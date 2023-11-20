@@ -1,4 +1,4 @@
-module onflow/flow-evm-grpc
+module github.com/onflow/flow-evm-grpc
 
 go 1.20
 

@@ -1,12 +1,9 @@
-package main
+package api
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math/big"
-	"net"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -15,29 +12,6 @@ import (
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/rpc"
 )
-
-// TransactionArgs represents the arguments to construct a new transaction
-// or a message call.
-type TransactionArgs struct {
-	From                 *common.Address `json:"from"`
-	To                   *common.Address `json:"to"`
-	Gas                  *hexutil.Uint64 `json:"gas"`
-	GasPrice             *hexutil.Big    `json:"gasPrice"`
-	MaxFeePerGas         *hexutil.Big    `json:"maxFeePerGas"`
-	MaxPriorityFeePerGas *hexutil.Big    `json:"maxPriorityFeePerGas"`
-	Value                *hexutil.Big    `json:"value"`
-	Nonce                *hexutil.Uint64 `json:"nonce"`
-
-	// We accept "data" and "input" for backwards-compatibility reasons.
-	// "input" is the newer name and should be preferred by clients.
-	// Issue detail: https://github.com/ethereum/go-ethereum/issues/15628
-	Data  *hexutil.Bytes `json:"data"`
-	Input *hexutil.Bytes `json:"input"`
-
-	// Introduced by AccessListTxType transaction.
-	AccessList *types.AccessList `json:"accessList,omitempty"`
-	ChainID    *hexutil.Big      `json:"chainId,omitempty"`
-}
 
 type BlockChainAPI struct{}
 
@@ -80,31 +54,15 @@ func (api *BlockChainAPI) SendRawTransaction(
 	return common.Hash{}, nil
 }
 
-// accessListResult returns an optional accesslist
-// It's the result of the `debug_createAccessList` RPC call.
-// It contains an error if the transaction itself failed.
-type accessListResult struct {
-	Accesslist *types.AccessList `json:"accessList"`
-	Error      string            `json:"error,omitempty"`
-	GasUsed    hexutil.Uint64    `json:"gasUsed"`
-}
-
 // eth_createAccessList
 // CreateAccessList creates an EIP-2930 type AccessList for the given transaction.
-// Reexec and BlockNrOrHash can be specified to create the accessList on top of a certain state.
+// Reexec and blockNumberOrHash can be specified to create the accessList on top of a certain state.
 func (s *BlockChainAPI) CreateAccessList(
 	ctx context.Context,
 	args TransactionArgs,
-	blockNrOrHash *rpc.BlockNumberOrHash,
+	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (*accessListResult, error) {
 	return &accessListResult{GasUsed: hexutil.Uint64(105)}, nil
-}
-
-type feeHistoryResult struct {
-	OldestBlock  *hexutil.Big     `json:"oldestBlock"`
-	Reward       [][]*hexutil.Big `json:"reward,omitempty"`
-	BaseFee      []*hexutil.Big   `json:"baseFeePerGas,omitempty"`
-	GasUsedRatio []float64        `json:"gasUsedRatio"`
 }
 
 // eth_feeHistory (transaction fee history)
@@ -141,7 +99,7 @@ func (s *BlockChainAPI) MaxPriorityFeePerGas(ctx context.Context) (*hexutil.Big,
 func (s *BlockChainAPI) GetBalance(
 	ctx context.Context,
 	address common.Address,
-	blockNrOrHash *rpc.BlockNumberOrHash,
+	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (*hexutil.Big, error) {
 	return (*hexutil.Big)(big.NewInt(101)), nil
 }
@@ -151,26 +109,9 @@ func (s *BlockChainAPI) GetBalance(
 func (s *BlockChainAPI) GetCode(
 	ctx context.Context,
 	address common.Address,
-	blockNrOrHash rpc.BlockNumberOrHash,
+	blockNumberOrHash rpc.BlockNumberOrHash,
 ) (hexutil.Bytes, error) {
 	return hexutil.Bytes{}, nil
-}
-
-// Result structs for GetProof
-type AccountResult struct {
-	Address      common.Address  `json:"address"`
-	AccountProof []string        `json:"accountProof"`
-	Balance      *hexutil.Big    `json:"balance"`
-	CodeHash     common.Hash     `json:"codeHash"`
-	Nonce        hexutil.Uint64  `json:"nonce"`
-	StorageHash  common.Hash     `json:"storageHash"`
-	StorageProof []StorageResult `json:"storageProof"`
-}
-
-type StorageResult struct {
-	Key   string       `json:"key"`
-	Value *hexutil.Big `json:"value"`
-	Proof []string     `json:"proof"`
 }
 
 // eth_getProof (returns state proof for an account)
@@ -179,7 +120,7 @@ func (s *BlockChainAPI) GetProof(
 	ctx context.Context,
 	address common.Address,
 	storageKeys []string,
-	blockNrOrHash rpc.BlockNumberOrHash,
+	blockNumberOrHash rpc.BlockNumberOrHash,
 ) (*AccountResult, error) {
 	storageProof := make([]StorageResult, len(storageKeys))
 	return &AccountResult{
@@ -200,7 +141,8 @@ func (s *BlockChainAPI) GetProof(
 func (s *BlockChainAPI) GetStorageAt(
 	ctx context.Context,
 	address common.Address,
-	hexKey string, blockNrOrHash rpc.BlockNumberOrHash,
+	hexKey string,
+	blockNumberOrHash rpc.BlockNumberOrHash,
 ) (hexutil.Bytes, error) {
 	return hexutil.Bytes{}, nil
 }
@@ -210,36 +152,10 @@ func (s *BlockChainAPI) GetStorageAt(
 func (s *BlockChainAPI) GetTransactionCount(
 	ctx context.Context,
 	address common.Address,
-	blockNrOrHash rpc.BlockNumberOrHash,
+	blockNumberOrHash rpc.BlockNumberOrHash,
 ) (*hexutil.Uint64, error) {
 	nonce := uint64(1050510)
 	return (*hexutil.Uint64)(&nonce), nil
-}
-
-// RPCTransaction represents a transaction that will serialize to the RPC representation of a transaction
-type RPCTransaction struct {
-	BlockHash           *common.Hash      `json:"blockHash"`
-	BlockNumber         *hexutil.Big      `json:"blockNumber"`
-	From                common.Address    `json:"from"`
-	Gas                 hexutil.Uint64    `json:"gas"`
-	GasPrice            *hexutil.Big      `json:"gasPrice"`
-	GasFeeCap           *hexutil.Big      `json:"maxFeePerGas,omitempty"`
-	GasTipCap           *hexutil.Big      `json:"maxPriorityFeePerGas,omitempty"`
-	MaxFeePerBlobGas    *hexutil.Big      `json:"maxFeePerBlobGas,omitempty"`
-	Hash                common.Hash       `json:"hash"`
-	Input               hexutil.Bytes     `json:"input"`
-	Nonce               hexutil.Uint64    `json:"nonce"`
-	To                  *common.Address   `json:"to"`
-	TransactionIndex    *hexutil.Uint64   `json:"transactionIndex"`
-	Value               *hexutil.Big      `json:"value"`
-	Type                hexutil.Uint64    `json:"type"`
-	Accesses            *types.AccessList `json:"accessList,omitempty"`
-	ChainID             *hexutil.Big      `json:"chainId,omitempty"`
-	BlobVersionedHashes []common.Hash     `json:"blobVersionedHashes,omitempty"`
-	V                   *hexutil.Big      `json:"v"`
-	R                   *hexutil.Big      `json:"r"`
-	S                   *hexutil.Big      `json:"s"`
-	YParity             *hexutil.Uint64   `json:"yParity,omitempty"`
 }
 
 // eth_getTransactionByHash
@@ -265,7 +181,7 @@ func (s *BlockChainAPI) GetTransactionByBlockHashAndIndex(
 // GetTransactionByBlockNumberAndIndex returns the transaction for the given block number and index.
 func (s *BlockChainAPI) GetTransactionByBlockNumberAndIndex(
 	ctx context.Context,
-	blockNr rpc.BlockNumber,
+	blockNumber rpc.BlockNumber,
 	index hexutil.Uint,
 ) *RPCTransaction {
 	return &RPCTransaction{}
@@ -291,7 +207,8 @@ func (s *BlockChainAPI) Coinbase() (common.Address, error) {
 // detail, otherwise only the transaction hash is returned.
 func (s *BlockChainAPI) GetBlockByHash(
 	ctx context.Context,
-	hash common.Hash, fullTx bool,
+	hash common.Hash,
+	fullTx bool,
 ) (map[string]interface{}, error) {
 	return map[string]interface{}{}, nil
 }
@@ -306,7 +223,7 @@ func (s *BlockChainAPI) GetBlockByHash(
 //     only the transaction hash is returned.
 func (s *BlockChainAPI) GetBlockByNumber(
 	ctx context.Context,
-	number rpc.BlockNumber,
+	blockNumber rpc.BlockNumber,
 	fullTx bool,
 ) (map[string]interface{}, error) {
 	return map[string]interface{}{}, nil
@@ -316,7 +233,7 @@ func (s *BlockChainAPI) GetBlockByNumber(
 // GetBlockReceipts returns the block receipts for the given block hash or number or tag.
 func (s *BlockChainAPI) GetBlockReceipts(
 	ctx context.Context,
-	blockNrOrHash rpc.BlockNumberOrHash,
+	blockNumberOrHash rpc.BlockNumberOrHash,
 ) ([]map[string]interface{}, error) {
 	result := make([]map[string]interface{}, 0)
 	return result, nil
@@ -336,7 +253,7 @@ func (s *BlockChainAPI) GetBlockTransactionCountByHash(
 // GetBlockTransactionCountByNumber returns the number of transactions in the block with the given block number.
 func (s *BlockChainAPI) GetBlockTransactionCountByNumber(
 	ctx context.Context,
-	blockNr rpc.BlockNumber,
+	blockNumber rpc.BlockNumber,
 ) *hexutil.Uint {
 	count := hexutil.Uint(522)
 	return &count
@@ -344,33 +261,31 @@ func (s *BlockChainAPI) GetBlockTransactionCountByNumber(
 
 // eth_getUncleCountByBlockHash (return empty)
 // GetUncleCountByBlockHash returns number of uncles in the block for the given block hash
-func (s *BlockChainAPI) GetUncleCountByBlockHash(ctx context.Context, blockHash common.Hash) *hexutil.Uint {
+func (s *BlockChainAPI) GetUncleCountByBlockHash(
+	ctx context.Context,
+	blockHash common.Hash,
+) *hexutil.Uint {
 	count := hexutil.Uint(0)
 	return &count
 }
 
 // eth_getUncleCountByBlockNumber (return empty)
 // GetUncleCountByBlockNumber returns number of uncles in the block for the given block number
-func (s *BlockChainAPI) GetUncleCountByBlockNumber(ctx context.Context, blockNr rpc.BlockNumber) *hexutil.Uint {
+func (s *BlockChainAPI) GetUncleCountByBlockNumber(
+	ctx context.Context,
+	blockNumber rpc.BlockNumber,
+) *hexutil.Uint {
 	count := hexutil.Uint(0)
 	return &count
 }
-
-var (
-	errFilterNotFound  = errors.New("filter not found")
-	errExceedMaxTopics = errors.New("exceed max topics")
-)
-
-// The maximum number of topic criteria allowed, vm.LOG4 - vm.LOG0
-const maxTopics = 4
 
 // eth_getLogs
 // GetLogs returns logs matching the given argument that are stored within the state.
 func (s *BlockChainAPI) GetLogs(
 	ctx context.Context,
-	crit filters.FilterCriteria,
+	criteria filters.FilterCriteria,
 ) ([]*types.Log, error) {
-	if len(crit.Topics) > maxTopics {
+	if len(criteria.Topics) > maxTopics {
 		return nil, errExceedMaxTopics
 	}
 
@@ -389,7 +304,9 @@ func (s *BlockChainAPI) GetLogs(
 // again but with the removed property set to true.
 //
 // In case "fromBlock" > "toBlock" an error is returned.
-func (s *BlockChainAPI) NewFilter(crit filters.FilterCriteria) (rpc.ID, error) {
+func (s *BlockChainAPI) NewFilter(
+	criteria filters.FilterCriteria,
+) (rpc.ID, error) {
 	return "", nil
 }
 
@@ -455,16 +372,10 @@ func (s *BlockChainAPI) Accounts() []common.Address {
 func (s *BlockChainAPI) Sign(
 	ctx context.Context,
 	data hexutil.Bytes,
-	addr common.Address,
-	passwd string,
+	address common.Address,
+	password string,
 ) (hexutil.Bytes, error) {
 	return hexutil.Bytes{}, fmt.Errorf("not implemented")
-}
-
-// SignTransactionResult represents a RLP encoded signed transaction.
-type SignTransactionResult struct {
-	Raw hexutil.Bytes      `json:"raw"`
-	Tx  *types.Transaction `json:"tx"`
 }
 
 // eth_signTransaction
@@ -485,38 +396,9 @@ func (s *BlockChainAPI) SignTransaction(
 func (s *BlockChainAPI) SendTransaction(
 	ctx context.Context,
 	args TransactionArgs,
-	passwd string,
+	password string,
 ) (common.Hash, error) {
 	return common.Hash{}, fmt.Errorf("not implemented")
-}
-
-// OverrideAccount indicates the overriding fields of account during the execution
-// of a message call.
-// Note, state and stateDiff can't be specified at the same time. If state is
-// set, message execution will only use the data in the given state. Otherwise
-// if statDiff is set, all diff will be applied first and then execute the call
-// message.
-type OverrideAccount struct {
-	Nonce     *hexutil.Uint64              `json:"nonce"`
-	Code      *hexutil.Bytes               `json:"code"`
-	Balance   **hexutil.Big                `json:"balance"`
-	State     *map[common.Hash]common.Hash `json:"state"`
-	StateDiff *map[common.Hash]common.Hash `json:"stateDiff"`
-}
-
-// StateOverride is the collection of overridden accounts.
-type StateOverride map[common.Address]OverrideAccount
-
-// BlockOverrides is a set of header fields to override.
-type BlockOverrides struct {
-	Number      *hexutil.Big
-	Difficulty  *hexutil.Big
-	Time        *hexutil.Uint64
-	GasLimit    *hexutil.Uint64
-	Coinbase    *common.Address
-	Random      *common.Hash
-	BaseFee     *hexutil.Big
-	BlobBaseFee *hexutil.Big
 }
 
 // eth_call (readonly calls, we might need this (if the wallet use it to get balanceOf an ERC-20))
@@ -529,7 +411,7 @@ type BlockOverrides struct {
 func (s *BlockChainAPI) Call(
 	ctx context.Context,
 	args TransactionArgs,
-	blockNrOrHash *rpc.BlockNumberOrHash,
+	blockNumberOrHash *rpc.BlockNumberOrHash,
 	overrides *StateOverride,
 	blockOverrides *BlockOverrides,
 ) (hexutil.Bytes, error) {
@@ -545,54 +427,8 @@ func (s *BlockChainAPI) Call(
 func (s *BlockChainAPI) EstimateGas(
 	ctx context.Context,
 	args TransactionArgs,
-	blockNrOrHash *rpc.BlockNumberOrHash,
+	blockNumberOrHash *rpc.BlockNumberOrHash,
 	overrides *StateOverride,
 ) (hexutil.Uint64, error) {
 	return hexutil.Uint64(105), nil
-}
-
-func main() {
-	server := rpc.NewServer()
-	defer server.Stop()
-
-	server.RegisterName("eth", &BlockChainAPI{})
-
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		fmt.Println("can't listen:", err)
-	}
-	defer listener.Close()
-	go server.ServeListener(listener)
-
-	requests := []string{
-		`{"jsonrpc":"2.0","id":1,"method":"eth_blockNumber","params": []}`,
-		`{"jsonrpc":"2.0","id":2,"method":"eth_chainId","params": []}`,
-		`{"jsonrpc":"2.0","id":3,"method":"eth_syncing","params": []}`,
-		`{"jsonrpc":"2.0","id":4,"method":"eth_getBalance","params": ["0x407d73d8a49eeb85d32cf465507dd71d507100c1"]}`,
-		`{"jsonrpc":"2.0","id":5,"method":"eth_getBlockTransactionCountByNumber","params": ["0x4E4ee"]}`,
-	}
-	deadline := time.Now().Add(10 * time.Second)
-
-	for _, request := range requests {
-		conn, err := net.Dial("tcp", listener.Addr().String())
-		if err != nil {
-			fmt.Println("can't dial:", err)
-		}
-
-		conn.SetDeadline(deadline)
-		// Write the request, then half-close the connection so the server stops reading.
-		conn.Write([]byte(request))
-		conn.(*net.TCPConn).CloseWrite()
-		// Now try to get the response.
-		buf := make([]byte, 2000)
-		n, err := conn.Read(buf)
-		conn.Close()
-
-		if err != nil {
-			fmt.Println("read error:", err)
-		}
-		fmt.Println("Request: ", request)
-		fmt.Println("Response: ", string(buf[:n]))
-	}
-
 }
