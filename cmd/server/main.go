@@ -5,7 +5,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/onflow/flow-evm-grpc/api"
+	"github.com/onflow/flow-evm-gateway/api"
 )
 
 func main() {
