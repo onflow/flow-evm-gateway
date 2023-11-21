@@ -149,7 +149,7 @@ func (s *BlockChainAPI) GetProof(
 func (s *BlockChainAPI) GetStorageAt(
 	ctx context.Context,
 	address common.Address,
-	hexKey string,
+	storageSlot string,
 	blockNumberOrHash rpc.BlockNumberOrHash,
 ) (hexutil.Bytes, error) {
 	return hexutil.Bytes{}, nil
