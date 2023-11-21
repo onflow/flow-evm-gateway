@@ -66,7 +66,15 @@ func (s *BlockChainAPI) CreateAccessList(
 }
 
 // eth_feeHistory (transaction fee history)
-// FeeHistory returns the fee market history.
+// FeeHistory returns transaction base fee per gas and effective priority fee
+// per gas for the requested/supported block range.
+// blockCount: Requested range of blocks. Clients will return less than the
+// requested range if not all blocks are available.
+// lastBlock: Highest block of the requested range.
+// rewardPercentiles: A monotonically increasing list of percentile values.
+// For each block in the requested range, the transactions will be sorted in
+// ascending order by effective tip per gas and the coresponding effective tip
+// for the percentile will be determined, accounting for gas consumed.
 func (s *BlockChainAPI) FeeHistory(
 	ctx context.Context,
 	blockCount math.HexOrDecimal64,
