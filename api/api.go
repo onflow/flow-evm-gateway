@@ -11,9 +11,12 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/onflow/flow-evm-gateway/storage"
 )
 
-type BlockChainAPI struct{}
+type BlockChainAPI struct {
+	Store *storage.Store
+}
 
 // eth_chainId
 // ChainId is the EIP-155 replay-protection chain id for the current Ethereum chain config.
@@ -29,7 +32,11 @@ func (api *BlockChainAPI) ChainId() *hexutil.Big {
 // eth_blockNumber
 // BlockNumber returns the block number of the chain head.
 func (api *BlockChainAPI) BlockNumber() hexutil.Uint64 {
-	return hexutil.Uint64(65848272)
+	latestBlockHeight, err := api.Store.LatestBlockHeight(context.Background())
+	if err != nil {
+		return hexutil.Uint64(0)
+	}
+	return hexutil.Uint64(latestBlockHeight)
 }
 
 // eth_syncing
