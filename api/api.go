@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -12,7 +13,13 @@ import (
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/onflow/flow-evm-gateway/storage"
+	"github.com/onflow/flow-go/fvm/evm/emulator"
 )
+
+// this is added to resolve the issue with chainhash ambiguous import,
+// the code is not used, but it's needed to force go.mod specify and retain chainhash version
+// workaround for issue: https://github.com/golang/go/issues/27899
+var _ = chainhash.Hash{}
 
 type BlockChainAPI struct {
 	Store *storage.Store
@@ -26,7 +33,8 @@ type BlockChainAPI struct {
 // wasn't synced up to a block where EIP-155 is enabled, but this behavior caused issues
 // in CL clients.
 func (api *BlockChainAPI) ChainId() *hexutil.Big {
-	return (*hexutil.Big)(big.NewInt(777))
+	//return (*hexutil.Big)(big.NewInt(777))
+	return (*hexutil.Big)(emulator.FlowEVMTestnetChainID)
 }
 
 // eth_blockNumber
