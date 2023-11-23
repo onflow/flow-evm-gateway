@@ -2,33 +2,90 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"runtime"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/onflow/flow-evm-gateway/api"
+	"github.com/onflow/flow-evm-gateway/indexer"
 	"github.com/onflow/flow-evm-gateway/storage"
+	"github.com/onflow/flow-go/model/flow"
 	"github.com/rs/zerolog"
 )
 
-func apis() []rpc.API {
+const (
+	accessURL = "access-001.devnet49.nodes.onflow.org:9000"
+)
+
+func main() {
+	store := storage.NewStore()
+	runServer(store)
+	runIndexer(store)
+
+	runtime.Goexit()
+}
+
+func apis(store *storage.Store) []rpc.API {
 	return []rpc.API{
 		{
 			Namespace: api.EthNamespace,
 			Service: &api.BlockChainAPI{
-				Store: storage.NewStore(),
+				Store: store,
 			},
 		},
 	}
 }
 
-func main() {
+func runIndexer(store *storage.Store) {
+	ctx := context.Background()
+
+	chain, err := indexer.GetChain(ctx, accessURL)
+	if err != nil {
+		log.Fatalf("could not get chain: %v", err)
+	}
+
+	execClient, err := indexer.NewExecutionDataClient(accessURL, chain)
+	if err != nil {
+		log.Fatalf("could not create execution data client: %v", err)
+	}
+
+	sub, err := execClient.SubscribeEvents(ctx, flow.ZeroID, 0, indexer.EventFilter{
+		Contracts: []string{"A.7e60df042a9c0868.FlowToken"},
+	})
+	if err != nil {
+		log.Fatalf("could not subscribe to execution data: %v", err)
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case response, ok := <-sub.Channel():
+			if sub.Err() != nil {
+				log.Fatalf("error in subscription: %v", sub.Err())
+			}
+			if !ok {
+				log.Fatalf("subscription closed")
+			}
+
+			log.Printf("block %d %s:", response.Height, response.BlockID)
+			store.StoreBlockHeight(ctx, response.Height)
+			for _, event := range response.Events {
+				log.Printf("  %s", event.Type)
+			}
+		}
+	}
+}
+
+func runServer(store *storage.Store) {
 	timeouts := &rpc.DefaultHTTPTimeouts
 	srv := api.NewHTTPServer(zerolog.Logger{}, *timeouts)
-	srv.EnableRPC(apis(), api.HttpConfig{})
+	srv.EnableRPC(apis(store), api.HttpConfig{})
 	// srv.enableWS(nil, *wsConf)
 	srv.SetListenAddr("localhost", 8080)
 	err := srv.Start()
@@ -54,8 +111,6 @@ func main() {
 		}
 		fmt.Println("Response: ", string(content))
 	}
-
-	runtime.Goexit()
 }
 
 // rpcRequest performs a JSON-RPC request to the given URL.
