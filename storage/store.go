@@ -11,7 +11,7 @@ type Store struct {
 	blockHeight uint64
 }
 
-// New returns a new in-memory Store implementation.
+// NewStore returns a new in-memory Store implementation.
 func NewStore() *Store {
 	return &Store{
 		mu: sync.RWMutex{},

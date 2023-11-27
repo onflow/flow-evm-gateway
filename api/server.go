@@ -123,7 +123,8 @@ func (h *httpServer) EnableRPC(apis []rpc.API, config HttpConfig) error {
 
 	// Create RPC server and handler.
 	srv := rpc.NewServer()
-	//srv.SetBatchLimits(config.batchItemLimit, config.batchResponseSizeLimit)
+	// TODO: This is only added in go-ethereum@v1.13.2
+	// srv.SetBatchLimits(config.batchItemLimit, config.batchResponseSizeLimit)
 	// Register all the APIs exposed by the services
 	for _, api := range apis {
 		if err := srv.RegisterName(api.Namespace, api.Service); err != nil {
