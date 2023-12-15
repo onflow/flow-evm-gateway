@@ -64,7 +64,7 @@ func (api *BlockChainAPI) Syncing() (interface{}, error) {
 // The sender is responsible for signing the transaction and using the correct nonce.
 func (api *BlockChainAPI) SendRawTransaction(
 	ctx context.Context,
-	input []byte,
+	input hexutil.Bytes,
 ) (common.Hash, error) {
 	return common.Hash{}, nil
 }
