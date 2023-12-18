@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"math/big"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/onflow/flow-evm-gateway/storage"
@@ -65,7 +67,7 @@ func (api *BlockChainAPI) SendRawTransaction(
 	ctx context.Context,
 	input hexutil.Bytes,
 ) (common.Hash, error) {
-	return common.Hash{}, nil
+	return crypto.Keccak256Hash([]byte("hello world")), nil
 }
 
 // eth_createAccessList
@@ -105,7 +107,7 @@ func (s *BlockChainAPI) FeeHistory(
 // eth_gasPrice (returns the gas price)
 // GasPrice returns a suggestion for a gas price for legacy transactions.
 func (s *BlockChainAPI) GasPrice(ctx context.Context) (*hexutil.Big, error) {
-	return (*hexutil.Big)(big.NewInt(10102020506)), nil
+	return (*hexutil.Big)(big.NewInt(8049999872)), nil
 }
 
 // eth_maxPriorityFeePerGas
@@ -133,7 +135,8 @@ func (s *BlockChainAPI) GetCode(
 	address common.Address,
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (hexutil.Bytes, error) {
-	return hexutil.Bytes{}, nil
+	code, _ := hex.DecodeString("600160008035811a818181146012578301005b601b6001356025565b8060005260206000f25b600060078202905091905056")
+	return hexutil.Bytes(code), nil
 }
 
 // eth_getProof (returns state proof for an account)
@@ -166,7 +169,8 @@ func (s *BlockChainAPI) GetStorageAt(
 	storageSlot string,
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (hexutil.Bytes, error) {
-	return hexutil.Bytes{}, nil
+	storage, _ := hex.DecodeString("600160008035811a818181146012578301005b601b6001356025565b8060005260206000f25b600060078202905091905056")
+	return hexutil.Bytes(storage), nil
 }
 
 // eth_getTransactionCount (returns the number of tx sent from an address (nonce))
@@ -186,7 +190,27 @@ func (s *BlockChainAPI) GetTransactionByHash(
 	ctx context.Context,
 	hash common.Hash,
 ) (*RPCTransaction, error) {
-	return &RPCTransaction{}, nil
+	blockHash := common.HexToHash("0x1d59ff54b1eb26b013ce3cb5fc9dab3705b415a67127a003c3e61eb445bb8df2")
+	to := common.HexToAddress("0xf02c1c8e6114b1dbe8937a39260b5b0a374432bb")
+	index := uint64(64)
+
+	tx := &RPCTransaction{
+		BlockHash:        (*common.Hash)(&blockHash),
+		BlockNumber:      (*hexutil.Big)(big.NewInt(6139707)),
+		From:             common.HexToAddress("0xa7d9ddbe1f17865597fbd27ec712455208b6b76d"),
+		Gas:              hexutil.Uint64(50000),
+		GasPrice:         (*hexutil.Big)(big.NewInt(20000000000)),
+		Hash:             common.HexToHash("0x88df016429689c079f3b2f6ad39fa052532c56795b733da78a91ebe6a713944b"),
+		Input:            hexutil.Bytes("0x68656c6c6f21"),
+		Nonce:            hexutil.Uint64(21),
+		To:               &to,
+		TransactionIndex: (*hexutil.Uint64)(&index),
+		Value:            (*hexutil.Big)(big.NewInt(4290000000000000)),
+		V:                (*hexutil.Big)(big.NewInt(37)),
+		R:                (*hexutil.Big)(big.NewInt(150)),
+		S:                (*hexutil.Big)(big.NewInt(250)),
+	}
+	return tx, nil
 }
 
 // eth_getTransactionByBlockHashAndIndex
@@ -196,7 +220,26 @@ func (s *BlockChainAPI) GetTransactionByBlockHashAndIndex(
 	blockHash common.Hash,
 	index hexutil.Uint,
 ) *RPCTransaction {
-	return &RPCTransaction{}
+	to := common.HexToAddress("0xf02c1c8e6114b1dbe8937a39260b5b0a374432bb")
+	txIndex := uint64(64)
+
+	tx := &RPCTransaction{
+		BlockHash:        (*common.Hash)(&blockHash),
+		BlockNumber:      (*hexutil.Big)(big.NewInt(6139707)),
+		From:             common.HexToAddress("0xa7d9ddbe1f17865597fbd27ec712455208b6b76d"),
+		Gas:              hexutil.Uint64(50000),
+		GasPrice:         (*hexutil.Big)(big.NewInt(20000000000)),
+		Hash:             common.HexToHash("0x88df016429689c079f3b2f6ad39fa052532c56795b733da78a91ebe6a713944b"),
+		Input:            hexutil.Bytes("0x68656c6c6f21"),
+		Nonce:            hexutil.Uint64(21),
+		To:               &to,
+		TransactionIndex: (*hexutil.Uint64)(&txIndex),
+		Value:            (*hexutil.Big)(big.NewInt(4290000000000000)),
+		V:                (*hexutil.Big)(big.NewInt(37)),
+		R:                (*hexutil.Big)(big.NewInt(150)),
+		S:                (*hexutil.Big)(big.NewInt(250)),
+	}
+	return tx
 }
 
 // eth_getTransactionByBlockNumberAndIndex
@@ -206,7 +249,27 @@ func (s *BlockChainAPI) GetTransactionByBlockNumberAndIndex(
 	blockNumber rpc.BlockNumber,
 	index hexutil.Uint,
 ) *RPCTransaction {
-	return &RPCTransaction{}
+	blockHash := common.HexToHash("0x1d59ff54b1eb26b013ce3cb5fc9dab3705b415a67127a003c3e61eb445bb8df2")
+	to := common.HexToAddress("0xf02c1c8e6114b1dbe8937a39260b5b0a374432bb")
+	txIndex := uint64(64)
+
+	tx := &RPCTransaction{
+		BlockHash:        (*common.Hash)(&blockHash),
+		BlockNumber:      (*hexutil.Big)(big.NewInt(6139707)),
+		From:             common.HexToAddress("0xa7d9ddbe1f17865597fbd27ec712455208b6b76d"),
+		Gas:              hexutil.Uint64(50000),
+		GasPrice:         (*hexutil.Big)(big.NewInt(20000000000)),
+		Hash:             common.HexToHash("0x88df016429689c079f3b2f6ad39fa052532c56795b733da78a91ebe6a713944b"),
+		Input:            hexutil.Bytes("0x68656c6c6f21"),
+		Nonce:            hexutil.Uint64(21),
+		To:               &to,
+		TransactionIndex: (*hexutil.Uint64)(&txIndex),
+		Value:            (*hexutil.Big)(big.NewInt(4290000000000000)),
+		V:                (*hexutil.Big)(big.NewInt(37)),
+		R:                (*hexutil.Big)(big.NewInt(150)),
+		S:                (*hexutil.Big)(big.NewInt(250)),
+	}
+	return tx
 }
 
 // eth_getTransactionReceipt
@@ -215,13 +278,30 @@ func (s *BlockChainAPI) GetTransactionReceipt(
 	ctx context.Context,
 	hash common.Hash,
 ) (map[string]interface{}, error) {
-	return map[string]interface{}{}, nil
+	receipt := map[string]interface{}{}
+	txIndex := uint64(64)
+	blockHash := common.HexToHash("0x1d59ff54b1eb26b013ce3cb5fc9dab3705b415a67127a003c3e61eb445bb8df2")
+	receipt["blockHash"] = blockHash
+	receipt["blockNumber"] = (*hexutil.Big)(big.NewInt(6139707))
+	receipt["contractAddress"] = nil
+	receipt["cumulativeGasUsed"] = hexutil.Uint64(50000)
+	receipt["effectiveGasPrice"] = (*hexutil.Big)(big.NewInt(20000000000))
+	receipt["from"] = common.HexToAddress("0xa7d9ddbe1f17865597fbd27ec712455208b6b76d")
+	receipt["gasUsed"] = hexutil.Uint64(40000)
+	receipt["logs"] = []*types.Log{}
+	receipt["logsBloom"] = "0x88df016429689c079f3b2f6ad39fa052532c56795b733da78a91ebe6a713944b"
+	receipt["status"] = hexutil.Uint64(1)
+	receipt["to"] = common.HexToAddress("0xf02c1c8e6114b1dbe8937a39260b5b0a374432bb")
+	receipt["transactionHash"] = common.HexToHash("0x88df016429689c079f3b2f6ad39fa052532c56795b733da78a91ebe6a713944b")
+	receipt["transactionIndex"] = (*hexutil.Uint64)(&txIndex)
+	receipt["type"] = hexutil.Uint64(2)
+	return receipt, nil
 }
 
 // eth_coinbase (return the coinbase for a block)
 // Coinbase is the address that mining rewards will be sent to (alias for Etherbase).
 func (s *BlockChainAPI) Coinbase() (common.Address, error) {
-	return common.Address{1, 2, 3, 4, 5}, nil
+	return common.HexToAddress("0x9b1d35635cc34752ca54713bb99d38614f63c955"), nil
 }
 
 // eth_getBlockByHash
@@ -232,7 +312,28 @@ func (s *BlockChainAPI) GetBlockByHash(
 	hash common.Hash,
 	fullTx bool,
 ) (map[string]interface{}, error) {
-	return map[string]interface{}{}, nil
+	block := map[string]interface{}{}
+	block["difficulty"] = "0x4ea3f27bc"
+	block["extraData"] = "0x476574682f4c5649562f76312e302e302f6c696e75782f676f312e342e32"
+	block["gasLimit"] = "0x1388"
+	block["gasUsed"] = "0x0"
+	block["hash"] = "0xdc0818cf78f21a8e70579cb46a43643f78291264dda342ae31049421c82d21ae"
+	block["logsBloom"] = "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+	block["miner"] = "0xbb7b8287f3f0a933474a79eae42cbca977791171"
+	block["mixHash"] = "0x4fffe9ae21f1c9e15207b1f472d5bbdd68c9595d461666602f2be20daf5e7843"
+	block["nonce"] = "0x689056015818adbe"
+	block["number"] = "0x1b4"
+	block["parentHash"] = "0xe99e022112df268087ea7eafaf4790497fd21dbeeb6bd7a1721df161a6657a54"
+	block["receiptsRoot"] = "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
+	block["sha3Uncles"] = "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
+	block["size"] = "0x220"
+	block["stateRoot"] = "0xddc8b0234c2e0cad087c8b389aa7ef01f7d79b2570bccb77ce48648aa61c904d"
+	block["timestamp"] = "0x55ba467c"
+	block["totalDifficulty"] = "0x78ed983323d"
+	block["transactions"] = []string{}
+	block["transactionsRoot"] = "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
+	block["uncles"] = []string{}
+	return block, nil
 }
 
 // eth_getBlockByNumber
@@ -248,7 +349,28 @@ func (s *BlockChainAPI) GetBlockByNumber(
 	blockNumber rpc.BlockNumber,
 	fullTx bool,
 ) (map[string]interface{}, error) {
-	return map[string]interface{}{}, nil
+	block := map[string]interface{}{}
+	block["difficulty"] = "0x4ea3f27bc"
+	block["extraData"] = "0x476574682f4c5649562f76312e302e302f6c696e75782f676f312e342e32"
+	block["gasLimit"] = "0x1388"
+	block["gasUsed"] = "0x0"
+	block["hash"] = "0xdc0818cf78f21a8e70579cb46a43643f78291264dda342ae31049421c82d21ae"
+	block["logsBloom"] = "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+	block["miner"] = "0xbb7b8287f3f0a933474a79eae42cbca977791171"
+	block["mixHash"] = "0x4fffe9ae21f1c9e15207b1f472d5bbdd68c9595d461666602f2be20daf5e7843"
+	block["nonce"] = "0x689056015818adbe"
+	block["number"] = "0x1b4"
+	block["parentHash"] = "0xe99e022112df268087ea7eafaf4790497fd21dbeeb6bd7a1721df161a6657a54"
+	block["receiptsRoot"] = "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
+	block["sha3Uncles"] = "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
+	block["size"] = "0x220"
+	block["stateRoot"] = "0xddc8b0234c2e0cad087c8b389aa7ef01f7d79b2570bccb77ce48648aa61c904d"
+	block["timestamp"] = "0x55ba467c"
+	block["totalDifficulty"] = "0x78ed983323d"
+	block["transactions"] = []string{}
+	block["transactionsRoot"] = "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
+	block["uncles"] = []string{}
+	return block, nil
 }
 
 // eth_getBlockReceipts
@@ -310,8 +432,18 @@ func (s *BlockChainAPI) GetLogs(
 	if len(criteria.Topics) > maxTopics {
 		return nil, errExceedMaxTopics
 	}
+	log := &types.Log{
+		Index:       1,
+		BlockNumber: 436,
+		BlockHash:   common.HexToHash("0x8216c5785ac562ff41e2dcfdf5785ac562ff41e2dcfdf829c5a142f1fccd7d"),
+		TxHash:      common.HexToHash("0xdf829c5a142f1fccd7d8216c5785ac562ff41e2dcfdf5785ac562ff41e2dcf"),
+		TxIndex:     0,
+		Address:     common.HexToAddress("0x16c5785ac562ff41e2dcfdf829c5a142f1fccd7d"),
+		Data:        []byte{0, 0, 0},
+		Topics:      []common.Hash{common.HexToHash("0x59ebeb90bc63057b6515673c3ecf9438e5058bca0f92585014eced636878c9a5")},
+	}
 
-	return []*types.Log{}, nil
+	return []*types.Log{log}, nil
 }
 
 // eth_newFilter
@@ -345,7 +477,18 @@ func (s *BlockChainAPI) GetFilterLogs(
 	ctx context.Context,
 	id rpc.ID,
 ) ([]*types.Log, error) {
-	return []*types.Log{}, nil
+	log := &types.Log{
+		Index:       1,
+		BlockNumber: 436,
+		BlockHash:   common.HexToHash("0x8216c5785ac562ff41e2dcfdf5785ac562ff41e2dcfdf829c5a142f1fccd7d"),
+		TxHash:      common.HexToHash("0xdf829c5a142f1fccd7d8216c5785ac562ff41e2dcfdf5785ac562ff41e2dcf"),
+		TxIndex:     0,
+		Address:     common.HexToAddress("0x16c5785ac562ff41e2dcfdf829c5a142f1fccd7d"),
+		Data:        []byte{0, 0, 0},
+		Topics:      []common.Hash{common.HexToHash("0x59ebeb90bc63057b6515673c3ecf9438e5058bca0f92585014eced636878c9a5")},
+	}
+
+	return []*types.Log{log}, nil
 }
 
 // eth_getFilterChanges
@@ -358,7 +501,18 @@ func (s *BlockChainAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 	if id == rpc.ID("") {
 		return nil, errFilterNotFound
 	}
-	return []interface{}{}, nil
+	log := &types.Log{
+		Index:       1,
+		BlockNumber: 436,
+		BlockHash:   common.HexToHash("0x8216c5785ac562ff41e2dcfdf5785ac562ff41e2dcfdf829c5a142f1fccd7d"),
+		TxHash:      common.HexToHash("0xdf829c5a142f1fccd7d8216c5785ac562ff41e2dcfdf5785ac562ff41e2dcf"),
+		TxIndex:     0,
+		Address:     common.HexToAddress("0x16c5785ac562ff41e2dcfdf829c5a142f1fccd7d"),
+		Data:        []byte{0, 0, 0},
+		Topics:      []common.Hash{common.HexToHash("0x59ebeb90bc63057b6515673c3ecf9438e5058bca0f92585014eced636878c9a5")},
+	}
+
+	return []*types.Log{log}, nil
 }
 
 // eth_newBlockFilter
@@ -381,7 +535,9 @@ func (s *BlockChainAPI) NewPendingTransactionFilter(fullTx *bool) rpc.ID {
 // eth_accounts
 // Accounts returns the collection of accounts this node manages.
 func (s *BlockChainAPI) Accounts() []common.Address {
-	return []common.Address{}
+	return []common.Address{
+		common.HexToAddress("0x407d73d8a49eeb85d32cf465507dd71d507100c1"),
+	}
 }
 
 // eth_sign
@@ -440,7 +596,7 @@ func (s *BlockChainAPI) Call(
 	overrides *StateOverride,
 	blockOverrides *BlockOverrides,
 ) (hexutil.Bytes, error) {
-	return hexutil.Bytes{}, nil
+	return hexutil.Bytes{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, nil
 }
 
 // eth_estimateGas (usually runs the call and checks how much gas might be used)
