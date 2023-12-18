@@ -33,7 +33,6 @@ type BlockChainAPI struct {
 // wasn't synced up to a block where EIP-155 is enabled, but this behavior caused issues
 // in CL clients.
 func (api *BlockChainAPI) ChainId() *hexutil.Big {
-	//return (*hexutil.Big)(big.NewInt(777))
 	return (*hexutil.Big)(emulator.FlowEVMTestnetChainID)
 }
 
@@ -132,7 +131,7 @@ func (s *BlockChainAPI) GetBalance(
 func (s *BlockChainAPI) GetCode(
 	ctx context.Context,
 	address common.Address,
-	blockNumberOrHash rpc.BlockNumberOrHash,
+	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (hexutil.Bytes, error) {
 	return hexutil.Bytes{}, nil
 }
@@ -165,7 +164,7 @@ func (s *BlockChainAPI) GetStorageAt(
 	ctx context.Context,
 	address common.Address,
 	storageSlot string,
-	blockNumberOrHash rpc.BlockNumberOrHash,
+	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (hexutil.Bytes, error) {
 	return hexutil.Bytes{}, nil
 }
@@ -175,7 +174,7 @@ func (s *BlockChainAPI) GetStorageAt(
 func (s *BlockChainAPI) GetTransactionCount(
 	ctx context.Context,
 	address common.Address,
-	blockNumberOrHash rpc.BlockNumberOrHash,
+	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (*hexutil.Uint64, error) {
 	nonce := uint64(1050510)
 	return (*hexutil.Uint64)(&nonce), nil
@@ -222,7 +221,7 @@ func (s *BlockChainAPI) GetTransactionReceipt(
 // eth_coinbase (return the coinbase for a block)
 // Coinbase is the address that mining rewards will be sent to (alias for Etherbase).
 func (s *BlockChainAPI) Coinbase() (common.Address, error) {
-	return common.Address{}, nil
+	return common.Address{1, 2, 3, 4, 5}, nil
 }
 
 // eth_getBlockByHash
@@ -330,13 +329,13 @@ func (s *BlockChainAPI) GetLogs(
 func (s *BlockChainAPI) NewFilter(
 	criteria filters.FilterCriteria,
 ) (rpc.ID, error) {
-	return "", nil
+	return rpc.ID("filter0"), nil
 }
 
 // eth_uninstallFilter
 // UninstallFilter removes the filter with the given filter id.
 func (s *BlockChainAPI) UninstallFilter(id rpc.ID) bool {
-	return false
+	return true
 }
 
 // eth_getFilterLogs
@@ -356,14 +355,17 @@ func (s *BlockChainAPI) GetFilterLogs(
 // For pending transaction and block filters the result is []common.Hash.
 // (pending)Log filters return []Log.
 func (s *BlockChainAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
-	return []interface{}{}, errFilterNotFound
+	if id == rpc.ID("") {
+		return nil, errFilterNotFound
+	}
+	return []interface{}{}, nil
 }
 
 // eth_newBlockFilter
 // NewBlockFilter creates a filter that fetches blocks that are imported into the chain.
 // It is part of the filter package since polling goes with eth_getFilterChanges.
 func (s *BlockChainAPI) NewBlockFilter() rpc.ID {
-	return ""
+	return rpc.ID("block_filter")
 }
 
 // eth_newPendingTransactionFilter
@@ -373,7 +375,7 @@ func (s *BlockChainAPI) NewBlockFilter() rpc.ID {
 // It is part of the filter package because this filter can be used through the
 // `eth_getFilterChanges` polling method that is also used for log filters.
 func (s *BlockChainAPI) NewPendingTransactionFilter(fullTx *bool) rpc.ID {
-	return ""
+	return rpc.ID("pending_tx_filter")
 }
 
 // eth_accounts

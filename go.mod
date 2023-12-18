@@ -5,8 +5,10 @@ go 1.20
 require (
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.0.2
 	github.com/ethereum/go-ethereum v1.12.0
+	github.com/golang-jwt/jwt/v4 v4.3.0
 	github.com/onflow/flow-go v0.32.4-0.20231122162232-0ba81ff8d241
 	github.com/onflow/flow/protobuf/go/flow v0.3.2-0.20231121210617-52ee94b830c2
+	github.com/rs/cors v1.8.0
 	github.com/rs/zerolog v1.31.0
 	google.golang.org/grpc v1.58.3
 )
