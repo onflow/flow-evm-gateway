@@ -32,7 +32,7 @@ func TestRPCServer(t *testing.T) {
 	store := storage.NewStore()
 	srv.EnableRPC(apis(store), api.HttpConfig{})
 	srv.EnableWS(nil, api.WSConfig{})
-	srv.SetListenAddr("localhost", 8080)
+	srv.SetListenAddr("localhost", 8545)
 	err := srv.Start()
 	defer srv.Stop()
 	if err != nil {

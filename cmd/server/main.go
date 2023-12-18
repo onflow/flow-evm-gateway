@@ -87,7 +87,7 @@ func runServer(store *storage.Store) {
 	srv := api.NewHTTPServer(zerolog.Logger{}, *timeouts)
 	srv.EnableRPC(apis(store), api.HttpConfig{})
 	srv.EnableWS(nil, api.WSConfig{})
-	srv.SetListenAddr("localhost", 8080)
+	srv.SetListenAddr("localhost", 8545)
 	err := srv.Start()
 	if err != nil {
 		panic(err)
