@@ -13,9 +13,7 @@ type Store struct {
 
 // NewStore returns a new in-memory Store implementation.
 func NewStore() *Store {
-	return &Store{
-		mu: sync.RWMutex{},
-	}
+	return &Store{}
 }
 
 func (s *Store) LatestBlockHeight(ctx context.Context) (uint64, error) {
