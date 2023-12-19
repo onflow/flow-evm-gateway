@@ -137,6 +137,7 @@ func (c *ExecutionDataClient) SubscribeEvents(
 	startBlockID flow.Identifier,
 	startHeight uint64,
 	filter EventFilter,
+	heartbeatInterval uint64,
 	opts ...grpc.CallOption,
 ) (*Subscription[EventsResponse], error) {
 	if startBlockID != flow.ZeroID && startHeight > 0 {
@@ -149,6 +150,7 @@ func (c *ExecutionDataClient) SubscribeEvents(
 			Address:   filter.Addresses,
 			Contract:  filter.Contracts,
 		},
+		HeartbeatInterval: heartbeatInterval,
 	}
 	if startBlockID != flow.ZeroID {
 		req.StartBlockId = startBlockID[:]

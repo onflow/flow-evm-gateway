@@ -70,6 +70,7 @@ func runIndexer(store *storage.Store) {
 		indexer.EventFilter{
 			Contracts: []string{"A.7e60df042a9c0868.FlowToken"},
 		},
+		1,
 	)
 	if err != nil {
 		log.Fatalf("could not subscribe to execution data: %v", err)
@@ -91,6 +92,7 @@ func runIndexer(store *storage.Store) {
 			indexer.EventFilter{
 				Contracts: []string{"A.7e60df042a9c0868.FlowToken"},
 			},
+			1,
 		)
 		if err != nil {
 			log.Fatalf("could not subscribe to execution data: %v", err)
@@ -98,12 +100,19 @@ func runIndexer(store *storage.Store) {
 	}
 
 	// track the most recently seen block height. we will use this when reconnecting
-	lastHeight := latestBlockHeader.Height
+	// the first response should be for latestBlockHeader.Height
+	lastHeight := latestBlockHeader.Height - 1
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case response, ok := <-sub.Channel():
+			if response.Height != lastHeight+1 {
+				log.Fatalf("missed events response for block %d", lastHeight+1)
+				reconnect(lastHeight)
+				continue
+			}
+
 			if !ok {
 				if sub.Err() != nil {
 					log.Fatalf("error in subscription: %v", sub.Err())
@@ -115,7 +124,9 @@ func runIndexer(store *storage.Store) {
 			}
 
 			log.Printf("block %d %s:", response.Height, response.BlockID)
-			store.StoreBlockHeight(ctx, response.Height)
+			if len(response.Events) > 0 {
+				store.StoreBlockHeight(ctx, response.Height)
+			}
 			for _, event := range response.Events {
 				log.Printf("  %s", event.Type)
 			}
