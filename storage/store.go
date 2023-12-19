@@ -17,6 +17,9 @@ func NewStore() *Store {
 }
 
 func (s *Store) LatestBlockHeight(ctx context.Context) (uint64, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
 	return s.blockHeight, nil
 }
 
