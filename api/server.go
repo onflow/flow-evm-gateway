@@ -396,7 +396,7 @@ func (h *httpServer) Start() error {
 		if h.wsConfig.prefix != "" {
 			url += h.wsConfig.prefix
 		}
-		log.Info().Msg(fmt.Sprint("WebSocket enabled", "url", url))
+		log.Info().Msg(fmt.Sprint("WebSocket enabled - URL: ", url))
 	}
 
 	// if server is websocket only, return after logging
@@ -407,16 +407,16 @@ func (h *httpServer) Start() error {
 	// Log http endpoint.
 	log.Info().Msg(
 		fmt.Sprint(
-			"HTTP server started",
-			"endpoint",
+			"HTTP server started: ",
+			"endpoint=",
 			listener.Addr(),
-			"auth",
+			" , auth=",
 			(h.httpConfig.jwtSecret != nil),
-			"prefix",
+			" , prefix=",
 			h.httpConfig.prefix,
-			"cors",
+			" , cors=",
 			strings.Join(h.httpConfig.CorsAllowedOrigins, ","),
-			"vhosts",
+			" , vhosts=",
 			strings.Join(h.httpConfig.Vhosts, ","),
 		),
 	)

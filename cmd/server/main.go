@@ -1,19 +1,16 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"log"
-	"net/http"
 	"runtime"
-	"strings"
 
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/onflow/flow-evm-gateway/api"
 	"github.com/onflow/flow-evm-gateway/indexer"
 	"github.com/onflow/flow-evm-gateway/storage"
+	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/onflow/flow-go/model/flow"
 	"github.com/rs/zerolog"
 )
@@ -44,6 +41,18 @@ func apis(store *storage.Store) []rpc.API {
 func runIndexer(store *storage.Store) {
 	ctx := context.Background()
 
+	flowClient, err := grpc.NewClient(accessURL)
+	if err != nil {
+		panic(err)
+	}
+
+	latestBlockHeader, err := flowClient.GetLatestBlockHeader(ctx, true)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("Latest Block Height: %d\n", latestBlockHeader.Height)
+	fmt.Printf("Latest Block ID: %s\n", latestBlockHeader.ID)
+
 	chain, err := indexer.GetChain(ctx, accessURL)
 	if err != nil {
 		log.Fatalf("could not get chain: %v", err)
@@ -54,23 +63,55 @@ func runIndexer(store *storage.Store) {
 		log.Fatalf("could not create execution data client: %v", err)
 	}
 
-	sub, err := execClient.SubscribeEvents(ctx, flow.ZeroID, 0, indexer.EventFilter{
-		Contracts: []string{"A.7e60df042a9c0868.FlowToken"},
-	})
+	sub, err := execClient.SubscribeEvents(
+		ctx,
+		flow.ZeroID,
+		latestBlockHeader.Height,
+		indexer.EventFilter{
+			Contracts: []string{"A.7e60df042a9c0868.FlowToken"},
+		},
+	)
 	if err != nil {
 		log.Fatalf("could not subscribe to execution data: %v", err)
 	}
 
+	reconnect := func(height uint64) {
+		fmt.Printf("Reconnecting at block %d\n", height)
+
+		var err error
+		execClient, err := indexer.NewExecutionDataClient(accessURL, chain)
+		if err != nil {
+			log.Fatalf("could not create execution data client: %v", err)
+		}
+
+		sub, err = execClient.SubscribeEvents(
+			ctx,
+			flow.ZeroID,
+			height,
+			indexer.EventFilter{
+				Contracts: []string{"A.7e60df042a9c0868.FlowToken"},
+			},
+		)
+		if err != nil {
+			log.Fatalf("could not subscribe to execution data: %v", err)
+		}
+	}
+
+	// track the most recently seen block height. we will use this when reconnecting
+	lastHeight := latestBlockHeader.Height
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case response, ok := <-sub.Channel():
-			if sub.Err() != nil {
-				log.Fatalf("error in subscription: %v", sub.Err())
-			}
 			if !ok {
-				log.Fatalf("subscription closed")
+				if sub.Err() != nil {
+					log.Fatalf("error in subscription: %v", sub.Err())
+					return // graceful shutdown
+				}
+				log.Fatalf("subscription closed - reconnecting")
+				reconnect(lastHeight + 1)
+				continue
 			}
 
 			log.Printf("block %d %s:", response.Height, response.BlockID)
@@ -78,6 +119,8 @@ func runIndexer(store *storage.Store) {
 			for _, event := range response.Events {
 				log.Printf("  %s", event.Type)
 			}
+
+			lastHeight = response.Height
 		}
 	}
 }
@@ -93,56 +136,4 @@ func runServer(store *storage.Store) {
 		panic(err)
 	}
 	fmt.Println("Server Started: ", srv.ListenAddr())
-
-	url := "http://" + srv.ListenAddr()
-	requests := []string{
-		`{"jsonrpc":"2.0","id":1,"method":"eth_blockNumber","params": []}`,
-		`{"jsonrpc":"2.0","id":2,"method":"eth_chainId","params": []}`,
-		`{"jsonrpc":"2.0","id":3,"method":"eth_syncing","params": []}`,
-		`{"jsonrpc":"2.0","id":4,"method":"eth_getBalance","params": ["0x407d73d8a49eeb85d32cf465507dd71d507100c1"]}`,
-		`{"jsonrpc":"2.0","id":5,"method":"eth_getBlockTransactionCountByNumber","params": ["0x4E4ee"]}`,
-	}
-	for _, request := range requests {
-		resp := rpcRequest(url, request, "origin", "test.com")
-		defer resp.Body.Close()
-		content, err := io.ReadAll(resp.Body)
-		if err != nil {
-			panic(err)
-		}
-		fmt.Println("Response: ", string(content))
-	}
-}
-
-// rpcRequest performs a JSON-RPC request to the given URL.
-func rpcRequest(url, bodyStr string, extraHeaders ...string) *http.Response {
-	// Create the request.
-	body := bytes.NewReader([]byte(bodyStr))
-	fmt.Println("Request: ", bodyStr)
-	req, err := http.NewRequest(http.MethodPost, url, body)
-	if err != nil {
-		panic(err)
-	}
-	req.Header.Set("content-type", "application/json")
-	req.Header.Set("accept-encoding", "identity")
-
-	// Apply extra headers.
-	if len(extraHeaders)%2 != 0 {
-		panic("odd extraHeaders length")
-	}
-	for i := 0; i < len(extraHeaders); i += 2 {
-		key, value := extraHeaders[i], extraHeaders[i+1]
-		if strings.EqualFold(key, "host") {
-			req.Host = value
-		} else {
-			req.Header.Set(key, value)
-		}
-	}
-
-	// Perform the request.
-	fmt.Printf("checking RPC/HTTP on %s %v\n", url, extraHeaders)
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		panic(err)
-	}
-	return resp
 }

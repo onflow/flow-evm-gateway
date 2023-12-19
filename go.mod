@@ -7,9 +7,11 @@ require (
 	github.com/ethereum/go-ethereum v1.12.0
 	github.com/golang-jwt/jwt/v4 v4.3.0
 	github.com/onflow/flow-go v0.32.4-0.20231122162232-0ba81ff8d241
+	github.com/onflow/flow-go-sdk v0.41.16
 	github.com/onflow/flow/protobuf/go/flow v0.3.2-0.20231121210617-52ee94b830c2
 	github.com/rs/cors v1.8.0
 	github.com/rs/zerolog v1.31.0
+	github.com/stretchr/testify v1.8.4
 	google.golang.org/grpc v1.58.3
 )
 
@@ -105,7 +107,6 @@ require (
 	github.com/onflow/flow-core-contracts/lib/go/contracts v0.14.0 // indirect
 	github.com/onflow/flow-core-contracts/lib/go/templates v0.14.0 // indirect
 	github.com/onflow/flow-ft/lib/go/contracts v0.7.1-0.20230711213910-baad011d2b13 // indirect
-	github.com/onflow/flow-go-sdk v0.41.16 // indirect
 	github.com/onflow/flow-go/crypto v0.24.9 // indirect
 	github.com/onflow/flow-nft/lib/go/contracts v1.1.0 // indirect
 	github.com/onflow/sdks v0.5.0 // indirect
@@ -133,7 +134,6 @@ require (
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/spf13/viper v1.15.0 // indirect
 	github.com/status-im/keycard-go v0.2.0 // indirect
-	github.com/stretchr/testify v1.8.4 // indirect
 	github.com/subosito/gotenv v1.4.2 // indirect
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7 // indirect
 	github.com/texttheater/golang-levenshtein/levenshtein v0.0.0-20200805054039-cae8b0eaed6c // indirect
