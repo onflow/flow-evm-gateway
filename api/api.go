@@ -18,10 +18,23 @@ import (
 	"github.com/onflow/flow-go/fvm/evm/emulator"
 )
 
+const EthNamespace = "eth"
+
 // this is added to resolve the issue with chainhash ambiguous import,
 // the code is not used, but it's needed to force go.mod specify and retain chainhash version
 // workaround for issue: https://github.com/golang/go/issues/27899
 var _ = chainhash.Hash{}
+
+func SupportedAPIs(store *storage.Store) []rpc.API {
+	return []rpc.API{
+		{
+			Namespace: EthNamespace,
+			Service: &BlockChainAPI{
+				Store: store,
+			},
+		},
+	}
+}
 
 type BlockChainAPI struct {
 	Store *storage.Store

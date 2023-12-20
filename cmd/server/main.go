@@ -27,17 +27,6 @@ func main() {
 	runtime.Goexit()
 }
 
-func apis(store *storage.Store) []rpc.API {
-	return []rpc.API{
-		{
-			Namespace: api.EthNamespace,
-			Service: &api.BlockChainAPI{
-				Store: store,
-			},
-		},
-	}
-}
-
 func runIndexer(store *storage.Store) {
 	ctx := context.Background()
 
@@ -137,10 +126,10 @@ func runIndexer(store *storage.Store) {
 }
 
 func runServer(store *storage.Store) {
-	timeouts := &rpc.DefaultHTTPTimeouts
-	srv := api.NewHTTPServer(zerolog.Logger{}, *timeouts)
-	srv.EnableRPC(apis(store), api.HttpConfig{})
-	srv.EnableWS(nil, api.WSConfig{})
+	srv := api.NewHTTPServer(zerolog.Logger{}, rpc.DefaultHTTPTimeouts)
+	supportedAPIs := api.SupportedAPIs(store)
+	srv.EnableRPC(supportedAPIs)
+	srv.EnableWS(supportedAPIs)
 	srv.SetListenAddr("localhost", 8545)
 	err := srv.Start()
 	if err != nil {
