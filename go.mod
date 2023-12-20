@@ -5,11 +5,10 @@ go 1.20
 require (
 	github.com/btcsuite/btcd/chaincfg/chainhash v1.0.2
 	github.com/ethereum/go-ethereum v1.12.0
-	github.com/golang-jwt/jwt/v4 v4.3.0
+	github.com/gorilla/websocket v1.5.0
 	github.com/onflow/flow-go v0.32.4-0.20231122162232-0ba81ff8d241
 	github.com/onflow/flow-go-sdk v0.41.16
 	github.com/onflow/flow/protobuf/go/flow v0.3.2-0.20231121210617-52ee94b830c2
-	github.com/rs/cors v1.8.0
 	github.com/rs/zerolog v1.31.0
 	github.com/stretchr/testify v1.8.4
 	google.golang.org/grpc v1.58.3
@@ -52,7 +51,6 @@ require (
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/golang/snappy v0.0.5-0.20220116011046-fa5810519dcb // indirect
 	github.com/google/uuid v1.3.0 // indirect
-	github.com/gorilla/websocket v1.5.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.7.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
