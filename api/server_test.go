@@ -48,6 +48,8 @@ var requests = []string{
 	`{"jsonrpc":"2.0","id":28,"method":"eth_accounts","params":[]}`,
 	`{"jsonrpc":"2.0","id":29,"method":"eth_call","params":[{"from":"0xb60e8dd61c5d32be8058bb8eb970870f07233155","to":"0xd46e8dd67c5d32be8058bb8eb970870f07244567","gas":"0x76c0","gasPrice":"0x9184e72a000","value":"0x9184e72a","input":"0xd46e8dd67c5d32be8d46e8dd67c5d32be8058bb8eb970870f072445675058bb8eb970870f072445675"}]}`,
 	`{"jsonrpc":"2.0","id":30,"method":"eth_estimateGas","params":[{"from":"0xb60e8dd61c5d32be8058bb8eb970870f07233155","to":"0xd46e8dd67c5d32be8058bb8eb970870f07244567","gas":"0x76c0","gasPrice":"0x9184e72a000","value":"0x9184e72a","input":"0xd46e8dd67c5d32be8d46e8dd67c5d32be8058bb8eb970870f072445675058bb8eb970870f072445675"}]}`,
+	`{"jsonrpc":"2.0","id":31,"method":"eth_getUncleByBlockHashAndIndex","params":["0xc6ef2fc5426d6ad6fd9e2a26abeab0aa2411b7ab17f30a99d3cb96aed1d1055b", "0x45"]}`,
+	`{"jsonrpc":"2.0","id":32,"method":"eth_getUncleByBlockNumberAndIndex","params":["0xe8", "0x45"]}`,
 }
 
 var expectedResponses = []string{
@@ -81,6 +83,8 @@ var expectedResponses = []string{
 	`{"jsonrpc":"2.0","id":28,"result":["0x407d73d8a49eeb85d32cf465507dd71d507100c1"]}`,
 	`{"jsonrpc":"2.0","id":29,"result":"0x00010203040506070809"}`,
 	`{"jsonrpc":"2.0","id":30,"result":"0x69"}`,
+	`{"jsonrpc":"2.0","id":31,"result":{}}`,
+	`{"jsonrpc":"2.0","id":32,"result":{}}`,
 }
 
 func TestServerJSONRPCOveHTTPHandler(t *testing.T) {

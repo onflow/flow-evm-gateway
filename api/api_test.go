@@ -622,4 +622,26 @@ func TestBlockChainAPI(t *testing.T) {
 
 		assert.Equal(t, hexutil.Uint64(105), gasEstimate)
 	})
+
+	t.Run("GetUncleByBlockHashAndIndex", func(t *testing.T) {
+		uncle, err := blockchainAPI.GetUncleByBlockHashAndIndex(
+			context.Background(),
+			common.HexToHash("0x8216c5785ac562ff41e2dcfdf5785ac562ff41e2dcfdf829c5a142f1fccd7d"),
+			hexutil.Uint(105),
+		)
+		require.NoError(t, err)
+
+		assert.Equal(t, map[string]interface{}{}, uncle)
+	})
+
+	t.Run("GetUncleByBlockNumberAndIndex", func(t *testing.T) {
+		uncle, err := blockchainAPI.GetUncleByBlockNumberAndIndex(
+			context.Background(),
+			rpc.FinalizedBlockNumber,
+			hexutil.Uint(115),
+		)
+		require.NoError(t, err)
+
+		assert.Equal(t, map[string]interface{}{}, uncle)
+	})
 }

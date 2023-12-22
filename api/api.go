@@ -632,3 +632,23 @@ func (s *BlockChainAPI) EstimateGas(
 ) (hexutil.Uint64, error) {
 	return hexutil.Uint64(105), nil
 }
+
+// eth_getUncleByBlockHashAndIndex
+// GetUncleByBlockHashAndIndex returns the uncle block for the given block hash and index.
+func (s *BlockChainAPI) GetUncleByBlockHashAndIndex(
+	ctx context.Context,
+	blockHash common.Hash,
+	index hexutil.Uint,
+) (map[string]interface{}, error) {
+	return map[string]interface{}{}, nil
+}
+
+// eth_getUncleByBlockNumberAndIndex
+// GetUncleByBlockNumberAndIndex returns the uncle block for the given block hash and index.
+func (s *BlockChainAPI) GetUncleByBlockNumberAndIndex(
+	ctx context.Context,
+	blockNumber rpc.BlockNumber,
+	index hexutil.Uint,
+) (map[string]interface{}, error) {
+	return map[string]interface{}{}, nil
+}
