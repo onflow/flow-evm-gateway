@@ -7,10 +7,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/gorilla/websocket"
 	"github.com/onflow/flow-evm-gateway/api"
 	"github.com/onflow/flow-evm-gateway/storage"
+	"github.com/onflow/flow-go/fvm/evm/emulator"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 )
@@ -62,7 +64,7 @@ var expectedResponses = []string{
 	`{"jsonrpc":"2.0","id":11,"result":{"blockHash":"0xc6ef2fc5426d6ad6fd9e2a26abeab0aa2411b7ab17f30a99d3cb96aed1d1055b","blockNumber":"0x5daf3b","from":"0xa7d9ddbe1f17865597fbd27ec712455208b6b76d","gas":"0xc350","gasPrice":"0x4a817c800","hash":"0x88df016429689c079f3b2f6ad39fa052532c56795b733da78a91ebe6a713944b","input":"0x3078363836353663366336663231","nonce":"0x15","to":"0xf02c1c8e6114b1dbe8937a39260b5b0a374432bb","transactionIndex":"0x40","value":"0xf3dbb76162000","type":"0x0","v":"0x25","r":"0x96","s":"0xfa"}}`,
 	`{"jsonrpc":"2.0","id":12,"result":{"blockHash":"0x1d59ff54b1eb26b013ce3cb5fc9dab3705b415a67127a003c3e61eb445bb8df2","blockNumber":"0x5daf3b","from":"0xa7d9ddbe1f17865597fbd27ec712455208b6b76d","gas":"0xc350","gasPrice":"0x4a817c800","hash":"0x88df016429689c079f3b2f6ad39fa052532c56795b733da78a91ebe6a713944b","input":"0x3078363836353663366336663231","nonce":"0x15","to":"0xf02c1c8e6114b1dbe8937a39260b5b0a374432bb","transactionIndex":"0x40","value":"0xf3dbb76162000","type":"0x0","v":"0x25","r":"0x96","s":"0xfa"}}`,
 	`{"jsonrpc":"2.0","id":13,"result":{"blockHash":"0x1d59ff54b1eb26b013ce3cb5fc9dab3705b415a67127a003c3e61eb445bb8df2","blockNumber":"0x5daf3b","contractAddress":null,"cumulativeGasUsed":"0xc350","effectiveGasPrice":"0x4a817c800","from":"0xa7d9ddbe1f17865597fbd27ec712455208b6b76d","gasUsed":"0x9c40","logs":[],"logsBloom":"0x88df016429689c079f3b2f6ad39fa052532c56795b733da78a91ebe6a713944b","status":"0x1","to":"0xf02c1c8e6114b1dbe8937a39260b5b0a374432bb","transactionHash":"0x88df016429689c079f3b2f6ad39fa052532c56795b733da78a91ebe6a713944b","transactionIndex":"0x40","type":"0x2"}}`,
-	`{"jsonrpc":"2.0","id":14,"result":"0x9b1d35635cc34752ca54713bb99d38614f63c955"}`,
+	`{"jsonrpc":"2.0","id":14,"result":"0xf02c1c8e6114b1dbe8937a39260b5b0a374432bb"}`,
 	`{"jsonrpc":"2.0","id":15,"result":{"difficulty":"0x4ea3f27bc","extraData":"0x476574682f4c5649562f76312e302e302f6c696e75782f676f312e342e32","gasLimit":"0x1388","gasUsed":"0x0","hash":"0xdc0818cf78f21a8e70579cb46a43643f78291264dda342ae31049421c82d21ae","logsBloom":"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","miner":"0xbb7b8287f3f0a933474a79eae42cbca977791171","mixHash":"0x4fffe9ae21f1c9e15207b1f472d5bbdd68c9595d461666602f2be20daf5e7843","nonce":"0x689056015818adbe","number":"0x1b4","parentHash":"0xe99e022112df268087ea7eafaf4790497fd21dbeeb6bd7a1721df161a6657a54","receiptsRoot":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421","sha3Uncles":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","size":"0x220","stateRoot":"0xddc8b0234c2e0cad087c8b389aa7ef01f7d79b2570bccb77ce48648aa61c904d","timestamp":"0x55ba467c","totalDifficulty":"0x78ed983323d","transactions":[],"transactionsRoot":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421","uncles":[]}}`,
 	`{"jsonrpc":"2.0","id":16,"result":{"difficulty":"0x4ea3f27bc","extraData":"0x476574682f4c5649562f76312e302e302f6c696e75782f676f312e342e32","gasLimit":"0x1388","gasUsed":"0x0","hash":"0xdc0818cf78f21a8e70579cb46a43643f78291264dda342ae31049421c82d21ae","logsBloom":"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","miner":"0xbb7b8287f3f0a933474a79eae42cbca977791171","mixHash":"0x4fffe9ae21f1c9e15207b1f472d5bbdd68c9595d461666602f2be20daf5e7843","nonce":"0x689056015818adbe","number":"0x1b4","parentHash":"0xe99e022112df268087ea7eafaf4790497fd21dbeeb6bd7a1721df161a6657a54","receiptsRoot":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421","sha3Uncles":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","size":"0x220","stateRoot":"0xddc8b0234c2e0cad087c8b389aa7ef01f7d79b2570bccb77ce48648aa61c904d","timestamp":"0x55ba467c","totalDifficulty":"0x78ed983323d","transactions":[],"transactionsRoot":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421","uncles":[]}}`,
 	`{"jsonrpc":"2.0","id":17,"result":"0x188aa"}`,
@@ -84,7 +86,11 @@ var expectedResponses = []string{
 func TestServerJSONRPCOveHTTPHandler(t *testing.T) {
 	store := storage.NewStore()
 	srv := api.NewHTTPServer(zerolog.Logger{}, rpc.DefaultHTTPTimeouts)
-	supportedAPIs := api.SupportedAPIs(store)
+	config := &api.Config{
+		ChainID:  emulator.FlowEVMTestnetChainID,
+		Coinbase: common.HexToAddress("0xf02c1c8e6114b1dbe8937a39260b5b0a374432bb"),
+	}
+	supportedAPIs := api.SupportedAPIs(config, store)
 	srv.EnableRPC(supportedAPIs)
 	srv.SetListenAddr("localhost", 8545)
 	err := srv.Start()
@@ -111,7 +117,11 @@ func TestServerJSONRPCOveHTTPHandler(t *testing.T) {
 func TestServerJSONRPCOveWebSocketHandler(t *testing.T) {
 	store := storage.NewStore()
 	srv := api.NewHTTPServer(zerolog.Logger{}, rpc.DefaultHTTPTimeouts)
-	supportedAPIs := api.SupportedAPIs(store)
+	config := &api.Config{
+		ChainID:  emulator.FlowEVMTestnetChainID,
+		Coinbase: common.HexToAddress("0xf02c1c8e6114b1dbe8937a39260b5b0a374432bb"),
+	}
+	supportedAPIs := api.SupportedAPIs(config, store)
 	srv.EnableWS(supportedAPIs)
 	srv.SetListenAddr("localhost", 8545)
 	err := srv.Start()

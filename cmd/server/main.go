@@ -2,34 +2,55 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"runtime"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/onflow/flow-evm-gateway/api"
 	"github.com/onflow/flow-evm-gateway/indexer"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-go-sdk/access/grpc"
+	"github.com/onflow/flow-go/fvm/evm/emulator"
 	"github.com/onflow/flow-go/model/flow"
 	"github.com/rs/zerolog"
 )
 
 const (
 	accessURL = "access-001.devnet49.nodes.onflow.org:9000"
+	coinbase  = "0xf02c1c8e6114b1dbe8937a39260b5b0a374432bb"
 )
 
 func main() {
+	var network, coinbase string
+
+	flag.StringVar(&network, "network", "testnet", "network to connect the gateway to")
+	flag.StringVar(&coinbase, "coinbase", coinbase, "coinbase address to use for fee collection")
+	flag.Parse()
+
+	config := &api.Config{}
+	config.Coinbase = common.HexToAddress(coinbase)
+	if network == "testnet" {
+		config.ChainID = emulator.FlowEVMTestnetChainID
+	} else if network == "mainnet" {
+		config.ChainID = emulator.FlowEVMMainnetChainID
+	} else {
+		panic(fmt.Errorf("unknown network: %s", network))
+	}
+
 	store := storage.NewStore()
-	runServer(store)
-	runIndexer(store)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	runServer(config, store)
+	runIndexer(ctx, store)
 
 	runtime.Goexit()
 }
 
-func runIndexer(store *storage.Store) {
-	ctx := context.Background()
-
+func runIndexer(ctx context.Context, store *storage.Store) {
 	flowClient, err := grpc.NewClient(accessURL)
 	if err != nil {
 		panic(err)
@@ -125,9 +146,9 @@ func runIndexer(store *storage.Store) {
 	}
 }
 
-func runServer(store *storage.Store) {
+func runServer(config *api.Config, store *storage.Store) {
 	srv := api.NewHTTPServer(zerolog.Logger{}, rpc.DefaultHTTPTimeouts)
-	supportedAPIs := api.SupportedAPIs(store)
+	supportedAPIs := api.SupportedAPIs(config, store)
 	srv.EnableRPC(supportedAPIs)
 	srv.EnableWS(supportedAPIs)
 	srv.SetListenAddr("localhost", 8545)

@@ -31,9 +31,11 @@ func TestBlockChainAPI(t *testing.T) {
 	t.Parallel()
 
 	store := storage.NewStore()
-	blockchainAPI := &api.BlockChainAPI{
-		Store: store,
+	config := &api.Config{
+		ChainID:  emulator.FlowEVMTestnetChainID,
+		Coinbase: common.HexToAddress("0xf02c1c8e6114b1dbe8937a39260b5b0a374432bb"),
 	}
+	blockchainAPI := api.NewBlockChainAPI(config, store)
 
 	t.Run("ChainId", func(t *testing.T) {
 		chainID := blockchainAPI.ChainId()
@@ -302,7 +304,7 @@ func TestBlockChainAPI(t *testing.T) {
 
 		assert.Equal(
 			t,
-			common.HexToAddress("0x9B1d35635cC34752ca54713BB99d38614f63C955"),
+			common.HexToAddress("0xf02c1c8e6114b1dbe8937a39260b5b0a374432bb"),
 			addr,
 		)
 	})

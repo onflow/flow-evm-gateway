@@ -15,29 +15,35 @@ import (
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/onflow/flow-evm-gateway/storage"
-	"github.com/onflow/flow-go/fvm/evm/emulator"
 )
 
 const EthNamespace = "eth"
+const defaultGasPrice = 8049999872
 
 // this is added to resolve the issue with chainhash ambiguous import,
 // the code is not used, but it's needed to force go.mod specify and retain chainhash version
 // workaround for issue: https://github.com/golang/go/issues/27899
 var _ = chainhash.Hash{}
 
-func SupportedAPIs(store *storage.Store) []rpc.API {
+func SupportedAPIs(config *Config, store *storage.Store) []rpc.API {
 	return []rpc.API{
 		{
 			Namespace: EthNamespace,
-			Service: &BlockChainAPI{
-				Store: store,
-			},
+			Service:   NewBlockChainAPI(config, store),
 		},
 	}
 }
 
 type BlockChainAPI struct {
-	Store *storage.Store
+	config *Config
+	Store  *storage.Store
+}
+
+func NewBlockChainAPI(config *Config, store *storage.Store) *BlockChainAPI {
+	return &BlockChainAPI{
+		config: config,
+		Store:  store,
+	}
 }
 
 // eth_chainId
@@ -48,7 +54,7 @@ type BlockChainAPI struct {
 // wasn't synced up to a block where EIP-155 is enabled, but this behavior caused issues
 // in CL clients.
 func (api *BlockChainAPI) ChainId() *hexutil.Big {
-	return (*hexutil.Big)(emulator.FlowEVMTestnetChainID)
+	return (*hexutil.Big)(api.config.ChainID)
 }
 
 // eth_blockNumber
@@ -120,7 +126,7 @@ func (s *BlockChainAPI) FeeHistory(
 // eth_gasPrice (returns the gas price)
 // GasPrice returns a suggestion for a gas price for legacy transactions.
 func (s *BlockChainAPI) GasPrice(ctx context.Context) (*hexutil.Big, error) {
-	return (*hexutil.Big)(big.NewInt(8049999872)), nil
+	return (*hexutil.Big)(big.NewInt(defaultGasPrice)), nil
 }
 
 // eth_maxPriorityFeePerGas
@@ -314,7 +320,7 @@ func (s *BlockChainAPI) GetTransactionReceipt(
 // eth_coinbase (return the coinbase for a block)
 // Coinbase is the address that mining rewards will be sent to (alias for Etherbase).
 func (s *BlockChainAPI) Coinbase() (common.Address, error) {
-	return common.HexToAddress("0x9b1d35635cc34752ca54713bb99d38614f63c955"), nil
+	return s.config.Coinbase, nil
 }
 
 // eth_getBlockByHash
