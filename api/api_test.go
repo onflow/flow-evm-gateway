@@ -16,7 +16,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/onflow/flow-evm-gateway/api"
 	"github.com/onflow/flow-evm-gateway/storage"
-	"github.com/onflow/flow-go/fvm/evm/emulator"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -32,7 +31,7 @@ func TestBlockChainAPI(t *testing.T) {
 
 	store := storage.NewStore()
 	config := &api.Config{
-		ChainID:  emulator.FlowEVMTestnetChainID,
+		ChainID:  api.FlowEVMTestnetChainID,
 		Coinbase: common.HexToAddress("0xf02c1c8e6114b1dbe8937a39260b5b0a374432bb"),
 	}
 	blockchainAPI := api.NewBlockChainAPI(config, store)
@@ -40,7 +39,7 @@ func TestBlockChainAPI(t *testing.T) {
 	t.Run("ChainId", func(t *testing.T) {
 		chainID := blockchainAPI.ChainId()
 
-		assert.Equal(t, (*hexutil.Big)(emulator.FlowEVMTestnetChainID), chainID)
+		assert.Equal(t, (*hexutil.Big)(api.FlowEVMTestnetChainID), chainID)
 	})
 
 	t.Run("BlockNumber", func(t *testing.T) {

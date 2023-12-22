@@ -12,7 +12,6 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/onflow/flow-evm-gateway/api"
 	"github.com/onflow/flow-evm-gateway/storage"
-	"github.com/onflow/flow-go/fvm/evm/emulator"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 )
@@ -91,7 +90,7 @@ func TestServerJSONRPCOveHTTPHandler(t *testing.T) {
 	store := storage.NewStore()
 	srv := api.NewHTTPServer(zerolog.Logger{}, rpc.DefaultHTTPTimeouts)
 	config := &api.Config{
-		ChainID:  emulator.FlowEVMTestnetChainID,
+		ChainID:  api.FlowEVMTestnetChainID,
 		Coinbase: common.HexToAddress("0xf02c1c8e6114b1dbe8937a39260b5b0a374432bb"),
 	}
 	supportedAPIs := api.SupportedAPIs(config, store)
@@ -122,7 +121,7 @@ func TestServerJSONRPCOveWebSocketHandler(t *testing.T) {
 	store := storage.NewStore()
 	srv := api.NewHTTPServer(zerolog.Logger{}, rpc.DefaultHTTPTimeouts)
 	config := &api.Config{
-		ChainID:  emulator.FlowEVMTestnetChainID,
+		ChainID:  api.FlowEVMTestnetChainID,
 		Coinbase: common.HexToAddress("0xf02c1c8e6114b1dbe8937a39260b5b0a374432bb"),
 	}
 	supportedAPIs := api.SupportedAPIs(config, store)

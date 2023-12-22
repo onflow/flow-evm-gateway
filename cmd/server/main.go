@@ -7,35 +7,36 @@ import (
 	"log"
 	"runtime"
 
+	goGrpc "google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/onflow/flow-evm-gateway/api"
-	"github.com/onflow/flow-evm-gateway/indexer"
 	"github.com/onflow/flow-evm-gateway/storage"
+	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access/grpc"
-	"github.com/onflow/flow-go/fvm/evm/emulator"
-	"github.com/onflow/flow-go/model/flow"
 	"github.com/rs/zerolog"
 )
 
 const (
-	accessURL = "access-001.devnet49.nodes.onflow.org:9000"
-	coinbase  = "0xf02c1c8e6114b1dbe8937a39260b5b0a374432bb"
+	accessURL    = "access-001.devnet49.nodes.onflow.org:9000"
+	coinbaseAddr = "0xf02c1c8e6114b1dbe8937a39260b5b0a374432bb"
 )
 
 func main() {
 	var network, coinbase string
 
 	flag.StringVar(&network, "network", "testnet", "network to connect the gateway to")
-	flag.StringVar(&coinbase, "coinbase", coinbase, "coinbase address to use for fee collection")
+	flag.StringVar(&coinbase, "coinbase", coinbaseAddr, "coinbase address to use for fee collection")
 	flag.Parse()
 
 	config := &api.Config{}
 	config.Coinbase = common.HexToAddress(coinbase)
 	if network == "testnet" {
-		config.ChainID = emulator.FlowEVMTestnetChainID
+		config.ChainID = api.FlowEVMTestnetChainID
 	} else if network == "mainnet" {
-		config.ChainID = emulator.FlowEVMMainnetChainID
+		config.ChainID = api.FlowEVMMainnetChainID
 	} else {
 		panic(fmt.Errorf("unknown network: %s", network))
 	}
@@ -51,7 +52,10 @@ func main() {
 }
 
 func runIndexer(ctx context.Context, store *storage.Store) {
-	flowClient, err := grpc.NewClient(accessURL)
+	flowClient, err := grpc.NewBaseClient(
+		accessURL,
+		goGrpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
 	if err != nil {
 		panic(err)
 	}
@@ -63,49 +67,40 @@ func runIndexer(ctx context.Context, store *storage.Store) {
 	fmt.Printf("Latest Block Height: %d\n", latestBlockHeader.Height)
 	fmt.Printf("Latest Block ID: %s\n", latestBlockHeader.ID)
 
-	chain, err := indexer.GetChain(ctx, accessURL)
-	if err != nil {
-		log.Fatalf("could not get chain: %v", err)
-	}
-
-	execClient, err := indexer.NewExecutionDataClient(accessURL, chain)
-	if err != nil {
-		log.Fatalf("could not create execution data client: %v", err)
-	}
-
-	sub, err := execClient.SubscribeEvents(
+	data, errChan, initErr := flowClient.SubscribeEventsByBlockHeight(
 		ctx,
-		flow.ZeroID,
 		latestBlockHeader.Height,
-		indexer.EventFilter{
+		flow.EventFilter{
 			Contracts: []string{"A.7e60df042a9c0868.FlowToken"},
 		},
-		1,
+		grpc.WithHeartbeatInterval(1),
 	)
-	if err != nil {
-		log.Fatalf("could not subscribe to execution data: %v", err)
+	if initErr != nil {
+		log.Fatalf("could not subscribe to events: %v", initErr)
 	}
 
 	reconnect := func(height uint64) {
 		fmt.Printf("Reconnecting at block %d\n", height)
 
 		var err error
-		execClient, err := indexer.NewExecutionDataClient(accessURL, chain)
-		if err != nil {
-			log.Fatalf("could not create execution data client: %v", err)
-		}
-
-		sub, err = execClient.SubscribeEvents(
-			ctx,
-			flow.ZeroID,
-			height,
-			indexer.EventFilter{
-				Contracts: []string{"A.7e60df042a9c0868.FlowToken"},
-			},
-			1,
+		flowClient, err := grpc.NewBaseClient(
+			accessURL,
+			goGrpc.WithTransportCredentials(insecure.NewCredentials()),
 		)
 		if err != nil {
-			log.Fatalf("could not subscribe to execution data: %v", err)
+			log.Fatalf("could not create flow client: %v", err)
+		}
+
+		data, errChan, initErr = flowClient.SubscribeEventsByBlockHeight(
+			ctx,
+			latestBlockHeader.Height,
+			flow.EventFilter{
+				Contracts: []string{"A.7e60df042a9c0868.FlowToken"},
+			},
+			grpc.WithHeartbeatInterval(1),
+		)
+		if initErr != nil {
+			log.Fatalf("could not subscribe to events: %v", initErr)
 		}
 	}
 
@@ -116,32 +111,46 @@ func runIndexer(ctx context.Context, store *storage.Store) {
 		select {
 		case <-ctx.Done():
 			return
-		case response, ok := <-sub.Channel():
-			if response.Height != lastHeight+1 {
-				log.Fatalf("missed events response for block %d", lastHeight+1)
-				reconnect(lastHeight)
-				continue
-			}
 
+		case response, ok := <-data:
 			if !ok {
-				if sub.Err() != nil {
-					log.Fatalf("error in subscription: %v", sub.Err())
+				if ctx.Err() != nil {
 					return // graceful shutdown
 				}
-				log.Fatalf("subscription closed - reconnecting")
+				fmt.Println("subscription closed - reconnecting")
 				reconnect(lastHeight + 1)
 				continue
 			}
 
-			log.Printf("block %d %s:", response.Height, response.BlockID)
+			if response.Height != lastHeight+1 {
+				fmt.Printf("missed events response for block %d\n", lastHeight+1)
+				reconnect(lastHeight)
+				continue
+			}
+
+			fmt.Printf("block %d %s:\n", response.Height, response.BlockID)
 			if len(response.Events) > 0 {
 				store.StoreBlockHeight(ctx, response.Height)
 			}
 			for _, event := range response.Events {
-				log.Printf("  %s", event.Type)
+				fmt.Printf("  %s\n", event.Type)
 			}
 
 			lastHeight = response.Height
+
+		case err, ok := <-errChan:
+			if !ok {
+				if ctx.Err() != nil {
+					return // graceful shutdown
+				}
+				// unexpected close
+				reconnect(lastHeight + 1)
+				continue
+			}
+
+			fmt.Printf("~~~ ERROR: %s ~~~\n", err.Error())
+			reconnect(lastHeight + 1)
+			continue
 		}
 	}
 }

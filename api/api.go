@@ -20,6 +20,12 @@ import (
 const EthNamespace = "eth"
 const defaultGasPrice = 8049999872
 
+// TODO: Fetch these from flow-go/fvm/evm/emulator/config.go
+var (
+	FlowEVMTestnetChainID = big.NewInt(666)
+	FlowEVMMainnetChainID = big.NewInt(777)
+)
+
 // this is added to resolve the issue with chainhash ambiguous import,
 // the code is not used, but it's needed to force go.mod specify and retain chainhash version
 // workaround for issue: https://github.com/golang/go/issues/27899
