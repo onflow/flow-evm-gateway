@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -25,11 +24,6 @@ var (
 	FlowEVMTestnetChainID = big.NewInt(666)
 	FlowEVMMainnetChainID = big.NewInt(777)
 )
-
-// this is added to resolve the issue with chainhash ambiguous import,
-// the code is not used, but it's needed to force go.mod specify and retain chainhash version
-// workaround for issue: https://github.com/golang/go/issues/27899
-var _ = chainhash.Hash{}
 
 func SupportedAPIs(config *Config, store *storage.Store) []rpc.API {
 	return []rpc.API{
