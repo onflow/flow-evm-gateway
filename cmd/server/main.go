@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"runtime"
+	"time"
 
 	goGrpc "google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -85,6 +86,9 @@ func runIndexer(ctx context.Context, store *storage.Store, logger zerolog.Logger
 
 	reconnect := func(height uint64) {
 		logger.Warn().Msgf("Reconnecting at block height: %d", height)
+		// TODO(m-Peter) We should add a proper library for retrying
+		// with configurable backoffs, such as https://github.com/sethvargo/go-retry.
+		time.Sleep(10 * time.Second)
 
 		var err error
 		flowClient, err := grpc.NewBaseClient(
