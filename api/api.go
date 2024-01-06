@@ -62,7 +62,8 @@ func (api *BlockChainAPI) ChainId() *hexutil.Big {
 func (api *BlockChainAPI) BlockNumber() hexutil.Uint64 {
 	latestBlockHeight, err := api.Store.LatestBlockHeight(context.Background())
 	if err != nil {
-		return hexutil.Uint64(0)
+		// TODO(m-Peter) We should add a logger to BlockChainAPI
+		panic(fmt.Errorf("failed to fetch the latest block number: %v", err))
 	}
 	return hexutil.Uint64(latestBlockHeight)
 }
