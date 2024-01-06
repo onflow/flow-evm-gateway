@@ -70,25 +70,12 @@ func runIndexer(ctx context.Context, store *storage.Store, logger zerolog.Logger
 		panic(err)
 	}
 	logger.Info().Msgf("Latest Block Height: %d", latestBlockHeader.Height)
-	logger.Info().Msgf("Latest Block ID: %s", latestBlockHeader.ID)
 
-	data, errChan, initErr := flowClient.SubscribeEventsByBlockHeight(
-		ctx,
-		latestBlockHeader.Height,
-		flow.EventFilter{
-			Contracts: []string{"A.7e60df042a9c0868.FlowToken"},
-		},
-		grpc.WithHeartbeatInterval(1),
-	)
-	if initErr != nil {
-		logger.Error().Msgf("could not subscribe to events: %v", initErr)
-	}
-
-	reconnect := func(height uint64) {
-		logger.Warn().Msgf("Reconnecting at block height: %d", height)
+	connect := func(height uint64, waitTime time.Duration) (<-chan flow.BlockEvents, <-chan error, error) {
+		logger.Info().Msgf("Connecting at block height: %d", height)
 		// TODO(m-Peter) We should add a proper library for retrying
 		// with configurable backoffs, such as https://github.com/sethvargo/go-retry.
-		time.Sleep(10 * time.Second)
+		time.Sleep(waitTime)
 
 		var err error
 		flowClient, err := grpc.NewBaseClient(
@@ -99,7 +86,7 @@ func runIndexer(ctx context.Context, store *storage.Store, logger zerolog.Logger
 			logger.Error().Msgf("could not create flow client: %v", err)
 		}
 
-		data, errChan, initErr = flowClient.SubscribeEventsByBlockHeight(
+		return flowClient.SubscribeEventsByBlockHeight(
 			ctx,
 			latestBlockHeader.Height,
 			flow.EventFilter{
@@ -107,9 +94,11 @@ func runIndexer(ctx context.Context, store *storage.Store, logger zerolog.Logger
 			},
 			grpc.WithHeartbeatInterval(1),
 		)
-		if initErr != nil {
-			logger.Error().Msgf("could not subscribe to events: %v", initErr)
-		}
+	}
+
+	data, errChan, initErr := connect(latestBlockHeader.Height, 0)
+	if initErr != nil {
+		logger.Error().Msgf("could not subscribe to events: %v", initErr)
 	}
 
 	// track the most recently seen block height. we will use this when reconnecting
@@ -126,13 +115,13 @@ func runIndexer(ctx context.Context, store *storage.Store, logger zerolog.Logger
 					return // graceful shutdown
 				}
 				logger.Error().Msg("subscription closed - reconnecting")
-				reconnect(lastHeight + 1)
+				connect(lastHeight+1, 10)
 				continue
 			}
 
 			if response.Height != lastHeight+1 {
 				logger.Error().Msgf("missed events response for block %d", lastHeight+1)
-				reconnect(lastHeight)
+				connect(lastHeight, 10)
 				continue
 			}
 
@@ -152,12 +141,12 @@ func runIndexer(ctx context.Context, store *storage.Store, logger zerolog.Logger
 					return // graceful shutdown
 				}
 				// unexpected close
-				reconnect(lastHeight + 1)
+				connect(lastHeight+1, 10)
 				continue
 			}
 
 			logger.Error().Msgf("ERROR: %v", err)
-			reconnect(lastHeight + 1)
+			connect(lastHeight+1, 10)
 			continue
 		}
 	}
