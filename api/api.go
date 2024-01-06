@@ -298,6 +298,10 @@ func (s *BlockChainAPI) GetTransactionReceipt(
 	ctx context.Context,
 	hash common.Hash,
 ) (map[string]interface{}, error) {
+	// TODO(m-Peter) These are mock data just for fleshing out the
+	// fields involved in the returned value. Ideally we would like to
+	// defined interfaces for the storage & indexer services, so that
+	// we can proceed with some tests, and get rid of these mock data.
 	receipt := map[string]interface{}{}
 	txIndex := uint64(64)
 	blockHash := common.HexToHash("0x1d59ff54b1eb26b013ce3cb5fc9dab3705b415a67127a003c3e61eb445bb8df2")
