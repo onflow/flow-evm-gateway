@@ -1,3 +1,8 @@
+// Disclaimer: The implementation & design of `httpServer` is largely inspired
+// by https://github.com/ethereum/go-ethereum/blob/master/node/rpcstack.go .
+// The types defined on the above file are not exported, so we have extracted
+// a minified version of it, for the needs of this EVM Gateway.
+
 package api
 
 import (
