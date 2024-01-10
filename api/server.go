@@ -1,12 +1,325 @@
+// Disclaimer: The implementation & design of `httpServer` is largely inspired
+// by https://github.com/ethereum/go-ethereum/blob/master/node/rpcstack.go .
+// The types defined on the above file are not exported, so we have extracted
+// a minified version of it, for the needs of this EVM Gateway.
+
 package api
 
-import "github.com/ethereum/go-ethereum/rpc"
+import (
+	"context"
+	"fmt"
+	"net"
+	"net/http"
+	"strings"
+	"time"
 
-const ethNamespace = "eth"
+	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
+)
 
-func NewRPCServer() *rpc.Server {
-	server := rpc.NewServer()
-	server.RegisterName(ethNamespace, &BlockChainAPI{})
+type rpcHandler struct {
+	http.Handler
+	server *rpc.Server
+}
 
-	return server
+type httpServer struct {
+	log      zerolog.Logger
+	timeouts rpc.HTTPTimeouts
+
+	server   *http.Server
+	listener net.Listener // non-nil when server is running
+
+	// JSON-RPC over HTTP handler
+	httpHandler *rpcHandler
+
+	// JSON-RPC over WebSocket handler
+	wsHandler *rpcHandler
+
+	// These are set by SetListenAddr.
+	endpoint string
+	host     string
+	port     int
+}
+
+const (
+	shutdownTimeout = 5 * time.Second
+)
+
+func NewHTTPServer(log zerolog.Logger, timeouts rpc.HTTPTimeouts) *httpServer {
+	return &httpServer{
+		log:      log,
+		timeouts: timeouts,
+	}
+}
+
+// SetListenAddr configures the listening address of the server.
+// The address can only be set while the server is not running.
+func (h *httpServer) SetListenAddr(host string, port int) error {
+	if h.listener != nil && (host != h.host || port != h.port) {
+		return fmt.Errorf("HTTP server already running on %s", h.endpoint)
+	}
+
+	h.host, h.port = host, port
+	h.endpoint = net.JoinHostPort(host, fmt.Sprintf("%d", port))
+
+	return nil
+}
+
+// ListenAddr returns the listening address of the server.
+func (h *httpServer) ListenAddr() string {
+	if h.listener != nil {
+		return h.listener.Addr().String()
+	}
+
+	return h.endpoint
+}
+
+// EnableRPC turns on JSON-RPC over HTTP on the server.
+func (h *httpServer) EnableRPC(apis []rpc.API) error {
+	if h.rpcAllowed() {
+		return fmt.Errorf("JSON-RPC over HTTP is already enabled")
+	}
+
+	// Create RPC server and handler.
+	srv := rpc.NewServer()
+
+	// Register all the APIs exposed by the services
+	for _, api := range apis {
+		if err := srv.RegisterName(api.Namespace, api.Service); err != nil {
+			return err
+		}
+	}
+
+	h.httpHandler = &rpcHandler{
+		Handler: srv,
+		server:  srv,
+	}
+
+	return nil
+}
+
+// rpcAllowed returns true when JSON-RPC over HTTP is enabled.
+func (h *httpServer) rpcAllowed() bool {
+	return h.httpHandler != nil
+}
+
+// EnableWS turns on JSON-RPC over WebSocket on the server.
+func (h *httpServer) EnableWS(apis []rpc.API) error {
+	if h.wsAllowed() {
+		return fmt.Errorf("JSON-RPC over WebSocket is already enabled")
+	}
+
+	// Create RPC server and handler.
+	srv := rpc.NewServer()
+
+	// Register all the APIs exposed by the services
+	for _, api := range apis {
+		if err := srv.RegisterName(api.Namespace, api.Service); err != nil {
+			return err
+		}
+	}
+
+	h.wsHandler = &rpcHandler{
+		Handler: srv.WebsocketHandler([]string{"*"}),
+		server:  srv,
+	}
+
+	return nil
+}
+
+// wsAllowed returns true when JSON-RPC over WebSocket is enabled.
+func (h *httpServer) wsAllowed() bool {
+	return h.wsHandler != nil
+}
+
+// disableWS disables the JSON-RPC over WebSocket handler.
+func (h *httpServer) disableWS() bool {
+	if h.wsAllowed() {
+		h.wsHandler.server.Stop()
+		h.wsHandler = nil
+		return true
+	}
+
+	return false
+}
+
+// Start starts the HTTP server if it is enabled and not already running.
+func (h *httpServer) Start() error {
+	if h.endpoint == "" || h.listener != nil {
+		return nil // already running or not configured
+	}
+
+	// Initialize the server.
+	h.server = &http.Server{Handler: h}
+	if h.timeouts != (rpc.HTTPTimeouts{}) {
+		CheckTimeouts(h.log, &h.timeouts)
+		h.server.ReadTimeout = h.timeouts.ReadTimeout
+		h.server.ReadHeaderTimeout = h.timeouts.ReadHeaderTimeout
+		h.server.WriteTimeout = h.timeouts.WriteTimeout
+		h.server.IdleTimeout = h.timeouts.IdleTimeout
+	}
+
+	// Start the server.
+	listener, err := net.Listen("tcp", h.endpoint)
+	if err != nil {
+		// If the server fails to start, we need to clear out the RPC and WS
+		// configurations so they can be configured another time.
+		h.disableRPC()
+		h.disableWS()
+		return err
+	}
+
+	h.listener = listener
+	go h.server.Serve(listener)
+
+	if h.rpcAllowed() {
+		log.Info().Msg(fmt.Sprintf("JSON-RPC over HTTP enabled: %v/rpc", listener.Addr()))
+	}
+
+	if h.wsAllowed() {
+		url := fmt.Sprintf("ws://%v/ws", listener.Addr())
+		log.Info().Msg(fmt.Sprint("JSON-RPC over WebSocket enabled: ", url))
+	}
+
+	return nil
+}
+
+// disableRPC stops the JSON-RPC over HTTP handler.
+func (h *httpServer) disableRPC() bool {
+	if h.rpcAllowed() {
+		h.httpHandler.server.Stop()
+		h.httpHandler = nil
+		return true
+	}
+
+	return false
+}
+
+func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Check if WebSocket request and serve if JSON-RPC over WebSocket is enabled
+	ws := h.wsHandler
+	if ws != nil && isWebSocket(r) {
+		if checkPath(r, "/ws") {
+			ws.ServeHTTP(w, r)
+			return
+		}
+	}
+
+	// If JSON-RPC over HTTP is enabled, try to serve the request
+	rpc := h.httpHandler
+	if rpc != nil {
+		if checkPath(r, "/rpc") {
+			rpc.ServeHTTP(w, r)
+			return
+		}
+	}
+
+	w.WriteHeader(http.StatusNotFound)
+}
+
+// Stop shuts down the HTTP server.
+func (h *httpServer) Stop() {
+	if h.listener == nil {
+		return // not running
+	}
+
+	// Shut down the server.
+	httpHandler := h.httpHandler
+	if httpHandler != nil {
+		httpHandler.server.Stop()
+		h.httpHandler = nil
+	}
+
+	wsHandler := h.wsHandler
+	if wsHandler != nil {
+		wsHandler.server.Stop()
+		h.wsHandler = nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+	err := h.server.Shutdown(ctx)
+	if err != nil && err == ctx.Err() {
+		log.Warn().Msg("HTTP server graceful shutdown timed out")
+		h.server.Close()
+	}
+
+	h.listener.Close()
+	log.Info().Msg(
+		fmt.Sprint("HTTP server stopped", "endpoint", h.listener.Addr()),
+	)
+
+	// Clear out everything to allow re-configuring it later.
+	h.host, h.port, h.endpoint = "", 0, ""
+	h.server, h.listener = nil, nil
+}
+
+// CheckTimeouts ensures that timeout values are meaningful
+func CheckTimeouts(logger zerolog.Logger, timeouts *rpc.HTTPTimeouts) {
+	if timeouts.ReadTimeout < time.Second {
+		log.Warn().Msg(
+			fmt.Sprint(
+				"Sanitizing invalid HTTP read timeout",
+				"provided",
+				timeouts.ReadTimeout,
+				"updated",
+				rpc.DefaultHTTPTimeouts.ReadTimeout,
+			),
+		)
+		timeouts.ReadTimeout = rpc.DefaultHTTPTimeouts.ReadTimeout
+	}
+	if timeouts.ReadHeaderTimeout < time.Second {
+		log.Warn().Msg(
+			fmt.Sprint(
+				"Sanitizing invalid HTTP read header timeout",
+				"provided",
+				timeouts.ReadHeaderTimeout,
+				"updated",
+				rpc.DefaultHTTPTimeouts.ReadHeaderTimeout,
+			),
+		)
+		timeouts.ReadHeaderTimeout = rpc.DefaultHTTPTimeouts.ReadHeaderTimeout
+	}
+	if timeouts.WriteTimeout < time.Second {
+		log.Warn().Msg(
+			fmt.Sprint(
+				"Sanitizing invalid HTTP write timeout",
+				"provided",
+				timeouts.WriteTimeout,
+				"updated",
+				rpc.DefaultHTTPTimeouts.WriteTimeout,
+			),
+		)
+		timeouts.WriteTimeout = rpc.DefaultHTTPTimeouts.WriteTimeout
+	}
+	if timeouts.IdleTimeout < time.Second {
+		log.Warn().Msg(
+			fmt.Sprint(
+				"Sanitizing invalid HTTP idle timeout",
+				"provided",
+				timeouts.IdleTimeout,
+				"updated",
+				rpc.DefaultHTTPTimeouts.IdleTimeout,
+			),
+		)
+		timeouts.IdleTimeout = rpc.DefaultHTTPTimeouts.IdleTimeout
+	}
+}
+
+// checkPath checks whether a given request URL matches a given path prefix.
+func checkPath(r *http.Request, path string) bool {
+	// if no prefix has been specified, request URL must be on root
+	if path == "" {
+		return r.URL.Path == "/"
+	}
+
+	// otherwise, check to make sure prefix matches
+	return len(r.URL.Path) >= len(path) && r.URL.Path[:len(path)] == path
+}
+
+// isWebSocket checks the header of an HTTP request for a WebSocket upgrade request.
+func isWebSocket(r *http.Request) bool {
+	return strings.EqualFold(r.Header.Get("Upgrade"), "websocket") &&
+		strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade")
 }
