@@ -20,9 +20,16 @@ import (
 )
 
 const (
-	accessURL    = "access-001.devnet49.nodes.onflow.org:9000"
-	coinbaseAddr = "0xf02c1c8e6114b1dbe8937a39260b5b0a374432bb"
+	defaultAccessURL = grpc.EmulatorHost
+	coinbaseAddr     = "0xf02c1c8e6114b1dbe8937a39260b5b0a374432bb"
 )
+
+// TODO(m-Peter): These should be updates to the EVM location,
+// as soon as it gets merged.
+var evmEventTypes = []string{
+	"flow.evm.BlockExecuted",
+	"flow.evm.TransactionExecuted",
+}
 
 func main() {
 	var network, coinbase string
@@ -54,7 +61,7 @@ func main() {
 
 func runIndexer(ctx context.Context, store *storage.Store, logger zerolog.Logger) {
 	flowClient, err := grpc.NewBaseClient(
-		accessURL,
+		defaultAccessURL,
 		goGrpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {
@@ -79,7 +86,7 @@ func runIndexer(ctx context.Context, store *storage.Store, logger zerolog.Logger
 
 		var err error
 		flowClient, err := grpc.NewBaseClient(
-			accessURL,
+			defaultAccessURL,
 			goGrpc.WithTransportCredentials(insecure.NewCredentials()),
 		)
 		if err != nil {
@@ -90,7 +97,7 @@ func runIndexer(ctx context.Context, store *storage.Store, logger zerolog.Logger
 			ctx,
 			latestBlockHeader.Height,
 			flow.EventFilter{
-				Contracts: []string{"A.7e60df042a9c0868.FlowToken"},
+				EventTypes: evmEventTypes,
 			},
 			grpc.WithHeartbeatInterval(1),
 		)
@@ -130,7 +137,7 @@ func runIndexer(ctx context.Context, store *storage.Store, logger zerolog.Logger
 				store.StoreBlockHeight(ctx, response.Height)
 			}
 			for _, event := range response.Events {
-				logger.Info().Msgf("  %s", event.Type)
+				logger.Info().Msgf("  %s", event.Value)
 			}
 
 			lastHeight = response.Height
