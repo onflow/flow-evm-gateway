@@ -529,10 +529,8 @@ func TestBlockChainAPI(t *testing.T) {
 		key, _ := crypto.GenerateKey()
 		addr := crypto.PubkeyToAddress(key.PublicKey)
 		_, err := blockchainAPI.Sign(
-			context.Background(),
-			hexutil.Bytes{1, 2, 3, 4, 5},
 			addr,
-			"secret_password",
+			hexutil.Bytes{1, 2, 3, 4, 5},
 		)
 		require.Error(t, err)
 		assert.ErrorContains(t, err, "not implemented")
@@ -571,7 +569,6 @@ func TestBlockChainAPI(t *testing.T) {
 				To:    &to.addr,
 				Value: (*hexutil.Big)(big.NewInt(1000)),
 			},
-			"secret_password",
 		)
 		require.Error(t, err)
 		assert.ErrorContains(t, err, "not implemented")

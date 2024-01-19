@@ -565,20 +565,18 @@ func (s *BlockChainAPI) Accounts() []common.Address {
 }
 
 // eth_sign
-// Sign calculates an Ethereum ECDSA signature for:
-// keccak256("\x19Ethereum Signed Message:\n" + len(message) + message))
+// Sign calculates an ECDSA signature for:
+// keccak256("\x19Ethereum Signed Message:\n" + len(message) + message).
 //
 // Note, the produced signature conforms to the secp256k1 curve R, S and V values,
 // where the V value will be 27 or 28 for legacy reasons.
 //
-// The key used to calculate the signature is decrypted with the given password.
+// The account associated with addr must be unlocked.
 //
-// https://github.com/ethereum/go-ethereum/wiki/Management-APIs#personal_sign
+// https://github.com/ethereum/wiki/wiki/JSON-RPC#eth_sign
 func (s *BlockChainAPI) Sign(
-	ctx context.Context,
+	addr common.Address,
 	data hexutil.Bytes,
-	address common.Address,
-	password string,
 ) (hexutil.Bytes, error) {
 	return hexutil.Bytes{}, fmt.Errorf("not implemented")
 }
@@ -595,13 +593,11 @@ func (s *BlockChainAPI) SignTransaction(
 }
 
 // eth_sendTransaction
-// SendTransaction will create a transaction from the given arguments and
-// tries to sign it with the key associated with args.From. If the given
-// passwd isn't able to decrypt the key it fails.
+// SendTransaction creates a transaction for the given argument, sign it
+// and submit it to the transaction pool.
 func (s *BlockChainAPI) SendTransaction(
 	ctx context.Context,
 	args TransactionArgs,
-	password string,
 ) (common.Hash, error) {
 	return common.Hash{}, fmt.Errorf("not implemented")
 }

@@ -30,3 +30,6 @@
 {"jsonrpc":"2.0","id":30,"result":"0x69"}
 {"jsonrpc":"2.0","id":31,"result":{}}
 {"jsonrpc":"2.0","id":32,"result":{}}
+{"jsonrpc":"2.0","id":33,"error":{"code":-32000,"message":"not implemented"}}
+{"jsonrpc":"2.0","id":34,"error":{"code":-32000,"message":"not implemented"}}
+{"jsonrpc":"2.0","id":35,"error":{"code":-32000,"message":"not implemented"}}
