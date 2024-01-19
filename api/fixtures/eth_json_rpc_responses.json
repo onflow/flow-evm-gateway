@@ -25,7 +25,7 @@
 {"jsonrpc":"2.0","id":25,"result":[{"address":"0x16c5785ac562ff41e2dcfdf829c5a142f1fccd7d","topics":["0x59ebeb90bc63057b6515673c3ecf9438e5058bca0f92585014eced636878c9a5"],"data":"0x000000","blockNumber":"0x1b4","transactionHash":"0x00df829c5a142f1fccd7d8216c5785ac562ff41e2dcfdf5785ac562ff41e2dcf","transactionIndex":"0x0","blockHash":"0x008216c5785ac562ff41e2dcfdf5785ac562ff41e2dcfdf829c5a142f1fccd7d","logIndex":"0x1","removed":false}]}
 {"jsonrpc":"2.0","id":26,"result":"block_filter"}
 {"jsonrpc":"2.0","id":27,"result":"pending_tx_filter"}
-{"jsonrpc":"2.0","id":28,"result":["0x407d73d8a49eeb85d32cf465507dd71d507100c1"]}
+{"jsonrpc":"2.0","id":28,"result":[]}
 {"jsonrpc":"2.0","id":29,"result":"0x00010203040506070809"}
 {"jsonrpc":"2.0","id":30,"result":"0x69"}
 {"jsonrpc":"2.0","id":31,"result":{}}

@@ -559,9 +559,7 @@ func (s *BlockChainAPI) NewPendingTransactionFilter(fullTx *bool) rpc.ID {
 // eth_accounts
 // Accounts returns the collection of accounts this node manages.
 func (s *BlockChainAPI) Accounts() []common.Address {
-	return []common.Address{
-		common.HexToAddress("0x407d73d8a49eeb85d32cf465507dd71d507100c1"),
-	}
+	return []common.Address{}
 }
 
 // eth_sign

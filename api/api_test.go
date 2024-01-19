@@ -518,9 +518,7 @@ func TestBlockChainAPI(t *testing.T) {
 
 		assert.Equal(
 			t,
-			[]common.Address{
-				common.HexToAddress("0x407D73d8a49eeb85D32Cf465507dd71d507100c1"),
-			},
+			[]common.Address{},
 			accounts,
 		)
 	})
