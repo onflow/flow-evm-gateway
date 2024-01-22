@@ -559,28 +559,24 @@ func (s *BlockChainAPI) NewPendingTransactionFilter(fullTx *bool) rpc.ID {
 // eth_accounts
 // Accounts returns the collection of accounts this node manages.
 func (s *BlockChainAPI) Accounts() []common.Address {
-	return []common.Address{
-		common.HexToAddress("0x407d73d8a49eeb85d32cf465507dd71d507100c1"),
-	}
+	return []common.Address{}
 }
 
 // eth_sign
-// Sign calculates an Ethereum ECDSA signature for:
-// keccak256("\x19Ethereum Signed Message:\n" + len(message) + message))
+// Sign calculates an ECDSA signature for:
+// keccak256("\x19Ethereum Signed Message:\n" + len(message) + message).
 //
 // Note, the produced signature conforms to the secp256k1 curve R, S and V values,
 // where the V value will be 27 or 28 for legacy reasons.
 //
-// The key used to calculate the signature is decrypted with the given password.
+// The account associated with addr must be unlocked.
 //
-// https://github.com/ethereum/go-ethereum/wiki/Management-APIs#personal_sign
+// https://github.com/ethereum/wiki/wiki/JSON-RPC#eth_sign
 func (s *BlockChainAPI) Sign(
-	ctx context.Context,
+	addr common.Address,
 	data hexutil.Bytes,
-	address common.Address,
-	password string,
 ) (hexutil.Bytes, error) {
-	return hexutil.Bytes{}, fmt.Errorf("not implemented")
+	return hexutil.Bytes{}, fmt.Errorf("method is not implemented")
 }
 
 // eth_signTransaction
@@ -591,19 +587,17 @@ func (s *BlockChainAPI) SignTransaction(
 	ctx context.Context,
 	args TransactionArgs,
 ) (*SignTransactionResult, error) {
-	return &SignTransactionResult{}, fmt.Errorf("not implemented")
+	return &SignTransactionResult{}, fmt.Errorf("method is not implemented")
 }
 
 // eth_sendTransaction
-// SendTransaction will create a transaction from the given arguments and
-// tries to sign it with the key associated with args.From. If the given
-// passwd isn't able to decrypt the key it fails.
+// SendTransaction creates a transaction for the given argument, sign it
+// and submit it to the transaction pool.
 func (s *BlockChainAPI) SendTransaction(
 	ctx context.Context,
 	args TransactionArgs,
-	password string,
 ) (common.Hash, error) {
-	return common.Hash{}, fmt.Errorf("not implemented")
+	return common.Hash{}, fmt.Errorf("method is not implemented")
 }
 
 // eth_call (readonly calls, we might need this (if the wallet use it to get balanceOf an ERC-20))
