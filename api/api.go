@@ -576,7 +576,7 @@ func (s *BlockChainAPI) Sign(
 	addr common.Address,
 	data hexutil.Bytes,
 ) (hexutil.Bytes, error) {
-	return hexutil.Bytes{}, fmt.Errorf("not implemented")
+	return hexutil.Bytes{}, fmt.Errorf("method is not implemented")
 }
 
 // eth_signTransaction
@@ -587,7 +587,7 @@ func (s *BlockChainAPI) SignTransaction(
 	ctx context.Context,
 	args TransactionArgs,
 ) (*SignTransactionResult, error) {
-	return &SignTransactionResult{}, fmt.Errorf("not implemented")
+	return &SignTransactionResult{}, fmt.Errorf("method is not implemented")
 }
 
 // eth_sendTransaction
@@ -597,7 +597,7 @@ func (s *BlockChainAPI) SendTransaction(
 	ctx context.Context,
 	args TransactionArgs,
 ) (common.Hash, error) {
-	return common.Hash{}, fmt.Errorf("not implemented")
+	return common.Hash{}, fmt.Errorf("method is not implemented")
 }
 
 // eth_call (readonly calls, we might need this (if the wallet use it to get balanceOf an ERC-20))

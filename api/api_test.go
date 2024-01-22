@@ -638,4 +638,66 @@ func TestBlockChainAPI(t *testing.T) {
 
 		assert.Equal(t, map[string]interface{}{}, uncle)
 	})
+
+	t.Run("Sign", func(t *testing.T) {
+		_, err := blockchainAPI.Sign(
+			common.HexToAddress("0x16c5785ac562ff41e2dcfdf829c5a142f1fccd7d"),
+			hexutil.Bytes{1, 2, 3, 4, 5},
+		)
+		require.Error(t, err)
+
+		assert.ErrorContains(
+			t,
+			err,
+			"method is not implemented",
+		)
+	})
+
+	t.Run("SignTransaction", func(t *testing.T) {
+		key1, _ := crypto.GenerateKey()
+		addr1 := crypto.PubkeyToAddress(key1.PublicKey)
+		from := Account{key: key1, addr: addr1}
+		key2, _ := crypto.GenerateKey()
+		addr2 := crypto.PubkeyToAddress(key1.PublicKey)
+		to := Account{key: key2, addr: addr2}
+		_, err := blockchainAPI.SignTransaction(
+			context.Background(),
+			api.TransactionArgs{
+				From:  &from.addr,
+				To:    &to.addr,
+				Value: (*hexutil.Big)(big.NewInt(1000)),
+			},
+		)
+		require.Error(t, err)
+
+		assert.ErrorContains(
+			t,
+			err,
+			"method is not implemented",
+		)
+	})
+
+	t.Run("SendTransaction", func(t *testing.T) {
+		key1, _ := crypto.GenerateKey()
+		addr1 := crypto.PubkeyToAddress(key1.PublicKey)
+		from := Account{key: key1, addr: addr1}
+		key2, _ := crypto.GenerateKey()
+		addr2 := crypto.PubkeyToAddress(key1.PublicKey)
+		to := Account{key: key2, addr: addr2}
+		_, err := blockchainAPI.SendTransaction(
+			context.Background(),
+			api.TransactionArgs{
+				From:  &from.addr,
+				To:    &to.addr,
+				Value: (*hexutil.Big)(big.NewInt(1000)),
+			},
+		)
+		require.Error(t, err)
+
+		assert.ErrorContains(
+			t,
+			err,
+			"method is not implemented",
+		)
+	})
 }
