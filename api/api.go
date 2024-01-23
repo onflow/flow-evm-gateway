@@ -200,7 +200,7 @@ func (s *BlockChainAPI) GetTransactionCount(
 	address common.Address,
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (*hexutil.Uint64, error) {
-	nonce := uint64(1050510)
+	nonce := s.Store.GetAccountNonce(context.Background(), address)
 	return (*hexutil.Uint64)(&nonce), nil
 }
 
