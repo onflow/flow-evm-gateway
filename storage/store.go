@@ -14,6 +14,7 @@ import (
 
 type Store struct {
 	mu           sync.RWMutex
+	logsByTopic  map[string][]*types.Log
 	latestHeight uint64
 	accountNonce map[common.Address]uint64
 }
@@ -26,6 +27,7 @@ type Store struct {
 func NewStore() *Store {
 	return &Store{
 		accountNonce: make(map[common.Address]uint64),
+		logsByTopic:  make(map[string][]*types.Log),
 	}
 }
 
@@ -88,6 +90,38 @@ func (s *Store) UpdateAccountNonce(ctx context.Context, event cadence.Event) {
 	}
 
 	s.accountNonce[from] = s.accountNonce[from] + 1
+}
+
+func (s *Store) StoreLog(ctx context.Context, event cadence.Event) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	logValue := event.GetFieldValues()[9]
+	logC, ok := logValue.(cadence.String)
+	if !ok {
+		return
+	}
+	logS := logC.ToGoValue().(string)
+	if len(logS) == 0 {
+		return
+	}
+	bt, err := hex.DecodeString(logS)
+	if err != nil {
+		panic(err)
+	}
+	logs := []*types.Log{}
+	err = rlp.Decode(bytes.NewReader(bt), &logs)
+	if err != nil {
+		panic(err)
+	}
+	for _, log := range logs {
+		topic := log.Topics[0].Hex()
+		s.logsByTopic[topic] = logs
+	}
+}
+
+func (s *Store) LogsByTopic(topic string) []*types.Log {
+	return s.logsByTopic[topic]
 }
 
 func (s *Store) StoreBlockHeight(ctx context.Context, blockHeight uint64) error {
