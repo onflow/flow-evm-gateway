@@ -1,19 +1,26 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/filters"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/onflow/cadence"
 	"github.com/onflow/flow-evm-gateway/storage"
+	"github.com/onflow/flow-go-sdk"
+	"github.com/onflow/flow-go-sdk/access/grpc"
+
+	sdkCrypto "github.com/onflow/flow-go-sdk/crypto"
 )
 
 const EthNamespace = "eth"
@@ -87,7 +94,94 @@ func (api *BlockChainAPI) SendRawTransaction(
 	ctx context.Context,
 	input hexutil.Bytes,
 ) (common.Hash, error) {
-	return crypto.Keccak256Hash([]byte("hello world")), nil
+	trx := &types.Transaction{}
+	encodedLen := uint(len(input))
+	err := trx.DecodeRLP(
+		rlp.NewStream(
+			bytes.NewReader(input),
+			uint64(encodedLen),
+		),
+	)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	flowClient, err := grpc.NewClient(grpc.EmulatorHost)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	script := `
+        import EVM from 0xf8d6e0586b0a20c7
+
+        transaction(encodedTx: [UInt8]) {
+            let bridgedAccount: &EVM.BridgedAccount
+
+            prepare(signer: auth(Storage) &Account) {
+                self.bridgedAccount = signer.storage.borrow<&EVM.BridgedAccount>(
+                    from: /storage/evm
+                ) ?? panic("Could not borrow reference to the bridged account!")
+            }
+
+            execute {
+                EVM.run(tx: encodedTx, coinbase: self.bridgedAccount.address())
+
+                log("transaction executed")
+            }
+        }
+	`
+
+	block, err := flowClient.GetLatestBlock(context.Background(), true)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	privateKey, err := sdkCrypto.DecodePrivateKeyHex(sdkCrypto.ECDSA_P256, strings.Replace("2619878f0e2ff438d17835c2a4561cb87b4d24d72d12ec34569acd0dd4af7c21", "0x", "", 1))
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	account, err := flowClient.GetAccount(context.Background(), flow.HexToAddress("0xf8d6e0586b0a20c7"))
+	if err != nil {
+		return common.Hash{}, err
+	}
+	accountKey := account.Keys[0]
+	signer, err := sdkCrypto.NewInMemorySigner(privateKey, accountKey.HashAlgo)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	tx := flow.NewTransaction().
+		SetScript([]byte(script)).
+		SetProposalKey(account.Address, accountKey.Index, accountKey.SequenceNumber).
+		SetReferenceBlockID(block.ID).
+		SetPayer(account.Address).
+		AddAuthorizer(account.Address)
+
+	decodedTx, err := hex.DecodeString(input.String()[2:])
+	if err != nil {
+		return common.Hash{}, err
+	}
+	cdcBytes := make([]cadence.Value, 0)
+	for _, bt := range decodedTx {
+		cdcBytes = append(cdcBytes, cadence.UInt8(bt))
+	}
+	encodedTx := cadence.NewArray(
+		cdcBytes,
+	).WithType(cadence.NewVariableSizedArrayType(cadence.TheUInt8Type))
+	tx.AddArgument(encodedTx)
+
+	err = tx.SignEnvelope(account.Address, accountKey.Index, signer)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	err = flowClient.SendTransaction(ctx, *tx)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	return trx.Hash(), nil
 }
 
 // eth_createAccessList
@@ -200,7 +294,7 @@ func (s *BlockChainAPI) GetTransactionCount(
 	address common.Address,
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (*hexutil.Uint64, error) {
-	nonce := uint64(1050510)
+	nonce := s.Store.GetAccountNonce(context.Background(), address)
 	return (*hexutil.Uint64)(&nonce), nil
 }
 
@@ -456,18 +550,19 @@ func (s *BlockChainAPI) GetLogs(
 	if len(criteria.Topics) > maxTopics {
 		return nil, errExceedMaxTopics
 	}
-	log := &types.Log{
-		Index:       1,
-		BlockNumber: 436,
-		BlockHash:   common.HexToHash("0x8216c5785ac562ff41e2dcfdf5785ac562ff41e2dcfdf829c5a142f1fccd7d"),
-		TxHash:      common.HexToHash("0xdf829c5a142f1fccd7d8216c5785ac562ff41e2dcfdf5785ac562ff41e2dcf"),
-		TxIndex:     0,
-		Address:     common.HexToAddress("0x16c5785ac562ff41e2dcfdf829c5a142f1fccd7d"),
-		Data:        []byte{0, 0, 0},
-		Topics:      []common.Hash{common.HexToHash("0x59ebeb90bc63057b6515673c3ecf9438e5058bca0f92585014eced636878c9a5")},
-	}
+	// log := &types.Log{
+	// 	Index:       1,
+	// 	BlockNumber: 436,
+	// 	BlockHash:   common.HexToHash("0x8216c5785ac562ff41e2dcfdf5785ac562ff41e2dcfdf829c5a142f1fccd7d"),
+	// 	TxHash:      common.HexToHash("0xdf829c5a142f1fccd7d8216c5785ac562ff41e2dcfdf5785ac562ff41e2dcf"),
+	// 	TxIndex:     0,
+	// 	Address:     common.HexToAddress("0x16c5785ac562ff41e2dcfdf829c5a142f1fccd7d"),
+	// 	Data:        []byte{0, 0, 0},
+	// 	Topics:      []common.Hash{common.HexToHash("0x59ebeb90bc63057b6515673c3ecf9438e5058bca0f92585014eced636878c9a5")},
+	// }
+	logs := s.Store.LogsByTopic(criteria.Topics[0][0].Hex())
 
-	return []*types.Log{log}, nil
+	return logs, nil
 }
 
 // eth_newFilter
@@ -614,7 +709,76 @@ func (s *BlockChainAPI) Call(
 	overrides *StateOverride,
 	blockOverrides *BlockOverrides,
 ) (hexutil.Bytes, error) {
-	return hexutil.Bytes{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, nil
+	script := `
+        import EVM from 0xf8d6e0586b0a20c7
+
+        access(all)
+        fun main(data: [UInt8], contractAddress: [UInt8; 20]): [UInt8] {
+            let flowAccount = getAuthAccount<auth(Storage) &Account>(Address(0xf8d6e0586b0a20c7))
+            let bridgedAccount = flowAccount.storage.borrow<&EVM.BridgedAccount>(
+                from: /storage/evm
+            ) ?? panic("Could not borrow reference to the bridged account!")
+
+            let evmResult = bridgedAccount.call(
+                to: EVM.EVMAddress(bytes: contractAddress),
+                data: data,
+                gasLimit: 300000,
+                value: EVM.Balance(flow: 0.0)
+            )
+
+            return evmResult
+        }
+	`
+
+	flowClient, err := grpc.NewClient(grpc.EmulatorHost)
+	if err != nil {
+		return hexutil.Bytes{}, err
+	}
+
+	decodedTx, err := hex.DecodeString(args.Input.String()[2:])
+	if err != nil {
+		return hexutil.Bytes{}, err
+	}
+	cdcBytes := make([]cadence.Value, 0)
+	for _, bt := range decodedTx {
+		cdcBytes = append(cdcBytes, cadence.UInt8(bt))
+	}
+	encodedTx := cadence.NewArray(
+		cdcBytes,
+	).WithType(cadence.NewVariableSizedArrayType(cadence.TheUInt8Type))
+
+	decodedTo, err := hex.DecodeString(args.To.String()[2:])
+	if err != nil {
+		return hexutil.Bytes{}, err
+	}
+	toBytes := make([]cadence.Value, 0)
+	for _, bt := range decodedTo {
+		toBytes = append(toBytes, cadence.UInt8(bt))
+	}
+	encodedTo := cadence.NewArray(
+		toBytes,
+	).WithType(cadence.NewConstantSizedArrayType(20, cadence.TheUInt8Type))
+
+	value, err := flowClient.ExecuteScriptAtLatestBlock(
+		ctx,
+		[]byte(script),
+		[]cadence.Value{encodedTx, encodedTo},
+	)
+	if err != nil {
+		return hexutil.Bytes{}, err
+	}
+
+	cadenceArray, ok := value.(cadence.Array)
+	if !ok {
+		return hexutil.Bytes{}, fmt.Errorf("script doesn't return byte array as it should")
+	}
+
+	resultValue := make([]byte, len(cadenceArray.Values))
+	for i, x := range cadenceArray.Values {
+		resultValue[i] = x.ToGoValue().(byte)
+	}
+
+	return hexutil.Bytes(resultValue), nil
 }
 
 // eth_estimateGas (usually runs the call and checks how much gas might be used)
