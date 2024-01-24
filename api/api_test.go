@@ -14,6 +14,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/onflow/cadence"
+	"github.com/onflow/cadence/runtime/stdlib"
 	"github.com/onflow/flow-evm-gateway/api"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/stretchr/testify/assert"
@@ -165,6 +167,7 @@ func TestBlockChainAPI(t *testing.T) {
 		key, _ := crypto.GenerateKey()
 		addr := crypto.PubkeyToAddress(key.PublicKey)
 		blockNumberOrHash := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
+
 		txCount, err := blockchainAPI.GetTransactionCount(
 			context.Background(),
 			addr,
@@ -172,7 +175,50 @@ func TestBlockChainAPI(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		nonce := uint64(1050510)
+		nonce := uint64(0)
+		assert.Equal(t, txCount, (*hexutil.Uint64)(&nonce))
+
+		evt := cadence.Event{
+			EventType: cadence.NewEventType(
+				stdlib.FlowLocation{},
+				"evm.TransactionExecuted",
+				[]cadence.Field{
+					cadence.NewField("blockHeight", cadence.UInt64Type{}),
+					cadence.NewField("transactionHash", cadence.StringType{}),
+					cadence.NewField("transaction", cadence.StringType{}),
+					cadence.NewField("failed", cadence.BoolType{}),
+					cadence.NewField("transactionType", cadence.UInt8Type{}),
+					cadence.NewField("gasConsumed", cadence.UInt64Type{}),
+					cadence.NewField("deployedContractAddress", cadence.StringType{}),
+					cadence.NewField("returnedValue", cadence.StringType{}),
+					cadence.NewField("logs", cadence.StringType{}),
+				},
+				nil,
+			),
+			Fields: []cadence.Value{
+				cadence.NewUInt64(3),
+				cadence.String("0xb47d74ea64221eb941490bdc0c9a404dacd0a8573379a45c992ac60ee3e83c3c"),
+				cadence.String("b88c02f88982029a01808083124f809499466ed2e37b892a2ee3e9cd55a98b68f5735db280a4c6888fa10000000000000000000000000000000000000000000000000000000000000006c001a0f84168f821b427dc158c4d8083bdc4b43e178cf0977a2c5eefbcbedcc4e351b0a066a747a38c6c266b9dc2136523cef04395918de37773db63d574aabde59c12eb"),
+				cadence.NewBool(false),
+				cadence.NewUInt8(2),
+				cadence.NewUInt64(22514),
+				cadence.String("0000000000000000000000000000000000000000"),
+				cadence.String("000000000000000000000000000000000000000000000000000000000000002a"),
+				cadence.String("f85af8589499466ed2e37b892a2ee3e9cd55a98b68f5735db2e1a024abdb5865df5079dcc5ac590ff6f01d5c16edbc5fab4e195d9febd1114503daa0000000000000000000000000000000000000000000000000000000000000002a"),
+			},
+		}
+
+		store := blockchainAPI.Store
+		store.UpdateAccountNonce(context.Background(), evt)
+
+		txCount, err = blockchainAPI.GetTransactionCount(
+			context.Background(),
+			common.HexToAddress("0x658Bdf435d810C91414eC09147DAA6DB62406379"),
+			&blockNumberOrHash,
+		)
+		require.NoError(t, err)
+
+		nonce = uint64(1)
 		assert.Equal(t, txCount, (*hexutil.Uint64)(&nonce))
 	})
 
