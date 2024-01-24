@@ -5,6 +5,7 @@ go 1.20
 require (
 	github.com/ethereum/go-ethereum v1.13.5
 	github.com/gorilla/websocket v1.5.0
+	github.com/onflow/cadence v0.42.6
 	github.com/onflow/flow-go-sdk v0.44.1-0.20231220221922-58fb441b7228
 	github.com/rs/zerolog v1.31.0
 	github.com/stretchr/testify v1.8.4
@@ -63,7 +64,6 @@ require (
 	github.com/mmcloughlin/addchain v0.4.0 // indirect
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
 	github.com/onflow/atree v0.6.0 // indirect
-	github.com/onflow/cadence v0.42.6 // indirect
 	github.com/onflow/crypto v0.24.9 // indirect
 	github.com/onflow/flow/protobuf/go/flow v0.3.2-0.20231121210617-52ee94b830c2 // indirect
 	github.com/onsi/ginkgo v1.16.5 // indirect
