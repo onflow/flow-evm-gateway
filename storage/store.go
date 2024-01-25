@@ -96,7 +96,7 @@ func (s *Store) StoreLog(ctx context.Context, event cadence.Event) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	logValue := event.GetFieldValues()[9]
+	logValue := event.GetFieldValues()[8]
 	logC, ok := logValue.(cadence.String)
 	if !ok {
 		return
@@ -116,7 +116,7 @@ func (s *Store) StoreLog(ctx context.Context, event cadence.Event) {
 	}
 	for _, log := range logs {
 		topic := log.Topics[0].Hex()
-		s.logsByTopic[topic] = logs
+		s.logsByTopic[topic] = append(s.logsByTopic[topic], logs...)
 	}
 }
 

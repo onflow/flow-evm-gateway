@@ -457,7 +457,13 @@ func (s *BlockChainAPI) GetLogs(
 		return nil, errExceedMaxTopics
 	}
 
-	logs := s.Store.LogsByTopic(criteria.Topics[0][0].Hex())
+	logs := []*types.Log{}
+	for _, topicList := range criteria.Topics {
+		for _, topic := range topicList {
+			matchingLogs := s.Store.LogsByTopic(topic.Hex())
+			logs = append(logs, matchingLogs...)
+		}
+	}
 
 	return logs, nil
 }
