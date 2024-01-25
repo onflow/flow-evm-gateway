@@ -13,7 +13,6 @@
 {"jsonrpc":"2.0","id":1,"method":"eth_getTransactionReceipt","params":["0x85d995eba9763907fdf35cd2034144dd9d53ce32cbec21349d4b12823c6860c5"]}
 {"jsonrpc":"2.0","id":1,"method":"eth_coinbase"}
 {"jsonrpc":"2.0","id":1,"method":"eth_getBlockByHash","params":["0xdc0818cf78f21a8e70579cb46a43643f78291264dda342ae31049421c82d21ae",false]}
-{"jsonrpc":"2.0","id":1,"method":"eth_getBlockByNumber","params":["0x1b4",true]}
 {"jsonrpc":"2.0","id":1,"method":"eth_getBlockTransactionCountByHash","params":["0xb903239f8543d04b5dc1ba6579132b143087c68db1b2168786408fcbce568238"]}
 {"jsonrpc":"2.0","id":1,"method":"eth_getBlockTransactionCountByNumber","params":["0xe8"]}
 {"jsonrpc":"2.0","id":1,"method":"eth_getUncleCountByBlockHash","params":["0xb903239f8543d04b5dc1ba6579132b143087c68db1b2168786408fcbce568238"]}

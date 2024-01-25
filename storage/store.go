@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"fmt"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -12,11 +13,88 @@ import (
 	"github.com/onflow/cadence"
 )
 
+type BlockExecutedPayload struct {
+	Height            uint64
+	Hash              string
+	TotalSupply       uint64
+	ParentBlockHash   string
+	ReceiptRoot       string
+	TransactionHashes []string
+}
+
+func NewBlockExecutedPayload(
+	blockExecutedEvent cadence.Event,
+) (*BlockExecutedPayload, error) {
+	blockExecutedPayload := &BlockExecutedPayload{}
+
+	heightFieldValue := blockExecutedEvent.GetFieldValues()[0]
+	heightCadenceValue, ok := heightFieldValue.(cadence.UInt64)
+	if !ok {
+		return nil, fmt.Errorf("unable to decode Cadence event")
+	}
+
+	height := heightCadenceValue.ToGoValue().(uint64)
+	blockExecutedPayload.Height = height
+
+	hashFieldValue := blockExecutedEvent.GetFieldValues()[1]
+	hashCadenceValue, ok := hashFieldValue.(cadence.String)
+	if !ok {
+		return nil, fmt.Errorf("unable to decode Cadence event")
+	}
+
+	hash := hashCadenceValue.ToGoValue().(string)
+	blockExecutedPayload.Hash = hash
+
+	totalSupplyFieldValue := blockExecutedEvent.GetFieldValues()[2]
+	totalSupplyCadenceValue, ok := totalSupplyFieldValue.(cadence.UInt64)
+	if !ok {
+		return nil, fmt.Errorf("unable to decode Cadence event")
+	}
+
+	totalSupply := totalSupplyCadenceValue.ToGoValue().(uint64)
+	blockExecutedPayload.TotalSupply = totalSupply
+
+	parentBlockHashFieldValue := blockExecutedEvent.GetFieldValues()[3]
+	parentBlockHashCadenceValue, ok := parentBlockHashFieldValue.(cadence.String)
+	if !ok {
+		return nil, fmt.Errorf("unable to decode Cadence event")
+	}
+
+	parentBlockHash := parentBlockHashCadenceValue.ToGoValue().(string)
+	blockExecutedPayload.ParentBlockHash = parentBlockHash
+
+	receiptRootFieldValue := blockExecutedEvent.GetFieldValues()[4]
+	receiptRootCadenceValue, ok := receiptRootFieldValue.(cadence.String)
+	if !ok {
+		return nil, fmt.Errorf("unable to decode Cadence event")
+	}
+
+	receiptRoot := receiptRootCadenceValue.ToGoValue().(string)
+	blockExecutedPayload.ReceiptRoot = receiptRoot
+
+	transactionHashesFieldValue := blockExecutedEvent.GetFieldValues()[5]
+	transactionHashesCadenceValue, ok := transactionHashesFieldValue.(cadence.Array)
+	if !ok {
+		return nil, fmt.Errorf("unable to decode Cadence event")
+	}
+
+	transactionHashes := make([]string, 0)
+	for _, cadenceValue := range transactionHashesCadenceValue.Values {
+		transactionHash := cadenceValue.ToGoValue().(string)
+		transactionHashes = append(transactionHashes, transactionHash)
+
+	}
+	blockExecutedPayload.TransactionHashes = transactionHashes
+
+	return blockExecutedPayload, nil
+}
+
 type Store struct {
-	mu           sync.RWMutex
-	logsByTopic  map[string][]*types.Log
-	latestHeight uint64
-	accountNonce map[common.Address]uint64
+	mu             sync.RWMutex
+	logsByTopic    map[string][]*types.Log
+	latestHeight   uint64
+	accountNonce   map[common.Address]uint64
+	blocksByNumber map[uint64]*BlockExecutedPayload
 }
 
 // NewStore returns a new in-memory Store implementation.
@@ -26,8 +104,9 @@ type Store struct {
 // `latestHeight` in `NewStore`.
 func NewStore() *Store {
 	return &Store{
-		accountNonce: make(map[common.Address]uint64),
-		logsByTopic:  make(map[string][]*types.Log),
+		accountNonce:   make(map[common.Address]uint64),
+		logsByTopic:    make(map[string][]*types.Log),
+		blocksByNumber: make(map[uint64]*BlockExecutedPayload),
 	}
 }
 
@@ -39,8 +118,8 @@ func (s *Store) LatestBlockHeight(ctx context.Context) (uint64, error) {
 }
 
 func (s *Store) GetAccountNonce(ctx context.Context, address common.Address) uint64 {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 
 	return s.accountNonce[address]
 }
@@ -124,17 +203,32 @@ func (s *Store) LogsByTopic(topic string) []*types.Log {
 	return s.logsByTopic[topic]
 }
 
-func (s *Store) StoreBlockHeight(ctx context.Context, blockHeight uint64) error {
+func (s *Store) StoreBlock(ctx context.Context, blockPayload cadence.Event) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	return s.storeBlockHeight(blockHeight)
-}
-
-func (s *Store) storeBlockHeight(blockHeight uint64) error {
-	if blockHeight > s.latestHeight {
-		s.latestHeight = blockHeight
+	blockExecutedPayload, err := NewBlockExecutedPayload(blockPayload)
+	if err != nil {
+		return err
 	}
 
+	s.blocksByNumber[blockExecutedPayload.Height] = blockExecutedPayload
+	s.latestHeight = blockExecutedPayload.Height
+
 	return nil
+}
+
+func (s *Store) GetBlockByNumber(
+	ctx context.Context,
+	blockNumber uint64,
+) (*BlockExecutedPayload, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	blockExecutedPayload, ok := s.blocksByNumber[blockNumber]
+	if !ok {
+		return nil, fmt.Errorf("unable to find block for number: %d", blockNumber)
+	}
+
+	return blockExecutedPayload, nil
 }

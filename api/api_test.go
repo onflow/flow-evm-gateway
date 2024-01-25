@@ -46,8 +46,37 @@ func TestBlockChainAPI(t *testing.T) {
 
 	t.Run("BlockNumber", func(t *testing.T) {
 		blockNumber := blockchainAPI.BlockNumber()
-
 		assert.Equal(t, hexutil.Uint64(0), blockNumber)
+
+		event := blockExecutedEvent(
+			1,
+			"0xf31ee13dad8f38431fd31278b12be62e6b77e6923f0b7a446eb1affb61f21fc9",
+			7766279631452241920,
+			"0xe81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421c0",
+			"0x0000000000000000000000000000000000000000000000000000000000000000",
+			[]string{"0xf31ee13dad8f38431fd31278b12be62e6b77e6923f0b7a446eb1affb61f21fc9"},
+		)
+		store := blockchainAPI.Store
+		err := store.StoreBlock(context.Background(), event)
+		require.NoError(t, err)
+
+		blockNumber = blockchainAPI.BlockNumber()
+		assert.Equal(t, hexutil.Uint64(1), blockNumber)
+
+		event = blockExecutedEvent(
+			2,
+			"0xaae4530246e61ae58479824ab0863f99ca50414d27aec0c269ae6a7cfc4c7f5b",
+			7766279631452241920,
+			"0xf31ee13dad8f38431fd31278b12be62e6b77e6923f0b7a446eb1affb61f21fc9",
+			"0x0000000000000000000000000000000000000000000000000000000000000000",
+			[]string{"0xaae4530246e61ae58479824ab0863f99ca50414d27aec0c269ae6a7cfc4c7f5b"},
+		)
+
+		err = store.StoreBlock(context.Background(), event)
+		require.NoError(t, err)
+
+		blockNumber = blockchainAPI.BlockNumber()
+		assert.Equal(t, hexutil.Uint64(2), blockNumber)
 	})
 
 	t.Run("Syncing", func(t *testing.T) {
@@ -370,32 +399,45 @@ func TestBlockChainAPI(t *testing.T) {
 	})
 
 	t.Run("GetBlockByNumber", func(t *testing.T) {
+		event := blockExecutedEvent(
+			1,
+			"0xf31ee13dad8f38431fd31278b12be62e6b77e6923f0b7a446eb1affb61f21fc9",
+			7766279631452241920,
+			"0xe81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421c0",
+			"0x0000000000000000000000000000000000000000000000000000000000000000",
+			[]string{"0xf31ee13dad8f38431fd31278b12be62e6b77e6923f0b7a446eb1affb61f21fc9"},
+		)
+		store := blockchainAPI.Store
+		err := store.StoreBlock(context.Background(), event)
+		require.NoError(t, err)
+
 		block, err := blockchainAPI.GetBlockByNumber(
 			context.Background(),
-			rpc.PendingBlockNumber,
+			rpc.BlockNumber(1),
 			false,
 		)
 		require.NoError(t, err)
 
 		expectedBlock := map[string]interface{}{}
+		expectedBlock["number"] = hexutil.Uint64(1)
+		expectedBlock["hash"] = "0xf31ee13dad8f38431fd31278b12be62e6b77e6923f0b7a446eb1affb61f21fc9"
+		expectedBlock["parentHash"] = "0xe81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421c0"
+		expectedBlock["receiptsRoot"] = "0x0000000000000000000000000000000000000000000000000000000000000000"
+		expectedBlock["transactions"] = []string{"0xf31ee13dad8f38431fd31278b12be62e6b77e6923f0b7a446eb1affb61f21fc9"}
+
 		expectedBlock["difficulty"] = "0x4ea3f27bc"
 		expectedBlock["extraData"] = "0x476574682f4c5649562f76312e302e302f6c696e75782f676f312e342e32"
 		expectedBlock["gasLimit"] = "0x1388"
 		expectedBlock["gasUsed"] = "0x0"
-		expectedBlock["hash"] = "0xdc0818cf78f21a8e70579cb46a43643f78291264dda342ae31049421c82d21ae"
 		expectedBlock["logsBloom"] = "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
 		expectedBlock["miner"] = "0xbb7b8287f3f0a933474a79eae42cbca977791171"
 		expectedBlock["mixHash"] = "0x4fffe9ae21f1c9e15207b1f472d5bbdd68c9595d461666602f2be20daf5e7843"
 		expectedBlock["nonce"] = "0x689056015818adbe"
-		expectedBlock["number"] = "0x1b4"
-		expectedBlock["parentHash"] = "0xe99e022112df268087ea7eafaf4790497fd21dbeeb6bd7a1721df161a6657a54"
-		expectedBlock["receiptsRoot"] = "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
 		expectedBlock["sha3Uncles"] = "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
 		expectedBlock["size"] = "0x220"
 		expectedBlock["stateRoot"] = "0xddc8b0234c2e0cad087c8b389aa7ef01f7d79b2570bccb77ce48648aa61c904d"
 		expectedBlock["timestamp"] = "0x55ba467c"
 		expectedBlock["totalDifficulty"] = "0x78ed983323d"
-		expectedBlock["transactions"] = []string{}
 		expectedBlock["transactionsRoot"] = "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
 		expectedBlock["uncles"] = []string{}
 
@@ -799,6 +841,49 @@ func transactionExecutedEvent(
 			cadence.String(deployedContractAddress),
 			cadence.String(returnedValue),
 			cadence.String(logs),
+		},
+	}
+}
+
+func blockExecutedEvent(
+	blockHeight uint64,
+	blockHash string,
+	totalSupply uint64,
+	parentBlockHash string,
+	receiptRoot string,
+	transactionHashes []string,
+) cadence.Event {
+	hashes := make([]cadence.Value, len(transactionHashes))
+	for i, hash := range transactionHashes {
+		hashes[i] = cadence.String(hash)
+	}
+
+	return cadence.Event{
+		EventType: cadence.NewEventType(
+			stdlib.FlowLocation{},
+			"evm.BlockExecuted",
+			[]cadence.Field{
+				cadence.NewField("blockHeight", cadence.UInt64Type{}),
+				cadence.NewField("blockHash", cadence.StringType{}),
+				cadence.NewField("totalSupply", cadence.UInt64Type{}),
+				cadence.NewField("parentBlockHash", cadence.StringType{}),
+				cadence.NewField("receiptRoot", cadence.StringType{}),
+				cadence.NewField(
+					"transactionHashes",
+					cadence.NewVariableSizedArrayType(cadence.StringType{}),
+				),
+			},
+			nil,
+		),
+		Fields: []cadence.Value{
+			cadence.NewUInt64(blockHeight),
+			cadence.String(blockHash),
+			cadence.NewUInt64(totalSupply),
+			cadence.String(parentBlockHash),
+			cadence.String(receiptRoot),
+			cadence.NewArray(hashes).WithType(
+				cadence.NewVariableSizedArrayType(cadence.StringType{}),
+			),
 		},
 	}
 }
