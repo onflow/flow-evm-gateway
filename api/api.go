@@ -456,18 +456,16 @@ func (s *BlockChainAPI) GetLogs(
 	if len(criteria.Topics) > maxTopics {
 		return nil, errExceedMaxTopics
 	}
-	log := &types.Log{
-		Index:       1,
-		BlockNumber: 436,
-		BlockHash:   common.HexToHash("0x8216c5785ac562ff41e2dcfdf5785ac562ff41e2dcfdf829c5a142f1fccd7d"),
-		TxHash:      common.HexToHash("0xdf829c5a142f1fccd7d8216c5785ac562ff41e2dcfdf5785ac562ff41e2dcf"),
-		TxIndex:     0,
-		Address:     common.HexToAddress("0x16c5785ac562ff41e2dcfdf829c5a142f1fccd7d"),
-		Data:        []byte{0, 0, 0},
-		Topics:      []common.Hash{common.HexToHash("0x59ebeb90bc63057b6515673c3ecf9438e5058bca0f92585014eced636878c9a5")},
+
+	logs := []*types.Log{}
+	for _, topicList := range criteria.Topics {
+		for _, topic := range topicList {
+			matchingLogs := s.Store.LogsByTopic(topic.Hex())
+			logs = append(logs, matchingLogs...)
+		}
 	}
 
-	return []*types.Log{log}, nil
+	return logs, nil
 }
 
 // eth_newFilter

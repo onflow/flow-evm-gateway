@@ -178,38 +178,20 @@ func TestBlockChainAPI(t *testing.T) {
 		nonce := uint64(0)
 		assert.Equal(t, txCount, (*hexutil.Uint64)(&nonce))
 
-		evt := cadence.Event{
-			EventType: cadence.NewEventType(
-				stdlib.FlowLocation{},
-				"evm.TransactionExecuted",
-				[]cadence.Field{
-					cadence.NewField("blockHeight", cadence.UInt64Type{}),
-					cadence.NewField("transactionHash", cadence.StringType{}),
-					cadence.NewField("transaction", cadence.StringType{}),
-					cadence.NewField("failed", cadence.BoolType{}),
-					cadence.NewField("transactionType", cadence.UInt8Type{}),
-					cadence.NewField("gasConsumed", cadence.UInt64Type{}),
-					cadence.NewField("deployedContractAddress", cadence.StringType{}),
-					cadence.NewField("returnedValue", cadence.StringType{}),
-					cadence.NewField("logs", cadence.StringType{}),
-				},
-				nil,
-			),
-			Fields: []cadence.Value{
-				cadence.NewUInt64(3),
-				cadence.String("0xb47d74ea64221eb941490bdc0c9a404dacd0a8573379a45c992ac60ee3e83c3c"),
-				cadence.String("b88c02f88982029a01808083124f809499466ed2e37b892a2ee3e9cd55a98b68f5735db280a4c6888fa10000000000000000000000000000000000000000000000000000000000000006c001a0f84168f821b427dc158c4d8083bdc4b43e178cf0977a2c5eefbcbedcc4e351b0a066a747a38c6c266b9dc2136523cef04395918de37773db63d574aabde59c12eb"),
-				cadence.NewBool(false),
-				cadence.NewUInt8(2),
-				cadence.NewUInt64(22514),
-				cadence.String("0000000000000000000000000000000000000000"),
-				cadence.String("000000000000000000000000000000000000000000000000000000000000002a"),
-				cadence.String("f85af8589499466ed2e37b892a2ee3e9cd55a98b68f5735db2e1a024abdb5865df5079dcc5ac590ff6f01d5c16edbc5fab4e195d9febd1114503daa0000000000000000000000000000000000000000000000000000000000000002a"),
-			},
-		}
+		event := transactionExecutedEvent(
+			3,
+			"0xb47d74ea64221eb941490bdc0c9a404dacd0a8573379a45c992ac60ee3e83c3c",
+			"b88c02f88982029a01808083124f809499466ed2e37b892a2ee3e9cd55a98b68f5735db280a4c6888fa10000000000000000000000000000000000000000000000000000000000000006c001a0f84168f821b427dc158c4d8083bdc4b43e178cf0977a2c5eefbcbedcc4e351b0a066a747a38c6c266b9dc2136523cef04395918de37773db63d574aabde59c12eb",
+			false,
+			2,
+			22514,
+			"0000000000000000000000000000000000000000",
+			"000000000000000000000000000000000000000000000000000000000000002a",
+			"f85af8589499466ed2e37b892a2ee3e9cd55a98b68f5735db2e1a024abdb5865df5079dcc5ac590ff6f01d5c16edbc5fab4e195d9febd1114503daa0000000000000000000000000000000000000000000000000000000000000002a",
+		)
 
 		store := blockchainAPI.Store
-		store.UpdateAccountNonce(context.Background(), evt)
+		store.UpdateAccountNonce(context.Background(), event)
 
 		txCount, err = blockchainAPI.GetTransactionCount(
 			context.Background(),
@@ -477,15 +459,46 @@ func TestBlockChainAPI(t *testing.T) {
 		)
 		require.NoError(t, err)
 
+		assert.Equal(t, []*types.Log{}, logs)
+
+		event := transactionExecutedEvent(
+			3,
+			"0xb47d74ea64221eb941490bdc0c9a404dacd0a8573379a45c992ac60ee3e83c3c",
+			"b88c02f88982029a01808083124f809499466ed2e37b892a2ee3e9cd55a98b68f5735db280a4c6888fa10000000000000000000000000000000000000000000000000000000000000006c001a0f84168f821b427dc158c4d8083bdc4b43e178cf0977a2c5eefbcbedcc4e351b0a066a747a38c6c266b9dc2136523cef04395918de37773db63d574aabde59c12eb",
+			false,
+			2,
+			22514,
+			"0000000000000000000000000000000000000000",
+			"000000000000000000000000000000000000000000000000000000000000002a",
+			"f85af8589499466ed2e37b892a2ee3e9cd55a98b68f5735db2e1a024abdb5865df5079dcc5ac590ff6f01d5c16edbc5fab4e195d9febd1114503daa0000000000000000000000000000000000000000000000000000000000000002a",
+		)
+
+		store := blockchainAPI.Store
+		store.StoreLog(context.Background(), event)
+
+		logs, err = blockchainAPI.GetLogs(
+			context.Background(),
+			filters.FilterCriteria{
+				Topics: [][]common.Hash{
+					{
+						common.HexToHash("0x24abdb5865df5079dcc5ac590ff6f01d5c16edbc5fab4e195d9febd1114503da"),
+					},
+				},
+			},
+		)
+		require.NoError(t, err)
+
+		data, err := hex.DecodeString("000000000000000000000000000000000000000000000000000000000000002a")
+		require.NoError(t, err)
 		log := &types.Log{
-			Index:       1,
-			BlockNumber: 436,
-			BlockHash:   common.HexToHash("0x8216c5785ac562ff41e2dcfdf5785ac562ff41e2dcfdf829c5a142f1fccd7d"),
-			TxHash:      common.HexToHash("0xdf829c5a142f1fccd7d8216c5785ac562ff41e2dcfdf5785ac562ff41e2dcf"),
+			Index:       0,
+			BlockNumber: 0,
+			BlockHash:   common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
+			TxHash:      common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
 			TxIndex:     0,
-			Address:     common.HexToAddress("0x16c5785ac562ff41e2dcfdf829c5a142f1fccd7d"),
-			Data:        []byte{0, 0, 0},
-			Topics:      []common.Hash{common.HexToHash("0x59ebeb90bc63057b6515673c3ecf9438e5058bca0f92585014eced636878c9a5")},
+			Address:     common.HexToAddress("0x99466ed2e37b892a2ee3e9cd55a98b68f5735db2"),
+			Data:        data,
+			Topics:      []common.Hash{common.HexToHash("0x24abdb5865df5079dcc5ac590ff6f01d5c16edbc5fab4e195d9febd1114503da")},
 		}
 
 		assert.Equal(t, []*types.Log{log}, logs)
@@ -746,4 +759,46 @@ func TestBlockChainAPI(t *testing.T) {
 			"method is not implemented",
 		)
 	})
+}
+
+func transactionExecutedEvent(
+	blockHeight uint64,
+	transactionHash string,
+	transaction string,
+	failed bool,
+	transactionType uint8,
+	gasConsumed uint64,
+	deployedContractAddress string,
+	returnedValue string,
+	logs string,
+) cadence.Event {
+	return cadence.Event{
+		EventType: cadence.NewEventType(
+			stdlib.FlowLocation{},
+			"evm.TransactionExecuted",
+			[]cadence.Field{
+				cadence.NewField("blockHeight", cadence.UInt64Type{}),
+				cadence.NewField("transactionHash", cadence.StringType{}),
+				cadence.NewField("transaction", cadence.StringType{}),
+				cadence.NewField("failed", cadence.BoolType{}),
+				cadence.NewField("transactionType", cadence.UInt8Type{}),
+				cadence.NewField("gasConsumed", cadence.UInt64Type{}),
+				cadence.NewField("deployedContractAddress", cadence.StringType{}),
+				cadence.NewField("returnedValue", cadence.StringType{}),
+				cadence.NewField("logs", cadence.StringType{}),
+			},
+			nil,
+		),
+		Fields: []cadence.Value{
+			cadence.NewUInt64(blockHeight),
+			cadence.String(transactionHash),
+			cadence.String(transaction),
+			cadence.NewBool(failed),
+			cadence.NewUInt8(transactionType),
+			cadence.NewUInt64(gasConsumed),
+			cadence.String(deployedContractAddress),
+			cadence.String(returnedValue),
+			cadence.String(logs),
+		},
+	}
 }
