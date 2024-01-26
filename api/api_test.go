@@ -327,29 +327,59 @@ func TestBlockChainAPI(t *testing.T) {
 	})
 
 	t.Run("GetTransactionReceipt", func(t *testing.T) {
+		event := transactionExecutedEvent(
+			3,
+			"0xb47d74ea64221eb941490bdc0c9a404dacd0a8573379a45c992ac60ee3e83c3c",
+			"b88c02f88982029a01808083124f809499466ed2e37b892a2ee3e9cd55a98b68f5735db280a4c6888fa10000000000000000000000000000000000000000000000000000000000000006c001a0f84168f821b427dc158c4d8083bdc4b43e178cf0977a2c5eefbcbedcc4e351b0a066a747a38c6c266b9dc2136523cef04395918de37773db63d574aabde59c12eb",
+			false,
+			2,
+			22514,
+			"0000000000000000000000000000000000000000",
+			"000000000000000000000000000000000000000000000000000000000000002a",
+			"f85af8589499466ed2e37b892a2ee3e9cd55a98b68f5735db2e1a024abdb5865df5079dcc5ac590ff6f01d5c16edbc5fab4e195d9febd1114503daa0000000000000000000000000000000000000000000000000000000000000002a",
+		)
+
+		store := blockchainAPI.Store
+		store.StoreTransaction(context.Background(), event)
+
 		receipt, err := blockchainAPI.GetTransactionReceipt(
 			context.Background(),
-			common.Hash{0, 1, 2},
+			common.HexToHash("0xb47d74ea64221eb941490bdc0c9a404dacd0a8573379a45c992ac60ee3e83c3c"),
 		)
 		require.NoError(t, err)
 
 		expectedReceipt := map[string]interface{}{}
-		txIndex := uint64(64)
-		blockHash := common.HexToHash("0x1d59ff54b1eb26b013ce3cb5fc9dab3705b415a67127a003c3e61eb445bb8df2")
-		expectedReceipt["blockHash"] = blockHash
-		expectedReceipt["blockNumber"] = (*hexutil.Big)(big.NewInt(6139707))
-		expectedReceipt["contractAddress"] = nil
+		expectedReceipt["blockNumber"] = (*hexutil.Big)(big.NewInt(3))
+		expectedReceipt["transactionHash"] = common.HexToHash("0xb47d74ea64221eb941490bdc0c9a404dacd0a8573379a45c992ac60ee3e83c3c")
+		expectedReceipt["status"] = hexutil.Uint64(1)
+		expectedReceipt["type"] = hexutil.Uint64(2)
+		expectedReceipt["gasUsed"] = hexutil.Uint64(22514)
+		expectedReceipt["contractAddress"] = common.HexToAddress("0x0000000000000000000000000000000000000000")
+		expectedReceipt["from"] = common.HexToAddress("0x658Bdf435d810C91414eC09147DAA6DB62406379")
+		to := common.HexToAddress("0x99466ED2E37B892A2Ee3E9CD55a98b68f5735db2")
+		expectedReceipt["to"] = &to
+
+		txIndex := uint64(0)
+		expectedReceipt["transactionIndex"] = (*hexutil.Uint64)(&txIndex)
+		expectedReceipt["blockHash"] = common.HexToHash("0x1d59ff54b1eb26b013ce3cb5fc9dab3705b415a67127a003c3e61eb445bb8df2")
 		expectedReceipt["cumulativeGasUsed"] = hexutil.Uint64(50000)
 		expectedReceipt["effectiveGasPrice"] = (*hexutil.Big)(big.NewInt(20000000000))
-		expectedReceipt["from"] = common.HexToAddress("0xa7d9ddbe1f17865597fbd27ec712455208b6b76d")
-		expectedReceipt["gasUsed"] = hexutil.Uint64(40000)
-		expectedReceipt["logs"] = []*types.Log{}
-		expectedReceipt["logsBloom"] = "0x88df016429689c079f3b2f6ad39fa052532c56795b733da78a91ebe6a713944b"
-		expectedReceipt["status"] = hexutil.Uint64(1)
-		expectedReceipt["to"] = common.HexToAddress("0xf02c1c8e6114b1dbe8937a39260b5b0a374432bb")
-		expectedReceipt["transactionHash"] = common.HexToHash("0x88df016429689c079f3b2f6ad39fa052532c56795b733da78a91ebe6a713944b")
-		expectedReceipt["transactionIndex"] = (*hexutil.Uint64)(&txIndex)
-		expectedReceipt["type"] = hexutil.Uint64(2)
+
+		data, err := hex.DecodeString("000000000000000000000000000000000000000000000000000000000000002a")
+		require.NoError(t, err)
+		log := &types.Log{
+			Index:       0,
+			BlockNumber: 0,
+			BlockHash:   common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
+			TxHash:      common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
+			TxIndex:     0,
+			Address:     common.HexToAddress("0x99466ed2e37b892a2ee3e9cd55a98b68f5735db2"),
+			Data:        data,
+			Topics:      []common.Hash{common.HexToHash("0x24abdb5865df5079dcc5ac590ff6f01d5c16edbc5fab4e195d9febd1114503da")},
+		}
+		logs := []*types.Log{log}
+		expectedReceipt["logs"] = logs
+		expectedReceipt["logsBloom"] = hexutil.Bytes(types.LogsBloom(logs))
 
 		assert.Equal(t, expectedReceipt, receipt)
 	})

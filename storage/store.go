@@ -89,12 +89,114 @@ func NewBlockExecutedPayload(
 	return blockExecutedPayload, nil
 }
 
+type TransactionExecutedPayload struct {
+	BlockHeight             uint64
+	TxHash                  string
+	Transaction             string
+	Failed                  bool
+	TxType                  uint8
+	GasConsumed             uint64
+	DeployedContractAddress string
+	ReturnedValue           string
+	Logs                    string
+}
+
+func NewTransactionExecutedPayload(
+	transactionExecutedEvent cadence.Event,
+) (*TransactionExecutedPayload, error) {
+	transactionExecutedPayload := &TransactionExecutedPayload{}
+
+	blockHeightFieldValue := transactionExecutedEvent.GetFieldValues()[0]
+	blockHeightCadenceValue, ok := blockHeightFieldValue.(cadence.UInt64)
+	if !ok {
+		return nil, fmt.Errorf("unable to decode Cadence event")
+	}
+
+	blockHeight := blockHeightCadenceValue.ToGoValue().(uint64)
+	transactionExecutedPayload.BlockHeight = blockHeight
+
+	txHashFieldValue := transactionExecutedEvent.GetFieldValues()[1]
+	txHashCadenceValue, ok := txHashFieldValue.(cadence.String)
+	if !ok {
+		return nil, fmt.Errorf("unable to decode Cadence event")
+	}
+
+	txHash := txHashCadenceValue.ToGoValue().(string)
+	transactionExecutedPayload.TxHash = txHash
+
+	transactionFieldValue := transactionExecutedEvent.GetFieldValues()[2]
+	transactionCadenceValue, ok := transactionFieldValue.(cadence.String)
+	if !ok {
+		return nil, fmt.Errorf("unable to decode Cadence event")
+	}
+
+	transaction := transactionCadenceValue.ToGoValue().(string)
+	transactionExecutedPayload.Transaction = transaction
+
+	failedFieldValue := transactionExecutedEvent.GetFieldValues()[3]
+	failedCadenceValue, ok := failedFieldValue.(cadence.Bool)
+	if !ok {
+		return nil, fmt.Errorf("unable to decode Cadence event")
+	}
+
+	failed := failedCadenceValue.ToGoValue().(bool)
+	transactionExecutedPayload.Failed = failed
+
+	txTypeFieldValue := transactionExecutedEvent.GetFieldValues()[4]
+	txTypeCadenceValue, ok := txTypeFieldValue.(cadence.UInt8)
+	if !ok {
+		return nil, fmt.Errorf("unable to decode Cadence event")
+	}
+
+	txType := txTypeCadenceValue.ToGoValue().(uint8)
+	transactionExecutedPayload.TxType = txType
+
+	gasConsumedFieldValue := transactionExecutedEvent.GetFieldValues()[5]
+	gasConsumedCadenceValue, ok := gasConsumedFieldValue.(cadence.UInt64)
+	if !ok {
+		return nil, fmt.Errorf("unable to decode Cadence event")
+	}
+
+	gasConsumed := gasConsumedCadenceValue.ToGoValue().(uint64)
+	transactionExecutedPayload.GasConsumed = gasConsumed
+
+	deployedContractAddressFieldValue := transactionExecutedEvent.GetFieldValues()[6]
+	deployedContractAddressCadenceValue, ok := deployedContractAddressFieldValue.(cadence.String)
+	if !ok {
+		return nil, fmt.Errorf("unable to decode Cadence event")
+	}
+
+	deployedContractAddress := deployedContractAddressCadenceValue.ToGoValue().(string)
+	transactionExecutedPayload.DeployedContractAddress = deployedContractAddress
+
+	returnedValueFieldValue := transactionExecutedEvent.GetFieldValues()[7]
+	returnedValueCadenceValue, ok := returnedValueFieldValue.(cadence.String)
+	if !ok {
+		return nil, fmt.Errorf("unable to decode Cadence event")
+	}
+
+	returnedValue := returnedValueCadenceValue.ToGoValue().(string)
+	transactionExecutedPayload.ReturnedValue = returnedValue
+
+	logsFieldValue := transactionExecutedEvent.GetFieldValues()[8]
+	logsCadenceValue, ok := logsFieldValue.(cadence.String)
+	if !ok {
+		return nil, fmt.Errorf("unable to decode Cadence event")
+	}
+
+	logs := logsCadenceValue.ToGoValue().(string)
+	transactionExecutedPayload.Logs = logs
+
+	return transactionExecutedPayload, nil
+}
+
 type Store struct {
 	mu             sync.RWMutex
 	logsByTopic    map[string][]*types.Log
 	latestHeight   uint64
 	accountNonce   map[common.Address]uint64
 	blocksByNumber map[uint64]*BlockExecutedPayload
+	txByHash       map[common.Hash]*TransactionExecutedPayload
 }
 
 // NewStore returns a new in-memory Store implementation.
@@ -106,6 +208,7 @@ func NewStore() *Store {
 	return &Store{
 		accountNonce:   make(map[common.Address]uint64),
 		logsByTopic:    make(map[string][]*types.Log),
+		txByHash:       make(map[common.Hash]*TransactionExecutedPayload),
 		blocksByNumber: make(map[uint64]*BlockExecutedPayload),
 	}
 }
@@ -231,4 +334,37 @@ func (s *Store) GetBlockByNumber(
 	}
 
 	return blockExecutedPayload, nil
+}
+
+func (s *Store) StoreTransaction(
+	ctx context.Context,
+	transactionPayload cadence.Event,
+) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	transactionExecutedPayload, err := NewTransactionExecutedPayload(transactionPayload)
+	if err != nil {
+		return err
+	}
+
+	txHash := common.HexToHash(transactionExecutedPayload.TxHash)
+	s.txByHash[txHash] = transactionExecutedPayload
+
+	return nil
+}
+
+func (s *Store) GetTransactionByHash(
+	ctx context.Context,
+	txHash common.Hash,
+) (*TransactionExecutedPayload, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	transactionExecutedPayload, ok := s.txByHash[txHash]
+	if !ok {
+		return nil, fmt.Errorf("unable to find transaction for hash: %s", txHash)
+	}
+
+	return transactionExecutedPayload, nil
 }
