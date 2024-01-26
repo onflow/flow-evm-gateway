@@ -1,6 +1,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/filters"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/onflow/flow-evm-gateway/storage"
 )
@@ -303,22 +305,65 @@ func (s *BlockChainAPI) GetTransactionReceipt(
 	// defined interfaces for the storage & indexer services, so that
 	// we can proceed with some tests, and get rid of these mock data.
 	receipt := map[string]interface{}{}
-	txIndex := uint64(64)
-	blockHash := common.HexToHash("0x1d59ff54b1eb26b013ce3cb5fc9dab3705b415a67127a003c3e61eb445bb8df2")
-	receipt["blockHash"] = blockHash
-	receipt["blockNumber"] = (*hexutil.Big)(big.NewInt(6139707))
-	receipt["contractAddress"] = nil
+
+	txReceipt, err := s.Store.GetTransactionByHash(ctx, hash)
+	if err != nil {
+		return receipt, err
+	}
+
+	receipt["blockNumber"] = (*hexutil.Big)(big.NewInt(int64(txReceipt.BlockHeight)))
+	receipt["transactionHash"] = common.HexToHash(txReceipt.TxHash)
+
+	if txReceipt.Failed {
+		receipt["status"] = hexutil.Uint64(0)
+	} else {
+		receipt["status"] = hexutil.Uint64(1)
+	}
+
+	receipt["type"] = hexutil.Uint64(txReceipt.TxType)
+	receipt["gasUsed"] = hexutil.Uint64(txReceipt.GasConsumed)
+	receipt["contractAddress"] = common.HexToAddress(txReceipt.DeployedContractAddress)
+
+	logs := []*types.Log{}
+	decodedLogs, err := hex.DecodeString(txReceipt.Logs)
+	if err != nil {
+		return receipt, err
+	}
+	err = rlp.Decode(bytes.NewReader(decodedLogs), &logs)
+	if err != nil {
+		return receipt, err
+	}
+	receipt["logs"] = logs
+	receipt["logsBloom"] = hexutil.Bytes(types.LogsBloom(logs))
+
+	decodedTx, err := hex.DecodeString(txReceipt.Transaction)
+	if err != nil {
+		return receipt, err
+	}
+	tx := &types.Transaction{}
+	encodedLen := uint(len(txReceipt.Transaction))
+	err = tx.DecodeRLP(
+		rlp.NewStream(
+			bytes.NewReader(decodedTx),
+			uint64(encodedLen),
+		),
+	)
+	if err != nil {
+		return receipt, err
+	}
+	from, err := types.Sender(types.LatestSignerForChainID(tx.ChainId()), tx)
+	if err != nil {
+		return receipt, err
+	}
+	receipt["from"] = from
+	receipt["to"] = tx.To()
+
+	txIndex := uint64(0)
+	receipt["transactionIndex"] = (*hexutil.Uint64)(&txIndex)
+	receipt["blockHash"] = common.HexToHash("0x1d59ff54b1eb26b013ce3cb5fc9dab3705b415a67127a003c3e61eb445bb8df2")
 	receipt["cumulativeGasUsed"] = hexutil.Uint64(50000)
 	receipt["effectiveGasPrice"] = (*hexutil.Big)(big.NewInt(20000000000))
-	receipt["from"] = common.HexToAddress("0xa7d9ddbe1f17865597fbd27ec712455208b6b76d")
-	receipt["gasUsed"] = hexutil.Uint64(40000)
-	receipt["logs"] = []*types.Log{}
-	receipt["logsBloom"] = "0x88df016429689c079f3b2f6ad39fa052532c56795b733da78a91ebe6a713944b"
-	receipt["status"] = hexutil.Uint64(1)
-	receipt["to"] = common.HexToAddress("0xf02c1c8e6114b1dbe8937a39260b5b0a374432bb")
-	receipt["transactionHash"] = common.HexToHash("0x88df016429689c079f3b2f6ad39fa052532c56795b733da78a91ebe6a713944b")
-	receipt["transactionIndex"] = (*hexutil.Uint64)(&txIndex)
-	receipt["type"] = hexutil.Uint64(2)
+
 	return receipt, nil
 }
 

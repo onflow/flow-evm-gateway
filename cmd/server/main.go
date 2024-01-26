@@ -137,6 +137,7 @@ func runIndexer(ctx context.Context, store *storage.Store, logger zerolog.Logger
 			for _, event := range response.Events {
 				logger.Info().Msgf("  %s", event.Value)
 				if event.Type == "flow.evm.TransactionExecuted" {
+					store.StoreTransaction(ctx, event.Value)
 					store.UpdateAccountNonce(ctx, event.Value)
 					store.StoreLog(ctx, event.Value)
 				}
