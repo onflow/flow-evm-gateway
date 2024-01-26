@@ -133,14 +133,15 @@ func runIndexer(ctx context.Context, store *storage.Store, logger zerolog.Logger
 			}
 
 			logger.Info().Msgf("block %d %s:", response.Height, response.BlockID)
-			if len(response.Events) > 0 {
-				store.StoreBlockHeight(ctx, response.Height)
-			}
+
 			for _, event := range response.Events {
 				logger.Info().Msgf("  %s", event.Value)
 				if event.Type == "flow.evm.TransactionExecuted" {
 					store.UpdateAccountNonce(ctx, event.Value)
 					store.StoreLog(ctx, event.Value)
+				}
+				if event.Type == "flow.evm.BlockExecuted" {
+					store.StoreBlock(ctx, event.Value)
 				}
 			}
 

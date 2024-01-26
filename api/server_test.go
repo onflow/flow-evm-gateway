@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"bytes"
+	"context"
 	_ "embed"
 	"io"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 //go:embed fixtures/eth_json_rpc_requests.json
@@ -53,6 +55,32 @@ func TestServerJSONRPCOveHTTPHandler(t *testing.T) {
 
 		assert.Equal(t, expectedResponse, strings.TrimSuffix(string(content), "\n"))
 	}
+
+	t.Run("eth_getBlockByNumber", func(t *testing.T) {
+		request := `{"jsonrpc":"2.0","id":1,"method":"eth_getBlockByNumber","params":["0x1",false]}`
+		expectedResponse := `{"jsonrpc":"2.0","id":1,"result":{"difficulty":"0x4ea3f27bc","extraData":"0x476574682f4c5649562f76312e302e302f6c696e75782f676f312e342e32","gasLimit":"0x1388","gasUsed":"0x0","hash":"0xf31ee13dad8f38431fd31278b12be62e6b77e6923f0b7a446eb1affb61f21fc9","logsBloom":"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","miner":"0xbb7b8287f3f0a933474a79eae42cbca977791171","mixHash":"0x4fffe9ae21f1c9e15207b1f472d5bbdd68c9595d461666602f2be20daf5e7843","nonce":"0x689056015818adbe","number":"0x1","parentHash":"0xe81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421c0","receiptsRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","sha3Uncles":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","size":"0x220","stateRoot":"0xddc8b0234c2e0cad087c8b389aa7ef01f7d79b2570bccb77ce48648aa61c904d","timestamp":"0x55ba467c","totalDifficulty":"0x78ed983323d","transactions":["0xf31ee13dad8f38431fd31278b12be62e6b77e6923f0b7a446eb1affb61f21fc9"],"transactionsRoot":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421","uncles":[]}}`
+
+		event := blockExecutedEvent(
+			1,
+			"0xf31ee13dad8f38431fd31278b12be62e6b77e6923f0b7a446eb1affb61f21fc9",
+			7766279631452241920,
+			"0xe81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421c0",
+			"0x0000000000000000000000000000000000000000000000000000000000000000",
+			[]string{"0xf31ee13dad8f38431fd31278b12be62e6b77e6923f0b7a446eb1affb61f21fc9"},
+		)
+		err := store.StoreBlock(context.Background(), event)
+		require.NoError(t, err)
+
+		resp := rpcRequest(url, request, "origin", "test.com")
+		defer resp.Body.Close()
+
+		content, err := io.ReadAll(resp.Body)
+		if err != nil {
+			panic(err)
+		}
+
+		assert.Equal(t, expectedResponse, strings.TrimSuffix(string(content), "\n"))
+	})
 }
 
 func TestServerJSONRPCOveWebSocketHandler(t *testing.T) {
