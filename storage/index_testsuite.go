@@ -6,6 +6,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/stretchr/testify/suite"
+	"math/big"
 )
 
 type BlockTestSuite struct {
@@ -131,12 +132,12 @@ func (s *ReceiptTestSuite) TestGetReceiptByBlockID() {
 func (s *ReceiptTestSuite) TestBloomsForBlockRange() {
 
 	s.Run("valid block range", func() {
-		start := uint64(10)
-		end := uint64(15)
-		testBlooms := make([]types.Bloom, end-start+1)
+		start := big.NewInt(10)
+		end := big.NewInt(15)
+		testBlooms := make([]types.Bloom, 0)
 
-		for i := start; i <= end; i++ {
-			r := newReceipt(i, common.HexToHash(fmt.Sprintf("0xf1%d", i)))
+		for i := start; i.Cmp(end) < 0; i = i.Add(i, big.NewInt(1)) {
+			r := newReceipt(i.Uint64(), common.HexToHash(fmt.Sprintf("0xf1%d", i)))
 			testBlooms = append(testBlooms, r.Bloom)
 		}
 
@@ -147,16 +148,16 @@ func (s *ReceiptTestSuite) TestBloomsForBlockRange() {
 	})
 
 	s.Run("invalid block range", func() {
-		start := uint64(10)
-		end := uint64(5) // end is less than start
+		start := big.NewInt(10)
+		end := big.NewInt(5) // end is less than start
 		blooms, err := s.ReceiptIndexer.BloomsForBlockRange(start, end)
 		s.Require().ErrorIs(err, errors.InvalidRange)
 		s.Require().Nil(blooms)
 	})
 
 	s.Run("non-existing block range", func() {
-		start := uint64(100)
-		end := uint64(105)
+		start := big.NewInt(100)
+		end := big.NewInt(105)
 		blooms, err := s.ReceiptIndexer.BloomsForBlockRange(start, end)
 		s.Require().NoError(err)
 		s.Require().Len(blooms, 0)

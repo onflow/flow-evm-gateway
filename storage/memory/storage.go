@@ -213,7 +213,7 @@ func (r ReceiptStorage) BloomsForBlockRange(start, end *big.Int) ([]*gethTypes.B
 	r.base.mu.RLock()
 	defer r.base.mu.RUnlock()
 
-	if start.Cmp(end) != -1 {
+	if start.Cmp(end) < -1 {
 		return nil, errors.InvalidRange
 	}
 
