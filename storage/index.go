@@ -8,7 +8,8 @@ import (
 
 type BlockIndexer interface {
 	Store(block *types.Block) error
-	Get(height uint64) (*types.Block, error)
+	GetByHeight(height uint64) (*types.Block, error)
+	GetByID(ID common.Hash) (*types.Block, error)
 	LatestHeight() (uint64, error)
 	FirstHeight() (uint64, error)
 }
@@ -17,7 +18,7 @@ type ReceiptIndexer interface {
 	Store(receipt *gethTypes.ReceiptForStorage) error
 	GetByTransactionID(ID common.Hash) *gethTypes.ReceiptForStorage
 	GetByBlockID(ID common.Hash) *gethTypes.ReceiptForStorage
-	BloomForBlockRange() gethTypes.Bloom
+	BloomForBlockRange(start, end uint64) gethTypes.Bloom
 }
 
 type TransactionIndexer interface {
