@@ -6,8 +6,8 @@ require (
 	github.com/ethereum/go-ethereum v1.13.5
 	github.com/gorilla/websocket v1.5.0
 	github.com/onflow/cadence v0.42.7
-	github.com/onflow/flow-go v0.33.1
-	github.com/onflow/flow-go-sdk v0.44.1-0.20231220221922-58fb441b7228
+	github.com/onflow/flow-go v0.33.2-0.20240126233840-ed23d2193420
+	github.com/onflow/flow-go-sdk v0.44.0
 	github.com/rs/zerolog v1.31.0
 	github.com/stretchr/testify v1.8.4
 	google.golang.org/grpc v1.59.0
@@ -56,7 +56,7 @@ require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/golang/snappy v0.0.5-0.20220116011046-fa5810519dcb // indirect
-	github.com/google/uuid v1.3.1 // indirect
+	github.com/google/uuid v1.4.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.7.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
@@ -109,11 +109,10 @@ require (
 	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
 	github.com/onflow/atree v0.6.0 // indirect
-	github.com/onflow/crypto v0.24.9 // indirect
+	github.com/onflow/crypto v0.25.0 // indirect
 	github.com/onflow/flow-core-contracts/lib/go/contracts v0.15.1-0.20231219201108-fbdb10b0a2da // indirect
 	github.com/onflow/flow-core-contracts/lib/go/templates v0.15.1-0.20231219201108-fbdb10b0a2da // indirect
 	github.com/onflow/flow-ft/lib/go/contracts v0.7.1-0.20230711213910-baad011d2b13 // indirect
-	github.com/onflow/flow-go/crypto v0.25.0 // indirect
 	github.com/onflow/flow-nft/lib/go/contracts v1.1.0 // indirect
 	github.com/onflow/flow/protobuf/go/flow v0.3.2-0.20231213135419-ae911cc351a2 // indirect
 	github.com/onflow/sdks v0.5.0 // indirect
