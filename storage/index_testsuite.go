@@ -2,9 +2,8 @@ package storage
 
 import (
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/stretchr/testify/require"
+	"github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/stretchr/testify/suite"
-	"testing"
 )
 
 type BlockTestSuite struct {
@@ -12,27 +11,59 @@ type BlockTestSuite struct {
 	Blocks BlockIndexer
 }
 
-func (b *BlockTestSuite) Get(t *testing.T) {
-	t.Run("existing block", func(t *testing.T) {
-		block := newBlock(1)
+func (b *BlockTestSuite) TestGet() {
+	b.Run("existing block", func() {
+		height := uint64(1)
+		block := newBlock(height)
 		err := b.Blocks.Store(block)
-		require.NoError(t, err)
+		b.Require().NoError(err)
 
 		ID, err := block.Hash()
-		require.NoError(t, err)
+		b.Require().NoError(err)
 
 		retBlock, err := b.Blocks.GetByID(ID)
-		require.NoError(t, err)
-		require.Equal(t, block.Height, retBlock.Height)
+		b.Require().NoError(err)
+		b.Require().Equal(block, retBlock)
+
+		retBlock, err = b.Blocks.GetByHeight(height)
+		b.Require().Equal(block, retBlock)
 	})
 
-	t.Run("non-existing block", func(t *testing.T) {
+	b.Run("non-existing block", func() {
 		retBlock, err := b.Blocks.GetByID(common.HexToHash("0x10"))
-		require.Nil(t, retBlock)
-		require.ErrorIs(t, err, NotFound)
+		b.Require().Nil(retBlock)
+		b.Require().ErrorIs(err, errors.NotFound)
 	})
 }
 
-func (b *BlockTestSuite) Store() {
+func (b *BlockTestSuite) TestStore() {
+	block := newBlock(10)
 
+	b.Run("success", func() {
+		err := b.Blocks.Store(block)
+		b.Require().NoError(err)
+	})
+
+	b.Run("failed to store same block", func() {
+		err := b.Blocks.Store(block)
+		b.Require().ErrorIs(err, errors.Duplicate)
+	})
+}
+
+func (b *BlockTestSuite) TestHeights() {
+	b.Run("first height", func() {
+		first, err := b.Blocks.FirstHeight()
+		b.Require().NoError(err)
+		b.Require().Equal(uint64(1), first)
+	})
+
+	b.Run("last height", func() {
+		lastHeight := uint64(100)
+		err := b.Blocks.Store(newBlock(lastHeight))
+		b.Require().NoError(err)
+
+		last, err := b.Blocks.LatestHeight()
+		b.Require().NoError(err)
+		b.Require().Equal(lastHeight, last)
+	})
 }
