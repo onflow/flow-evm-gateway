@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/onflow/flow-go/fvm/evm/types"
+	"math/big"
 )
 
 func newBlock(height uint64) *types.Block {
@@ -15,7 +16,7 @@ func newBlock(height uint64) *types.Block {
 	return &types.Block{
 		ParentBlockHash:   parent,
 		Height:            height,
-		TotalSupply:       1000,
+		TotalSupply:       big.NewInt(1000),
 		ReceiptRoot:       common.HexToHash(fmt.Sprintf("0x1337%d", height)),
 		TransactionHashes: nil,
 	}
