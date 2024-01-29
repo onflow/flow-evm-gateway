@@ -17,9 +17,11 @@ import (
 	"github.com/onflow/cadence"
 	"github.com/onflow/cadence/runtime/stdlib"
 	"github.com/onflow/flow-evm-gateway/api"
+	"github.com/onflow/flow-evm-gateway/api/mocks"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -707,21 +709,7 @@ func TestBlockChainAPI(t *testing.T) {
 	})
 
 	t.Run("Call", func(t *testing.T) {
-		var mockFlowClient api.FlowAccessAPI = api.MockFlowClient{
-			ExecuteScriptAtLatestBlockFunc: func(ctx context.Context, script []byte, arguments []cadence.Value) (cadence.Value, error) {
-				result, err := hex.DecodeString("000000000000000000000000000000000000000000000000000000000000002a")
-				require.NoError(t, err)
-				toBytes := make([]cadence.Value, 0)
-				for _, bt := range result {
-					toBytes = append(toBytes, cadence.UInt8(bt))
-				}
-				returnValue := cadence.NewArray(
-					toBytes,
-				).WithType(cadence.NewVariableSizedArrayType(cadence.TheUInt8Type))
-
-				return returnValue, nil
-			},
-		}
+		mockFlowClient := new(mocks.MockAccessClient)
 		blockchainAPI = api.NewBlockChainAPI(config, store, mockFlowClient)
 
 		from := common.HexToAddress("0x658bdf435d810c91414ec09147daa6db62406379")
@@ -730,7 +718,19 @@ func TestBlockChainAPI(t *testing.T) {
 		gasPrice := hexutil.Big(*big.NewInt(1350000))
 		value := hexutil.Big(*big.NewInt(0))
 		input := hexutil.Bytes("0xc6888fa10000000000000000000000000000000000000000000000000000000000000006")
-		result, err := blockchainAPI.Call(
+
+		result, err := hex.DecodeString("000000000000000000000000000000000000000000000000000000000000002a")
+		require.NoError(t, err)
+		toBytes := make([]cadence.Value, 0)
+		for _, bt := range result {
+			toBytes = append(toBytes, cadence.UInt8(bt))
+		}
+		returnValue := cadence.NewArray(
+			toBytes,
+		).WithType(cadence.NewVariableSizedArrayType(cadence.TheUInt8Type))
+		mockFlowClient.On("ExecuteScriptAtLatestBlock", mock.Anything, mock.Anything, mock.Anything).Return(returnValue, nil)
+
+		returnedValue, err := blockchainAPI.Call(
 			context.Background(),
 			api.TransactionArgs{
 				From:     &from,
@@ -749,7 +749,7 @@ func TestBlockChainAPI(t *testing.T) {
 		assert.Equal(
 			t,
 			hexutil.Bytes{0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x2a},
-			result,
+			returnedValue,
 		)
 	})
 

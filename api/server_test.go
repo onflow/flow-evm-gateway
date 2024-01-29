@@ -15,10 +15,12 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-evm-gateway/api"
+	"github.com/onflow/flow-evm-gateway/api/mocks"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -28,23 +30,7 @@ var requests string
 //go:embed fixtures/eth_json_rpc_responses.json
 var responses string
 
-var mockFlowClient api.FlowAccessAPI = api.MockFlowClient{
-	ExecuteScriptAtLatestBlockFunc: func(ctx context.Context, script []byte, arguments []cadence.Value) (cadence.Value, error) {
-		result, err := hex.DecodeString("000000000000000000000000000000000000000000000000000000000000002a")
-		if err != nil {
-			panic(err)
-		}
-		toBytes := make([]cadence.Value, 0)
-		for _, bt := range result {
-			toBytes = append(toBytes, cadence.UInt8(bt))
-		}
-		returnValue := cadence.NewArray(
-			toBytes,
-		).WithType(cadence.NewVariableSizedArrayType(cadence.TheUInt8Type))
-
-		return returnValue, nil
-	},
-}
+var mockFlowClient = new(mocks.MockAccessClient)
 
 func TestServerJSONRPCOveHTTPHandler(t *testing.T) {
 	store := storage.NewStore()
@@ -137,6 +123,17 @@ func TestServerJSONRPCOveHTTPHandler(t *testing.T) {
 	t.Run("eth_call", func(t *testing.T) {
 		request := `{"jsonrpc":"2.0","id":1,"method":"eth_call","params":[{"from":"0xb60e8dd61c5d32be8058bb8eb970870f07233155","to":"0xd46e8dd67c5d32be8058bb8eb970870f07244567","gas":"0x76c0","gasPrice":"0x9184e72a000","value":"0x9184e72a","input":"0xd46e8dd67c5d32be8d46e8dd67c5d32be8058bb8eb970870f072445675058bb8eb970870f072445675"}]}`
 		expectedResponse := `{"jsonrpc":"2.0","id":1,"result":"0x000000000000000000000000000000000000000000000000000000000000002a"}`
+
+		result, err := hex.DecodeString("000000000000000000000000000000000000000000000000000000000000002a")
+		require.NoError(t, err)
+		toBytes := make([]cadence.Value, 0)
+		for _, bt := range result {
+			toBytes = append(toBytes, cadence.UInt8(bt))
+		}
+		returnValue := cadence.NewArray(
+			toBytes,
+		).WithType(cadence.NewVariableSizedArrayType(cadence.TheUInt8Type))
+		mockFlowClient.On("ExecuteScriptAtLatestBlock", mock.Anything, mock.Anything, mock.Anything).Return(returnValue, nil)
 
 		blockchainAPI = api.NewBlockChainAPI(config, store, mockFlowClient)
 

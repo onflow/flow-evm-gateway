@@ -17,6 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-evm-gateway/storage"
+	"github.com/onflow/flow-go-sdk/access"
 )
 
 const EthNamespace = "eth"
@@ -40,13 +41,13 @@ func SupportedAPIs(blockChainAPI *BlockChainAPI) []rpc.API {
 type BlockChainAPI struct {
 	config     *Config
 	Store      *storage.Store
-	FlowClient FlowAccessAPI
+	FlowClient access.Client
 }
 
 func NewBlockChainAPI(
 	config *Config,
 	store *storage.Store,
-	flowClient FlowAccessAPI,
+	flowClient access.Client,
 ) *BlockChainAPI {
 	return &BlockChainAPI{
 		config:     config,
