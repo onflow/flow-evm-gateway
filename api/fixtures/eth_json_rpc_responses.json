@@ -24,7 +24,6 @@
 {"jsonrpc":"2.0","id":1,"result":"block_filter"}
 {"jsonrpc":"2.0","id":1,"result":"pending_tx_filter"}
 {"jsonrpc":"2.0","id":1,"result":[]}
-{"jsonrpc":"2.0","id":1,"result":"0x00010203040506070809"}
 {"jsonrpc":"2.0","id":1,"result":"0x69"}
 {"jsonrpc":"2.0","id":1,"result":{}}
 {"jsonrpc":"2.0","id":1,"result":{}}

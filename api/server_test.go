@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	_ "embed"
+	"encoding/hex"
 	"io"
 	"net/http"
 	"strings"
@@ -12,8 +13,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/gorilla/websocket"
+	"github.com/onflow/cadence"
 	"github.com/onflow/flow-evm-gateway/api"
 	"github.com/onflow/flow-evm-gateway/storage"
+	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -25,6 +28,24 @@ var requests string
 //go:embed fixtures/eth_json_rpc_responses.json
 var responses string
 
+var mockFlowClient api.FlowAccessAPI = api.MockFlowClient{
+	ExecuteScriptAtLatestBlockFunc: func(ctx context.Context, script []byte, arguments []cadence.Value) (cadence.Value, error) {
+		result, err := hex.DecodeString("000000000000000000000000000000000000000000000000000000000000002a")
+		if err != nil {
+			panic(err)
+		}
+		toBytes := make([]cadence.Value, 0)
+		for _, bt := range result {
+			toBytes = append(toBytes, cadence.UInt8(bt))
+		}
+		returnValue := cadence.NewArray(
+			toBytes,
+		).WithType(cadence.NewVariableSizedArrayType(cadence.TheUInt8Type))
+
+		return returnValue, nil
+	},
+}
+
 func TestServerJSONRPCOveHTTPHandler(t *testing.T) {
 	store := storage.NewStore()
 	srv := api.NewHTTPServer(zerolog.Logger{}, rpc.DefaultHTTPTimeouts)
@@ -32,7 +53,8 @@ func TestServerJSONRPCOveHTTPHandler(t *testing.T) {
 		ChainID:  api.FlowEVMTestnetChainID,
 		Coinbase: common.HexToAddress("0xf02c1c8e6114b1dbe8937a39260b5b0a374432bb"),
 	}
-	supportedAPIs := api.SupportedAPIs(config, store)
+	blockchainAPI := api.NewBlockChainAPI(config, store, mockFlowClient)
+	supportedAPIs := api.SupportedAPIs(blockchainAPI)
 	srv.EnableRPC(supportedAPIs)
 	srv.SetListenAddr("localhost", 8545)
 	err := srv.Start()
@@ -111,6 +133,23 @@ func TestServerJSONRPCOveHTTPHandler(t *testing.T) {
 
 		assert.Equal(t, expectedResponse, strings.TrimSuffix(string(content), "\n"))
 	})
+
+	t.Run("eth_call", func(t *testing.T) {
+		request := `{"jsonrpc":"2.0","id":1,"method":"eth_call","params":[{"from":"0xb60e8dd61c5d32be8058bb8eb970870f07233155","to":"0xd46e8dd67c5d32be8058bb8eb970870f07244567","gas":"0x76c0","gasPrice":"0x9184e72a000","value":"0x9184e72a","input":"0xd46e8dd67c5d32be8d46e8dd67c5d32be8058bb8eb970870f072445675058bb8eb970870f072445675"}]}`
+		expectedResponse := `{"jsonrpc":"2.0","id":1,"result":"0x000000000000000000000000000000000000000000000000000000000000002a"}`
+
+		blockchainAPI = api.NewBlockChainAPI(config, store, mockFlowClient)
+
+		resp := rpcRequest(url, request, "origin", "test.com")
+		defer resp.Body.Close()
+
+		content, err := io.ReadAll(resp.Body)
+		if err != nil {
+			panic(err)
+		}
+
+		assert.Equal(t, expectedResponse, strings.TrimSuffix(string(content), "\n"))
+	})
 }
 
 func TestServerJSONRPCOveWebSocketHandler(t *testing.T) {
@@ -120,10 +159,13 @@ func TestServerJSONRPCOveWebSocketHandler(t *testing.T) {
 		ChainID:  api.FlowEVMTestnetChainID,
 		Coinbase: common.HexToAddress("0xf02c1c8e6114b1dbe8937a39260b5b0a374432bb"),
 	}
-	supportedAPIs := api.SupportedAPIs(config, store)
+	flowClient, err := api.NewFlowClient(grpc.EmulatorHost)
+	require.NoError(t, err)
+	blockchainAPI := api.NewBlockChainAPI(config, store, flowClient)
+	supportedAPIs := api.SupportedAPIs(blockchainAPI)
 	srv.EnableWS(supportedAPIs)
 	srv.SetListenAddr("localhost", 8545)
-	err := srv.Start()
+	err = srv.Start()
 	defer srv.Stop()
 	if err != nil {
 		panic(err)

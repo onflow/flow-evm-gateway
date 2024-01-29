@@ -18,6 +18,7 @@ import (
 	"github.com/onflow/cadence/runtime/stdlib"
 	"github.com/onflow/flow-evm-gateway/api"
 	"github.com/onflow/flow-evm-gateway/storage"
+	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -36,7 +37,9 @@ func TestBlockChainAPI(t *testing.T) {
 		ChainID:  api.FlowEVMTestnetChainID,
 		Coinbase: common.HexToAddress("0xf02c1c8e6114b1dbe8937a39260b5b0a374432bb"),
 	}
-	blockchainAPI := api.NewBlockChainAPI(config, store)
+	flowClient, err := api.NewFlowClient(grpc.EmulatorHost)
+	require.NoError(t, err)
+	blockchainAPI := api.NewBlockChainAPI(config, store, flowClient)
 
 	t.Run("ChainId", func(t *testing.T) {
 		chainID := blockchainAPI.ChainId()
@@ -704,18 +707,38 @@ func TestBlockChainAPI(t *testing.T) {
 	})
 
 	t.Run("Call", func(t *testing.T) {
-		key1, _ := crypto.GenerateKey()
-		addr1 := crypto.PubkeyToAddress(key1.PublicKey)
-		from := Account{key: key1, addr: addr1}
-		key2, _ := crypto.GenerateKey()
-		addr2 := crypto.PubkeyToAddress(key1.PublicKey)
-		to := Account{key: key2, addr: addr2}
+		var mockFlowClient api.FlowAccessAPI = api.MockFlowClient{
+			ExecuteScriptAtLatestBlockFunc: func(ctx context.Context, script []byte, arguments []cadence.Value) (cadence.Value, error) {
+				result, err := hex.DecodeString("000000000000000000000000000000000000000000000000000000000000002a")
+				require.NoError(t, err)
+				toBytes := make([]cadence.Value, 0)
+				for _, bt := range result {
+					toBytes = append(toBytes, cadence.UInt8(bt))
+				}
+				returnValue := cadence.NewArray(
+					toBytes,
+				).WithType(cadence.NewVariableSizedArrayType(cadence.TheUInt8Type))
+
+				return returnValue, nil
+			},
+		}
+		blockchainAPI = api.NewBlockChainAPI(config, store, mockFlowClient)
+
+		from := common.HexToAddress("0x658bdf435d810c91414ec09147daa6db62406379")
+		to := common.HexToAddress("0x99466ed2e37b892a2ee3e9cd55a98b68f5735db2")
+		gas := hexutil.Uint64(21500)
+		gasPrice := hexutil.Big(*big.NewInt(1350000))
+		value := hexutil.Big(*big.NewInt(0))
+		input := hexutil.Bytes("0xc6888fa10000000000000000000000000000000000000000000000000000000000000006")
 		result, err := blockchainAPI.Call(
 			context.Background(),
 			api.TransactionArgs{
-				From:  &from.addr,
-				To:    &to.addr,
-				Value: (*hexutil.Big)(big.NewInt(1000)),
+				From:     &from,
+				To:       &to,
+				Gas:      &gas,
+				GasPrice: &gasPrice,
+				Value:    &value,
+				Input:    &input,
 			},
 			nil,
 			nil,
@@ -723,7 +746,11 @@ func TestBlockChainAPI(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assert.Equal(t, hexutil.Bytes{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, result)
+		assert.Equal(
+			t,
+			hexutil.Bytes{0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x2a},
+			result,
+		)
 	})
 
 	t.Run("EstimateGas", func(t *testing.T) {

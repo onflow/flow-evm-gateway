@@ -17,7 +17,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-evm-gateway/storage"
-	"github.com/onflow/flow-go-sdk/access/grpc"
 )
 
 const EthNamespace = "eth"
@@ -29,24 +28,30 @@ var (
 	FlowEVMMainnetChainID = big.NewInt(777)
 )
 
-func SupportedAPIs(config *Config, store *storage.Store) []rpc.API {
+func SupportedAPIs(blockChainAPI *BlockChainAPI) []rpc.API {
 	return []rpc.API{
 		{
 			Namespace: EthNamespace,
-			Service:   NewBlockChainAPI(config, store),
+			Service:   blockChainAPI,
 		},
 	}
 }
 
 type BlockChainAPI struct {
-	config *Config
-	Store  *storage.Store
+	config     *Config
+	Store      *storage.Store
+	FlowClient FlowAccessAPI
 }
 
-func NewBlockChainAPI(config *Config, store *storage.Store) *BlockChainAPI {
+func NewBlockChainAPI(
+	config *Config,
+	store *storage.Store,
+	flowClient FlowAccessAPI,
+) *BlockChainAPI {
 	return &BlockChainAPI{
-		config: config,
-		Store:  store,
+		config:     config,
+		Store:      store,
+		FlowClient: flowClient,
 	}
 }
 
@@ -688,11 +693,6 @@ func (s *BlockChainAPI) Call(
         }
 	`
 
-	flowClient, err := grpc.NewClient(grpc.EmulatorHost)
-	if err != nil {
-		return hexutil.Bytes{}, err
-	}
-
 	decodedTx, err := hex.DecodeString(args.Input.String()[2:])
 	if err != nil {
 		return hexutil.Bytes{}, err
@@ -717,7 +717,7 @@ func (s *BlockChainAPI) Call(
 		toBytes,
 	).WithType(cadence.NewConstantSizedArrayType(20, cadence.TheUInt8Type))
 
-	value, err := flowClient.ExecuteScriptAtLatestBlock(
+	value, err := s.FlowClient.ExecuteScriptAtLatestBlock(
 		ctx,
 		[]byte(script),
 		[]cadence.Value{encodedTx, encodedTo},
