@@ -26,7 +26,7 @@ type baseStorage struct {
 
 	receiptsTxIDs       map[common.Hash]*gethTypes.Receipt
 	receiptBlockIDTxIDs map[common.Hash]common.Hash
-	bloomHeight         map[*big.Int]gethTypes.Bloom
+	bloomHeight         map[int64]gethTypes.Bloom
 
 	transactionsIDs map[common.Hash]*gethTypes.Transaction
 }
@@ -42,7 +42,7 @@ func baseStorageFactory() *baseStorage {
 			lastHeight:          unknownHeight,
 			receiptsTxIDs:       make(map[common.Hash]*gethTypes.Receipt),
 			receiptBlockIDTxIDs: make(map[common.Hash]common.Hash),
-			bloomHeight:         make(map[*big.Int]gethTypes.Bloom),
+			bloomHeight:         make(map[int64]gethTypes.Bloom),
 			transactionsIDs:     make(map[common.Hash]*gethTypes.Transaction),
 		}
 	}
@@ -171,11 +171,11 @@ func (r ReceiptStorage) Store(receipt *gethTypes.Receipt) error {
 	r.base.receiptsTxIDs[receipt.TxHash] = receipt
 	r.base.receiptBlockIDTxIDs[receipt.BlockHash] = receipt.TxHash
 
-	if _, ok := r.base.bloomHeight[receipt.BlockNumber]; ok {
+	if _, ok := r.base.bloomHeight[receipt.BlockNumber.Int64()]; ok {
 		return errors.Duplicate
 	}
 
-	r.base.bloomHeight[receipt.BlockNumber] = receipt.Bloom
+	r.base.bloomHeight[receipt.BlockNumber.Int64()] = receipt.Bloom
 
 	return nil
 }
@@ -213,15 +213,15 @@ func (r ReceiptStorage) BloomsForBlockRange(start, end *big.Int) ([]*gethTypes.B
 	r.base.mu.RLock()
 	defer r.base.mu.RUnlock()
 
-	if start.Cmp(end) < -1 {
+	if start.Cmp(end) > -1 {
 		return nil, errors.InvalidRange
 	}
 
 	blooms := make([]*gethTypes.Bloom, 0)
 
 	// Iterate through the range of block heights and add the blooms to the result
-	for height := start; height.Cmp(end) < 1; height = height.Add(height, big.NewInt(1)) {
-		b, exists := r.base.bloomHeight[height]
+	for i := start.Int64(); i < end.Int64(); i++ {
+		b, exists := r.base.bloomHeight[i]
 		if exists {
 			blooms = append(blooms, &b)
 		}
