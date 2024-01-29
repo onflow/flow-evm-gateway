@@ -16,12 +16,12 @@ type BlockIndexer interface {
 
 type ReceiptIndexer interface {
 	Store(receipt *gethTypes.ReceiptForStorage) error
-	GetByTransactionID(ID common.Hash) *gethTypes.ReceiptForStorage
-	GetByBlockID(ID common.Hash) *gethTypes.ReceiptForStorage
-	BloomForBlockRange(start, end uint64) *gethTypes.Bloom
+	GetByTransactionID(ID common.Hash) (*gethTypes.ReceiptForStorage, error)
+	GetByBlockID(ID common.Hash) (*gethTypes.ReceiptForStorage, error)
+	BloomForBlockRange(start, end uint64) []*gethTypes.Bloom
 }
 
 type TransactionIndexer interface {
 	Store(tx *gethTypes.Transaction) error
-	Get(ID common.Hash) *gethTypes.Transaction
+	Get(ID common.Hash) (*gethTypes.Transaction, error)
 }
