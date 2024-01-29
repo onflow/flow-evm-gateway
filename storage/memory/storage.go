@@ -23,7 +23,7 @@ type baseStorage struct {
 	firstHeight     uint64
 	lastHeight      uint64
 
-	receiptsTxIDs       map[common.Hash]*gethTypes.ReceiptForStorage
+	receiptsTxIDs       map[common.Hash]*gethTypes.Receipt
 	receiptBlockIDTxIDs map[common.Hash]common.Hash
 	bloomHeight         map[uint64]*gethTypes.Bloom
 
@@ -39,7 +39,7 @@ func baseStorageFactory() *baseStorage {
 			blockHeightsIDs:     make(map[uint64]common.Hash),
 			firstHeight:         unknownHeight,
 			lastHeight:          unknownHeight,
-			receiptsTxIDs:       make(map[common.Hash]*gethTypes.ReceiptForStorage),
+			receiptsTxIDs:       make(map[common.Hash]*gethTypes.Receipt),
 			receiptBlockIDTxIDs: make(map[common.Hash]common.Hash),
 			bloomHeight:         make(map[uint64]*gethTypes.Bloom),
 		}
@@ -158,7 +158,7 @@ func NewReceiptStorage() *ReceiptStorage {
 	}
 }
 
-func (r ReceiptStorage) Store(receipt *gethTypes.ReceiptForStorage) error {
+func (r ReceiptStorage) Store(receipt *gethTypes.Receipt) error {
 	r.base.mu.Lock()
 	defer r.base.mu.Unlock()
 
@@ -173,7 +173,7 @@ func (r ReceiptStorage) Store(receipt *gethTypes.ReceiptForStorage) error {
 	return nil
 }
 
-func (r ReceiptStorage) GetByTransactionID(ID common.Hash) (*gethTypes.ReceiptForStorage, error) {
+func (r ReceiptStorage) GetByTransactionID(ID common.Hash) (*gethTypes.Receipt, error) {
 	r.base.mu.RLock()
 	defer r.base.mu.RUnlock()
 
@@ -185,7 +185,7 @@ func (r ReceiptStorage) GetByTransactionID(ID common.Hash) (*gethTypes.ReceiptFo
 	return receipt, nil
 }
 
-func (r ReceiptStorage) GetByBlockID(ID common.Hash) (*gethTypes.ReceiptForStorage, error) {
+func (r ReceiptStorage) GetByBlockID(ID common.Hash) (*gethTypes.Receipt, error) {
 	r.base.mu.RLock()
 	defer r.base.mu.RUnlock()
 

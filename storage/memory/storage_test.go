@@ -7,6 +7,10 @@ import (
 )
 
 // tests that make sure the implementation conform to the interface expected behaviour
-func TestStorageSuite(t *testing.T) {
+func TestBlocks(t *testing.T) {
 	suite.Run(t, &storage.BlockTestSuite{Blocks: NewBlockStorage()})
+}
+
+func TestReceipts(t *testing.T) {
+	suite.Run(t, &storage.ReceiptTestSuite{ReceiptIndexer: NewReceiptStorage()})
 }

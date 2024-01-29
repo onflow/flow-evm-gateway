@@ -74,7 +74,7 @@ type ReceiptTestSuite struct {
 }
 
 func (s *ReceiptTestSuite) TestStoreReceipt() {
-	receipt := newReceipt()
+	receipt := newReceipt(1, common.HexToHash("0xf1"))
 
 	s.Run("store receipt successfully", func() {
 		err := s.ReceiptIndexer.Store(receipt)
@@ -89,7 +89,7 @@ func (s *ReceiptTestSuite) TestStoreReceipt() {
 
 func (s *ReceiptTestSuite) TestGetReceiptByTransactionID() {
 	s.Run("existing transaction ID", func() {
-		receipt := newReceipt()
+		receipt := newReceipt(2, common.HexToHash("0xf2"))
 		err := s.ReceiptIndexer.Store(receipt)
 		s.Require().NoError(err)
 
@@ -108,11 +108,12 @@ func (s *ReceiptTestSuite) TestGetReceiptByTransactionID() {
 
 func (s *ReceiptTestSuite) TestGetReceiptByBlockID() {
 	s.Run("existing block ID", func() {
-		receipt := newReceipt()
+		ID := common.HexToHash("0x1")
+		receipt := newReceipt(3, ID)
 		err := s.ReceiptIndexer.Store(receipt)
 		s.Require().NoError(err)
 
-		retReceipt, err := s.ReceiptIndexer.GetByBlockID(receipt.BlockHash)
+		retReceipt, err := s.ReceiptIndexer.GetByBlockID(ID)
 		s.Require().NoError(err)
 		s.Require().Equal(receipt, retReceipt)
 	})
