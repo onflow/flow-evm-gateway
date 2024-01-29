@@ -134,11 +134,13 @@ func (s *ReceiptTestSuite) TestBloomsForBlockRange() {
 	s.Run("valid block range", func() {
 		start := big.NewInt(10)
 		end := big.NewInt(15)
-		testBlooms := make([]types.Bloom, 0)
+		testBlooms := make([]*types.Bloom, 0)
 
-		for i := start; i.Cmp(end) < 0; i = i.Add(i, big.NewInt(1)) {
-			r := newReceipt(i.Uint64(), common.HexToHash(fmt.Sprintf("0xf1%d", i)))
-			testBlooms = append(testBlooms, r.Bloom)
+		for i := start.Uint64(); i < end.Uint64(); i++ {
+			r := newReceipt(i, common.HexToHash(fmt.Sprintf("0xf1%d", i)))
+			testBlooms = append(testBlooms, &r.Bloom)
+			err := s.ReceiptIndexer.Store(r)
+			s.Require().NoError(err)
 		}
 
 		blooms, err := s.ReceiptIndexer.BloomsForBlockRange(start, end)
