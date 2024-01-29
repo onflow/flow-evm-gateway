@@ -67,3 +67,60 @@ func (b *BlockTestSuite) TestHeights() {
 		b.Require().Equal(lastHeight, last)
 	})
 }
+
+type ReceiptTestSuite struct {
+	suite.Suite
+	ReceiptIndexer ReceiptIndexer
+}
+
+func (s *ReceiptTestSuite) TestStoreReceipt() {
+	receipt := newReceipt()
+
+	s.Run("store receipt successfully", func() {
+		err := s.ReceiptIndexer.Store(receipt)
+		s.Require().NoError(err)
+	})
+
+	s.Run("store duplicate receipt", func() {
+		err := s.ReceiptIndexer.Store(receipt)
+		s.Require().ErrorIs(err, errors.Duplicate)
+	})
+}
+
+func (s *ReceiptTestSuite) TestGetReceiptByTransactionID() {
+	s.Run("existing transaction ID", func() {
+		receipt := newReceipt()
+		err := s.ReceiptIndexer.Store(receipt)
+		s.Require().NoError(err)
+
+		retReceipt, err := s.ReceiptIndexer.GetByTransactionID(receipt.TxHash)
+		s.Require().NoError(err)
+		s.Require().Equal(receipt, retReceipt)
+	})
+
+	s.Run("non-existing transaction ID", func() {
+		nonExistingTxHash := common.HexToHash("0x123")
+		retReceipt, err := s.ReceiptIndexer.GetByTransactionID(nonExistingTxHash)
+		s.Require().Nil(retReceipt)
+		s.Require().ErrorIs(err, errors.NotFound)
+	})
+}
+
+func (s *ReceiptTestSuite) TestGetReceiptByBlockID() {
+	s.Run("existing block ID", func() {
+		receipt := newReceipt()
+		err := s.ReceiptIndexer.Store(receipt)
+		s.Require().NoError(err)
+
+		retReceipt, err := s.ReceiptIndexer.GetByBlockID(receipt.BlockHash)
+		s.Require().NoError(err)
+		s.Require().Equal(receipt, retReceipt)
+	})
+
+	s.Run("non-existing block ID", func() {
+		nonExistingBlockHash := common.HexToHash("0x456")
+		retReceipt, err := s.ReceiptIndexer.GetByBlockID(nonExistingBlockHash)
+		s.Require().Nil(retReceipt)
+		s.Require().ErrorIs(err, errors.NotFound)
+	})
+}
