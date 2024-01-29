@@ -56,3 +56,15 @@ func newReceipt(height uint64, ID common.Hash) *gethTypes.Receipt {
 		TransactionIndex:  1,
 	}
 }
+
+func newTransaction(nonce uint64) *gethTypes.Transaction {
+	return gethTypes.NewTx(&gethTypes.DynamicFeeTx{
+		ChainID:   big.NewInt(1),
+		Nonce:     nonce,
+		To:        &common.Address{0x01, 0x02},
+		Gas:       123457,
+		GasFeeCap: big.NewInt(13),
+		GasTipCap: big.NewInt(0),
+		Data:      []byte{},
+	})
+}
