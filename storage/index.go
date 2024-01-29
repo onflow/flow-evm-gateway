@@ -18,7 +18,7 @@ type ReceiptIndexer interface {
 	Store(receipt *gethTypes.ReceiptForStorage) error
 	GetByTransactionID(ID common.Hash) (*gethTypes.ReceiptForStorage, error)
 	GetByBlockID(ID common.Hash) (*gethTypes.ReceiptForStorage, error)
-	BloomForBlockRange(start, end uint64) []*gethTypes.Bloom
+	BloomsForBlockRange(start, end uint64) []*gethTypes.Bloom
 }
 
 type TransactionIndexer interface {
