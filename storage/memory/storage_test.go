@@ -6,6 +6,7 @@ import (
 	"testing"
 )
 
+// tests that make sure the implementation conform to the interface expected behaviour
 func TestStorageSuite(t *testing.T) {
 	suite.Run(t, &storage.BlockTestSuite{Blocks: NewBlockStorage()})
 }
