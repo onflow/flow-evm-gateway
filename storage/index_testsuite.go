@@ -125,3 +125,41 @@ func (s *ReceiptTestSuite) TestGetReceiptByBlockID() {
 		s.Require().ErrorIs(err, errors.NotFound)
 	})
 }
+
+type TransactionTestSuite struct {
+	suite.Suite
+	TransactionIndexer TransactionIndexer
+}
+
+func (s *TransactionTestSuite) TestStoreTransaction() {
+	tx := newTransaction(0)
+
+	s.Run("store transaction successfully", func() {
+		err := s.TransactionIndexer.Store(tx)
+		s.Require().NoError(err)
+	})
+
+	s.Run("store duplicate transaction", func() {
+		err := s.TransactionIndexer.Store(tx)
+		s.Require().ErrorIs(err, errors.Duplicate)
+	})
+}
+
+func (s *TransactionTestSuite) TestGetTransaction() {
+	s.Run("existing transaction", func() {
+		tx := newTransaction(1)
+		err := s.TransactionIndexer.Store(tx)
+		s.Require().NoError(err)
+
+		retTx, err := s.TransactionIndexer.Get(tx.Hash())
+		s.Require().NoError(err)
+		s.Require().Equal(tx, retTx)
+	})
+
+	s.Run("non-existing transaction", func() {
+		nonExistingTxHash := common.HexToHash("0x789")
+		retTx, err := s.TransactionIndexer.Get(nonExistingTxHash)
+		s.Require().Nil(retTx)
+		s.Require().ErrorIs(err, errors.NotFound)
+	})
+}

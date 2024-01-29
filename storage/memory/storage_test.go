@@ -14,3 +14,7 @@ func TestBlocks(t *testing.T) {
 func TestReceipts(t *testing.T) {
 	suite.Run(t, &storage.ReceiptTestSuite{ReceiptIndexer: NewReceiptStorage()})
 }
+
+func TestTransactions(t *testing.T) {
+	suite.Run(t, &storage.TransactionTestSuite{TransactionIndexer: NewTransactionStorage()})
+}
