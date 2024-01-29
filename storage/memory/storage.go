@@ -42,6 +42,7 @@ func baseStorageFactory() *baseStorage {
 			receiptsTxIDs:       make(map[common.Hash]*gethTypes.Receipt),
 			receiptBlockIDTxIDs: make(map[common.Hash]common.Hash),
 			bloomHeight:         make(map[uint64]*gethTypes.Bloom),
+			transactionsIDs:     make(map[common.Hash]*gethTypes.Transaction),
 		}
 	}
 	return store
@@ -239,7 +240,7 @@ func (t TransactionStorage) Store(tx *gethTypes.Transaction) error {
 	t.base.mu.Lock()
 	defer t.base.mu.Unlock()
 
-	tx, exists := t.base.transactionsIDs[tx.Hash()]
+	_, exists := t.base.transactionsIDs[tx.Hash()]
 	if exists {
 		return errors.Duplicate
 	}
