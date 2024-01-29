@@ -8,6 +8,7 @@ import (
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/onflow/flow-go/fvm/evm/types"
+	"math/big"
 	"sync"
 )
 
@@ -25,7 +26,7 @@ type baseStorage struct {
 
 	receiptsTxIDs       map[common.Hash]*gethTypes.Receipt
 	receiptBlockIDTxIDs map[common.Hash]common.Hash
-	bloomHeight         map[uint64]*gethTypes.Bloom
+	bloomHeight         map[*big.Int]gethTypes.Bloom
 
 	transactionsIDs map[common.Hash]*gethTypes.Transaction
 }
@@ -41,7 +42,7 @@ func baseStorageFactory() *baseStorage {
 			lastHeight:          unknownHeight,
 			receiptsTxIDs:       make(map[common.Hash]*gethTypes.Receipt),
 			receiptBlockIDTxIDs: make(map[common.Hash]common.Hash),
-			bloomHeight:         make(map[uint64]*gethTypes.Bloom),
+			bloomHeight:         make(map[*big.Int]gethTypes.Bloom),
 			transactionsIDs:     make(map[common.Hash]*gethTypes.Transaction),
 		}
 	}
@@ -163,13 +164,18 @@ func (r ReceiptStorage) Store(receipt *gethTypes.Receipt) error {
 	r.base.mu.Lock()
 	defer r.base.mu.Unlock()
 
-	_, exists := r.base.receiptsTxIDs[receipt.TxHash]
-	if exists {
+	if _, ok := r.base.receiptsTxIDs[receipt.TxHash]; ok {
 		return errors.Duplicate
 	}
 
 	r.base.receiptsTxIDs[receipt.TxHash] = receipt
 	r.base.receiptBlockIDTxIDs[receipt.BlockHash] = receipt.TxHash
+
+	if _, ok := r.base.bloomHeight[receipt.BlockNumber]; ok {
+		return errors.Duplicate
+	}
+
+	r.base.bloomHeight[receipt.BlockNumber] = receipt.Bloom
 
 	return nil
 }
@@ -203,21 +209,21 @@ func (r ReceiptStorage) GetByBlockID(ID common.Hash) (*gethTypes.Receipt, error)
 	return receipt, nil
 }
 
-func (r ReceiptStorage) BloomsForBlockRange(start, end uint64) ([]*gethTypes.Bloom, error) {
+func (r ReceiptStorage) BloomsForBlockRange(start, end *big.Int) ([]*gethTypes.Bloom, error) {
 	r.base.mu.RLock()
 	defer r.base.mu.RUnlock()
 
-	if start >= end {
+	if start.Cmp(end) != -1 {
 		return nil, errors.InvalidRange
 	}
 
 	blooms := make([]*gethTypes.Bloom, 0)
 
 	// Iterate through the range of block heights and add the blooms to the result
-	for height := start; height <= end; height++ {
+	for height := start; height.Cmp(end) < 1; height = height.Add(height, big.NewInt(1)) {
 		b, exists := r.base.bloomHeight[height]
 		if exists {
-			blooms = append(blooms, b)
+			blooms = append(blooms, &b)
 		}
 	}
 
