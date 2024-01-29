@@ -1,17 +1,18 @@
 package memory
 
 import (
-	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/math"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/onflow/flow-evm-gateway/storage"
+	"github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	"sync"
 )
 
 const (
-	unknownHeight = uint64(0) - 1
+	unknownHeight = math.MaxUint64 - 1
 )
 
 type baseStorage struct {
@@ -64,19 +65,19 @@ func (s BlockStorage) GetByHeight(height uint64) (*types.Block, error) {
 
 	// Check if the requested height is within the known range
 	if height < s.base.firstHeight || height > s.base.lastHeight {
-		return nil, storage.NotFound
+		return nil, errors.NotFound
 	}
 
 	// Retrieve the block using the blockHeightsIDs map
 	blockID, exists := s.base.blockHeightsIDs[height]
 	if !exists {
-		return nil, storage.NotFound
+		return nil, errors.NotFound
 	}
 
 	// Retrieve the block using the blocksIDs map
 	block, exists := s.base.blocksIDs[blockID]
 	if !exists {
-		return nil, storage.NotFound
+		return nil, errors.NotFound
 	}
 
 	return block, nil
@@ -89,7 +90,7 @@ func (s BlockStorage) GetByID(ID common.Hash) (*types.Block, error) {
 	// Retrieve the block using the blocksIDs map
 	block, exists := s.base.blocksIDs[ID]
 	if !exists {
-		return nil, storage.NotFound
+		return nil, errors.NotFound
 	}
 
 	return block, nil
@@ -107,7 +108,7 @@ func (s BlockStorage) Store(block *types.Block) error {
 	// Check if the block already exists
 	_, exists := s.base.blocksIDs[ID]
 	if exists {
-		return errors.New("block already exists")
+		return errors.Duplicate
 	}
 
 	// Store the block in blocksIDs map and update blockHeightsIDs map
@@ -130,7 +131,7 @@ func (s BlockStorage) LatestHeight() (uint64, error) {
 	defer s.base.mu.RUnlock()
 
 	if s.base.lastHeight == unknownHeight {
-		return 0, storage.NotInitialized
+		return 0, errors.NotInitialized
 	}
 	return s.base.lastHeight, nil
 }
@@ -140,7 +141,7 @@ func (s BlockStorage) FirstHeight() (uint64, error) {
 	defer s.base.mu.RUnlock()
 
 	if s.base.firstHeight == unknownHeight {
-		return 0, storage.NotInitialized
+		return 0, errors.NotInitialized
 	}
 	return s.base.firstHeight, nil
 }
@@ -161,6 +162,11 @@ func (r ReceiptStorage) Store(receipt *gethTypes.ReceiptForStorage) error {
 	r.base.mu.Lock()
 	defer r.base.mu.Unlock()
 
+	_, exists := r.base.receiptsTxIDs[receipt.TxHash]
+	if exists {
+		return errors.Duplicate
+	}
+
 	r.base.receiptsTxIDs[receipt.TxHash] = receipt
 	r.base.receiptBlockIDTxIDs[receipt.BlockHash] = receipt.TxHash
 
@@ -173,7 +179,7 @@ func (r ReceiptStorage) GetByTransactionID(ID common.Hash) (*gethTypes.ReceiptFo
 
 	receipt, exists := r.base.receiptsTxIDs[ID]
 	if !exists {
-		return nil, storage.NotFound
+		return nil, errors.NotFound
 	}
 
 	return receipt, nil
@@ -185,20 +191,24 @@ func (r ReceiptStorage) GetByBlockID(ID common.Hash) (*gethTypes.ReceiptForStora
 
 	txID, exists := r.base.receiptBlockIDTxIDs[ID]
 	if !exists {
-		return nil, storage.NotFound
+		return nil, errors.NotFound
 	}
 
 	receipt, exists := r.base.receiptsTxIDs[txID]
 	if !exists {
-		return nil, storage.NotFound
+		return nil, errors.NotFound
 	}
 
 	return receipt, nil
 }
 
-func (r ReceiptStorage) BloomsForBlockRange(start, end uint64) []*gethTypes.Bloom {
+func (r ReceiptStorage) BloomsForBlockRange(start, end uint64) ([]*gethTypes.Bloom, error) {
 	r.base.mu.RLock()
 	defer r.base.mu.RUnlock()
+
+	if start >= end {
+		return nil, errors.InvalidRange
+	}
 
 	blooms := make([]*gethTypes.Bloom, 0)
 
@@ -210,7 +220,7 @@ func (r ReceiptStorage) BloomsForBlockRange(start, end uint64) []*gethTypes.Bloo
 		}
 	}
 
-	return blooms
+	return blooms, nil
 }
 
 var _ storage.TransactionIndexer = &TransactionStorage{}
@@ -229,6 +239,11 @@ func (t TransactionStorage) Store(tx *gethTypes.Transaction) error {
 	t.base.mu.Lock()
 	defer t.base.mu.Unlock()
 
+	tx, exists := t.base.transactionsIDs[tx.Hash()]
+	if exists {
+		return errors.Duplicate
+	}
+
 	t.base.transactionsIDs[tx.Hash()] = tx
 	return nil
 }
@@ -239,7 +254,7 @@ func (t TransactionStorage) Get(ID common.Hash) (*gethTypes.Transaction, error) 
 
 	tx, exists := t.base.transactionsIDs[ID]
 	if !exists {
-		return nil, storage.NotFound
+		return nil, errors.NotFound
 	}
 
 	return tx, nil
