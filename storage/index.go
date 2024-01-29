@@ -4,6 +4,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/onflow/flow-go/fvm/evm/types"
+	"math/big"
 )
 
 type BlockIndexer interface {
@@ -53,8 +54,8 @@ type ReceiptIndexer interface {
 	// BloomsForBlockRange returns bloom values for the block height range.
 	// Goes through all the blocks in the range if the range is valid and returns the bloom values.
 	// Expected errors:
-	// - errors.InvalidRange if the provided height range is invalid.
-	BloomsForBlockRange(start, end uint64) ([]*gethTypes.Bloom, error)
+	// - errors.InvalidRange if the block by the height was not indexed or if the end and start values are invalid.
+	BloomsForBlockRange(start, end *big.Int) ([]*gethTypes.Bloom, error)
 }
 
 type TransactionIndexer interface {
