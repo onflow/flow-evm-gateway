@@ -1,7 +1,6 @@
 package logs
 
 import (
-	"bytes"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"math/big"
@@ -24,35 +23,15 @@ type StorageProvider struct {
 	receipts storage.ReceiptIndexer
 }
 
-func (s StorageProvider) Get(bloom gethTypes.Bloom, start, end *big.Int) (chan []*gethTypes.Log, error) {
-	rangeBlooms, err := s.receipts.BloomsForBlockRange(start, end)
-	if err != nil {
-		return nil, err
-	}
-
-	logs := make(chan []*gethTypes.Log, 0)
-	defer close(logs)
-
-	for _, b := range rangeBlooms {
-		// todo add correct bloom matching using composed blooms
-		if bytes.Equal(b.Bytes(), bloom.Bytes()) {
-			receipt, err := s.receipts.GetByBlockHeight(x)
-			if err != nil {
-				return nil, err
-			}
-
-			logs <- receipt.Logs
-		}
-	}
-
-	return logs, nil
+func (s StorageProvider) Get(bloom gethTypes.Bloom, start, end *big.Int) chan []*gethTypes.Log {
+	s.receipts.BloomsForBlockRange(start, end)
 }
 
 var _ Provider = &StreamProvider{}
 
 type StreamProvider struct{}
 
-func (s StreamProvider) Get(bloom gethTypes.Bloom, start, end *big.Int) (chan []*gethTypes.Log, error) {
+func (s StreamProvider) Get(bloom gethTypes.Bloom, start, end *big.Int) chan []*gethTypes.Log {
 	//TODO implement me
 	panic("implement me")
 }
