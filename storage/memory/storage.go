@@ -24,9 +24,9 @@ type baseStorage struct {
 	firstHeight     uint64
 	lastHeight      uint64
 
-	receiptsTxIDs       map[common.Hash]*gethTypes.Receipt
-	receiptBlockIDTxIDs map[common.Hash]common.Hash
-	bloomHeight         map[int64]gethTypes.Bloom
+	receiptsTxIDs          map[common.Hash]*gethTypes.Receipt
+	receiptBlockHeightTxID map[*big.Int]common.Hash
+	bloomHeight            map[*big.Int]gethTypes.Bloom
 
 	transactionsIDs map[common.Hash]*gethTypes.Transaction
 }
@@ -36,14 +36,14 @@ var store *baseStorage
 func baseStorageFactory() *baseStorage {
 	if store == nil {
 		store = &baseStorage{
-			blocksIDs:           make(map[common.Hash]*types.Block),
-			blockHeightsIDs:     make(map[uint64]common.Hash),
-			firstHeight:         unknownHeight,
-			lastHeight:          unknownHeight,
-			receiptsTxIDs:       make(map[common.Hash]*gethTypes.Receipt),
-			receiptBlockIDTxIDs: make(map[common.Hash]common.Hash),
-			bloomHeight:         make(map[int64]gethTypes.Bloom),
-			transactionsIDs:     make(map[common.Hash]*gethTypes.Transaction),
+			blocksIDs:              make(map[common.Hash]*types.Block),
+			blockHeightsIDs:        make(map[uint64]common.Hash),
+			firstHeight:            unknownHeight,
+			lastHeight:             unknownHeight,
+			receiptsTxIDs:          make(map[common.Hash]*gethTypes.Receipt),
+			receiptBlockHeightTxID: make(map[*big.Int]common.Hash),
+			bloomHeight:            make(map[*big.Int]gethTypes.Bloom),
+			transactionsIDs:        make(map[common.Hash]*gethTypes.Transaction),
 		}
 	}
 	return store
@@ -169,13 +169,8 @@ func (r ReceiptStorage) Store(receipt *gethTypes.Receipt) error {
 	}
 
 	r.base.receiptsTxIDs[receipt.TxHash] = receipt
-	r.base.receiptBlockIDTxIDs[receipt.BlockHash] = receipt.TxHash
-
-	if _, ok := r.base.bloomHeight[receipt.BlockNumber.Int64()]; ok {
-		return errors.Duplicate
-	}
-
-	r.base.bloomHeight[receipt.BlockNumber.Int64()] = receipt.Bloom
+	r.base.receiptBlockHeightTxID[receipt.BlockNumber] = receipt.TxHash
+	r.base.bloomHeight[receipt.BlockNumber] = receipt.Bloom
 
 	return nil
 }
@@ -192,11 +187,11 @@ func (r ReceiptStorage) GetByTransactionID(ID common.Hash) (*gethTypes.Receipt, 
 	return receipt, nil
 }
 
-func (r ReceiptStorage) GetByBlockID(ID common.Hash) (*gethTypes.Receipt, error) {
+func (r ReceiptStorage) GetByBlockHeight(height *big.Int) (*gethTypes.Receipt, error) {
 	r.base.mu.RLock()
 	defer r.base.mu.RUnlock()
 
-	txID, exists := r.base.receiptBlockIDTxIDs[ID]
+	txID, exists := r.base.receiptBlockHeightTxID[height]
 	if !exists {
 		return nil, errors.NotFound
 	}
@@ -213,14 +208,15 @@ func (r ReceiptStorage) BloomsForBlockRange(start, end *big.Int) ([]*gethTypes.B
 	r.base.mu.RLock()
 	defer r.base.mu.RUnlock()
 
-	if start.Cmp(end) > -1 {
+	// make sure start is not bigger than end
+	if start.Cmp(end) > 0 {
 		return nil, errors.InvalidRange
 	}
 
 	blooms := make([]*gethTypes.Bloom, 0)
 
 	// Iterate through the range of block heights and add the blooms to the result
-	for i := start.Int64(); i < end.Int64(); i++ {
+	for i := start.Int64(); i <= end.Int64(); i++ {
 		b, exists := r.base.bloomHeight[i]
 		if exists {
 			blooms = append(blooms, &b)
