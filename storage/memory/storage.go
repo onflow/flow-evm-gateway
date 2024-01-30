@@ -217,7 +217,7 @@ func (r ReceiptStorage) BloomsForBlockRange(start, end *big.Int) ([]*gethTypes.B
 
 	// Iterate through the range of block heights and add the blooms to the result
 	for i := start.Int64(); i <= end.Int64(); i++ {
-		b, exists := r.base.bloomHeight[i]
+		b, exists := r.base.bloomHeight[big.NewInt(i)]
 		if exists {
 			blooms = append(blooms, &b)
 		}
