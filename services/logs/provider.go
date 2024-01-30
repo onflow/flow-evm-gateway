@@ -16,7 +16,7 @@ type Provider interface {
 	// Start and end have special values "latest", if both are set to "latest" that means we want
 	// to get all the upcoming new logs that match the bloom filter. If the start and end are
 	// defined as anything else we fetch already indexed logs.
-	Get(bloom gethTypes.Bloom, hash *common.Hash, start, end *big.Int) (chan *gethTypes.Log, error)
+	Get(bloom gethTypes.Bloom, hash *common.Hash, start, end *big.Int) (chan []*gethTypes.Log, error)
 }
 
 var _ Provider = &StorageProvider{}
@@ -31,8 +31,8 @@ func (s StorageProvider) Get(
 	bloom gethTypes.Bloom,
 	hash *common.Hash,
 	start, end *big.Int,
-) (chan *gethTypes.Log, error) {
-	logs := make(chan *gethTypes.Log, 0)
+) (chan []*gethTypes.Log, error) {
+	logs := make(chan []*gethTypes.Log, 0)
 	defer close(logs)
 
 	// if we need to search in a single block provided by ID
@@ -47,9 +47,7 @@ func (s StorageProvider) Get(
 		}
 
 		if matchBloom(receipt.Bloom, bloom) {
-			for _, log := range receipt.Logs {
-				logs <- log
-			}
+			logs <- receipt.Logs
 			return logs, nil
 		}
 	}
@@ -67,9 +65,7 @@ func (s StorageProvider) Get(
 				return nil, err
 			}
 
-			for _, log := range receipt.Logs {
-				logs <- log
-			}
+			logs <- receipt.Logs
 		}
 	}
 
@@ -81,7 +77,7 @@ var _ Provider = &StreamProvider{}
 // StreamProvider uses stream of logs as they come in to retrieve matching logs.
 type StreamProvider struct{}
 
-func (s StreamProvider) Get(bloom gethTypes.Bloom, hash *common.Hash, start, end *big.Int) (chan *gethTypes.Log, error) {
+func (s StreamProvider) Get(bloom gethTypes.Bloom, hash *common.Hash, start, end *big.Int) (chan []*gethTypes.Log, error) {
 	//TODO implement me
 	panic("implement me")
 }
