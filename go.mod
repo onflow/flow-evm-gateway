@@ -7,7 +7,7 @@ require (
 	github.com/gorilla/websocket v1.5.0
 	github.com/onflow/cadence v0.42.7
 	github.com/onflow/flow-go v0.33.2-0.20240126233840-ed23d2193420
-	github.com/onflow/flow-go-sdk v0.44.0
+	github.com/onflow/flow-go-sdk v0.44.1-0.20231223194516-344ba7015faa
 	github.com/rs/zerolog v1.31.0
 	github.com/stretchr/testify v1.8.4
 	google.golang.org/grpc v1.59.0
