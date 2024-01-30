@@ -111,17 +111,19 @@ func (s *ReceiptTestSuite) TestGetReceiptByTransactionID() {
 
 func (s *ReceiptTestSuite) TestGetReceiptByBlockID() {
 	s.Run("existing block ID", func() {
-		receipt := newReceipt(3, common.HexToHash("0x1"))
+		ID := common.HexToHash("0x1")
+		receipt := newReceipt(3, ID)
 		err := s.ReceiptIndexer.Store(receipt)
 		s.Require().NoError(err)
 
-		retReceipt, err := s.ReceiptIndexer.GetByBlockHeight(receipt.BlockNumber)
+		retReceipt, err := s.ReceiptIndexer.GetByBlockID(ID)
 		s.Require().NoError(err)
 		s.Require().Equal(receipt, retReceipt)
 	})
 
 	s.Run("non-existing block ID", func() {
-		retReceipt, err := s.ReceiptIndexer.GetByBlockHeight(big.NewInt(1337))
+		nonExistingBlockHash := common.HexToHash("0x456")
+		retReceipt, err := s.ReceiptIndexer.GetByBlockID(nonExistingBlockHash)
 		s.Require().Nil(retReceipt)
 		s.Require().ErrorIs(err, errors.NotFound)
 	})
