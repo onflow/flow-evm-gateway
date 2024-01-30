@@ -25,8 +25,8 @@ type baseStorage struct {
 	lastHeight      uint64
 
 	receiptsTxIDs          map[common.Hash]*gethTypes.Receipt
-	receiptBlockHeightTxID map[uint64]common.Hash
-	bloomHeight            map[uint64]gethTypes.Bloom
+	receiptBlockHeightTxID map[*big.Int]common.Hash
+	bloomHeight            map[*big.Int]gethTypes.Bloom
 
 	transactionsIDs map[common.Hash]*gethTypes.Transaction
 }
@@ -41,8 +41,8 @@ func baseStorageFactory() *baseStorage {
 			firstHeight:            unknownHeight,
 			lastHeight:             unknownHeight,
 			receiptsTxIDs:          make(map[common.Hash]*gethTypes.Receipt),
-			receiptBlockHeightTxID: make(map[uint64]common.Hash),
-			bloomHeight:            make(map[uint64]gethTypes.Bloom),
+			receiptBlockHeightTxID: make(map[*big.Int]common.Hash),
+			bloomHeight:            make(map[*big.Int]gethTypes.Bloom),
 			transactionsIDs:        make(map[common.Hash]*gethTypes.Transaction),
 		}
 	}
@@ -169,8 +169,8 @@ func (r ReceiptStorage) Store(receipt *gethTypes.Receipt) error {
 	}
 
 	r.base.receiptsTxIDs[receipt.TxHash] = receipt
-	r.base.receiptBlockHeightTxID[receipt.BlockNumber.Uint64()] = receipt.TxHash
-	r.base.bloomHeight[receipt.BlockNumber.Uint64()] = receipt.Bloom
+	r.base.receiptBlockHeightTxID[receipt.BlockNumber] = receipt.TxHash
+	r.base.bloomHeight[receipt.BlockNumber] = receipt.Bloom
 
 	return nil
 }
@@ -191,7 +191,7 @@ func (r ReceiptStorage) GetByBlockHeight(height *big.Int) (*gethTypes.Receipt, e
 	r.base.mu.RLock()
 	defer r.base.mu.RUnlock()
 
-	txID, exists := r.base.receiptBlockHeightTxID[height.Uint64()]
+	txID, exists := r.base.receiptBlockHeightTxID[height]
 	if !exists {
 		return nil, errors.NotFound
 	}
@@ -216,8 +216,8 @@ func (r ReceiptStorage) BloomsForBlockRange(start, end *big.Int) ([]*gethTypes.B
 	blooms := make([]*gethTypes.Bloom, 0)
 
 	// Iterate through the range of block heights and add the blooms to the result
-	for i := start.Uint64(); i <= end.Uint64(); i++ {
-		b, exists := r.base.bloomHeight[i]
+	for i := start.Int64(); i <= end.Int64(); i++ {
+		b, exists := r.base.bloomHeight[big.NewInt(i)]
 		if exists {
 			blooms = append(blooms, &b)
 		}
