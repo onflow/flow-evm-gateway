@@ -20,6 +20,7 @@ type Provider interface {
 
 var _ Provider = &StorageProvider{}
 
+// StorageProvider uses the indexer storage to fetch matching logs.
 type StorageProvider struct {
 	receipts storage.ReceiptIndexer
 }
@@ -50,6 +51,7 @@ func (s StorageProvider) Get(bloom gethTypes.Bloom, start, end *big.Int) (chan [
 
 var _ Provider = &StreamProvider{}
 
+// StreamProvider uses stream of logs as they come in to retrieve matching logs.
 type StreamProvider struct{}
 
 func (s StreamProvider) Get(bloom gethTypes.Bloom, start, end *big.Int) (chan []*gethTypes.Log, error) {
