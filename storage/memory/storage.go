@@ -204,7 +204,7 @@ func (r ReceiptStorage) GetByBlockHeight(height *big.Int) (*gethTypes.Receipt, e
 	return receipt, nil
 }
 
-func (r ReceiptStorage) BloomsForBlockRange(start, end *big.Int) (map[*big.Int]*gethTypes.Bloom, error) {
+func (r ReceiptStorage) BloomsForBlockRange(start, end *big.Int) ([]*gethTypes.Bloom, error) {
 	r.base.mu.RLock()
 	defer r.base.mu.RUnlock()
 
@@ -213,15 +213,14 @@ func (r ReceiptStorage) BloomsForBlockRange(start, end *big.Int) (map[*big.Int]*
 		return nil, errors.InvalidRange
 	}
 
-	blooms := make(map[*big.Int]*gethTypes.Bloom)
+	blooms := make([]*gethTypes.Bloom, 0)
 
 	// Iterate through the range of block heights and add the blooms to the result
 	for i := start.Uint64(); i <= end.Uint64(); i++ {
 		b, exists := r.base.bloomHeight[i]
-		if !exists {
-			return nil, fmt.Errorf("bloom by height not found") // this should not happen
+		if exists {
+			blooms = append(blooms, &b)
 		}
-		blooms[big.NewInt(int64(i))] = &b
 	}
 
 	return blooms, nil
