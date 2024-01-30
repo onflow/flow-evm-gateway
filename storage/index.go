@@ -54,7 +54,7 @@ type ReceiptIndexer interface {
 	// BloomsForBlockRange returns a map of bloom filters as values and block height as keys.
 	// Expected errors:
 	// - errors.InvalidRange if the block by the height was not indexed or if the end and start values are invalid.
-	BloomsForBlockRange(start, end *big.Int) (map[*big.Int]*gethTypes.Bloom, error)
+	BloomsForBlockRange(start, end *big.Int) (map[*big.Int]gethTypes.Bloom, error)
 }
 
 type TransactionIndexer interface {
