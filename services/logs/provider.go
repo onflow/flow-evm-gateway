@@ -34,10 +34,10 @@ func (s StorageProvider) Get(bloom gethTypes.Bloom, start, end *big.Int) (chan [
 	logs := make(chan []*gethTypes.Log, 0)
 	defer close(logs)
 
-	for height, b := range rangeBlooms {
+	for _, b := range rangeBlooms {
 		// todo add correct bloom matching using composed blooms
 		if bytes.Equal(b.Bytes(), bloom.Bytes()) {
-			receipt, err := s.receipts.GetByBlockHeight(height)
+			receipt, err := s.receipts.GetByBlockHeight(x)
 			if err != nil {
 				return nil, err
 			}
