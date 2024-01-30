@@ -2,7 +2,6 @@ package logs
 
 import (
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/onflow/flow-evm-gateway/storage"
 	"math/big"
 )
 
@@ -15,23 +14,4 @@ type Provider interface {
 	// to get all the upcoming new logs that match the bloom filter. If the start and end are
 	// defined as anything else we fetch already indexed logs.
 	Get(bloom gethTypes.Bloom, start, end *big.Int) (chan []*gethTypes.Log, error)
-}
-
-var _ Provider = &StorageProvider{}
-
-type StorageProvider struct {
-	receipts storage.ReceiptIndexer
-}
-
-func (s StorageProvider) Get(bloom gethTypes.Bloom, start, end *big.Int) chan []*gethTypes.Log {
-	s.receipts.BloomsForBlockRange(start, end)
-}
-
-var _ Provider = &StreamProvider{}
-
-type StreamProvider struct{}
-
-func (s StreamProvider) Get(bloom gethTypes.Bloom, start, end *big.Int) chan []*gethTypes.Log {
-	//TODO implement me
-	panic("implement me")
 }
