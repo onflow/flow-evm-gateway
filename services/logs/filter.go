@@ -30,7 +30,7 @@ func (f *Filter) get() error {
 		select {
 		case l := <-logs:
 			if f.matches(l) {
-
+				// todo
 			}
 		}
 	}
