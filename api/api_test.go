@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"encoding/hex"
 	"math/big"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -19,7 +20,9 @@ import (
 	"github.com/onflow/flow-evm-gateway/api"
 	"github.com/onflow/flow-evm-gateway/api/mocks"
 	"github.com/onflow/flow-evm-gateway/storage"
+	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access/grpc"
+	sdkCrypto "github.com/onflow/flow-go-sdk/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -93,15 +96,48 @@ func TestBlockChainAPI(t *testing.T) {
 	})
 
 	t.Run("SendRawTransaction", func(t *testing.T) {
+		tx := "b88c02f88982029a01808083124f809499466ed2e37b892a2ee3e9cd55a98b68f5735db280a4c6888fa10000000000000000000000000000000000000000000000000000000000000006c001a0f84168f821b427dc158c4d8083bdc4b43e178cf0977a2c5eefbcbedcc4e351b0a066a747a38c6c266b9dc2136523cef04395918de37773db63d574aabde59c12eb"
+		txBytes, err := hex.DecodeString(tx)
+		require.NoError(t, err)
+
+		mockFlowClient := new(mocks.MockAccessClient)
+		blockchainAPI = api.NewBlockChainAPI(config, store, mockFlowClient)
+
+		block := &flow.Block{
+			BlockHeader: flow.BlockHeader{
+				ID: flow.EmptyID,
+			},
+		}
+		mockFlowClient.On("GetLatestBlock", mock.Anything, mock.Anything).Return(block, nil)
+
+		privateKey, err := sdkCrypto.DecodePrivateKeyHex(sdkCrypto.ECDSA_P256, strings.Replace("2619878f0e2ff438d17835c2a4561cb87b4d24d72d12ec34569acd0dd4af7c21", "0x", "", 1))
+		require.NoError(t, err)
+		key := &flow.AccountKey{
+			Index:          0,
+			PublicKey:      privateKey.PublicKey(),
+			SigAlgo:        privateKey.Algorithm(),
+			HashAlgo:       sdkCrypto.SHA3_256,
+			Weight:         1000,
+			SequenceNumber: uint64(0),
+			Revoked:        false,
+		}
+		account := &flow.Account{
+			Address: flow.HexToAddress("0xf8d6e0586b0a20c7"),
+			Keys:    []*flow.AccountKey{key},
+		}
+		mockFlowClient.On("GetAccount", mock.Anything, mock.Anything).Return(account, nil)
+
+		mockFlowClient.On("SendTransaction", mock.Anything, mock.Anything).Return(nil)
+
 		hash, err := blockchainAPI.SendRawTransaction(
 			context.Background(),
-			hexutil.Bytes{},
+			hexutil.Bytes(txBytes),
 		)
 		require.NoError(t, err)
 
 		assert.Equal(
 			t,
-			common.HexToHash("0x47173285a8d7341e5e972fc677286384f802f8ef42a5ec5f03bbfa254cb01fad"),
+			common.HexToHash("0xb47d74ea64221eb941490bdc0c9a404dacd0a8573379a45c992ac60ee3e83c3c"),
 			hash,
 		)
 	})

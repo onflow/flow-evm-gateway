@@ -17,7 +17,9 @@ import (
 	"github.com/onflow/flow-evm-gateway/api"
 	"github.com/onflow/flow-evm-gateway/api/mocks"
 	"github.com/onflow/flow-evm-gateway/storage"
+	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access/grpc"
+	sdkCrypto "github.com/onflow/flow-go-sdk/crypto"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -136,6 +138,49 @@ func TestServerJSONRPCOveHTTPHandler(t *testing.T) {
 		mockFlowClient.On("ExecuteScriptAtLatestBlock", mock.Anything, mock.Anything, mock.Anything).Return(returnValue, nil)
 
 		blockchainAPI = api.NewBlockChainAPI(config, store, mockFlowClient)
+
+		resp := rpcRequest(url, request, "origin", "test.com")
+		defer resp.Body.Close()
+
+		content, err := io.ReadAll(resp.Body)
+		if err != nil {
+			panic(err)
+		}
+
+		assert.Equal(t, expectedResponse, strings.TrimSuffix(string(content), "\n"))
+	})
+
+	t.Run("eth_sendRawTransaction", func(t *testing.T) {
+		request := `{"jsonrpc":"2.0","id":1,"method":"eth_sendRawTransaction","params":["0xb88c02f88982029a01808083124f809499466ed2e37b892a2ee3e9cd55a98b68f5735db280a4c6888fa10000000000000000000000000000000000000000000000000000000000000006c001a0f84168f821b427dc158c4d8083bdc4b43e178cf0977a2c5eefbcbedcc4e351b0a066a747a38c6c266b9dc2136523cef04395918de37773db63d574aabde59c12eb"]}`
+		expectedResponse := `{"jsonrpc":"2.0","id":1,"result":"0xb47d74ea64221eb941490bdc0c9a404dacd0a8573379a45c992ac60ee3e83c3c"}`
+
+		blockchainAPI = api.NewBlockChainAPI(config, store, mockFlowClient)
+
+		block := &flow.Block{
+			BlockHeader: flow.BlockHeader{
+				ID: flow.EmptyID,
+			},
+		}
+		mockFlowClient.On("GetLatestBlock", mock.Anything, mock.Anything).Return(block, nil)
+
+		privateKey, err := sdkCrypto.DecodePrivateKeyHex(sdkCrypto.ECDSA_P256, strings.Replace("2619878f0e2ff438d17835c2a4561cb87b4d24d72d12ec34569acd0dd4af7c21", "0x", "", 1))
+		require.NoError(t, err)
+		key := &flow.AccountKey{
+			Index:          0,
+			PublicKey:      privateKey.PublicKey(),
+			SigAlgo:        privateKey.Algorithm(),
+			HashAlgo:       sdkCrypto.SHA3_256,
+			Weight:         1000,
+			SequenceNumber: uint64(0),
+			Revoked:        false,
+		}
+		account := &flow.Account{
+			Address: flow.HexToAddress("0xf8d6e0586b0a20c7"),
+			Keys:    []*flow.AccountKey{key},
+		}
+		mockFlowClient.On("GetAccount", mock.Anything, mock.Anything).Return(account, nil)
+
+		mockFlowClient.On("SendTransaction", mock.Anything, mock.Anything).Return(nil)
 
 		resp := rpcRequest(url, request, "origin", "test.com")
 		defer resp.Body.Close()

@@ -7,18 +7,21 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-evm-gateway/storage"
+	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access"
+
+	sdkCrypto "github.com/onflow/flow-go-sdk/crypto"
 )
 
 const EthNamespace = "eth"
@@ -32,6 +35,9 @@ var (
 
 //go:embed cadence/scripts/bridged_account_call.cdc
 var bridgedAccountCall []byte
+
+//go:embed cadence/transactions/evm_run.cdc
+var evmRunTx []byte
 
 func SupportedAPIs(blockChainAPI *BlockChainAPI) []rpc.API {
 	return []rpc.API{
@@ -101,7 +107,71 @@ func (api *BlockChainAPI) SendRawTransaction(
 	ctx context.Context,
 	input hexutil.Bytes,
 ) (common.Hash, error) {
-	return crypto.Keccak256Hash([]byte("hello world")), nil
+	gethTx := &types.Transaction{}
+	encodedLen := uint(len(input))
+	err := gethTx.DecodeRLP(
+		rlp.NewStream(
+			bytes.NewReader(input),
+			uint64(encodedLen),
+		),
+	)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	block, err := api.FlowClient.GetLatestBlock(context.Background(), true)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	// TODO(m-Peter): Fetch the private key from a dedicated flow.json config file
+	privateKey, err := sdkCrypto.DecodePrivateKeyHex(sdkCrypto.ECDSA_P256, strings.Replace("2619878f0e2ff438d17835c2a4561cb87b4d24d72d12ec34569acd0dd4af7c21", "0x", "", 1))
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	// // TODO(m-Peter): Fetch the address from a dedicated flow.json config file
+	account, err := api.FlowClient.GetAccount(context.Background(), flow.HexToAddress("0xf8d6e0586b0a20c7"))
+	if err != nil {
+		return common.Hash{}, err
+	}
+	accountKey := account.Keys[0]
+	signer, err := sdkCrypto.NewInMemorySigner(privateKey, accountKey.HashAlgo)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	tx := flow.NewTransaction().
+		SetScript(evmRunTx).
+		SetProposalKey(account.Address, accountKey.Index, accountKey.SequenceNumber).
+		SetReferenceBlockID(block.ID).
+		SetPayer(account.Address).
+		AddAuthorizer(account.Address)
+
+	decodedTx, err := hex.DecodeString(input.String()[2:])
+	if err != nil {
+		return common.Hash{}, err
+	}
+	cdcBytes := make([]cadence.Value, 0)
+	for _, bt := range decodedTx {
+		cdcBytes = append(cdcBytes, cadence.UInt8(bt))
+	}
+	encodedTx := cadence.NewArray(
+		cdcBytes,
+	).WithType(cadence.NewVariableSizedArrayType(cadence.TheUInt8Type))
+	tx.AddArgument(encodedTx)
+
+	err = tx.SignEnvelope(account.Address, accountKey.Index, signer)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	err = api.FlowClient.SendTransaction(ctx, *tx)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	return gethTx.Hash(), nil
 }
 
 // eth_createAccessList
