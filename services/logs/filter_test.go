@@ -32,15 +32,15 @@ var receipts = []*gethTypes.Receipt{
 		Logs: []*gethTypes.Log{
 			{
 				Address: common.BytesToAddress([]byte{0x22}),
-				Topics:  []common.Hash{common.HexToHash("alfa"), common.HexToHash("bravo")},
+				Topics:  []common.Hash{common.HexToHash("aa"), common.HexToHash("bb")},
 			},
 			{
 				Address: common.BytesToAddress([]byte{0x22}),
-				Topics:  []common.Hash{common.HexToHash("charlie"), common.HexToHash("delta")},
+				Topics:  []common.Hash{common.HexToHash("cc"), common.HexToHash("dd")},
 			},
 			{
 				Address: common.BytesToAddress([]byte{0x33}),
-				Topics:  []common.Hash{common.HexToHash("echo"), common.HexToHash("foxtrot")},
+				Topics:  []common.Hash{common.HexToHash("ee"), common.HexToHash("ff")},
 			},
 		},
 	}, {
@@ -49,11 +49,11 @@ var receipts = []*gethTypes.Receipt{
 		Logs: []*gethTypes.Log{
 			{
 				Address: common.BytesToAddress([]byte{0x22}),
-				Topics:  []common.Hash{common.HexToHash("charlie"), common.HexToHash("hotel")},
+				Topics:  []common.Hash{common.HexToHash("cc"), common.HexToHash("11")},
 			},
 			{
 				Address: common.BytesToAddress([]byte{0x55}),
-				Topics:  []common.Hash{common.HexToHash("alfa"), common.HexToHash("hotel")},
+				Topics:  []common.Hash{common.HexToHash("aa"), common.HexToHash("11")},
 			},
 		},
 	}, {
@@ -66,11 +66,11 @@ var receipts = []*gethTypes.Receipt{
 		Logs: []*gethTypes.Log{
 			{
 				Address: common.BytesToAddress([]byte{0x66}),
-				Topics:  []common.Hash{common.HexToHash("alfa"), common.HexToHash("bravo"), common.HexToHash("india")},
+				Topics:  []common.Hash{common.HexToHash("aa"), common.HexToHash("bb"), common.HexToHash("22")},
 			},
 			{
 				Address: common.BytesToAddress([]byte{0x22}),
-				Topics:  []common.Hash{common.HexToHash("alfa")},
+				Topics:  []common.Hash{common.HexToHash("aa")},
 			},
 		},
 	}, {
@@ -79,7 +79,7 @@ var receipts = []*gethTypes.Receipt{
 		Logs: []*gethTypes.Log{
 			{
 				Address: common.BytesToAddress([]byte{0x88}),
-				Topics:  []common.Hash{common.HexToHash("juliet"), common.HexToHash("kilo"), common.HexToHash("lima")},
+				Topics:  []common.Hash{common.HexToHash("33"), common.HexToHash("44"), common.HexToHash("55")},
 			},
 		},
 	},
@@ -121,20 +121,48 @@ func TestIDFilter(t *testing.T) {
 	blockStorage := blockStorage()
 	receiptStorage := receiptStorage()
 
-	t.Run("single topic, single address", func(t *testing.T) {
-		id, _ := blocks[0].Hash()
-		log := receipts[0].Logs[0]
-		criteria := FilterCriteria{
-			Addresses: []common.Address{log.Address},
-			Topics:    [][]common.Hash{{log.Topics[0]}},
-		}
-		filter := NewIDFilter(id, criteria, blockStorage, receiptStorage)
-		logs, err := filter.Match()
+	// both topics no address
+	// only address
+	// multiple addresses
 
-		require.NoError(t, err)
-		require.Len(t, logs, 1)
-		require.Equal(t, logs[0], log)
-	})
+	tests := []struct {
+		desc       string
+		id         common.Hash
+		expectLogs []*gethTypes.Log
+		criteria   FilterCriteria
+	}{{
+		desc: "single topic, single address match single log",
+		id:   mustHash(blocks[0]),
+		criteria: FilterCriteria{
+			Addresses: []common.Address{receipts[0].Logs[0].Address},
+			Topics:    [][]common.Hash{{receipts[0].Logs[0].Topics[0]}},
+		},
+		expectLogs: []*gethTypes.Log{receipts[0].Logs[0]},
+	}, {
+		desc: "single topic match single log",
+		id:   mustHash(blocks[0]),
+		criteria: FilterCriteria{
+			Topics: [][]common.Hash{{receipts[0].Logs[0].Topics[0]}},
+		},
+		expectLogs: []*gethTypes.Log{receipts[0].Logs[0]},
+	}, {
+		desc: "invalid topic match no logs",
+		id:   mustHash(blocks[0]),
+		criteria: FilterCriteria{
+			Topics: [][]common.Hash{{common.HexToHash("123")}},
+		},
+		expectLogs: []*gethTypes.Log{},
+	}}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			filter := NewIDFilter(tt.id, tt.criteria, blockStorage, receiptStorage)
+			logs, err := filter.Match()
+
+			require.NoError(t, err)
+			require.Equal(t, tt.expectLogs, logs)
+		})
+	}
 }
 
 func TestRangeFilter(t *testing.T) {
