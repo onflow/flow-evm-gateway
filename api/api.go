@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	_ "embed"
 	"encoding/hex"
 	"fmt"
 	"math/big"
@@ -28,6 +29,9 @@ var (
 	FlowEVMTestnetChainID = big.NewInt(666)
 	FlowEVMMainnetChainID = big.NewInt(777)
 )
+
+//go:embed cadence/scripts/bridged_account_call.cdc
+var bridgedAccountCall []byte
 
 func SupportedAPIs(blockChainAPI *BlockChainAPI) []rpc.API {
 	return []rpc.API{
@@ -673,27 +677,6 @@ func (s *BlockChainAPI) Call(
 	overrides *StateOverride,
 	blockOverrides *BlockOverrides,
 ) (hexutil.Bytes, error) {
-	script := `
-        import EVM from 0xf8d6e0586b0a20c7
-
-        access(all)
-        fun main(data: [UInt8], contractAddress: [UInt8; 20]): [UInt8] {
-            let flowAccount = getAuthAccount<auth(Storage) &Account>(Address(0xf8d6e0586b0a20c7))
-            let bridgedAccount = flowAccount.storage.borrow<&EVM.BridgedAccount>(
-                from: /storage/evm
-            ) ?? panic("Could not borrow reference to the bridged account!")
-
-            let evmResult = bridgedAccount.call(
-                to: EVM.EVMAddress(bytes: contractAddress),
-                data: data,
-                gasLimit: 300000,
-                value: EVM.Balance(flow: 0.0)
-            )
-
-            return evmResult
-        }
-	`
-
 	decodedTx, err := hex.DecodeString(args.Input.String()[2:])
 	if err != nil {
 		return hexutil.Bytes{}, err
@@ -720,7 +703,7 @@ func (s *BlockChainAPI) Call(
 
 	value, err := s.FlowClient.ExecuteScriptAtLatestBlock(
 		ctx,
-		[]byte(script),
+		bridgedAccountCall,
 		[]cadence.Value{encodedTx, encodedTo},
 	)
 	if err != nil {
