@@ -124,11 +124,13 @@ func (api *BlockChainAPI) SendRawTransaction(
 		return common.Hash{}, err
 	}
 
+	// TODO(m-Peter): Fetch the private key from a dedicated flow.json config file
 	privateKey, err := sdkCrypto.DecodePrivateKeyHex(sdkCrypto.ECDSA_P256, strings.Replace("2619878f0e2ff438d17835c2a4561cb87b4d24d72d12ec34569acd0dd4af7c21", "0x", "", 1))
 	if err != nil {
 		return common.Hash{}, err
 	}
 
+	// // TODO(m-Peter): Fetch the address from a dedicated flow.json config file
 	account, err := api.FlowClient.GetAccount(context.Background(), flow.HexToAddress("0xf8d6e0586b0a20c7"))
 	if err != nil {
 		return common.Hash{}, err
