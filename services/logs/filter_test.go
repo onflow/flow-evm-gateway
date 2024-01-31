@@ -102,6 +102,10 @@ func blockStorage() storage.BlockIndexer {
 }
 
 func receiptStorage() storage.ReceiptIndexer {
+	for _, r := range receipts { // calculate bloom filters
+		r.Bloom = gethTypes.CreateBloom(gethTypes.Receipts{r})
+	}
+
 	receiptStorage := &mocks.ReceiptIndexer{}
 	receiptStorage.
 		On("GetByBlockHeight", mock.AnythingOfType("*big.Int")).
@@ -112,6 +116,19 @@ func receiptStorage() storage.ReceiptIndexer {
 				}
 			}
 			return nil, errors.NotFound
+		})
+
+	receiptStorage.
+		On("BloomsForBlockRange", mock.AnythingOfType("*big.Int"), mock.AnythingOfType("*big.Int")).
+		Return(func(start, end *big.Int) (map[*big.Int]gethTypes.Bloom, error) {
+			blooms := make(map[*big.Int]gethTypes.Bloom)
+			for _, r := range receipts {
+				if r.BlockNumber.Cmp(start) >= 0 && r.BlockNumber.Cmp(end) <= 0 {
+					blooms[r.BlockNumber] = r.Bloom
+				}
+			}
+
+			return blooms, nil
 		})
 
 	return receiptStorage
