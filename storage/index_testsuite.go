@@ -141,26 +141,29 @@ func (s *ReceiptTestSuite) TestBloomsForBlockRange() {
 			s.Require().NoError(err)
 		}
 
-		blooms, err := s.ReceiptIndexer.BloomsForBlockRange(start, end)
+		blooms, heights, err := s.ReceiptIndexer.BloomsForBlockRange(start, end)
 		s.Require().NoError(err)
 		s.Require().Len(blooms, len(testBlooms))
+		s.Require().Len(heights, len(testBlooms))
 		s.Require().Equal(testBlooms, blooms)
 	})
 
 	s.Run("invalid block range", func() {
 		start := big.NewInt(10)
 		end := big.NewInt(5) // end is less than start
-		blooms, err := s.ReceiptIndexer.BloomsForBlockRange(start, end)
+		blooms, heights, err := s.ReceiptIndexer.BloomsForBlockRange(start, end)
 		s.Require().ErrorIs(err, errors.InvalidRange)
+		s.Require().Nil(heights)
 		s.Require().Nil(blooms)
 	})
 
 	s.Run("non-existing block range", func() {
 		start := big.NewInt(100)
 		end := big.NewInt(105)
-		blooms, err := s.ReceiptIndexer.BloomsForBlockRange(start, end)
+		blooms, heights, err := s.ReceiptIndexer.BloomsForBlockRange(start, end)
 		s.Require().NoError(err)
-		s.Require().Len(blooms, 0)
+		s.Require().Nil(blooms)
+		s.Require().Nil(heights)
 	})
 }
 

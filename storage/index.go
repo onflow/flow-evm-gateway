@@ -51,10 +51,11 @@ type ReceiptIndexer interface {
 	// TODO right now one transaction per block, but this might change in future so the API needs to be updated.
 	GetByBlockHeight(height *big.Int) (*gethTypes.Receipt, error)
 
-	// BloomsForBlockRange returns a map of bloom filters as values and block height as keys.
+	// BloomsForBlockRange returns slice of bloom values and a slice of block heights
+	// corresponding to each item in the bloom slice.
 	// Expected errors:
 	// - errors.InvalidRange if the block by the height was not indexed or if the end and start values are invalid.
-	BloomsForBlockRange(start, end *big.Int) (map[*big.Int]gethTypes.Bloom, error)
+	BloomsForBlockRange(start, end *big.Int) ([]gethTypes.Bloom, []*big.Int, error)
 }
 
 type TransactionIndexer interface {
