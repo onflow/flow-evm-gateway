@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	_ "embed"
 	"encoding/hex"
 	"fmt"
 	"math/big"
@@ -15,7 +16,9 @@ import (
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/onflow/cadence"
 	"github.com/onflow/flow-evm-gateway/storage"
+	"github.com/onflow/flow-go-sdk/access"
 )
 
 const EthNamespace = "eth"
@@ -27,24 +30,33 @@ var (
 	FlowEVMMainnetChainID = big.NewInt(777)
 )
 
-func SupportedAPIs(config *Config, store *storage.Store) []rpc.API {
+//go:embed cadence/scripts/bridged_account_call.cdc
+var bridgedAccountCall []byte
+
+func SupportedAPIs(blockChainAPI *BlockChainAPI) []rpc.API {
 	return []rpc.API{
 		{
 			Namespace: EthNamespace,
-			Service:   NewBlockChainAPI(config, store),
+			Service:   blockChainAPI,
 		},
 	}
 }
 
 type BlockChainAPI struct {
-	config *Config
-	Store  *storage.Store
+	config     *Config
+	Store      *storage.Store
+	FlowClient access.Client
 }
 
-func NewBlockChainAPI(config *Config, store *storage.Store) *BlockChainAPI {
+func NewBlockChainAPI(
+	config *Config,
+	store *storage.Store,
+	flowClient access.Client,
+) *BlockChainAPI {
 	return &BlockChainAPI{
-		config: config,
-		Store:  store,
+		config:     config,
+		Store:      store,
+		FlowClient: flowClient,
 	}
 }
 
@@ -665,7 +677,50 @@ func (s *BlockChainAPI) Call(
 	overrides *StateOverride,
 	blockOverrides *BlockOverrides,
 ) (hexutil.Bytes, error) {
-	return hexutil.Bytes{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, nil
+	decodedTx, err := hex.DecodeString(args.Input.String()[2:])
+	if err != nil {
+		return hexutil.Bytes{}, err
+	}
+	cdcBytes := make([]cadence.Value, 0)
+	for _, bt := range decodedTx {
+		cdcBytes = append(cdcBytes, cadence.UInt8(bt))
+	}
+	encodedTx := cadence.NewArray(
+		cdcBytes,
+	).WithType(cadence.NewVariableSizedArrayType(cadence.TheUInt8Type))
+
+	decodedTo, err := hex.DecodeString(args.To.String()[2:])
+	if err != nil {
+		return hexutil.Bytes{}, err
+	}
+	toBytes := make([]cadence.Value, 0)
+	for _, bt := range decodedTo {
+		toBytes = append(toBytes, cadence.UInt8(bt))
+	}
+	encodedTo := cadence.NewArray(
+		toBytes,
+	).WithType(cadence.NewConstantSizedArrayType(20, cadence.TheUInt8Type))
+
+	value, err := s.FlowClient.ExecuteScriptAtLatestBlock(
+		ctx,
+		bridgedAccountCall,
+		[]cadence.Value{encodedTx, encodedTo},
+	)
+	if err != nil {
+		return hexutil.Bytes{}, err
+	}
+
+	cadenceArray, ok := value.(cadence.Array)
+	if !ok {
+		return hexutil.Bytes{}, fmt.Errorf("script doesn't return byte array as it should")
+	}
+
+	resultValue := make([]byte, len(cadenceArray.Values))
+	for i, x := range cadenceArray.Values {
+		resultValue[i] = x.ToGoValue().(byte)
+	}
+
+	return hexutil.Bytes(resultValue), nil
 }
 
 // eth_estimateGas (usually runs the call and checks how much gas might be used)

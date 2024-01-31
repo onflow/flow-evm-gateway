@@ -167,14 +167,19 @@ func runIndexer(ctx context.Context, store *storage.Store, logger zerolog.Logger
 
 func runServer(config *api.Config, store *storage.Store, logger zerolog.Logger) {
 	srv := api.NewHTTPServer(logger, rpc.DefaultHTTPTimeouts)
-	supportedAPIs := api.SupportedAPIs(config, store)
+	flowClient, err := api.NewFlowClient(grpc.EmulatorHost)
+	if err != nil {
+		panic(err)
+	}
+	blockchainAPI := api.NewBlockChainAPI(config, store, flowClient)
+	supportedAPIs := api.SupportedAPIs(blockchainAPI)
 
 	srv.EnableRPC(supportedAPIs)
 	srv.EnableWS(supportedAPIs)
 
 	srv.SetListenAddr("localhost", 8545)
 
-	err := srv.Start()
+	err = srv.Start()
 	if err != nil {
 		panic(err)
 	}
