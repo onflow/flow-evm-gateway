@@ -118,13 +118,7 @@ func receiptStorage() storage.ReceiptIndexer {
 }
 
 func TestIDFilter(t *testing.T) {
-	blockStorage := blockStorage()
-	receiptStorage := receiptStorage()
-
-	// both topics no address
-	// only address
-	// multiple addresses
-
+	lgs := receipts[0].Logs
 	tests := []struct {
 		desc       string
 		id         common.Hash
@@ -134,17 +128,25 @@ func TestIDFilter(t *testing.T) {
 		desc: "single topic, single address match single log",
 		id:   mustHash(blocks[0]),
 		criteria: FilterCriteria{
-			Addresses: []common.Address{receipts[0].Logs[0].Address},
-			Topics:    [][]common.Hash{{receipts[0].Logs[0].Topics[0]}},
+			Addresses: []common.Address{lgs[0].Address},
+			Topics:    [][]common.Hash{lgs[0].Topics[:1]},
 		},
-		expectLogs: []*gethTypes.Log{receipts[0].Logs[0]},
+		expectLogs: lgs[:1],
 	}, {
-		desc: "single topic match single log",
+		desc: "single address no topic match two logs",
 		id:   mustHash(blocks[0]),
 		criteria: FilterCriteria{
-			Topics: [][]common.Hash{{receipts[0].Logs[0].Topics[0]}},
+			Addresses: []common.Address{lgs[0].Address},
 		},
-		expectLogs: []*gethTypes.Log{receipts[0].Logs[0]},
+		expectLogs: lgs[:2],
+	}, {
+		desc: "single address, both topics match single log",
+		id:   mustHash(blocks[0]),
+		criteria: FilterCriteria{
+			Addresses: []common.Address{lgs[0].Address},
+			Topics:    [][]common.Hash{lgs[0].Topics},
+		},
+		expectLogs: lgs[:1],
 	}, {
 		desc: "invalid topic match no logs",
 		id:   mustHash(blocks[0]),
@@ -154,9 +156,19 @@ func TestIDFilter(t *testing.T) {
 		expectLogs: []*gethTypes.Log{},
 	}}
 
+	/* todo check if empty address with only topics provided is a valid query
+	{
+		desc: "single topic match single log",
+		id:   mustHash(blocks[0]),
+		criteria: FilterCriteria{
+			Topics: [][]common.Hash{{receipts[0].Logs[0].Topics[0]}},
+		},
+		expectLogs: []*gethTypes.Log{receipts[0].Logs[0]},
+	} */
+
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			filter := NewIDFilter(tt.id, tt.criteria, blockStorage, receiptStorage)
+			filter := NewIDFilter(tt.id, tt.criteria, blockStorage(), receiptStorage())
 			logs, err := filter.Match()
 
 			require.NoError(t, err)
@@ -166,7 +178,42 @@ func TestIDFilter(t *testing.T) {
 }
 
 func TestRangeFilter(t *testing.T) {
+	lgs := receipts[0].Logs
+	tests := []struct {
+		desc       string
+		start, end *big.Int
+		expectLogs []*gethTypes.Log
+		criteria   FilterCriteria
+	}{{
+		desc:  "single topic, single address match single log",
+		start: big.NewInt(0),
+		end:   big.NewInt(1),
+		criteria: FilterCriteria{
+			Addresses: []common.Address{lgs[0].Address},
+			Topics:    [][]common.Hash{lgs[0].Topics[:1]},
+		},
+		expectLogs: lgs[:1],
+	}}
 
+	/* todo check if empty address with only topics provided is a valid query
+	{
+		desc: "single topic match single log",
+		id:   mustHash(blocks[0]),
+		criteria: FilterCriteria{
+			Topics: [][]common.Hash{{receipts[0].Logs[0].Topics[0]}},
+		},
+		expectLogs: []*gethTypes.Log{receipts[0].Logs[0]},
+	} */
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			filter := NewRangeFilter(*tt.start, *tt.end, tt.criteria, receiptStorage())
+			logs, err := filter.Match()
+
+			require.NoError(t, err)
+			require.Equal(t, tt.expectLogs, logs)
+		})
+	}
 }
 
 func TestStreamFilter(t *testing.T) {
