@@ -17,29 +17,38 @@ type ReceiptIndexer struct {
 }
 
 // BloomsForBlockRange provides a mock function with given fields: start, end
-func (_m *ReceiptIndexer) BloomsForBlockRange(start *big.Int, end *big.Int) (map[*big.Int]types.Bloom, error) {
+func (_m *ReceiptIndexer) BloomsForBlockRange(start *big.Int, end *big.Int) ([]types.Bloom, []*big.Int, error) {
 	ret := _m.Called(start, end)
 
-	var r0 map[*big.Int]types.Bloom
-	var r1 error
-	if rf, ok := ret.Get(0).(func(*big.Int, *big.Int) (map[*big.Int]types.Bloom, error)); ok {
+	var r0 []types.Bloom
+	var r1 []*big.Int
+	var r2 error
+	if rf, ok := ret.Get(0).(func(*big.Int, *big.Int) ([]types.Bloom, []*big.Int, error)); ok {
 		return rf(start, end)
 	}
-	if rf, ok := ret.Get(0).(func(*big.Int, *big.Int) map[*big.Int]types.Bloom); ok {
+	if rf, ok := ret.Get(0).(func(*big.Int, *big.Int) []types.Bloom); ok {
 		r0 = rf(start, end)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(map[*big.Int]types.Bloom)
+			r0 = ret.Get(0).([]types.Bloom)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(*big.Int, *big.Int) error); ok {
+	if rf, ok := ret.Get(1).(func(*big.Int, *big.Int) []*big.Int); ok {
 		r1 = rf(start, end)
 	} else {
-		r1 = ret.Error(1)
+		if ret.Get(1) != nil {
+			r1 = ret.Get(1).([]*big.Int)
+		}
 	}
 
-	return r0, r1
+	if rf, ok := ret.Get(2).(func(*big.Int, *big.Int) error); ok {
+		r2 = rf(start, end)
+	} else {
+		r2 = ret.Error(2)
+	}
+
+	return r0, r1, r2
 }
 
 // GetByBlockHeight provides a mock function with given fields: height

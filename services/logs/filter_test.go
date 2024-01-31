@@ -120,19 +120,24 @@ func receiptStorage() storage.ReceiptIndexer {
 
 	receiptStorage.
 		On("BloomsForBlockRange", mock.AnythingOfType("*big.Int"), mock.AnythingOfType("*big.Int")).
-		Return(func(start, end *big.Int) (map[*big.Int]gethTypes.Bloom, error) {
-			blooms := make(map[*big.Int]gethTypes.Bloom)
+		Return(func(start, end *big.Int) ([]gethTypes.Bloom, []*big.Int, error) {
+			blooms := make([]gethTypes.Bloom, 0)
+			heights := make([]*big.Int, 0)
+
 			for _, r := range receipts {
 				if r.BlockNumber.Cmp(start) >= 0 && r.BlockNumber.Cmp(end) <= 0 {
-					blooms[r.BlockNumber] = r.Bloom
+					blooms = append(blooms, r.Bloom)
+					heights = append(heights, r.BlockNumber)
 				}
 			}
 
-			return blooms, nil
+			return blooms, heights, nil
 		})
 
 	return receiptStorage
 }
+
+// todo check if empty address with only topics provided is a valid query
 
 func TestIDFilter(t *testing.T) {
 	lgs := receipts[0].Logs
@@ -173,16 +178,6 @@ func TestIDFilter(t *testing.T) {
 		expectLogs: []*gethTypes.Log{},
 	}}
 
-	/* todo check if empty address with only topics provided is a valid query
-	{
-		desc: "single topic match single log",
-		id:   mustHash(blocks[0]),
-		criteria: FilterCriteria{
-			Topics: [][]common.Hash{{receipts[0].Logs[0].Topics[0]}},
-		},
-		expectLogs: []*gethTypes.Log{receipts[0].Logs[0]},
-	} */
-
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			filter := NewIDFilter(tt.id, tt.criteria, blockStorage(), receiptStorage())
@@ -195,32 +190,56 @@ func TestIDFilter(t *testing.T) {
 }
 
 func TestRangeFilter(t *testing.T) {
-	lgs := receipts[0].Logs
+	lgs := [][]*gethTypes.Log{receipts[0].Logs, receipts[1].Logs, receipts[2].Logs, receipts[3].Logs, receipts[4].Logs}
+
 	tests := []struct {
 		desc       string
 		start, end *big.Int
 		expectLogs []*gethTypes.Log
 		criteria   FilterCriteria
 	}{{
-		desc:  "single topic, single address match single log",
+		desc:  "single topic, single address, single block match single log",
 		start: big.NewInt(0),
 		end:   big.NewInt(1),
 		criteria: FilterCriteria{
-			Addresses: []common.Address{lgs[0].Address},
-			Topics:    [][]common.Hash{lgs[0].Topics[:1]},
+			Addresses: []common.Address{lgs[0][0].Address},
+			Topics:    [][]common.Hash{lgs[0][0].Topics[:1]},
 		},
-		expectLogs: lgs[:1],
-	}}
-
-	/* todo check if empty address with only topics provided is a valid query
-	{
-		desc: "single topic match single log",
-		id:   mustHash(blocks[0]),
+		expectLogs: lgs[0][:1],
+	}, {
+		desc:  "single topic, single address, all blocks match multiple logs",
+		start: big.NewInt(0),
+		end:   big.NewInt(4),
 		criteria: FilterCriteria{
-			Topics: [][]common.Hash{{receipts[0].Logs[0].Topics[0]}},
+			Addresses: []common.Address{lgs[0][0].Address},
+			Topics:    [][]common.Hash{lgs[0][0].Topics[:1]},
 		},
-		expectLogs: []*gethTypes.Log{receipts[0].Logs[0]},
-	} */
+		expectLogs: []*gethTypes.Log{lgs[0][0], lgs[3][1]},
+	}, {
+		desc:  "single address, all blocks match multiple logs",
+		start: big.NewInt(0),
+		end:   big.NewInt(4),
+		criteria: FilterCriteria{
+			Addresses: []common.Address{lgs[0][0].Address},
+		},
+		expectLogs: []*gethTypes.Log{lgs[0][0], lgs[0][1], lgs[1][0], lgs[3][1]},
+	}, {
+		desc:  "invalid address, all blocks no match",
+		start: big.NewInt(0),
+		end:   big.NewInt(4),
+		criteria: FilterCriteria{
+			Addresses: []common.Address{common.HexToAddress("0x123")},
+		},
+		expectLogs: []*gethTypes.Log{},
+	}, {
+		desc:  "single address, non-existing range no match",
+		start: big.NewInt(5),
+		end:   big.NewInt(10),
+		criteria: FilterCriteria{
+			Addresses: []common.Address{lgs[0][0].Address},
+		},
+		expectLogs: []*gethTypes.Log{},
+	}}
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
