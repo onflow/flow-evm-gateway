@@ -43,19 +43,23 @@ func (r *RangeFilter) Match() ([]*gethTypes.Log, error) {
 		return nil, fmt.Errorf("invalid start and end block height, start must be smaller than end value")
 	}
 
-	blooms, err := r.receipts.BloomsForBlockRange(r.start, r.end)
+	blooms, heights, err := r.receipts.BloomsForBlockRange(r.start, r.end)
 	if err != nil {
 		return nil, err
 	}
 
+	if len(blooms) != len(heights) {
+		return nil, fmt.Errorf("bloom values don't match height values") // this should never happen
+	}
+
 	logs := make([]*gethTypes.Log, 0)
-	for height, bloom := range blooms {
+	for i, bloom := range blooms {
 		if !bloomMatch(bloom, r.criteria) {
 			continue
 		}
 
 		// todo do this concurrently
-		receipt, err := r.receipts.GetByBlockHeight(height)
+		receipt, err := r.receipts.GetByBlockHeight(heights[i])
 		if err != nil {
 			return nil, err
 		}
@@ -129,7 +133,7 @@ func NewStreamFilter(criteria FilterCriteria, receipts chan *gethTypes.Receipt) 
 
 func (s *StreamFilter) Match() (chan *gethTypes.Log, error) {
 	logs := make(chan *gethTypes.Log)
-	// todo close logs
+
 	go func() {
 		defer close(logs)
 
