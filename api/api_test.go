@@ -275,31 +275,54 @@ func TestBlockChainAPI(t *testing.T) {
 	})
 
 	t.Run("GetTransactionByHash", func(t *testing.T) {
+		event := transactionExecutedEvent(
+			3,
+			"0xb47d74ea64221eb941490bdc0c9a404dacd0a8573379a45c992ac60ee3e83c3c",
+			"b88c02f88982029a01808083124f809499466ed2e37b892a2ee3e9cd55a98b68f5735db280a4c6888fa10000000000000000000000000000000000000000000000000000000000000006c001a0f84168f821b427dc158c4d8083bdc4b43e178cf0977a2c5eefbcbedcc4e351b0a066a747a38c6c266b9dc2136523cef04395918de37773db63d574aabde59c12eb",
+			false,
+			2,
+			22514,
+			"0000000000000000000000000000000000000000",
+			"000000000000000000000000000000000000000000000000000000000000002a",
+			"f85af8589499466ed2e37b892a2ee3e9cd55a98b68f5735db2e1a024abdb5865df5079dcc5ac590ff6f01d5c16edbc5fab4e195d9febd1114503daa0000000000000000000000000000000000000000000000000000000000000002a",
+		)
+
+		store := blockchainAPI.Store
+		store.StoreTransaction(context.Background(), event)
+
 		tx, err := blockchainAPI.GetTransactionByHash(
 			context.Background(),
-			common.Hash{0, 1, 2},
+			common.HexToHash("0xb47d74ea64221eb941490bdc0c9a404dacd0a8573379a45c992ac60ee3e83c3c"),
 		)
 		require.NoError(t, err)
 
 		blockHash := common.HexToHash("0x1d59ff54b1eb26b013ce3cb5fc9dab3705b415a67127a003c3e61eb445bb8df2")
-		to := common.HexToAddress("0xf02c1c8e6114b1dbe8937a39260b5b0a374432bb")
-		index := uint64(64)
+		to := common.HexToAddress("0x99466ED2E37B892A2Ee3E9CD55a98b68f5735db2")
+		index := uint64(0)
+		input, err := hex.DecodeString("c6888fa10000000000000000000000000000000000000000000000000000000000000006")
+		require.NoError(t, err)
+
+		r, err := hexutil.DecodeBig("0xf84168f821b427dc158c4d8083bdc4b43e178cf0977a2c5eefbcbedcc4e351b0")
+		require.NoError(t, err)
+		s, err := hexutil.DecodeBig("0x66a747a38c6c266b9dc2136523cef04395918de37773db63d574aabde59c12eb")
+		require.NoError(t, err)
 
 		expectedTx := &api.RPCTransaction{
 			BlockHash:        (*common.Hash)(&blockHash),
-			BlockNumber:      (*hexutil.Big)(big.NewInt(6139707)),
-			From:             common.HexToAddress("0xa7d9ddbe1f17865597fbd27ec712455208b6b76d"),
-			Gas:              hexutil.Uint64(50000),
-			GasPrice:         (*hexutil.Big)(big.NewInt(20000000000)),
-			Hash:             common.HexToHash("0x88df016429689c079f3b2f6ad39fa052532c56795b733da78a91ebe6a713944b"),
-			Input:            hexutil.Bytes("0x68656c6c6f21"),
-			Nonce:            hexutil.Uint64(21),
+			BlockNumber:      (*hexutil.Big)(big.NewInt(3)),
+			From:             common.HexToAddress("0xa7d9ddBE1f17865597fBD27EC712455208B6B76d"),
+			Gas:              hexutil.Uint64(22514),
+			GasPrice:         (*hexutil.Big)(big.NewInt(0)),
+			Hash:             common.HexToHash("0xb47d74ea64221eb941490bdc0c9a404dacd0a8573379a45c992ac60ee3e83c3c"),
+			Input:            hexutil.Bytes(input),
+			Nonce:            hexutil.Uint64(1),
 			To:               &to,
 			TransactionIndex: (*hexutil.Uint64)(&index),
-			Value:            (*hexutil.Big)(big.NewInt(4290000000000000)),
-			V:                (*hexutil.Big)(big.NewInt(37)),
-			R:                (*hexutil.Big)(big.NewInt(150)),
-			S:                (*hexutil.Big)(big.NewInt(250)),
+			Value:            (*hexutil.Big)(big.NewInt(0)),
+			Type:             hexutil.Uint64(2),
+			V:                (*hexutil.Big)(big.NewInt(1)),
+			R:                (*hexutil.Big)(r),
+			S:                (*hexutil.Big)(s),
 		}
 
 		assert.Equal(t, expectedTx, tx)

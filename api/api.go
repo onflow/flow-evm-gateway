@@ -290,31 +290,54 @@ func (s *BlockChainAPI) GetTransactionCount(
 
 // eth_getTransactionByHash
 // GetTransactionByHash returns the transaction for the given hash
-func (s *BlockChainAPI) GetTransactionByHash(
+func (b *BlockChainAPI) GetTransactionByHash(
 	ctx context.Context,
 	hash common.Hash,
 ) (*RPCTransaction, error) {
-	blockHash := common.HexToHash("0x1d59ff54b1eb26b013ce3cb5fc9dab3705b415a67127a003c3e61eb445bb8df2")
-	to := common.HexToAddress("0xf02c1c8e6114b1dbe8937a39260b5b0a374432bb")
-	index := uint64(64)
-
-	tx := &RPCTransaction{
-		BlockHash:        (*common.Hash)(&blockHash),
-		BlockNumber:      (*hexutil.Big)(big.NewInt(6139707)),
-		From:             common.HexToAddress("0xa7d9ddbe1f17865597fbd27ec712455208b6b76d"),
-		Gas:              hexutil.Uint64(50000),
-		GasPrice:         (*hexutil.Big)(big.NewInt(20000000000)),
-		Hash:             common.HexToHash("0x88df016429689c079f3b2f6ad39fa052532c56795b733da78a91ebe6a713944b"),
-		Input:            hexutil.Bytes("0x68656c6c6f21"),
-		Nonce:            hexutil.Uint64(21),
-		To:               &to,
-		TransactionIndex: (*hexutil.Uint64)(&index),
-		Value:            (*hexutil.Big)(big.NewInt(4290000000000000)),
-		V:                (*hexutil.Big)(big.NewInt(37)),
-		R:                (*hexutil.Big)(big.NewInt(150)),
-		S:                (*hexutil.Big)(big.NewInt(250)),
+	txPayload, err := b.Store.GetTransactionByHash(ctx, hash)
+	if err != nil {
+		return nil, err
 	}
-	return tx, nil
+
+	decodedTx, err := hex.DecodeString(txPayload.Transaction)
+	if err != nil {
+		return nil, err
+	}
+	tx := &types.Transaction{}
+	encodedLen := uint(len(txPayload.Transaction))
+	err = tx.DecodeRLP(
+		rlp.NewStream(
+			bytes.NewReader(decodedTx),
+			uint64(encodedLen),
+		),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO(m-Peter): Add BlockHash to storage
+	blockHash := common.HexToHash("0x1d59ff54b1eb26b013ce3cb5fc9dab3705b415a67127a003c3e61eb445bb8df2")
+	index := uint64(0)
+	v, r, s := tx.RawSignatureValues()
+
+	txResult := &RPCTransaction{
+		BlockHash:        (*common.Hash)(&blockHash),
+		BlockNumber:      (*hexutil.Big)(big.NewInt(int64(txPayload.BlockHeight))),
+		From:             common.HexToAddress("0xa7d9ddbe1f17865597fbd27ec712455208b6b76d"),
+		Gas:              hexutil.Uint64(txPayload.GasConsumed),
+		GasPrice:         (*hexutil.Big)(tx.GasPrice()),
+		Hash:             tx.Hash(),
+		Input:            hexutil.Bytes(tx.Data()),
+		Nonce:            hexutil.Uint64(tx.Nonce()),
+		To:               tx.To(),
+		TransactionIndex: (*hexutil.Uint64)(&index),
+		Value:            (*hexutil.Big)(tx.Value()),
+		Type:             hexutil.Uint64(uint64(tx.Type())),
+		V:                (*hexutil.Big)(v),
+		R:                (*hexutil.Big)(r),
+		S:                (*hexutil.Big)(s),
+	}
+	return txResult, nil
 }
 
 // eth_getTransactionByBlockHashAndIndex
