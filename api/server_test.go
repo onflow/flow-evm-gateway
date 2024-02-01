@@ -192,6 +192,36 @@ func TestServerJSONRPCOveHTTPHandler(t *testing.T) {
 
 		assert.Equal(t, expectedResponse, strings.TrimSuffix(string(content), "\n"))
 	})
+
+	t.Run("eth_getTransactionByHash", func(t *testing.T) {
+		request := `{"jsonrpc":"2.0","id":1,"method":"eth_getTransactionByHash","params":["0xb47d74ea64221eb941490bdc0c9a404dacd0a8573379a45c992ac60ee3e83c3c"]}`
+		expectedResponse := `{"jsonrpc":"2.0","id":1,"result":{"blockHash":"0x1d59ff54b1eb26b013ce3cb5fc9dab3705b415a67127a003c3e61eb445bb8df2","blockNumber":"0x3","from":"0xa7d9ddbe1f17865597fbd27ec712455208b6b76d","gas":"0x57f2","gasPrice":"0x0","hash":"0xb47d74ea64221eb941490bdc0c9a404dacd0a8573379a45c992ac60ee3e83c3c","input":"0xc6888fa10000000000000000000000000000000000000000000000000000000000000006","nonce":"0x1","to":"0x99466ed2e37b892a2ee3e9cd55a98b68f5735db2","transactionIndex":"0x0","value":"0x0","type":"0x2","v":"0x1","r":"0xf84168f821b427dc158c4d8083bdc4b43e178cf0977a2c5eefbcbedcc4e351b0","s":"0x66a747a38c6c266b9dc2136523cef04395918de37773db63d574aabde59c12eb"}}`
+
+		event := transactionExecutedEvent(
+			3,
+			"0xb47d74ea64221eb941490bdc0c9a404dacd0a8573379a45c992ac60ee3e83c3c",
+			"b88c02f88982029a01808083124f809499466ed2e37b892a2ee3e9cd55a98b68f5735db280a4c6888fa10000000000000000000000000000000000000000000000000000000000000006c001a0f84168f821b427dc158c4d8083bdc4b43e178cf0977a2c5eefbcbedcc4e351b0a066a747a38c6c266b9dc2136523cef04395918de37773db63d574aabde59c12eb",
+			false,
+			2,
+			22514,
+			"0000000000000000000000000000000000000000",
+			"000000000000000000000000000000000000000000000000000000000000002a",
+			"f85af8589499466ed2e37b892a2ee3e9cd55a98b68f5735db2e1a024abdb5865df5079dcc5ac590ff6f01d5c16edbc5fab4e195d9febd1114503daa0000000000000000000000000000000000000000000000000000000000000002a",
+		)
+
+		err := store.StoreTransaction(context.Background(), event)
+		require.NoError(t, err)
+
+		resp := rpcRequest(url, request, "origin", "test.com")
+		defer resp.Body.Close()
+
+		content, err := io.ReadAll(resp.Body)
+		if err != nil {
+			panic(err)
+		}
+
+		assert.Equal(t, expectedResponse, strings.TrimSuffix(string(content), "\n"))
+	})
 }
 
 func TestServerJSONRPCOveWebSocketHandler(t *testing.T) {
