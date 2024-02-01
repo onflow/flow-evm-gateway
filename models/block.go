@@ -24,13 +24,13 @@ type blockEventPayload struct {
 func DecodeBlock(event cadence.Event) (*types.Block, error) {
 	if cdcCommon.TypeID(event.EventType.ID()) != blockExecutedType {
 		return nil, fmt.Errorf(
-			"invalid event type for decoding into block executed event, received %s expected %s",
+			"invalid event type for decoding into block, received %s expected %s",
 			event.Type().ID(),
 			types.EventTypeBlockExecuted,
 		)
 	}
 
-	b := blockEventPayload{}
+	var b blockEventPayload
 	err := cadence.DecodeFields(event, &b)
 	if err != nil {
 		return nil, err
