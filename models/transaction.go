@@ -13,8 +13,6 @@ import (
 	"math/big"
 )
 
-var txExecutedType = (types.EVMLocation{}).TypeID(nil, string(types.EventTypeTransactionExecuted))
-
 type txEventPayload struct {
 	BlockHeight             uint64 `cadence:"blockHeight"`
 	TransactionHash         string `cadence:"transactionHash"`
@@ -29,7 +27,7 @@ type txEventPayload struct {
 
 // DecodeReceipt takes a cadence event for transaction executed and decodes it into the receipt.
 func DecodeReceipt(event cadence.Event) (*gethTypes.Receipt, error) {
-	if cdcCommon.TypeID(event.EventType.ID()) != txExecutedType {
+	if !IsTransactionExecutedEvent(event) {
 		return nil, fmt.Errorf(
 			"invalid event type for decoding into receipt, received %s expected %s",
 			event.Type().ID(),
@@ -77,7 +75,7 @@ func DecodeReceipt(event cadence.Event) (*gethTypes.Receipt, error) {
 
 // DecodeTransaction takes a cadence event for transaction executed and decodes it into the transaction.
 func DecodeTransaction(event cadence.Event) (*gethTypes.Transaction, error) {
-	if cdcCommon.TypeID(event.EventType.ID()) != txExecutedType {
+	if !IsTransactionExecutedEvent(event) {
 		return nil, fmt.Errorf(
 			"invalid event type for decoding into receipt, received %s expected %s",
 			event.Type().ID(),
@@ -103,4 +101,9 @@ func DecodeTransaction(event cadence.Event) (*gethTypes.Transaction, error) {
 	}
 
 	return &tx, nil
+}
+
+func IsTransactionExecutedEvent(event cadence.Event) bool {
+	txExecutedType := (types.EVMLocation{}).TypeID(nil, string(types.EventTypeTransactionExecuted))
+	return cdcCommon.TypeID(event.EventType.ID()) == txExecutedType
 }
