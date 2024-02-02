@@ -13,6 +13,8 @@ import (
 
 var ErrDisconnected = errors.New("disconnected")
 
+var _ models.Engine = &EventIngestionEngine{}
+
 type EventIngestionEngine struct {
 	subscriber   Subscriber
 	blocks       storage.BlockIndexer
