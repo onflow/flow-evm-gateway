@@ -8,6 +8,7 @@ import (
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-go-sdk"
+	"github.com/onflow/flow-go/module/counters"
 	"github.com/rs/zerolog"
 )
 
@@ -21,6 +22,7 @@ type EventIngestionEngine struct {
 	receipts     storage.ReceiptIndexer
 	transactions storage.TransactionIndexer
 	logs         zerolog.Logger
+	lastHeight   *counters.StrictMonotonousCounter
 }
 
 // Ready signals when the engine has started.
@@ -37,17 +39,25 @@ func (e *EventIngestionEngine) Done() <-chan struct{} {
 
 // Stop the engine.
 func (e *EventIngestionEngine) Stop() {
+	// todo
 }
 
+// Start the event ingestion engine. Load the latest height that was stored and provide it
+// to the event subscribers as a starting point.
+// Consume the events provided by the event subscriber.
+// Each event is then processed by the event processing methods.
 func (e *EventIngestionEngine) Start(ctx context.Context) error {
 	latest, err := e.blocks.LatestHeight()
 	if err != nil {
 		return err
 	}
-	startFrom := latest + 1
-	e.logs.Info().Uint64("start height", startFrom).Msg("starting ingestion")
+	if ok := e.lastHeight.Set(latest); !ok {
+		return fmt.Errorf("invalid latest height value")
+	}
 
-	events, errs, err := e.subscriber.Subscribe(ctx, startFrom)
+	e.logs.Info().Uint64("start height", latest).Msg("starting ingestion")
+
+	events, errs, err := e.subscriber.Subscribe(ctx, latest)
 	if err != nil {
 		return err
 	}
@@ -84,8 +94,8 @@ func (e *EventIngestionEngine) Start(ctx context.Context) error {
 	}
 }
 
+// processEvents iterates all the events and decides based on the type how to process them.
 func (e *EventIngestionEngine) processEvents(events flow.BlockEvents) error {
-	// todo validate events.Height is sequential
 
 	for _, event := range events.Events {
 		if models.IsBlockExecutedEvent(event.Value) {
@@ -110,6 +120,10 @@ func (e *EventIngestionEngine) processBlockEvent(event cadence.Event) error {
 	block, err := models.DecodeBlock(event)
 	if err != nil {
 		return err
+	}
+
+	if ok := e.lastHeight.Set(block.Height); !ok {
+		return fmt.Errorf("invalid block height, expected %d, got %d", e.lastHeight.Value()+1, block.Height)
 	}
 
 	return e.blocks.Store(block)
