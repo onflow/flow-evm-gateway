@@ -1,6 +1,8 @@
 package models
 
 import (
+	"bytes"
+	"encoding/hex"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
@@ -9,7 +11,6 @@ import (
 	cdcCommon "github.com/onflow/cadence/runtime/common"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	"math/big"
-	"strings"
 )
 
 var txExecutedType = (types.EVMLocation{}).TypeID(nil, string(types.EventTypeTransactionExecuted))
@@ -42,8 +43,13 @@ func DecodeReceipt(event cadence.Event) (*gethTypes.Receipt, error) {
 		return nil, err
 	}
 
+	encLogs, err := hex.DecodeString(tx.Logs)
+	if err != nil {
+		return nil, err
+	}
+
 	var logs []*gethTypes.Log
-	err = rlp.DecodeBytes([]byte(tx.Logs), &logs)
+	err = rlp.Decode(bytes.NewReader(encLogs), &logs)
 	if err != nil {
 		return nil, err
 	}
@@ -85,11 +91,16 @@ func DecodeTransaction(event cadence.Event) (*gethTypes.Transaction, error) {
 		return nil, err
 	}
 
+	encTx, err := hex.DecodeString(t.Transaction)
+	if err != nil {
+		return nil, err
+	}
+
 	tx := gethTypes.Transaction{}
-	err = tx.DecodeRLP(rlp.NewStream(
-		strings.NewReader(t.Transaction),
-		uint64(len(t.Transaction)),
-	))
+	err = tx.DecodeRLP(rlp.NewStream(bytes.NewReader(encTx), uint64(len(encTx))))
+	if err != nil {
+		return nil, err
+	}
 
 	return &tx, nil
 }
