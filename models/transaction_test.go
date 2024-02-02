@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"github.com/ethereum/go-ethereum/common"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -11,7 +12,7 @@ import (
 	"testing"
 )
 
-func Test_DecodeTransaction(t *testing.T) {
+func createTestEvent(t *testing.T) (cadence.Event, *gethTypes.Transaction, *types.Result) {
 	res := &types.Result{
 		Failed:                  false,
 		TxType:                  1,
@@ -37,16 +38,44 @@ func Test_DecodeTransaction(t *testing.T) {
 		Data:     []byte{0x2, 0x3},
 	})
 
-	var txEnc []byte
-	err := tx.EncodeRLP(bytes.NewBuffer(txEnc))
+	var txEnc bytes.Buffer
+	err := tx.EncodeRLP(&txEnc)
 	require.NoError(t, err)
 
-	ev := types.NewTransactionExecutedEvent(1, txEnc, tx.Hash(), res)
+	ev := types.NewTransactionExecutedEvent(1, txEnc.Bytes(), tx.Hash(), res)
 
 	cdcEv, err := ev.Payload.CadenceEvent()
 	require.NoError(t, err)
 
+	return cdcEv, tx, res
+}
+
+func Test_DecodeTransaction(t *testing.T) {
+	cdcEv, tx, _ := createTestEvent(t)
+
 	decTx, err := DecodeTransaction(cdcEv)
 	require.NoError(t, err)
-	assert.Equal(t, tx, decTx)
+	assert.Equal(t, tx.Hash(), decTx.Hash())
+	assert.Equal(t, tx.Type(), decTx.Type())
+	assert.Equal(t, tx.To(), decTx.To())
+	assert.Equal(t, tx.Value(), decTx.Value())
+	assert.Equal(t, tx.Nonce(), decTx.Nonce())
+	assert.Equal(t, tx.Data(), decTx.Data())
+	assert.Equal(t, tx.GasPrice(), decTx.GasPrice())
+	assert.Equal(t, tx.BlobGas(), decTx.BlobGas())
+	assert.Equal(t, tx.Size(), decTx.Size())
+}
+
+func Test_DecodeReceipts(t *testing.T) {
+	cdcEv, _, rec := createTestEvent(t)
+
+	receipt, err := DecodeReceipt(cdcEv)
+	require.NoError(t, err)
+
+	for i, l := range rec.Logs {
+		assert.ObjectsAreEqualValues(l, receipt.Logs[i])
+		for j, tt := range l.Topics {
+			assert.EqualValues(t, tt, receipt.Logs[i].Topics[j])
+		}
+	}
 }
