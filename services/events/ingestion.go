@@ -26,6 +26,24 @@ type EventIngestionEngine struct {
 	status       *models.EngineStatus
 }
 
+func NewEventIngestionEngine(
+	subscriber Subscriber,
+	blocks storage.BlockIndexer,
+	receipts storage.ReceiptIndexer,
+	transactions storage.TransactionIndexer,
+	logs zerolog.Logger,
+) *EventIngestionEngine {
+	return &EventIngestionEngine{
+		subscriber:   subscriber,
+		blocks:       blocks,
+		receipts:     receipts,
+		transactions: transactions,
+		logs:         logs,
+		lastHeight:   &counters.StrictMonotonousCounter{},
+		status:       models.NewEngineStatus(),
+	}
+}
+
 // Ready signals when the engine has started.
 func (e *EventIngestionEngine) Ready() <-chan struct{} {
 	return e.status.IsReady()
@@ -34,6 +52,7 @@ func (e *EventIngestionEngine) Ready() <-chan struct{} {
 // Done signals when the engine has stopped.
 func (e *EventIngestionEngine) Done() <-chan struct{} {
 	// return e.status.IsDone()
+	return nil
 }
 
 // Stop the engine.
