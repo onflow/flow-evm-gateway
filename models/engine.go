@@ -41,3 +41,41 @@ func (r *RestartableEngine) Start(ctx context.Context) error {
 	// todo add restart logic
 	return r.engine.Start(ctx)
 }
+
+type EngineStatus struct {
+	done  chan struct{}
+	ready chan struct{}
+	stop  chan struct{}
+}
+
+func NewEngineStatus() *EngineStatus {
+	return &EngineStatus{
+		done:  make(chan struct{}),
+		ready: make(chan struct{}),
+		stop:  make(chan struct{}),
+	}
+}
+
+func (e *EngineStatus) IsReady() <-chan struct{} {
+	return e.ready
+}
+
+func (e *EngineStatus) IsStopped() <-chan struct{} {
+	return e.stop
+}
+
+func (e *EngineStatus) IsDone() <-chan struct{} {
+	return e.done
+}
+
+func (e *EngineStatus) Ready() {
+	close(e.ready)
+}
+
+func (e *EngineStatus) Done() {
+	close(e.done)
+}
+
+func (e *EngineStatus) Stop() {
+	close(e.stop)
+}

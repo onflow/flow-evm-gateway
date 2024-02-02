@@ -23,18 +23,17 @@ type EventIngestionEngine struct {
 	transactions storage.TransactionIndexer
 	logs         zerolog.Logger
 	lastHeight   *counters.StrictMonotonousCounter
+	status       *models.EngineStatus
 }
 
 // Ready signals when the engine has started.
 func (e *EventIngestionEngine) Ready() <-chan struct{} {
-	// todo
-	return nil
+	return e.status.IsReady()
 }
 
 // Done signals when the engine has stopped.
 func (e *EventIngestionEngine) Done() <-chan struct{} {
-	// todo
-	return nil
+	// return e.status.IsDone()
 }
 
 // Stop the engine.
@@ -61,6 +60,8 @@ func (e *EventIngestionEngine) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
+	e.status.Ready()
 
 	for {
 		select {
