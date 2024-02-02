@@ -14,6 +14,8 @@ type Engine interface {
 	Ready() <-chan struct{}
 }
 
+var _ Engine = &RestartableEngine{}
+
 // RestartableEngine is an engine wrapper that tries to restart
 // the engine in case of starting errors.
 //
@@ -21,4 +23,21 @@ type Engine interface {
 // limited number of retries that can be configured.
 type RestartableEngine struct {
 	engine Engine
+}
+
+func (r *RestartableEngine) Stop() {
+	r.engine.Stop()
+}
+
+func (r *RestartableEngine) Done() <-chan struct{} {
+	return r.engine.Done()
+}
+
+func (r *RestartableEngine) Ready() <-chan struct{} {
+	return r.engine.Ready()
+}
+
+func (r *RestartableEngine) Start(ctx context.Context) error {
+	// todo add restart logic
+	return r.engine.Start(ctx)
 }
