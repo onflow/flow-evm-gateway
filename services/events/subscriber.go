@@ -28,6 +28,6 @@ func (r *RPCSubscriber) Subscribe(ctx context.Context, height uint64) (<-chan fl
 			string(txExecutedType),
 		},
 	}
-	// todo handle reconnection
+
 	return r.client.SubscribeEventsByBlockHeight(ctx, height, filter)
 }
