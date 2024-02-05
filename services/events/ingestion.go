@@ -8,7 +8,6 @@ import (
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-go-sdk"
-	"github.com/onflow/flow-go/module/counters"
 	"github.com/rs/zerolog"
 )
 
@@ -22,7 +21,7 @@ type EventIngestionEngine struct {
 	receipts     storage.ReceiptIndexer
 	transactions storage.TransactionIndexer
 	logs         zerolog.Logger
-	lastHeight   *counters.StrictMonotonousCounter
+	lastHeight   *models.SequentialHeight
 	status       *models.EngineStatus
 }
 
@@ -39,7 +38,6 @@ func NewEventIngestionEngine(
 		receipts:     receipts,
 		transactions: transactions,
 		logs:         logs,
-		lastHeight:   &counters.StrictMonotonousCounter{},
 		status:       models.NewEngineStatus(),
 	}
 }
@@ -69,8 +67,15 @@ func (e *EventIngestionEngine) Start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if ok := e.lastHeight.Set(latest); !ok {
-		return fmt.Errorf("invalid latest height value")
+
+	// only init latest height if not set
+	if e.lastHeight == nil {
+		e.lastHeight = models.NewSequentialHeight(latest)
+	} else { // otherwise make sure the latest height is same as the one set on the engine
+		err = e.lastHeight.Increment(latest)
+		if err != nil {
+			return err
+		}
 	}
 
 	e.logs.Info().Uint64("start height", latest).Msg("starting ingestion")
@@ -142,8 +147,8 @@ func (e *EventIngestionEngine) processBlockEvent(event cadence.Event) error {
 		return err
 	}
 
-	if ok := e.lastHeight.Set(block.Height); !ok {
-		return fmt.Errorf("invalid block height, expected %d, got %d", e.lastHeight.Value()+1, block.Height)
+	if err = e.lastHeight.Increment(block.Height); err != nil {
+		return fmt.Errorf("invalid block height, expected %d, got %d: %w", e.lastHeight.Load(), block.Height, err)
 	}
 
 	return e.blocks.Store(block)
