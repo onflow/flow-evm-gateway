@@ -21,6 +21,10 @@ type RPCSubscriber struct {
 	client access.Client
 }
 
+func NewRPCSubscriber(client access.Client) *RPCSubscriber {
+	return &RPCSubscriber{client: client}
+}
+
 func (r *RPCSubscriber) Subscribe(ctx context.Context, height uint64) (<-chan flow.BlockEvents, <-chan error, error) {
 	filter := flow.EventFilter{
 		EventTypes: []string{
