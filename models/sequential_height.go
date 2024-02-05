@@ -13,6 +13,13 @@ type SequentialHeight struct {
 	height atomic.Uint64
 }
 
+func NewSequentialHeight(init uint64) *SequentialHeight {
+	h := &SequentialHeight{}
+	h.height.Store(init)
+
+	return h
+}
+
 // Increment the height value according to the rules.
 // A valid next height must be either incremented
 // by one, or must be the same as previous height to make the action idempotent.
