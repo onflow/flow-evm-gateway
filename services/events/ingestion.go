@@ -115,7 +115,7 @@ func (e *EventIngestionEngine) Start(ctx context.Context) error {
 				return ErrDisconnected
 			}
 
-			return err
+			return errors.Join(err, ErrDisconnected)
 		}
 	}
 }
