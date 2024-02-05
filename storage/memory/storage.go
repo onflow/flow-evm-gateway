@@ -51,14 +51,28 @@ func baseStorageFactory() *baseStorage {
 
 var _ storage.BlockIndexer = &BlockStorage{}
 
+type BlockOption func(block *BlockStorage)
+
+func WithLatestHeight(latest uint64) BlockOption {
+	return func(block *BlockStorage) {
+		block.base.lastHeight = latest
+	}
+}
+
 type BlockStorage struct {
 	base *baseStorage
 }
 
-func NewBlockStorage() *BlockStorage {
-	return &BlockStorage{
+func NewBlockStorage(opts ...BlockOption) *BlockStorage {
+	blk := &BlockStorage{
 		base: baseStorageFactory(),
 	}
+
+	for _, opt := range opts {
+		opt(blk)
+	}
+
+	return blk
 }
 
 func (s BlockStorage) GetByHeight(height uint64) (*types.Block, error) {
