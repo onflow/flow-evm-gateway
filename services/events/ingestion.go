@@ -90,6 +90,7 @@ func (e *EventIngestionEngine) Start(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
+			e.logs.Info().Msg("event ingestion received done signal")
 			return nil
 
 		case blockEvents, ok := <-events:
@@ -147,6 +148,11 @@ func (e *EventIngestionEngine) processBlockEvent(event cadence.Event) error {
 		return err
 	}
 
+	e.logs.Info().
+		Uint64("height", block.Height).
+		Str("parent hash", block.ParentBlockHash.String()).
+		Msg("ingesting new block executed event")
+
 	if err = e.lastHeight.Increment(block.Height); err != nil {
 		return fmt.Errorf("invalid block height, expected %d, got %d: %w", e.lastHeight.Load(), block.Height, err)
 	}
@@ -164,6 +170,13 @@ func (e *EventIngestionEngine) processTransactionEvent(event cadence.Event) erro
 	if err != nil {
 		return err
 	}
+
+	e.logs.Info().
+		Str("contract address", receipt.ContractAddress.String()).
+		Int("log count", len(receipt.Logs)).
+		Str("receipt tx hash", receipt.TxHash.String()).
+		Str("tx hash", tx.Hash().String()).
+		Msg("ingesting new transaction executed event")
 
 	err = e.transactions.Store(tx)
 	if err != nil {
