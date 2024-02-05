@@ -3,6 +3,9 @@ package integration
 import (
 	"context"
 	"fmt"
+	"github.com/onflow/flow-evm-gateway/storage/memory"
+	"github.com/onflow/flow-go-sdk/access/grpc"
+
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-emulator/adapters"
 	"github.com/onflow/flow-emulator/emulator"
@@ -26,21 +29,40 @@ func startEmulator() (*server.EmulatorServer, error) {
 	}
 
 	srv := server.NewEmulatorServer(&logger, &server.Config{
-		// BlockTime:       0, maybe
 		ServicePrivateKey:  pkey,
 		ServiceKeySigAlgo:  crypto.ECDSA_P256,
 		ServiceKeyHashAlgo: crypto.SHA3_256,
 		GenesisTokenSupply: 10000,
 		EVMEnabled:         true,
 		WithContracts:      true,
-		Host:               "localhost",
+		Host:               grpc.EmulatorHost,
 	})
 
 	return srv, srv.Listen()
 }
 
-func startEventIngestionEngine() {
-	events.NewEventIngestionEngine()
+func startEventIngestionEngine(ctx context.Context) error {
+	client, err := grpc.NewClient(grpc.EmulatorHost, nil)
+	if err != nil {
+		return err
+	}
+
+	subscriber := events.NewRPCSubscriber(client)
+	blocks := memory.NewBlockStorage()
+	receipts := memory.NewReceiptStorage()
+	txs := memory.NewTransactionStorage()
+
+	engine := events.NewEventIngestionEngine(subscriber, blocks, receipts, txs, logger)
+
+	go func() {
+		err = engine.Start(ctx)
+		if err != nil {
+			panic(err)
+		}
+	}()
+
+	<-engine.Ready() // wait for engine to be ready
+	return nil
 }
 
 // sendTransaction sends an evm transaction to the emulator, the code provided doesn't
