@@ -33,10 +33,13 @@ var (
 )
 
 //go:embed cadence/scripts/bridged_account_call.cdc
-var bridgedAccountCall []byte
+var BridgedAccountCall []byte
 
 //go:embed cadence/transactions/evm_run.cdc
-var evmRunTx []byte
+var EVMRunTx []byte
+
+//go:embed cadence/scripts/evm_address_balance.cdc
+var EVMAddressBalance []byte
 
 func SupportedAPIs(blockChainAPI *BlockChainAPI) []rpc.API {
 	return []rpc.API{
@@ -141,7 +144,7 @@ func (api *BlockChainAPI) SendRawTransaction(
 	}
 
 	tx := flow.NewTransaction().
-		SetScript(evmRunTx).
+		SetScript(EVMRunTx).
 		SetProposalKey(account.Address, accountKey.Index, accountKey.SequenceNumber).
 		SetReferenceBlockID(block.ID).
 		SetPayer(account.Address).
@@ -228,7 +231,29 @@ func (s *BlockChainAPI) GetBalance(
 	address common.Address,
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (*hexutil.Big, error) {
-	return (*hexutil.Big)(big.NewInt(101)), nil
+	addressBytes := make([]cadence.Value, 0)
+	for _, bt := range address.Bytes() {
+		addressBytes = append(addressBytes, cadence.UInt8(bt))
+	}
+	evmAddress := cadence.NewArray(
+		addressBytes,
+	).WithType(cadence.NewConstantSizedArrayType(20, cadence.TheUInt8Type))
+
+	value, err := s.FlowClient.ExecuteScriptAtLatestBlock(
+		ctx,
+		EVMAddressBalance,
+		[]cadence.Value{evmAddress},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	balance, ok := value.(cadence.UFix64)
+	if !ok {
+		return nil, fmt.Errorf("script doesn't return UFix64 as it should")
+	}
+
+	return (*hexutil.Big)(big.NewInt(int64(balance))), nil
 }
 
 // eth_getCode (returns the code for the given address)
@@ -795,7 +820,7 @@ func (s *BlockChainAPI) Call(
 
 	value, err := s.FlowClient.ExecuteScriptAtLatestBlock(
 		ctx,
-		bridgedAccountCall,
+		BridgedAccountCall,
 		[]cadence.Value{encodedTx, encodedTo},
 	)
 	if err != nil {

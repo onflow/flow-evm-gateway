@@ -198,6 +198,13 @@ func TestBlockChainAPI(t *testing.T) {
 	})
 
 	t.Run("GetBalance", func(t *testing.T) {
+		mockFlowClient := new(mocks.MockAccessClient)
+		blockchainAPI = api.NewBlockChainAPI(config, store, mockFlowClient)
+
+		result, err := cadence.NewUFix64("1500.0")
+		require.NoError(t, err)
+		mockFlowClient.On("ExecuteScriptAtLatestBlock", mock.Anything, mock.Anything, mock.Anything).Return(result, nil)
+
 		key, _ := crypto.GenerateKey()
 		addr := crypto.PubkeyToAddress(key.PublicKey)
 		balance, err := blockchainAPI.GetBalance(
@@ -207,7 +214,7 @@ func TestBlockChainAPI(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		assert.Equal(t, balance, (*hexutil.Big)(big.NewInt(101)))
+		assert.Equal(t, balance, (*hexutil.Big)(big.NewInt(150000000000)))
 	})
 
 	t.Run("GetProof", func(t *testing.T) {

@@ -136,7 +136,12 @@ func TestServerJSONRPCOveHTTPHandler(t *testing.T) {
 		returnValue := cadence.NewArray(
 			toBytes,
 		).WithType(cadence.NewVariableSizedArrayType(cadence.TheUInt8Type))
-		mockFlowClient.On("ExecuteScriptAtLatestBlock", mock.Anything, mock.Anything, mock.Anything).Return(returnValue, nil)
+		mockFlowClient.On(
+			"ExecuteScriptAtLatestBlock",
+			mock.Anything,
+			api.BridgedAccountCall,
+			mock.Anything,
+		).Once().Return(returnValue, nil)
 
 		blockchainAPI = api.NewBlockChainAPI(config, store, mockFlowClient)
 
@@ -212,6 +217,30 @@ func TestServerJSONRPCOveHTTPHandler(t *testing.T) {
 
 		err := store.StoreTransaction(context.Background(), event)
 		require.NoError(t, err)
+
+		resp := rpcRequest(url, request, "origin", "test.com")
+		defer resp.Body.Close()
+
+		content, err := io.ReadAll(resp.Body)
+		if err != nil {
+			panic(err)
+		}
+
+		assert.Equal(t, expectedResponse, strings.TrimSuffix(string(content), "\n"))
+	})
+
+	t.Run("eth_getBalance", func(t *testing.T) {
+		request := `{"jsonrpc":"2.0","id":1,"method":"eth_getBalance","params":["0x407d73d8a49eeb85d32cf465507dd71d507100c1","latest"]}`
+		expectedResponse := `{"jsonrpc":"2.0","id":1,"result":"0x22ecb25c00"}`
+
+		result, err := cadence.NewUFix64("1500.0")
+		require.NoError(t, err)
+		mockFlowClient.On(
+			"ExecuteScriptAtLatestBlock",
+			mock.Anything,
+			api.EVMAddressBalance,
+			mock.Anything,
+		).Once().Return(result, nil)
 
 		resp := rpcRequest(url, request, "origin", "test.com")
 		defer resp.Body.Close()
