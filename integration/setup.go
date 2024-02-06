@@ -37,7 +37,7 @@ func startEmulator() (*server.EmulatorServer, error) {
 		GenesisTokenSupply: 10000,
 		EVMEnabled:         true,
 		WithContracts:      true,
-		Host:               "127.0.0.1",
+		Host:               "localhost",
 	})
 
 	go func() {
@@ -55,7 +55,7 @@ func startEmulator() (*server.EmulatorServer, error) {
 // todo for now we return index storage as a way to check the data if it was correctly
 // indexed this will be in future replaced with evm gateway API access
 func startEventIngestionEngine(ctx context.Context) (storage.BlockIndexer, storage.ReceiptIndexer, storage.TransactionIndexer, error) {
-	client, err := grpc.NewClient("127.0.0.1:3569")
+	client, err := grpc.NewClient("localhost:3569")
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -87,44 +87,57 @@ func startEventIngestionEngine(ctx context.Context) (storage.BlockIndexer, stora
 
 // sendTransaction sends an evm transaction to the emulator, the code provided doesn't
 // have to import EVM, this will be handled by this helper function.
-func sendTransaction(emu emulator.Emulator, code string, args ...cadence.Value) error {
+func sendTransaction(emu emulator.Emulator, code string, args ...cadence.Value) (*sdk.TransactionResult, error) {
 	key := emu.ServiceKey()
 
 	codeWrapper := []byte(fmt.Sprintf(`
 		import EVM from %s
+		import FungibleToken from 0xee82856bf20e2aa6
+		import FlowToken from 0x0ae53cb6e3f42a79
 
 		%s`,
 		key.Address.HexWithPrefix(),
 		code,
 	))
 
-	log := logger.With().Str("component", "adapter").Logger().Level(zerolog.InfoLevel)
+	log := logger.With().Str("component", "adapter").Logger().Level(zerolog.DebugLevel)
 	adapter := adapters.NewSDKAdapter(&log, emu)
 
 	tx := sdk.NewTransaction().
 		SetScript(codeWrapper).
 		SetComputeLimit(flow.DefaultMaxTransactionGasLimit).
 		SetProposalKey(key.Address, key.Index, key.SequenceNumber).
-		SetPayer(key.Address)
+		SetPayer(key.Address).
+		AddAuthorizer(key.Address)
 
 	for _, arg := range args {
 		err := tx.AddArgument(arg)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
 	signer, err := key.Signer()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	err = tx.SignEnvelope(key.Address, key.Index, signer)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return adapter.SendTransaction(context.Background(), *tx)
+	err = adapter.SendTransaction(context.Background(), *tx)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := adapter.GetTransactionResult(context.Background(), tx.ID())
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
 }
 
 func sendRawEVMTransaction() {
