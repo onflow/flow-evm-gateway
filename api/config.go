@@ -15,4 +15,5 @@ import (
 type Config struct {
 	ChainID  *big.Int
 	Coinbase common.Address
+	GasPrice *big.Int
 }

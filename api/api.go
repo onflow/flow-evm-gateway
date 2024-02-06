@@ -25,7 +25,7 @@ import (
 )
 
 const EthNamespace = "eth"
-const defaultGasPrice = 8049999872
+const DefaultGasPrice = 8049999872
 
 // TODO: Fetch these from flow-go/fvm/evm/emulator/config.go
 var (
@@ -211,7 +211,7 @@ func (s *BlockChainAPI) FeeHistory(
 // eth_gasPrice (returns the gas price)
 // GasPrice returns a suggestion for a gas price for legacy transactions.
 func (s *BlockChainAPI) GasPrice(ctx context.Context) (*hexutil.Big, error) {
-	return (*hexutil.Big)(big.NewInt(defaultGasPrice)), nil
+	return (*hexutil.Big)(s.config.GasPrice), nil
 }
 
 // eth_maxPriorityFeePerGas

@@ -6,6 +6,7 @@ import (
 	_ "embed"
 	"encoding/hex"
 	"io"
+	"math/big"
 	"net/http"
 	"strings"
 	"testing"
@@ -40,6 +41,7 @@ func TestServerJSONRPCOveHTTPHandler(t *testing.T) {
 	config := &api.Config{
 		ChainID:  api.FlowEVMTestnetChainID,
 		Coinbase: common.HexToAddress("0xf02c1c8e6114b1dbe8937a39260b5b0a374432bb"),
+		GasPrice: big.NewInt(api.DefaultGasPrice),
 	}
 	blockchainAPI := api.NewBlockChainAPI(config, store, mockFlowClient)
 	supportedAPIs := api.SupportedAPIs(blockchainAPI)
@@ -230,6 +232,7 @@ func TestServerJSONRPCOveWebSocketHandler(t *testing.T) {
 	config := &api.Config{
 		ChainID:  api.FlowEVMTestnetChainID,
 		Coinbase: common.HexToAddress("0xf02c1c8e6114b1dbe8937a39260b5b0a374432bb"),
+		GasPrice: big.NewInt(api.DefaultGasPrice),
 	}
 	flowClient, err := api.NewFlowClient(grpc.EmulatorHost)
 	require.NoError(t, err)
