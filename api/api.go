@@ -25,7 +25,6 @@ import (
 )
 
 const EthNamespace = "eth"
-const DefaultGasPrice = 8049999872
 
 // TODO: Fetch these from flow-go/fvm/evm/emulator/config.go
 var (

@@ -38,7 +38,7 @@ func main() {
 
 	flag.StringVar(&network, "network", "testnet", "network to connect the gateway to")
 	flag.StringVar(&coinbase, "coinbase", coinbaseAddr, "coinbase address to use for fee collection")
-	flag.Int64Var(&gasPrice, "gasPrice", api.DefaultGasPrice, "gas price for transactions")
+	flag.Int64Var(&gasPrice, "gasPrice", api.DefaultGasPrice.Int64(), "gas price for transactions")
 	flag.Parse()
 
 	config := &api.Config{
