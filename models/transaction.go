@@ -38,18 +38,18 @@ func DecodeReceipt(event cadence.Event) (*gethTypes.Receipt, error) {
 	var tx txEventPayload
 	err := cadence.DecodeFields(event, &tx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to cadence decode receipt: %w", err)
 	}
 
 	encLogs, err := hex.DecodeString(tx.Logs)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to hex decode receipt: %w", err)
 	}
 
 	var logs []*gethTypes.Log
 	err = rlp.Decode(bytes.NewReader(encLogs), &logs)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to rlp decode receipt: %w", err)
 	}
 
 	receipt := &gethTypes.Receipt{
@@ -86,18 +86,18 @@ func DecodeTransaction(event cadence.Event) (*gethTypes.Transaction, error) {
 	var t txEventPayload
 	err := cadence.DecodeFields(event, &t)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to cadence decode transaction: %w", err)
 	}
 
 	encTx, err := hex.DecodeString(t.Transaction)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to decode transaction hex: %w", err)
 	}
 
 	tx := gethTypes.Transaction{}
 	err = tx.DecodeRLP(rlp.NewStream(bytes.NewReader(encTx), uint64(len(encTx))))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to rlp decode transaction: %w", err)
 	}
 
 	return &tx, nil
