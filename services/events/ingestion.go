@@ -122,6 +122,10 @@ func (e *EventIngestionEngine) Start(ctx context.Context) error {
 
 // processEvents iterates all the events and decides based on the type how to process them.
 func (e *EventIngestionEngine) processEvents(events flow.BlockEvents) error {
+	e.logs.Debug().
+		Uint64("height", events.Height).
+		Int("event length", len(events.Events)).
+		Msg("received new events")
 
 	for _, event := range events.Events {
 		if models.IsBlockExecutedEvent(event.Value) {
