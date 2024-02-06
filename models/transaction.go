@@ -47,9 +47,11 @@ func DecodeReceipt(event cadence.Event) (*gethTypes.Receipt, error) {
 	}
 
 	var logs []*gethTypes.Log
-	err = rlp.Decode(bytes.NewReader(encLogs), &logs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to rlp decode receipt: %w", err)
+	if len(encLogs) > 0 {
+		err = rlp.Decode(bytes.NewReader(encLogs), &logs)
+		if err != nil {
+			return nil, fmt.Errorf("failed to rlp decode receipt: %w", err)
+		}
 	}
 
 	receipt := &gethTypes.Receipt{
@@ -92,6 +94,19 @@ func DecodeTransaction(event cadence.Event) (*gethTypes.Transaction, error) {
 	encTx, err := hex.DecodeString(t.Transaction)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode transaction hex: %w", err)
+	}
+
+	// check if the transaction data is actually from a direct call, which is a special flow/evm state transition
+	if encTx[0] == types.DirectCallTxType {
+		var direct types.DirectCall
+		err = rlp.DecodeBytes(encTx[1:], &direct) // strip type from data before rlp decoding
+		if err != nil {
+			return nil, fmt.Errorf("failed to rlp decode transaction direct call: %w", err)
+		}
+
+		// convert message to transaction
+		msg := direct.Message()
+		return gethTypes.NewTransaction(msg.Nonce, *msg.To, msg.Value, msg.GasLimit, msg.GasPrice, msg.Data), nil
 	}
 
 	tx := gethTypes.Transaction{}
