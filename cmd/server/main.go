@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"math/big"
 	"runtime"
 	"time"
 
@@ -33,13 +34,17 @@ var evmEventTypes = []string{
 
 func main() {
 	var network, coinbase string
+	var gasPrice int64
 
 	flag.StringVar(&network, "network", "testnet", "network to connect the gateway to")
 	flag.StringVar(&coinbase, "coinbase", coinbaseAddr, "coinbase address to use for fee collection")
+	flag.Int64Var(&gasPrice, "gasPrice", api.DefaultGasPrice.Int64(), "gas price for transactions")
 	flag.Parse()
 
-	config := &api.Config{}
-	config.Coinbase = common.HexToAddress(coinbase)
+	config := &api.Config{
+		Coinbase: common.HexToAddress(coinbase),
+		GasPrice: big.NewInt(gasPrice),
+	}
 	if network == "testnet" {
 		config.ChainID = api.FlowEVMTestnetChainID
 	} else if network == "mainnet" {

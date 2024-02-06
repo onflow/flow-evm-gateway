@@ -177,10 +177,17 @@ func TestBlockChainAPI(t *testing.T) {
 	})
 
 	t.Run("GasPrice", func(t *testing.T) {
+		config := &api.Config{
+			ChainID:  api.FlowEVMTestnetChainID,
+			Coinbase: common.HexToAddress("0xf02c1c8e6114b1dbe8937a39260b5b0a374432bb"),
+			GasPrice: big.NewInt(5049999872),
+		}
+		blockchainAPI := api.NewBlockChainAPI(config, store, flowClient)
+
 		gasPrice, err := blockchainAPI.GasPrice(context.Background())
 		require.NoError(t, err)
 
-		assert.Equal(t, gasPrice, (*hexutil.Big)(big.NewInt(8049999872)))
+		assert.Equal(t, gasPrice, (*hexutil.Big)(big.NewInt(5049999872)))
 	})
 
 	t.Run("MaxPriorityFeePerGas", func(t *testing.T) {
