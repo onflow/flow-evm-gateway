@@ -1,0 +1,83 @@
+name: "Deploy EVM Gateway to Cloud Run"
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  DOCKER_IMAGE_URL: ${{ vars.GCP_DOCKER_IMAGE_URL }}:${{ github.sha }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Google auth
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          token_format: 'access_token'
+          workload_identity_provider: ${{ vars.BUILDER_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.BUILDER_SERVICE_ACCOUNT }}
+      
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ vars.GAR_PROJECT_ID }}
+      
+      - name: Docker Auth
+        run: |-
+          gcloud auth configure-docker ${{ vars.GAR_LOCATION }}-docker.pkg.dev
+          docker build -t ${{ env.DOCKER_IMAGE_URL }} --file Dockerfile .
+          docker push ${{ env.DOCKER_IMAGE_URL }}
+      
+  deploy-staging:
+    needs: [build]
+    environment: staging
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Google auth
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          token_format: 'access_token'
+          workload_identity_provider: ${{ vars.DEPLOYER_GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.DEPLOYER_SERVICE_ACCOUNT }}
+      - name: Deploy EVM Gateway to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v1
+        with:
+          service: ${{ vars.GCP_SERVICE }}
+          image: ${{ env.DOCKER_IMAGE_URL }}
+
+  deploy-production:
+    needs: [build]
+    environment: production
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Google auth
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          token_format: 'access_token'
+          workload_identity_provider: ${{ vars.DEPLOYER_GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.DEPLOYER_SERVICE_ACCOUNT }}
+      - name: Deploy EVM Gateway to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v1
+        with:
+          service: ${{ vars.GCP_SERVICE }}
+          image: ${{ env.DOCKER_IMAGE_URL }}
