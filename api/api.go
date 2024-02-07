@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
-	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -20,8 +19,7 @@ import (
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access"
-
-	sdkCrypto "github.com/onflow/flow-go-sdk/crypto"
+	"github.com/onflow/flow-go-sdk/crypto"
 )
 
 const EthNamespace = "eth"
@@ -109,36 +107,32 @@ func (api *BlockChainAPI) SendRawTransaction(
 	ctx context.Context,
 	input hexutil.Bytes,
 ) (common.Hash, error) {
-	gethTx := &types.Transaction{}
-	encodedLen := uint(len(input))
-	err := gethTx.DecodeRLP(
-		rlp.NewStream(
-			bytes.NewReader(input),
-			uint64(encodedLen),
-		),
-	)
+	gethTx, err := GethTxFromBytes(input)
 	if err != nil {
 		return common.Hash{}, err
 	}
 
-	block, err := api.FlowClient.GetLatestBlock(context.Background(), true)
+	latestBlock, err := api.FlowClient.GetLatestBlock(ctx, true)
 	if err != nil {
 		return common.Hash{}, err
 	}
 
 	// TODO(m-Peter): Fetch the private key from a dedicated flow.json config file
-	privateKey, err := sdkCrypto.DecodePrivateKeyHex(sdkCrypto.ECDSA_P256, strings.Replace("2619878f0e2ff438d17835c2a4561cb87b4d24d72d12ec34569acd0dd4af7c21", "0x", "", 1))
+	privateKey, err := crypto.DecodePrivateKeyHex(
+		crypto.ECDSA_P256,
+		"2619878f0e2ff438d17835c2a4561cb87b4d24d72d12ec34569acd0dd4af7c21",
+	)
 	if err != nil {
 		return common.Hash{}, err
 	}
 
-	// // TODO(m-Peter): Fetch the address from a dedicated flow.json config file
-	account, err := api.FlowClient.GetAccount(context.Background(), flow.HexToAddress("0xf8d6e0586b0a20c7"))
+	// TODO(m-Peter): Fetch the address from a dedicated flow.json config file
+	account, err := api.FlowClient.GetAccount(ctx, flow.HexToAddress("0xf8d6e0586b0a20c7"))
 	if err != nil {
 		return common.Hash{}, err
 	}
 	accountKey := account.Keys[0]
-	signer, err := sdkCrypto.NewInMemorySigner(privateKey, accountKey.HashAlgo)
+	signer, err := crypto.NewInMemorySigner(privateKey, accountKey.HashAlgo)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -146,22 +140,12 @@ func (api *BlockChainAPI) SendRawTransaction(
 	tx := flow.NewTransaction().
 		SetScript(EVMRunTx).
 		SetProposalKey(account.Address, accountKey.Index, accountKey.SequenceNumber).
-		SetReferenceBlockID(block.ID).
+		SetReferenceBlockID(latestBlock.ID).
 		SetPayer(account.Address).
 		AddAuthorizer(account.Address)
 
-	decodedTx, err := hex.DecodeString(input.String()[2:])
-	if err != nil {
-		return common.Hash{}, err
-	}
-	cdcBytes := make([]cadence.Value, 0)
-	for _, bt := range decodedTx {
-		cdcBytes = append(cdcBytes, cadence.UInt8(bt))
-	}
-	encodedTx := cadence.NewArray(
-		cdcBytes,
-	).WithType(cadence.NewVariableSizedArrayType(cadence.TheUInt8Type))
-	tx.AddArgument(encodedTx)
+	txArgument := CadenceByteArrayFromBytes(input)
+	tx.AddArgument(txArgument)
 
 	err = tx.SignEnvelope(account.Address, accountKey.Index, signer)
 	if err != nil {
@@ -231,14 +215,7 @@ func (s *BlockChainAPI) GetBalance(
 	address common.Address,
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (*hexutil.Big, error) {
-	addressBytes := make([]cadence.Value, 0)
-	for _, bt := range address.Bytes() {
-		addressBytes = append(addressBytes, cadence.UInt8(bt))
-	}
-	evmAddress := cadence.NewArray(
-		addressBytes,
-	).WithType(cadence.NewConstantSizedArrayType(20, cadence.TheUInt8Type))
-
+	evmAddress := CadenceEVMAddressFromBytes(address.Bytes())
 	value, err := s.FlowClient.ExecuteScriptAtLatestBlock(
 		ctx,
 		EVMAddressBalance,
@@ -308,7 +285,7 @@ func (s *BlockChainAPI) GetTransactionCount(
 	address common.Address,
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (*hexutil.Uint64, error) {
-	nonce := s.Store.GetAccountNonce(context.Background(), address)
+	nonce := s.Store.GetAccountNonce(ctx, address)
 	return (*hexutil.Uint64)(&nonce), nil
 }
 
@@ -323,18 +300,11 @@ func (b *BlockChainAPI) GetTransactionByHash(
 		return nil, err
 	}
 
-	decodedTx, err := hex.DecodeString(txPayload.Transaction)
+	txBytes, err := hex.DecodeString(txPayload.Transaction)
 	if err != nil {
 		return nil, err
 	}
-	tx := &types.Transaction{}
-	encodedLen := uint(len(txPayload.Transaction))
-	err = tx.DecodeRLP(
-		rlp.NewStream(
-			bytes.NewReader(decodedTx),
-			uint64(encodedLen),
-		),
-	)
+	gethTx, err := GethTxFromBytes(txBytes)
 	if err != nil {
 		return nil, err
 	}
@@ -342,21 +312,21 @@ func (b *BlockChainAPI) GetTransactionByHash(
 	// TODO(m-Peter): Add BlockHash to storage
 	blockHash := common.HexToHash("0x1d59ff54b1eb26b013ce3cb5fc9dab3705b415a67127a003c3e61eb445bb8df2")
 	index := uint64(0)
-	v, r, s := tx.RawSignatureValues()
+	v, r, s := gethTx.RawSignatureValues()
 
 	txResult := &RPCTransaction{
 		BlockHash:        (*common.Hash)(&blockHash),
 		BlockNumber:      (*hexutil.Big)(big.NewInt(int64(txPayload.BlockHeight))),
 		From:             common.HexToAddress("0xa7d9ddbe1f17865597fbd27ec712455208b6b76d"),
 		Gas:              hexutil.Uint64(txPayload.GasConsumed),
-		GasPrice:         (*hexutil.Big)(tx.GasPrice()),
-		Hash:             tx.Hash(),
-		Input:            hexutil.Bytes(tx.Data()),
-		Nonce:            hexutil.Uint64(tx.Nonce()),
-		To:               tx.To(),
+		GasPrice:         (*hexutil.Big)(gethTx.GasPrice()),
+		Hash:             gethTx.Hash(),
+		Input:            hexutil.Bytes(gethTx.Data()),
+		Nonce:            hexutil.Uint64(gethTx.Nonce()),
+		To:               gethTx.To(),
 		TransactionIndex: (*hexutil.Uint64)(&index),
-		Value:            (*hexutil.Big)(tx.Value()),
-		Type:             hexutil.Uint64(uint64(tx.Type())),
+		Value:            (*hexutil.Big)(gethTx.Value()),
+		Type:             hexutil.Uint64(uint64(gethTx.Type())),
 		V:                (*hexutil.Big)(v),
 		R:                (*hexutil.Big)(r),
 		S:                (*hexutil.Big)(s),
@@ -465,27 +435,20 @@ func (s *BlockChainAPI) GetTransactionReceipt(
 	receipt["logs"] = logs
 	receipt["logsBloom"] = hexutil.Bytes(types.LogsBloom(logs))
 
-	decodedTx, err := hex.DecodeString(txReceipt.Transaction)
+	txBytes, err := hex.DecodeString(txReceipt.Transaction)
 	if err != nil {
 		return receipt, err
 	}
-	tx := &types.Transaction{}
-	encodedLen := uint(len(txReceipt.Transaction))
-	err = tx.DecodeRLP(
-		rlp.NewStream(
-			bytes.NewReader(decodedTx),
-			uint64(encodedLen),
-		),
-	)
+	gethTx, err := GethTxFromBytes(txBytes)
 	if err != nil {
 		return receipt, err
 	}
-	from, err := types.Sender(types.LatestSignerForChainID(tx.ChainId()), tx)
+	from, err := types.Sender(types.LatestSignerForChainID(gethTx.ChainId()), gethTx)
 	if err != nil {
 		return receipt, err
 	}
 	receipt["from"] = from
-	receipt["to"] = tx.To()
+	receipt["to"] = gethTx.To()
 
 	txIndex := uint64(0)
 	receipt["transactionIndex"] = (*hexutil.Uint64)(&txIndex)
@@ -794,34 +757,17 @@ func (s *BlockChainAPI) Call(
 	overrides *StateOverride,
 	blockOverrides *BlockOverrides,
 ) (hexutil.Bytes, error) {
-	decodedTx, err := hex.DecodeString(args.Input.String()[2:])
+	txBytes, err := hex.DecodeString(args.Input.String()[2:])
 	if err != nil {
 		return hexutil.Bytes{}, err
 	}
-	cdcBytes := make([]cadence.Value, 0)
-	for _, bt := range decodedTx {
-		cdcBytes = append(cdcBytes, cadence.UInt8(bt))
-	}
-	encodedTx := cadence.NewArray(
-		cdcBytes,
-	).WithType(cadence.NewVariableSizedArrayType(cadence.TheUInt8Type))
-
-	decodedTo, err := hex.DecodeString(args.To.String()[2:])
-	if err != nil {
-		return hexutil.Bytes{}, err
-	}
-	toBytes := make([]cadence.Value, 0)
-	for _, bt := range decodedTo {
-		toBytes = append(toBytes, cadence.UInt8(bt))
-	}
-	encodedTo := cadence.NewArray(
-		toBytes,
-	).WithType(cadence.NewConstantSizedArrayType(20, cadence.TheUInt8Type))
+	txData := CadenceByteArrayFromBytes(txBytes)
+	toAddress := CadenceEVMAddressFromBytes(args.To.Bytes())
 
 	value, err := s.FlowClient.ExecuteScriptAtLatestBlock(
 		ctx,
 		BridgedAccountCall,
-		[]cadence.Value{encodedTx, encodedTo},
+		[]cadence.Value{txData, toAddress},
 	)
 	if err != nil {
 		return hexutil.Bytes{}, err
