@@ -1,8 +1,14 @@
 package integration
 
 import (
+	"bytes"
 	"context"
+	"crypto/ecdsa"
+	"encoding/hex"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-emulator/adapters"
 	"github.com/onflow/flow-emulator/emulator"
@@ -13,9 +19,12 @@ import (
 	sdk "github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/onflow/flow-go-sdk/crypto"
+	evmEmulator "github.com/onflow/flow-go/fvm/evm/emulator"
+	"github.com/onflow/flow-go/fvm/evm/stdlib"
 	"github.com/onflow/flow-go/fvm/systemcontracts"
 	"github.com/onflow/flow-go/model/flow"
 	"github.com/rs/zerolog"
+	"math/big"
 	"os"
 	"time"
 )
@@ -23,6 +32,7 @@ import (
 const testPrivateKey = "61ceacbdce419e25ee8e7c2beceee170a05c9cab1e725a955b15ba94dcd747d2"
 
 var (
+	toWei  = big.NewInt(10000000000)
 	logger = zerolog.New(os.Stdout)
 	sc     = systemcontracts.SystemContractsForChain(flow.Emulator)
 )
@@ -63,7 +73,12 @@ func startEmulator() (*server.EmulatorServer, error) {
 // listening for events.
 // todo for now we return index storage as a way to check the data if it was correctly
 // indexed this will be in future replaced with evm gateway API access
-func startEventIngestionEngine(ctx context.Context) (storage.BlockIndexer, storage.ReceiptIndexer, storage.TransactionIndexer, error) {
+func startEventIngestionEngine(ctx context.Context) (
+	storage.BlockIndexer,
+	storage.ReceiptIndexer,
+	storage.TransactionIndexer,
+	error,
+) {
 	client, err := grpc.NewClient("localhost:3569")
 	if err != nil {
 		return nil, nil, nil, err
@@ -94,9 +109,57 @@ func startEventIngestionEngine(ctx context.Context) (storage.BlockIndexer, stora
 	return blocks, receipts, txs, err
 }
 
-// sendTransaction sends an evm transaction to the emulator, the code provided doesn't
+// fundEOA funds an evm account provided with the amount.
+func fundEOA(
+	emu emulator.Emulator,
+	flowAmount cadence.UFix64,
+	eoaAddress common.Address,
+) (*sdk.TransactionResult, error) {
+	// create a new funded COA and fund an EOA to be used for in tests
+	code := `
+	transaction(amount: UFix64, eoaAddress: [UInt8; 20]) {
+		let fundVault: @FlowToken.Vault
+	
+		prepare(signer: auth(Storage) &Account) {
+			let vaultRef = signer.storage.borrow<auth(FungibleToken.Withdraw) &FlowToken.Vault>(from: /storage/flowTokenVault)
+				?? panic("Could not borrow reference to the owner's Vault!")
+	
+			self.fundVault <- vaultRef.withdraw(amount: amount) as! @FlowToken.Vault
+		}
+	
+		execute {
+			let acc <- EVM.createBridgedAccount()
+			acc.deposit(from: <-self.fundVault)
+
+			let transferValue = amount - 1.0
+
+			let result = acc.call(
+				to: EVM.EVMAddress(bytes: eoaAddress), 
+				data: [], 
+				gasLimit: 300000, 
+				value: EVM.Balance(flow: transferValue)
+			)
+			
+			log(result)
+			destroy acc
+		}
+	}`
+
+	eoaBytes, err := evmHexToCadenceBytes(eoaAddress.Hex())
+	if err != nil {
+		return nil, err
+	}
+
+	return flowSendTransaction(emu, code, flowAmount, eoaBytes)
+}
+
+// flowSendTransaction sends an evm transaction to the emulator, the code provided doesn't
 // have to import EVM, this will be handled by this helper function.
-func flowSendTransaction(emu emulator.Emulator, code string, args ...cadence.Value) (*sdk.TransactionResult, error) {
+func flowSendTransaction(
+	emu emulator.Emulator,
+	code string,
+	args ...cadence.Value,
+) (*sdk.TransactionResult, error) {
 	key := emu.ServiceKey()
 
 	codeWrapper := []byte(fmt.Sprintf(`
@@ -151,6 +214,62 @@ func flowSendTransaction(emu emulator.Emulator, code string, args ...cadence.Val
 	return res, nil
 }
 
-func sendRawEVMTransaction() {
+// evmTransferValue creates an evm transaction and signs it producing a payload that send using the evmRunTransaction.
+func evmTransferValue(
+	emu emulator.Emulator,
+	flowAmount *big.Int,
+	signer *ecdsa.PrivateKey,
+	to common.Address,
+) (*sdk.TransactionResult, error) {
+	gasPrice := big.NewInt(0)
+	weiAmount := flowAmount.Mul(flowAmount, toWei)
+	nonce := uint64(1)
 
+	evmTx := types.NewTx(&types.LegacyTx{Nonce: nonce, To: &to, Value: weiAmount, Gas: params.TxGas, GasPrice: gasPrice, Data: nil})
+
+	signed, err := types.SignTx(evmTx, evmEmulator.GetDefaultSigner(), signer)
+	if err != nil {
+		return nil, fmt.Errorf("error signing EVM transaction: %w", err)
+	}
+	var encoded bytes.Buffer
+	err = signed.EncodeRLP(&encoded)
+	if err != nil {
+		return nil, fmt.Errorf("error encoding EVM transaction: %w", err)
+	}
+
+	return evmRunTransaction(emu, encoded.Bytes())
+}
+
+// evmRunTransaction calls the evm run method with the provided evm signed transaction payload.
+func evmRunTransaction(emu emulator.Emulator, signedTx []byte) (*sdk.TransactionResult, error) {
+	encodedCadence := make([]cadence.Value, 0)
+	for _, b := range signedTx {
+		encodedCadence = append(encodedCadence, cadence.UInt8(b))
+	}
+	transactionBytes := cadence.NewArray(encodedCadence).WithType(stdlib.EVMTransactionBytesCadenceType)
+
+	code := `
+	transaction(encodedTx: [UInt8]) {
+		execute {
+			let feeAcc <- EVM.createBridgedAccount()
+			EVM.run(tx: encodedTx, coinbase: feeAcc.address())
+			destroy feeAcc
+		}
+	}`
+
+	return flowSendTransaction(emu, code, transactionBytes)
+}
+
+// evmHexToString takes an evm address as string and convert it to cadence byte array
+func evmHexToCadenceBytes(address string) (cadence.Array, error) {
+	data, err := hex.DecodeString(address)
+	if err != nil {
+		return cadence.NewArray(nil), err
+	}
+
+	res := make([]cadence.Value, 0)
+	for _, d := range data {
+		res = append(res, cadence.UInt8(d))
+	}
+	return cadence.NewArray(res), nil
 }
