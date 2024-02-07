@@ -13,6 +13,7 @@ import (
 	sdk "github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/onflow/flow-go-sdk/crypto"
+	"github.com/onflow/flow-go/fvm/systemcontracts"
 	"github.com/onflow/flow-go/model/flow"
 	"github.com/rs/zerolog"
 	"os"
@@ -21,10 +22,18 @@ import (
 
 const testPrivateKey = "61ceacbdce419e25ee8e7c2beceee170a05c9cab1e725a955b15ba94dcd747d2"
 
-var logger = zerolog.New(os.Stdout)
+var (
+	logger = zerolog.New(os.Stdout)
+	sc     = systemcontracts.SystemContractsForChain(flow.Emulator)
+)
 
 func startEmulator() (*server.EmulatorServer, error) {
 	pkey, err := crypto.DecodePrivateKeyHex(crypto.ECDSA_P256, testPrivateKey)
+	if err != nil {
+		return nil, err
+	}
+
+	genesisToken, err := cadence.NewUFix64("10000.0")
 	if err != nil {
 		return nil, err
 	}
@@ -34,7 +43,7 @@ func startEmulator() (*server.EmulatorServer, error) {
 		ServicePrivateKey:  pkey,
 		ServiceKeySigAlgo:  crypto.ECDSA_P256,
 		ServiceKeyHashAlgo: crypto.SHA3_256,
-		GenesisTokenSupply: 10000,
+		GenesisTokenSupply: genesisToken,
 		EVMEnabled:         true,
 		WithContracts:      true,
 		Host:               "localhost",
@@ -87,16 +96,18 @@ func startEventIngestionEngine(ctx context.Context) (storage.BlockIndexer, stora
 
 // sendTransaction sends an evm transaction to the emulator, the code provided doesn't
 // have to import EVM, this will be handled by this helper function.
-func sendTransaction(emu emulator.Emulator, code string, args ...cadence.Value) (*sdk.TransactionResult, error) {
+func flowSendTransaction(emu emulator.Emulator, code string, args ...cadence.Value) (*sdk.TransactionResult, error) {
 	key := emu.ServiceKey()
 
 	codeWrapper := []byte(fmt.Sprintf(`
 		import EVM from %s
-		import FungibleToken from 0xee82856bf20e2aa6
-		import FlowToken from 0x0ae53cb6e3f42a79
+		import FungibleToken from %s
+		import FlowToken from %s
 
 		%s`,
-		key.Address.HexWithPrefix(),
+		sc.EVMContract.Address,
+		sc.FungibleToken.Address,
+		sc.FlowToken.Address,
 		code,
 	))
 
