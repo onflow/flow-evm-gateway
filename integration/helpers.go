@@ -26,6 +26,7 @@ import (
 	"github.com/rs/zerolog"
 	"math/big"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -145,7 +146,7 @@ func fundEOA(
 		}
 	}`
 
-	eoaBytes, err := evmHexToCadenceBytes(eoaAddress.Hex())
+	eoaBytes, err := evmHexToCadenceBytes(strings.ReplaceAll(eoaAddress.String(), "0x", ""))
 	if err != nil {
 		return nil, err
 	}
@@ -168,9 +169,9 @@ func flowSendTransaction(
 		import FlowToken from %s
 
 		%s`,
-		sc.EVMContract.Address,
-		sc.FungibleToken.Address,
-		sc.FlowToken.Address,
+		sc.EVMContract.Address.HexWithPrefix(),
+		sc.FungibleToken.Address.HexWithPrefix(),
+		sc.FlowToken.Address.HexWithPrefix(),
 		code,
 	))
 
@@ -222,10 +223,9 @@ func evmTransferValue(
 	to common.Address,
 ) (*sdk.TransactionResult, error) {
 	gasPrice := big.NewInt(0)
-	weiAmount := flowAmount.Mul(flowAmount, toWei)
-	nonce := uint64(1)
+	nonce := uint64(0)
 
-	evmTx := types.NewTx(&types.LegacyTx{Nonce: nonce, To: &to, Value: weiAmount, Gas: params.TxGas, GasPrice: gasPrice, Data: nil})
+	evmTx := types.NewTx(&types.LegacyTx{Nonce: nonce, To: &to, Value: flowAmount, Gas: params.TxGas, GasPrice: gasPrice, Data: nil})
 
 	signed, err := types.SignTx(evmTx, evmEmulator.GetDefaultSigner(), signer)
 	if err != nil {
@@ -250,6 +250,8 @@ func evmRunTransaction(emu emulator.Emulator, signedTx []byte) (*sdk.Transaction
 
 	code := `
 	transaction(encodedTx: [UInt8]) {
+		prepare(signer: auth(Storage) &Account) {}
+
 		execute {
 			let feeAcc <- EVM.createBridgedAccount()
 			EVM.run(tx: encodedTx, coinbase: feeAcc.address())
@@ -272,4 +274,9 @@ func evmHexToCadenceBytes(address string) (cadence.Array, error) {
 		res = append(res, cadence.UInt8(d))
 	}
 	return cadence.NewArray(res), nil
+}
+
+// todo use types.NewBalanceFromUFix64(evmAmount) when flow-go updated
+func flowToWei(flow int64) *big.Int {
+	return new(big.Int).Mul(big.NewInt(flow), toWei)
 }
