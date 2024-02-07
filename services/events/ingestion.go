@@ -123,9 +123,9 @@ func (e *EventIngestionEngine) Start(ctx context.Context) error {
 // processEvents iterates all the events and decides based on the type how to process them.
 func (e *EventIngestionEngine) processEvents(events flow.BlockEvents) error {
 	e.logs.Debug().
-		Uint64("height", events.Height).
-		Int("event length", len(events.Events)).
-		Msg("received new events")
+		Uint64("cadence height", events.Height).
+		Int("cadence event length", len(events.Events)).
+		Msg("received new cadence evm events")
 
 	for _, event := range events.Events {
 		if models.IsBlockExecutedEvent(event.Value) {
@@ -153,9 +153,9 @@ func (e *EventIngestionEngine) processBlockEvent(event cadence.Event) error {
 	}
 
 	e.logs.Info().
-		Uint64("height", block.Height).
+		Uint64("evm height", block.Height).
 		Str("parent hash", block.ParentBlockHash.String()).
-		Msg("ingesting new block executed event")
+		Msg("new evm block executed event")
 
 	if err = e.lastHeight.Increment(block.Height); err != nil {
 		return fmt.Errorf("invalid block height, expected %d, got %d: %w", e.lastHeight.Load(), block.Height, err)
@@ -168,6 +168,12 @@ func (e *EventIngestionEngine) processTransactionEvent(event cadence.Event) erro
 	tx, err := models.DecodeTransaction(event)
 	if err != nil {
 		return err
+	}
+
+	// in case we have a direct call transaction we ignore it for now
+	// todo support indexing of direct calls
+	if tx == nil {
+		return nil
 	}
 
 	receipt, err := models.DecodeReceipt(event)

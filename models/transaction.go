@@ -98,15 +98,17 @@ func DecodeTransaction(event cadence.Event) (*gethTypes.Transaction, error) {
 
 	// check if the transaction data is actually from a direct call, which is a special flow/evm state transition
 	if encTx[0] == types.DirectCallTxType {
-		var direct types.DirectCall
-		err = rlp.DecodeBytes(encTx[1:], &direct) // strip type from data before rlp decoding
-		if err != nil {
-			return nil, fmt.Errorf("failed to rlp decode transaction direct call: %w", err)
-		}
-
-		// convert message to transaction
-		msg := direct.Message()
-		return gethTypes.NewTransaction(msg.Nonce, *msg.To, msg.Value, msg.GasLimit, msg.GasPrice, msg.Data), nil
+		// todo(sideninja) support indexing of direct calls in the future
+		// but for now just return nil nil indicating we don't support this
+		// the problem we can't index direct calls as other transactions is that the geth.Transaction
+		// uses geth.TxData for internal representation of a transaction, and although we could
+		// convert direct call to a geth.transaction we would calculate wrong geth.Trasnaction.Hash() of a transaction
+		// compared to evm.DirectCall.Hash(), but further more I don't think evm devs will want to
+		// fetch these state changes made by direct calls since they can not trigger them in the first place.
+		// I believe this direct calls should be indexed solely for purpose of the gateway monitoring of
+		// the state changes (such as balance movements etc), not for the purpose of providing this data
+		// to the APIs.
+		return nil, nil
 	}
 
 	tx := gethTypes.Transaction{}
