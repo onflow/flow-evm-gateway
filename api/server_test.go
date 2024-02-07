@@ -252,6 +252,175 @@ func TestServerJSONRPCOveHTTPHandler(t *testing.T) {
 
 		assert.Equal(t, expectedResponse, strings.TrimSuffix(string(content), "\n"))
 	})
+
+	t.Run("eth_getBlockByHash", func(t *testing.T) {
+		request := `{"jsonrpc":"2.0","id":1,"method":"eth_getBlockByHash","params":["0xf31ee13dad8f38431fd31278b12be62e6b77e6923f0b7a446eb1affb61f21fc9",false]}`
+		expectedResponse := `{"jsonrpc":"2.0","id":1,"result":{"difficulty":"0x4ea3f27bc","extraData":"0x476574682f4c5649562f76312e302e302f6c696e75782f676f312e342e32","gasLimit":"0x1388","gasUsed":"0x0","hash":"0xf31ee13dad8f38431fd31278b12be62e6b77e6923f0b7a446eb1affb61f21fc9","logsBloom":"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","miner":"0xbb7b8287f3f0a933474a79eae42cbca977791171","mixHash":"0x4fffe9ae21f1c9e15207b1f472d5bbdd68c9595d461666602f2be20daf5e7843","nonce":"0x689056015818adbe","number":"0x1","parentHash":"0xe81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421c0","receiptsRoot":"0x0000000000000000000000000000000000000000000000000000000000000000","sha3Uncles":"0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347","size":"0x220","stateRoot":"0xddc8b0234c2e0cad087c8b389aa7ef01f7d79b2570bccb77ce48648aa61c904d","timestamp":"0x55ba467c","totalDifficulty":"0x78ed983323d","transactions":["0xf31ee13dad8f38431fd31278b12be62e6b77e6923f0b7a446eb1affb61f21fc9"],"transactionsRoot":"0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421","uncles":[]}}`
+
+		event := blockExecutedEvent(
+			1,
+			"0xf31ee13dad8f38431fd31278b12be62e6b77e6923f0b7a446eb1affb61f21fc9",
+			7766279631452241920,
+			"0xe81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421c0",
+			"0x0000000000000000000000000000000000000000000000000000000000000000",
+			[]string{"0xf31ee13dad8f38431fd31278b12be62e6b77e6923f0b7a446eb1affb61f21fc9"},
+		)
+		err := store.StoreBlock(context.Background(), event)
+		require.NoError(t, err)
+
+		resp := rpcRequest(url, request, "origin", "test.com")
+		defer resp.Body.Close()
+
+		content, err := io.ReadAll(resp.Body)
+		if err != nil {
+			panic(err)
+		}
+
+		assert.Equal(t, expectedResponse, strings.TrimSuffix(string(content), "\n"))
+	})
+
+	t.Run("eth_getBlockTransactionCountByHash", func(t *testing.T) {
+		request := `{"jsonrpc":"2.0","id":1,"method":"eth_getBlockTransactionCountByHash","params":["0xf31ee13dad8f38431fd31278b12be62e6b77e6923f0b7a446eb1affb61f21fc9"]}`
+		expectedResponse := `{"jsonrpc":"2.0","id":1,"result":"0x2"}`
+
+		event := blockExecutedEvent(
+			1,
+			"0xf31ee13dad8f38431fd31278b12be62e6b77e6923f0b7a446eb1affb61f21fc9",
+			7766279631452241920,
+			"0xe81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421c0",
+			"0x0000000000000000000000000000000000000000000000000000000000000000",
+			[]string{
+				"0xf31ee13dad8f38431fd31278b12be62e6b77e6923f0b7a446eb1affb61f21fc9",
+				"0xf31ee13dad8f38431fd31278b12be62e6b77e6923f0b7a446eb1affb61f21000",
+			},
+		)
+		err := store.StoreBlock(context.Background(), event)
+		require.NoError(t, err)
+
+		resp := rpcRequest(url, request, "origin", "test.com")
+		defer resp.Body.Close()
+
+		content, err := io.ReadAll(resp.Body)
+		if err != nil {
+			panic(err)
+		}
+
+		assert.Equal(t, expectedResponse, strings.TrimSuffix(string(content), "\n"))
+	})
+
+	t.Run("eth_getBlockTransactionCountByNumber", func(t *testing.T) {
+		request := `{"jsonrpc":"2.0","id":1,"method":"eth_getBlockTransactionCountByNumber","params":["0x1"]}`
+		expectedResponse := `{"jsonrpc":"2.0","id":1,"result":"0x3"}`
+
+		event := blockExecutedEvent(
+			1,
+			"0xf31ee13dad8f38431fd31278b12be62e6b77e6923f0b7a446eb1affb61f21fc9",
+			7766279631452241920,
+			"0xe81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421c0",
+			"0x0000000000000000000000000000000000000000000000000000000000000000",
+			[]string{
+				"0xf31ee13dad8f38431fd31278b12be62e6b77e6923f0b7a446eb1affb61f21fc9",
+				"0xf31ee13dad8f38431fd31278b12be62e6b77e6923f0b7a446eb1affb61f21000",
+				"0xf31ee13dad8f38431fd31278b12be62e6b77e6923f0b7a446eb1affb61f21002",
+			},
+		)
+		err := store.StoreBlock(context.Background(), event)
+		require.NoError(t, err)
+
+		resp := rpcRequest(url, request, "origin", "test.com")
+		defer resp.Body.Close()
+
+		content, err := io.ReadAll(resp.Body)
+		if err != nil {
+			panic(err)
+		}
+
+		assert.Equal(t, expectedResponse, strings.TrimSuffix(string(content), "\n"))
+	})
+
+	t.Run("eth_getTransactionByBlockHashAndIndex", func(t *testing.T) {
+		request := `{"jsonrpc":"2.0","id":1,"method":"eth_getTransactionByBlockHashAndIndex","params":["0xaae4530246e61ae58479824ab0863f99ca50414d27aec0c269ae6a7cfc4c7f5b","0x0"]}`
+		expectedResponse := `{"jsonrpc":"2.0","id":1,"result":{"blockHash":"0x1d59ff54b1eb26b013ce3cb5fc9dab3705b415a67127a003c3e61eb445bb8df2","blockNumber":"0x3","from":"0xa7d9ddbe1f17865597fbd27ec712455208b6b76d","gas":"0x57f2","gasPrice":"0x0","hash":"0xb47d74ea64221eb941490bdc0c9a404dacd0a8573379a45c992ac60ee3e83c3c","input":"0xc6888fa10000000000000000000000000000000000000000000000000000000000000006","nonce":"0x1","to":"0x99466ed2e37b892a2ee3e9cd55a98b68f5735db2","transactionIndex":"0x0","value":"0x0","type":"0x2","v":"0x1","r":"0xf84168f821b427dc158c4d8083bdc4b43e178cf0977a2c5eefbcbedcc4e351b0","s":"0x66a747a38c6c266b9dc2136523cef04395918de37773db63d574aabde59c12eb"}}`
+
+		event := transactionExecutedEvent(
+			3,
+			"0xb47d74ea64221eb941490bdc0c9a404dacd0a8573379a45c992ac60ee3e83c3c",
+			"b88c02f88982029a01808083124f809499466ed2e37b892a2ee3e9cd55a98b68f5735db280a4c6888fa10000000000000000000000000000000000000000000000000000000000000006c001a0f84168f821b427dc158c4d8083bdc4b43e178cf0977a2c5eefbcbedcc4e351b0a066a747a38c6c266b9dc2136523cef04395918de37773db63d574aabde59c12eb",
+			false,
+			2,
+			22514,
+			"0000000000000000000000000000000000000000",
+			"000000000000000000000000000000000000000000000000000000000000002a",
+			"f85af8589499466ed2e37b892a2ee3e9cd55a98b68f5735db2e1a024abdb5865df5079dcc5ac590ff6f01d5c16edbc5fab4e195d9febd1114503daa0000000000000000000000000000000000000000000000000000000000000002a",
+		)
+
+		store := blockchainAPI.Store
+		store.StoreTransaction(context.Background(), event)
+
+		event = blockExecutedEvent(
+			3,
+			"0xaae4530246e61ae58479824ab0863f99ca50414d27aec0c269ae6a7cfc4c7f5b",
+			7766279631452241920,
+			"0xf31ee13dad8f38431fd31278b12be62e6b77e6923f0b7a446eb1affb61f21fc9",
+			"0x0000000000000000000000000000000000000000000000000000000000000000",
+			[]string{"0xb47d74ea64221eb941490bdc0c9a404dacd0a8573379a45c992ac60ee3e83c3c"},
+		)
+
+		err = store.StoreBlock(context.Background(), event)
+		require.NoError(t, err)
+
+		resp := rpcRequest(url, request, "origin", "test.com")
+		defer resp.Body.Close()
+
+		content, err := io.ReadAll(resp.Body)
+		if err != nil {
+			panic(err)
+		}
+
+		assert.Equal(t, expectedResponse, strings.TrimSuffix(string(content), "\n"))
+	})
+
+	t.Run("eth_getTransactionByBlockNumberAndIndex", func(t *testing.T) {
+		request := `{"jsonrpc":"2.0","id":1,"method":"eth_getTransactionByBlockNumberAndIndex","params":["0x3","0x0"]}`
+		expectedResponse := `{"jsonrpc":"2.0","id":1,"result":{"blockHash":"0x1d59ff54b1eb26b013ce3cb5fc9dab3705b415a67127a003c3e61eb445bb8df2","blockNumber":"0x3","from":"0xa7d9ddbe1f17865597fbd27ec712455208b6b76d","gas":"0x57f2","gasPrice":"0x0","hash":"0xb47d74ea64221eb941490bdc0c9a404dacd0a8573379a45c992ac60ee3e83c3c","input":"0xc6888fa10000000000000000000000000000000000000000000000000000000000000006","nonce":"0x1","to":"0x99466ed2e37b892a2ee3e9cd55a98b68f5735db2","transactionIndex":"0x0","value":"0x0","type":"0x2","v":"0x1","r":"0xf84168f821b427dc158c4d8083bdc4b43e178cf0977a2c5eefbcbedcc4e351b0","s":"0x66a747a38c6c266b9dc2136523cef04395918de37773db63d574aabde59c12eb"}}`
+
+		event := transactionExecutedEvent(
+			3,
+			"0xb47d74ea64221eb941490bdc0c9a404dacd0a8573379a45c992ac60ee3e83c3c",
+			"b88c02f88982029a01808083124f809499466ed2e37b892a2ee3e9cd55a98b68f5735db280a4c6888fa10000000000000000000000000000000000000000000000000000000000000006c001a0f84168f821b427dc158c4d8083bdc4b43e178cf0977a2c5eefbcbedcc4e351b0a066a747a38c6c266b9dc2136523cef04395918de37773db63d574aabde59c12eb",
+			false,
+			2,
+			22514,
+			"0000000000000000000000000000000000000000",
+			"000000000000000000000000000000000000000000000000000000000000002a",
+			"f85af8589499466ed2e37b892a2ee3e9cd55a98b68f5735db2e1a024abdb5865df5079dcc5ac590ff6f01d5c16edbc5fab4e195d9febd1114503daa0000000000000000000000000000000000000000000000000000000000000002a",
+		)
+
+		store := blockchainAPI.Store
+		store.StoreTransaction(context.Background(), event)
+
+		event = blockExecutedEvent(
+			3,
+			"0xaae4530246e61ae58479824ab0863f99ca50414d27aec0c269ae6a7cfc4c7f5b",
+			7766279631452241920,
+			"0xf31ee13dad8f38431fd31278b12be62e6b77e6923f0b7a446eb1affb61f21fc9",
+			"0x0000000000000000000000000000000000000000000000000000000000000000",
+			[]string{"0xb47d74ea64221eb941490bdc0c9a404dacd0a8573379a45c992ac60ee3e83c3c"},
+		)
+
+		err = store.StoreBlock(context.Background(), event)
+		require.NoError(t, err)
+
+		resp := rpcRequest(url, request, "origin", "test.com")
+		defer resp.Body.Close()
+
+		content, err := io.ReadAll(resp.Body)
+		if err != nil {
+			panic(err)
+		}
+
+		assert.Equal(t, expectedResponse, strings.TrimSuffix(string(content), "\n"))
+	})
 }
 
 func TestServerJSONRPCOveWebSocketHandler(t *testing.T) {
