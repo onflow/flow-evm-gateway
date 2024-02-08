@@ -309,15 +309,23 @@ func (b *BlockChainAPI) GetTransactionByHash(
 		return nil, err
 	}
 
-	// TODO(m-Peter): Add BlockHash to storage
-	blockHash := common.HexToHash("0x1d59ff54b1eb26b013ce3cb5fc9dab3705b415a67127a003c3e61eb445bb8df2")
+	block, err := b.Store.GetBlockByNumber(ctx, txPayload.BlockHeight)
+	if err != nil {
+		return nil, err
+	}
+	blockHash := common.HexToHash(block.Hash)
 	index := uint64(0)
 	v, r, s := gethTx.RawSignatureValues()
+
+	from, err := types.Sender(types.LatestSignerForChainID(gethTx.ChainId()), gethTx)
+	if err != nil {
+		return nil, err
+	}
 
 	txResult := &RPCTransaction{
 		BlockHash:        (*common.Hash)(&blockHash),
 		BlockNumber:      (*hexutil.Big)(big.NewInt(int64(txPayload.BlockHeight))),
-		From:             common.HexToAddress("0xa7d9ddbe1f17865597fbd27ec712455208b6b76d"),
+		From:             from,
 		Gas:              hexutil.Uint64(txPayload.GasConsumed),
 		GasPrice:         (*hexutil.Big)(gethTx.GasPrice()),
 		Hash:             gethTx.Hash(),
@@ -417,15 +425,17 @@ func (s *BlockChainAPI) GetTransactionReceipt(
 	receipt["contractAddress"] = common.HexToAddress(txReceipt.DeployedContractAddress)
 
 	logs := []*types.Log{}
-	decodedLogs, err := hex.DecodeString(txReceipt.Logs)
-	if err != nil {
-		return receipt, err
+	if txReceipt.Logs != "" {
+		decodedLogs, err := hex.DecodeString(txReceipt.Logs)
+		if err != nil {
+			return receipt, err
+		}
+		err = rlp.Decode(bytes.NewReader(decodedLogs), &logs)
+		if err != nil {
+			return receipt, err
+		}
+		receipt["logs"] = logs
 	}
-	err = rlp.Decode(bytes.NewReader(decodedLogs), &logs)
-	if err != nil {
-		return receipt, err
-	}
-	receipt["logs"] = logs
 	receipt["logsBloom"] = hexutil.Bytes(types.LogsBloom(logs))
 
 	txBytes, err := hex.DecodeString(txReceipt.Transaction)
@@ -443,9 +453,14 @@ func (s *BlockChainAPI) GetTransactionReceipt(
 	receipt["from"] = from
 	receipt["to"] = gethTx.To()
 
+	block, err := s.Store.GetBlockByNumber(ctx, txReceipt.BlockHeight)
+	if err != nil {
+		return receipt, err
+	}
+	receipt["blockHash"] = common.HexToHash(block.Hash)
+
 	txIndex := uint64(0)
 	receipt["transactionIndex"] = (*hexutil.Uint64)(&txIndex)
-	receipt["blockHash"] = common.HexToHash("0x1d59ff54b1eb26b013ce3cb5fc9dab3705b415a67127a003c3e61eb445bb8df2")
 	receipt["cumulativeGasUsed"] = hexutil.Uint64(50000)
 	receipt["effectiveGasPrice"] = (*hexutil.Big)(big.NewInt(20000000000))
 

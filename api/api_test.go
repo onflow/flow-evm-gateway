@@ -306,13 +306,25 @@ func TestBlockChainAPI(t *testing.T) {
 		store := blockchainAPI.Store
 		store.StoreTransaction(context.Background(), event)
 
+		event = blockExecutedEvent(
+			3,
+			"0xaae4530246e61ae58479824ab0863f99ca50414d27aec0c269ae6a7cfc4c7f5b",
+			7766279631452241920,
+			"0xf31ee13dad8f38431fd31278b12be62e6b77e6923f0b7a446eb1affb61f21fc9",
+			"0x0000000000000000000000000000000000000000000000000000000000000000",
+			[]string{"0xb47d74ea64221eb941490bdc0c9a404dacd0a8573379a45c992ac60ee3e83c3c"},
+		)
+
+		err = store.StoreBlock(context.Background(), event)
+		require.NoError(t, err)
+
 		tx, err := blockchainAPI.GetTransactionByHash(
 			context.Background(),
 			common.HexToHash("0xb47d74ea64221eb941490bdc0c9a404dacd0a8573379a45c992ac60ee3e83c3c"),
 		)
 		require.NoError(t, err)
 
-		blockHash := common.HexToHash("0x1d59ff54b1eb26b013ce3cb5fc9dab3705b415a67127a003c3e61eb445bb8df2")
+		blockHash := common.HexToHash("0xaae4530246e61ae58479824ab0863f99ca50414d27aec0c269ae6a7cfc4c7f5b")
 		to := common.HexToAddress("0x99466ED2E37B892A2Ee3E9CD55a98b68f5735db2")
 		index := uint64(0)
 		input, err := hex.DecodeString("c6888fa10000000000000000000000000000000000000000000000000000000000000006")
@@ -326,7 +338,7 @@ func TestBlockChainAPI(t *testing.T) {
 		expectedTx := &api.RPCTransaction{
 			BlockHash:        (*common.Hash)(&blockHash),
 			BlockNumber:      (*hexutil.Big)(big.NewInt(3)),
-			From:             common.HexToAddress("0xa7d9ddBE1f17865597fBD27EC712455208B6B76d"),
+			From:             common.HexToAddress("0x658Bdf435d810C91414eC09147DAA6DB62406379"),
 			Gas:              hexutil.Uint64(22514),
 			GasPrice:         (*hexutil.Big)(big.NewInt(0)),
 			Hash:             common.HexToHash("0xb47d74ea64221eb941490bdc0c9a404dacd0a8573379a45c992ac60ee3e83c3c"),
@@ -379,7 +391,7 @@ func TestBlockChainAPI(t *testing.T) {
 			hexutil.Uint(0),
 		)
 
-		blockHash = common.HexToHash("0x1d59ff54b1eb26b013ce3cb5fc9dab3705b415a67127a003c3e61eb445bb8df2")
+		blockHash = common.HexToHash("0xaae4530246e61ae58479824ab0863f99ca50414d27aec0c269ae6a7cfc4c7f5b")
 		to := common.HexToAddress("0x99466ED2E37B892A2Ee3E9CD55a98b68f5735db2")
 		index := uint64(0)
 		input, err := hex.DecodeString("c6888fa10000000000000000000000000000000000000000000000000000000000000006")
@@ -393,7 +405,7 @@ func TestBlockChainAPI(t *testing.T) {
 		expectedTx := &api.RPCTransaction{
 			BlockHash:        (*common.Hash)(&blockHash),
 			BlockNumber:      (*hexutil.Big)(big.NewInt(3)),
-			From:             common.HexToAddress("0xa7d9ddBE1f17865597fBD27EC712455208B6B76d"),
+			From:             common.HexToAddress("0x658Bdf435d810C91414eC09147DAA6DB62406379"),
 			Gas:              hexutil.Uint64(22514),
 			GasPrice:         (*hexutil.Big)(big.NewInt(0)),
 			Hash:             common.HexToHash("0xb47d74ea64221eb941490bdc0c9a404dacd0a8573379a45c992ac60ee3e83c3c"),
@@ -445,7 +457,7 @@ func TestBlockChainAPI(t *testing.T) {
 			hexutil.Uint(0),
 		)
 
-		blockHash := common.HexToHash("0x1d59ff54b1eb26b013ce3cb5fc9dab3705b415a67127a003c3e61eb445bb8df2")
+		blockHash := common.HexToHash("0xaae4530246e61ae58479824ab0863f99ca50414d27aec0c269ae6a7cfc4c7f5b")
 		to := common.HexToAddress("0x99466ED2E37B892A2Ee3E9CD55a98b68f5735db2")
 		index := uint64(0)
 		input, err := hex.DecodeString("c6888fa10000000000000000000000000000000000000000000000000000000000000006")
@@ -459,7 +471,7 @@ func TestBlockChainAPI(t *testing.T) {
 		expectedTx := &api.RPCTransaction{
 			BlockHash:        (*common.Hash)(&blockHash),
 			BlockNumber:      (*hexutil.Big)(big.NewInt(3)),
-			From:             common.HexToAddress("0xa7d9ddBE1f17865597fBD27EC712455208B6B76d"),
+			From:             common.HexToAddress("0x658Bdf435d810C91414eC09147DAA6DB62406379"),
 			Gas:              hexutil.Uint64(22514),
 			GasPrice:         (*hexutil.Big)(big.NewInt(0)),
 			Hash:             common.HexToHash("0xb47d74ea64221eb941490bdc0c9a404dacd0a8573379a45c992ac60ee3e83c3c"),
@@ -493,6 +505,18 @@ func TestBlockChainAPI(t *testing.T) {
 		store := blockchainAPI.Store
 		store.StoreTransaction(context.Background(), event)
 
+		event = blockExecutedEvent(
+			3,
+			"0xaae4530246e61ae58479824ab0863f99ca50414d27aec0c269ae6a7cfc4c7f5b",
+			7766279631452241920,
+			"0xf31ee13dad8f38431fd31278b12be62e6b77e6923f0b7a446eb1affb61f21fc9",
+			"0x0000000000000000000000000000000000000000000000000000000000000000",
+			[]string{"0xb47d74ea64221eb941490bdc0c9a404dacd0a8573379a45c992ac60ee3e83c3c"},
+		)
+
+		err = store.StoreBlock(context.Background(), event)
+		require.NoError(t, err)
+
 		receipt, err := blockchainAPI.GetTransactionReceipt(
 			context.Background(),
 			common.HexToHash("0xb47d74ea64221eb941490bdc0c9a404dacd0a8573379a45c992ac60ee3e83c3c"),
@@ -509,10 +533,10 @@ func TestBlockChainAPI(t *testing.T) {
 		expectedReceipt["from"] = common.HexToAddress("0x658Bdf435d810C91414eC09147DAA6DB62406379")
 		to := common.HexToAddress("0x99466ED2E37B892A2Ee3E9CD55a98b68f5735db2")
 		expectedReceipt["to"] = &to
+		expectedReceipt["blockHash"] = common.HexToHash("0xaae4530246e61ae58479824ab0863f99ca50414d27aec0c269ae6a7cfc4c7f5b")
 
 		txIndex := uint64(0)
 		expectedReceipt["transactionIndex"] = (*hexutil.Uint64)(&txIndex)
-		expectedReceipt["blockHash"] = common.HexToHash("0x1d59ff54b1eb26b013ce3cb5fc9dab3705b415a67127a003c3e61eb445bb8df2")
 		expectedReceipt["cumulativeGasUsed"] = hexutil.Uint64(50000)
 		expectedReceipt["effectiveGasPrice"] = (*hexutil.Big)(big.NewInt(20000000000))
 

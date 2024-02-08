@@ -95,7 +95,7 @@ func TestServerJSONRPCOveHTTPHandler(t *testing.T) {
 
 	t.Run("eth_getTransactionReceipt", func(t *testing.T) {
 		request := `{"jsonrpc":"2.0","id":1,"method":"eth_getTransactionReceipt","params":["0xb47d74ea64221eb941490bdc0c9a404dacd0a8573379a45c992ac60ee3e83c3c"]}`
-		expectedResponse := `{"jsonrpc":"2.0","id":1,"result":{"blockHash":"0x1d59ff54b1eb26b013ce3cb5fc9dab3705b415a67127a003c3e61eb445bb8df2","blockNumber":"0x3","contractAddress":"0x0000000000000000000000000000000000000000","cumulativeGasUsed":"0xc350","effectiveGasPrice":"0x4a817c800","from":"0x658bdf435d810c91414ec09147daa6db62406379","gasUsed":"0x57f2","logs":[{"address":"0x99466ed2e37b892a2ee3e9cd55a98b68f5735db2","topics":["0x24abdb5865df5079dcc5ac590ff6f01d5c16edbc5fab4e195d9febd1114503da"],"data":"0x000000000000000000000000000000000000000000000000000000000000002a","blockNumber":"0x0","transactionHash":"0x0000000000000000000000000000000000000000000000000000000000000000","transactionIndex":"0x0","blockHash":"0x0000000000000000000000000000000000000000000000000000000000000000","logIndex":"0x0","removed":false}],"logsBloom":"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000020000000000000000000000000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000","status":"0x1","to":"0x99466ed2e37b892a2ee3e9cd55a98b68f5735db2","transactionHash":"0xb47d74ea64221eb941490bdc0c9a404dacd0a8573379a45c992ac60ee3e83c3c","transactionIndex":"0x0","type":"0x2"}}`
+		expectedResponse := `{"jsonrpc":"2.0","id":1,"result":{"blockHash":"0xaae4530246e61ae58479824ab0863f99ca50414d27aec0c269ae6a7cfc4c7f5b","blockNumber":"0x3","contractAddress":"0x0000000000000000000000000000000000000000","cumulativeGasUsed":"0xc350","effectiveGasPrice":"0x4a817c800","from":"0x658bdf435d810c91414ec09147daa6db62406379","gasUsed":"0x57f2","logs":[{"address":"0x99466ed2e37b892a2ee3e9cd55a98b68f5735db2","topics":["0x24abdb5865df5079dcc5ac590ff6f01d5c16edbc5fab4e195d9febd1114503da"],"data":"0x000000000000000000000000000000000000000000000000000000000000002a","blockNumber":"0x0","transactionHash":"0x0000000000000000000000000000000000000000000000000000000000000000","transactionIndex":"0x0","blockHash":"0x0000000000000000000000000000000000000000000000000000000000000000","logIndex":"0x0","removed":false}],"logsBloom":"0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000020000000000000000000000000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000","status":"0x1","to":"0x99466ed2e37b892a2ee3e9cd55a98b68f5735db2","transactionHash":"0xb47d74ea64221eb941490bdc0c9a404dacd0a8573379a45c992ac60ee3e83c3c","transactionIndex":"0x0","type":"0x2"}}`
 
 		event := transactionExecutedEvent(
 			3,
@@ -110,6 +110,18 @@ func TestServerJSONRPCOveHTTPHandler(t *testing.T) {
 		)
 
 		err := store.StoreTransaction(context.Background(), event)
+		require.NoError(t, err)
+
+		event = blockExecutedEvent(
+			3,
+			"0xaae4530246e61ae58479824ab0863f99ca50414d27aec0c269ae6a7cfc4c7f5b",
+			7766279631452241920,
+			"0xf31ee13dad8f38431fd31278b12be62e6b77e6923f0b7a446eb1affb61f21fc9",
+			"0x0000000000000000000000000000000000000000000000000000000000000000",
+			[]string{"0xb47d74ea64221eb941490bdc0c9a404dacd0a8573379a45c992ac60ee3e83c3c"},
+		)
+
+		err = store.StoreBlock(context.Background(), event)
 		require.NoError(t, err)
 
 		resp := rpcRequest(url, request, "origin", "test.com")
@@ -201,7 +213,7 @@ func TestServerJSONRPCOveHTTPHandler(t *testing.T) {
 
 	t.Run("eth_getTransactionByHash", func(t *testing.T) {
 		request := `{"jsonrpc":"2.0","id":1,"method":"eth_getTransactionByHash","params":["0xb47d74ea64221eb941490bdc0c9a404dacd0a8573379a45c992ac60ee3e83c3c"]}`
-		expectedResponse := `{"jsonrpc":"2.0","id":1,"result":{"blockHash":"0x1d59ff54b1eb26b013ce3cb5fc9dab3705b415a67127a003c3e61eb445bb8df2","blockNumber":"0x3","from":"0xa7d9ddbe1f17865597fbd27ec712455208b6b76d","gas":"0x57f2","gasPrice":"0x0","hash":"0xb47d74ea64221eb941490bdc0c9a404dacd0a8573379a45c992ac60ee3e83c3c","input":"0xc6888fa10000000000000000000000000000000000000000000000000000000000000006","nonce":"0x1","to":"0x99466ed2e37b892a2ee3e9cd55a98b68f5735db2","transactionIndex":"0x0","value":"0x0","type":"0x2","v":"0x1","r":"0xf84168f821b427dc158c4d8083bdc4b43e178cf0977a2c5eefbcbedcc4e351b0","s":"0x66a747a38c6c266b9dc2136523cef04395918de37773db63d574aabde59c12eb"}}`
+		expectedResponse := `{"jsonrpc":"2.0","id":1,"result":{"blockHash":"0xaae4530246e61ae58479824ab0863f99ca50414d27aec0c269ae6a7cfc4c7f5b","blockNumber":"0x3","from":"0x658bdf435d810c91414ec09147daa6db62406379","gas":"0x57f2","gasPrice":"0x0","hash":"0xb47d74ea64221eb941490bdc0c9a404dacd0a8573379a45c992ac60ee3e83c3c","input":"0xc6888fa10000000000000000000000000000000000000000000000000000000000000006","nonce":"0x1","to":"0x99466ed2e37b892a2ee3e9cd55a98b68f5735db2","transactionIndex":"0x0","value":"0x0","type":"0x2","v":"0x1","r":"0xf84168f821b427dc158c4d8083bdc4b43e178cf0977a2c5eefbcbedcc4e351b0","s":"0x66a747a38c6c266b9dc2136523cef04395918de37773db63d574aabde59c12eb"}}`
 
 		event := transactionExecutedEvent(
 			3,
@@ -216,6 +228,18 @@ func TestServerJSONRPCOveHTTPHandler(t *testing.T) {
 		)
 
 		err := store.StoreTransaction(context.Background(), event)
+		require.NoError(t, err)
+
+		event = blockExecutedEvent(
+			3,
+			"0xaae4530246e61ae58479824ab0863f99ca50414d27aec0c269ae6a7cfc4c7f5b",
+			7766279631452241920,
+			"0xf31ee13dad8f38431fd31278b12be62e6b77e6923f0b7a446eb1affb61f21fc9",
+			"0x0000000000000000000000000000000000000000000000000000000000000000",
+			[]string{"0xb47d74ea64221eb941490bdc0c9a404dacd0a8573379a45c992ac60ee3e83c3c"},
+		)
+
+		err = store.StoreBlock(context.Background(), event)
 		require.NoError(t, err)
 
 		resp := rpcRequest(url, request, "origin", "test.com")
@@ -340,7 +364,7 @@ func TestServerJSONRPCOveHTTPHandler(t *testing.T) {
 
 	t.Run("eth_getTransactionByBlockHashAndIndex", func(t *testing.T) {
 		request := `{"jsonrpc":"2.0","id":1,"method":"eth_getTransactionByBlockHashAndIndex","params":["0xaae4530246e61ae58479824ab0863f99ca50414d27aec0c269ae6a7cfc4c7f5b","0x0"]}`
-		expectedResponse := `{"jsonrpc":"2.0","id":1,"result":{"blockHash":"0x1d59ff54b1eb26b013ce3cb5fc9dab3705b415a67127a003c3e61eb445bb8df2","blockNumber":"0x3","from":"0xa7d9ddbe1f17865597fbd27ec712455208b6b76d","gas":"0x57f2","gasPrice":"0x0","hash":"0xb47d74ea64221eb941490bdc0c9a404dacd0a8573379a45c992ac60ee3e83c3c","input":"0xc6888fa10000000000000000000000000000000000000000000000000000000000000006","nonce":"0x1","to":"0x99466ed2e37b892a2ee3e9cd55a98b68f5735db2","transactionIndex":"0x0","value":"0x0","type":"0x2","v":"0x1","r":"0xf84168f821b427dc158c4d8083bdc4b43e178cf0977a2c5eefbcbedcc4e351b0","s":"0x66a747a38c6c266b9dc2136523cef04395918de37773db63d574aabde59c12eb"}}`
+		expectedResponse := `{"jsonrpc":"2.0","id":1,"result":{"blockHash":"0xaae4530246e61ae58479824ab0863f99ca50414d27aec0c269ae6a7cfc4c7f5b","blockNumber":"0x3","from":"0x658bdf435d810c91414ec09147daa6db62406379","gas":"0x57f2","gasPrice":"0x0","hash":"0xb47d74ea64221eb941490bdc0c9a404dacd0a8573379a45c992ac60ee3e83c3c","input":"0xc6888fa10000000000000000000000000000000000000000000000000000000000000006","nonce":"0x1","to":"0x99466ed2e37b892a2ee3e9cd55a98b68f5735db2","transactionIndex":"0x0","value":"0x0","type":"0x2","v":"0x1","r":"0xf84168f821b427dc158c4d8083bdc4b43e178cf0977a2c5eefbcbedcc4e351b0","s":"0x66a747a38c6c266b9dc2136523cef04395918de37773db63d574aabde59c12eb"}}`
 
 		event := transactionExecutedEvent(
 			3,
@@ -382,7 +406,7 @@ func TestServerJSONRPCOveHTTPHandler(t *testing.T) {
 
 	t.Run("eth_getTransactionByBlockNumberAndIndex", func(t *testing.T) {
 		request := `{"jsonrpc":"2.0","id":1,"method":"eth_getTransactionByBlockNumberAndIndex","params":["0x3","0x0"]}`
-		expectedResponse := `{"jsonrpc":"2.0","id":1,"result":{"blockHash":"0x1d59ff54b1eb26b013ce3cb5fc9dab3705b415a67127a003c3e61eb445bb8df2","blockNumber":"0x3","from":"0xa7d9ddbe1f17865597fbd27ec712455208b6b76d","gas":"0x57f2","gasPrice":"0x0","hash":"0xb47d74ea64221eb941490bdc0c9a404dacd0a8573379a45c992ac60ee3e83c3c","input":"0xc6888fa10000000000000000000000000000000000000000000000000000000000000006","nonce":"0x1","to":"0x99466ed2e37b892a2ee3e9cd55a98b68f5735db2","transactionIndex":"0x0","value":"0x0","type":"0x2","v":"0x1","r":"0xf84168f821b427dc158c4d8083bdc4b43e178cf0977a2c5eefbcbedcc4e351b0","s":"0x66a747a38c6c266b9dc2136523cef04395918de37773db63d574aabde59c12eb"}}`
+		expectedResponse := `{"jsonrpc":"2.0","id":1,"result":{"blockHash":"0xaae4530246e61ae58479824ab0863f99ca50414d27aec0c269ae6a7cfc4c7f5b","blockNumber":"0x3","from":"0x658bdf435d810c91414ec09147daa6db62406379","gas":"0x57f2","gasPrice":"0x0","hash":"0xb47d74ea64221eb941490bdc0c9a404dacd0a8573379a45c992ac60ee3e83c3c","input":"0xc6888fa10000000000000000000000000000000000000000000000000000000000000006","nonce":"0x1","to":"0x99466ed2e37b892a2ee3e9cd55a98b68f5735db2","transactionIndex":"0x0","value":"0x0","type":"0x2","v":"0x1","r":"0xf84168f821b427dc158c4d8083bdc4b43e178cf0977a2c5eefbcbedcc4e351b0","s":"0x66a747a38c6c266b9dc2136523cef04395918de37773db63d574aabde59c12eb"}}`
 
 		event := transactionExecutedEvent(
 			3,
