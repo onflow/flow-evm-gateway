@@ -564,8 +564,34 @@ func (s *BlockChainAPI) GetBlockReceipts(
 	ctx context.Context,
 	blockNumberOrHash rpc.BlockNumberOrHash,
 ) ([]map[string]interface{}, error) {
-	result := make([]map[string]interface{}, 0)
-	return result, nil
+	receipts := make([]map[string]interface{}, 0)
+
+	var block *storage.BlockExecutedPayload
+	var err error
+	if blockNumberOrHash.BlockHash != nil {
+		block, err = s.Store.GetBlockByHash(ctx, *blockNumberOrHash.BlockHash)
+		if err != nil {
+			return receipts, err
+		}
+	} else if blockNumberOrHash.BlockNumber != nil {
+		block, err = s.Store.GetBlockByNumber(ctx, uint64(blockNumberOrHash.BlockNumber.Int64()))
+		if err != nil {
+			return receipts, err
+		}
+	} else {
+		return receipts, fmt.Errorf("block number or hash not provided")
+	}
+
+	for _, tx := range block.TransactionHashes {
+		txHash := common.HexToHash(tx)
+		txReceipt, err := s.GetTransactionReceipt(ctx, txHash)
+		if err != nil {
+			return receipts, err
+		}
+		receipts = append(receipts, txReceipt)
+	}
+
+	return receipts, nil
 }
 
 // eth_getBlockTransactionCountByHash
