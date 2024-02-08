@@ -2,16 +2,10 @@
 {"jsonrpc":"2.0","id":1,"method":"eth_blockNumber","params": []}
 {"jsonrpc":"2.0","id":1,"method":"eth_syncing","params": []}
 {"jsonrpc":"2.0","id":1,"method":"eth_gasPrice","params":[]}
-{"jsonrpc":"2.0","id":1,"method":"eth_getBalance","params":["0x407d73d8a49eeb85d32cf465507dd71d507100c1","latest"]}
 {"jsonrpc":"2.0","id":1,"method":"eth_getCode","params":["0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b","0x2"]}
 {"jsonrpc":"2.0","id":1,"method":"eth_getStorageAt","params":["0x295a70b2de5e3953354a6a8344e616ed314d7251","0x6661e9d6d8b923d5bbaab1b96e1dd51ff6ea2a93520fdc9eb75d059238b8c5e9","latest"]}
 {"jsonrpc":"2.0","id":1,"method":"eth_getTransactionCount","params":["0x407d73d8a49eeb85d32cf465507dd71d507100c1","latest"]}
-{"jsonrpc":"2.0","id":1,"method":"eth_getTransactionByBlockHashAndIndex","params":["0xc6ef2fc5426d6ad6fd9e2a26abeab0aa2411b7ab17f30a99d3cb96aed1d1055b", "0x0"]}
-{"jsonrpc":"2.0","id":1,"method":"eth_getTransactionByBlockNumberAndIndex","params":["0x29c", "0x0"]}
 {"jsonrpc":"2.0","id":1,"method":"eth_coinbase"}
-{"jsonrpc":"2.0","id":1,"method":"eth_getBlockByHash","params":["0xdc0818cf78f21a8e70579cb46a43643f78291264dda342ae31049421c82d21ae",false]}
-{"jsonrpc":"2.0","id":1,"method":"eth_getBlockTransactionCountByHash","params":["0xb903239f8543d04b5dc1ba6579132b143087c68db1b2168786408fcbce568238"]}
-{"jsonrpc":"2.0","id":1,"method":"eth_getBlockTransactionCountByNumber","params":["0xe8"]}
 {"jsonrpc":"2.0","id":1,"method":"eth_getUncleCountByBlockHash","params":["0xb903239f8543d04b5dc1ba6579132b143087c68db1b2168786408fcbce568238"]}
 {"jsonrpc":"2.0","id":1,"method":"eth_getUncleCountByBlockNumber","params":["0xe8"]}
 {"jsonrpc":"2.0","id":1,"method":"eth_getLogs","params":[{"topics":[]}]}
