@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-emulator/adapters"
 	"github.com/onflow/flow-emulator/emulator"
@@ -61,7 +60,6 @@ func startEmulator() (*server.EmulatorServer, error) {
 	})
 
 	go func() {
-		defer srv.Stop()
 		srv.Start()
 	}()
 
@@ -215,17 +213,19 @@ func flowSendTransaction(
 	return res, nil
 }
 
-// evmTransferValue creates an evm transaction and signs it producing a payload that send using the evmRunTransaction.
-func evmTransferValue(
+// evmSignAndRun creates an evm transaction and signs it producing a payload that send using the evmRunTransaction.
+func evmSignAndRun(
 	emu emulator.Emulator,
-	flowAmount *big.Int,
+	weiValue *big.Int,
+	gasLimit uint64,
 	signer *ecdsa.PrivateKey,
-	to common.Address,
+	to *common.Address,
+	data []byte,
 ) (*sdk.TransactionResult, error) {
 	gasPrice := big.NewInt(0)
 	nonce := uint64(0)
 
-	evmTx := types.NewTx(&types.LegacyTx{Nonce: nonce, To: &to, Value: flowAmount, Gas: params.TxGas, GasPrice: gasPrice, Data: nil})
+	evmTx := types.NewTx(&types.LegacyTx{Nonce: nonce, To: to, Value: weiValue, Gas: gasLimit, GasPrice: gasPrice, Data: data})
 
 	signed, err := types.SignTx(evmTx, evmEmulator.GetDefaultSigner(), signer)
 	if err != nil {
