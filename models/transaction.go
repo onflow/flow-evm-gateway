@@ -65,8 +65,8 @@ func DecodeReceipt(event cadence.Event) (*gethTypes.Receipt, error) {
 		EffectiveGasPrice: nil,            // todo check
 		BlobGasUsed:       0,              // todo check
 		BlobGasPrice:      nil,            // todo check
-		BlockHash:         common.Hash{},  // todo check
-		TransactionIndex:  0,              // todo check
+		TransactionIndex:  0,              // todo add tx index in evm core event
+		BlockHash:         common.Hash{},  // todo add block hash in the evm core event
 	}
 
 	if tx.Failed {
