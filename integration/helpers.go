@@ -33,7 +33,7 @@ import (
 const testPrivateKey = "61ceacbdce419e25ee8e7c2beceee170a05c9cab1e725a955b15ba94dcd747d2"
 
 var (
-	toWei  = big.NewInt(10000000000)
+	toWei  = new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
 	logger = zerolog.New(os.Stdout)
 	sc     = systemcontracts.SystemContractsForChain(flow.Emulator)
 )
