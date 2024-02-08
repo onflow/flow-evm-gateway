@@ -55,19 +55,24 @@ func DecodeReceipt(event cadence.Event) (*gethTypes.Receipt, error) {
 	}
 
 	receipt := &gethTypes.Receipt{
-		Type:              0,              // todo check
-		Status:            0,              // todo check
-		CumulativeGasUsed: tx.GasConsumed, // todo check
+		BlockNumber:       big.NewInt(int64(tx.BlockHeight)),
+		Type:              uint8(tx.TransactionType),
 		Logs:              logs,
 		TxHash:            common.HexToHash(tx.TransactionHash),
 		ContractAddress:   common.HexToAddress(tx.DeployedContractAddress),
 		GasUsed:           tx.GasConsumed,
-		EffectiveGasPrice: nil,           // todo check
-		BlobGasUsed:       0,             // todo check
-		BlobGasPrice:      nil,           // todo check
-		BlockHash:         common.Hash{}, // todo check
-		BlockNumber:       big.NewInt(int64(tx.BlockHeight)),
-		TransactionIndex:  0, // todo check
+		CumulativeGasUsed: tx.GasConsumed, // todo check
+		EffectiveGasPrice: nil,            // todo check
+		BlobGasUsed:       0,              // todo check
+		BlobGasPrice:      nil,            // todo check
+		BlockHash:         common.Hash{},  // todo check
+		TransactionIndex:  0,              // todo check
+	}
+
+	if tx.Failed {
+		receipt.Status = gethTypes.ReceiptStatusFailed
+	} else {
+		receipt.Status = gethTypes.ReceiptStatusSuccessful
 	}
 
 	receipt.Bloom = gethTypes.CreateBloom([]*gethTypes.Receipt{receipt})
