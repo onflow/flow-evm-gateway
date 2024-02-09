@@ -10,7 +10,7 @@ RUN go mod download
 RUN go mod verify
 RUN CGO_ENABLED=0 go build -o evm-gateway ./cmd/server/main.go
 RUN chmod a+x evm-gateway
-RUN git clone git@github.com:m-Peter/flow-cli-custom-builds.git
+RUN git clone https://github.com/m-Peter/flow-cli-custom-builds.git
 
 # RUN APP
 FROM alpine:latest
