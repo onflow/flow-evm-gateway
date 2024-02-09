@@ -287,10 +287,7 @@ func TestIntegration_DeployCallContract(t *testing.T) {
 		assert.Equal(t, sumA.Cmp(sumLog.Topics[2].Big()), 0)                         // topic 2 is argument sumA
 		assert.Equal(t, sumB.Cmp(sumLog.Topics[3].Big()), 0)                         // topic 3 is argument sumB
 
-		event, err := storeContract.value("Calculated", sumLog.Data)
-		require.NoError(t, err)
-		returnValue := event[0].(*big.Int)
-		assert.Equal(t, new(big.Int).Add(sumA, sumB).Cmp(returnValue), 0)
+		assert.NoError(t, checkSumLogValue(storeContract, sumA, sumB, sumLog.Data))
 	}
 
 	// test filtering of events by different filter parameters, we have the following state:
@@ -320,12 +317,8 @@ func TestIntegration_DeployCallContract(t *testing.T) {
 		matches, err := logs.NewIDFilter(blkID, filter, blocks, receipts).Match()
 		require.NoError(t, err)
 		require.Len(t, matches, 1)
-		// make sure the match is correct by checking sum value
 		match := matches[0]
-		event, err := storeContract.value("Calculated", match.Data)
-		require.NoError(t, err)
-		returnValue := event[0].(*big.Int)
-		assert.Equal(t, new(big.Int).Add(sumA, sumB).Cmp(returnValue), 0)
+		assert.NoError(t, checkSumLogValue(storeContract, sumA, sumB, match.Data))
 	}
 
 	// invalid filter by block id with wrong topic value
@@ -348,4 +341,57 @@ func TestIntegration_DeployCallContract(t *testing.T) {
 	matches, err := logs.NewIDFilter(blkID, filter, blocks, receipts).Match()
 	require.NoError(t, err) // no error for matches not found
 	require.Len(t, matches, 0)
+
+	// successfully filter specific log for provided valid range
+	sumA = big.NewInt(5)
+	sumB = big.NewInt(4)
+	filter = logs.FilterCriteria{
+		Addresses: []common.Address{contractAddress},
+		Topics: [][]common.Hash{{
+			common.HexToHash(fundEOAAddress.Hex()),
+			common.BigToHash(sumA),
+			common.BigToHash(sumB),
+		}},
+	}
+
+	matches, err = logs.NewRangeFilter(*big.NewInt(6), *big.NewInt(9), filter, receipts).Match()
+	require.NoError(t, err)
+	require.Len(t, matches, 1)
+	assert.NoError(t, checkSumLogValue(storeContract, sumA, sumB, matches[0].Data))
+
+	// successfully filter logs with wildcard as a second topic matching all the logs for provided valid range
+	sumA = big.NewInt(5)
+	filter = logs.FilterCriteria{
+		Addresses: []common.Address{contractAddress},
+		Topics: [][]common.Hash{{
+			common.HexToHash(fundEOAAddress.Hex()),
+			common.BigToHash(sumA),
+		}},
+	}
+
+	matches, err = logs.NewRangeFilter(*big.NewInt(6), *big.NewInt(9), filter, receipts).Match()
+	require.NoError(t, err)
+	require.Len(t, matches, 4)
+	assert.NoError(t, checkSumLogValue(storeContract, sumA, big.NewInt(3), matches[0].Data))
+	assert.NoError(t, checkSumLogValue(storeContract, sumA, big.NewInt(4), matches[1].Data))
+	assert.NoError(t, checkSumLogValue(storeContract, sumA, big.NewInt(5), matches[2].Data))
+	assert.NoError(t, checkSumLogValue(storeContract, sumA, big.NewInt(6), matches[3].Data))
+
+}
+
+// checkSumLogValue makes sure the match is correct by checking sum value
+func checkSumLogValue(c *contract, a *big.Int, b *big.Int, data []byte) error {
+	event, err := c.value("Calculated", data)
+	if err != nil {
+		return err
+	}
+
+	returnValue := event[0].(*big.Int)
+
+	correctSum := new(big.Int).Add(a, b)
+	if correctSum.Cmp(returnValue) != 0 {
+		return fmt.Errorf("log value not correct, should be %d but is %d", correctSum.Int64(), returnValue.Int64())
+	}
+
+	return nil
 }
