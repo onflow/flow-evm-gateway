@@ -310,6 +310,6 @@ func (c *contract) call(funcName string, args ...any) ([]byte, error) {
 	return call, nil
 }
 
-func (c *contract) value(name string, data []byte) (any, error) {
+func (c *contract) value(name string, data []byte) ([]any, error) {
 	return c.a.Unpack(name, data)
 }

@@ -124,6 +124,8 @@ func TestIntegration_TransferValue(t *testing.T) {
 // 4. Deploy a contract using the EOA - produces block event as well as transaction executed event
 // 5. Execute a function on the new deployed contract that returns a value - produces block and tx executed event
 // 6. Execute a function that emits a log multiple times with different values - produces block and tx executed event with logs
+//
+// The test then proceeds on testing filtering of events
 func TestIntegration_DeployCallContract(t *testing.T) {
 	srv, err := startEmulator()
 	require.NoError(t, err)
@@ -248,34 +250,48 @@ func TestIntegration_DeployCallContract(t *testing.T) {
 	assert.Len(t, rcp.Logs, 0)
 
 	// step 6 - call event emitting function with different values
-	callSum, err := storeContract.call("sum", big.NewInt(5), big.NewInt(3))
-	require.NoError(t, err)
+	for i := 0; i < 4; i++ {
+		sumA := big.NewInt(5)
+		sumB := big.NewInt(int64(3 + i))
+		callSum, err := storeContract.call("sum", sumA, sumB)
+		require.NoError(t, err)
 
-	res, err = evmSignAndRun(emu, nil, gasLimit, eoaKey, 3, &contractAddress, callSum)
-	require.NoError(t, err)
-	require.NoError(t, res.Error)
+		res, err = evmSignAndRun(emu, nil, gasLimit, eoaKey, uint64(3+i), &contractAddress, callSum)
+		require.NoError(t, err)
+		require.NoError(t, res.Error)
 
-	time.Sleep(1 * time.Second)
+		time.Sleep(1 * time.Second)
 
-	blk, err = blocks.GetByHeight(6)
-	require.NoError(t, err)
-	require.Len(t, blk.TransactionHashes, 1)
+		// block 6 is produced by above call to the sum that emits event
+		blk, err = blocks.GetByHeight(uint64(6 + i))
+		require.NoError(t, err)
+		require.Len(t, blk.TransactionHashes, 1)
 
-	sumHash := blk.TransactionHashes[0]
-	tx, err = txs.Get(sumHash)
-	require.NoError(t, err)
+		sumHash := blk.TransactionHashes[0]
+		tx, err = txs.Get(sumHash)
+		require.NoError(t, err)
 
-	rcp, err = receipts.GetByTransactionID(sumHash)
-	require.NoError(t, err)
-	assert.Equal(t, gethTypes.ReceiptStatusSuccessful, rcp.Status)
-	require.Len(t, rcp.Logs, 1)
+		rcp, err = receipts.GetByTransactionID(sumHash)
+		require.NoError(t, err)
+		assert.Equal(t, gethTypes.ReceiptStatusSuccessful, rcp.Status)
+		require.Len(t, rcp.Logs, 1)
 
-	sumLog := rcp.Logs[0]
-	assert.Equal(t, contractAddress.Hex(), sumLog.Address.Hex())
-	assert.Equal(t, blk.Height, sumLog.BlockNumber)
-	assert.Equal(t, sumHash.Hex(), sumLog.TxHash.Hex())
+		// check the sum call event
+		sumLog := rcp.Logs[0]
+		assert.Equal(t, contractAddress.Hex(), sumLog.Address.Hex())
+		// todo https://github.com/onflow/flow-go/blob/b3279863c7787d112128188a243905a43ec1654a/fvm/evm/emulator/emulator.go#L397
+		//assert.Equal(t, blk.Height, sumLog.BlockNumber)
+		//assert.Equal(t, sumHash.Hex(), sumLog.TxHash.Hex())
+		assert.Equal(t, fundEOAAddress, common.HexToAddress(sumLog.Topics[1].Hex())) // topic 1 is caller argument
+		assert.Equal(t, sumA.Cmp(sumLog.Topics[2].Big()), 0)                         // topic 2 is argument sumA
+		assert.Equal(t, sumB.Cmp(sumLog.Topics[3].Big()), 0)                         // topic 3 is argument sumB
 
-	event, err := storeContract.value("Calculated", sumLog.Data)
-	require.NoError(t, err)
-	fmt.Println("event", event)
+		event, err := storeContract.value("Calculated", sumLog.Data)
+		require.NoError(t, err)
+		returnValue := event[0].(*big.Int)
+		assert.Equal(t, new(big.Int).Add(sumA, sumB).Cmp(returnValue), 0)
+	}
+
+	// test filtering of events by different filter parameters
+
 }
