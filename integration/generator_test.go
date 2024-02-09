@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/onflow/flow-evm-gateway/services/logs"
 	"math/big"
 	"testing"
 	"time"
@@ -292,6 +293,59 @@ func TestIntegration_DeployCallContract(t *testing.T) {
 		assert.Equal(t, new(big.Int).Add(sumA, sumB).Cmp(returnValue), 0)
 	}
 
-	// test filtering of events by different filter parameters
+	// test filtering of events by different filter parameters, we have the following state:
+	// block height 6 - event topics (eoa, 5, 3)
+	// block height 7 - event topics (eoa, 5, 4)
+	// block height 8 - event topics (eoa, 5, 5)
+	// block height 9 - event topics (eoa, 5, 6)
 
+	// successfully filter by block id with found single match for each block
+	for i := 0; i < 4; i++ {
+		blk, err = blocks.GetByHeight(uint64(6 + i))
+		require.NoError(t, err)
+		blkID, err := blk.Hash()
+		require.NoError(t, err)
+
+		sumA := big.NewInt(5)
+		sumB := big.NewInt(int64(3 + i))
+		filter := logs.FilterCriteria{
+			Addresses: []common.Address{contractAddress},
+			Topics: [][]common.Hash{{
+				common.HexToHash(fundEOAAddress.Hex()),
+				common.BigToHash(sumA),
+				common.BigToHash(sumB),
+			}},
+		}
+
+		matches, err := logs.NewIDFilter(blkID, filter, blocks, receipts).Match()
+		require.NoError(t, err)
+		require.Len(t, matches, 1)
+		// make sure the match is correct by checking sum value
+		match := matches[0]
+		event, err := storeContract.value("Calculated", match.Data)
+		require.NoError(t, err)
+		returnValue := event[0].(*big.Int)
+		assert.Equal(t, new(big.Int).Add(sumA, sumB).Cmp(returnValue), 0)
+	}
+
+	// invalid filter by block id with wrong topic value
+	blk, err = blocks.GetByHeight(6)
+	require.NoError(t, err)
+	blkID, err := blk.Hash()
+	require.NoError(t, err)
+
+	sumA := big.NewInt(5)
+	sumB := big.NewInt(99999)
+	filter := logs.FilterCriteria{
+		Addresses: []common.Address{contractAddress},
+		Topics: [][]common.Hash{{
+			common.HexToHash(fundEOAAddress.Hex()),
+			common.BigToHash(sumA),
+			common.BigToHash(sumB),
+		}},
+	}
+
+	matches, err := logs.NewIDFilter(blkID, filter, blocks, receipts).Match()
+	require.NoError(t, err) // no error for matches not found
+	require.Len(t, matches, 0)
 }
