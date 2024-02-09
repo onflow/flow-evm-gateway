@@ -4,7 +4,9 @@ import (
 	"context"
 	_ "embed"
 	"encoding/hex"
+	"fmt"
 	"github.com/ethereum/go-ethereum/params"
+	"math/big"
 	"testing"
 	"time"
 
@@ -18,6 +20,9 @@ import (
 
 //go:embed fixtures/test.bin
 var testContractBinary string
+
+//go:embed fixtures/test-abi.json
+var testContractABI string
 
 var (
 	fundEOAAddress    = common.HexToAddress("FACF71692421039876a5BB4F10EF7A439D8ef61E")
@@ -60,7 +65,7 @@ func TestIntegration_TransferValue(t *testing.T) {
 	require.NoError(t, err)
 
 	// step 4. - transfer between EOAs
-	res, err = evmSignAndRun(emu, transferWei, params.TxGas, fundEOAKey, &transferEOAAdress, nil)
+	res, err = evmSignAndRun(emu, transferWei, params.TxGas, fundEOAKey, 0, &transferEOAAdress, nil)
 	require.NoError(t, err)
 	require.NoError(t, res.Error)
 	assert.Len(t, res.Events, 2)
@@ -135,6 +140,7 @@ func TestIntegration_DeployCallContract(t *testing.T) {
 	emu := srv.Emulator()
 
 	flowAmount, _ := cadence.NewUFix64("5.0")
+	gasLimit := uint64(4700000) // arbitrarily big
 
 	// Steps 1, 2 and 3. - create COA and fund it
 	res, err := fundEOA(emu, flowAmount, fundEOAAddress)
@@ -149,11 +155,11 @@ func TestIntegration_DeployCallContract(t *testing.T) {
 	require.NoError(t, err)
 
 	// Step 4. - deploy contract
-	res, err = evmSignAndRun(emu, nil, 4700000, eoaKey, nil, deployData)
+	res, err = evmSignAndRun(emu, nil, gasLimit, eoaKey, 0, nil, deployData)
 	require.NoError(t, err)
 	require.NoError(t, res.Error)
 
-	time.Sleep(2 * time.Second) // todo change
+	time.Sleep(1 * time.Second) // todo change
 
 	// block 3 comes from contract deployment
 	blk, err := blocks.GetByHeight(3)
@@ -175,5 +181,69 @@ func TestIntegration_DeployCallContract(t *testing.T) {
 	assert.Equal(t, uint64(215324), rcp.GasUsed)
 	assert.Len(t, rcp.Logs, 0)
 
-	// todo 5, 6
+	contractAddress := rcp.ContractAddress
+
+	callRetrieve, err := contractCallData(testContractABI, "retrieve")
+	require.NoError(t, err)
+
+	// step 5. - call retrieve function on the contract
+	res, err = evmSignAndRun(emu, nil, gasLimit, eoaKey, 1, &contractAddress, callRetrieve) // todo use nonce tracking to pass in value
+	require.NoError(t, err)
+	require.NoError(t, res.Error)
+
+	time.Sleep(1 * time.Second)
+
+	// block 4 comes from contract interaction
+	blk, err = blocks.GetByHeight(4)
+	require.NoError(t, err)
+	assert.Equal(t, uint64(4), blk.Height)
+	require.Len(t, blk.TransactionHashes, 1)
+
+	interactHash := blk.TransactionHashes[0]
+	tx, err = txs.Get(interactHash)
+	require.NoError(t, err)
+	assert.Equal(t, interactHash, tx.Hash())
+	assert.Equal(t, callRetrieve, tx.Data())
+	assert.Equal(t, contractAddress.Hex(), tx.To().Hex())
+
+	rcp, err = receipts.GetByTransactionID(interactHash)
+	require.NoError(t, err)
+	assert.Equal(t, gethTypes.ReceiptStatusSuccessful, rcp.Status)
+	assert.Equal(t, interactHash, rcp.TxHash)
+	assert.Equal(t, uint64(4), rcp.BlockNumber.Uint64())
+	assert.Len(t, rcp.Logs, 0)
+
+	callStore, err := contractCallData(testContractABI, "store", big.NewInt(1337))
+	require.NoError(t, err)
+
+	// step 5 - call store to set the value
+	res, err = evmSignAndRun(emu, nil, gasLimit, eoaKey, 2, &contractAddress, callStore)
+	require.NoError(t, err)
+	require.NoError(t, res.Error)
+	fmt.Println(res.Events)
+
+	time.Sleep(1 * time.Second)
+
+	// block 5 comes from contract store interaction
+	blk, err = blocks.GetByHeight(5)
+	require.NoError(t, err)
+	assert.Equal(t, uint64(5), blk.Height)
+	require.Len(t, blk.TransactionHashes, 1)
+
+	interactHash = blk.TransactionHashes[0]
+	tx, err = txs.Get(interactHash)
+	require.NoError(t, err)
+	assert.Equal(t, interactHash, tx.Hash())
+	assert.Equal(t, callStore, tx.Data())
+	assert.Equal(t, contractAddress.Hex(), tx.To().Hex())
+
+	rcp, err = receipts.GetByTransactionID(interactHash)
+	require.NoError(t, err)
+	assert.Equal(t, gethTypes.ReceiptStatusSuccessful, rcp.Status)
+	assert.Equal(t, interactHash, rcp.TxHash)
+	assert.Equal(t, uint64(5), rcp.BlockNumber.Uint64())
+	assert.Len(t, rcp.Logs, 0)
+
+	// step 5 - call retrieve again and check the value was set
+
 }

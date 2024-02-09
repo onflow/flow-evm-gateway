@@ -6,6 +6,7 @@ import (
 	"crypto/ecdsa"
 	"encoding/hex"
 	"fmt"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/onflow/cadence"
@@ -219,11 +220,11 @@ func evmSignAndRun(
 	weiValue *big.Int,
 	gasLimit uint64,
 	signer *ecdsa.PrivateKey,
+	nonce uint64,
 	to *common.Address,
 	data []byte,
 ) (*sdk.TransactionResult, error) {
 	gasPrice := big.NewInt(0)
-	nonce := uint64(0)
 
 	evmTx := types.NewTx(&types.LegacyTx{Nonce: nonce, To: to, Value: weiValue, Gas: gasLimit, GasPrice: gasPrice, Data: data})
 
@@ -279,4 +280,18 @@ func evmHexToCadenceBytes(address string) (cadence.Array, error) {
 // todo use types.NewBalanceFromUFix64(evmAmount) when flow-go updated
 func flowToWei(flow int64) *big.Int {
 	return new(big.Int).Mul(big.NewInt(flow), toWei)
+}
+
+func contractCallData(abiString string, name string, args ...interface{}) ([]byte, error) {
+	a, err := abi.JSON(strings.NewReader(abiString))
+	if err != nil {
+		return nil, err
+	}
+
+	call, err := a.Pack(name, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	return call, nil
 }
