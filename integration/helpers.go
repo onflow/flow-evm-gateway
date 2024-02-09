@@ -282,16 +282,34 @@ func flowToWei(flow int64) *big.Int {
 	return new(big.Int).Mul(big.NewInt(flow), toWei)
 }
 
-func contractCallData(abiString string, name string, args ...interface{}) ([]byte, error) {
-	a, err := abi.JSON(strings.NewReader(abiString))
+type contract struct {
+	code    string
+	abiJSON string
+	a       abi.ABI
+}
+
+func newContract(code string, abiJSON string) (*contract, error) {
+	a, err := abi.JSON(strings.NewReader(abiJSON))
 	if err != nil {
 		return nil, err
 	}
 
-	call, err := a.Pack(name, args...)
+	return &contract{
+		code:    code,
+		abiJSON: abiJSON,
+		a:       a,
+	}, nil
+}
+
+func (c *contract) call(funcName string, args ...any) ([]byte, error) {
+	call, err := c.a.Pack(funcName, args...)
 	if err != nil {
 		return nil, err
 	}
 
 	return call, nil
+}
+
+func (c *contract) value(name string, data []byte) (any, error) {
+	return c.a.Unpack(name, data)
 }

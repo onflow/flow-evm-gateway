@@ -142,6 +142,9 @@ func TestIntegration_DeployCallContract(t *testing.T) {
 	flowAmount, _ := cadence.NewUFix64("5.0")
 	gasLimit := uint64(4700000) // arbitrarily big
 
+	storeContract, err := newContract(testContractBinary, testContractABI)
+	require.NoError(t, err)
+
 	// Steps 1, 2 and 3. - create COA and fund it
 	res, err := fundEOA(emu, flowAmount, fundEOAAddress)
 	require.NoError(t, err)
@@ -183,7 +186,7 @@ func TestIntegration_DeployCallContract(t *testing.T) {
 
 	contractAddress := rcp.ContractAddress
 
-	callRetrieve, err := contractCallData(testContractABI, "retrieve")
+	callRetrieve, err := storeContract.call(testContractABI, "retrieve")
 	require.NoError(t, err)
 
 	// step 5. - call retrieve function on the contract
@@ -213,7 +216,7 @@ func TestIntegration_DeployCallContract(t *testing.T) {
 	assert.Equal(t, uint64(4), rcp.BlockNumber.Uint64())
 	assert.Len(t, rcp.Logs, 0)
 
-	callStore, err := contractCallData(testContractABI, "store", big.NewInt(1337))
+	callStore, err := storeContract.call(testContractABI, "store", big.NewInt(1337))
 	require.NoError(t, err)
 
 	// step 5 - call store to set the value
@@ -244,6 +247,32 @@ func TestIntegration_DeployCallContract(t *testing.T) {
 	assert.Equal(t, uint64(5), rcp.BlockNumber.Uint64())
 	assert.Len(t, rcp.Logs, 0)
 
-	// step 5 - call retrieve again and check the value was set
+	// step 6 - call event emitting function with different values
+	callSum, err := storeContract.call(testContractABI, "sum", big.NewInt(5), big.NewInt(3))
+	require.NoError(t, err)
+
+	res, err = evmSignAndRun(emu, nil, gasLimit, eoaKey, 3, &contractAddress, callSum)
+	require.NoError(t, err)
+	require.NoError(t, res.Error)
+
+	time.Sleep(1 * time.Second)
+
+	blk, err = blocks.GetByHeight(6)
+	require.NoError(t, err)
+	require.Len(t, blk.TransactionHashes, 1)
+
+	sumHash := blk.TransactionHashes[0]
+	tx, err = txs.Get(sumHash)
+	require.NoError(t, err)
+
+	rcp, err = receipts.GetByTransactionID(sumHash)
+	require.NoError(t, err)
+	assert.Equal(t, gethTypes.ReceiptStatusSuccessful, rcp.Status)
+	require.Len(t, rcp.Logs, 1)
+
+	sumLog := rcp.Logs[0]
+	assert.Equal(t, contractAddress.Hex(), sumLog.Address.Hex())
+	assert.Equal(t, blk.Height, sumLog.BlockNumber)
+	assert.Equal(t, sumHash.Hex(), sumLog.TxHash.Hex())
 
 }
