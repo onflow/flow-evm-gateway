@@ -186,7 +186,7 @@ func TestIntegration_DeployCallContract(t *testing.T) {
 
 	contractAddress := rcp.ContractAddress
 
-	callRetrieve, err := storeContract.call(testContractABI, "retrieve")
+	callRetrieve, err := storeContract.call("retrieve")
 	require.NoError(t, err)
 
 	// step 5. - call retrieve function on the contract
@@ -216,7 +216,7 @@ func TestIntegration_DeployCallContract(t *testing.T) {
 	assert.Equal(t, uint64(4), rcp.BlockNumber.Uint64())
 	assert.Len(t, rcp.Logs, 0)
 
-	callStore, err := storeContract.call(testContractABI, "store", big.NewInt(1337))
+	callStore, err := storeContract.call("store", big.NewInt(1337))
 	require.NoError(t, err)
 
 	// step 5 - call store to set the value
@@ -248,7 +248,7 @@ func TestIntegration_DeployCallContract(t *testing.T) {
 	assert.Len(t, rcp.Logs, 0)
 
 	// step 6 - call event emitting function with different values
-	callSum, err := storeContract.call(testContractABI, "sum", big.NewInt(5), big.NewInt(3))
+	callSum, err := storeContract.call("sum", big.NewInt(5), big.NewInt(3))
 	require.NoError(t, err)
 
 	res, err = evmSignAndRun(emu, nil, gasLimit, eoaKey, 3, &contractAddress, callSum)
@@ -275,4 +275,7 @@ func TestIntegration_DeployCallContract(t *testing.T) {
 	assert.Equal(t, blk.Height, sumLog.BlockNumber)
 	assert.Equal(t, sumHash.Hex(), sumLog.TxHash.Hex())
 
+	event, err := storeContract.value("Calculated", sumLog.Data)
+	require.NoError(t, err)
+	fmt.Println("event", event)
 }
