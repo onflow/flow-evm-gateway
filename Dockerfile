@@ -19,5 +19,5 @@ COPY --from=builder /flow-evm-gateway/evm-gateway /flow-evm-gateway/evm-gateway
 COPY --from=builder /flow-evm-gateway/flow-cli-custom-builds/flow-x86_64-linux- /flow-evm-gateway/flow-x86_64-linux-
 COPY --from=builder /flow-evm-gateway/flow.json /flow-evm-gateway/flow.json 
 COPY --from=builder /flow-evm-gateway/api/cadence/transactions/create_bridged_account.cdc /flow-evm-gateway/create_bridged_account.cdc 
-EXPOSE 8888
+EXPOSE 8545
 CMD ./flow-x86_64-linux- emulator --evm-enabled & ./flow-x86_64-linux- transactions send ./create_bridged_account.cdc 1500.0 --network=emulator --signer=emulator-account & ./evm-gateway && wait
