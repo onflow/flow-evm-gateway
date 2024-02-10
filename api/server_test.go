@@ -45,7 +45,7 @@ func TestServerJSONRPCOveHTTPHandler(t *testing.T) {
 	blockchainAPI := api.NewBlockChainAPI(config, store, mockFlowClient)
 	supportedAPIs := api.SupportedAPIs(blockchainAPI)
 	srv.EnableRPC(supportedAPIs)
-	srv.SetListenAddr("localhost", 8545)
+	srv.SetListenAddr("", 8545)
 	err := srv.Start()
 	defer srv.Stop()
 	if err != nil {
@@ -460,7 +460,7 @@ func TestServerJSONRPCOveWebSocketHandler(t *testing.T) {
 	blockchainAPI := api.NewBlockChainAPI(config, store, flowClient)
 	supportedAPIs := api.SupportedAPIs(blockchainAPI)
 	srv.EnableWS(supportedAPIs)
-	srv.SetListenAddr("localhost", 8545)
+	srv.SetListenAddr("", 8545)
 	err = srv.Start()
 	defer srv.Stop()
 	if err != nil {
