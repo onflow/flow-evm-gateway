@@ -40,19 +40,19 @@ func (b *Blocks) Store(block *types.Block) error {
 	}
 
 	// todo batch operations
-	if err := b.store.set(blockHeightKey, block.Height, val); err != nil {
+	if err := b.store.set(blockHeightKey, uint64Key(block.Height), val); err != nil {
 		return err
 	}
 
-	return b.store.set(blockIDKey, id, val)
+	return b.store.set(blockIDKey, id.Bytes(), val)
 }
 
 func (b *Blocks) GetByHeight(height uint64) (*types.Block, error) {
-	return b.getBlock(blockHeightKey, height)
+	return b.getBlock(blockHeightKey, uint64Key(height))
 }
 
 func (b *Blocks) GetByID(ID common.Hash) (*types.Block, error) {
-	return b.getBlock(blockIDKey, ID)
+	return b.getBlock(blockIDKey, ID.Bytes())
 }
 
 func (b *Blocks) LatestHeight() (uint64, error) {
@@ -63,7 +63,7 @@ func (b *Blocks) FirstHeight() (uint64, error) {
 	return b.getHeight(firstHeightKey)
 }
 
-func (b *Blocks) getBlock(keyCode byte, key any) (*types.Block, error) {
+func (b *Blocks) getBlock(keyCode byte, key []byte) (*types.Block, error) {
 	b.mux.RLock()
 	defer b.mux.RUnlock()
 

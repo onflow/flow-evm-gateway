@@ -32,36 +32,36 @@ func (r *Receipts) Store(receipt *gethTypes.Receipt) error {
 	}
 
 	// todo batch the operations
-	if err := r.store.set(receiptTxIDKey, receipt.TxHash, val); err != nil {
+	if err := r.store.set(receiptTxIDKey, receipt.TxHash.Bytes(), val); err != nil {
 		return err
 	}
 
-	if err := r.store.set(receiptHeightKey, receipt.BlockNumber, val); err != nil {
+	if err := r.store.set(receiptHeightKey, receipt.BlockNumber.Bytes(), val); err != nil {
 		return err
 	}
 
-	return r.store.set(bloomHeightKey, receipt.BlockNumber, receipt.Bloom.Bytes())
+	return r.store.set(bloomHeightKey, receipt.BlockNumber.Bytes(), receipt.Bloom.Bytes())
 }
 
 func (r *Receipts) GetByTransactionID(ID common.Hash) (*gethTypes.Receipt, error) {
 	r.mux.RLock()
 	defer r.mux.RUnlock()
 
-	return r.getReceipt(receiptTxIDKey, ID)
+	return r.getReceipt(receiptTxIDKey, ID.Bytes())
 }
 
 func (r *Receipts) GetByBlockHeight(height *big.Int) (*gethTypes.Receipt, error) {
 	r.mux.RLock()
 	defer r.mux.RUnlock()
 
-	return r.getReceipt(receiptHeightKey, height)
+	return r.getReceipt(receiptHeightKey, height.Bytes())
 }
 
 func (r *Receipts) BloomsForBlockRange(start, end *big.Int) ([]gethTypes.Bloom, []*big.Int, error) {
 	panic("TODO")
 }
 
-func (r *Receipts) getReceipt(keyCode byte, key any) (*gethTypes.Receipt, error) {
+func (r *Receipts) getReceipt(keyCode byte, key []byte) (*gethTypes.Receipt, error) {
 	val, err := r.store.get(keyCode, key)
 	if err != nil {
 		return nil, err

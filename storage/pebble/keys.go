@@ -1,11 +1,6 @@
 package pebble
 
-import (
-	"encoding/binary"
-	"fmt"
-	"github.com/ethereum/go-ethereum/common"
-	"math/big"
-)
+import "encoding/binary"
 
 const (
 	// block keys
@@ -25,7 +20,7 @@ const (
 	firstHeightKey  = byte(101)
 )
 
-func makePrefix(code byte, key ...any) []byte {
+func makePrefix(code byte, key ...[]byte) []byte {
 	prefix := make([]byte, 1)
 	prefix[0] = code
 
@@ -37,16 +32,11 @@ func makePrefix(code byte, key ...any) []byte {
 		panic("unsupported key length")
 	}
 
-	switch i := key[0].(type) {
-	case uint64:
-		b := make([]byte, 8)
-		binary.BigEndian.PutUint64(b, i)
-		return append(prefix, b...)
-	case common.Hash:
-		return append(prefix, i.Bytes()...)
-	case *big.Int:
-		return append(prefix, i.Bytes()...)
-	default:
-		panic(fmt.Sprintf("unsupported key type to convert (%T)", key[0]))
-	}
+	return append(prefix, key[0]...)
+}
+
+func uint64Key(height uint64) []byte {
+	b := make([]byte, 8)
+	binary.BigEndian.PutUint64(b, height)
+	return b
 }

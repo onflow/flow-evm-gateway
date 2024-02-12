@@ -30,14 +30,14 @@ func (t *Transactions) Store(tx *gethTypes.Transaction) error {
 		return err
 	}
 
-	return t.store.set(txIDKey, tx.Hash(), val)
+	return t.store.set(txIDKey, tx.Hash().Bytes(), val)
 }
 
 func (t *Transactions) Get(ID common.Hash) (*gethTypes.Transaction, error) {
 	t.mux.RLock()
 	defer t.mux.RUnlock()
 
-	val, err := t.store.get(txIDKey, ID)
+	val, err := t.store.get(txIDKey, ID.Bytes())
 	if err != nil {
 		return nil, err
 	}
