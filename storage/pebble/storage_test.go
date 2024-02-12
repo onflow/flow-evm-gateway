@@ -2,6 +2,7 @@ package pebble
 
 import (
 	"github.com/onflow/flow-evm-gateway/storage/mocks"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"os"
@@ -36,7 +37,7 @@ func runDB(name string, t *testing.T, f func(t *testing.T, db *Storage)) {
 		require.NoError(t, os.RemoveAll(dir))
 	}()
 
-	db, err := New(dir)
+	db, err := New(dir, zerolog.New(zerolog.NewTestWriter(t)))
 	require.NoError(t, err)
 
 	t.Run(name, func(t *testing.T) {
