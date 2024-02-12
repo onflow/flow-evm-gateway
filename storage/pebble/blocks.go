@@ -2,14 +2,29 @@ package pebble
 
 import (
 	"encoding/binary"
+	"errors"
+	"fmt"
+	"sync"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/onflow/flow-evm-gateway/storage"
+	errs "github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/onflow/flow-go/fvm/evm/types"
-	"sync"
 )
 
 var _ storage.BlockIndexer = &Blocks{}
+
+type BlockOption func(block *Blocks) error
+
+// WithInitHeight sets the first and last height to the provided value,
+// this should be used to initialize an empty database, if the first and last
+// heights are already set an error will be returned.
+func WithInitHeight(height uint64) BlockOption {
+	return func(block *Blocks) error {
+		return block.storeInitHeight(height)
+	}
+}
 
 type Blocks struct {
 	store       *Storage
@@ -17,12 +32,20 @@ type Blocks struct {
 	heightCache map[byte]uint64
 }
 
-func NewBlocks(store *Storage) *Blocks {
-	return &Blocks{
+func NewBlocks(store *Storage, opts ...BlockOption) (*Blocks, error) {
+	blk := &Blocks{
 		store:       store,
 		mux:         sync.RWMutex{},
 		heightCache: make(map[byte]uint64),
 	}
+
+	for _, opt := range opts {
+		if err := opt(blk); err != nil {
+			return nil, err
+		}
+	}
+
+	return blk, nil
 }
 
 func (b *Blocks) Store(block *types.Block) error {
@@ -40,19 +63,35 @@ func (b *Blocks) Store(block *types.Block) error {
 	}
 
 	// todo batch operations
-	if err := b.store.set(blockHeightKey, uint64Key(block.Height), val); err != nil {
+	if err := b.store.set(blockHeightKey, uint64Bytes(block.Height), val); err != nil {
 		return err
 	}
 
-	return b.store.set(blockIDKey, id.Bytes(), val)
+	// todo check if what is more often used block by id or block by height and fix accordingly if needed
+	return b.store.set(blockIDHeightKey, id.Bytes(), uint64Bytes(block.Height))
 }
 
 func (b *Blocks) GetByHeight(height uint64) (*types.Block, error) {
-	return b.getBlock(blockHeightKey, uint64Key(height))
+	first, err := b.FirstHeight()
+	if err != nil {
+		return nil, err
+	}
+
+	last, err := b.LatestHeight()
+	if err != nil {
+		return nil, err
+	}
+
+	// check if the requested height is within the known range
+	if height < first || height > last {
+		return nil, errs.NotFound
+	}
+
+	return b.getBlock(blockHeightKey, uint64Bytes(height))
 }
 
 func (b *Blocks) GetByID(ID common.Hash) (*types.Block, error) {
-	return b.getBlock(blockIDKey, ID.Bytes())
+	return b.getBlock(blockIDHeightKey, ID.Bytes())
 }
 
 func (b *Blocks) LatestHeight() (uint64, error) {
@@ -94,4 +133,19 @@ func (b *Blocks) getHeight(keyCode byte) (uint64, error) {
 	h := binary.BigEndian.Uint64(val)
 	b.heightCache[keyCode] = h
 	return h, nil
+}
+
+func (b *Blocks) storeInitHeight(height uint64) error {
+	// check if first and last exists
+	_, err := b.store.get(firstHeightKey)
+	if !errors.Is(err, errs.NotFound) {
+		return fmt.Errorf("can not overwrite an existing first height")
+	}
+
+	// todo batch
+	if err := b.store.set(firstHeightKey, nil, uint64Bytes(height)); err != nil {
+		return err
+	}
+
+	return b.store.set(latestHeightKey, nil, uint64Bytes(height))
 }
