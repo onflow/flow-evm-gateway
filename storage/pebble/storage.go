@@ -104,17 +104,10 @@ func (s *Storage) storeBlock(block *types.Block) error {
 }
 
 func (s *Storage) getBlock(height uint64) (*types.Block, error) {
-	key := []byte(fmt.Sprintf("blocks/%d", height))
-	data, closer, err := s.db.Get(key)
+	data, err := s.get(blockHeightKey, height)
 	if err != nil {
 		return nil, err
 	}
-	defer func(closer io.Closer) {
-		err = closer.Close()
-		if err != nil {
-
-		}
-	}(closer)
 
 	var block types.Block
 	err = rlp.DecodeBytes(data, &block)
