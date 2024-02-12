@@ -1,6 +1,7 @@
 package pebble
 
 import (
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/onflow/flow-evm-gateway/storage/mocks"
 	"github.com/rs/zerolog"
@@ -14,7 +15,8 @@ func TestBlock(t *testing.T) {
 
 	runDB("store block", t, func(t *testing.T, db *Storage) {
 		bl := mocks.NewBlock(10)
-		err := db.storeBlock(bl)
+		blocks := NewBlocks(db)
+		err := blocks.Store(bl)
 		require.NoError(t, err)
 	})
 
@@ -22,16 +24,30 @@ func TestBlock(t *testing.T) {
 		const height = uint64(12)
 		bl := mocks.NewBlock(height)
 
-		err := db.storeBlock(bl)
+		blocks := NewBlocks(db)
+		err := blocks.Store(bl)
 		require.NoError(t, err)
 
-		block, err := db.getBlock(height)
+		block, err := blocks.GetByHeight(height)
+		require.NoError(t, err)
+		assert.Equal(t, bl, block)
+
+		id, err := bl.Hash()
+		require.NoError(t, err)
+
+		block, err = blocks.GetByID(id)
 		require.NoError(t, err)
 		assert.Equal(t, bl, block)
 	})
 
 	runDB("get not found block error", t, func(t *testing.T, db *Storage) {
-		bl, err := db.getBlock(2)
+		blocks := NewBlocks(db)
+
+		bl, err := blocks.GetByHeight(11)
+		require.ErrorIs(t, err, errors.NotFound)
+		require.Nil(t, bl)
+
+		bl, err = blocks.GetByID(common.Hash{0x1})
 		require.ErrorIs(t, err, errors.NotFound)
 		require.Nil(t, bl)
 	})
