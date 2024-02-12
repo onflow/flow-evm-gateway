@@ -4,8 +4,8 @@ import "encoding/binary"
 
 const (
 	// block keys
-	blockHeightKey = byte(1)
-	blockIDKey     = byte(2)
+	blockHeightKey   = byte(1)
+	blockIDHeightKey = byte(2)
 
 	// transaction keys
 	txIDKey = byte(10)
@@ -35,7 +35,7 @@ func makePrefix(code byte, key ...[]byte) []byte {
 	return append(prefix, key[0]...)
 }
 
-func uint64Key(height uint64) []byte {
+func uint64Bytes(height uint64) []byte {
 	b := make([]byte, 8)
 	binary.BigEndian.PutUint64(b, height)
 	return b
