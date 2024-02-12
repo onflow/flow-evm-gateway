@@ -1,23 +1,17 @@
 package pebble
 
 import (
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"github.com/cockroachdb/pebble"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/rlp"
 	errs "github.com/onflow/flow-evm-gateway/storage/errors"
-	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/rs/zerolog"
 	"io"
 )
 
 type Storage struct {
-	db          *pebble.DB
-	log         zerolog.Logger
-	heightCache map[byte]uint64
-	// todo add mutex locks
+	db  *pebble.DB
+	log zerolog.Logger
 }
 
 // New creates a new storage instance using the provided dir location as the storage directory.
@@ -96,69 +90,4 @@ func (s *Storage) get(keyCode byte, key ...any) ([]byte, error) {
 	}(closer)
 
 	return data, nil
-}
-
-func (s *Storage) storeBlock(block *types.Block) error {
-	val, err := block.ToBytes()
-	if err != nil {
-		return err
-	}
-
-	id, err := block.Hash()
-	if err != nil {
-		return err
-	}
-
-	// todo batch operations
-	if err := s.set(blockHeightKey, block.Height, val); err != nil {
-		return err
-	}
-
-	return s.set(blockIDKey, id, val)
-}
-
-func (s *Storage) getBlock(keyCode byte, key any) (*types.Block, error) {
-	data, err := s.get(keyCode, key)
-	if err != nil {
-		return nil, err
-	}
-
-	var block types.Block
-	err = rlp.DecodeBytes(data, &block)
-	if err != nil {
-		return nil, err
-	}
-
-	return &block, nil
-}
-
-func (s *Storage) getBlockByHeight(height uint64) (*types.Block, error) {
-	return s.getBlock(blockHeightKey, height)
-}
-
-func (s *Storage) getBlockByID(id common.Hash) (*types.Block, error) {
-	return s.getBlock(blockIDKey, id)
-}
-
-func (s *Storage) getHeight(keyCode byte) (uint64, error) {
-	if s.heightCache[keyCode] != 0 {
-		return s.heightCache[keyCode], nil
-	}
-
-	val, err := s.get(keyCode)
-	if err != nil {
-		return 0, err
-	}
-
-	h := binary.BigEndian.Uint64(val)
-	s.heightCache[keyCode] = h
-	return h, nil
-}
-
-func (s *Storage) getLatestHeight() (uint64, error) {
-	return s.getHeight(latestHeightKey)
-}
-
-func (s *Storage) getFirstHeight() (uint64, error) {
-	return s.getHeight(firstHeightKey)
 }

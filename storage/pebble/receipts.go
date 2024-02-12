@@ -15,6 +15,13 @@ type Receipts struct {
 	mux   sync.RWMutex
 }
 
+func NewReceipts(store *Storage) *Receipts {
+	return &Receipts{
+		store: store,
+		mux:   sync.RWMutex{},
+	}
+}
+
 func (r *Receipts) Store(receipt *gethTypes.Receipt) error {
 	r.mux.Lock()
 	defer r.mux.Unlock()

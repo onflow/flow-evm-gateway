@@ -14,6 +14,13 @@ type Transactions struct {
 	mux   sync.RWMutex
 }
 
+func NewTransactions(store *Storage) *Transactions {
+	return &Transactions{
+		store: store,
+		mux:   sync.RWMutex{},
+	}
+}
+
 func (t *Transactions) Store(tx *gethTypes.Transaction) error {
 	t.mux.Lock()
 	defer t.mux.Unlock()
