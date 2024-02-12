@@ -14,8 +14,9 @@ import (
 )
 
 type Storage struct {
-	db  *pebble.DB
-	log zerolog.Logger
+	db          *pebble.DB
+	log         zerolog.Logger
+	heightCache map[byte]uint64
 	// todo add mutex locks
 }
 
@@ -138,9 +139,21 @@ func (s *Storage) getHeight(keyCode byte) (uint64, error) {
 }
 
 func (s *Storage) getLatestHeight() (uint64, error) {
-	return s.getHeight(latestHeightKey)
+	if s.heightCache[latestHeightKey] != 0 {
+		return s.heightCache[latestHeightKey], nil
+	}
+
+	var err error
+	s.heightCache[latestHeightKey], err = s.getHeight(latestHeightKey)
+	return s.heightCache[latestHeightKey], err
 }
 
 func (s *Storage) getFirstHeight() (uint64, error) {
-	return s.getHeight(firstHeightKey)
+	if s.heightCache[firstHeightKey] != 0 {
+		return s.heightCache[firstHeightKey], nil
+	}
+
+	var err error
+	s.heightCache[firstHeightKey], err = s.getHeight(firstHeightKey)
+	return s.heightCache[firstHeightKey], err
 }
