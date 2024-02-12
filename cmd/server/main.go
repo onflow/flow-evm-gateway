@@ -182,7 +182,7 @@ func runServer(config *api.Config, store *storage.Store, logger zerolog.Logger) 
 	srv.EnableRPC(supportedAPIs)
 	srv.EnableWS(supportedAPIs)
 
-	srv.SetListenAddr("localhost", 8545)
+	srv.SetListenAddr("", 8545)
 
 	err = srv.Start()
 	if err != nil {
