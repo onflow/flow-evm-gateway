@@ -72,6 +72,9 @@ func (b *Blocks) Store(block *types.Block) error {
 }
 
 func (b *Blocks) GetByHeight(height uint64) (*types.Block, error) {
+	b.mux.RLock()
+	defer b.mux.RUnlock()
+
 	first, err := b.FirstHeight()
 	if err != nil {
 		return nil, err
@@ -91,7 +94,15 @@ func (b *Blocks) GetByHeight(height uint64) (*types.Block, error) {
 }
 
 func (b *Blocks) GetByID(ID common.Hash) (*types.Block, error) {
-	return b.getBlock(blockIDHeightKey, ID.Bytes())
+	b.mux.RLock()
+	defer b.mux.RUnlock()
+
+	height, err := b.store.get(blockIDHeightKey)
+	if err != nil {
+		return nil, err
+	}
+
+	return b.getBlock(blockHeightKey, height)
 }
 
 func (b *Blocks) LatestHeight() (uint64, error) {
@@ -103,9 +114,6 @@ func (b *Blocks) FirstHeight() (uint64, error) {
 }
 
 func (b *Blocks) getBlock(keyCode byte, key []byte) (*types.Block, error) {
-	b.mux.RLock()
-	defer b.mux.RUnlock()
-
 	data, err := b.store.get(keyCode, key)
 	if err != nil {
 		return nil, err
@@ -121,6 +129,9 @@ func (b *Blocks) getBlock(keyCode byte, key []byte) (*types.Block, error) {
 }
 
 func (b *Blocks) getHeight(keyCode byte) (uint64, error) {
+	b.mux.RLock()
+	defer b.mux.RUnlock()
+
 	if b.heightCache[keyCode] != 0 {
 		return b.heightCache[keyCode], nil
 	}
