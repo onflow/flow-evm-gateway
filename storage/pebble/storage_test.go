@@ -2,14 +2,35 @@ package pebble
 
 import (
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/onflow/flow-evm-gateway/storage/mocks"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
 	"os"
 	"testing"
 )
+
+// tests that make sure the implementation conform to the interface expected behaviour
+func TestBlocks(t *testing.T) {
+	runDB("blocks", t, func(t *testing.T, db *Storage) {
+		suite.Run(t, &storage.BlockTestSuite{Blocks: NewBlocks(db)})
+	})
+}
+
+func TestReceipts(t *testing.T) {
+	runDB("receipts", t, func(t *testing.T, db *Storage) {
+		suite.Run(t, &storage.ReceiptTestSuite{ReceiptIndexer: NewReceipts(db)})
+	})
+}
+
+func TestTransactions(t *testing.T) {
+	runDB("transactions", t, func(t *testing.T, db *Storage) {
+		suite.Run(t, &storage.TransactionTestSuite{TransactionIndexer: NewTransactions(db)})
+	})
+}
 
 func TestBlock(t *testing.T) {
 
