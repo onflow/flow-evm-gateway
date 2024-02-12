@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/cockroachdb/pebble"
 	"github.com/ethereum/go-ethereum/common"
+	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 	errs "github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/onflow/flow-go/fvm/evm/types"
@@ -151,4 +152,31 @@ func (s *Storage) getLatestHeight() (uint64, error) {
 
 func (s *Storage) getFirstHeight() (uint64, error) {
 	return s.getHeight(firstHeightKey)
+}
+
+func (s *Storage) storeReceipt(receipt *gethTypes.Receipt) error {
+	val, err := receipt.MarshalBinary()
+	if err != nil {
+		return err
+	}
+
+	return s.set(receiptTxIDKey, receipt.TxHash, val)
+}
+
+func (s *Storage) getReceipt(keyCode byte, key any) (*gethTypes.Receipt, error) {
+	val, err := s.get(keyCode, key)
+	if err != nil {
+		return nil, err
+	}
+
+	var receipt *gethTypes.Receipt
+	return receipt, receipt.UnmarshalBinary(val)
+}
+
+func (s *Storage) getReceiptByTxID(id common.Hash) (*gethTypes.Receipt, error) {
+	return s.getReceipt(receiptTxIDKey, id)
+}
+
+func (s *Storage) getReceiptByHeight(height uint64) (*gethTypes.Receipt, error) {
+	return s.getReceipt(receiptHeightKey, height)
 }
