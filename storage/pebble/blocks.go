@@ -63,12 +63,17 @@ func (b *Blocks) Store(block *types.Block) error {
 	}
 
 	// todo batch operations
-	if err := b.store.set(blockHeightKey, uint64Bytes(block.Height), val); err != nil {
+	height := uint64Bytes(block.Height)
+	if err := b.store.set(blockHeightKey, height, val); err != nil {
 		return err
 	}
 
 	// todo check if what is more often used block by id or block by height and fix accordingly if needed
-	return b.store.set(blockIDHeightKey, id.Bytes(), uint64Bytes(block.Height))
+	if err := b.store.set(blockIDHeightKey, id.Bytes(), uint64Bytes(block.Height)); err != nil {
+		return err
+	}
+
+	return b.store.set(latestHeightKey, nil, height)
 }
 
 func (b *Blocks) GetByHeight(height uint64) (*types.Block, error) {
@@ -97,7 +102,7 @@ func (b *Blocks) GetByID(ID common.Hash) (*types.Block, error) {
 	b.mux.RLock()
 	defer b.mux.RUnlock()
 
-	height, err := b.store.get(blockIDHeightKey)
+	height, err := b.store.get(blockIDHeightKey, ID.Bytes())
 	if err != nil {
 		return nil, err
 	}
