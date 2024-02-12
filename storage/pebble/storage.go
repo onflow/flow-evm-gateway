@@ -1,6 +1,7 @@
 package pebble
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"github.com/cockroachdb/pebble"
@@ -15,6 +16,7 @@ import (
 type Storage struct {
 	db  *pebble.DB
 	log zerolog.Logger
+	// todo add mutex locks
 }
 
 // New creates a new storage instance using the provided dir location as the storage directory.
@@ -74,7 +76,7 @@ func (s *Storage) set(keyCode byte, key any, value []byte) error {
 	return s.db.Set(prefixedKey, value, writeOpts)
 }
 
-func (s *Storage) get(keyCode byte, key any) ([]byte, error) {
+func (s *Storage) get(keyCode byte, key ...any) ([]byte, error) {
 	prefixedKey := makePrefix(keyCode, key)
 
 	data, closer, err := s.db.Get(prefixedKey)
@@ -125,4 +127,20 @@ func (s *Storage) getBlockByHeight(height uint64) (*types.Block, error) {
 
 func (s *Storage) getBlockByID(id common.Hash) (*types.Block, error) {
 	return s.getBlock(blockIDKey, id)
+}
+
+func (s *Storage) getHeight(keyCode byte) (uint64, error) {
+	val, err := s.get(keyCode)
+	if err != nil {
+		return 0, err
+	}
+	return binary.BigEndian.Uint64(val), nil
+}
+
+func (s *Storage) getLatestHeight() (uint64, error) {
+	return s.getHeight(latestHeightKey)
+}
+
+func (s *Storage) getFirstHeight() (uint64, error) {
+	return s.getHeight(firstHeightKey)
 }
