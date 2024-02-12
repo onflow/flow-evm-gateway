@@ -160,7 +160,16 @@ func (s *Storage) storeReceipt(receipt *gethTypes.Receipt) error {
 		return err
 	}
 
-	return s.set(receiptTxIDKey, receipt.TxHash, val)
+	// todo batch the operations
+	if err := s.set(receiptTxIDKey, receipt.TxHash, val); err != nil {
+		return err
+	}
+
+	if err := s.set(receiptHeightKey, receipt.BlockNumber, val); err != nil {
+		return err
+	}
+
+	return s.set(bloomHeightKey, receipt.BlockNumber, receipt.Bloom.Bytes())
 }
 
 func (s *Storage) getReceipt(keyCode byte, key any) (*gethTypes.Receipt, error) {
