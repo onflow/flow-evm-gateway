@@ -8,22 +8,22 @@ import (
 )
 
 const (
-	// block codes
-	codeHeightToBlock = byte(1)
-	codeIDToBlock     = byte(2)
+	// block keys
+	blockHeightKey = byte(1)
+	blockIDKey     = byte(2)
 
-	// transaction codes
-	codeIDToTx     = byte(10)
-	codeHeightToTx = byte(11)
+	// transaction keys
+	txIDKey     = byte(10)
+	txHeightKey = byte(11)
 
-	// receipt codes
-	codeTxIDToReceipt   = byte(20)
-	codeHeightToReceipt = byte(21)
-	codeHeightToBloom   = byte(22)
+	// receipt keys
+	receiptTxIDKey   = byte(20)
+	receiptHeightKey = byte(21)
+	bloomHeightKey   = byte(22)
 
-	// special codes
-	codeLatestHeight = byte(100)
-	codeFirstHeight  = byte(101)
+	// special keys
+	latestHeightKey = byte(100)
+	firstHeightKey  = byte(101)
 )
 
 func makePrefix(code byte, key any) []byte {
