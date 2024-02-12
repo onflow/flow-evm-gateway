@@ -1,4 +1,4 @@
-package storage
+package mocks
 
 import (
 	"fmt"
@@ -8,7 +8,7 @@ import (
 	"math/big"
 )
 
-func newBlock(height uint64) *types.Block {
+func NewBlock(height uint64) *types.Block {
 	parent := common.HexToHash(fmt.Sprintf("0x0%d", height-1))
 	if height == 0 {
 		parent = common.Hash{}
@@ -23,7 +23,7 @@ func newBlock(height uint64) *types.Block {
 	}
 }
 
-func newReceipt(height uint64, ID common.Hash) *gethTypes.Receipt {
+func NewReceipt(height uint64, ID common.Hash) *gethTypes.Receipt {
 	txHash := common.HexToHash(fmt.Sprintf("0xff%d", height))
 	return &gethTypes.Receipt{
 		PostState:         common.Hash{2}.Bytes(),
@@ -57,7 +57,7 @@ func newReceipt(height uint64, ID common.Hash) *gethTypes.Receipt {
 	}
 }
 
-func newTransaction(nonce uint64) *gethTypes.Transaction {
+func NewTransaction(nonce uint64) *gethTypes.Transaction {
 	return gethTypes.NewTx(&gethTypes.DynamicFeeTx{
 		ChainID:   big.NewInt(1),
 		Nonce:     nonce,

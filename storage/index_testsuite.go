@@ -5,6 +5,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/onflow/flow-evm-gateway/storage/errors"
+	"github.com/onflow/flow-evm-gateway/storage/mocks"
 	"github.com/stretchr/testify/suite"
 	"math/big"
 )
@@ -17,7 +18,7 @@ type BlockTestSuite struct {
 func (b *BlockTestSuite) TestGet() {
 	b.Run("existing block", func() {
 		height := uint64(1)
-		block := newBlock(height)
+		block := mocks.NewBlock(height)
 		err := b.Blocks.Store(block)
 		b.Require().NoError(err)
 
@@ -40,7 +41,7 @@ func (b *BlockTestSuite) TestGet() {
 }
 
 func (b *BlockTestSuite) TestStore() {
-	block := newBlock(10)
+	block := mocks.NewBlock(10)
 
 	b.Run("success", func() {
 		err := b.Blocks.Store(block)
@@ -62,7 +63,7 @@ func (b *BlockTestSuite) TestHeights() {
 
 	b.Run("last height", func() {
 		lastHeight := uint64(100)
-		err := b.Blocks.Store(newBlock(lastHeight))
+		err := b.Blocks.Store(mocks.NewBlock(lastHeight))
 		b.Require().NoError(err)
 
 		last, err := b.Blocks.LatestHeight()
@@ -77,7 +78,7 @@ type ReceiptTestSuite struct {
 }
 
 func (s *ReceiptTestSuite) TestStoreReceipt() {
-	receipt := newReceipt(1, common.HexToHash("0xf1"))
+	receipt := mocks.NewReceipt(1, common.HexToHash("0xf1"))
 
 	s.Run("store receipt successfully", func() {
 		err := s.ReceiptIndexer.Store(receipt)
@@ -92,7 +93,7 @@ func (s *ReceiptTestSuite) TestStoreReceipt() {
 
 func (s *ReceiptTestSuite) TestGetReceiptByTransactionID() {
 	s.Run("existing transaction ID", func() {
-		receipt := newReceipt(2, common.HexToHash("0xf2"))
+		receipt := mocks.NewReceipt(2, common.HexToHash("0xf2"))
 		err := s.ReceiptIndexer.Store(receipt)
 		s.Require().NoError(err)
 
@@ -111,7 +112,7 @@ func (s *ReceiptTestSuite) TestGetReceiptByTransactionID() {
 
 func (s *ReceiptTestSuite) TestGetReceiptByBlockID() {
 	s.Run("existing block ID", func() {
-		receipt := newReceipt(3, common.HexToHash("0x1"))
+		receipt := mocks.NewReceipt(3, common.HexToHash("0x1"))
 		err := s.ReceiptIndexer.Store(receipt)
 		s.Require().NoError(err)
 
@@ -135,7 +136,7 @@ func (s *ReceiptTestSuite) TestBloomsForBlockRange() {
 		testBlooms := make([]*types.Bloom, 0)
 
 		for i := start.Uint64(); i < end.Uint64(); i++ {
-			r := newReceipt(i, common.HexToHash(fmt.Sprintf("0xf1%d", i)))
+			r := mocks.NewReceipt(i, common.HexToHash(fmt.Sprintf("0xf1%d", i)))
 			testBlooms = append(testBlooms, &r.Bloom)
 			err := s.ReceiptIndexer.Store(r)
 			s.Require().NoError(err)
@@ -173,7 +174,7 @@ type TransactionTestSuite struct {
 }
 
 func (s *TransactionTestSuite) TestStoreTransaction() {
-	tx := newTransaction(0)
+	tx := mocks.NewTransaction(0)
 
 	s.Run("store transaction successfully", func() {
 		err := s.TransactionIndexer.Store(tx)
@@ -188,7 +189,7 @@ func (s *TransactionTestSuite) TestStoreTransaction() {
 
 func (s *TransactionTestSuite) TestGetTransaction() {
 	s.Run("existing transaction", func() {
-		tx := newTransaction(1)
+		tx := mocks.NewTransaction(1)
 		err := s.TransactionIndexer.Store(tx)
 		s.Require().NoError(err)
 
