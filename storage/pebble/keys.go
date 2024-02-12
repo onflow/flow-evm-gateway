@@ -26,11 +26,19 @@ const (
 	firstHeightKey  = byte(101)
 )
 
-func makePrefix(code byte, key any) []byte {
+func makePrefix(code byte, key ...any) []byte {
 	prefix := make([]byte, 1)
 	prefix[0] = code
 
-	switch i := key.(type) {
+	// allow for special keys
+	if key == nil {
+		return prefix
+	}
+	if len(key) != 1 {
+		panic("unsupported key length")
+	}
+
+	switch i := key[0].(type) {
 	case uint64:
 		b := make([]byte, 8)
 		binary.BigEndian.PutUint64(b, i)
@@ -40,6 +48,6 @@ func makePrefix(code byte, key any) []byte {
 	case *big.Int:
 		return append(prefix, i.Bytes()...)
 	default:
-		panic(fmt.Sprintf("unsupported key type to convert (%T)", key))
+		panic(fmt.Sprintf("unsupported key type to convert (%T)", key[0]))
 	}
 }
