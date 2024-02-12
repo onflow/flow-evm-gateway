@@ -131,29 +131,24 @@ func (s *Storage) getBlockByID(id common.Hash) (*types.Block, error) {
 }
 
 func (s *Storage) getHeight(keyCode byte) (uint64, error) {
+	if s.heightCache[keyCode] != 0 {
+		return s.heightCache[keyCode], nil
+	}
+
 	val, err := s.get(keyCode)
 	if err != nil {
 		return 0, err
 	}
-	return binary.BigEndian.Uint64(val), nil
+
+	h := binary.BigEndian.Uint64(val)
+	s.heightCache[keyCode] = h
+	return h, nil
 }
 
 func (s *Storage) getLatestHeight() (uint64, error) {
-	if s.heightCache[latestHeightKey] != 0 {
-		return s.heightCache[latestHeightKey], nil
-	}
-
-	var err error
-	s.heightCache[latestHeightKey], err = s.getHeight(latestHeightKey)
-	return s.heightCache[latestHeightKey], err
+	return s.getHeight(latestHeightKey)
 }
 
 func (s *Storage) getFirstHeight() (uint64, error) {
-	if s.heightCache[firstHeightKey] != 0 {
-		return s.heightCache[firstHeightKey], nil
-	}
-
-	var err error
-	s.heightCache[firstHeightKey], err = s.getHeight(firstHeightKey)
-	return s.heightCache[firstHeightKey], err
+	return s.getHeight(firstHeightKey)
 }
