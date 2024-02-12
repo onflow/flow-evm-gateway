@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/cockroachdb/pebble"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rlp"
 	errs "github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/onflow/flow-go/fvm/evm/types"
@@ -103,8 +104,8 @@ func (s *Storage) storeBlock(block *types.Block) error {
 	return s.set(blockHeightKey, block.Height, val)
 }
 
-func (s *Storage) getBlock(height uint64) (*types.Block, error) {
-	data, err := s.get(blockHeightKey, height)
+func (s *Storage) getBlock(keyCode byte, key any) (*types.Block, error) {
+	data, err := s.get(keyCode, key)
 	if err != nil {
 		return nil, err
 	}
@@ -116,4 +117,12 @@ func (s *Storage) getBlock(height uint64) (*types.Block, error) {
 	}
 
 	return &block, nil
+}
+
+func (s *Storage) getBlockByHeight(height uint64) (*types.Block, error) {
+	return s.getBlock(blockHeightKey, height)
+}
+
+func (s *Storage) getBlockByID(id common.Hash) (*types.Block, error) {
+	return s.getBlock(blockIDKey, id)
 }
