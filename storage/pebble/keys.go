@@ -13,8 +13,7 @@ const (
 	blockIDKey     = byte(2)
 
 	// transaction keys
-	txIDKey     = byte(10)
-	txHeightKey = byte(11)
+	txIDKey = byte(10)
 
 	// receipt keys
 	receiptTxIDKey   = byte(20)

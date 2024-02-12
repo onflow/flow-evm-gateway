@@ -189,3 +189,22 @@ func (s *Storage) getReceiptByTxID(id common.Hash) (*gethTypes.Receipt, error) {
 func (s *Storage) getReceiptByHeight(height uint64) (*gethTypes.Receipt, error) {
 	return s.getReceipt(receiptHeightKey, height)
 }
+
+func (s *Storage) storeTransaction(tx *gethTypes.Transaction) error {
+	val, err := tx.MarshalBinary()
+	if err != nil {
+		return err
+	}
+
+	return s.set(txIDKey, tx.Hash(), val)
+}
+
+func (s *Storage) getTransactionByID(id common.Hash) (*gethTypes.Transaction, error) {
+	val, err := s.get(txIDKey, id)
+	if err != nil {
+		return nil, err
+	}
+
+	var tx *gethTypes.Transaction
+	return tx, tx.UnmarshalBinary(val)
+}
