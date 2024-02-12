@@ -1,6 +1,7 @@
 package pebble
 
 import (
+	"github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/onflow/flow-evm-gateway/storage/mocks"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -17,7 +18,7 @@ func TestBlock(t *testing.T) {
 		require.NoError(t, err)
 	})
 
-	runDB("store and retrieve", t, func(t *testing.T, db *Storage) {
+	runDB("get stored block", t, func(t *testing.T, db *Storage) {
 		const height = uint64(12)
 		bl := mocks.NewBlock(height)
 
@@ -27,6 +28,12 @@ func TestBlock(t *testing.T) {
 		block, err := db.getBlock(height)
 		require.NoError(t, err)
 		assert.Equal(t, bl, block)
+	})
+
+	runDB("get not found block error", t, func(t *testing.T, db *Storage) {
+		bl, err := db.getBlock(2)
+		require.ErrorIs(t, err, errors.NotFound)
+		require.Nil(t, bl)
 	})
 }
 
