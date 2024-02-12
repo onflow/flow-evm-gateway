@@ -105,7 +105,17 @@ func (s *Storage) storeBlock(block *types.Block) error {
 		return err
 	}
 
-	return s.set(blockHeightKey, block.Height, val)
+	id, err := block.Hash()
+	if err != nil {
+		return err
+	}
+
+	// todo batch operations
+	if err := s.set(blockHeightKey, block.Height, val); err != nil {
+		return err
+	}
+
+	return s.set(blockIDKey, id, val)
 }
 
 func (s *Storage) getBlock(keyCode byte, key any) (*types.Block, error) {
