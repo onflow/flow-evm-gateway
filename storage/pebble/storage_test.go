@@ -16,7 +16,9 @@ import (
 // tests that make sure the implementation conform to the interface expected behaviour
 func TestBlocks(t *testing.T) {
 	runDB("blocks", t, func(t *testing.T, db *Storage) {
-		suite.Run(t, &storage.BlockTestSuite{Blocks: NewBlocks(db)})
+		bl, err := NewBlocks(db, WithInitHeight(0))
+		require.NoError(t, err)
+		suite.Run(t, &storage.BlockTestSuite{Blocks: bl})
 	})
 }
 
@@ -36,8 +38,10 @@ func TestBlock(t *testing.T) {
 
 	runDB("store block", t, func(t *testing.T, db *Storage) {
 		bl := mocks.NewBlock(10)
-		blocks := NewBlocks(db)
-		err := blocks.Store(bl)
+		blocks, err := NewBlocks(db)
+		require.NoError(t, err)
+
+		err = blocks.Store(bl)
 		require.NoError(t, err)
 	})
 
@@ -45,8 +49,10 @@ func TestBlock(t *testing.T) {
 		const height = uint64(12)
 		bl := mocks.NewBlock(height)
 
-		blocks := NewBlocks(db)
-		err := blocks.Store(bl)
+		blocks, err := NewBlocks(db)
+		require.NoError(t, err)
+
+		err = blocks.Store(bl)
 		require.NoError(t, err)
 
 		block, err := blocks.GetByHeight(height)
@@ -62,7 +68,8 @@ func TestBlock(t *testing.T) {
 	})
 
 	runDB("get not found block error", t, func(t *testing.T, db *Storage) {
-		blocks := NewBlocks(db)
+		blocks, err := NewBlocks(db)
+		require.NoError(t, err)
 
 		bl, err := blocks.GetByHeight(11)
 		require.ErrorIs(t, err, errors.NotFound)
