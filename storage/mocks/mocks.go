@@ -19,7 +19,7 @@ func NewBlock(height uint64) *types.Block {
 		Height:            height,
 		TotalSupply:       big.NewInt(1000),
 		ReceiptRoot:       common.HexToHash(fmt.Sprintf("0x1337%d", height)),
-		TransactionHashes: nil,
+		TransactionHashes: make([]common.Hash, 0),
 	}
 }
 
