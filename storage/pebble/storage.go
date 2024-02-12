@@ -12,7 +12,8 @@ type Storage struct {
 	db *pebble.DB
 }
 
-func New() (*Storage, error) {
+// New creates a new storage instance using the provided dir location as the storage directory.
+func New(dir string) (*Storage, error) {
 	cache := pebble.NewCache(1 << 20)
 	defer cache.Unref()
 
@@ -51,8 +52,7 @@ func New() (*Storage, error) {
 	opts.FlushSplitBytes = opts.Levels[0].TargetFileSize
 	opts.EnsureDefaults()
 
-	dbDir := "./db"
-	db, err := pebble.Open(dbDir, opts)
+	db, err := pebble.Open(dir, opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open db: %w", err)
 	}
