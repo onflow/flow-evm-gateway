@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/onflow/flow-evm-gateway/services/logs"
 	"math/big"
+	"os"
 	"testing"
 	"time"
 
@@ -40,8 +41,13 @@ func TestIntegration_TransferValue(t *testing.T) {
 	srv, err := startEmulator()
 	require.NoError(t, err)
 
+	dbDir := "./db-test"
+	defer func() {
+		_ = os.Remove(dbDir)
+	}()
+
 	ctx, cancelIngestion := context.WithCancel(context.Background())
-	blocks, receipts, txs, err := startEventIngestionEngine(ctx)
+	blocks, receipts, txs, err := startEventIngestionEngine(ctx, dbDir)
 	require.NoError(t, err)
 
 	defer func() {
@@ -131,8 +137,13 @@ func TestIntegration_DeployCallContract(t *testing.T) {
 	srv, err := startEmulator()
 	require.NoError(t, err)
 
+	dbDir := "./db-test"
+	defer func() {
+		_ = os.Remove(dbDir)
+	}()
+
 	ctx, cancelIngestion := context.WithCancel(context.Background())
-	blocks, receipts, txs, err := startEventIngestionEngine(ctx)
+	blocks, receipts, txs, err := startEventIngestionEngine(ctx, dbDir)
 	require.NoError(t, err)
 
 	defer func() {
