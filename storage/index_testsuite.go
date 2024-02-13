@@ -123,7 +123,7 @@ func (s *ReceiptTestSuite) TestGetReceiptByTransactionID() {
 
 		retReceipt, err := s.ReceiptIndexer.GetByTransactionID(receipt.TxHash)
 		s.Require().NoError(err)
-		s.Require().Equal(receipt, retReceipt)
+		s.compareReceipts(receipt, retReceipt)
 	})
 
 	s.Run("non-existing transaction ID", func() {
@@ -142,25 +142,7 @@ func (s *ReceiptTestSuite) TestGetReceiptByBlockID() {
 
 		retReceipt, err := s.ReceiptIndexer.GetByBlockHeight(receipt.BlockNumber)
 		s.Require().NoError(err)
-		s.Require().Equal(receipt.BlockNumber, retReceipt.BlockNumber)
-		s.Require().Equal(receipt.TxHash, retReceipt.TxHash)
-		s.Require().Equal(receipt.Type, retReceipt.Type)
-		s.Require().Equal(receipt.PostState, retReceipt.PostState)
-		s.Require().Equal(receipt.Status, retReceipt.Status)
-		s.Require().Equal(receipt.CumulativeGasUsed, retReceipt.CumulativeGasUsed)
-		s.Require().Equal(receipt.Bloom, retReceipt.Bloom)
-		s.Require().Equal(len(receipt.Logs), len(retReceipt.Logs))
-		for i := range receipt.Logs {
-			s.Require().Equal(receipt.Logs[i], retReceipt.Logs[i])
-		}
-		s.Require().Equal(receipt.TxHash, retReceipt.TxHash)
-		s.Require().Equal(receipt.ContractAddress, retReceipt.ContractAddress)
-		s.Require().Equal(receipt.GasUsed, retReceipt.GasUsed)
-		s.Require().Equal(receipt.EffectiveGasPrice, retReceipt.EffectiveGasPrice)
-		s.Require().Equal(receipt.BlobGasUsed, retReceipt.BlobGasUsed)
-		s.Require().Equal(receipt.BlockHash, retReceipt.BlockHash)
-		s.Require().Equal(receipt.BlockNumber, retReceipt.BlockNumber)
-		s.Require().Equal(receipt.TransactionIndex, retReceipt.TransactionIndex)
+		s.compareReceipts(receipt, retReceipt)
 	})
 
 	s.Run("non-existing block height", func() {
@@ -210,6 +192,28 @@ func (s *ReceiptTestSuite) TestBloomsForBlockRange() {
 		s.Require().Nil(blooms)
 		s.Require().Nil(heights)
 	})
+}
+
+func (s *ReceiptTestSuite) compareReceipts(expected *types.Receipt, actual *types.Receipt) {
+	s.Require().Equal(expected.BlockNumber, actual.BlockNumber)
+	s.Require().Equal(expected.TxHash, actual.TxHash)
+	s.Require().Equal(expected.Type, actual.Type)
+	s.Require().Equal(expected.PostState, actual.PostState)
+	s.Require().Equal(expected.Status, actual.Status)
+	s.Require().Equal(expected.CumulativeGasUsed, actual.CumulativeGasUsed)
+	s.Require().Equal(expected.Bloom, actual.Bloom)
+	s.Require().Equal(len(expected.Logs), len(actual.Logs))
+	for i := range expected.Logs {
+		s.Require().Equal(expected.Logs[i], actual.Logs[i])
+	}
+	s.Require().Equal(expected.TxHash, actual.TxHash)
+	s.Require().Equal(expected.ContractAddress, actual.ContractAddress)
+	s.Require().Equal(expected.GasUsed, actual.GasUsed)
+	s.Require().Equal(expected.EffectiveGasPrice, actual.EffectiveGasPrice)
+	s.Require().Equal(expected.BlobGasUsed, actual.BlobGasUsed)
+	s.Require().Equal(expected.BlockHash, actual.BlockHash)
+	s.Require().Equal(expected.BlockNumber, actual.BlockNumber)
+	s.Require().Equal(expected.TransactionIndex, actual.TransactionIndex)
 }
 
 type TransactionTestSuite struct {
