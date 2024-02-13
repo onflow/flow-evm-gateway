@@ -69,11 +69,11 @@ func (b *Blocks) Store(block *types.Block) error {
 	}
 
 	// todo check if what is more often used block by id or block by height and fix accordingly if needed
-	if err := b.store.set(blockIDHeightKey, id.Bytes(), uint64Bytes(block.Height)); err != nil {
+	if err := b.store.set(blockIDHeightKey, id.Bytes(), height); err != nil {
 		return err
 	}
 
-	return b.store.set(latestHeightKey, nil, height)
+	return b.setLastHeight(block.Height)
 }
 
 func (b *Blocks) GetByHeight(height uint64) (*types.Block, error) {
@@ -131,6 +131,16 @@ func (b *Blocks) getBlock(keyCode byte, key []byte) (*types.Block, error) {
 	}
 
 	return &block, nil
+}
+
+func (b *Blocks) setLastHeight(height uint64) error {
+	err := b.store.set(latestHeightKey, nil, uint64Bytes(height))
+	if err != nil {
+		return err
+	}
+	// update cache
+	b.heightCache[latestHeightKey] = height
+	return nil
 }
 
 func (b *Blocks) getHeight(keyCode byte) (uint64, error) {

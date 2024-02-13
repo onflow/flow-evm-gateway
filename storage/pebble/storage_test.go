@@ -16,7 +16,7 @@ import (
 // tests that make sure the implementation conform to the interface expected behaviour
 func TestBlocks(t *testing.T) {
 	runDB("blocks", t, func(t *testing.T, db *Storage) {
-		bl, err := NewBlocks(db, WithInitHeight(0))
+		bl, err := NewBlocks(db, WithInitHeight(1))
 		require.NoError(t, err)
 		suite.Run(t, &storage.BlockTestSuite{Blocks: bl})
 	})
