@@ -16,7 +16,7 @@ func start(cfg config) error {
 	logger := zerolog.New(zerolog.NewConsoleWriter()).With().Timestamp().Logger()
 	logger.Info().Msg("starting up the EVM gateway")
 
-	pebbleDB, err := pebble.New(cfg.pebbleDBDir, logger)
+	pebbleDB, err := pebble.New(cfg.databaseDir, logger)
 	if err != nil {
 		return err
 	}
