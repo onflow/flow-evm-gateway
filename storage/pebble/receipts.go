@@ -37,29 +37,48 @@ func (r *Receipts) Store(receipt *gethTypes.Receipt) error {
 	}
 
 	// todo batch the operations
-	if err := r.store.set(receiptTxIDKey, receipt.TxHash.Bytes(), val); err != nil {
+	height := receipt.BlockNumber.Bytes()
+	if err := r.store.set(receiptTxIDToHeightKey, receipt.TxHash.Bytes(), height); err != nil {
 		return err
 	}
 
-	if err := r.store.set(receiptHeightKey, receipt.BlockNumber.Bytes(), val); err != nil {
+	if err := r.store.set(receiptHeightKey, height, val); err != nil {
 		return err
 	}
 
-	return r.store.set(bloomHeightKey, receipt.BlockNumber.Bytes(), receipt.Bloom.Bytes())
+	return r.store.set(bloomHeightKey, height, receipt.Bloom.Bytes())
 }
 
 func (r *Receipts) GetByTransactionID(ID common.Hash) (*gethTypes.Receipt, error) {
 	r.mux.RLock()
 	defer r.mux.RUnlock()
 
-	return r.getReceipt(receiptTxIDKey, ID.Bytes())
+	height, err := r.store.get(receiptTxIDToHeightKey, ID.Bytes())
+	if err != nil {
+		return nil, err
+	}
+
+	return r.getByBlockHeight(height)
 }
 
 func (r *Receipts) GetByBlockHeight(height *big.Int) (*gethTypes.Receipt, error) {
 	r.mux.RLock()
 	defer r.mux.RUnlock()
+	return r.getByBlockHeight(height.Bytes())
+}
 
-	return r.getReceipt(receiptHeightKey, height.Bytes())
+func (r *Receipts) getByBlockHeight(height []byte) (*gethTypes.Receipt, error) {
+	val, err := r.store.get(receiptHeightKey, height)
+	if err != nil {
+		return nil, err
+	}
+
+	receipt := &gethTypes.Receipt{}
+	if err := receipt.UnmarshalBinary(val); err != nil {
+		return nil, err
+	}
+
+	return receipt, nil
 }
 
 func (r *Receipts) BloomsForBlockRange(start, end *big.Int) ([]gethTypes.Bloom, []*big.Int, error) {
@@ -148,14 +167,4 @@ func (r *Receipts) getFirstLast() (uint64, uint64, error) {
 
 	r.first = binary.BigEndian.Uint64(first)
 	return r.first, last, nil
-}
-
-func (r *Receipts) getReceipt(keyCode byte, key []byte) (*gethTypes.Receipt, error) {
-	val, err := r.store.get(keyCode, key)
-	if err != nil {
-		return nil, err
-	}
-
-	var receipt *gethTypes.Receipt
-	return receipt, receipt.UnmarshalBinary(val)
 }
