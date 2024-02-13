@@ -17,6 +17,7 @@ import (
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access/grpc"
+	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/rs/zerolog"
 )
 
@@ -25,11 +26,12 @@ const (
 	coinbaseAddr     = "0xf02c1c8e6114b1dbe8937a39260b5b0a374432bb"
 )
 
-// TODO(m-Peter): These should be updates to the EVM location,
-// as soon as it gets merged.
+var blockExecutedType = (types.EVMLocation{}).TypeID(nil, string(types.EventTypeBlockExecuted))
+var txExecutedType = (types.EVMLocation{}).TypeID(nil, string(types.EventTypeTransactionExecuted))
+
 var evmEventTypes = []string{
-	"flow.evm.BlockExecuted",
-	"flow.evm.TransactionExecuted",
+	string(blockExecutedType),
+	string(txExecutedType),
 }
 
 func main() {
@@ -141,13 +143,19 @@ func runIndexer(ctx context.Context, store *storage.Store, logger zerolog.Logger
 
 			for _, event := range response.Events {
 				logger.Info().Msgf("  %s", event.Value)
-				if event.Type == "flow.evm.TransactionExecuted" {
-					store.StoreTransaction(ctx, event.Value)
+				if event.Type == "evm.TransactionExecuted" {
+					err := store.StoreTransaction(ctx, event.Value)
+					if err != nil {
+						logger.Error().Msgf("got error when storing tx: %s", err)
+					}
 					store.UpdateAccountNonce(ctx, event.Value)
 					store.StoreLog(ctx, event.Value)
 				}
-				if event.Type == "flow.evm.BlockExecuted" {
-					store.StoreBlock(ctx, event.Value)
+				if event.Type == "evm.BlockExecuted" {
+					err := store.StoreBlock(ctx, event.Value)
+					if err != nil {
+						logger.Error().Msgf("got error when storing block: %s", err)
+					}
 				}
 			}
 

@@ -13,7 +13,7 @@ fun main(data: [UInt8], contractAddress: [UInt8; 20]): [UInt8] {
         to: EVM.EVMAddress(bytes: contractAddress),
         data: data,
         gasLimit: 300000, // TODO(m-Peter): Maybe also pass this as script argument
-        value: EVM.Balance(flow: 0.0)
+        value: EVM.Balance(attoflow: 0)
     )
 
     return evmResult

@@ -147,7 +147,7 @@ func TestServerJSONRPCOveHTTPHandler(t *testing.T) {
 		}
 		returnValue := cadence.NewArray(
 			toBytes,
-		).WithType(cadence.NewVariableSizedArrayType(cadence.TheUInt8Type))
+		).WithType(cadence.NewVariableSizedArrayType(cadence.UInt8Type))
 		mockFlowClient.On(
 			"ExecuteScriptAtLatestBlock",
 			mock.Anything,
@@ -257,8 +257,7 @@ func TestServerJSONRPCOveHTTPHandler(t *testing.T) {
 		request := `{"jsonrpc":"2.0","id":1,"method":"eth_getBalance","params":["0x407d73d8a49eeb85d32cf465507dd71d507100c1","latest"]}`
 		expectedResponse := `{"jsonrpc":"2.0","id":1,"result":"0x22ecb25c00"}`
 
-		result, err := cadence.NewUFix64("1500.0")
-		require.NoError(t, err)
+		result := cadence.NewUInt(150000000000)
 		mockFlowClient.On(
 			"ExecuteScriptAtLatestBlock",
 			mock.Anything,

@@ -7,7 +7,7 @@ transaction(amount: UFix64) {
     let auth: auth(Storage) &Account
 
     prepare(signer: auth(Storage) &Account) {
-        let vaultRef = signer.storage.borrow<auth(FungibleToken.Withdrawable) &FlowToken.Vault>(
+        let vaultRef = signer.storage.borrow<auth(FungibleToken.Withdraw) &FlowToken.Vault>(
             from: /storage/flowTokenVault
         ) ?? panic("Could not borrow reference to the owner's Vault!")
 
@@ -20,7 +20,7 @@ transaction(amount: UFix64) {
         log(account.address())
         account.deposit(from: <-self.sentVault)
 
-        log(account.balance().flow)
+        log(account.balance())
         self.auth.storage.save<@EVM.BridgedAccount>(<-account, to: StoragePath(identifier: "evm")!)
     }
 }

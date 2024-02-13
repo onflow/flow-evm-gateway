@@ -10,11 +10,11 @@ import (
 	"github.com/onflow/cadence"
 )
 
-var byteArrayType = cadence.NewVariableSizedArrayType(cadence.TheUInt8Type)
+var byteArrayType = cadence.NewVariableSizedArrayType(cadence.UInt8Type)
 
 var evmAddressType = cadence.NewConstantSizedArrayType(
 	common.AddressLength,
-	cadence.TheUInt8Type,
+	cadence.UInt8Type,
 )
 
 func GethTxFromBytes(input hexutil.Bytes) (*types.Transaction, error) {
