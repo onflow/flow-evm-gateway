@@ -36,9 +36,32 @@ jobs:
           docker build -t ${{ env.DOCKER_IMAGE_URL }} --file Dockerfile .
           docker push ${{ env.DOCKER_IMAGE_URL }}
       
-  deploy-staging:
+  deploy-canary:
     needs: [build]
-    environment: staging
+    environment: canary
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Google auth
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          token_format: 'access_token'
+          workload_identity_provider: ${{ vars.DEPLOYER_GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.DEPLOYER_SERVICE_ACCOUNT }}
+      - name: Deploy EVM Gateway to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v1
+        with:
+          service: ${{ vars.GCP_SERVICE }}
+          image: ${{ env.DOCKER_IMAGE_URL }}
+          
+  deploy-crescendo:
+    needs: [build]
+    environment: crescendo
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -59,9 +82,32 @@ jobs:
           service: ${{ vars.GCP_SERVICE }}
           image: ${{ env.DOCKER_IMAGE_URL }}
 
-  deploy-production:
+  deploy-testnet:
     needs: [build]
-    environment: production
+    environment: testnet
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Google auth
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          token_format: 'access_token'
+          workload_identity_provider: ${{ vars.DEPLOYER_GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.DEPLOYER_SERVICE_ACCOUNT }}
+      - name: Deploy EVM Gateway to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v1
+        with:
+          service: ${{ vars.GCP_SERVICE }}
+          image: ${{ env.DOCKER_IMAGE_URL }}
+          
+  deploy-mainnet:
+    needs: [build]
+    environment: mainnet
     runs-on: ubuntu-latest
     permissions:
       id-token: write
