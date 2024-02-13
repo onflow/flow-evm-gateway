@@ -188,7 +188,7 @@ func (s *ReceiptTestSuite) TestBloomsForBlockRange() {
 		start := big.NewInt(100)
 		end := big.NewInt(105)
 		blooms, heights, err := s.ReceiptIndexer.BloomsForBlockRange(start, end)
-		s.Require().NoError(err)
+		s.Require().ErrorIs(err, errors.InvalidRange)
 		s.Require().Nil(blooms)
 		s.Require().Nil(heights)
 	})
