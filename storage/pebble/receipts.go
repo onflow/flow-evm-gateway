@@ -37,8 +37,8 @@ func (r *Receipts) Store(receipt *gethTypes.Receipt) error {
 	// receipt for storage is used because it strips the bloom filter which is
 	// a dynamically calculated value and doesn't have to be stored to save space
 	rcp := (*gethTypes.ReceiptForStorage)(receipt)
-	var val *buffer.Buffer
-	err := rcp.EncodeRLP(val)
+	var val buffer.Buffer
+	err := rcp.EncodeRLP(&val)
 	if err != nil {
 		return err
 	}
@@ -80,13 +80,13 @@ func (r *Receipts) getByBlockHeight(height []byte) (*gethTypes.Receipt, error) {
 		return nil, err
 	}
 
-	var receipt *gethTypes.ReceiptForStorage
+	var receipt gethTypes.ReceiptForStorage
 	err = receipt.DecodeRLP(rlp.NewStream(bytes.NewReader(val), uint64(len(val))))
 	if err != nil {
 		return nil, err
 	}
 
-	return (*gethTypes.Receipt)(receipt), nil
+	return (*gethTypes.Receipt)(&receipt), nil
 }
 
 func (r *Receipts) BloomsForBlockRange(start, end *big.Int) ([]gethTypes.Bloom, []*big.Int, error) {
