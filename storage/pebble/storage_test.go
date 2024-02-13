@@ -38,7 +38,7 @@ func TestBlock(t *testing.T) {
 
 	runDB("store block", t, func(t *testing.T, db *Storage) {
 		bl := mocks.NewBlock(10)
-		blocks, err := NewBlocks(db)
+		blocks, err := NewBlocks(db, WithInitHeight(1))
 		require.NoError(t, err)
 
 		err = blocks.Store(bl)
@@ -49,7 +49,7 @@ func TestBlock(t *testing.T) {
 		const height = uint64(12)
 		bl := mocks.NewBlock(height)
 
-		blocks, err := NewBlocks(db)
+		blocks, err := NewBlocks(db, WithInitHeight(1))
 		require.NoError(t, err)
 
 		err = blocks.Store(bl)
@@ -68,7 +68,7 @@ func TestBlock(t *testing.T) {
 	})
 
 	runDB("get not found block error", t, func(t *testing.T, db *Storage) {
-		blocks, err := NewBlocks(db)
+		blocks, err := NewBlocks(db, WithInitHeight(1))
 		require.NoError(t, err)
 
 		bl, err := blocks.GetByHeight(11)
