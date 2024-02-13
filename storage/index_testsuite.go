@@ -34,8 +34,14 @@ func (b *BlockTestSuite) TestGet() {
 	})
 
 	b.Run("non-existing block", func() {
-		retBlock, err := b.Blocks.GetByID(common.HexToHash("0x10"))
-		b.Require().Nil(retBlock)
+		// non-existing id
+		bl, err := b.Blocks.GetByID(common.HexToHash("0x10"))
+		b.Require().Nil(bl)
+		b.Require().ErrorIs(err, errors.NotFound)
+
+		// non-existing height
+		bl, err = b.Blocks.GetByHeight(uint64(200))
+		b.Require().Nil(bl)
 		b.Require().ErrorIs(err, errors.NotFound)
 	})
 }
@@ -144,7 +150,7 @@ func (s *ReceiptTestSuite) TestGetReceiptByBlockID() {
 		s.Require().Equal(receipt, retReceipt)
 	})
 
-	s.Run("non-existing block ID", func() {
+	s.Run("non-existing block height", func() {
 		retReceipt, err := s.ReceiptIndexer.GetByBlockHeight(big.NewInt(1337))
 		s.Require().Nil(retReceipt)
 		s.Require().ErrorIs(err, errors.NotFound)
