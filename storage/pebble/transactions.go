@@ -42,6 +42,9 @@ func (t *Transactions) Get(ID common.Hash) (*gethTypes.Transaction, error) {
 		return nil, err
 	}
 
-	var tx *gethTypes.Transaction
-	return tx, tx.UnmarshalBinary(val)
+	tx := &gethTypes.Transaction{}
+	if err := tx.UnmarshalBinary(val); err != nil {
+		return nil, err
+	}
+	return tx, nil
 }

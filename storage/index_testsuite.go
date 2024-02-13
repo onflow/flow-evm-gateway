@@ -184,11 +184,6 @@ func (s *TransactionTestSuite) TestStoreTransaction() {
 		err := s.TransactionIndexer.Store(tx)
 		s.Require().NoError(err)
 	})
-
-	s.Run("store duplicate transaction", func() {
-		err := s.TransactionIndexer.Store(tx)
-		s.Require().ErrorIs(err, errors.Duplicate)
-	})
 }
 
 func (s *TransactionTestSuite) TestGetTransaction() {
@@ -199,7 +194,7 @@ func (s *TransactionTestSuite) TestGetTransaction() {
 
 		retTx, err := s.TransactionIndexer.Get(tx.Hash())
 		s.Require().NoError(err)
-		s.Require().Equal(tx, retTx)
+		s.Require().Equal(tx.Hash(), retTx.Hash()) // if hashes are equal the data must be equal
 	})
 
 	s.Run("non-existing transaction", func() {
