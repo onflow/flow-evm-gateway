@@ -1,4 +1,4 @@
-package cmd
+package main
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"syscall"
 )
 
-func start(cfg config) error {
+func start(cfg *config) error {
 
 	logger := zerolog.New(zerolog.NewConsoleWriter()).With().Timestamp().Logger()
 	logger.Info().Msg("starting up the EVM gateway")
