@@ -225,12 +225,12 @@ func (s *BlockChainAPI) GetBalance(
 		return nil, err
 	}
 
-	balance, ok := value.(cadence.UFix64)
+	balance, ok := value.(cadence.UInt)
 	if !ok {
-		return nil, fmt.Errorf("script doesn't return UFix64 as it should")
+		return nil, fmt.Errorf("script doesn't return UInt as it should")
 	}
 
-	return (*hexutil.Big)(big.NewInt(int64(balance))), nil
+	return (*hexutil.Big)(balance.Value), nil
 }
 
 // eth_getCode (returns the code for the given address)

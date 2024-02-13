@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"math/big"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -16,7 +17,7 @@ import (
 type BlockExecutedPayload struct {
 	Height            uint64
 	Hash              string
-	TotalSupply       uint64
+	TotalSupply       *big.Int
 	ParentBlockHash   string
 	ReceiptRoot       string
 	TransactionHashes []string
@@ -46,12 +47,12 @@ func NewBlockExecutedPayload(
 	blockExecutedPayload.Hash = hash
 
 	totalSupplyFieldValue := blockExecutedEvent.GetFieldValues()[2]
-	totalSupplyCadenceValue, ok := totalSupplyFieldValue.(cadence.UInt64)
+	totalSupplyCadenceValue, ok := totalSupplyFieldValue.(cadence.Int)
 	if !ok {
 		return nil, fmt.Errorf("unable to decode Cadence event")
 	}
 
-	totalSupply := totalSupplyCadenceValue.ToGoValue().(uint64)
+	totalSupply := totalSupplyCadenceValue.ToGoValue().(*big.Int)
 	blockExecutedPayload.TotalSupply = totalSupply
 
 	parentBlockHashFieldValue := blockExecutedEvent.GetFieldValues()[3]

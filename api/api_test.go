@@ -203,8 +203,7 @@ func TestBlockChainAPI(t *testing.T) {
 		mockFlowClient := new(mocks.MockAccessClient)
 		blockchainAPI = api.NewBlockChainAPI(config, store, mockFlowClient)
 
-		result, err := cadence.NewUFix64("1500.0")
-		require.NoError(t, err)
+		result := cadence.NewUInt(150000000000)
 		mockFlowClient.On("ExecuteScriptAtLatestBlock", mock.Anything, mock.Anything, mock.Anything).Return(result, nil)
 
 		key, _ := crypto.GenerateKey()
@@ -1003,7 +1002,7 @@ func TestBlockChainAPI(t *testing.T) {
 		}
 		returnValue := cadence.NewArray(
 			toBytes,
-		).WithType(cadence.NewVariableSizedArrayType(cadence.TheUInt8Type))
+		).WithType(cadence.NewVariableSizedArrayType(cadence.UInt8Type))
 		mockFlowClient.On("ExecuteScriptAtLatestBlock", mock.Anything, mock.Anything, mock.Anything).Return(returnValue, nil)
 
 		returnedValue, err := blockchainAPI.Call(
@@ -1152,15 +1151,15 @@ func transactionExecutedEvent(
 			stdlib.FlowLocation{},
 			"evm.TransactionExecuted",
 			[]cadence.Field{
-				cadence.NewField("blockHeight", cadence.UInt64Type{}),
-				cadence.NewField("transactionHash", cadence.StringType{}),
-				cadence.NewField("transaction", cadence.StringType{}),
-				cadence.NewField("failed", cadence.BoolType{}),
-				cadence.NewField("transactionType", cadence.UInt8Type{}),
-				cadence.NewField("gasConsumed", cadence.UInt64Type{}),
-				cadence.NewField("deployedContractAddress", cadence.StringType{}),
-				cadence.NewField("returnedValue", cadence.StringType{}),
-				cadence.NewField("logs", cadence.StringType{}),
+				cadence.NewField("blockHeight", cadence.UInt64Type),
+				cadence.NewField("transactionHash", cadence.StringType),
+				cadence.NewField("transaction", cadence.StringType),
+				cadence.NewField("failed", cadence.BoolType),
+				cadence.NewField("transactionType", cadence.UInt8Type),
+				cadence.NewField("gasConsumed", cadence.UInt64Type),
+				cadence.NewField("deployedContractAddress", cadence.StringType),
+				cadence.NewField("returnedValue", cadence.StringType),
+				cadence.NewField("logs", cadence.StringType),
 			},
 			nil,
 		),
@@ -1181,7 +1180,7 @@ func transactionExecutedEvent(
 func blockExecutedEvent(
 	blockHeight uint64,
 	blockHash string,
-	totalSupply uint64,
+	totalSupply int64,
 	parentBlockHash string,
 	receiptRoot string,
 	transactionHashes []string,
@@ -1196,14 +1195,14 @@ func blockExecutedEvent(
 			stdlib.FlowLocation{},
 			"evm.BlockExecuted",
 			[]cadence.Field{
-				cadence.NewField("blockHeight", cadence.UInt64Type{}),
-				cadence.NewField("blockHash", cadence.StringType{}),
-				cadence.NewField("totalSupply", cadence.UInt64Type{}),
-				cadence.NewField("parentBlockHash", cadence.StringType{}),
-				cadence.NewField("receiptRoot", cadence.StringType{}),
+				cadence.NewField("blockHeight", cadence.UInt64Type),
+				cadence.NewField("blockHash", cadence.StringType),
+				cadence.NewField("totalSupply", cadence.IntType),
+				cadence.NewField("parentBlockHash", cadence.StringType),
+				cadence.NewField("receiptRoot", cadence.StringType),
 				cadence.NewField(
 					"transactionHashes",
-					cadence.NewVariableSizedArrayType(cadence.StringType{}),
+					cadence.NewVariableSizedArrayType(cadence.StringType),
 				),
 			},
 			nil,
@@ -1211,11 +1210,11 @@ func blockExecutedEvent(
 		Fields: []cadence.Value{
 			cadence.NewUInt64(blockHeight),
 			cadence.String(blockHash),
-			cadence.NewUInt64(totalSupply),
+			cadence.NewIntFromBig(big.NewInt(totalSupply)),
 			cadence.String(parentBlockHash),
 			cadence.String(receiptRoot),
 			cadence.NewArray(hashes).WithType(
-				cadence.NewVariableSizedArrayType(cadence.StringType{}),
+				cadence.NewVariableSizedArrayType(cadence.StringType),
 			),
 		},
 	}
