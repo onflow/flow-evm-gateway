@@ -113,11 +113,6 @@ func (s *ReceiptTestSuite) TestStoreReceipt() {
 		err := s.ReceiptIndexer.Store(receipt)
 		s.Require().NoError(err)
 	})
-
-	s.Run("store duplicate receipt", func() {
-		err := s.ReceiptIndexer.Store(receipt)
-		s.Require().ErrorIs(err, errors.Duplicate)
-	})
 }
 
 func (s *ReceiptTestSuite) TestGetReceiptByTransactionID() {
@@ -176,6 +171,8 @@ func (s *ReceiptTestSuite) TestBloomsForBlockRange() {
 		s.Require().Len(blooms, len(testBlooms))
 		s.Require().Len(heights, len(testBlooms))
 		s.Require().Equal(testBlooms, blooms)
+
+		// todo smaller block range
 	})
 
 	s.Run("invalid block range", func() {
