@@ -1,63 +1,39 @@
 package main
 
 import (
-	"flag"
-	"fmt"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/onflow/flow-evm-gateway/api"
+	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/storage"
-	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/rs/zerolog"
-)
-
-const (
-	defaultAccessURL = grpc.EmulatorHost
-	coinbaseAddr     = "0xf02c1c8e6114b1dbe8937a39260b5b0a374432bb"
 )
 
 func main() {
 	logger := zerolog.New(zerolog.NewConsoleWriter()).With().Timestamp().Logger()
 
-	// start server
-	go func() {
-		runServer(logger)
-	}()
-
-	// start ingestion
-	cfg, err := configFromFlags()
+	cfg, err := config.FromFlags()
 	if err != nil {
 		logger.Fatal().Err(err)
 	}
 
+	// start server
+	go func() {
+		runServer(cfg, logger)
+	}()
+
+	// start ingestion
 	err = start(cfg)
 	if err != nil {
 		logger.Fatal().Err(err)
 	}
 }
 
-func runServer(logger zerolog.Logger) {
-	var network, coinbase string
-
-	flag.StringVar(&network, "network", "testnet", "network to connect the gateway to")
-	flag.StringVar(&coinbase, "coinbase", coinbaseAddr, "coinbase address to use for fee collection")
-	flag.Parse()
-
-	config := &api.Config{}
-	config.Coinbase = common.HexToAddress(coinbase)
-	if network == "testnet" {
-		config.ChainID = api.FlowEVMTestnetChainID
-	} else if network == "mainnet" {
-		config.ChainID = api.FlowEVMMainnetChainID
-	} else {
-		panic(fmt.Errorf("unknown network: %s", network))
-	}
-
+func runServer(cfg *config.Config, logger zerolog.Logger) {
 	store := storage.NewStore()
 
 	logger = logger.With().Str("component", "api").Logger()
 	srv := api.NewHTTPServer(logger, rpc.DefaultHTTPTimeouts)
-	supportedAPIs := api.SupportedAPIs(config, store)
+	supportedAPIs := api.SupportedAPIs(cfg, store)
 
 	srv.EnableRPC(supportedAPIs)
 	srv.EnableWS(supportedAPIs)

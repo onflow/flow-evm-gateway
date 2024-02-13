@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"github.com/onflow/flow-evm-gateway/config"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -27,7 +28,7 @@ var (
 	FlowEVMMainnetChainID = big.NewInt(777)
 )
 
-func SupportedAPIs(config *Config, store *storage.Store) []rpc.API {
+func SupportedAPIs(config *config.Config, store *storage.Store) []rpc.API {
 	return []rpc.API{
 		{
 			Namespace: EthNamespace,
@@ -37,11 +38,11 @@ func SupportedAPIs(config *Config, store *storage.Store) []rpc.API {
 }
 
 type BlockChainAPI struct {
-	config *Config
+	config *config.Config
 	Store  *storage.Store
 }
 
-func NewBlockChainAPI(config *Config, store *storage.Store) *BlockChainAPI {
+func NewBlockChainAPI(config *config.Config, store *storage.Store) *BlockChainAPI {
 	return &BlockChainAPI{
 		config: config,
 		Store:  store,

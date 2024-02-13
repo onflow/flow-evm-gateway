@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/services/events"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
 	"github.com/onflow/flow-go-sdk/access/grpc"
@@ -11,20 +12,20 @@ import (
 	"syscall"
 )
 
-func start(cfg *config) error {
+func start(cfg *config.Config) error {
 
 	logger := zerolog.New(zerolog.NewConsoleWriter()).With().Timestamp().Logger()
 	logger.Info().Msg("starting up the EVM gateway")
 
-	pebbleDB, err := pebble.New(cfg.databaseDir, logger)
+	pebbleDB, err := pebble.New(cfg.DatabaseDir, logger)
 	if err != nil {
 		return err
 	}
 
 	opts := make([]pebble.BlockOption, 0)
 	// if initialization height is provided use that to bootstrap the database
-	if cfg.initHeight != emptyHeight {
-		opts = append(opts, pebble.WithInitHeight(cfg.initHeight))
+	if cfg.InitHeight != config.EmptyHeight {
+		opts = append(opts, pebble.WithInitHeight(cfg.InitHeight))
 	}
 
 	blocks, err := pebble.NewBlocks(pebbleDB, opts...)
@@ -46,7 +47,7 @@ func start(cfg *config) error {
 
 	logger.Info().Uint64("first", first).Uint64("latest", latest).Msg("index already contains data")
 
-	client, err := grpc.NewClient(cfg.accessNodeGRPCHost)
+	client, err := grpc.NewClient(cfg.AccessNodeGRPCHost)
 	if err != nil {
 		return err
 	}
