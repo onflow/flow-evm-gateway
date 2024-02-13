@@ -19,6 +19,8 @@ func New(dir string, log zerolog.Logger) (*Storage, error) {
 	cache := pebble.NewCache(1 << 20)
 	defer cache.Unref()
 
+	log = log.With().Str("component", "storage").Logger()
+
 	// currently pebble is only used for registers
 	opts := &pebble.Options{
 		Cache:                 cache,

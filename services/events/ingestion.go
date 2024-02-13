@@ -20,7 +20,7 @@ type EventIngestionEngine struct {
 	blocks       storage.BlockIndexer
 	receipts     storage.ReceiptIndexer
 	transactions storage.TransactionIndexer
-	logs         zerolog.Logger
+	log          zerolog.Logger
 	lastHeight   *models.SequentialHeight
 	status       *models.EngineStatus
 }
@@ -30,14 +30,16 @@ func NewEventIngestionEngine(
 	blocks storage.BlockIndexer,
 	receipts storage.ReceiptIndexer,
 	transactions storage.TransactionIndexer,
-	logs zerolog.Logger,
+	log zerolog.Logger,
 ) *EventIngestionEngine {
+	log = log.With().Str("component", "ingestion").Logger()
+
 	return &EventIngestionEngine{
 		subscriber:   subscriber,
 		blocks:       blocks,
 		receipts:     receipts,
 		transactions: transactions,
-		logs:         logs,
+		log:          log,
 		status:       models.NewEngineStatus(),
 	}
 }
@@ -78,7 +80,7 @@ func (e *EventIngestionEngine) Start(ctx context.Context) error {
 		}
 	}
 
-	e.logs.Info().Uint64("start height", latest).Msg("starting ingestion")
+	e.log.Info().Uint64("start height", latest).Msg("starting ingestion")
 
 	events, errs, err := e.subscriber.Subscribe(ctx, latest)
 	if err != nil {
@@ -90,7 +92,7 @@ func (e *EventIngestionEngine) Start(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			e.logs.Info().Msg("event ingestion received done signal")
+			e.log.Info().Msg("event ingestion received done signal")
 			return nil
 
 		case blockEvents, ok := <-events:
@@ -122,7 +124,7 @@ func (e *EventIngestionEngine) Start(ctx context.Context) error {
 
 // processEvents iterates all the events and decides based on the type how to process them.
 func (e *EventIngestionEngine) processEvents(events flow.BlockEvents) error {
-	e.logs.Debug().
+	e.log.Debug().
 		Uint64("cadence height", events.Height).
 		Int("cadence event length", len(events.Events)).
 		Msg("received new cadence evm events")
@@ -152,7 +154,7 @@ func (e *EventIngestionEngine) processBlockEvent(event cadence.Event) error {
 		return err
 	}
 
-	e.logs.Info().
+	e.log.Info().
 		Uint64("evm height", block.Height).
 		Str("parent hash", block.ParentBlockHash.String()).
 		Msg("new evm block executed event")
@@ -181,7 +183,7 @@ func (e *EventIngestionEngine) processTransactionEvent(event cadence.Event) erro
 		return err
 	}
 
-	e.logs.Info().
+	e.log.Info().
 		Str("contract address", receipt.ContractAddress.String()).
 		Int("log count", len(receipt.Logs)).
 		Str("receipt tx hash", receipt.TxHash.String()).

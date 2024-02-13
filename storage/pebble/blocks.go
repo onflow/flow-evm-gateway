@@ -153,7 +153,10 @@ func (b *Blocks) getHeight(keyCode byte) (uint64, error) {
 
 	val, err := b.store.get(keyCode)
 	if err != nil {
-		return 0, err
+		if errors.Is(err, errs.NotFound) {
+			return 0, errs.NotInitialized
+		}
+		return 0, fmt.Errorf("failed to get height: %w", err)
 	}
 
 	h := binary.BigEndian.Uint64(val)
