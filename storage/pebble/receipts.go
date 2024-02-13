@@ -95,7 +95,7 @@ func (r *Receipts) getByBlockHeight(height []byte) (*gethTypes.Receipt, error) {
 	return (*gethTypes.Receipt)(&rcp), nil
 }
 
-func (r *Receipts) BloomsForBlockRange(start, end *big.Int) ([]gethTypes.Bloom, []*big.Int, error) {
+func (r *Receipts) BloomsForBlockRange(start, end *big.Int) ([]*gethTypes.Bloom, []*big.Int, error) {
 	if start.Cmp(end) > 0 {
 		return nil, nil, fmt.Errorf("start is bigger than end: %w", errors.InvalidRange)
 	}
@@ -103,7 +103,7 @@ func (r *Receipts) BloomsForBlockRange(start, end *big.Int) ([]gethTypes.Bloom, 
 	// make sure the first and last height are within indexed values
 	first, last, err := r.getFirstLast()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed getting first and last height: %w", err)
 	}
 
 	if start.Uint64() < first || start.Uint64() > last {
@@ -143,7 +143,7 @@ func (r *Receipts) BloomsForBlockRange(start, end *big.Int) ([]gethTypes.Bloom, 
 	}()
 
 	caps := end.Div(end, start).Uint64() // max capacity for slices
-	blooms := make([]gethTypes.Bloom, 0, caps)
+	blooms := make([]*gethTypes.Bloom, 0, caps)
 	heights := make([]*big.Int, 0, caps)
 
 	for iterator.First(); iterator.Valid(); iterator.Next() {
@@ -154,10 +154,10 @@ func (r *Receipts) BloomsForBlockRange(start, end *big.Int) ([]gethTypes.Bloom, 
 
 		bloom := gethTypes.BytesToBloom(val)
 		h := stripPrefix(iterator.Key())
-		height := binary.BigEndian.Uint64(h)
+		height := new(big.Int).SetBytes(h)
 
-		blooms = append(blooms, bloom)
-		heights = append(heights, big.NewInt(int64(height)))
+		blooms = append(blooms, &bloom)
+		heights = append(heights, height)
 	}
 
 	return blooms, heights, nil
@@ -166,7 +166,7 @@ func (r *Receipts) BloomsForBlockRange(start, end *big.Int) ([]gethTypes.Bloom, 
 func (r *Receipts) getFirstLast() (uint64, uint64, error) {
 	l, err := r.store.get(latestHeightKey)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, fmt.Errorf("failed getting latest height: %w", err)
 	}
 	last := binary.BigEndian.Uint64(l)
 
@@ -176,7 +176,7 @@ func (r *Receipts) getFirstLast() (uint64, uint64, error) {
 
 	first, err := r.store.get(firstHeightKey)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, fmt.Errorf("failed getting first height: %w", err)
 	}
 
 	r.first = binary.BigEndian.Uint64(first)

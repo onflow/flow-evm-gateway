@@ -24,6 +24,12 @@ func TestBlocks(t *testing.T) {
 
 func TestReceipts(t *testing.T) {
 	runDB("receipts", t, func(t *testing.T, db *Storage) {
+		// prepare the blocks database since they track heights which are used in receipts as well
+		bl, err := NewBlocks(db, WithInitHeight(1))
+		require.NoError(t, err)
+		err = bl.Store(mocks.NewBlock(20)) // update latest height
+		require.NoError(t, err)
+
 		suite.Run(t, &storage.ReceiptTestSuite{ReceiptIndexer: NewReceipts(db)})
 	})
 }

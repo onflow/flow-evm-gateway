@@ -162,10 +162,13 @@ func (b *Blocks) getHeight(keyCode byte) (uint64, error) {
 }
 
 func (b *Blocks) storeInitHeight(height uint64) error {
-	// check if first and last exists
 	_, err := b.store.get(firstHeightKey)
-	if !errors.Is(err, errs.NotFound) {
-		return fmt.Errorf("can not overwrite an existing first height")
+	if err != nil && !errors.Is(err, errs.NotFound) {
+		return fmt.Errorf("existing first height can not be overwritten")
+	}
+	_, err = b.store.get(latestHeightKey)
+	if err != nil && !errors.Is(err, errs.NotFound) {
+		return fmt.Errorf("existing latest height can not be overwritten")
 	}
 
 	// todo batch
