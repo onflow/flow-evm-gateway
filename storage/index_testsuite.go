@@ -214,6 +214,22 @@ func (s *TransactionTestSuite) TestGetTransaction() {
 		retTx, err := s.TransactionIndexer.Get(tx.Hash())
 		s.Require().NoError(err)
 		s.Require().Equal(tx.Hash(), retTx.Hash()) // if hashes are equal the data must be equal
+
+		// allow same transaction overwrites
+		s.Require().NoError(s.TransactionIndexer.Store(retTx))
+	})
+
+	s.Run("store multiple transactions and get single", func() {
+		var tx *types.Transaction
+		for i := 0; i < 10; i++ {
+			tx = mocks.NewTransaction(uint64(10 + i))
+			err := s.TransactionIndexer.Store(tx)
+			s.Require().NoError(err)
+		}
+
+		t, err := s.TransactionIndexer.Get(tx.Hash())
+		s.Require().Equal(tx.Hash(), t.Hash())
+		s.Require().NoError(err)
 	})
 
 	s.Run("non-existing transaction", func() {
