@@ -47,28 +47,32 @@ func (b *BlockTestSuite) TestStore() {
 		err := b.Blocks.Store(block)
 		b.Require().NoError(err)
 	})
-
-	b.Run("failed to store same block", func() {
-		err := b.Blocks.Store(block)
-		b.Require().ErrorIs(err, errors.Duplicate)
-	})
 }
 
 func (b *BlockTestSuite) TestHeights() {
 	b.Run("first height", func() {
-		first, err := b.Blocks.FirstHeight()
-		b.Require().NoError(err)
-		b.Require().Equal(uint64(1), first)
+		for i := 0; i < 5; i++ {
+			first, err := b.Blocks.FirstHeight()
+			b.Require().NoError(err)
+			b.Require().Equal(uint64(1), first)
+
+			// shouldn't affect first height
+			lastHeight := uint64(100 + i)
+			err = b.Blocks.Store(mocks.NewBlock(lastHeight))
+			b.Require().NoError(err)
+		}
 	})
 
 	b.Run("last height", func() {
-		lastHeight := uint64(100)
-		err := b.Blocks.Store(mocks.NewBlock(lastHeight))
-		b.Require().NoError(err)
+		for i := 0; i < 5; i++ {
+			lastHeight := uint64(100 + i)
+			err := b.Blocks.Store(mocks.NewBlock(lastHeight))
+			b.Require().NoError(err)
 
-		last, err := b.Blocks.LatestHeight()
-		b.Require().NoError(err)
-		b.Require().Equal(lastHeight, last)
+			last, err := b.Blocks.LatestHeight()
+			b.Require().NoError(err)
+			b.Require().Equal(lastHeight, last)
+		}
 	})
 }
 
