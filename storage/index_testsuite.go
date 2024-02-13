@@ -142,7 +142,25 @@ func (s *ReceiptTestSuite) TestGetReceiptByBlockID() {
 
 		retReceipt, err := s.ReceiptIndexer.GetByBlockHeight(receipt.BlockNumber)
 		s.Require().NoError(err)
-		s.Require().Equal(receipt, retReceipt)
+		s.Require().Equal(receipt.BlockNumber, retReceipt.BlockNumber)
+		s.Require().Equal(receipt.TxHash, retReceipt.TxHash)
+		s.Require().Equal(receipt.Type, retReceipt.Type)
+		s.Require().Equal(receipt.PostState, retReceipt.PostState)
+		s.Require().Equal(receipt.Status, retReceipt.Status)
+		s.Require().Equal(receipt.CumulativeGasUsed, retReceipt.CumulativeGasUsed)
+		s.Require().Equal(receipt.Bloom, retReceipt.Bloom)
+		s.Require().Equal(len(receipt.Logs), len(retReceipt.Logs))
+		for i := range receipt.Logs {
+			s.Require().Equal(receipt.Logs[i], retReceipt.Logs[i])
+		}
+		s.Require().Equal(receipt.TxHash, retReceipt.TxHash)
+		s.Require().Equal(receipt.ContractAddress, retReceipt.ContractAddress)
+		s.Require().Equal(receipt.GasUsed, retReceipt.GasUsed)
+		s.Require().Equal(receipt.EffectiveGasPrice, retReceipt.EffectiveGasPrice)
+		s.Require().Equal(receipt.BlobGasUsed, retReceipt.BlobGasUsed)
+		s.Require().Equal(receipt.BlockHash, retReceipt.BlockHash)
+		s.Require().Equal(receipt.BlockNumber, retReceipt.BlockNumber)
+		s.Require().Equal(receipt.TransactionIndex, retReceipt.TransactionIndex)
 	})
 
 	s.Run("non-existing block height", func() {
