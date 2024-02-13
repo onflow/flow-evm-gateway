@@ -69,7 +69,7 @@ func (b *Blocks) Store(block *types.Block) error {
 	}
 
 	// todo check if what is more often used block by id or block by height and fix accordingly if needed
-	if err := b.store.set(blockIDHeightKey, id.Bytes(), height); err != nil {
+	if err := b.store.set(blockIDToHeightKey, id.Bytes(), height); err != nil {
 		return err
 	}
 
@@ -102,7 +102,7 @@ func (b *Blocks) GetByID(ID common.Hash) (*types.Block, error) {
 	b.mux.RLock()
 	defer b.mux.RUnlock()
 
-	height, err := b.store.get(blockIDHeightKey, ID.Bytes())
+	height, err := b.store.get(blockIDToHeightKey, ID.Bytes())
 	if err != nil {
 		return nil, err
 	}

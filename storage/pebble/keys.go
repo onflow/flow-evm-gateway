@@ -4,16 +4,16 @@ import "encoding/binary"
 
 const (
 	// block keys
-	blockHeightKey   = byte(1)
-	blockIDHeightKey = byte(2)
+	blockHeightKey     = byte(1)
+	blockIDToHeightKey = byte(2)
 
 	// transaction keys
 	txIDKey = byte(10)
 
 	// receipt keys
-	receiptTxIDKey   = byte(20)
-	receiptHeightKey = byte(21)
-	bloomHeightKey   = byte(22)
+	receiptTxIDToHeightKey = byte(20)
+	receiptHeightKey       = byte(21)
+	bloomHeightKey         = byte(22)
 
 	// special keys
 	latestHeightKey = byte(100)
