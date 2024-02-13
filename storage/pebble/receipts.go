@@ -1,13 +1,16 @@
 package pebble
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"github.com/cockroachdb/pebble"
 	"github.com/ethereum/go-ethereum/common"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/errors"
+	"go.uber.org/zap/buffer"
 	"math/big"
 	"sync"
 )
@@ -31,7 +34,11 @@ func (r *Receipts) Store(receipt *gethTypes.Receipt) error {
 	r.mux.Lock()
 	defer r.mux.Unlock()
 
-	val, err := receipt.MarshalBinary()
+	// receipt for storage is used because it strips the bloom filter which is
+	// a dynamically calculated value and doesn't have to be stored to save space
+	rcp := (*gethTypes.ReceiptForStorage)(receipt)
+	var val *buffer.Buffer
+	err := rcp.EncodeRLP(val)
 	if err != nil {
 		return err
 	}
@@ -42,7 +49,7 @@ func (r *Receipts) Store(receipt *gethTypes.Receipt) error {
 		return err
 	}
 
-	if err := r.store.set(receiptHeightKey, height, val); err != nil {
+	if err := r.store.set(receiptHeightKey, height, val.Bytes()); err != nil {
 		return err
 	}
 
@@ -73,12 +80,13 @@ func (r *Receipts) getByBlockHeight(height []byte) (*gethTypes.Receipt, error) {
 		return nil, err
 	}
 
-	receipt := &gethTypes.Receipt{}
-	if err := receipt.UnmarshalBinary(val); err != nil {
+	var receipt *gethTypes.ReceiptForStorage
+	err = receipt.DecodeRLP(rlp.NewStream(bytes.NewReader(val), uint64(len(val))))
+	if err != nil {
 		return nil, err
 	}
 
-	return receipt, nil
+	return (*gethTypes.Receipt)(receipt), nil
 }
 
 func (r *Receipts) BloomsForBlockRange(start, end *big.Int) ([]gethTypes.Bloom, []*big.Int, error) {
