@@ -46,6 +46,25 @@ func (b *BlockTestSuite) TestStore() {
 	b.Run("success", func() {
 		err := b.Blocks.Store(block)
 		b.Require().NoError(err)
+
+		// we allow overwriting blocks to make the actions idempotent
+		err = b.Blocks.Store(block)
+		b.Require().NoError(err)
+	})
+
+	b.Run("store multiple blocks, and get one", func() {
+		for i := 0; i < 10; i++ {
+			err := b.Blocks.Store(mocks.NewBlock(uint64(10 + i)))
+			b.Require().NoError(err)
+		}
+
+		bl, err := b.Blocks.GetByHeight(15)
+		b.Require().NoError(err)
+
+		id, err := bl.Hash()
+		b.Require().NoError(err)
+		blId, err := b.Blocks.GetByID(id)
+		b.Require().Equal(bl, blId)
 	})
 }
 
