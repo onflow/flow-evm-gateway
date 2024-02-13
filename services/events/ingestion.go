@@ -65,6 +65,7 @@ func (e *EventIngestionEngine) Stop() {
 // Consume the events provided by the event subscriber.
 // Each event is then processed by the event processing methods.
 func (e *EventIngestionEngine) Start(ctx context.Context) error {
+	// todo support starting from other heights, we probably need to add another storage for cadence heights
 	latest, err := e.blocks.LatestHeight()
 	if err != nil {
 		return err
