@@ -17,6 +17,7 @@ type StorageReceipt struct {
 	PostState         []byte
 	Status            uint64
 	CumulativeGasUsed uint64
+	// todo we could skip bloom to optimize storage and dynamically recalculate it
 	Bloom             gethTypes.Bloom
 	Logs              []*gethTypes.Log
 	TxHash            common.Hash
