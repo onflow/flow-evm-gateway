@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
+	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/onflow/flow-evm-gateway/api"
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/services/events"
+	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
 	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/rs/zerolog"
@@ -12,7 +15,7 @@ import (
 	"syscall"
 )
 
-func start(cfg *config.Config) error {
+func startIngestion(cfg *config.Config) error {
 
 	logger := zerolog.New(zerolog.NewConsoleWriter()).With().Timestamp().Logger()
 	logger.Info().Msg("starting up the EVM gateway")
@@ -81,6 +84,39 @@ func start(cfg *config.Config) error {
 	<-gracefulShutdown
 	logger.Info().Msg("shutdown signal received, shutting down")
 	cancel()
+
+	return nil
+}
+
+func startServer(cfg *config.Config, logger zerolog.Logger) error {
+	store := storage.NewStore()
+
+	logger = logger.With().Str("component", "api").Logger()
+	srv := api.NewHTTPServer(logger, rpc.DefaultHTTPTimeouts)
+	supportedAPIs := api.SupportedAPIs(cfg, store)
+
+	err := srv.EnableRPC(supportedAPIs)
+	if err != nil {
+		return err
+	}
+
+	err = srv.EnableWS(supportedAPIs)
+	if err != nil {
+		return err
+	}
+
+	// todo add to config
+	err = srv.SetListenAddr("localhost", 8545)
+	if err != nil {
+		return err
+	}
+
+	err = srv.Start()
+	if err != nil {
+		return err
+	}
+
+	logger.Info().Msgf("RPC server started: %s", srv.ListenAddr())
 
 	return nil
 }
