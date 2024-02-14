@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go/fvm/evm/emulator"
 	"math/big"
 )
@@ -16,13 +17,24 @@ const (
 )
 
 type Config struct {
-	DatabaseDir        string
+	// DatabaseDir is where the database should be stored.
+	DatabaseDir string
+	// AccessNodeGRPCHost defines the Flow network AN host.
 	AccessNodeGRPCHost string
 	// todo support also just specifying latest height
+	// InitHeight provides initial heights for EVM block height
+	// useful only on a cold-start with an empty database, otherwise
+	// should be avoided or an error will be thrown.
 	InitHeight uint64
-	ChainID    *big.Int
-	Coinbase   common.Address
-	GasPrice   *big.Int
+	// ChainID provides the EVM chain ID.
+	ChainID *big.Int
+	// Coinbase is EVM address that collects the EVM operator fees collected
+	// when transactions are being submitted.
+	Coinbase common.Address
+	// COAAddress is Flow address that holds COA account used for submitting transactions.
+	COAAddress flow.Address
+	// GasPrice is a fixed gas price that will be used when submitting transactions.
+	GasPrice *big.Int
 }
 
 func FromFlags() (*Config, error) {
