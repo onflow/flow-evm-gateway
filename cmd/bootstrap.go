@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/onflow/flow-evm-gateway/api"
 	"github.com/onflow/flow-evm-gateway/config"
@@ -15,8 +16,7 @@ import (
 	"syscall"
 )
 
-func StartIngestion(cfg *config.Config) error {
-
+func Start(cfg *config.Config) error {
 	logger := zerolog.New(zerolog.NewConsoleWriter()).With().Timestamp().Logger()
 	logger.Info().Msg("starting up the EVM gateway")
 
@@ -37,6 +37,30 @@ func StartIngestion(cfg *config.Config) error {
 	}
 	transactions := pebble.NewTransactions(pebbleDB)
 	receipts := pebble.NewReceipts(pebbleDB)
+
+	go func() {
+		err := startServer(cfg, blocks, transactions, receipts, logger)
+		if err != nil {
+			logger.Fatal().Err(fmt.Errorf("failed to start RPC server: %w", err))
+		}
+	}()
+
+	err = startIngestion(cfg, blocks, transactions, receipts, logger)
+	if err != nil {
+		return fmt.Errorf("failed to start event ingestion: %w", err)
+	}
+
+	return nil
+}
+
+func startIngestion(
+	cfg *config.Config,
+	blocks storage.BlockIndexer,
+	transactions storage.TransactionIndexer,
+	receipts storage.ReceiptIndexer,
+	logger zerolog.Logger,
+) error {
+	logger.Info().Msg("starting up event ingestion")
 
 	latest, err := blocks.LatestHeight()
 	if err != nil {
@@ -88,7 +112,15 @@ func StartIngestion(cfg *config.Config) error {
 	return nil
 }
 
-func StartServer(cfg *config.Config, logger zerolog.Logger) error {
+func startServer(
+	cfg *config.Config,
+	blocks storage.BlockIndexer,
+	transactions storage.TransactionIndexer,
+	receipts storage.ReceiptIndexer,
+	logger zerolog.Logger,
+) error {
+	logger.Info().Msg("starting up RPC server")
+
 	srv := api.NewHTTPServer(logger, rpc.DefaultHTTPTimeouts)
 
 	flowClient, err := api.NewFlowClient(grpc.EmulatorHost)
@@ -96,8 +128,7 @@ func StartServer(cfg *config.Config, logger zerolog.Logger) error {
 		return err
 	}
 
-	store := storage.NewStore()
-	blockchainAPI := api.NewBlockChainAPI(cfg, store, flowClient)
+	blockchainAPI := api.NewBlockChainAPI(cfg, flowClient, blocks, transactions, receipts)
 	supportedAPIs := api.SupportedAPIs(blockchainAPI)
 
 	if err := srv.EnableRPC(supportedAPIs); err != nil {
