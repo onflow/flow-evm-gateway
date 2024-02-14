@@ -23,13 +23,7 @@ import (
 	"github.com/onflow/flow-go-sdk/crypto"
 )
 
-const EthNamespace = "eth"
-
-// TODO: Fetch these from flow-go/fvm/evm/emulator/config.go
-var (
-	FlowEVMTestnetChainID = big.NewInt(666)
-	FlowEVMMainnetChainID = big.NewInt(777)
-)
+const ethNamespace = "eth"
 
 //go:embed cadence/scripts/bridged_account_call.cdc
 var BridgedAccountCall []byte
@@ -43,7 +37,7 @@ var EVMAddressBalance []byte
 func SupportedAPIs(blockChainAPI *BlockChainAPI) []rpc.API {
 	return []rpc.API{
 		{
-			Namespace: EthNamespace,
+			Namespace: ethNamespace,
 			Service:   blockChainAPI,
 		},
 	}
