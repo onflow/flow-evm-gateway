@@ -50,9 +50,12 @@ func SupportedAPIs(blockChainAPI *BlockChainAPI) []rpc.API {
 }
 
 type BlockChainAPI struct {
-	config     *config.Config
-	Store      *storage.Store
-	FlowClient access.Client
+	config       *config.Config
+	Store        *storage.Store
+	FlowClient   access.Client
+	blocks       storage.BlockIndexer
+	transactions storage.TransactionIndexer
+	receipt      storage.ReceiptIndexer
 }
 
 func NewBlockChainAPI(
