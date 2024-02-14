@@ -1,27 +1,24 @@
 package api
 
 import (
-	"bytes"
 	"context"
 	_ "embed"
 	"encoding/hex"
 	"fmt"
-	"github.com/onflow/flow-evm-gateway/api/errors"
-	"github.com/onflow/flow-evm-gateway/config"
-	"math/big"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/filters"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/onflow/cadence"
+	"github.com/onflow/flow-evm-gateway/api/errors"
+	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access"
 	"github.com/onflow/flow-go-sdk/crypto"
+	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 )
 
 const ethNamespace = "eth"
@@ -357,72 +354,8 @@ func (b *BlockChainAPI) GetTransactionByBlockNumberAndIndex(
 func (b *BlockChainAPI) GetTransactionReceipt(
 	ctx context.Context,
 	hash common.Hash,
-) (map[string]interface{}, error) {
-	// TODO(m-Peter) These are mock data just for fleshing out the
-	// fields involved in the returned value. Ideally we would like to
-	// defined interfaces for the storage & indexer services, so that
-	// we can proceed with some tests, and get rid of these mock data.
-	receipt := map[string]interface{}{}
-
-	txReceipt, err := b.receipt.GetByTransactionID(hash)
-	if err != nil {
-		return receipt, err
-	}
-
-	receipt["blockNumber"] = (*hexutil.Big)(big.NewInt(int64(txReceipt.BlockHeight)))
-	receipt["transactionHash"] = common.HexToHash(txReceipt.TxHash)
-
-	if txReceipt.Failed {
-		receipt["status"] = hexutil.Uint64(0)
-	} else {
-		receipt["status"] = hexutil.Uint64(1)
-	}
-
-	receipt["type"] = hexutil.Uint64(txReceipt.TxType)
-	receipt["gasUsed"] = hexutil.Uint64(txReceipt.GasConsumed)
-	receipt["contractAddress"] = common.HexToAddress(txReceipt.DeployedContractAddress)
-
-	logs := []*types.Log{}
-	if txReceipt.Logs != "" {
-		decodedLogs, err := hex.DecodeString(txReceipt.Logs)
-		if err != nil {
-			return receipt, err
-		}
-		err = rlp.Decode(bytes.NewReader(decodedLogs), &logs)
-		if err != nil {
-			return receipt, err
-		}
-		receipt["logs"] = logs
-	}
-	receipt["logsBloom"] = hexutil.Bytes(types.LogsBloom(logs))
-
-	txBytes, err := hex.DecodeString(txReceipt.Transaction)
-	if err != nil {
-		return receipt, err
-	}
-	gethTx, err := GethTxFromBytes(txBytes)
-	if err != nil {
-		return receipt, err
-	}
-	from, err := types.Sender(types.LatestSignerForChainID(gethTx.ChainId()), gethTx)
-	if err != nil {
-		return receipt, err
-	}
-	receipt["from"] = from
-	receipt["to"] = gethTx.To()
-
-	block, err := b.Store.GetBlockByNumber(ctx, txReceipt.BlockHeight)
-	if err != nil {
-		return receipt, err
-	}
-	receipt["blockHash"] = common.HexToHash(block.Hash)
-
-	txIndex := uint64(0)
-	receipt["transactionIndex"] = (*hexutil.Uint64)(&txIndex)
-	receipt["cumulativeGasUsed"] = hexutil.Uint64(50000)
-	receipt["effectiveGasPrice"] = (*hexutil.Big)(big.NewInt(20000000000))
-
-	return receipt, nil
+) (*types.Receipt, error) { // todo validate we can use the types directly, check the json struct directives
+	return b.receipt.GetByTransactionID(hash)
 }
 
 // Coinbase is the address that mining rewards will be sent to (alias for Etherbase).
@@ -436,7 +369,7 @@ func (b *BlockChainAPI) GetBlockByHash(
 	ctx context.Context,
 	hash common.Hash,
 	fullTx bool,
-) (map[string]interface{}, error) {
+) (map[string]interface{}, error) { // todo validate we can use the types directly
 	block := map[string]interface{}{}
 
 	bl, err := b.blocks.GetByID(hash)
@@ -465,6 +398,10 @@ func (b *BlockChainAPI) GetBlockByNumber(
 	blockNumber rpc.BlockNumber,
 	fullTx bool,
 ) (map[string]interface{}, error) {
+	if fullTx {
+		return nil, errors.NotSupported
+	}
+
 	block := map[string]interface{}{}
 
 	height := uint64(blockNumber)
@@ -495,33 +432,30 @@ func (b *BlockChainAPI) GetBlockByNumber(
 // GetBlockReceipts returns the block receipts for the given block hash or number or tag.
 func (b *BlockChainAPI) GetBlockReceipts(
 	ctx context.Context,
-	blockNumberOrHash rpc.BlockNumberOrHash,
-) ([]map[string]interface{}, error) {
-	receipts := make([]map[string]interface{}, 0)
-
-	var block *storage.BlockExecutedPayload
-	var err error
-	if blockNumberOrHash.BlockHash != nil {
-		block, err = b.Store.GetBlockByHash(ctx, *blockNumberOrHash.BlockHash)
-		if err != nil {
-			return receipts, err
-		}
-	} else if blockNumberOrHash.BlockNumber != nil {
-		block, err = b.Store.GetBlockByNumber(ctx, uint64(blockNumberOrHash.BlockNumber.Int64()))
-		if err != nil {
-			return receipts, err
-		}
+	numHash rpc.BlockNumberOrHash,
+) ([]*types.Receipt, error) { // todo validate return type
+	var (
+		block *evmTypes.Block
+		err   error
+	)
+	if numHash.BlockHash != nil {
+		block, err = b.blocks.GetByID(*numHash.BlockHash)
+	} else if numHash.BlockNumber != nil {
+		block, err = b.blocks.GetByHeight(uint64(numHash.BlockNumber.Int64()))
 	} else {
-		return receipts, fmt.Errorf("block number or hash not provided")
+		return nil, fmt.Errorf("block number or hash not provided") // todo replace with invalid
+	}
+	if err != nil {
+		return nil, err
 	}
 
-	for _, tx := range block.TransactionHashes {
-		txHash := common.HexToHash(tx)
-		txReceipt, err := b.GetTransactionReceipt(ctx, txHash)
+	receipts := make([]*types.Receipt, len(block.TransactionHashes))
+	for i, hash := range block.TransactionHashes {
+		rcp, err := b.receipt.GetByTransactionID(hash)
 		if err != nil {
-			return receipts, err
+			return nil, err
 		}
-		receipts = append(receipts, txReceipt)
+		receipts[i] = rcp
 	}
 
 	return receipts, nil
