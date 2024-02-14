@@ -39,7 +39,7 @@ type Config struct {
 
 func FromFlags() (*Config, error) {
 	cfg := &Config{}
-	var network, coinbase, gas string
+	var network, coinbase, gas, coa string
 
 	// parse from flags
 	flag.StringVar(&cfg.DatabaseDir, "database-dir", "./db", "path to the directory for the database")
@@ -48,11 +48,17 @@ func FromFlags() (*Config, error) {
 	flag.StringVar(&network, "network-id", "testnet", "EVM network ID (testnet, mainnet)")
 	flag.StringVar(&coinbase, "coinbase", defaultCoinbase, "coinbase address to use for fee collection")
 	flag.StringVar(&gas, "gas-price", "1", "static gas price used for EVM transactions")
+	flag.StringVar(&coa, "coa-address", "", "Flow address that holds COA account used for submitting transactions")
 	flag.Parse()
 
 	cfg.Coinbase = common.HexToAddress(coinbase)
 	if g, ok := new(big.Int).SetString(gas, 10); ok {
 		cfg.GasPrice = g
+	}
+
+	cfg.COAAddress = flow.HexToAddress(coa)
+	if cfg.COAAddress == flow.EmptyAddress {
+		return nil, fmt.Errorf("invalid COA address value")
 	}
 
 	switch network {
