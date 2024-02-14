@@ -70,7 +70,6 @@ func NewBlockChainAPI(
 	}
 }
 
-// eth_chainId
 // ChainId is the EIP-155 replay-protection chain id for the current Ethereum chain config.
 //
 // Note, this method does not conform to EIP-695 because the configured chain ID is always
@@ -81,7 +80,6 @@ func (api *BlockChainAPI) ChainId() *hexutil.Big {
 	return (*hexutil.Big)(api.config.ChainID)
 }
 
-// eth_blockNumber
 // BlockNumber returns the block number of the chain head.
 func (api *BlockChainAPI) BlockNumber() hexutil.Uint64 {
 	latestBlockHeight, err := api.Store.LatestBlockHeight(context.Background())
@@ -92,7 +90,6 @@ func (api *BlockChainAPI) BlockNumber() hexutil.Uint64 {
 	return hexutil.Uint64(latestBlockHeight)
 }
 
-// eth_syncing
 // Syncing returns false in case the node is currently not syncing with the network. It can be up-to-date or has not
 // yet received the latest block headers from its pears. In case it is synchronizing:
 // - startingBlock: block number this node started to synchronize from
@@ -104,7 +101,6 @@ func (api *BlockChainAPI) Syncing() (interface{}, error) {
 	return false, nil
 }
 
-// eth_sendRawTransaction
 // SendRawTransaction will add the signed transaction to the transaction pool.
 // The sender is responsible for signing the transaction and using the correct nonce.
 func (api *BlockChainAPI) SendRawTransaction(
@@ -164,7 +160,6 @@ func (api *BlockChainAPI) SendRawTransaction(
 	return gethTx.Hash(), nil
 }
 
-// eth_createAccessList
 // CreateAccessList creates an EIP-2930 type AccessList for the given transaction.
 // Reexec and blockNumberOrHash can be specified to create the accessList on top of a certain state.
 func (s *BlockChainAPI) CreateAccessList(
@@ -175,7 +170,6 @@ func (s *BlockChainAPI) CreateAccessList(
 	return &accessListResult{GasUsed: hexutil.Uint64(105)}, nil
 }
 
-// eth_feeHistory (transaction fee history)
 // FeeHistory returns transaction base fee per gas and effective priority fee
 // per gas for the requested/supported block range.
 // blockCount: Requested range of blocks. Clients will return less than the
@@ -198,19 +192,16 @@ func (s *BlockChainAPI) FeeHistory(
 	return results, nil
 }
 
-// eth_gasPrice (returns the gas price)
 // GasPrice returns a suggestion for a gas price for legacy transactions.
 func (s *BlockChainAPI) GasPrice(ctx context.Context) (*hexutil.Big, error) {
 	return (*hexutil.Big)(s.config.GasPrice), nil
 }
 
-// eth_maxPriorityFeePerGas
 // MaxPriorityFeePerGas returns a suggestion for a gas tip cap for dynamic fee transactions.
 func (s *BlockChainAPI) MaxPriorityFeePerGas(ctx context.Context) (*hexutil.Big, error) {
 	return (*hexutil.Big)(big.NewInt(10102020506)), nil
 }
 
-// eth_getBalance (returns the balance for any given block)
 // GetBalance returns the amount of wei for the given address in the state of the
 // given block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta
 // block numbers are also allowed.
@@ -237,7 +228,6 @@ func (s *BlockChainAPI) GetBalance(
 	return (*hexutil.Big)(balance.Value), nil
 }
 
-// eth_getCode (returns the code for the given address)
 // GetCode returns the code stored at the given address in the state for the given block number.
 func (s *BlockChainAPI) GetCode(
 	ctx context.Context,
@@ -248,7 +238,6 @@ func (s *BlockChainAPI) GetCode(
 	return hexutil.Bytes(code), nil
 }
 
-// eth_getProof (returns state proof for an account)
 // GetProof returns the Merkle-proof for a given account and optionally some storage keys.
 func (s *BlockChainAPI) GetProof(
 	ctx context.Context,
@@ -268,7 +257,6 @@ func (s *BlockChainAPI) GetProof(
 	}, nil
 }
 
-// eth_getStorageAt (we probably won't support this day 1)
 // GetStorageAt returns the storage from the state at the given address, key and
 // block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta block
 // numbers are also allowed.
@@ -282,7 +270,6 @@ func (s *BlockChainAPI) GetStorageAt(
 	return hexutil.Bytes(storage), nil
 }
 
-// eth_getTransactionCount (returns the number of tx sent from an address (nonce))
 // GetTransactionCount returns the number of transactions the given address has sent for the given block number
 func (s *BlockChainAPI) GetTransactionCount(
 	ctx context.Context,
@@ -293,7 +280,6 @@ func (s *BlockChainAPI) GetTransactionCount(
 	return (*hexutil.Uint64)(&nonce), nil
 }
 
-// eth_getTransactionByHash
 // GetTransactionByHash returns the transaction for the given hash
 func (b *BlockChainAPI) GetTransactionByHash(
 	ctx context.Context,
@@ -346,7 +332,6 @@ func (b *BlockChainAPI) GetTransactionByHash(
 	return txResult, nil
 }
 
-// eth_getTransactionByBlockHashAndIndex
 // GetTransactionByBlockHashAndIndex returns the transaction for the given block hash and index.
 func (s *BlockChainAPI) GetTransactionByBlockHashAndIndex(
 	ctx context.Context,
@@ -372,7 +357,6 @@ func (s *BlockChainAPI) GetTransactionByBlockHashAndIndex(
 	return tx
 }
 
-// eth_getTransactionByBlockNumberAndIndex
 // GetTransactionByBlockNumberAndIndex returns the transaction for the given block number and index.
 func (s *BlockChainAPI) GetTransactionByBlockNumberAndIndex(
 	ctx context.Context,
@@ -398,7 +382,6 @@ func (s *BlockChainAPI) GetTransactionByBlockNumberAndIndex(
 	return tx
 }
 
-// eth_getTransactionReceipt
 // GetTransactionReceipt returns the transaction receipt for the given transaction hash.
 func (s *BlockChainAPI) GetTransactionReceipt(
 	ctx context.Context,
@@ -471,13 +454,11 @@ func (s *BlockChainAPI) GetTransactionReceipt(
 	return receipt, nil
 }
 
-// eth_coinbase (return the coinbase for a block)
 // Coinbase is the address that mining rewards will be sent to (alias for Etherbase).
 func (s *BlockChainAPI) Coinbase() (common.Address, error) {
 	return s.config.Coinbase, nil
 }
 
-// eth_getBlockByHash
 // GetBlockByHash returns the requested block. When fullTx is true all transactions in the block are returned in full
 // detail, otherwise only the transaction hash is returned.
 func (s *BlockChainAPI) GetBlockByHash(
@@ -517,7 +498,6 @@ func (s *BlockChainAPI) GetBlockByHash(
 	return block, nil
 }
 
-// eth_getBlockByNumber
 // GetBlockByNumber returns the requested canonical block.
 //   - When blockNr is -1 the chain pending block is returned.
 //   - When blockNr is -2 the chain latest block is returned.
@@ -562,7 +542,6 @@ func (s *BlockChainAPI) GetBlockByNumber(
 	return block, nil
 }
 
-// eth_getBlockReceipts
 // GetBlockReceipts returns the block receipts for the given block hash or number or tag.
 func (s *BlockChainAPI) GetBlockReceipts(
 	ctx context.Context,
@@ -598,7 +577,6 @@ func (s *BlockChainAPI) GetBlockReceipts(
 	return receipts, nil
 }
 
-// eth_getBlockTransactionCountByHash
 // GetBlockTransactionCountByHash returns the number of transactions in the block with the given hash.
 func (s *BlockChainAPI) GetBlockTransactionCountByHash(
 	ctx context.Context,
@@ -613,7 +591,6 @@ func (s *BlockChainAPI) GetBlockTransactionCountByHash(
 	return &count
 }
 
-// eth_getBlockTransactionCountByNumber
 // GetBlockTransactionCountByNumber returns the number of transactions in the block with the given block number.
 func (s *BlockChainAPI) GetBlockTransactionCountByNumber(
 	ctx context.Context,
@@ -628,7 +605,6 @@ func (s *BlockChainAPI) GetBlockTransactionCountByNumber(
 	return &count
 }
 
-// eth_getUncleCountByBlockHash (return empty)
 // GetUncleCountByBlockHash returns number of uncles in the block for the given block hash
 func (s *BlockChainAPI) GetUncleCountByBlockHash(
 	ctx context.Context,
@@ -638,7 +614,6 @@ func (s *BlockChainAPI) GetUncleCountByBlockHash(
 	return &count
 }
 
-// eth_getUncleCountByBlockNumber (return empty)
 // GetUncleCountByBlockNumber returns number of uncles in the block for the given block number
 func (s *BlockChainAPI) GetUncleCountByBlockNumber(
 	ctx context.Context,
@@ -648,7 +623,6 @@ func (s *BlockChainAPI) GetUncleCountByBlockNumber(
 	return &count
 }
 
-// eth_getLogs
 // GetLogs returns logs matching the given argument that are stored within the state.
 func (s *BlockChainAPI) GetLogs(
 	ctx context.Context,
@@ -669,7 +643,6 @@ func (s *BlockChainAPI) GetLogs(
 	return logs, nil
 }
 
-// eth_newFilter
 // NewFilter creates a new filter and returns the filter id. It can be
 // used to retrieve logs when the state changes. This method cannot be
 // used to fetch logs that are already stored in the state.
@@ -687,13 +660,11 @@ func (s *BlockChainAPI) NewFilter(
 	return rpc.ID("filter0"), nil
 }
 
-// eth_uninstallFilter
 // UninstallFilter removes the filter with the given filter id.
 func (s *BlockChainAPI) UninstallFilter(id rpc.ID) bool {
 	return true
 }
 
-// eth_getFilterLogs
 // GetFilterLogs returns the logs for the filter with the given id.
 // If the filter could not be found an empty array of logs is returned.
 func (s *BlockChainAPI) GetFilterLogs(
@@ -714,7 +685,6 @@ func (s *BlockChainAPI) GetFilterLogs(
 	return []*types.Log{log}, nil
 }
 
-// eth_getFilterChanges
 // GetFilterChanges returns the logs for the filter with the given id since
 // last time it was called. This can be used for polling.
 //
@@ -738,14 +708,12 @@ func (s *BlockChainAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 	return []*types.Log{log}, nil
 }
 
-// eth_newBlockFilter
 // NewBlockFilter creates a filter that fetches blocks that are imported into the chain.
 // It is part of the filter package since polling goes with eth_getFilterChanges.
 func (s *BlockChainAPI) NewBlockFilter() rpc.ID {
 	return rpc.ID("block_filter")
 }
 
-// eth_newPendingTransactionFilter
 // NewPendingTransactionFilter creates a filter that fetches pending transactions
 // as transactions enter the pending state.
 //
@@ -755,13 +723,11 @@ func (s *BlockChainAPI) NewPendingTransactionFilter(fullTx *bool) rpc.ID {
 	return rpc.ID("pending_tx_filter")
 }
 
-// eth_accounts
 // Accounts returns the collection of accounts this node manages.
 func (s *BlockChainAPI) Accounts() []common.Address {
 	return []common.Address{}
 }
 
-// eth_sign
 // Sign calculates an ECDSA signature for:
 // keccak256("\x19Ethereum Signed Message:\n" + len(message) + message).
 //
@@ -778,7 +744,6 @@ func (s *BlockChainAPI) Sign(
 	return hexutil.Bytes{}, fmt.Errorf("method is not implemented")
 }
 
-// eth_signTransaction
 // SignTransaction will sign the given transaction with the from account.
 // The node needs to have the private key of the account corresponding with
 // the given from address and it needs to be unlocked.
@@ -789,7 +754,6 @@ func (s *BlockChainAPI) SignTransaction(
 	return &SignTransactionResult{}, fmt.Errorf("method is not implemented")
 }
 
-// eth_sendTransaction
 // SendTransaction creates a transaction for the given argument, sign it
 // and submit it to the transaction pool.
 func (s *BlockChainAPI) SendTransaction(
@@ -799,7 +763,6 @@ func (s *BlockChainAPI) SendTransaction(
 	return common.Hash{}, fmt.Errorf("method is not implemented")
 }
 
-// eth_call (readonly calls, we might need this (if the wallet use it to get balanceOf an ERC-20))
 // Call executes the given transaction on the state for the given block number.
 //
 // Additionally, the caller can specify a batch of contract for fields overriding.
@@ -842,7 +805,6 @@ func (s *BlockChainAPI) Call(
 	return hexutil.Bytes(resultValue), nil
 }
 
-// eth_estimateGas (usually runs the call and checks how much gas might be used)
 // EstimateGas returns the lowest possible gas limit that allows the transaction to run
 // successfully at block `blockNrOrHash`, or the latest block if `blockNrOrHash` is unspecified. It
 // returns error if the transaction would revert or if there are unexpected failures. The returned
@@ -857,7 +819,6 @@ func (s *BlockChainAPI) EstimateGas(
 	return hexutil.Uint64(105), nil
 }
 
-// eth_getUncleByBlockHashAndIndex
 // GetUncleByBlockHashAndIndex returns the uncle block for the given block hash and index.
 func (s *BlockChainAPI) GetUncleByBlockHashAndIndex(
 	ctx context.Context,
@@ -867,7 +828,6 @@ func (s *BlockChainAPI) GetUncleByBlockHashAndIndex(
 	return map[string]interface{}{}, nil
 }
 
-// eth_getUncleByBlockNumberAndIndex
 // GetUncleByBlockNumberAndIndex returns the uncle block for the given block hash and index.
 func (s *BlockChainAPI) GetUncleByBlockNumberAndIndex(
 	ctx context.Context,
