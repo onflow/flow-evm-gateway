@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	_ "embed"
-	"encoding/hex"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -11,54 +10,40 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/onflow/cadence"
 	"github.com/onflow/flow-evm-gateway/api/errors"
 	"github.com/onflow/flow-evm-gateway/config"
+	"github.com/onflow/flow-evm-gateway/services/requester"
 	"github.com/onflow/flow-evm-gateway/storage"
-	"github.com/onflow/flow-go-sdk"
-	"github.com/onflow/flow-go-sdk/access"
-	"github.com/onflow/flow-go-sdk/crypto"
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
+	"github.com/rs/zerolog"
 )
 
-const ethNamespace = "eth"
-
-//go:embed cadence/scripts/bridged_account_call.cdc
-var BridgedAccountCall []byte
-
-//go:embed cadence/transactions/evm_run.cdc
-var EVMRunTx []byte
-
-//go:embed cadence/scripts/evm_address_balance.cdc
-var EVMAddressBalance []byte
-
 func SupportedAPIs(blockChainAPI *BlockChainAPI) []rpc.API {
-	return []rpc.API{
-		{
-			Namespace: ethNamespace,
-			Service:   blockChainAPI,
-		},
-	}
+	return []rpc.API{{
+		Namespace: "eth",
+		Service:   blockChainAPI,
+	}}
 }
 
 type BlockChainAPI struct {
+	logger       zerolog.Logger
 	config       *config.Config
-	FlowClient   access.Client
+	evm          requester.Requester
 	blocks       storage.BlockIndexer
 	transactions storage.TransactionIndexer
 	receipts     storage.ReceiptIndexer
 }
 
 func NewBlockChainAPI(
+	logger zerolog.Logger,
 	config *config.Config,
-	flowClient access.Client,
 	blocks storage.BlockIndexer,
 	transactions storage.TransactionIndexer,
 	receipts storage.ReceiptIndexer,
 ) *BlockChainAPI {
 	return &BlockChainAPI{
+		logger:       logger,
 		config:       config,
-		FlowClient:   flowClient,
 		blocks:       blocks,
 		transactions: transactions,
 		receipts:     receipts,
@@ -79,8 +64,7 @@ func (b *BlockChainAPI) ChainId() *hexutil.Big {
 func (b *BlockChainAPI) BlockNumber() hexutil.Uint64 {
 	latestBlockHeight, err := b.blocks.LatestHeight()
 	if err != nil {
-		// TODO(m-Peter) We should add a logger to BlockChainAPI
-		panic(fmt.Errorf("failed to fetch the latest block number: %v", err))
+		b.logger.Fatal().Err(err)
 	}
 	return hexutil.Uint64(latestBlockHeight)
 }
@@ -93,6 +77,7 @@ func (b *BlockChainAPI) BlockNumber() hexutil.Uint64 {
 // - pulledStates:  number of state entries processed until now
 // - knownStates:   number of known state entries that still need to be pulled
 func (b *BlockChainAPI) Syncing() (interface{}, error) {
+	// todo maybe we should check if the node is caught up with the latest flow block
 	return false, nil
 }
 
@@ -102,95 +87,12 @@ func (b *BlockChainAPI) SendRawTransaction(
 	ctx context.Context,
 	input hexutil.Bytes,
 ) (common.Hash, error) {
-	gethTx, err := GethTxFromBytes(input)
-	if err != nil {
-		return common.Hash{}, err
-	}
-
-	latestBlock, err := b.FlowClient.GetLatestBlock(ctx, true)
-	if err != nil {
-		return common.Hash{}, err
-	}
-
-	// TODO(m-Peter): Fetch the private key from a dedicated flow.json config file
-	privateKey, err := crypto.DecodePrivateKeyHex(
-		crypto.ECDSA_P256,
-		"2619878f0e2ff438d17835c2a4561cb87b4d24d72d12ec34569acd0dd4af7c21",
-	)
-	if err != nil {
-		return common.Hash{}, err
-	}
-
-	// TODO(m-Peter): Fetch the address from a dedicated flow.json config file
-	account, err := b.FlowClient.GetAccount(ctx, flow.HexToAddress("0xf8d6e0586b0a20c7"))
-	if err != nil {
-		return common.Hash{}, err
-	}
-	accountKey := account.Keys[0]
-	signer, err := crypto.NewInMemorySigner(privateKey, accountKey.HashAlgo)
-	if err != nil {
-		return common.Hash{}, err
-	}
-
-	tx := flow.NewTransaction().
-		SetScript(EVMRunTx).
-		SetProposalKey(account.Address, accountKey.Index, accountKey.SequenceNumber).
-		SetReferenceBlockID(latestBlock.ID).
-		SetPayer(account.Address).
-		AddAuthorizer(account.Address)
-
-	txArgument := CadenceByteArrayFromBytes(input)
-	tx.AddArgument(txArgument)
-
-	err = tx.SignEnvelope(account.Address, accountKey.Index, signer)
-	if err != nil {
-		return common.Hash{}, err
-	}
-
-	err = b.FlowClient.SendTransaction(ctx, *tx)
-	if err != nil {
-		return common.Hash{}, err
-	}
-
-	return gethTx.Hash(), nil
-}
-
-// CreateAccessList creates an EIP-2930 type AccessList for the given transaction.
-// Reexec and blockNumberOrHash can be specified to create the accessList on top of a certain state.
-func (b *BlockChainAPI) CreateAccessList(
-	ctx context.Context,
-	args TransactionArgs,
-	blockNumberOrHash *rpc.BlockNumberOrHash,
-) (*AccessListResult, error) {
-	return nil, errors.NotSupported
-}
-
-// FeeHistory returns transaction base fee per gas and effective priority fee
-// per gas for the requested/supported block range.
-// blockCount: Requested range of blocks. Clients will return less than the
-// requested range if not all blocks are available.
-// lastBlock: Highest block of the requested range.
-// rewardPercentiles: A monotonically increasing list of percentile values.
-// For each block in the requested range, the transactions will be sorted in
-// ascending order by effective tip per gas and the coresponding effective tip
-// for the percentile will be determined, accounting for gas consumed.
-func (b *BlockChainAPI) FeeHistory(
-	ctx context.Context,
-	blockCount math.HexOrDecimal64,
-	lastBlock rpc.BlockNumber,
-	rewardPercentiles []float64,
-) (*FeeHistoryResult, error) {
-	return nil, errors.NotSupported
+	return b.evm.SendRawTransaction(ctx, input)
 }
 
 // GasPrice returns a suggestion for a gas price for legacy transactions.
 func (b *BlockChainAPI) GasPrice(ctx context.Context) (*hexutil.Big, error) {
 	return (*hexutil.Big)(b.config.GasPrice), nil
-}
-
-// MaxPriorityFeePerGas returns a suggestion for a gas tip cap for dynamic fee transactions.
-func (b *BlockChainAPI) MaxPriorityFeePerGas(ctx context.Context) (*hexutil.Big, error) {
-	return nil, errors.NotSupported
 }
 
 // GetBalance returns the amount of wei for the given address in the state of the
@@ -199,65 +101,15 @@ func (b *BlockChainAPI) MaxPriorityFeePerGas(ctx context.Context) (*hexutil.Big,
 func (b *BlockChainAPI) GetBalance(
 	ctx context.Context,
 	address common.Address,
-	blockNumberOrHash *rpc.BlockNumberOrHash,
+	_ *rpc.BlockNumberOrHash,
 ) (*hexutil.Big, error) {
-	evmAddress := CadenceEVMAddressFromBytes(address.Bytes())
-	value, err := b.FlowClient.ExecuteScriptAtLatestBlock(
-		ctx,
-		EVMAddressBalance,
-		[]cadence.Value{evmAddress},
-	)
+	// todo use provided height, when height mapping is implemented
+	balance, err := b.evm.GetBalance(ctx, address, 0)
 	if err != nil {
 		return nil, err
 	}
 
-	balance, ok := value.(cadence.UInt)
-	if !ok {
-		return nil, fmt.Errorf("script doesn't return UInt as it should")
-	}
-
-	return (*hexutil.Big)(balance.Value), nil
-}
-
-// GetCode returns the code stored at the given address in the state for the given block number.
-func (b *BlockChainAPI) GetCode(
-	ctx context.Context,
-	address common.Address,
-	blockNumberOrHash *rpc.BlockNumberOrHash,
-) (hexutil.Bytes, error) {
-	return nil, errors.NotSupported
-}
-
-// GetProof returns the Merkle-proof for a given account and optionally some storage keys.
-func (b *BlockChainAPI) GetProof(
-	ctx context.Context,
-	address common.Address,
-	storageKeys []string,
-	blockNumberOrHash rpc.BlockNumberOrHash,
-) (*AccountResult, error) {
-	return nil, errors.NotSupported
-}
-
-// GetStorageAt returns the storage from the state at the given address, key and
-// block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta block
-// numbers are also allowed.
-func (b *BlockChainAPI) GetStorageAt(
-	ctx context.Context,
-	address common.Address,
-	storageSlot string,
-	blockNumberOrHash *rpc.BlockNumberOrHash,
-) (hexutil.Bytes, error) {
-	return nil, errors.NotSupported
-}
-
-// GetTransactionCount returns the number of transactions the given address has sent for the given block number
-func (b *BlockChainAPI) GetTransactionCount(
-	ctx context.Context,
-	address common.Address,
-	blockNumberOrHash *rpc.BlockNumberOrHash,
-) (*hexutil.Uint64, error) {
-	// todo add support in store
-	return nil, errors.NotSupported
+	return (*hexutil.Big)(balance), nil
 }
 
 // GetTransactionByHash returns the transaction for the given hash
@@ -493,6 +345,38 @@ func (b *BlockChainAPI) GetBlockTransactionCountByNumber(
 	return &count
 }
 
+// Call executes the given transaction on the state for the given block number.
+//
+// Additionally, the caller can specify a batch of contract for fields overriding.
+//
+// Note, this function doesn't make and changes in the state/blockchain and is
+// useful to execute and retrieve values.
+func (b *BlockChainAPI) Call(
+	ctx context.Context,
+	args TransactionArgs,
+	blockNumberOrHash *rpc.BlockNumberOrHash,
+	overrides *StateOverride,
+	blockOverrides *BlockOverrides,
+) (hexutil.Bytes, error) {
+	return b.evm.Call(ctx, *args.To, *args.Input)
+}
+
+// GetLogs returns logs matching the given argument that are stored within the state.
+func (b *BlockChainAPI) GetLogs(
+	ctx context.Context,
+	criteria filters.FilterCriteria,
+) ([]*types.Log, error) {
+	// todo add filters and store
+	return nil, errors.NotSupported
+}
+
+/* ====================================================================================================================
+
+ NOT SUPPORTED SECTION
+
+====================================================================================================================== */
+// todo check the design, maybe we don't need to even have the unsupported functions defined
+
 // GetUncleCountByBlockHash returns number of uncles in the block for the given block hash
 func (b *BlockChainAPI) GetUncleCountByBlockHash(
 	ctx context.Context,
@@ -509,15 +393,6 @@ func (b *BlockChainAPI) GetUncleCountByBlockNumber(
 ) *hexutil.Uint {
 	count := hexutil.Uint(0)
 	return &count
-}
-
-// GetLogs returns logs matching the given argument that are stored within the state.
-func (b *BlockChainAPI) GetLogs(
-	ctx context.Context,
-	criteria filters.FilterCriteria,
-) ([]*types.Log, error) {
-	// todo add filters and store
-	return nil, errors.NotSupported
 }
 
 // NewFilter creates a new filter and returns the filter id. It can be
@@ -580,6 +455,38 @@ func (b *BlockChainAPI) Accounts() []common.Address {
 	return nil
 }
 
+// EstimateGas returns the lowest possible gas limit that allows the transaction to run
+// successfully at block `blockNrOrHash`, or the latest block if `blockNrOrHash` is unspecified. It
+// returns error if the transaction would revert or if there are unexpected failures. The returned
+// value is capped by both `args.Gas` (if non-nil & non-zero) and the backend's RPCGasCap
+// configuration (if non-zero).
+func (b *BlockChainAPI) EstimateGas(
+	ctx context.Context,
+	args TransactionArgs,
+	blockNumberOrHash *rpc.BlockNumberOrHash,
+	overrides *StateOverride,
+) (hexutil.Uint64, error) {
+	return 0, errors.NotSupported
+}
+
+// GetUncleByBlockHashAndIndex returns the uncle block for the given block hash and index.
+func (b *BlockChainAPI) GetUncleByBlockHashAndIndex(
+	ctx context.Context,
+	blockHash common.Hash,
+	index hexutil.Uint,
+) (map[string]interface{}, error) {
+	return nil, errors.NotSupported
+}
+
+// GetUncleByBlockNumberAndIndex returns the uncle block for the given block hash and index.
+func (b *BlockChainAPI) GetUncleByBlockNumberAndIndex(
+	ctx context.Context,
+	blockNumber rpc.BlockNumber,
+	index hexutil.Uint,
+) (map[string]interface{}, error) {
+	return nil, errors.NotSupported
+}
+
 // Sign calculates an ECDSA signature for:
 // keccak256("\x19Ethereum Signed Message:\n" + len(message) + message).
 //
@@ -615,76 +522,76 @@ func (b *BlockChainAPI) SendTransaction(
 	return common.Hash{}, errors.NotSupported
 }
 
-// Call executes the given transaction on the state for the given block number.
-//
-// Additionally, the caller can specify a batch of contract for fields overriding.
-//
-// Note, this function doesn't make and changes in the state/blockchain and is
-// useful to execute and retrieve values.
-func (b *BlockChainAPI) Call(
+// GetCode returns the code stored at the given address in the state for the given block number.
+func (b *BlockChainAPI) GetCode(
 	ctx context.Context,
-	args TransactionArgs,
+	address common.Address,
 	blockNumberOrHash *rpc.BlockNumberOrHash,
-	overrides *StateOverride,
-	blockOverrides *BlockOverrides,
 ) (hexutil.Bytes, error) {
-	txBytes, err := hex.DecodeString(args.Input.String()[2:])
-	if err != nil {
-		return hexutil.Bytes{}, err
-	}
-	txData := CadenceByteArrayFromBytes(txBytes)
-	toAddress := CadenceEVMAddressFromBytes(args.To.Bytes())
-
-	value, err := b.FlowClient.ExecuteScriptAtLatestBlock(
-		ctx,
-		BridgedAccountCall,
-		[]cadence.Value{txData, toAddress},
-	)
-	if err != nil {
-		return hexutil.Bytes{}, err
-	}
-
-	cadenceArray, ok := value.(cadence.Array)
-	if !ok {
-		return hexutil.Bytes{}, fmt.Errorf("script doesn't return byte array as it should")
-	}
-
-	resultValue := make([]byte, len(cadenceArray.Values))
-	for i, x := range cadenceArray.Values {
-		resultValue[i] = x.ToGoValue().(byte)
-	}
-
-	return resultValue, nil
-}
-
-// EstimateGas returns the lowest possible gas limit that allows the transaction to run
-// successfully at block `blockNrOrHash`, or the latest block if `blockNrOrHash` is unspecified. It
-// returns error if the transaction would revert or if there are unexpected failures. The returned
-// value is capped by both `args.Gas` (if non-nil & non-zero) and the backend's RPCGasCap
-// configuration (if non-zero).
-func (b *BlockChainAPI) EstimateGas(
-	ctx context.Context,
-	args TransactionArgs,
-	blockNumberOrHash *rpc.BlockNumberOrHash,
-	overrides *StateOverride,
-) (hexutil.Uint64, error) {
-	return 0, errors.NotSupported
-}
-
-// GetUncleByBlockHashAndIndex returns the uncle block for the given block hash and index.
-func (b *BlockChainAPI) GetUncleByBlockHashAndIndex(
-	ctx context.Context,
-	blockHash common.Hash,
-	index hexutil.Uint,
-) (map[string]interface{}, error) {
 	return nil, errors.NotSupported
 }
 
-// GetUncleByBlockNumberAndIndex returns the uncle block for the given block hash and index.
-func (b *BlockChainAPI) GetUncleByBlockNumberAndIndex(
+// GetProof returns the Merkle-proof for a given account and optionally some storage keys.
+func (b *BlockChainAPI) GetProof(
 	ctx context.Context,
-	blockNumber rpc.BlockNumber,
-	index hexutil.Uint,
-) (map[string]interface{}, error) {
+	address common.Address,
+	storageKeys []string,
+	blockNumberOrHash rpc.BlockNumberOrHash,
+) (*AccountResult, error) {
+	return nil, errors.NotSupported
+}
+
+// GetStorageAt returns the storage from the state at the given address, key and
+// block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta block
+// numbers are also allowed.
+func (b *BlockChainAPI) GetStorageAt(
+	ctx context.Context,
+	address common.Address,
+	storageSlot string,
+	blockNumberOrHash *rpc.BlockNumberOrHash,
+) (hexutil.Bytes, error) {
+	return nil, errors.NotSupported
+}
+
+// CreateAccessList creates an EIP-2930 type AccessList for the given transaction.
+// Reexec and blockNumberOrHash can be specified to create the accessList on top of a certain state.
+func (b *BlockChainAPI) CreateAccessList(
+	ctx context.Context,
+	args TransactionArgs,
+	blockNumberOrHash *rpc.BlockNumberOrHash,
+) (*AccessListResult, error) {
+	return nil, errors.NotSupported
+}
+
+// FeeHistory returns transaction base fee per gas and effective priority fee
+// per gas for the requested/supported block range.
+// blockCount: Requested range of blocks. Clients will return less than the
+// requested range if not all blocks are available.
+// lastBlock: Highest block of the requested range.
+// rewardPercentiles: A monotonically increasing list of percentile values.
+// For each block in the requested range, the transactions will be sorted in
+// ascending order by effective tip per gas and the coresponding effective tip
+// for the percentile will be determined, accounting for gas consumed.
+func (b *BlockChainAPI) FeeHistory(
+	ctx context.Context,
+	blockCount math.HexOrDecimal64,
+	lastBlock rpc.BlockNumber,
+	rewardPercentiles []float64,
+) (*FeeHistoryResult, error) {
+	return nil, errors.NotSupported
+}
+
+// MaxPriorityFeePerGas returns a suggestion for a gas tip cap for dynamic fee transactions.
+func (b *BlockChainAPI) MaxPriorityFeePerGas(ctx context.Context) (*hexutil.Big, error) {
+	return nil, errors.NotSupported
+}
+
+// GetTransactionCount returns the number of transactions the given address has sent for the given block number
+func (b *BlockChainAPI) GetTransactionCount(
+	ctx context.Context,
+	address common.Address,
+	blockNumberOrHash *rpc.BlockNumberOrHash,
+) (*hexutil.Uint64, error) {
+	// todo add support in store
 	return nil, errors.NotSupported
 }
