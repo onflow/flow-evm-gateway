@@ -36,7 +36,7 @@ var (
 type Requester interface {
 	// SendRawTransaction will submit signed transaction data to the network.
 	// The submitted EVM transaction hash is returned.
-	SendRawTransaction(ctx context.Context, data []byte) (*common.Hash, error)
+	SendRawTransaction(ctx context.Context, data []byte) (common.Hash, error)
 
 	// GetBalance returns the amount of wei for the given address in the state of the
 	// given block height.
@@ -57,7 +57,7 @@ type EVM struct {
 	signer  crypto.Signer
 }
 
-func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (*common.Hash, error) {
+func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash, error) {
 	tx := &types.Transaction{}
 	err := tx.DecodeRLP(
 		rlp.NewStream(
@@ -68,12 +68,12 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (*common.Hash
 
 	latestBlock, err := e.client.GetLatestBlock(ctx, true)
 	if err != nil {
-		return nil, err
+		return common.Hash{}, err
 	}
 
 	index, seqNum, err := e.getSignerNetworkInfo(ctx)
 	if err != nil {
-		return nil, err
+		return common.Hash{}, err
 	}
 
 	flowTx := flow.NewTransaction().
@@ -84,20 +84,19 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (*common.Hash
 		AddAuthorizer(e.address)
 
 	if err = flowTx.AddArgument(cadenceArrayFromBytes(data)); err != nil {
-		return nil, err
+		return common.Hash{}, err
 	}
 
 	if err = flowTx.SignEnvelope(e.address, index, e.signer); err != nil {
-		return nil, err
+		return common.Hash{}, err
 	}
 
 	err = e.client.SendTransaction(ctx, *flowTx)
 	if err != nil {
-		return nil, err
+		return common.Hash{}, err
 	}
 
-	h := tx.Hash()
-	return &h, nil
+	return tx.Hash(), nil
 }
 
 func (e *EVM) GetBalance(ctx context.Context, address common.Address, height uint64) (*big.Int, error) {
