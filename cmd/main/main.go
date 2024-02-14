@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/onflow/flow-evm-gateway/cmd"
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/rs/zerolog"
 )
@@ -14,13 +15,13 @@ func main() {
 	}
 
 	go func() {
-		err := startServer(cfg, logger)
+		err := cmd.StartServer(cfg, logger)
 		if err != nil {
 			logger.Fatal().Err(err)
 		}
 	}()
 
-	err = startIngestion(cfg)
+	err = cmd.StartIngestion(cfg)
 	if err != nil {
 		logger.Fatal().Err(err)
 	}

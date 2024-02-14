@@ -1,4 +1,4 @@
-package main
+package cmd
 
 import (
 	"context"
@@ -15,7 +15,7 @@ import (
 	"syscall"
 )
 
-func startIngestion(cfg *config.Config) error {
+func StartIngestion(cfg *config.Config) error {
 
 	logger := zerolog.New(zerolog.NewConsoleWriter()).With().Timestamp().Logger()
 	logger.Info().Msg("starting up the EVM gateway")
@@ -88,7 +88,7 @@ func startIngestion(cfg *config.Config) error {
 	return nil
 }
 
-func startServer(cfg *config.Config, logger zerolog.Logger) error {
+func StartServer(cfg *config.Config, logger zerolog.Logger) error {
 	srv := api.NewHTTPServer(logger, rpc.DefaultHTTPTimeouts)
 
 	flowClient, err := api.NewFlowClient(grpc.EmulatorHost)
