@@ -37,6 +37,7 @@ type BlockChainAPI struct {
 func NewBlockChainAPI(
 	logger zerolog.Logger,
 	config *config.Config,
+	evm requester.Requester,
 	blocks storage.BlockIndexer,
 	transactions storage.TransactionIndexer,
 	receipts storage.ReceiptIndexer,
@@ -44,6 +45,7 @@ func NewBlockChainAPI(
 	return &BlockChainAPI{
 		logger:       logger,
 		config:       config,
+		evm:          evm,
 		blocks:       blocks,
 		transactions: transactions,
 		receipts:     receipts,

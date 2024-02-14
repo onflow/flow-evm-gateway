@@ -7,9 +7,11 @@ import (
 	"github.com/onflow/flow-evm-gateway/api"
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/services/ingestion"
+	"github.com/onflow/flow-evm-gateway/services/requester"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
 	"github.com/onflow/flow-go-sdk/access/grpc"
+	"github.com/onflow/flow-go-sdk/crypto"
 	"github.com/rs/zerolog"
 	"os"
 	"os/signal"
@@ -123,12 +125,19 @@ func startServer(
 
 	srv := api.NewHTTPServer(logger, rpc.DefaultHTTPTimeouts)
 
-	flowClient, err := api.NewFlowClient(grpc.EmulatorHost)
+	client, err := grpc.NewClient(cfg.AccessNodeGRPCHost)
 	if err != nil {
 		return err
 	}
 
-	blockchainAPI := api.NewBlockChainAPI(cfg, flowClient, blocks, transactions, receipts)
+	// todo abstract signer and support multiple different signers, for now only in-memory
+	signer, err := crypto.NewInMemorySigner(cfg.COAKey, crypto.SHA3_256)
+	if err != nil {
+		return fmt.Errorf("failed to create a COA signer: %w", err)
+	}
+
+	evm := requester.NewEVM(client, cfg.COAAddress, signer)
+	blockchainAPI := api.NewBlockChainAPI(logger, cfg, evm, blocks, transactions, receipts)
 	supportedAPIs := api.SupportedAPIs(blockchainAPI)
 
 	if err := srv.EnableRPC(supportedAPIs); err != nil {
