@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/onflow/flow-evm-gateway/api/errors"
 	"github.com/onflow/flow-evm-gateway/config"
+	"github.com/onflow/flow-evm-gateway/services/logs"
 	"github.com/onflow/flow-evm-gateway/services/requester"
 	"github.com/onflow/flow-evm-gateway/storage"
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
@@ -368,8 +369,24 @@ func (b *BlockChainAPI) GetLogs(
 	ctx context.Context,
 	criteria filters.FilterCriteria,
 ) ([]*types.Log, error) {
-	// todo add filters and store
-	return nil, errors.NotSupported
+
+	filter := logs.FilterCriteria{
+		Addresses: criteria.Addresses,
+		Topics:    criteria.Topics,
+	}
+
+	if criteria.BlockHash != nil {
+		return logs.
+			NewIDFilter(*criteria.BlockHash, filter, b.blocks, b.receipts).
+			Match()
+	}
+	if criteria.FromBlock != nil && criteria.ToBlock != nil {
+		return logs.
+			NewRangeFilter(*criteria.FromBlock, *criteria.ToBlock, filter, b.receipts).
+			Match()
+	}
+
+	return nil, fmt.Errorf("must provide either block ID or 'from' and 'to' block nubmers, to filter events")
 }
 
 /* ====================================================================================================================
