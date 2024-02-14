@@ -1,13 +1,17 @@
 package requester
 
 import (
+	"bytes"
 	"context"
 	_ "embed"
 	"fmt"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/onflow/flow-go-sdk"
+	"github.com/onflow/flow-go-sdk/crypto"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go-sdk/access"
 )
@@ -32,16 +36,12 @@ var (
 type Requester interface {
 	// SendRawTransaction will submit signed transaction data to the network.
 	// The submitted EVM transaction hash is returned.
-	SendRawTransaction(ctx context.Context, data []byte) (common.Hash, error)
+	SendRawTransaction(ctx context.Context, data []byte) (*common.Hash, error)
 
 	// GetBalance returns the amount of wei for the given address in the state of the
 	// given block height.
 	// todo in future this should be deprecated for local data
 	GetBalance(ctx context.Context, address common.Address, height uint64) (*big.Int, error)
-
-	// GetNonce returns the nonce of the account.
-	// todo in future this should be deprecated for local data
-	GetNonce(ctx context.Context, address common.Address) (uint64, error)
 
 	// Call executes the given signed transaction data on the state for the given block number.
 	// Note, this function doesn't make and changes in the state/blockchain and is
@@ -52,39 +52,96 @@ type Requester interface {
 var _ Requester = &EVM{}
 
 type EVM struct {
-	client access.Client
+	client  access.Client
+	address flow.Address
+	signer  crypto.Signer
 }
 
-func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash, error) {
-	//TODO implement me
-	panic("implement me")
+func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (*common.Hash, error) {
+	tx := &types.Transaction{}
+	err := tx.DecodeRLP(
+		rlp.NewStream(
+			bytes.NewReader(data),
+			uint64(len(data)),
+		),
+	)
+
+	latestBlock, err := e.client.GetLatestBlock(ctx, true)
+	if err != nil {
+		return nil, err
+	}
+
+	index, seqNum, err := e.getSignerNetworkInfo(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	flowTx := flow.NewTransaction().
+		SetScript(runTxScript).
+		SetProposalKey(e.address, index, seqNum).
+		SetReferenceBlockID(latestBlock.ID).
+		SetPayer(e.address).
+		AddAuthorizer(e.address)
+
+	if err = flowTx.AddArgument(cadenceArrayFromBytes(data)); err != nil {
+		return nil, err
+	}
+
+	if err = flowTx.SignEnvelope(e.address, index, e.signer); err != nil {
+		return nil, err
+	}
+
+	err = e.client.SendTransaction(ctx, *flowTx)
+	if err != nil {
+		return nil, err
+	}
+
+	h := tx.Hash()
+	return &h, nil
 }
 
 func (e *EVM) GetBalance(ctx context.Context, address common.Address, height uint64) (*big.Int, error) {
-	//TODO implement me
-	panic("implement me")
-}
+	addr := cadenceArrayFromBytes(address.Bytes()).WithType(addressType)
 
-func (e *EVM) GetNonce(ctx context.Context, address common.Address) (uint64, error) {
-	//TODO implement me
-	panic("implement me")
+	val, err := e.executeScript(ctx, getBalanceScript, []cadence.Value{addr})
+	if err != nil {
+		return nil, err
+	}
+
+	return new(big.Int).SetBytes(val), nil
 }
 
 func (e *EVM) Call(ctx context.Context, address common.Address, data []byte) ([]byte, error) {
-
 	txData := cadenceArrayFromBytes(data).WithType(byteArrayType)
 	toAddress := cadenceArrayFromBytes(address.Bytes()).WithType(addressType)
 
-	value, err := e.client.ExecuteScriptAtLatestBlock(
-		ctx,
-		callScript,
-		[]cadence.Value{txData, toAddress},
-	)
+	return e.executeScript(ctx, callScript, []cadence.Value{txData, toAddress})
+}
+
+func (e *EVM) executeScript(ctx context.Context, script []byte, args []cadence.Value) ([]byte, error) {
+	value, err := e.client.ExecuteScriptAtLatestBlock(ctx, script, args)
 	if err != nil {
-		return hexutil.Bytes{}, err
+		return nil, err
 	}
 
 	return bytesFromCadenceArray(value)
+}
+
+// getSignerNetworkInfo loads the signer account from network and returns key index and sequence number
+func (e *EVM) getSignerNetworkInfo(ctx context.Context) (int, uint64, error) {
+	account, err := e.client.GetAccount(ctx, e.address)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	signerPub := e.signer.PublicKey()
+	for _, k := range account.Keys {
+		if k.PublicKey.Equals(signerPub) {
+			return k.Index, k.SequenceNumber, nil
+		}
+	}
+
+	return 0, 0, fmt.Errorf("provided account address and signer keys do not match")
 }
 
 func cadenceArrayFromBytes(input []byte) cadence.Array {
