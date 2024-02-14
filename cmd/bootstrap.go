@@ -6,7 +6,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/onflow/flow-evm-gateway/api"
 	"github.com/onflow/flow-evm-gateway/config"
-	"github.com/onflow/flow-evm-gateway/services/events"
+	"github.com/onflow/flow-evm-gateway/services/ingestion"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
 	"github.com/onflow/flow-go-sdk/access/grpc"
@@ -86,8 +86,8 @@ func startIngestion(
 
 	logger.Info().Uint64("cadence height", blk.Height).Msg("latest flow block on the network")
 
-	subscriber := events.NewRPCSubscriber(client)
-	engine := events.NewEventIngestionEngine(subscriber, blocks, receipts, transactions, logger)
+	subscriber := ingestion.NewRPCSubscriber(client)
+	engine := ingestion.NewEventIngestionEngine(subscriber, blocks, receipts, transactions, logger)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {

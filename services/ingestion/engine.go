@@ -1,4 +1,4 @@
-package events
+package ingestion
 
 import (
 	"context"
@@ -13,10 +13,10 @@ import (
 
 var ErrDisconnected = errors.New("disconnected")
 
-var _ models.Engine = &EventIngestionEngine{}
+var _ models.Engine = &Engine{}
 
-type EventIngestionEngine struct {
-	subscriber   Subscriber
+type Engine struct {
+	subscriber   EventSubscriber
 	blocks       storage.BlockIndexer
 	receipts     storage.ReceiptIndexer
 	transactions storage.TransactionIndexer
@@ -26,15 +26,15 @@ type EventIngestionEngine struct {
 }
 
 func NewEventIngestionEngine(
-	subscriber Subscriber,
+	subscriber EventSubscriber,
 	blocks storage.BlockIndexer,
 	receipts storage.ReceiptIndexer,
 	transactions storage.TransactionIndexer,
 	log zerolog.Logger,
-) *EventIngestionEngine {
+) *Engine {
 	log = log.With().Str("component", "ingestion").Logger()
 
-	return &EventIngestionEngine{
+	return &Engine{
 		subscriber:   subscriber,
 		blocks:       blocks,
 		receipts:     receipts,
@@ -45,18 +45,18 @@ func NewEventIngestionEngine(
 }
 
 // Ready signals when the engine has started.
-func (e *EventIngestionEngine) Ready() <-chan struct{} {
+func (e *Engine) Ready() <-chan struct{} {
 	return e.status.IsReady()
 }
 
 // Done signals when the engine has stopped.
-func (e *EventIngestionEngine) Done() <-chan struct{} {
+func (e *Engine) Done() <-chan struct{} {
 	// return e.status.IsDone()
 	return nil
 }
 
 // Stop the engine.
-func (e *EventIngestionEngine) Stop() {
+func (e *Engine) Stop() {
 	// todo
 }
 
@@ -64,7 +64,7 @@ func (e *EventIngestionEngine) Stop() {
 // to the event subscribers as a starting point.
 // Consume the events provided by the event subscriber.
 // Each event is then processed by the event processing methods.
-func (e *EventIngestionEngine) Start(ctx context.Context) error {
+func (e *Engine) Start(ctx context.Context) error {
 	// todo support starting from other heights, we probably need to add another storage for cadence heights
 	latest, err := e.blocks.LatestHeight()
 	if err != nil {
@@ -124,7 +124,7 @@ func (e *EventIngestionEngine) Start(ctx context.Context) error {
 }
 
 // processEvents iterates all the events and decides based on the type how to process them.
-func (e *EventIngestionEngine) processEvents(events flow.BlockEvents) error {
+func (e *Engine) processEvents(events flow.BlockEvents) error {
 	e.log.Debug().
 		Uint64("cadence height", events.Height).
 		Int("cadence event length", len(events.Events)).
@@ -149,7 +149,7 @@ func (e *EventIngestionEngine) processEvents(events flow.BlockEvents) error {
 	return nil
 }
 
-func (e *EventIngestionEngine) processBlockEvent(event cadence.Event) error {
+func (e *Engine) processBlockEvent(event cadence.Event) error {
 	block, err := models.DecodeBlock(event)
 	if err != nil {
 		return err
@@ -167,7 +167,7 @@ func (e *EventIngestionEngine) processBlockEvent(event cadence.Event) error {
 	return e.blocks.Store(block)
 }
 
-func (e *EventIngestionEngine) processTransactionEvent(event cadence.Event) error {
+func (e *Engine) processTransactionEvent(event cadence.Event) error {
 	tx, err := models.DecodeTransaction(event)
 	if err != nil {
 		return err

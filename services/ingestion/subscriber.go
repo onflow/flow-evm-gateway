@@ -1,4 +1,4 @@
-package events
+package ingestion
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 var blockExecutedType = (types.EVMLocation{}).TypeID(nil, string(types.EventTypeBlockExecuted))
 var txExecutedType = (types.EVMLocation{}).TypeID(nil, string(types.EventTypeTransactionExecuted))
 
-type Subscriber interface {
+type EventSubscriber interface {
 	// Subscribe to relevant events from the provided block height.
 	// Returns a channel with block events and errors,
 	// if subscription fails returns an error as the third value.
