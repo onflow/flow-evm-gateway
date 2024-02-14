@@ -31,7 +31,6 @@ var (
 	FlowEVMMainnetChainID = big.NewInt(777)
 )
 
-func SupportedAPIs(config *config.Config, store *storage.Store) []rpc.API {
 //go:embed cadence/scripts/bridged_account_call.cdc
 var BridgedAccountCall []byte
 
@@ -51,7 +50,7 @@ func SupportedAPIs(blockChainAPI *BlockChainAPI) []rpc.API {
 }
 
 type BlockChainAPI struct {
-	config *config     .Config
+	config     *config.Config
 	Store      *storage.Store
 	FlowClient access.Client
 }

@@ -89,34 +89,34 @@ func startIngestion(cfg *config.Config) error {
 }
 
 func startServer(cfg *config.Config, logger zerolog.Logger) error {
-	store := storage.NewStore()
-
-	logger = logger.With().Str("component", "api").Logger()
 	srv := api.NewHTTPServer(logger, rpc.DefaultHTTPTimeouts)
-	supportedAPIs := api.SupportedAPIs(cfg, store)
 
-	err := srv.EnableRPC(supportedAPIs)
+	flowClient, err := api.NewFlowClient(grpc.EmulatorHost)
 	if err != nil {
 		return err
 	}
 
-	err = srv.EnableWS(supportedAPIs)
-	if err != nil {
+	store := storage.NewStore()
+	blockchainAPI := api.NewBlockChainAPI(cfg, store, flowClient)
+	supportedAPIs := api.SupportedAPIs(blockchainAPI)
+
+	if err := srv.EnableRPC(supportedAPIs); err != nil {
 		return err
 	}
 
-	// todo add to config
-	err = srv.SetListenAddr("localhost", 8545)
-	if err != nil {
+	if err := srv.EnableWS(supportedAPIs); err != nil {
 		return err
 	}
 
-	err = srv.Start()
-	if err != nil {
+	if err := srv.SetListenAddr("", 8545); err != nil {
 		return err
 	}
 
-	logger.Info().Msgf("RPC server started: %s", srv.ListenAddr())
+	if err := srv.Start(); err != nil {
+		return err
+	}
+
+	logger.Info().Msgf("Server Started: %s", srv.ListenAddr())
 
 	return nil
 }

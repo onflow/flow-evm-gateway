@@ -22,21 +22,26 @@ type Config struct {
 	InitHeight uint64
 	ChainID    *big.Int
 	Coinbase   common.Address
+	GasPrice   *big.Int
 }
 
 func FromFlags() (*Config, error) {
 	cfg := &Config{}
-	var network, coinbase string
+	var network, coinbase, gas string
 
 	// parse from flags
 	flag.StringVar(&cfg.DatabaseDir, "database-dir", "./db", "path to the directory for the database")
 	flag.StringVar(&cfg.AccessNodeGRPCHost, "access-node-grpc-host", "localhost:3569", "host to the flow access node gRPC API")
 	flag.Uint64Var(&cfg.InitHeight, "init-height", EmptyHeight, "init cadence block height from where the event ingestion will start. WARNING: you should only provide this if there are no existing values in the database, otherwise an error will be thrown")
-	flag.StringVar(&network, "network ID", "emulator", "EVM network ID (testnet, mainnet)")
+	flag.StringVar(&network, "network-id", "emulator", "EVM network ID (testnet, mainnet)")
 	flag.StringVar(&coinbase, "coinbase", defaultCoinbase, "coinbase address to use for fee collection")
+	flag.StringVar(&gas, "gas-price", "1", "static gas price used for EVM transactions")
 	flag.Parse()
 
 	cfg.Coinbase = common.HexToAddress(coinbase)
+	if g, ok := new(big.Int).SetString(gas, 10); ok {
+		cfg.GasPrice = g
+	}
 
 	switch network {
 	case "testnet":
