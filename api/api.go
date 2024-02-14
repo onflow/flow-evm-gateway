@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	_ "embed"
+	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -10,7 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/onflow/flow-evm-gateway/api/errors"
+	errs "github.com/onflow/flow-evm-gateway/api/errors"
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/services/logs"
 	"github.com/onflow/flow-evm-gateway/services/requester"
@@ -257,7 +258,7 @@ func (b *BlockChainAPI) GetBlockByNumber(
 	fullTx bool,
 ) (map[string]interface{}, error) {
 	if fullTx {
-		return nil, errors.NotSupported
+		return nil, errs.ErrNotSupported
 	}
 
 	block := map[string]interface{}{}
@@ -301,7 +302,10 @@ func (b *BlockChainAPI) GetBlockReceipts(
 	} else if numHash.BlockNumber != nil {
 		block, err = b.blocks.GetByHeight(uint64(numHash.BlockNumber.Int64()))
 	} else {
-		return nil, fmt.Errorf("block number or hash not provided") // todo replace with invalid
+		return nil, errors.Join(
+			errs.ErrInvalid,
+			fmt.Errorf("block number or hash not provided"),
+		)
 	}
 	if err != nil {
 		return nil, err
@@ -386,7 +390,10 @@ func (b *BlockChainAPI) GetLogs(
 			Match()
 	}
 
-	return nil, fmt.Errorf("must provide either block ID or 'from' and 'to' block nubmers, to filter events")
+	return nil, errors.Join(
+		errs.ErrInvalid,
+		fmt.Errorf("must provide either block ID or 'from' and 'to' block nubmers, to filter events"),
+	)
 }
 
 /* ====================================================================================================================
@@ -428,7 +435,7 @@ func (b *BlockChainAPI) GetUncleCountByBlockNumber(
 func (b *BlockChainAPI) NewFilter(
 	criteria filters.FilterCriteria,
 ) (rpc.ID, error) {
-	return "", errors.NotSupported
+	return "", errs.ErrNotSupported
 }
 
 // UninstallFilter removes the filter with the given filter id.
@@ -442,7 +449,7 @@ func (b *BlockChainAPI) GetFilterLogs(
 	ctx context.Context,
 	id rpc.ID,
 ) ([]*types.Log, error) {
-	return nil, errors.NotSupported
+	return nil, errs.ErrNotSupported
 }
 
 // GetFilterChanges returns the logs for the filter with the given id since
@@ -451,7 +458,7 @@ func (b *BlockChainAPI) GetFilterLogs(
 // For pending transaction and block filters the result is []common.Hash.
 // (pending)Log filters return []Log.
 func (b *BlockChainAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
-	return nil, errors.NotSupported
+	return nil, errs.ErrNotSupported
 }
 
 // NewBlockFilter creates a filter that fetches blocks that are imported into the chain.
@@ -485,7 +492,7 @@ func (b *BlockChainAPI) EstimateGas(
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 	overrides *StateOverride,
 ) (hexutil.Uint64, error) {
-	return 0, errors.NotSupported
+	return 0, errs.ErrNotSupported
 }
 
 // GetUncleByBlockHashAndIndex returns the uncle block for the given block hash and index.
@@ -494,7 +501,7 @@ func (b *BlockChainAPI) GetUncleByBlockHashAndIndex(
 	blockHash common.Hash,
 	index hexutil.Uint,
 ) (map[string]interface{}, error) {
-	return nil, errors.NotSupported
+	return nil, errs.ErrNotSupported
 }
 
 // GetUncleByBlockNumberAndIndex returns the uncle block for the given block hash and index.
@@ -503,7 +510,7 @@ func (b *BlockChainAPI) GetUncleByBlockNumberAndIndex(
 	blockNumber rpc.BlockNumber,
 	index hexutil.Uint,
 ) (map[string]interface{}, error) {
-	return nil, errors.NotSupported
+	return nil, errs.ErrNotSupported
 }
 
 // Sign calculates an ECDSA signature for:
@@ -519,7 +526,7 @@ func (b *BlockChainAPI) Sign(
 	addr common.Address,
 	data hexutil.Bytes,
 ) (hexutil.Bytes, error) {
-	return nil, errors.NotSupported
+	return nil, errs.ErrNotSupported
 }
 
 // SignTransaction will sign the given transaction with the from account.
@@ -529,7 +536,7 @@ func (b *BlockChainAPI) SignTransaction(
 	ctx context.Context,
 	args TransactionArgs,
 ) (*SignTransactionResult, error) {
-	return nil, errors.NotSupported
+	return nil, errs.ErrNotSupported
 }
 
 // SendTransaction creates a transaction for the given argument, sign it
@@ -538,7 +545,7 @@ func (b *BlockChainAPI) SendTransaction(
 	ctx context.Context,
 	args TransactionArgs,
 ) (common.Hash, error) {
-	return common.Hash{}, errors.NotSupported
+	return common.Hash{}, errs.ErrNotSupported
 }
 
 // GetCode returns the code stored at the given address in the state for the given block number.
@@ -547,7 +554,7 @@ func (b *BlockChainAPI) GetCode(
 	address common.Address,
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (hexutil.Bytes, error) {
-	return nil, errors.NotSupported
+	return nil, errs.ErrNotSupported
 }
 
 // GetProof returns the Merkle-proof for a given account and optionally some storage keys.
@@ -557,7 +564,7 @@ func (b *BlockChainAPI) GetProof(
 	storageKeys []string,
 	blockNumberOrHash rpc.BlockNumberOrHash,
 ) (*AccountResult, error) {
-	return nil, errors.NotSupported
+	return nil, errs.ErrNotSupported
 }
 
 // GetStorageAt returns the storage from the state at the given address, key and
@@ -569,7 +576,7 @@ func (b *BlockChainAPI) GetStorageAt(
 	storageSlot string,
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (hexutil.Bytes, error) {
-	return nil, errors.NotSupported
+	return nil, errs.ErrNotSupported
 }
 
 // CreateAccessList creates an EIP-2930 type AccessList for the given transaction.
@@ -579,7 +586,7 @@ func (b *BlockChainAPI) CreateAccessList(
 	args TransactionArgs,
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (*AccessListResult, error) {
-	return nil, errors.NotSupported
+	return nil, errs.ErrNotSupported
 }
 
 // FeeHistory returns transaction base fee per gas and effective priority fee
@@ -597,12 +604,12 @@ func (b *BlockChainAPI) FeeHistory(
 	lastBlock rpc.BlockNumber,
 	rewardPercentiles []float64,
 ) (*FeeHistoryResult, error) {
-	return nil, errors.NotSupported
+	return nil, errs.ErrNotSupported
 }
 
 // MaxPriorityFeePerGas returns a suggestion for a gas tip cap for dynamic fee transactions.
 func (b *BlockChainAPI) MaxPriorityFeePerGas(ctx context.Context) (*hexutil.Big, error) {
-	return nil, errors.NotSupported
+	return nil, errs.ErrNotSupported
 }
 
 // GetTransactionCount returns the number of transactions the given address has sent for the given block number
@@ -612,5 +619,5 @@ func (b *BlockChainAPI) GetTransactionCount(
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (*hexutil.Uint64, error) {
 	// todo add support in store
-	return nil, errors.NotSupported
+	return nil, errs.ErrNotSupported
 }
