@@ -6,6 +6,7 @@ import (
 	_ "embed"
 	"encoding/hex"
 	"fmt"
+	"github.com/onflow/flow-evm-gateway/api/errors"
 	"github.com/onflow/flow-evm-gateway/config"
 	"math/big"
 
@@ -76,7 +77,7 @@ func (b *BlockChainAPI) ChainId() *hexutil.Big {
 
 // BlockNumber returns the block number of the chain head.
 func (b *BlockChainAPI) BlockNumber() hexutil.Uint64 {
-	latestBlockHeight, err := b.Store.LatestBlockHeight(context.Background())
+	latestBlockHeight, err := b.blocks.LatestHeight()
 	if err != nil {
 		// TODO(m-Peter) We should add a logger to BlockChainAPI
 		panic(fmt.Errorf("failed to fetch the latest block number: %v", err))
@@ -160,8 +161,8 @@ func (b *BlockChainAPI) CreateAccessList(
 	ctx context.Context,
 	args TransactionArgs,
 	blockNumberOrHash *rpc.BlockNumberOrHash,
-) (*accessListResult, error) {
-	return &accessListResult{GasUsed: hexutil.Uint64(105)}, nil
+) (*AccessListResult, error) {
+	return nil, errors.NotSupported
 }
 
 // FeeHistory returns transaction base fee per gas and effective priority fee
@@ -178,12 +179,8 @@ func (b *BlockChainAPI) FeeHistory(
 	blockCount math.HexOrDecimal64,
 	lastBlock rpc.BlockNumber,
 	rewardPercentiles []float64,
-) (*feeHistoryResult, error) {
-	results := &feeHistoryResult{
-		OldestBlock:  (*hexutil.Big)(big.NewInt(10102020506)),
-		GasUsedRatio: []float64{105.0},
-	}
-	return results, nil
+) (*FeeHistoryResult, error) {
+	return nil, errors.NotSupported
 }
 
 // GasPrice returns a suggestion for a gas price for legacy transactions.
@@ -193,7 +190,7 @@ func (b *BlockChainAPI) GasPrice(ctx context.Context) (*hexutil.Big, error) {
 
 // MaxPriorityFeePerGas returns a suggestion for a gas tip cap for dynamic fee transactions.
 func (b *BlockChainAPI) MaxPriorityFeePerGas(ctx context.Context) (*hexutil.Big, error) {
-	return (*hexutil.Big)(big.NewInt(10102020506)), nil
+	return nil, errors.NotSupported
 }
 
 // GetBalance returns the amount of wei for the given address in the state of the
@@ -228,8 +225,7 @@ func (b *BlockChainAPI) GetCode(
 	address common.Address,
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (hexutil.Bytes, error) {
-	code, _ := hex.DecodeString("600160008035811a818181146012578301005b601b6001356025565b8060005260206000f25b600060078202905091905056")
-	return hexutil.Bytes(code), nil
+	return nil, errors.NotSupported
 }
 
 // GetProof returns the Merkle-proof for a given account and optionally some storage keys.
@@ -239,16 +235,7 @@ func (b *BlockChainAPI) GetProof(
 	storageKeys []string,
 	blockNumberOrHash rpc.BlockNumberOrHash,
 ) (*AccountResult, error) {
-	storageProof := make([]StorageResult, len(storageKeys))
-	return &AccountResult{
-		Address:      address,
-		AccountProof: []string{""},
-		Balance:      (*hexutil.Big)(big.NewInt(10011)),
-		CodeHash:     common.Hash{},
-		Nonce:        hexutil.Uint64(10502),
-		StorageHash:  common.Hash{},
-		StorageProof: storageProof,
-	}, nil
+	return nil, errors.NotSupported
 }
 
 // GetStorageAt returns the storage from the state at the given address, key and
@@ -260,8 +247,7 @@ func (b *BlockChainAPI) GetStorageAt(
 	storageSlot string,
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (hexutil.Bytes, error) {
-	storage, _ := hex.DecodeString("600160008035811a818181146012578301005b601b6001356025565b8060005260206000f25b600060078202905091905056")
-	return hexutil.Bytes(storage), nil
+	return nil, errors.NotSupported
 }
 
 // GetTransactionCount returns the number of transactions the given address has sent for the given block number
@@ -279,46 +265,37 @@ func (b *BlockChainAPI) GetTransactionByHash(
 	ctx context.Context,
 	hash common.Hash,
 ) (*RPCTransaction, error) {
-	txPayload, err := b.Store.GetTransactionByHash(ctx, hash)
+	tx, err := b.transactions.Get(hash)
 	if err != nil {
 		return nil, err
 	}
 
-	txBytes, err := hex.DecodeString(txPayload.Transaction)
-	if err != nil {
-		return nil, err
-	}
-	gethTx, err := GethTxFromBytes(txBytes)
+	rcp, err := b.receipt.GetByTransactionID(tx.Hash())
 	if err != nil {
 		return nil, err
 	}
 
-	block, err := b.Store.GetBlockByNumber(ctx, txPayload.BlockHeight)
+	from, err := types.Sender(types.LatestSignerForChainID(tx.ChainId()), tx)
 	if err != nil {
 		return nil, err
 	}
-	blockHash := common.HexToHash(block.Hash)
-	index := uint64(0)
-	v, r, s := gethTx.RawSignatureValues()
 
-	from, err := types.Sender(types.LatestSignerForChainID(gethTx.ChainId()), gethTx)
-	if err != nil {
-		return nil, err
-	}
+	v, r, s := tx.RawSignatureValues()
+	index := uint64(rcp.TransactionIndex)
 
 	txResult := &RPCTransaction{
-		BlockHash:        (*common.Hash)(&blockHash),
-		BlockNumber:      (*hexutil.Big)(big.NewInt(int64(txPayload.BlockHeight))),
+		Hash:             tx.Hash(),
+		BlockHash:        &rcp.BlockHash,
+		BlockNumber:      (*hexutil.Big)(rcp.BlockNumber),
 		From:             from,
-		Gas:              hexutil.Uint64(txPayload.GasConsumed),
-		GasPrice:         (*hexutil.Big)(gethTx.GasPrice()),
-		Hash:             gethTx.Hash(),
-		Input:            hexutil.Bytes(gethTx.Data()),
-		Nonce:            hexutil.Uint64(gethTx.Nonce()),
-		To:               gethTx.To(),
+		To:               tx.To(),
+		Gas:              hexutil.Uint64(rcp.GasUsed),
+		GasPrice:         (*hexutil.Big)(rcp.EffectiveGasPrice),
+		Input:            tx.Data(),
+		Nonce:            hexutil.Uint64(tx.Nonce()),
 		TransactionIndex: (*hexutil.Uint64)(&index),
-		Value:            (*hexutil.Big)(gethTx.Value()),
-		Type:             hexutil.Uint64(uint64(gethTx.Type())),
+		Value:            (*hexutil.Big)(tx.Value()),
+		Type:             hexutil.Uint64(tx.Type()),
 		V:                (*hexutil.Big)(v),
 		R:                (*hexutil.Big)(r),
 		S:                (*hexutil.Big)(s),
@@ -332,7 +309,7 @@ func (b *BlockChainAPI) GetTransactionByBlockHashAndIndex(
 	blockHash common.Hash,
 	index hexutil.Uint,
 ) *RPCTransaction {
-	block, err := b.Store.GetBlockByHash(ctx, blockHash)
+	block, err := b.blocks.GetByID(blockHash)
 	if err != nil {
 		return nil
 	}
@@ -342,7 +319,7 @@ func (b *BlockChainAPI) GetTransactionByBlockHashAndIndex(
 		return nil
 	}
 
-	txHash := common.HexToHash(block.TransactionHashes[index])
+	txHash := block.TransactionHashes[index]
 	tx, err := b.GetTransactionByHash(ctx, txHash)
 	if err != nil {
 		return nil
@@ -357,7 +334,7 @@ func (b *BlockChainAPI) GetTransactionByBlockNumberAndIndex(
 	blockNumber rpc.BlockNumber,
 	index hexutil.Uint,
 ) *RPCTransaction {
-	block, err := b.Store.GetBlockByNumber(ctx, uint64(blockNumber))
+	block, err := b.blocks.GetByHeight(uint64(blockNumber))
 	if err != nil {
 		return nil
 	}
@@ -367,7 +344,7 @@ func (b *BlockChainAPI) GetTransactionByBlockNumberAndIndex(
 		return nil
 	}
 
-	txHash := common.HexToHash(block.TransactionHashes[index])
+	txHash := block.TransactionHashes[index]
 	tx, err := b.GetTransactionByHash(ctx, txHash)
 	if err != nil {
 		return nil
@@ -387,7 +364,7 @@ func (b *BlockChainAPI) GetTransactionReceipt(
 	// we can proceed with some tests, and get rid of these mock data.
 	receipt := map[string]interface{}{}
 
-	txReceipt, err := b.Store.GetTransactionByHash(ctx, hash)
+	txReceipt, err := b.receipt.GetByTransactionID(hash)
 	if err != nil {
 		return receipt, err
 	}
@@ -462,32 +439,16 @@ func (b *BlockChainAPI) GetBlockByHash(
 ) (map[string]interface{}, error) {
 	block := map[string]interface{}{}
 
-	blockExecutedPayload, err := b.Store.GetBlockByHash(ctx, hash)
+	bl, err := b.blocks.GetByID(hash)
 	if err != nil {
-		return block, err
+		return nil, err
 	}
 
-	block["number"] = hexutil.Uint64(blockExecutedPayload.Height)
-	block["hash"] = blockExecutedPayload.Hash
-	block["parentHash"] = blockExecutedPayload.ParentBlockHash
-	block["receiptsRoot"] = blockExecutedPayload.ReceiptRoot
-	block["transactions"] = blockExecutedPayload.TransactionHashes
-
-	block["difficulty"] = "0x4ea3f27bc"
-	block["extraData"] = "0x476574682f4c5649562f76312e302e302f6c696e75782f676f312e342e32"
-	block["gasLimit"] = "0x1388"
-	block["gasUsed"] = "0x0"
-	block["logsBloom"] = "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
-	block["miner"] = "0xbb7b8287f3f0a933474a79eae42cbca977791171"
-	block["mixHash"] = "0x4fffe9ae21f1c9e15207b1f472d5bbdd68c9595d461666602f2be20daf5e7843"
-	block["nonce"] = "0x689056015818adbe"
-	block["sha3Uncles"] = "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
-	block["size"] = "0x220"
-	block["stateRoot"] = "0xddc8b0234c2e0cad087c8b389aa7ef01f7d79b2570bccb77ce48648aa61c904d"
-	block["timestamp"] = "0x55ba467c"
-	block["totalDifficulty"] = "0x78ed983323d"
-	block["transactionsRoot"] = "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
-	block["uncles"] = []string{}
+	block["number"] = hexutil.Uint64(bl.Height)
+	block["hash"] = bl.Hash
+	block["parentHash"] = bl.ParentBlockHash
+	block["receiptsRoot"] = bl.ReceiptRoot
+	block["transactions"] = bl.TransactionHashes
 
 	return block, nil
 }
@@ -506,32 +467,27 @@ func (b *BlockChainAPI) GetBlockByNumber(
 ) (map[string]interface{}, error) {
 	block := map[string]interface{}{}
 
-	blockExecutedPayload, err := b.Store.GetBlockByNumber(ctx, uint64(blockNumber))
-	if err != nil {
-		return block, err
+	height := uint64(blockNumber)
+	var err error
+	if blockNumber == -2 {
+		height, err = b.blocks.LatestHeight()
+		if err != nil {
+			return nil, err
+		}
+	} else if blockNumber < 0 {
+		return nil, fmt.Errorf("not supported")
 	}
 
-	block["number"] = hexutil.Uint64(blockExecutedPayload.Height)
-	block["hash"] = blockExecutedPayload.Hash
-	block["parentHash"] = blockExecutedPayload.ParentBlockHash
-	block["receiptsRoot"] = blockExecutedPayload.ReceiptRoot
-	block["transactions"] = blockExecutedPayload.TransactionHashes
+	bl, err := b.blocks.GetByHeight(height)
+	if err != nil {
+		return nil, err
+	}
 
-	block["difficulty"] = "0x4ea3f27bc"
-	block["extraData"] = "0x476574682f4c5649562f76312e302e302f6c696e75782f676f312e342e32"
-	block["gasLimit"] = "0x1388"
-	block["gasUsed"] = "0x0"
-	block["logsBloom"] = "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
-	block["miner"] = "0xbb7b8287f3f0a933474a79eae42cbca977791171"
-	block["mixHash"] = "0x4fffe9ae21f1c9e15207b1f472d5bbdd68c9595d461666602f2be20daf5e7843"
-	block["nonce"] = "0x689056015818adbe"
-	block["sha3Uncles"] = "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
-	block["size"] = "0x220"
-	block["stateRoot"] = "0xddc8b0234c2e0cad087c8b389aa7ef01f7d79b2570bccb77ce48648aa61c904d"
-	block["timestamp"] = "0x55ba467c"
-	block["totalDifficulty"] = "0x78ed983323d"
-	block["transactionsRoot"] = "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421"
-	block["uncles"] = []string{}
+	block["number"] = hexutil.Uint64(bl.Height)
+	block["hash"] = bl.Hash
+	block["parentHash"] = bl.ParentBlockHash
+	block["receiptsRoot"] = bl.ReceiptRoot
+	block["transactions"] = bl.TransactionHashes
 
 	return block, nil
 }
@@ -590,7 +546,8 @@ func (b *BlockChainAPI) GetBlockTransactionCountByNumber(
 	ctx context.Context,
 	blockNumber rpc.BlockNumber,
 ) *hexutil.Uint {
-	block, err := b.Store.GetBlockByNumber(ctx, uint64(blockNumber))
+	// todo handle block number for negative special values in all APIs
+	block, err := b.blocks.GetByHeight(uint64(blockNumber))
 	if err != nil {
 		return nil
 	}
@@ -651,12 +608,12 @@ func (b *BlockChainAPI) GetLogs(
 func (b *BlockChainAPI) NewFilter(
 	criteria filters.FilterCriteria,
 ) (rpc.ID, error) {
-	return rpc.ID("filter0"), nil
+	return "", errors.NotSupported
 }
 
 // UninstallFilter removes the filter with the given filter id.
 func (b *BlockChainAPI) UninstallFilter(id rpc.ID) bool {
-	return true
+	return false
 }
 
 // GetFilterLogs returns the logs for the filter with the given id.
@@ -665,18 +622,7 @@ func (b *BlockChainAPI) GetFilterLogs(
 	ctx context.Context,
 	id rpc.ID,
 ) ([]*types.Log, error) {
-	log := &types.Log{
-		Index:       1,
-		BlockNumber: 436,
-		BlockHash:   common.HexToHash("0x8216c5785ac562ff41e2dcfdf5785ac562ff41e2dcfdf829c5a142f1fccd7d"),
-		TxHash:      common.HexToHash("0xdf829c5a142f1fccd7d8216c5785ac562ff41e2dcfdf5785ac562ff41e2dcf"),
-		TxIndex:     0,
-		Address:     common.HexToAddress("0x16c5785ac562ff41e2dcfdf829c5a142f1fccd7d"),
-		Data:        []byte{0, 0, 0},
-		Topics:      []common.Hash{common.HexToHash("0x59ebeb90bc63057b6515673c3ecf9438e5058bca0f92585014eced636878c9a5")},
-	}
-
-	return []*types.Log{log}, nil
+	return nil, errors.NotSupported
 }
 
 // GetFilterChanges returns the logs for the filter with the given id since
@@ -685,27 +631,13 @@ func (b *BlockChainAPI) GetFilterLogs(
 // For pending transaction and block filters the result is []common.Hash.
 // (pending)Log filters return []Log.
 func (b *BlockChainAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
-	if id == rpc.ID("") {
-		return nil, errFilterNotFound
-	}
-	log := &types.Log{
-		Index:       1,
-		BlockNumber: 436,
-		BlockHash:   common.HexToHash("0x8216c5785ac562ff41e2dcfdf5785ac562ff41e2dcfdf829c5a142f1fccd7d"),
-		TxHash:      common.HexToHash("0xdf829c5a142f1fccd7d8216c5785ac562ff41e2dcfdf5785ac562ff41e2dcf"),
-		TxIndex:     0,
-		Address:     common.HexToAddress("0x16c5785ac562ff41e2dcfdf829c5a142f1fccd7d"),
-		Data:        []byte{0, 0, 0},
-		Topics:      []common.Hash{common.HexToHash("0x59ebeb90bc63057b6515673c3ecf9438e5058bca0f92585014eced636878c9a5")},
-	}
-
-	return []*types.Log{log}, nil
+	return nil, errors.NotSupported
 }
 
 // NewBlockFilter creates a filter that fetches blocks that are imported into the chain.
 // It is part of the filter package since polling goes with eth_getFilterChanges.
 func (b *BlockChainAPI) NewBlockFilter() rpc.ID {
-	return rpc.ID("block_filter")
+	return ""
 }
 
 // NewPendingTransactionFilter creates a filter that fetches pending transactions
@@ -714,12 +646,12 @@ func (b *BlockChainAPI) NewBlockFilter() rpc.ID {
 // It is part of the filter package because this filter can be used through the
 // `eth_getFilterChanges` polling method that is also used for log filters.
 func (b *BlockChainAPI) NewPendingTransactionFilter(fullTx *bool) rpc.ID {
-	return rpc.ID("pending_tx_filter")
+	return ""
 }
 
 // Accounts returns the collection of accounts this node manages.
 func (b *BlockChainAPI) Accounts() []common.Address {
-	return []common.Address{}
+	return nil
 }
 
 // Sign calculates an ECDSA signature for:
@@ -735,7 +667,7 @@ func (b *BlockChainAPI) Sign(
 	addr common.Address,
 	data hexutil.Bytes,
 ) (hexutil.Bytes, error) {
-	return hexutil.Bytes{}, fmt.Errorf("method is not implemented")
+	return nil, errors.NotSupported
 }
 
 // SignTransaction will sign the given transaction with the from account.
@@ -745,7 +677,7 @@ func (b *BlockChainAPI) SignTransaction(
 	ctx context.Context,
 	args TransactionArgs,
 ) (*SignTransactionResult, error) {
-	return &SignTransactionResult{}, fmt.Errorf("method is not implemented")
+	return nil, errors.NotSupported
 }
 
 // SendTransaction creates a transaction for the given argument, sign it
@@ -754,7 +686,7 @@ func (b *BlockChainAPI) SendTransaction(
 	ctx context.Context,
 	args TransactionArgs,
 ) (common.Hash, error) {
-	return common.Hash{}, fmt.Errorf("method is not implemented")
+	return common.Hash{}, errors.NotSupported
 }
 
 // Call executes the given transaction on the state for the given block number.
@@ -796,7 +728,7 @@ func (b *BlockChainAPI) Call(
 		resultValue[i] = x.ToGoValue().(byte)
 	}
 
-	return hexutil.Bytes(resultValue), nil
+	return resultValue, nil
 }
 
 // EstimateGas returns the lowest possible gas limit that allows the transaction to run
@@ -810,7 +742,7 @@ func (b *BlockChainAPI) EstimateGas(
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 	overrides *StateOverride,
 ) (hexutil.Uint64, error) {
-	return hexutil.Uint64(105), nil
+	return 0, errors.NotSupported
 }
 
 // GetUncleByBlockHashAndIndex returns the uncle block for the given block hash and index.
@@ -819,7 +751,7 @@ func (b *BlockChainAPI) GetUncleByBlockHashAndIndex(
 	blockHash common.Hash,
 	index hexutil.Uint,
 ) (map[string]interface{}, error) {
-	return map[string]interface{}{}, nil
+	return nil, errors.NotSupported
 }
 
 // GetUncleByBlockNumberAndIndex returns the uncle block for the given block hash and index.
@@ -828,5 +760,5 @@ func (b *BlockChainAPI) GetUncleByBlockNumberAndIndex(
 	blockNumber rpc.BlockNumber,
 	index hexutil.Uint,
 ) (map[string]interface{}, error) {
-	return map[string]interface{}{}, nil
+	return nil, errors.NotSupported
 }
