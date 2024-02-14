@@ -43,22 +43,25 @@ func SupportedAPIs(blockChainAPI *BlockChainAPI) []rpc.API {
 
 type BlockChainAPI struct {
 	config       *config.Config
-	Store        *storage.Store
 	FlowClient   access.Client
 	blocks       storage.BlockIndexer
 	transactions storage.TransactionIndexer
-	receipt      storage.ReceiptIndexer
+	receipts     storage.ReceiptIndexer
 }
 
 func NewBlockChainAPI(
 	config *config.Config,
-	store *storage.Store,
 	flowClient access.Client,
+	blocks storage.BlockIndexer,
+	transactions storage.TransactionIndexer,
+	receipts storage.ReceiptIndexer,
 ) *BlockChainAPI {
 	return &BlockChainAPI{
-		config:     config,
-		Store:      store,
-		FlowClient: flowClient,
+		config:       config,
+		FlowClient:   flowClient,
+		blocks:       blocks,
+		transactions: transactions,
+		receipts:     receipts,
 	}
 }
 
@@ -253,8 +256,8 @@ func (b *BlockChainAPI) GetTransactionCount(
 	address common.Address,
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (*hexutil.Uint64, error) {
-	nonce := b.Store.GetAccountNonce(ctx, address)
-	return (*hexutil.Uint64)(&nonce), nil
+	// todo add support in store
+	return nil, errors.NotSupported
 }
 
 // GetTransactionByHash returns the transaction for the given hash
@@ -267,7 +270,7 @@ func (b *BlockChainAPI) GetTransactionByHash(
 		return nil, err
 	}
 
-	rcp, err := b.receipt.GetByTransactionID(tx.Hash())
+	rcp, err := b.receipts.GetByTransactionID(tx.Hash())
 	if err != nil {
 		return nil, err
 	}
@@ -355,7 +358,7 @@ func (b *BlockChainAPI) GetTransactionReceipt(
 	ctx context.Context,
 	hash common.Hash,
 ) (*types.Receipt, error) { // todo validate we can use the types directly, check the json struct directives
-	return b.receipt.GetByTransactionID(hash)
+	return b.receipts.GetByTransactionID(hash)
 }
 
 // Coinbase is the address that mining rewards will be sent to (alias for Etherbase).
@@ -451,7 +454,7 @@ func (b *BlockChainAPI) GetBlockReceipts(
 
 	receipts := make([]*types.Receipt, len(block.TransactionHashes))
 	for i, hash := range block.TransactionHashes {
-		rcp, err := b.receipt.GetByTransactionID(hash)
+		rcp, err := b.receipts.GetByTransactionID(hash)
 		if err != nil {
 			return nil, err
 		}
@@ -466,7 +469,7 @@ func (b *BlockChainAPI) GetBlockTransactionCountByHash(
 	ctx context.Context,
 	blockHash common.Hash,
 ) *hexutil.Uint {
-	block, err := b.Store.GetBlockByHash(ctx, blockHash)
+	block, err := b.blocks.GetByID(blockHash)
 	if err != nil {
 		return nil
 	}
@@ -513,19 +516,8 @@ func (b *BlockChainAPI) GetLogs(
 	ctx context.Context,
 	criteria filters.FilterCriteria,
 ) ([]*types.Log, error) {
-	if len(criteria.Topics) > maxTopics {
-		return nil, errExceedMaxTopics
-	}
-
-	logs := []*types.Log{}
-	for _, topicList := range criteria.Topics {
-		for _, topic := range topicList {
-			matchingLogs := b.Store.LogsByTopic(topic.Hex())
-			logs = append(logs, matchingLogs...)
-		}
-	}
-
-	return logs, nil
+	// todo add filters and store
+	return nil, errors.NotSupported
 }
 
 // NewFilter creates a new filter and returns the filter id. It can be
