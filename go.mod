@@ -185,3 +185,7 @@ require (
 	lukechampine.com/blake3 v1.2.1 // indirect
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
+
+// TODO(m-Peter): Temporary workaround to unblock the build process
+// CGO_ENABLED=0 go build -o evm-gateway ./cmd/server/main.go fails!
+replace github.com/onflow/crypto => github.com/onflow/crypto v0.24.9
