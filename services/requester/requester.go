@@ -57,6 +57,14 @@ type EVM struct {
 	signer  crypto.Signer
 }
 
+func NewEVM(client access.Client, address flow.Address, signer crypto.Signer) *EVM {
+	return &EVM{
+		client:  client,
+		address: address,
+		signer:  signer,
+	}
+}
+
 func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash, error) {
 	tx := &types.Transaction{}
 	err := tx.DecodeRLP(
