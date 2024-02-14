@@ -21,10 +21,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
-const (
-	defaultAccessURL = grpc.EmulatorHost
-	coinbaseAddr     = "0xf02c1c8e6114b1dbe8937a39260b5b0a374432bb"
-)
+const coinbaseAddr = "0xf02c1c8e6114b1dbe8937a39260b5b0a374432bb"
 
 var blockExecutedType = (types.EVMLocation{}).TypeID(nil, string(types.EventTypeBlockExecuted))
 var txExecutedType = (types.EVMLocation{}).TypeID(nil, string(types.EventTypeTransactionExecuted))
@@ -35,22 +32,40 @@ var evmEventTypes = []string{
 }
 
 func main() {
-	var network, coinbase string
+	var network, coinbase, host string
 	var gasPrice int64
+	var port int
 
-	flag.StringVar(&network, "network", "testnet", "network to connect the gateway to")
+	flag.StringVar(&network, "network", "emulator", "network to connect the gateway to")
 	flag.StringVar(&coinbase, "coinbase", coinbaseAddr, "coinbase address to use for fee collection")
+	flag.StringVar(&host, "host", "", "address to run the gateway")
 	flag.Int64Var(&gasPrice, "gasPrice", api.DefaultGasPrice.Int64(), "gas price for transactions")
+	flag.IntVar(&port, "port", 8545, "port to run the gateway")
 	flag.Parse()
 
 	config := &api.Config{
-		Coinbase: common.HexToAddress(coinbase),
-		GasPrice: big.NewInt(gasPrice),
+		Coinbase:  common.HexToAddress(coinbase),
+		GasPrice:  big.NewInt(gasPrice),
+		Host:      host,
+		Port:      port,
+		AccessURL: grpc.EmulatorHost,
 	}
+
 	if network == "testnet" {
 		config.ChainID = api.FlowEVMTestnetChainID
+		config.AccessURL = grpc.TestnetHost
 	} else if network == "mainnet" {
 		config.ChainID = api.FlowEVMMainnetChainID
+		config.AccessURL = grpc.MainnetHost
+	} else if network == "canarynet" {
+		config.ChainID = api.FlowEVMTestnetChainID
+		config.AccessURL = grpc.CanarynetHost
+	} else if network == "crescendo" {
+		config.ChainID = api.FlowEVMTestnetChainID
+		config.AccessURL = grpc.CrescendoHost
+	} else if network == "emulator" {
+		config.ChainID = api.FlowEVMTestnetChainID
+		config.AccessURL = grpc.EmulatorHost
 	} else {
 		panic(fmt.Errorf("unknown network: %s", network))
 	}
@@ -61,14 +76,19 @@ func main() {
 
 	logger := zerolog.New(zerolog.NewConsoleWriter()).With().Timestamp().Logger()
 	runServer(config, store, logger)
-	runIndexer(ctx, store, logger)
+	runIndexer(config, ctx, store, logger)
 
 	runtime.Goexit()
 }
 
-func runIndexer(ctx context.Context, store *storage.Store, logger zerolog.Logger) {
+func runIndexer(
+	config *api.Config,
+	ctx context.Context,
+	store *storage.Store,
+	logger zerolog.Logger,
+) {
 	flowClient, err := grpc.NewBaseClient(
-		defaultAccessURL,
+		config.AccessURL,
 		goGrpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {
@@ -93,7 +113,7 @@ func runIndexer(ctx context.Context, store *storage.Store, logger zerolog.Logger
 
 		var err error
 		flowClient, err := grpc.NewBaseClient(
-			defaultAccessURL,
+			config.AccessURL,
 			goGrpc.WithTransportCredentials(insecure.NewCredentials()),
 		)
 		if err != nil {
@@ -180,7 +200,7 @@ func runIndexer(ctx context.Context, store *storage.Store, logger zerolog.Logger
 
 func runServer(config *api.Config, store *storage.Store, logger zerolog.Logger) {
 	srv := api.NewHTTPServer(logger, rpc.DefaultHTTPTimeouts)
-	flowClient, err := api.NewFlowClient(grpc.EmulatorHost)
+	flowClient, err := api.NewFlowClient(config.AccessURL)
 	if err != nil {
 		panic(err)
 	}
@@ -190,7 +210,7 @@ func runServer(config *api.Config, store *storage.Store, logger zerolog.Logger) 
 	srv.EnableRPC(supportedAPIs)
 	srv.EnableWS(supportedAPIs)
 
-	srv.SetListenAddr("", 8545)
+	srv.SetListenAddr(config.Host, config.Port)
 
 	err = srv.Start()
 	if err != nil {

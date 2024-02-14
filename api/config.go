@@ -15,7 +15,10 @@ var DefaultGasPrice = big.NewInt(8049999872)
 // - whether JSON-RPC is exposed HTTP/WebSocket or both
 // - some connection timeout options etc
 type Config struct {
-	ChainID  *big.Int
-	Coinbase common.Address
-	GasPrice *big.Int
+	ChainID   *big.Int
+	Coinbase  common.Address
+	GasPrice  *big.Int
+	Host      string
+	Port      int
+	AccessURL string
 }
