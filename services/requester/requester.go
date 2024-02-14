@@ -100,6 +100,7 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 }
 
 func (e *EVM) GetBalance(ctx context.Context, address common.Address, height uint64) (*big.Int, error) {
+	// todo make sure provided height is used
 	addr := cadenceArrayFromBytes(address.Bytes()).WithType(addressType)
 
 	val, err := e.executeScript(ctx, getBalanceScript, []cadence.Value{addr})
