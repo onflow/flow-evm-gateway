@@ -70,13 +70,13 @@ func NewBlockChainAPI(
 // returned, regardless of the current head block. We used to return an error when the chain
 // wasn't synced up to a block where EIP-155 is enabled, but this behavior caused issues
 // in CL clients.
-func (api *BlockChainAPI) ChainId() *hexutil.Big {
-	return (*hexutil.Big)(api.config.ChainID)
+func (b *BlockChainAPI) ChainId() *hexutil.Big {
+	return (*hexutil.Big)(b.config.ChainID)
 }
 
 // BlockNumber returns the block number of the chain head.
-func (api *BlockChainAPI) BlockNumber() hexutil.Uint64 {
-	latestBlockHeight, err := api.Store.LatestBlockHeight(context.Background())
+func (b *BlockChainAPI) BlockNumber() hexutil.Uint64 {
+	latestBlockHeight, err := b.Store.LatestBlockHeight(context.Background())
 	if err != nil {
 		// TODO(m-Peter) We should add a logger to BlockChainAPI
 		panic(fmt.Errorf("failed to fetch the latest block number: %v", err))
@@ -91,13 +91,13 @@ func (api *BlockChainAPI) BlockNumber() hexutil.Uint64 {
 // - highestBlock:  block number of the highest block header this node has received from peers
 // - pulledStates:  number of state entries processed until now
 // - knownStates:   number of known state entries that still need to be pulled
-func (api *BlockChainAPI) Syncing() (interface{}, error) {
+func (b *BlockChainAPI) Syncing() (interface{}, error) {
 	return false, nil
 }
 
 // SendRawTransaction will add the signed transaction to the transaction pool.
 // The sender is responsible for signing the transaction and using the correct nonce.
-func (api *BlockChainAPI) SendRawTransaction(
+func (b *BlockChainAPI) SendRawTransaction(
 	ctx context.Context,
 	input hexutil.Bytes,
 ) (common.Hash, error) {
@@ -106,7 +106,7 @@ func (api *BlockChainAPI) SendRawTransaction(
 		return common.Hash{}, err
 	}
 
-	latestBlock, err := api.FlowClient.GetLatestBlock(ctx, true)
+	latestBlock, err := b.FlowClient.GetLatestBlock(ctx, true)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -121,7 +121,7 @@ func (api *BlockChainAPI) SendRawTransaction(
 	}
 
 	// TODO(m-Peter): Fetch the address from a dedicated flow.json config file
-	account, err := api.FlowClient.GetAccount(ctx, flow.HexToAddress("0xf8d6e0586b0a20c7"))
+	account, err := b.FlowClient.GetAccount(ctx, flow.HexToAddress("0xf8d6e0586b0a20c7"))
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -146,7 +146,7 @@ func (api *BlockChainAPI) SendRawTransaction(
 		return common.Hash{}, err
 	}
 
-	err = api.FlowClient.SendTransaction(ctx, *tx)
+	err = b.FlowClient.SendTransaction(ctx, *tx)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -156,7 +156,7 @@ func (api *BlockChainAPI) SendRawTransaction(
 
 // CreateAccessList creates an EIP-2930 type AccessList for the given transaction.
 // Reexec and blockNumberOrHash can be specified to create the accessList on top of a certain state.
-func (s *BlockChainAPI) CreateAccessList(
+func (b *BlockChainAPI) CreateAccessList(
 	ctx context.Context,
 	args TransactionArgs,
 	blockNumberOrHash *rpc.BlockNumberOrHash,
@@ -173,7 +173,7 @@ func (s *BlockChainAPI) CreateAccessList(
 // For each block in the requested range, the transactions will be sorted in
 // ascending order by effective tip per gas and the coresponding effective tip
 // for the percentile will be determined, accounting for gas consumed.
-func (s *BlockChainAPI) FeeHistory(
+func (b *BlockChainAPI) FeeHistory(
 	ctx context.Context,
 	blockCount math.HexOrDecimal64,
 	lastBlock rpc.BlockNumber,
@@ -187,25 +187,25 @@ func (s *BlockChainAPI) FeeHistory(
 }
 
 // GasPrice returns a suggestion for a gas price for legacy transactions.
-func (s *BlockChainAPI) GasPrice(ctx context.Context) (*hexutil.Big, error) {
-	return (*hexutil.Big)(s.config.GasPrice), nil
+func (b *BlockChainAPI) GasPrice(ctx context.Context) (*hexutil.Big, error) {
+	return (*hexutil.Big)(b.config.GasPrice), nil
 }
 
 // MaxPriorityFeePerGas returns a suggestion for a gas tip cap for dynamic fee transactions.
-func (s *BlockChainAPI) MaxPriorityFeePerGas(ctx context.Context) (*hexutil.Big, error) {
+func (b *BlockChainAPI) MaxPriorityFeePerGas(ctx context.Context) (*hexutil.Big, error) {
 	return (*hexutil.Big)(big.NewInt(10102020506)), nil
 }
 
 // GetBalance returns the amount of wei for the given address in the state of the
 // given block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta
 // block numbers are also allowed.
-func (s *BlockChainAPI) GetBalance(
+func (b *BlockChainAPI) GetBalance(
 	ctx context.Context,
 	address common.Address,
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (*hexutil.Big, error) {
 	evmAddress := CadenceEVMAddressFromBytes(address.Bytes())
-	value, err := s.FlowClient.ExecuteScriptAtLatestBlock(
+	value, err := b.FlowClient.ExecuteScriptAtLatestBlock(
 		ctx,
 		EVMAddressBalance,
 		[]cadence.Value{evmAddress},
@@ -223,7 +223,7 @@ func (s *BlockChainAPI) GetBalance(
 }
 
 // GetCode returns the code stored at the given address in the state for the given block number.
-func (s *BlockChainAPI) GetCode(
+func (b *BlockChainAPI) GetCode(
 	ctx context.Context,
 	address common.Address,
 	blockNumberOrHash *rpc.BlockNumberOrHash,
@@ -233,7 +233,7 @@ func (s *BlockChainAPI) GetCode(
 }
 
 // GetProof returns the Merkle-proof for a given account and optionally some storage keys.
-func (s *BlockChainAPI) GetProof(
+func (b *BlockChainAPI) GetProof(
 	ctx context.Context,
 	address common.Address,
 	storageKeys []string,
@@ -254,7 +254,7 @@ func (s *BlockChainAPI) GetProof(
 // GetStorageAt returns the storage from the state at the given address, key and
 // block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta block
 // numbers are also allowed.
-func (s *BlockChainAPI) GetStorageAt(
+func (b *BlockChainAPI) GetStorageAt(
 	ctx context.Context,
 	address common.Address,
 	storageSlot string,
@@ -265,12 +265,12 @@ func (s *BlockChainAPI) GetStorageAt(
 }
 
 // GetTransactionCount returns the number of transactions the given address has sent for the given block number
-func (s *BlockChainAPI) GetTransactionCount(
+func (b *BlockChainAPI) GetTransactionCount(
 	ctx context.Context,
 	address common.Address,
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (*hexutil.Uint64, error) {
-	nonce := s.Store.GetAccountNonce(ctx, address)
+	nonce := b.Store.GetAccountNonce(ctx, address)
 	return (*hexutil.Uint64)(&nonce), nil
 }
 
@@ -327,12 +327,12 @@ func (b *BlockChainAPI) GetTransactionByHash(
 }
 
 // GetTransactionByBlockHashAndIndex returns the transaction for the given block hash and index.
-func (s *BlockChainAPI) GetTransactionByBlockHashAndIndex(
+func (b *BlockChainAPI) GetTransactionByBlockHashAndIndex(
 	ctx context.Context,
 	blockHash common.Hash,
 	index hexutil.Uint,
 ) *RPCTransaction {
-	block, err := s.Store.GetBlockByHash(ctx, blockHash)
+	block, err := b.Store.GetBlockByHash(ctx, blockHash)
 	if err != nil {
 		return nil
 	}
@@ -343,7 +343,7 @@ func (s *BlockChainAPI) GetTransactionByBlockHashAndIndex(
 	}
 
 	txHash := common.HexToHash(block.TransactionHashes[index])
-	tx, err := s.GetTransactionByHash(ctx, txHash)
+	tx, err := b.GetTransactionByHash(ctx, txHash)
 	if err != nil {
 		return nil
 	}
@@ -352,12 +352,12 @@ func (s *BlockChainAPI) GetTransactionByBlockHashAndIndex(
 }
 
 // GetTransactionByBlockNumberAndIndex returns the transaction for the given block number and index.
-func (s *BlockChainAPI) GetTransactionByBlockNumberAndIndex(
+func (b *BlockChainAPI) GetTransactionByBlockNumberAndIndex(
 	ctx context.Context,
 	blockNumber rpc.BlockNumber,
 	index hexutil.Uint,
 ) *RPCTransaction {
-	block, err := s.Store.GetBlockByNumber(ctx, uint64(blockNumber))
+	block, err := b.Store.GetBlockByNumber(ctx, uint64(blockNumber))
 	if err != nil {
 		return nil
 	}
@@ -368,7 +368,7 @@ func (s *BlockChainAPI) GetTransactionByBlockNumberAndIndex(
 	}
 
 	txHash := common.HexToHash(block.TransactionHashes[index])
-	tx, err := s.GetTransactionByHash(ctx, txHash)
+	tx, err := b.GetTransactionByHash(ctx, txHash)
 	if err != nil {
 		return nil
 	}
@@ -377,7 +377,7 @@ func (s *BlockChainAPI) GetTransactionByBlockNumberAndIndex(
 }
 
 // GetTransactionReceipt returns the transaction receipt for the given transaction hash.
-func (s *BlockChainAPI) GetTransactionReceipt(
+func (b *BlockChainAPI) GetTransactionReceipt(
 	ctx context.Context,
 	hash common.Hash,
 ) (map[string]interface{}, error) {
@@ -387,7 +387,7 @@ func (s *BlockChainAPI) GetTransactionReceipt(
 	// we can proceed with some tests, and get rid of these mock data.
 	receipt := map[string]interface{}{}
 
-	txReceipt, err := s.Store.GetTransactionByHash(ctx, hash)
+	txReceipt, err := b.Store.GetTransactionByHash(ctx, hash)
 	if err != nil {
 		return receipt, err
 	}
@@ -434,7 +434,7 @@ func (s *BlockChainAPI) GetTransactionReceipt(
 	receipt["from"] = from
 	receipt["to"] = gethTx.To()
 
-	block, err := s.Store.GetBlockByNumber(ctx, txReceipt.BlockHeight)
+	block, err := b.Store.GetBlockByNumber(ctx, txReceipt.BlockHeight)
 	if err != nil {
 		return receipt, err
 	}
@@ -449,20 +449,20 @@ func (s *BlockChainAPI) GetTransactionReceipt(
 }
 
 // Coinbase is the address that mining rewards will be sent to (alias for Etherbase).
-func (s *BlockChainAPI) Coinbase() (common.Address, error) {
-	return s.config.Coinbase, nil
+func (b *BlockChainAPI) Coinbase() (common.Address, error) {
+	return b.config.Coinbase, nil
 }
 
 // GetBlockByHash returns the requested block. When fullTx is true all transactions in the block are returned in full
 // detail, otherwise only the transaction hash is returned.
-func (s *BlockChainAPI) GetBlockByHash(
+func (b *BlockChainAPI) GetBlockByHash(
 	ctx context.Context,
 	hash common.Hash,
 	fullTx bool,
 ) (map[string]interface{}, error) {
 	block := map[string]interface{}{}
 
-	blockExecutedPayload, err := s.Store.GetBlockByHash(ctx, hash)
+	blockExecutedPayload, err := b.Store.GetBlockByHash(ctx, hash)
 	if err != nil {
 		return block, err
 	}
@@ -499,14 +499,14 @@ func (s *BlockChainAPI) GetBlockByHash(
 //   - When blockNr is -4 the chain safe block is returned.
 //   - When fullTx is true all transactions in the block are returned, otherwise
 //     only the transaction hash is returned.
-func (s *BlockChainAPI) GetBlockByNumber(
+func (b *BlockChainAPI) GetBlockByNumber(
 	ctx context.Context,
 	blockNumber rpc.BlockNumber,
 	fullTx bool,
 ) (map[string]interface{}, error) {
 	block := map[string]interface{}{}
 
-	blockExecutedPayload, err := s.Store.GetBlockByNumber(ctx, uint64(blockNumber))
+	blockExecutedPayload, err := b.Store.GetBlockByNumber(ctx, uint64(blockNumber))
 	if err != nil {
 		return block, err
 	}
@@ -537,7 +537,7 @@ func (s *BlockChainAPI) GetBlockByNumber(
 }
 
 // GetBlockReceipts returns the block receipts for the given block hash or number or tag.
-func (s *BlockChainAPI) GetBlockReceipts(
+func (b *BlockChainAPI) GetBlockReceipts(
 	ctx context.Context,
 	blockNumberOrHash rpc.BlockNumberOrHash,
 ) ([]map[string]interface{}, error) {
@@ -546,12 +546,12 @@ func (s *BlockChainAPI) GetBlockReceipts(
 	var block *storage.BlockExecutedPayload
 	var err error
 	if blockNumberOrHash.BlockHash != nil {
-		block, err = s.Store.GetBlockByHash(ctx, *blockNumberOrHash.BlockHash)
+		block, err = b.Store.GetBlockByHash(ctx, *blockNumberOrHash.BlockHash)
 		if err != nil {
 			return receipts, err
 		}
 	} else if blockNumberOrHash.BlockNumber != nil {
-		block, err = s.Store.GetBlockByNumber(ctx, uint64(blockNumberOrHash.BlockNumber.Int64()))
+		block, err = b.Store.GetBlockByNumber(ctx, uint64(blockNumberOrHash.BlockNumber.Int64()))
 		if err != nil {
 			return receipts, err
 		}
@@ -561,7 +561,7 @@ func (s *BlockChainAPI) GetBlockReceipts(
 
 	for _, tx := range block.TransactionHashes {
 		txHash := common.HexToHash(tx)
-		txReceipt, err := s.GetTransactionReceipt(ctx, txHash)
+		txReceipt, err := b.GetTransactionReceipt(ctx, txHash)
 		if err != nil {
 			return receipts, err
 		}
@@ -572,11 +572,11 @@ func (s *BlockChainAPI) GetBlockReceipts(
 }
 
 // GetBlockTransactionCountByHash returns the number of transactions in the block with the given hash.
-func (s *BlockChainAPI) GetBlockTransactionCountByHash(
+func (b *BlockChainAPI) GetBlockTransactionCountByHash(
 	ctx context.Context,
 	blockHash common.Hash,
 ) *hexutil.Uint {
-	block, err := s.Store.GetBlockByHash(ctx, blockHash)
+	block, err := b.Store.GetBlockByHash(ctx, blockHash)
 	if err != nil {
 		return nil
 	}
@@ -586,11 +586,11 @@ func (s *BlockChainAPI) GetBlockTransactionCountByHash(
 }
 
 // GetBlockTransactionCountByNumber returns the number of transactions in the block with the given block number.
-func (s *BlockChainAPI) GetBlockTransactionCountByNumber(
+func (b *BlockChainAPI) GetBlockTransactionCountByNumber(
 	ctx context.Context,
 	blockNumber rpc.BlockNumber,
 ) *hexutil.Uint {
-	block, err := s.Store.GetBlockByNumber(ctx, uint64(blockNumber))
+	block, err := b.Store.GetBlockByNumber(ctx, uint64(blockNumber))
 	if err != nil {
 		return nil
 	}
@@ -600,7 +600,7 @@ func (s *BlockChainAPI) GetBlockTransactionCountByNumber(
 }
 
 // GetUncleCountByBlockHash returns number of uncles in the block for the given block hash
-func (s *BlockChainAPI) GetUncleCountByBlockHash(
+func (b *BlockChainAPI) GetUncleCountByBlockHash(
 	ctx context.Context,
 	blockHash common.Hash,
 ) *hexutil.Uint {
@@ -609,7 +609,7 @@ func (s *BlockChainAPI) GetUncleCountByBlockHash(
 }
 
 // GetUncleCountByBlockNumber returns number of uncles in the block for the given block number
-func (s *BlockChainAPI) GetUncleCountByBlockNumber(
+func (b *BlockChainAPI) GetUncleCountByBlockNumber(
 	ctx context.Context,
 	blockNumber rpc.BlockNumber,
 ) *hexutil.Uint {
@@ -618,7 +618,7 @@ func (s *BlockChainAPI) GetUncleCountByBlockNumber(
 }
 
 // GetLogs returns logs matching the given argument that are stored within the state.
-func (s *BlockChainAPI) GetLogs(
+func (b *BlockChainAPI) GetLogs(
 	ctx context.Context,
 	criteria filters.FilterCriteria,
 ) ([]*types.Log, error) {
@@ -629,7 +629,7 @@ func (s *BlockChainAPI) GetLogs(
 	logs := []*types.Log{}
 	for _, topicList := range criteria.Topics {
 		for _, topic := range topicList {
-			matchingLogs := s.Store.LogsByTopic(topic.Hex())
+			matchingLogs := b.Store.LogsByTopic(topic.Hex())
 			logs = append(logs, matchingLogs...)
 		}
 	}
@@ -648,20 +648,20 @@ func (s *BlockChainAPI) GetLogs(
 // again but with the removed property set to true.
 //
 // In case "fromBlock" > "toBlock" an error is returned.
-func (s *BlockChainAPI) NewFilter(
+func (b *BlockChainAPI) NewFilter(
 	criteria filters.FilterCriteria,
 ) (rpc.ID, error) {
 	return rpc.ID("filter0"), nil
 }
 
 // UninstallFilter removes the filter with the given filter id.
-func (s *BlockChainAPI) UninstallFilter(id rpc.ID) bool {
+func (b *BlockChainAPI) UninstallFilter(id rpc.ID) bool {
 	return true
 }
 
 // GetFilterLogs returns the logs for the filter with the given id.
 // If the filter could not be found an empty array of logs is returned.
-func (s *BlockChainAPI) GetFilterLogs(
+func (b *BlockChainAPI) GetFilterLogs(
 	ctx context.Context,
 	id rpc.ID,
 ) ([]*types.Log, error) {
@@ -684,7 +684,7 @@ func (s *BlockChainAPI) GetFilterLogs(
 //
 // For pending transaction and block filters the result is []common.Hash.
 // (pending)Log filters return []Log.
-func (s *BlockChainAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
+func (b *BlockChainAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 	if id == rpc.ID("") {
 		return nil, errFilterNotFound
 	}
@@ -704,7 +704,7 @@ func (s *BlockChainAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 
 // NewBlockFilter creates a filter that fetches blocks that are imported into the chain.
 // It is part of the filter package since polling goes with eth_getFilterChanges.
-func (s *BlockChainAPI) NewBlockFilter() rpc.ID {
+func (b *BlockChainAPI) NewBlockFilter() rpc.ID {
 	return rpc.ID("block_filter")
 }
 
@@ -713,12 +713,12 @@ func (s *BlockChainAPI) NewBlockFilter() rpc.ID {
 //
 // It is part of the filter package because this filter can be used through the
 // `eth_getFilterChanges` polling method that is also used for log filters.
-func (s *BlockChainAPI) NewPendingTransactionFilter(fullTx *bool) rpc.ID {
+func (b *BlockChainAPI) NewPendingTransactionFilter(fullTx *bool) rpc.ID {
 	return rpc.ID("pending_tx_filter")
 }
 
 // Accounts returns the collection of accounts this node manages.
-func (s *BlockChainAPI) Accounts() []common.Address {
+func (b *BlockChainAPI) Accounts() []common.Address {
 	return []common.Address{}
 }
 
@@ -731,7 +731,7 @@ func (s *BlockChainAPI) Accounts() []common.Address {
 // The account associated with addr must be unlocked.
 //
 // https://github.com/ethereum/wiki/wiki/JSON-RPC#eth_sign
-func (s *BlockChainAPI) Sign(
+func (b *BlockChainAPI) Sign(
 	addr common.Address,
 	data hexutil.Bytes,
 ) (hexutil.Bytes, error) {
@@ -741,7 +741,7 @@ func (s *BlockChainAPI) Sign(
 // SignTransaction will sign the given transaction with the from account.
 // The node needs to have the private key of the account corresponding with
 // the given from address and it needs to be unlocked.
-func (s *BlockChainAPI) SignTransaction(
+func (b *BlockChainAPI) SignTransaction(
 	ctx context.Context,
 	args TransactionArgs,
 ) (*SignTransactionResult, error) {
@@ -750,7 +750,7 @@ func (s *BlockChainAPI) SignTransaction(
 
 // SendTransaction creates a transaction for the given argument, sign it
 // and submit it to the transaction pool.
-func (s *BlockChainAPI) SendTransaction(
+func (b *BlockChainAPI) SendTransaction(
 	ctx context.Context,
 	args TransactionArgs,
 ) (common.Hash, error) {
@@ -763,7 +763,7 @@ func (s *BlockChainAPI) SendTransaction(
 //
 // Note, this function doesn't make and changes in the state/blockchain and is
 // useful to execute and retrieve values.
-func (s *BlockChainAPI) Call(
+func (b *BlockChainAPI) Call(
 	ctx context.Context,
 	args TransactionArgs,
 	blockNumberOrHash *rpc.BlockNumberOrHash,
@@ -777,7 +777,7 @@ func (s *BlockChainAPI) Call(
 	txData := CadenceByteArrayFromBytes(txBytes)
 	toAddress := CadenceEVMAddressFromBytes(args.To.Bytes())
 
-	value, err := s.FlowClient.ExecuteScriptAtLatestBlock(
+	value, err := b.FlowClient.ExecuteScriptAtLatestBlock(
 		ctx,
 		BridgedAccountCall,
 		[]cadence.Value{txData, toAddress},
@@ -804,7 +804,7 @@ func (s *BlockChainAPI) Call(
 // returns error if the transaction would revert or if there are unexpected failures. The returned
 // value is capped by both `args.Gas` (if non-nil & non-zero) and the backend's RPCGasCap
 // configuration (if non-zero).
-func (s *BlockChainAPI) EstimateGas(
+func (b *BlockChainAPI) EstimateGas(
 	ctx context.Context,
 	args TransactionArgs,
 	blockNumberOrHash *rpc.BlockNumberOrHash,
@@ -814,7 +814,7 @@ func (s *BlockChainAPI) EstimateGas(
 }
 
 // GetUncleByBlockHashAndIndex returns the uncle block for the given block hash and index.
-func (s *BlockChainAPI) GetUncleByBlockHashAndIndex(
+func (b *BlockChainAPI) GetUncleByBlockHashAndIndex(
 	ctx context.Context,
 	blockHash common.Hash,
 	index hexutil.Uint,
@@ -823,7 +823,7 @@ func (s *BlockChainAPI) GetUncleByBlockHashAndIndex(
 }
 
 // GetUncleByBlockNumberAndIndex returns the uncle block for the given block hash and index.
-func (s *BlockChainAPI) GetUncleByBlockNumberAndIndex(
+func (b *BlockChainAPI) GetUncleByBlockNumberAndIndex(
 	ctx context.Context,
 	blockNumber rpc.BlockNumber,
 	index hexutil.Uint,
