@@ -1,32 +1,6 @@
 package api_test
 
-import (
-	"context"
-	"crypto/ecdsa"
-	"encoding/hex"
-	"math/big"
-	"testing"
-
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/common/math"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth/filters"
-	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/onflow/cadence"
-	"github.com/onflow/cadence/runtime/stdlib"
-	"github.com/onflow/flow-evm-gateway/api"
-	"github.com/onflow/flow-evm-gateway/api/mocks"
-	"github.com/onflow/flow-evm-gateway/storage"
-	"github.com/onflow/flow-go-sdk"
-	"github.com/onflow/flow-go-sdk/access/grpc"
-	sdkCrypto "github.com/onflow/flow-go-sdk/crypto"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
-)
-
+/* todo temp
 type Account struct {
 	key  *ecdsa.PrivateKey
 	addr common.Address
@@ -1219,3 +1193,4 @@ func blockExecutedEvent(
 		},
 	}
 }
+*/

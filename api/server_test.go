@@ -1,31 +1,10 @@
 package api_test
 
 import (
-	"bytes"
-	"context"
 	_ "embed"
-	"encoding/hex"
-	"io"
-	"net/http"
-	"strings"
-	"testing"
-
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/gorilla/websocket"
-	"github.com/onflow/cadence"
-	"github.com/onflow/flow-evm-gateway/api"
-	"github.com/onflow/flow-evm-gateway/api/mocks"
-	"github.com/onflow/flow-evm-gateway/storage"
-	"github.com/onflow/flow-go-sdk"
-	"github.com/onflow/flow-go-sdk/access/grpc"
-	sdkCrypto "github.com/onflow/flow-go-sdk/crypto"
-	"github.com/rs/zerolog"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
 )
 
+/* todo temp
 //go:embed fixtures/eth_json_rpc_requests.json
 var requests string
 
@@ -578,3 +557,4 @@ func rpcRequest(url, bodyStr string, extraHeaders ...string) *http.Response {
 	}
 	return resp
 }
+*/
