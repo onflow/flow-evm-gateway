@@ -6,6 +6,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/onflow/flow-go-sdk"
+	"github.com/onflow/flow-go-sdk/crypto"
 	"github.com/onflow/flow-go/fvm/evm/emulator"
 	"math/big"
 )
@@ -33,13 +34,15 @@ type Config struct {
 	Coinbase common.Address
 	// COAAddress is Flow address that holds COA account used for submitting transactions.
 	COAAddress flow.Address
+	//COAKey is Flow key to the COA account. WARNING: do not use in production
+	COAKey crypto.PrivateKey
 	// GasPrice is a fixed gas price that will be used when submitting transactions.
 	GasPrice *big.Int
 }
 
 func FromFlags() (*Config, error) {
 	cfg := &Config{}
-	var network, coinbase, gas, coa string
+	var network, coinbase, gas, coa, key string
 
 	// parse from flags
 	flag.StringVar(&cfg.DatabaseDir, "database-dir", "./db", "path to the directory for the database")
@@ -49,6 +52,7 @@ func FromFlags() (*Config, error) {
 	flag.StringVar(&coinbase, "coinbase", defaultCoinbase, "coinbase address to use for fee collection")
 	flag.StringVar(&gas, "gas-price", "1", "static gas price used for EVM transactions")
 	flag.StringVar(&coa, "coa-address", "", "Flow address that holds COA account used for submitting transactions")
+	flag.StringVar(&key, "coa-key", "", "WARNING: do not use this flag in production! private key value for the COA address used for submitting transactions")
 	flag.Parse()
 
 	cfg.Coinbase = common.HexToAddress(coinbase)
@@ -60,6 +64,12 @@ func FromFlags() (*Config, error) {
 	if cfg.COAAddress == flow.EmptyAddress {
 		return nil, fmt.Errorf("invalid COA address value")
 	}
+
+	pkey, err := crypto.DecodePrivateKeyHex(crypto.ECDSA_P256, key)
+	if err != nil {
+		return nil, fmt.Errorf("invalid COA key: %w", err)
+	}
+	cfg.COAKey = pkey
 
 	switch network {
 	case "testnet":
