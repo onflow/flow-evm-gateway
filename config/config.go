@@ -22,6 +22,10 @@ type Config struct {
 	DatabaseDir string
 	// AccessNodeGRPCHost defines the Flow network AN host.
 	AccessNodeGRPCHost string
+	// GRPCPort for the RPC API server
+	RPCPort int
+	// GRPCHost for the RPC API server
+	RPCHost string
 	// todo support also just specifying latest height
 	// InitHeight provides initial heights for EVM block height
 	// useful only on a cold-start with an empty database, otherwise
@@ -46,6 +50,9 @@ func FromFlags() (*Config, error) {
 
 	// parse from flags
 	flag.StringVar(&cfg.DatabaseDir, "database-dir", "./db", "path to the directory for the database")
+	flag.StringVar(&cfg.AccessNodeGRPCHost, "access-node-grpc-host", "localhost:3569", "host to the flow access node gRPC API")
+	flag.StringVar(&cfg.RPCHost, "rpc-host", "localhost", "host for the RPC API server")
+	flag.IntVar(&cfg.RPCPort, "rpc-port", 3000, "port for the RPC API server")
 	flag.StringVar(&cfg.AccessNodeGRPCHost, "access-node-grpc-host", "localhost:3569", "host to the flow access node gRPC API")
 	flag.Uint64Var(&cfg.InitHeight, "init-height", EmptyHeight, "init cadence block height from where the event ingestion will start. WARNING: you should only provide this if there are no existing values in the database, otherwise an error will be thrown")
 	flag.StringVar(&network, "network-id", "testnet", "EVM network ID (testnet, mainnet)")
