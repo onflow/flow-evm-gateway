@@ -239,8 +239,13 @@ func (b *BlockChainAPI) GetBlockByHash(
 		return nil, err
 	}
 
+	h, err := bl.Hash()
+	if err != nil {
+		return nil, err
+	}
+
+	block["hash"] = h
 	block["number"] = hexutil.Uint64(bl.Height)
-	block["hash"] = bl.Hash
 	block["parentHash"] = bl.ParentBlockHash
 	block["receiptsRoot"] = bl.ReceiptRoot
 	block["transactions"] = bl.TransactionHashes
@@ -282,8 +287,13 @@ func (b *BlockChainAPI) GetBlockByNumber(
 		return nil, err
 	}
 
+	h, err := bl.Hash()
+	if err != nil {
+		return nil, err
+	}
+
+	block["hash"] = h
 	block["number"] = hexutil.Uint64(bl.Height)
-	block["hash"] = bl.Hash
 	block["parentHash"] = bl.ParentBlockHash
 	block["receiptsRoot"] = bl.ReceiptRoot
 	block["transactions"] = bl.TransactionHashes
