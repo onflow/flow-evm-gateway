@@ -40,6 +40,12 @@ func TestTransactions(t *testing.T) {
 	})
 }
 
+func TestAccounts(t *testing.T) {
+	runDB("accounts", t, func(t *testing.T, db *Storage) {
+		suite.Run(t, &storage.AccountTestSuite{AccountIndexer: NewAccounts(db)})
+	})
+}
+
 func TestBlock(t *testing.T) {
 
 	runDB("store block", t, func(t *testing.T, db *Storage) {

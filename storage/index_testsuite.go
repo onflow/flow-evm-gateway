@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/onflow/flow-evm-gateway/storage/mocks"
+	evmEmulator "github.com/onflow/flow-go/fvm/evm/emulator"
 	"github.com/stretchr/testify/suite"
 	"math/big"
 )
@@ -262,5 +264,37 @@ func (s *TransactionTestSuite) TestGetTransaction() {
 		retTx, err := s.TransactionIndexer.Get(nonExistingTxHash)
 		s.Require().Nil(retTx)
 		s.Require().ErrorIs(err, errors.NotFound)
+	})
+}
+
+type AccountTestSuite struct {
+	suite.Suite
+	AccountIndexer AccountIndexer
+}
+
+func (a *AccountTestSuite) TestNonce() {
+
+	a.Run("update account and increase nonce", func() {
+		tx := mocks.NewTransaction(0)
+		// todo add multiple accounts test
+		from := common.HexToAddress("FACF71692421039876a5BB4F10EF7A439D8ef61E")
+		rawKey := "f6d5333177711e562cabf1f311916196ee6ffc2a07966d9d4628094073bd5442"
+		key, err := crypto.HexToECDSA(rawKey)
+
+		tx, err = types.SignTx(tx, evmEmulator.GetDefaultSigner(), key)
+		a.Require().NoError(err)
+
+		nonce, err := a.AccountIndexer.GetNonce(&from)
+		a.Require().NoError(err)
+		a.Require().Equal(uint64(0), nonce)
+
+		for i := 1; i < 5; i++ {
+			err = a.AccountIndexer.Update(tx)
+			a.Require().NoError(err)
+
+			nonce, err = a.AccountIndexer.GetNonce(&from)
+			a.Require().NoError(err)
+			a.Require().Equal(uint64(i), nonce)
+		}
 	})
 }
