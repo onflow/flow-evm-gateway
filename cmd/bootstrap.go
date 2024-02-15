@@ -39,15 +39,16 @@ func Start(cfg *config.Config) error {
 	}
 	transactions := pebble.NewTransactions(pebbleDB)
 	receipts := pebble.NewReceipts(pebbleDB)
+	accounts := pebble.NewAccounts(pebbleDB)
 
 	go func() {
-		err := startServer(cfg, blocks, transactions, receipts, logger)
+		err := startServer(cfg, blocks, transactions, receipts, accounts, logger)
 		if err != nil {
 			logger.Fatal().Err(fmt.Errorf("failed to start RPC server: %w", err))
 		}
 	}()
 
-	err = startIngestion(cfg, blocks, transactions, receipts, logger)
+	err = startIngestion(cfg, blocks, transactions, receipts, accounts, logger)
 	if err != nil {
 		return fmt.Errorf("failed to start event ingestion: %w", err)
 	}
@@ -60,6 +61,7 @@ func startIngestion(
 	blocks storage.BlockIndexer,
 	transactions storage.TransactionIndexer,
 	receipts storage.ReceiptIndexer,
+	accounts storage.AccountIndexer,
 	logger zerolog.Logger,
 ) error {
 	logger.Info().Msg("starting up event ingestion")
@@ -89,7 +91,14 @@ func startIngestion(
 	logger.Info().Uint64("cadence height", blk.Height).Msg("latest flow block on the network")
 
 	subscriber := ingestion.NewRPCSubscriber(client)
-	engine := ingestion.NewEventIngestionEngine(subscriber, blocks, receipts, transactions, logger)
+	engine := ingestion.NewEventIngestionEngine(
+		subscriber,
+		blocks,
+		receipts,
+		transactions,
+		accounts,
+		logger,
+	)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
@@ -119,6 +128,7 @@ func startServer(
 	blocks storage.BlockIndexer,
 	transactions storage.TransactionIndexer,
 	receipts storage.ReceiptIndexer,
+	accounts storage.AccountIndexer,
 	logger zerolog.Logger,
 ) error {
 	logger.Info().Msg("starting up RPC server")
@@ -137,7 +147,15 @@ func startServer(
 	}
 
 	evm := requester.NewEVM(client, cfg.COAAddress, signer)
-	blockchainAPI := api.NewBlockChainAPI(logger, cfg, evm, blocks, transactions, receipts)
+	blockchainAPI := api.NewBlockChainAPI(
+		logger,
+		cfg,
+		evm,
+		blocks,
+		transactions,
+		receipts,
+		accounts,
+	)
 	supportedAPIs := api.SupportedAPIs(blockchainAPI)
 
 	if err := srv.EnableRPC(supportedAPIs); err != nil {

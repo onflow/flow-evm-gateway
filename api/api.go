@@ -34,6 +34,7 @@ type BlockChainAPI struct {
 	blocks       storage.BlockIndexer
 	transactions storage.TransactionIndexer
 	receipts     storage.ReceiptIndexer
+	accounts     storage.AccountIndexer
 }
 
 func NewBlockChainAPI(
@@ -43,6 +44,7 @@ func NewBlockChainAPI(
 	blocks storage.BlockIndexer,
 	transactions storage.TransactionIndexer,
 	receipts storage.ReceiptIndexer,
+	accounts storage.AccountIndexer,
 ) *BlockChainAPI {
 	return &BlockChainAPI{
 		logger:       logger,
@@ -51,6 +53,7 @@ func NewBlockChainAPI(
 		blocks:       blocks,
 		transactions: transactions,
 		receipts:     receipts,
+		accounts:     accounts,
 	}
 }
 
@@ -396,6 +399,25 @@ func (b *BlockChainAPI) GetLogs(
 	)
 }
 
+// GetTransactionCount returns the number of transactions the given address has sent for the given block number
+func (b *BlockChainAPI) GetTransactionCount(
+	ctx context.Context,
+	address common.Address,
+	blockNumberOrHash *rpc.BlockNumberOrHash,
+) (*hexutil.Uint64, error) {
+	// for now we only support indexing at latest block
+	if blockNumberOrHash.BlockNumber != nil || blockNumberOrHash.BlockHash != nil {
+		return nil, errs.ErrNotSupported
+	}
+
+	nonce, err := b.accounts.GetNonce(&address)
+	if err != nil {
+		return nil, err
+	}
+
+	return (*hexutil.Uint64)(&nonce), nil
+}
+
 /* ====================================================================================================================
 
  NOT SUPPORTED SECTION
@@ -609,15 +631,5 @@ func (b *BlockChainAPI) FeeHistory(
 
 // MaxPriorityFeePerGas returns a suggestion for a gas tip cap for dynamic fee transactions.
 func (b *BlockChainAPI) MaxPriorityFeePerGas(ctx context.Context) (*hexutil.Big, error) {
-	return nil, errs.ErrNotSupported
-}
-
-// GetTransactionCount returns the number of transactions the given address has sent for the given block number
-func (b *BlockChainAPI) GetTransactionCount(
-	ctx context.Context,
-	address common.Address,
-	blockNumberOrHash *rpc.BlockNumberOrHash,
-) (*hexutil.Uint64, error) {
-	// todo add support in store
 	return nil, errs.ErrNotSupported
 }
