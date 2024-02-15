@@ -20,6 +20,7 @@ type Engine struct {
 	blocks       storage.BlockIndexer
 	receipts     storage.ReceiptIndexer
 	transactions storage.TransactionIndexer
+	accounts     storage.AccountIndexer
 	log          zerolog.Logger
 	lastHeight   *models.SequentialHeight
 	status       *models.EngineStatus
@@ -30,6 +31,7 @@ func NewEventIngestionEngine(
 	blocks storage.BlockIndexer,
 	receipts storage.ReceiptIndexer,
 	transactions storage.TransactionIndexer,
+	accounts storage.AccountIndexer,
 	log zerolog.Logger,
 ) *Engine {
 	log = log.With().Str("component", "ingestion").Logger()
@@ -39,6 +41,7 @@ func NewEventIngestionEngine(
 		blocks:       blocks,
 		receipts:     receipts,
 		transactions: transactions,
+		accounts:     accounts,
 		log:          log,
 		status:       models.NewEngineStatus(),
 	}
@@ -191,13 +194,16 @@ func (e *Engine) processTransactionEvent(event cadence.Event) error {
 		Str("tx hash", tx.Hash().String()).
 		Msg("ingesting new transaction executed event")
 
-	err = e.transactions.Store(tx)
-	if err != nil {
+	// todo think if we could introduce batching
+	if err := e.transactions.Store(tx); err != nil {
 		return err
 	}
 
-	err = e.receipts.Store(receipt)
-	if err != nil {
+	if err := e.accounts.Update(tx); err != nil {
+		return err
+	}
+
+	if err := e.receipts.Store(receipt); err != nil {
 		return err
 	}
 
