@@ -171,7 +171,12 @@ func (h *httpServer) Start() error {
 	}
 
 	h.listener = listener
-	go h.server.Serve(listener)
+	go func() {
+		err = h.server.Serve(listener)
+		if err != nil {
+			h.log.Fatal().Err(err)
+		}
+	}()
 
 	if h.rpcAllowed() {
 		log.Info().Msg(fmt.Sprintf("JSON-RPC over HTTP enabled: %v/rpc", listener.Addr()))
