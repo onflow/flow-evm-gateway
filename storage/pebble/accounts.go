@@ -17,7 +17,15 @@ type Accounts struct {
 	store *Storage
 	mux   sync.RWMutex
 	// todo LRU caching with size limit
-	nonceCache map[*common.Address]uint64
+	nonceCache map[common.Address]uint64
+}
+
+func NewAccounts(db *Storage) *Accounts {
+	return &Accounts{
+		store:      db,
+		mux:        sync.RWMutex{},
+		nonceCache: make(map[common.Address]uint64),
+	}
 }
 
 func (a *Accounts) Update(tx *gethTypes.Transaction) error {
@@ -26,10 +34,10 @@ func (a *Accounts) Update(tx *gethTypes.Transaction) error {
 
 	from, err := gethTypes.Sender(gethTypes.LatestSignerForChainID(tx.ChainId()), tx)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
-	nonce, err := a.getNonce(&from)
+	nonce, err := a.getNonce(from)
 	if err != nil {
 		return err
 	}
@@ -42,11 +50,11 @@ func (a *Accounts) Update(tx *gethTypes.Transaction) error {
 		return err
 	}
 
-	a.nonceCache[&from] = nonce
+	a.nonceCache[from] = nonce
 	return nil
 }
 
-func (a *Accounts) getNonce(address *common.Address) (uint64, error) {
+func (a *Accounts) getNonce(address common.Address) (uint64, error) {
 	nonce, ok := a.nonceCache[address]
 	if ok { // if present in cache return it
 		return nonce, nil
@@ -70,7 +78,7 @@ func (a *Accounts) getNonce(address *common.Address) (uint64, error) {
 func (a *Accounts) GetNonce(address *common.Address) (uint64, error) {
 	a.mux.RLock()
 	defer a.mux.RUnlock()
-	return a.getNonce(address)
+	return a.getNonce(*address)
 }
 
 func (a *Accounts) GetBalance(address *common.Address) (*big.Int, error) {
