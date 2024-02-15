@@ -26,10 +26,10 @@ var (
 	//go:embed cadence/evm_address_balance.cdc
 	getBalanceScript []byte
 
-	byteArrayType = cadence.NewVariableSizedArrayType(cadence.UInt8Type{})
+	byteArrayType = cadence.NewVariableSizedArrayType(cadence.UInt8Type)
 	addressType   = cadence.NewConstantSizedArrayType(
 		common.AddressLength,
-		cadence.UInt8Type{},
+		cadence.UInt8Type,
 	)
 )
 
