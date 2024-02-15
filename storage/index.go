@@ -76,6 +76,7 @@ type AccountIndexer interface {
 	Update(tx *gethTypes.Transaction) error
 
 	// GetNonce gets an account nonce. If no nonce was indexed it returns 0.
+	// todo add getting nonce at provided block height / hash
 	GetNonce(address *common.Address) (uint64, error)
 
 	// GetBalance gets an account balance. If no balance was indexer it returns 0.
