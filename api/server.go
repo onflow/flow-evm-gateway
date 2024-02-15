@@ -24,7 +24,7 @@ type rpcHandler struct {
 }
 
 type httpServer struct {
-	log      zerolog.Logger
+	logger   zerolog.Logger
 	timeouts rpc.HTTPTimeouts
 
 	server   *http.Server
@@ -46,9 +46,9 @@ const (
 	shutdownTimeout = 5 * time.Second
 )
 
-func NewHTTPServer(log zerolog.Logger, timeouts rpc.HTTPTimeouts) *httpServer {
+func NewHTTPServer(logger zerolog.Logger, timeouts rpc.HTTPTimeouts) *httpServer {
 	return &httpServer{
-		log:      log,
+		logger:   logger,
 		timeouts: timeouts,
 	}
 }
@@ -153,7 +153,7 @@ func (h *httpServer) Start() error {
 	// Initialize the server.
 	h.server = &http.Server{Handler: h}
 	if h.timeouts != (rpc.HTTPTimeouts{}) {
-		CheckTimeouts(h.log, &h.timeouts)
+		CheckTimeouts(h.logger, &h.timeouts)
 		h.server.ReadTimeout = h.timeouts.ReadTimeout
 		h.server.ReadHeaderTimeout = h.timeouts.ReadHeaderTimeout
 		h.server.WriteTimeout = h.timeouts.WriteTimeout
@@ -174,12 +174,11 @@ func (h *httpServer) Start() error {
 	go h.server.Serve(listener)
 
 	if h.rpcAllowed() {
-		log.Info().Msg(fmt.Sprintf("JSON-RPC over HTTP enabled: %v/rpc", listener.Addr()))
+		h.logger.Info().Msgf("JSON-RPC over HTTP enabled: %s", listener.Addr())
 	}
 
 	if h.wsAllowed() {
-		url := fmt.Sprintf("ws://%v/ws", listener.Addr())
-		log.Info().Msg(fmt.Sprint("JSON-RPC over WebSocket enabled: ", url))
+		h.logger.Info().Msgf("JSON-RPC over WebSocket enabled: %s", listener.Addr())
 	}
 
 	return nil
@@ -200,7 +199,7 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Check if WebSocket request and serve if JSON-RPC over WebSocket is enabled
 	ws := h.wsHandler
 	if ws != nil && isWebSocket(r) {
-		if checkPath(r, "/ws") {
+		if checkPath(r, "") {
 			ws.ServeHTTP(w, r)
 			return
 		}
@@ -209,7 +208,7 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// If JSON-RPC over HTTP is enabled, try to serve the request
 	rpc := h.httpHandler
 	if rpc != nil {
-		if checkPath(r, "/rpc") {
+		if checkPath(r, "") {
 			rpc.ServeHTTP(w, r)
 			return
 		}
