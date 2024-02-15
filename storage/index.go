@@ -70,3 +70,14 @@ type TransactionIndexer interface {
 	// - errors.NotFound if the transaction with the ID is not found.
 	Get(ID common.Hash) (*gethTypes.Transaction, error)
 }
+
+type AccountIndexer interface {
+	// Update account with executed transactions.
+	Update(tx *gethTypes.Transaction) error
+
+	// GetNonce gets an account nonce. If no nonce was indexed it returns 0.
+	GetNonce(address *common.Address) (uint64, error)
+
+	// GetBalance gets an account balance. If no balance was indexer it returns 0.
+	GetBalance(address *common.Address) (*big.Int, error)
+}
