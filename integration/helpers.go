@@ -8,13 +8,16 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/goccy/go-json"
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-emulator/adapters"
 	"github.com/onflow/flow-emulator/emulator"
 	"github.com/onflow/flow-emulator/server"
+	"github.com/onflow/flow-evm-gateway/api"
 	"github.com/onflow/flow-evm-gateway/services/ingestion"
+	"github.com/onflow/flow-evm-gateway/services/logs"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
 	sdk "github.com/onflow/flow-go-sdk"
@@ -325,9 +328,16 @@ func (c *contract) value(name string, data []byte) ([]any, error) {
 	return c.a.Unpack(name, data)
 }
 
-func rpcRequest(url string, bodyStr string) (map[string]any, error) {
-	body := bytes.NewReader([]byte(bodyStr))
-	req, err := http.NewRequest(http.MethodPost, url, body)
+type rpcTest struct {
+	url string
+}
+
+// rpcRequest takes url, method (eg. "eth_getBlockByNumber") and params (eg. `["0x03"]` or `[]` if empty)
+func (r *rpcTest) request(method string, params string) (json.RawMessage, error) {
+	reqURL := fmt.Sprintf(`{"jsonrpc":"2.0","id":0,"method":"%s","params":%s}`, method, params)
+	fmt.Println("-> request: ", reqURL)
+	body := bytes.NewReader([]byte(reqURL))
+	req, err := http.NewRequest(http.MethodPost, r.url, body)
 	if err != nil {
 		return nil, err
 	}
@@ -344,11 +354,134 @@ func rpcRequest(url string, bodyStr string) (map[string]any, error) {
 		return nil, err
 	}
 
-	resp := make(map[string]any)
+	fmt.Println("<- result: ", string(content))
+
+	type rpcResult struct {
+		Result json.RawMessage `json:"result"`
+		Error  any             `json:"error"`
+	}
+
+	var resp rpcResult
 	err = json.Unmarshal(content, &resp)
 	if err != nil {
 		return nil, err
 	}
+	if resp.Error != nil {
+		return nil, fmt.Errorf("%s", resp.Error)
+	}
 
-	return resp, nil
+	return resp.Result, nil
+}
+
+func (r *rpcTest) getLogs(
+	hash *common.Hash,
+	from *big.Int,
+	to *big.Int,
+	filter *logs.FilterCriteria,
+) ([]*types.Log, error) {
+	var id, ranges, topics string
+
+	for _, t := range filter.Topics[0] {
+		topics += fmt.Sprintf(`"%s",`, t.String())
+	}
+	topics = topics[:len(topics)-1] // remove last ,
+
+	if hash != nil {
+		id = fmt.Sprintf(`"blockHash": "%s",`, hash.Hex())
+	} else {
+		ranges = fmt.Sprintf(`
+			"fromBlock": "0x%s",
+			"toBlock": "0x%s",
+		`, from.String(), to.String())
+	}
+
+	params := fmt.Sprintf(`[{
+		%s
+		%s
+		"address": "%s",	
+		"topics": [
+			%s
+		]
+	}]`, ranges, id, filter.Addresses[0].Hex(), topics)
+
+	rpcRes, err := r.request("eth_getLogs", params)
+	if err != nil {
+		return nil, err
+	}
+
+	var lg []*types.Log
+	err = json.Unmarshal(rpcRes, &lg)
+	if err != nil {
+		return nil, err
+	}
+
+	return lg, nil
+}
+
+func (r *rpcTest) getBlock(height uint64) (*rpcBlock, error) {
+	rpcRes, err := r.request("eth_getBlockByNumber", fmt.Sprintf(`["%s",false]`, uintHex(height)))
+	if err != nil {
+		return nil, err
+	}
+
+	var blkRpc rpcBlock
+	err = json.Unmarshal(rpcRes, &blkRpc)
+	if err != nil {
+		return nil, err
+	}
+
+	return &blkRpc, nil
+}
+
+func (r *rpcTest) getTx(hash string) (*api.RPCTransaction, error) {
+	rpcRes, err := r.request("eth_getTransactionByHash", fmt.Sprintf(`["%s"]`, hash))
+	if err != nil {
+		return nil, err
+	}
+
+	var txRpc api.RPCTransaction
+	err = json.Unmarshal(rpcRes, &txRpc)
+	if err != nil {
+		return nil, err
+	}
+
+	return &txRpc, nil
+}
+
+func (r *rpcTest) getReceipt(hash string) (*types.Receipt, error) {
+	rpcRes, err := r.request("eth_getTransactionReceipt", fmt.Sprintf(`["%s"]`, hash))
+	if err != nil {
+		return nil, err
+	}
+
+	var rcp types.Receipt
+	err = json.Unmarshal(rpcRes, &rcp)
+	if err != nil {
+		return nil, err
+	}
+
+	return &rcp, nil
+}
+
+func uintHex(x uint64) string {
+	return fmt.Sprintf("0x%x", x)
+}
+
+type rpcBlock struct {
+	Hash         string
+	Number       string
+	ParentHash   string
+	Transactions []string
+}
+
+type rpcTx struct {
+	BlockHash   string
+	BlockNumber string
+	Gas         string
+	GasPrice    string
+	From        string
+	Hash        string
+	Input       hexutil.Bytes
+	Nonce       string
+	Type        string
 }
