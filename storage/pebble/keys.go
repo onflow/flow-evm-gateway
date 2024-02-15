@@ -15,6 +15,10 @@ const (
 	receiptHeightKey       = byte(21)
 	bloomHeightKey         = byte(22)
 
+	// account keys
+	accountNonceKey   = byte(30)
+	accountBalanceKey = byte(31)
+
 	// special keys
 	latestHeightKey = byte(100)
 	firstHeightKey  = byte(101)
