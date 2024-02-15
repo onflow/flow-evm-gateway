@@ -166,7 +166,7 @@ func startServer(
 		return err
 	}
 
-	if err := srv.SetListenAddr("", 8545); err != nil {
+	if err := srv.SetListenAddr(cfg.RPCHost, cfg.RPCPort); err != nil {
 		return err
 	}
 
