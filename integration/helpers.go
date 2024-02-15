@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/goccy/go-json"
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-emulator/adapters"
 	"github.com/onflow/flow-emulator/emulator"
@@ -24,7 +25,9 @@ import (
 	"github.com/onflow/flow-go/fvm/systemcontracts"
 	"github.com/onflow/flow-go/model/flow"
 	"github.com/rs/zerolog"
+	"io"
 	"math/big"
+	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -99,10 +102,11 @@ func startEventIngestionEngine(ctx context.Context, dbDir string) (
 
 	blocks, err := pebble.NewBlocks(db, pebble.WithInitHeight(blk.Height))
 	receipts := pebble.NewReceipts(db)
+	accounts := pebble.NewAccounts(db)
 	txs := pebble.NewTransactions(db)
 
 	log = logger.With().Str("component", "ingestion").Logger()
-	engine := ingestion.NewEventIngestionEngine(subscriber, blocks, receipts, txs, log)
+	engine := ingestion.NewEventIngestionEngine(subscriber, blocks, receipts, txs, accounts, log)
 
 	go func() {
 		err = engine.Start(ctx)
@@ -319,4 +323,32 @@ func (c *contract) call(funcName string, args ...any) ([]byte, error) {
 
 func (c *contract) value(name string, data []byte) ([]any, error) {
 	return c.a.Unpack(name, data)
+}
+
+func rpcRequest(url string, bodyStr string) (map[string]any, error) {
+	body := bytes.NewReader([]byte(bodyStr))
+	req, err := http.NewRequest(http.MethodPost, url, body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("content-type", "application/json")
+	req.Header.Set("accept-encoding", "identity")
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+
+	content, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := make(map[string]any)
+	err = json.Unmarshal(content, &resp)
+	if err != nil {
+		return nil, err
+	}
+
+	return resp, nil
 }
