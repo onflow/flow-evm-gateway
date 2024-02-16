@@ -24,6 +24,12 @@ func SupportedAPIs(blockChainAPI *BlockChainAPI) []rpc.API {
 	return []rpc.API{{
 		Namespace: "eth",
 		Service:   blockChainAPI,
+	}, {
+		Namespace: "web3",
+		Service:   &Web3API{},
+	}, {
+		Namespace: "net",
+		Service:   &NetAPI{},
 	}}
 }
 
