@@ -416,7 +416,7 @@ func (b *BlockChainAPI) GetTransactionCount(
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (*hexutil.Uint64, error) {
 	// for now we only support indexing at latest block
-	if blockNumberOrHash.BlockNumber != nil || blockNumberOrHash.BlockHash != nil {
+	if blockNumberOrHash != nil {
 		return nil, errs.ErrNotSupported
 	}
 
