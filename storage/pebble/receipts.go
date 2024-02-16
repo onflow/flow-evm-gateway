@@ -119,7 +119,7 @@ func (r *Receipts) BloomsForBlockRange(start, end *big.Int) ([]*gethTypes.Bloom,
 	if end.Uint64() < first || end.Uint64() > last {
 		return nil, nil, fmt.Errorf(
 			"end value %d is not within the indexed range of [%d - %d]: %w",
-			start,
+			end,
 			first,
 			last,
 			errors.InvalidRange,
