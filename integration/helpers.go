@@ -513,6 +513,21 @@ func (r *rpcTest) getNonce(address common.Address) (uint64, error) {
 	return uint64(u), nil
 }
 
+func (r *rpcTest) getBalance(address common.Address) (*hexutil.Big, error) {
+	rpcRes, err := r.request("eth_getBalance", fmt.Sprintf(`["%s", "latest"]`, address.Hex()))
+	if err != nil {
+		return nil, err
+	}
+
+	var u hexutil.Big
+	err = json.Unmarshal(rpcRes, &u)
+	if err != nil {
+		return nil, err
+	}
+
+	return &u, nil
+}
+
 func uintHex(x uint64) string {
 	return fmt.Sprintf("0x%x", x)
 }
