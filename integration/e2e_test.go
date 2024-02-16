@@ -464,7 +464,7 @@ func TestIntegration_API_DeployEvents(t *testing.T) {
 	// check balance
 	balance, err := rpcTester.getBalance(fundEOAAddress)
 	require.NoError(t, err)
-	assert.Equal(t, new(big.Int).Mul(big.NewInt(5), toWei), balance.ToInt())
+	assert.Equal(t, new(big.Int).Mul(big.NewInt(4), toWei), balance.ToInt())
 
 	// Step 4. - deploy contract
 	nonce := uint64(0)

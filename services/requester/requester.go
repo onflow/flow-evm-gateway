@@ -72,6 +72,7 @@ func NewEVM(
 	createCOA bool,
 	logger zerolog.Logger,
 ) (*EVM, error) {
+	logger = logger.With().Str("component", "requester").Logger()
 	// check that the address stores already created COA resource in the "evm" storage path.
 	// if it doesn't check if the auto-creation boolean is true and if so create it
 	// otherwise fail. COA resource is required by the EVM requester to be able to submit transactions.
@@ -92,14 +93,15 @@ func NewEVM(
 		client:  client,
 		address: address,
 		signer:  signer,
-		logger:  logger.With().Str("component", "requester").Logger(),
+		logger:  logger,
 	}
 
 	// create COA on the account
 	// todo improve this to first check if coa exists and only if it doesn't create it, if it doesn't and the flag is false return an error
 	if createCOA {
 		// we ignore errors for now since creation of already existing COA resource will fail, which is fine for now
-		_, _ = evm.signAndSend(context.Background(), createCOAScript, cadence.UFix64(coaFundingBalance))
+		id, err := evm.signAndSend(context.Background(), createCOAScript, cadence.UFix64(coaFundingBalance))
+		logger.Info().Err(err).Str("id", id.String()).Msg("COA resource auto-created")
 	}
 
 	return evm, nil
@@ -171,14 +173,16 @@ func (e *EVM) GetBalance(ctx context.Context, address common.Address, height uin
 	// todo make sure provided height is used
 	addr := cadenceArrayFromBytes(address.Bytes()).WithType(addressType)
 
-	val, err := e.executeScript(ctx, getBalanceScript, []cadence.Value{addr})
+	val, err := e.client.ExecuteScriptAtLatestBlock(ctx, getBalanceScript, []cadence.Value{addr})
 	if err != nil {
 		return nil, err
 	}
 
 	e.logger.Info().Str("address", address.String()).Msg("get balance")
 
-	return new(big.Int).SetBytes(val), nil
+	// todo this will change once we update to latest flow-go, temp solution
+	bal := val.(cadence.UFix64)
+	return big.NewInt(int64(bal) * 10000000000), nil
 }
 
 func (e *EVM) Call(ctx context.Context, address common.Address, data []byte) ([]byte, error) {
@@ -190,11 +194,7 @@ func (e *EVM) Call(ctx context.Context, address common.Address, data []byte) ([]
 		Str("data", string(data)).
 		Msg("call")
 
-	return e.executeScript(ctx, callScript, []cadence.Value{txData, toAddress})
-}
-
-func (e *EVM) executeScript(ctx context.Context, script []byte, args []cadence.Value) ([]byte, error) {
-	value, err := e.client.ExecuteScriptAtLatestBlock(ctx, script, args)
+	value, err := e.client.ExecuteScriptAtLatestBlock(ctx, callScript, []cadence.Value{txData, toAddress})
 	if err != nil {
 		return nil, err
 	}
