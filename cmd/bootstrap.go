@@ -146,7 +146,11 @@ func startServer(
 		return fmt.Errorf("failed to create a COA signer: %w", err)
 	}
 
-	evm := requester.NewEVM(client, cfg.COAAddress, signer)
+	evm, err := requester.NewEVM(client, cfg.COAAddress, signer, true, logger)
+	if err != nil {
+		return fmt.Errorf("failed to create EVM requester: %w", err)
+	}
+
 	blockchainAPI := api.NewBlockChainAPI(
 		logger,
 		cfg,
