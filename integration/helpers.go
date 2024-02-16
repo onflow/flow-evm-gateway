@@ -249,7 +249,7 @@ func evmSign(
 		return nil, common.Hash{}, fmt.Errorf("error encoding EVM transaction: %w", err)
 	}
 
-	return encoded.Bytes(), evmTx.Hash(), nil
+	return encoded.Bytes(), signed.Hash(), nil
 }
 
 // evmSignAndRun creates an evm transaction and signs it producing a payload that send using the evmRunTransaction.
