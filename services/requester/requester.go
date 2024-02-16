@@ -92,6 +92,7 @@ func NewEVM(
 		client:  client,
 		address: address,
 		signer:  signer,
+		logger:  logger.With().Str("component", "requester").Logger(),
 	}
 
 	// create COA on the account
@@ -105,6 +106,8 @@ func NewEVM(
 }
 
 func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash, error) {
+	e.logger.Info().Str("data", fmt.Sprintf("%x", data)).Msg("sending raw transaction")
+
 	tx := &types.Transaction{}
 	err := tx.DecodeRLP(
 		rlp.NewStream(
@@ -113,10 +116,15 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 		),
 	)
 
-	_, err = e.signAndSend(ctx, runTxScript, cadenceArrayFromBytes(data))
+	flowID, err := e.signAndSend(ctx, runTxScript, cadenceArrayFromBytes(data))
 	if err != nil {
 		return common.Hash{}, err
 	}
+
+	e.logger.Info().
+		Str("evm ID", tx.Hash().Hex()).
+		Str("flow ID", flowID.Hex()).
+		Msg("raw transaction submitted")
 
 	return tx.Hash(), nil
 }
@@ -168,12 +176,19 @@ func (e *EVM) GetBalance(ctx context.Context, address common.Address, height uin
 		return nil, err
 	}
 
+	e.logger.Info().Str("address", address.String()).Msg("get balance")
+
 	return new(big.Int).SetBytes(val), nil
 }
 
 func (e *EVM) Call(ctx context.Context, address common.Address, data []byte) ([]byte, error) {
 	txData := cadenceArrayFromBytes(data).WithType(byteArrayType)
 	toAddress := cadenceArrayFromBytes(address.Bytes()).WithType(addressType)
+
+	e.logger.Info().
+		Str("address", address.Hex()).
+		Str("data", string(data)).
+		Msg("call")
 
 	return e.executeScript(ctx, callScript, []cadence.Value{txData, toAddress})
 }
