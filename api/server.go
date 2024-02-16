@@ -205,7 +205,7 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Check if WebSocket request and serve if JSON-RPC over WebSocket is enabled
 	ws := h.wsHandler
 	if ws != nil && isWebSocket(r) {
-		if checkPath(r, "/ws") {
+		if checkPath(r, "") {
 			ws.ServeHTTP(w, r)
 			return
 		}
@@ -214,7 +214,7 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// If JSON-RPC over HTTP is enabled, try to serve the request
 	rpc := h.httpHandler
 	if rpc != nil {
-		if checkPath(r, "/rpc") {
+		if checkPath(r, "") {
 			rpc.ServeHTTP(w, r)
 			return
 		}
