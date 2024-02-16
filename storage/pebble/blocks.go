@@ -7,7 +7,6 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/onflow/flow-evm-gateway/storage"
 	errs "github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/onflow/flow-go/fvm/evm/types"
@@ -124,13 +123,7 @@ func (b *Blocks) getBlock(keyCode byte, key []byte) (*types.Block, error) {
 		return nil, err
 	}
 
-	var block types.Block
-	err = rlp.DecodeBytes(data, &block)
-	if err != nil {
-		return nil, err
-	}
-
-	return &block, nil
+	return types.NewBlockFromBytes(data)
 }
 
 func (b *Blocks) setLastHeight(height uint64) error {
