@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/crypto"
+	"github.com/rs/zerolog"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -26,12 +27,18 @@ var (
 	//go:embed cadence/evm_address_balance.cdc
 	getBalanceScript []byte
 
+	//go:embed cadence/create_bridged_account.cdc
+	createCOAScript []byte
+
 	byteArrayType = cadence.NewVariableSizedArrayType(cadence.UInt8Type)
 	addressType   = cadence.NewConstantSizedArrayType(
 		common.AddressLength,
 		cadence.UInt8Type,
 	)
 )
+
+const minFlowBalance = 2
+const coaFundingBalance = minFlowBalance - 1
 
 type Requester interface {
 	// SendRawTransaction will submit signed transaction data to the network.
@@ -52,17 +59,49 @@ type Requester interface {
 var _ Requester = &EVM{}
 
 type EVM struct {
+	logger  zerolog.Logger
 	client  access.Client
 	address flow.Address
 	signer  crypto.Signer
 }
 
-func NewEVM(client access.Client, address flow.Address, signer crypto.Signer) *EVM {
-	return &EVM{
+func NewEVM(
+	client access.Client,
+	address flow.Address,
+	signer crypto.Signer,
+	createCOA bool,
+	logger zerolog.Logger,
+) (*EVM, error) {
+	// check that the address stores already created COA resource in the "evm" storage path.
+	// if it doesn't check if the auto-creation boolean is true and if so create it
+	// otherwise fail. COA resource is required by the EVM requester to be able to submit transactions.
+	acc, err := client.GetAccount(context.Background(), address)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"could not fetch the configured COA account: %s make sure it exists: %w",
+			address.String(),
+			err,
+		)
+	}
+
+	if acc.Balance < minFlowBalance {
+		return nil, fmt.Errorf("COA account must be funded with at least %f Flow", minFlowBalance)
+	}
+
+	evm := &EVM{
 		client:  client,
 		address: address,
 		signer:  signer,
 	}
+
+	// create COA on the account
+	// todo improve this to first check if coa exists and only if it doesn't create it, if it doesn't and the flag is false return an error
+	if createCOA {
+		// we ignore errors for now since creation of already existing COA resource will fail, which is fine for now
+		_, _ = evm.signAndSend(context.Background(), createCOAScript, cadence.UFix64(coaFundingBalance))
+	}
+
+	return evm, nil
 }
 
 func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash, error) {
@@ -74,37 +113,50 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 		),
 	)
 
-	latestBlock, err := e.client.GetLatestBlock(ctx, true)
-	if err != nil {
-		return common.Hash{}, err
-	}
-
-	index, seqNum, err := e.getSignerNetworkInfo(ctx)
-	if err != nil {
-		return common.Hash{}, err
-	}
-
-	flowTx := flow.NewTransaction().
-		SetScript(runTxScript).
-		SetProposalKey(e.address, index, seqNum).
-		SetReferenceBlockID(latestBlock.ID).
-		SetPayer(e.address).
-		AddAuthorizer(e.address)
-
-	if err = flowTx.AddArgument(cadenceArrayFromBytes(data)); err != nil {
-		return common.Hash{}, err
-	}
-
-	if err = flowTx.SignEnvelope(e.address, index, e.signer); err != nil {
-		return common.Hash{}, err
-	}
-
-	err = e.client.SendTransaction(ctx, *flowTx)
+	_, err = e.signAndSend(ctx, runTxScript, cadenceArrayFromBytes(data))
 	if err != nil {
 		return common.Hash{}, err
 	}
 
 	return tx.Hash(), nil
+}
+
+// signAndSend creates a flow transaction from the provided script with the arguments and signs it with the
+// configured COA account and then submits it to the network.
+func (e *EVM) signAndSend(ctx context.Context, script []byte, args ...cadence.Value) (flow.Identifier, error) {
+	latestBlock, err := e.client.GetLatestBlock(ctx, true)
+	if err != nil {
+		return flow.EmptyID, err
+	}
+
+	index, seqNum, err := e.getSignerNetworkInfo(ctx)
+	if err != nil {
+		return flow.EmptyID, err
+	}
+
+	flowTx := flow.NewTransaction().
+		SetScript(script).
+		SetProposalKey(e.address, index, seqNum).
+		SetReferenceBlockID(latestBlock.ID).
+		SetPayer(e.address).
+		AddAuthorizer(e.address)
+
+	for _, arg := range args {
+		if err = flowTx.AddArgument(arg); err != nil {
+			return flow.EmptyID, err
+		}
+	}
+
+	if err = flowTx.SignEnvelope(e.address, index, e.signer); err != nil {
+		return flow.EmptyID, err
+	}
+
+	err = e.client.SendTransaction(ctx, *flowTx)
+	if err != nil {
+		return flow.EmptyID, err
+	}
+
+	return flowTx.ID(), nil
 }
 
 func (e *EVM) GetBalance(ctx context.Context, address common.Address, height uint64) (*big.Int, error) {
@@ -142,6 +194,7 @@ func (e *EVM) getSignerNetworkInfo(ctx context.Context) (int, uint64, error) {
 		return 0, 0, err
 	}
 
+	// todo support key rotation
 	signerPub := e.signer.PublicKey()
 	for _, k := range account.Keys {
 		if k.PublicKey.Equals(signerPub) {
