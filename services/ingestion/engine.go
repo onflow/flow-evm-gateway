@@ -158,9 +158,12 @@ func (e *Engine) processBlockEvent(event cadence.Event) error {
 		return err
 	}
 
+	h, _ := block.Hash()
 	e.log.Info().
+		Str("hash", h.Hex()).
 		Uint64("evm height", block.Height).
 		Str("parent hash", block.ParentBlockHash.String()).
+		Str("tx hash", block.TransactionHashes[0].Hex()). // now we only have 1 tx per block
 		Msg("new evm block executed event")
 
 	if err = e.lastHeight.Increment(block.Height); err != nil {
