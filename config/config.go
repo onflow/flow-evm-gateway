@@ -54,7 +54,6 @@ func FromFlags() (*Config, error) {
 
 	// parse from flags
 	flag.StringVar(&cfg.DatabaseDir, "database-dir", "./db", "path to the directory for the database")
-	flag.StringVar(&cfg.AccessNodeGRPCHost, "access-node-grpc-host", "localhost:3569", "host to the flow access node gRPC API")
 	flag.StringVar(&cfg.RPCHost, "rpc-host", "localhost", "host for the RPC API server")
 	flag.IntVar(&cfg.RPCPort, "rpc-port", 3000, "port for the RPC API server")
 	flag.StringVar(&cfg.AccessNodeGRPCHost, "access-node-grpc-host", "localhost:3569", "host to the flow access node gRPC API")
