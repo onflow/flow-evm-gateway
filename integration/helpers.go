@@ -234,22 +234,22 @@ func evmSign(
 	signer *ecdsa.PrivateKey,
 	nonce uint64,
 	to *common.Address,
-	data []byte) ([]byte, error) {
+	data []byte) ([]byte, common.Hash, error) {
 	gasPrice := big.NewInt(0)
 
 	evmTx := types.NewTx(&types.LegacyTx{Nonce: nonce, To: to, Value: weiValue, Gas: gasLimit, GasPrice: gasPrice, Data: data})
 
 	signed, err := types.SignTx(evmTx, evmEmulator.GetDefaultSigner(), signer)
 	if err != nil {
-		return nil, fmt.Errorf("error signing EVM transaction: %w", err)
+		return nil, common.Hash{}, fmt.Errorf("error signing EVM transaction: %w", err)
 	}
 	var encoded bytes.Buffer
 	err = signed.EncodeRLP(&encoded)
 	if err != nil {
-		return nil, fmt.Errorf("error encoding EVM transaction: %w", err)
+		return nil, common.Hash{}, fmt.Errorf("error encoding EVM transaction: %w", err)
 	}
 
-	return encoded.Bytes(), nil
+	return encoded.Bytes(), evmTx.Hash(), nil
 }
 
 // evmSignAndRun creates an evm transaction and signs it producing a payload that send using the evmRunTransaction.
@@ -261,13 +261,18 @@ func evmSignAndRun(
 	nonce uint64,
 	to *common.Address,
 	data []byte,
-) (*sdk.TransactionResult, error) {
-	signed, err := evmSign(weiValue, gasLimit, signer, nonce, to, data)
+) (*sdk.TransactionResult, common.Hash, error) {
+	signed, evmID, err := evmSign(weiValue, gasLimit, signer, nonce, to, data)
 	if err != nil {
-		return nil, err
+		return nil, common.Hash{}, err
 	}
 
-	return evmRunTransaction(emu, signed)
+	res, err := evmRunTransaction(emu, signed)
+	if err != nil {
+		return nil, common.Hash{}, err
+	}
+
+	return res, evmID, nil
 }
 
 // evmRunTransaction calls the evm run method with the provided evm signed transaction payload.
@@ -405,9 +410,9 @@ func (r *rpcTest) getLogs(
 		id = fmt.Sprintf(`"blockHash": "%s",`, hash.Hex())
 	} else {
 		ranges = fmt.Sprintf(`
-			"fromBlock": "0x%s",
-			"toBlock": "0x%s",
-		`, from.String(), to.String())
+			"fromBlock": "0x%x",
+			"toBlock": "0x%x",
+		`, from, to)
 	}
 
 	params := fmt.Sprintf(`[{
