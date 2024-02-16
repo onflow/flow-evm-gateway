@@ -1,23 +1,53 @@
-# Repository template
-A template enabled repository, including all necesary files to open source.
-(create an issue with the following content if you want to track the repo configuration)
+# FlowEVM Gateway
 
-## Repository settings and configuration
-- [ ]  Repository info
-    - [ ]  Add repo description
-    - [ ]  Update website to https://onflow.org
-    - [ ]  Add relevant repository topics (i.e. `blockchain` `onflow`, etc)
-    - [ ]  Check issue labels on `.github/labels.yml` and do any commit to main to get them synced
-- [ ]  Define merge workflow (create new branch protection rule)
-    - [ ]  `main` branch rule:
-        - [ ]  **Require pull request reviews before merging (2 approving reviews)**
-            - [ ]  **Require review from Code Owners**
-        - [ ]  **Require status checks to pass before merging**
-            - [ ]  **Require branches to be up to date before merging**
-        - [ ]  **Require linear history**
-        - [ ]   **Restrict who can push to matching branches**
-            - [ ]  Choose `onflow/flow` team
+FlowEVM Gateway implements the Ethereum JSON-RPC API for the [FlowEVM](https://developers.flow.com/evm/about) which confirms to the [JSON-RPC specification](https://ethereum.github.io/execution-apis/api-documentation/). FlowEVM Gateway is specifically designed to integrate with the FlowEVM environment on the Flow blockchain. Rather than implementing the full geth stack, the JSON-RPC API is a lightweight implementation which uses Flow's underlying consesus and smart contract language, [Cadence](https://cadence-lang.org/docs/), to execute FlowEVM transactions which are invoked on the FlowEVM Gateway. For those interested in the underlying implementation specifics we recommend reading the FlowEVM Gateway [FLIP #243](https://github.com/onflow/flips/issues/243) and FlowEVM Core [FLIP #223](https://github.com/onflow/flips/issues/223) improvement proposals. 
 
-- [ ]  Add necessary team members, adjust access levels
-    - [ ]  `onflow/flow-admin` ⇒ Admin access
-    - [ ]  `onflow/flow-engineering ` ⇒ Write access
+FlowEVM Gateway is compatible with the majority of standard web3 JSON-RPC APIs allowing seamless integration with existing Ethereum-compatible web3 tools via HTTP. FlowEVM Gateway honors Ethereum's JSON-RPC namespace system, grouping RPC methods into categories based on their specific purpose. Each method name is constructed using the namespace, an underscore, and the actual method name within that namespace. For instance, the `eth_call` method is located within the `eth` namespace.
+
+Listed below are the JSON-RPC namespaces currently supported by the FlowEVM Gateway:
+
+* `eth`
+* `web3`
+* `net`
+
+We also plan to add support for the `admin` namespace in the near future.
+
+## Event subscription and filters
+
+FlowEVM Gateway also supports the standard Ethereum JSON-RPC event subscription and filters, enabling callers to subscribe to state logs, blocks or pending transactions changes.
+
+* TODO, add more specifics 
+
+# Launch a FlowEVM Gateway node
+
+* TODO
+
+## Configuration
+
+* TODO
+
+## Infrastructure considerations
+
+## Logging and metrics
+
+* TODO  
+
+# Running the FlowEVM Gateway with the FLow CLI
+
+We recommend using the [Flow Emulator](https://github.com/onflow/flow-emulator) with the [Flow CLI](https://docs.onflow.org/flow-cli), a command-line interface for working with Flow, for local development and testing of the FlowEVM Gateway. The Flow CLI incorporates support for running the FlowEVM gateway on the command line together with the emulator. 
+
+## Installation
+
+Follow [these steps](https://github.com/onflow/flow-emulator?tab=readme-ov-file#installation) to install the Flow Emulator and CLI.
+
+## Starting the server from the CLI
+
+* TODO
+
+# Running the FlowEVM Gateway in Docker
+
+* TODO
+
+# Contributing
+
+* TODO
