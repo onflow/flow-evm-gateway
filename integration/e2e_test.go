@@ -502,9 +502,13 @@ func TestIntegration_API_DeployEvents(t *testing.T) {
 	require.NoError(t, err)
 
 	// step 5. - call retrieve function on the contract
-	res, _, err = evmSignAndRun(emu, nil, gasLimit, eoaKey, 1, &contractAddress, callRetrieve)
+	signed, signedHash, err := evmSign(nil, gasLimit, eoaKey, 1, &contractAddress, callRetrieve)
 	require.NoError(t, err)
-	require.NoError(t, res.Error)
+
+	hash, err = rpcTester.sendRawTx(signed)
+	require.NoError(t, err)
+	assert.NotNil(t, hash)
+	assert.Equal(t, signedHash.String(), hash.String())
 
 	time.Sleep(1 * time.Second)
 
@@ -515,6 +519,8 @@ func TestIntegration_API_DeployEvents(t *testing.T) {
 	require.Len(t, blkRpc.Transactions, 1)
 
 	interactHash := blkRpc.Transactions[0]
+	assert.Equal(t, signedHash.String(), interactHash)
+
 	txRpc, err = rpcTester.getTx(interactHash)
 	require.NoError(t, err)
 	assert.Equal(t, interactHash, txRpc.Hash.String())
@@ -532,10 +538,13 @@ func TestIntegration_API_DeployEvents(t *testing.T) {
 	require.NoError(t, err)
 
 	// step 5 - call store to set the value
-	res, _, err = evmSignAndRun(emu, nil, gasLimit, eoaKey, 2, &contractAddress, callStore)
+	signed, signedHash, err = evmSign(nil, gasLimit, eoaKey, 2, &contractAddress, callStore)
 	require.NoError(t, err)
-	require.NoError(t, res.Error)
-	fmt.Println(res.Events)
+
+	hash, err = rpcTester.sendRawTx(signed)
+	require.NoError(t, err)
+	assert.NotNil(t, hash)
+	assert.Equal(t, signedHash.String(), hash.String())
 
 	time.Sleep(1 * time.Second)
 
@@ -546,6 +555,8 @@ func TestIntegration_API_DeployEvents(t *testing.T) {
 	require.Len(t, blkRpc.Transactions, 1)
 
 	interactHash = blkRpc.Transactions[0]
+	assert.Equal(t, signedHash.String(), interactHash)
+
 	txRpc, err = rpcTester.getTx(interactHash)
 	require.NoError(t, err)
 	assert.Equal(t, interactHash, txRpc.Hash.String())
@@ -569,9 +580,13 @@ func TestIntegration_API_DeployEvents(t *testing.T) {
 		callSum, err := storeContract.call("sum", sumA, sumB)
 		require.NoError(t, err)
 
-		res, _, err = evmSignAndRun(emu, nil, gasLimit, eoaKey, uint64(3+i), &contractAddress, callSum)
+		signed, signedHash, err = evmSign(nil, gasLimit, eoaKey, uint64(3+i), &contractAddress, callSum)
 		require.NoError(t, err)
-		require.NoError(t, res.Error)
+
+		hash, err = rpcTester.sendRawTx(signed)
+		require.NoError(t, err)
+		assert.NotNil(t, hash)
+		assert.Equal(t, signedHash.String(), hash.String())
 
 		time.Sleep(1 * time.Second)
 
@@ -581,6 +596,8 @@ func TestIntegration_API_DeployEvents(t *testing.T) {
 		require.Len(t, blkRpc.Transactions, 1)
 
 		sumHash := blkRpc.Transactions[0]
+		assert.Equal(t, signedHash.String(), sumHash)
+
 		txRpc, err = rpcTester.getTx(sumHash)
 		require.NoError(t, err)
 
