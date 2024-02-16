@@ -550,17 +550,17 @@ func TestIntegration_API_DeployEvents(t *testing.T) {
 	nonce++
 	require.NoError(t, err)
 
-	// check if the sender account nonce has been indexed as increased
-	eoaNonce, err = rpcTester.getNonce(fundEOAAddress)
-	require.NoError(t, err)
-	assert.Equal(t, nonce, eoaNonce)
-
 	hash, err = rpcTester.sendRawTx(signed)
 	require.NoError(t, err)
 	assert.NotNil(t, hash)
 	assert.Equal(t, signedHash.String(), hash.String())
 
 	time.Sleep(1 * time.Second)
+
+	// check if the sender account nonce has been indexed as increased
+	eoaNonce, err = rpcTester.getNonce(fundEOAAddress)
+	require.NoError(t, err)
+	assert.Equal(t, nonce, eoaNonce)
 
 	// block 6 comes from contract store interaction
 	blkRpc, err = rpcTester.getBlock(6)
