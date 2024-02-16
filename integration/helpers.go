@@ -228,16 +228,13 @@ func flowSendTransaction(
 	return res, nil
 }
 
-// evmSignAndRun creates an evm transaction and signs it producing a payload that send using the evmRunTransaction.
-func evmSignAndRun(
-	emu emulator.Emulator,
+func evmSign(
 	weiValue *big.Int,
 	gasLimit uint64,
 	signer *ecdsa.PrivateKey,
 	nonce uint64,
 	to *common.Address,
-	data []byte,
-) (*sdk.TransactionResult, error) {
+	data []byte) ([]byte, error) {
 	gasPrice := big.NewInt(0)
 
 	evmTx := types.NewTx(&types.LegacyTx{Nonce: nonce, To: to, Value: weiValue, Gas: gasLimit, GasPrice: gasPrice, Data: data})
@@ -252,7 +249,25 @@ func evmSignAndRun(
 		return nil, fmt.Errorf("error encoding EVM transaction: %w", err)
 	}
 
-	return evmRunTransaction(emu, encoded.Bytes())
+	return encoded.Bytes(), nil
+}
+
+// evmSignAndRun creates an evm transaction and signs it producing a payload that send using the evmRunTransaction.
+func evmSignAndRun(
+	emu emulator.Emulator,
+	weiValue *big.Int,
+	gasLimit uint64,
+	signer *ecdsa.PrivateKey,
+	nonce uint64,
+	to *common.Address,
+	data []byte,
+) (*sdk.TransactionResult, error) {
+	signed, err := evmSign(weiValue, gasLimit, signer, nonce, to, data)
+	if err != nil {
+		return nil, err
+	}
+
+	return evmRunTransaction(emu, signed)
 }
 
 // evmRunTransaction calls the evm run method with the provided evm signed transaction payload.
@@ -461,6 +476,21 @@ func (r *rpcTest) getReceipt(hash string) (*types.Receipt, error) {
 	}
 
 	return &rcp, nil
+}
+
+func (r *rpcTest) sendRawTx(signed []byte) (common.Hash, error) {
+	rpcRes, err := r.request("eth_sendRawTransaction", fmt.Sprintf(`["0x%x"]`, signed))
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	var h common.Hash
+	err = json.Unmarshal(rpcRes, &h)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	return h, nil
 }
 
 func uintHex(x uint64) string {
