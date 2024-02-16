@@ -32,7 +32,7 @@ FlowEVM Gateway also supports the standard Ethereum JSON-RPC event subscription 
 
 * TODO  
 
-# Running the FlowEVM Gateway with the FLow CLI
+# Running the FlowEVM Gateway with the Flow CLI
 
 We recommend using the [Flow Emulator](https://github.com/onflow/flow-emulator) with the [Flow CLI](https://docs.onflow.org/flow-cli), a command-line interface for working with Flow, for local development and testing of the FlowEVM Gateway. The Flow CLI incorporates support for running the FlowEVM gateway on the command line together with the emulator. 
 
