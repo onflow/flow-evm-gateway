@@ -459,6 +459,13 @@ func TestIntegration_API_DeployEvents(t *testing.T) {
 	deployData, err := hex.DecodeString(testContractBinary)
 	require.NoError(t, err)
 
+	time.Sleep(1 * time.Second)
+
+	// check balance
+	balance, err := rpcTester.getBalance(fundEOAAddress)
+	require.NoError(t, err)
+	assert.Equal(t, new(big.Int).Mul(big.NewInt(5), toWei), balance.ToInt())
+
 	// Step 4. - deploy contract
 	nonce := uint64(0)
 	signed, _, err := evmSign(nil, gasLimit, eoaKey, nonce, nil, deployData)
@@ -741,6 +748,4 @@ func checkSumLogValue(c *contract, a *big.Int, b *big.Int, data []byte) error {
 }
 
 // todo
-// test get nonce
-// test sending transaction using the API
 // test running a script using the API
