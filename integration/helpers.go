@@ -498,6 +498,21 @@ func (r *rpcTest) sendRawTx(signed []byte) (common.Hash, error) {
 	return h, nil
 }
 
+func (r *rpcTest) getNonce(address common.Address) (hexutil.Uint64, error) {
+	rpcRes, err := r.request("eth_getTransactionCount", fmt.Sprintf(`["%s"]`, address.Hex()))
+	if err != nil {
+		return 0, err
+	}
+
+	var u hexutil.Uint64
+	err = json.Unmarshal(rpcRes, &u)
+	if err != nil {
+		return 0, err
+	}
+
+	return u, nil
+}
+
 func uintHex(x uint64) string {
 	return fmt.Sprintf("0x%x", x)
 }

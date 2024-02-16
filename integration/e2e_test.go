@@ -460,7 +460,9 @@ func TestIntegration_API_DeployEvents(t *testing.T) {
 	require.NoError(t, err)
 
 	// Step 4. - deploy contract
-	signed, _, err := evmSign(nil, gasLimit, eoaKey, 0, nil, deployData)
+	nonce := uint64(0)
+	signed, _, err := evmSign(nil, gasLimit, eoaKey, nonce, nil, deployData)
+	nonce++
 	hash, err := rpcTester.sendRawTx(signed)
 	require.NoError(t, err)
 	require.NotNil(t, hash)
@@ -502,7 +504,8 @@ func TestIntegration_API_DeployEvents(t *testing.T) {
 	require.NoError(t, err)
 
 	// step 5. - call retrieve function on the contract
-	signed, signedHash, err := evmSign(nil, gasLimit, eoaKey, 1, &contractAddress, callRetrieve)
+	signed, signedHash, err := evmSign(nil, gasLimit, eoaKey, nonce, &contractAddress, callRetrieve)
+	nonce++
 	require.NoError(t, err)
 
 	hash, err = rpcTester.sendRawTx(signed)
@@ -511,6 +514,11 @@ func TestIntegration_API_DeployEvents(t *testing.T) {
 	assert.Equal(t, signedHash.String(), hash.String())
 
 	time.Sleep(1 * time.Second)
+
+	// check if the sender account nonce has been indexed as increased
+	eoaNonce, err := rpcTester.getNonce(fundEOAAddress)
+	require.NoError(t, err)
+	assert.Equal(t, nonce, eoaNonce)
 
 	// block 5 comes from contract interaction
 	blkRpc, err = rpcTester.getBlock(5)
@@ -538,8 +546,14 @@ func TestIntegration_API_DeployEvents(t *testing.T) {
 	require.NoError(t, err)
 
 	// step 5 - call store to set the value
-	signed, signedHash, err = evmSign(nil, gasLimit, eoaKey, 2, &contractAddress, callStore)
+	signed, signedHash, err = evmSign(nil, gasLimit, eoaKey, nonce, &contractAddress, callStore)
+	nonce++
 	require.NoError(t, err)
+
+	// check if the sender account nonce has been indexed as increased
+	eoaNonce, err = rpcTester.getNonce(fundEOAAddress)
+	require.NoError(t, err)
+	assert.Equal(t, nonce, eoaNonce)
 
 	hash, err = rpcTester.sendRawTx(signed)
 	require.NoError(t, err)
@@ -580,7 +594,8 @@ func TestIntegration_API_DeployEvents(t *testing.T) {
 		callSum, err := storeContract.call("sum", sumA, sumB)
 		require.NoError(t, err)
 
-		signed, signedHash, err = evmSign(nil, gasLimit, eoaKey, uint64(3+i), &contractAddress, callSum)
+		signed, signedHash, err = evmSign(nil, gasLimit, eoaKey, nonce, &contractAddress, callSum)
+		nonce++
 		require.NoError(t, err)
 
 		hash, err = rpcTester.sendRawTx(signed)
