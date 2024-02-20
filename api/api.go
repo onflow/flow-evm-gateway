@@ -452,12 +452,21 @@ func (b *BlockChainAPI) Call(
 	overrides *StateOverride,
 	blockOverrides *BlockOverrides,
 ) (hexutil.Bytes, error) {
-	if args.To == nil || args.Input == nil {
+	if args.To == nil {
+		// todo temporary fix, support empty to address
 		return nil, nil
-		//return nil, errs.ErrInvalid
 	}
 
-	res, err := b.evm.Call(ctx, *args.To, *args.Input)
+	var data []byte
+	if args.Data != nil {
+		data = *args.Data
+	} else if args.Input != nil {
+		data = *args.Input
+	} else {
+		return nil, fmt.Errorf("must provide either data or input values: %w", errs.ErrInvalid)
+	}
+
+	res, err := b.evm.Call(ctx, *args.To, data)
 	if err != nil {
 		b.logger.Error().Err(err).Msg("failed to execute call")
 		return nil, err

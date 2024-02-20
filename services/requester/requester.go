@@ -191,6 +191,7 @@ func (e *EVM) GetBalance(ctx context.Context, address common.Address, height uin
 }
 
 func (e *EVM) Call(ctx context.Context, address common.Address, data []byte) ([]byte, error) {
+	// todo make "to" address optional, this can be used for contract deployment simulations
 	txData := cadenceArrayFromBytes(data).WithType(byteArrayType)
 	toAddress := cadenceArrayFromBytes(address.Bytes()).WithType(addressType)
 
