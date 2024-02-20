@@ -121,12 +121,16 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 		return common.Hash{}, err
 	}
 
+	var to string
+	if tx.To() != nil {
+		to = tx.To().String()
+	}
 	e.logger.Info().
 		Str("evm ID", tx.Hash().Hex()).
 		Str("flow ID", flowID.Hex()).
-		Str("to", tx.To().String()).
+		Str("to", to).
 		Str("value", tx.Value().String()).
-		Str("data", string(tx.Data())).
+		Str("data", fmt.Sprintf("%x", tx.Data())).
 		Msg("raw transaction submitted")
 
 	return tx.Hash(), nil
