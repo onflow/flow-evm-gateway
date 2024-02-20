@@ -8,6 +8,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -220,7 +221,7 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// If JSON-RPC over HTTP is enabled, try to serve the request
-	rpc := h.httpHandler
+	rpc := recoverHandler(h.log, h.httpHandler)
 	if rpc != nil {
 		if checkPath(r, "") {
 			rpc.ServeHTTP(w, r)
@@ -335,4 +336,26 @@ func checkPath(r *http.Request, path string) bool {
 func isWebSocket(r *http.Request) bool {
 	return strings.EqualFold(r.Header.Get("Upgrade"), "websocket") &&
 		strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade")
+}
+
+// recoverHandler adds a wrapper to handle panics
+func recoverHandler(logger zerolog.Logger, h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			r := recover()
+			if r != nil {
+				var err error
+				switch t := r.(type) {
+				case string:
+					err = errors.New(t)
+				case error:
+					err = t
+				}
+
+				logger.Error().Err(err).Msg("panic in the http server")
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
+		}()
+		h.ServeHTTP(w, r)
+	})
 }
