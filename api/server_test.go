@@ -19,7 +19,7 @@ import (
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access/grpc"
-	sdkCrypto "github.com/onflow/flow-go-sdk/crypto"
+	"github.com/onflow/flow-go-sdk/crypto"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -52,7 +52,7 @@ func TestServerJSONRPCOveHTTPHandler(t *testing.T) {
 		panic(err)
 	}
 
-	url := "http://" + srv.ListenAddr() + "/rpc"
+	url := "http://" + srv.ListenAddr()
 
 	expectedResponses := strings.Split(responses, "\n")
 	for i, request := range strings.Split(requests, "\n") {
@@ -181,13 +181,13 @@ func TestServerJSONRPCOveHTTPHandler(t *testing.T) {
 		}
 		mockFlowClient.On("GetLatestBlock", mock.Anything, mock.Anything).Return(block, nil)
 
-		privateKey, err := sdkCrypto.DecodePrivateKeyHex(sdkCrypto.ECDSA_P256, strings.Replace("2619878f0e2ff438d17835c2a4561cb87b4d24d72d12ec34569acd0dd4af7c21", "0x", "", 1))
+		privateKey, err := crypto.DecodePrivateKeyHex(crypto.ECDSA_P256, strings.Replace("2619878f0e2ff438d17835c2a4561cb87b4d24d72d12ec34569acd0dd4af7c21", "0x", "", 1))
 		require.NoError(t, err)
 		key := &flow.AccountKey{
 			Index:          0,
 			PublicKey:      privateKey.PublicKey(),
 			SigAlgo:        privateKey.Algorithm(),
-			HashAlgo:       sdkCrypto.SHA3_256,
+			HashAlgo:       crypto.SHA3_256,
 			Weight:         1000,
 			SequenceNumber: uint64(0),
 			Revoked:        false,
@@ -486,6 +486,58 @@ func TestServerJSONRPCOveHTTPHandler(t *testing.T) {
 
 		assert.Equal(t, expectedResponse, strings.TrimSuffix(string(content), "\n"))
 	})
+
+	t.Run("net endpoints", func(t *testing.T) {
+		requests := `
+			[
+				{"jsonrpc":"2.0","id":1,"method":"net_listening","params":[]},
+				{"jsonrpc":"2.0","id":2,"method":"net_peerCount","params":[]},
+				{"jsonrpc":"2.0","id":3,"method":"net_version","params":[]}
+			]
+		`
+		expectedResponse := `
+			[
+				{"jsonrpc":"2.0","id":1,"result":true},
+				{"jsonrpc":"2.0","id":2,"result":"0x1"},
+				{"jsonrpc":"2.0","id":3,"result":"666"}
+			]
+		`
+
+		resp := rpcRequest(url, requests, "origin", "test.com")
+		defer resp.Body.Close()
+
+		content, err := io.ReadAll(resp.Body)
+		if err != nil {
+			panic(err)
+		}
+
+		assert.JSONEq(t, expectedResponse, string(content))
+	})
+
+	t.Run("web3 endpoints", func(t *testing.T) {
+		requests := `
+			[
+				{"jsonrpc":"2.0","id":1,"method":"web3_clientVersion","params":[]},
+				{"jsonrpc":"2.0","id":2,"method":"web3_sha3","params":["0x68656c6c6f20776f726c64"]}
+			]
+		`
+		expectedResponse := `
+			[
+				{"jsonrpc":"2.0","id":1,"result":"flow-evm-gateway@v1.13.5"},
+				{"jsonrpc":"2.0","id":2,"result":"0x47173285a8d7341e5e972fc677286384f802f8ef42a5ec5f03bbfa254cb01fad"}
+			]
+		`
+
+		resp := rpcRequest(url, requests, "origin", "test.com")
+		defer resp.Body.Close()
+
+		content, err := io.ReadAll(resp.Body)
+		if err != nil {
+			panic(err)
+		}
+
+		assert.JSONEq(t, expectedResponse, string(content))
+	})
 }
 
 func TestServerJSONRPCOveWebSocketHandler(t *testing.T) {
@@ -508,7 +560,7 @@ func TestServerJSONRPCOveWebSocketHandler(t *testing.T) {
 		panic(err)
 	}
 
-	url := "ws://" + srv.ListenAddr() + "/ws"
+	url := "ws://" + srv.ListenAddr()
 
 	extraHeaders := []string{"Origin", "*"}
 	headers := make(http.Header)

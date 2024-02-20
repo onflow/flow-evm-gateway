@@ -22,7 +22,11 @@ import (
 	"github.com/onflow/flow-go-sdk/crypto"
 )
 
-const EthNamespace = "eth"
+const (
+	EthNamespace  = "eth"
+	Web3Namespace = "web3"
+	NetNamespace  = "net"
+)
 
 // TODO: Fetch these from flow-go/fvm/evm/emulator/config.go
 var (
@@ -44,6 +48,14 @@ func SupportedAPIs(blockChainAPI *BlockChainAPI) []rpc.API {
 		{
 			Namespace: EthNamespace,
 			Service:   blockChainAPI,
+		},
+		{
+			Namespace: Web3Namespace,
+			Service:   &Web3API{},
+		},
+		{
+			Namespace: NetNamespace,
+			Service:   &NetAPI{},
 		},
 	}
 }
