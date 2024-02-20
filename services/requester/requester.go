@@ -108,8 +108,6 @@ func NewEVM(
 }
 
 func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash, error) {
-	e.logger.Info().Str("data", fmt.Sprintf("%x", data)).Msg("sending raw transaction")
-
 	tx := &types.Transaction{}
 	err := tx.DecodeRLP(
 		rlp.NewStream(
@@ -126,6 +124,9 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 	e.logger.Info().
 		Str("evm ID", tx.Hash().Hex()).
 		Str("flow ID", flowID.Hex()).
+		Str("to", tx.To().String()).
+		Str("value", tx.Value().String()).
+		Str("data", string(tx.Data())).
 		Msg("raw transaction submitted")
 
 	return tx.Hash(), nil
