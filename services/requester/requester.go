@@ -136,12 +136,12 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 func (e *EVM) signAndSend(ctx context.Context, script []byte, args ...cadence.Value) (flow.Identifier, error) {
 	latestBlock, err := e.client.GetLatestBlock(ctx, true)
 	if err != nil {
-		return flow.EmptyID, err
+		return flow.EmptyID, fmt.Errorf("failed to get latest flow block: %w", err)
 	}
 
 	index, seqNum, err := e.getSignerNetworkInfo(ctx)
 	if err != nil {
-		return flow.EmptyID, err
+		return flow.EmptyID, fmt.Errorf("failed to get signer info: %w", err)
 	}
 
 	flowTx := flow.NewTransaction().
@@ -153,17 +153,17 @@ func (e *EVM) signAndSend(ctx context.Context, script []byte, args ...cadence.Va
 
 	for _, arg := range args {
 		if err = flowTx.AddArgument(arg); err != nil {
-			return flow.EmptyID, err
+			return flow.EmptyID, fmt.Errorf("failed to add argument: %w", err)
 		}
 	}
 
 	if err = flowTx.SignEnvelope(e.address, index, e.signer); err != nil {
-		return flow.EmptyID, err
+		return flow.EmptyID, fmt.Errorf("failed to sign envelope: %w", err)
 	}
 
 	err = e.client.SendTransaction(ctx, *flowTx)
 	if err != nil {
-		return flow.EmptyID, err
+		return flow.EmptyID, fmt.Errorf("failed to send transaction: %w", err)
 	}
 
 	return flowTx.ID(), nil
@@ -196,7 +196,7 @@ func (e *EVM) Call(ctx context.Context, address common.Address, data []byte) ([]
 
 	value, err := e.client.ExecuteScriptAtLatestBlock(ctx, callScript, []cadence.Value{txData, toAddress})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to execute script: %w", err)
 	}
 
 	return bytesFromCadenceArray(value)

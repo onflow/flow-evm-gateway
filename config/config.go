@@ -13,8 +13,6 @@ import (
 
 const (
 	EmptyHeight = math.MaxUint64
-	// todo probably not good idea to have a default for this
-	defaultCoinbase = "0xf02c1c8e6114b1dbe8937a39260b5b0a374432bb"
 )
 
 type Config struct {
@@ -59,13 +57,16 @@ func FromFlags() (*Config, error) {
 	flag.StringVar(&cfg.AccessNodeGRPCHost, "access-node-grpc-host", "localhost:3569", "host to the flow access node gRPC API")
 	flag.Uint64Var(&cfg.InitHeight, "init-height", EmptyHeight, "init cadence block height from where the event ingestion will start. WARNING: you should only provide this if there are no existing values in the database, otherwise an error will be thrown")
 	flag.StringVar(&network, "network-id", "testnet", "EVM network ID (testnet, mainnet)")
-	flag.StringVar(&coinbase, "coinbase", defaultCoinbase, "coinbase address to use for fee collection")
+	flag.StringVar(&coinbase, "coinbase", "", "coinbase address to use for fee collection")
 	flag.StringVar(&gas, "gas-price", "1", "static gas price used for EVM transactions")
 	flag.StringVar(&coa, "coa-address", "", "Flow address that holds COA account used for submitting transactions")
 	flag.StringVar(&key, "coa-key", "", "WARNING: do not use this flag in production! private key value for the COA address used for submitting transactions")
 	flag.BoolVar(&cfg.CreateCOAResource, "coa-resource-create", false, "auto-create the COA resource in the Flow COA account provided if one doesn't exist")
 	flag.Parse()
 
+	if coinbase == "" {
+		return nil, fmt.Errorf("coinbase EVM address required")
+	}
 	cfg.Coinbase = common.HexToAddress(coinbase)
 	if g, ok := new(big.Int).SetString(gas, 10); ok {
 		cfg.GasPrice = g

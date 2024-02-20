@@ -100,7 +100,13 @@ func (b *BlockChainAPI) SendRawTransaction(
 	ctx context.Context,
 	input hexutil.Bytes,
 ) (common.Hash, error) {
-	return b.evm.SendRawTransaction(ctx, input)
+	id, err := b.evm.SendRawTransaction(ctx, input)
+	if err != nil {
+		b.logger.Error().Err(err).Msg("failed to send raw transaction")
+		return common.Hash{}, errs.ErrInternal
+	}
+
+	return id, nil
 }
 
 // GasPrice returns a suggestion for a gas price for legacy transactions.
@@ -119,7 +125,8 @@ func (b *BlockChainAPI) GetBalance(
 	// todo use provided height, when height mapping is implemented
 	balance, err := b.evm.GetBalance(ctx, address, 0)
 	if err != nil {
-		return nil, err
+		b.logger.Error().Err(err).Msg("failed to get balance")
+		return nil, errs.ErrInternal
 	}
 
 	return (*hexutil.Big)(balance), nil
@@ -132,17 +139,20 @@ func (b *BlockChainAPI) GetTransactionByHash(
 ) (*RPCTransaction, error) {
 	tx, err := b.transactions.Get(hash)
 	if err != nil {
-		return nil, err
+		b.logger.Error().Err(err).Msg("failed to get transaction by hash")
+		return nil, errs.ErrInternal
 	}
 
 	rcp, err := b.receipts.GetByTransactionID(tx.Hash())
 	if err != nil {
-		return nil, err
+		b.logger.Error().Err(err).Msg("failed to get transaction receipt")
+		return nil, errs.ErrInternal
 	}
 
 	from, err := types.Sender(types.LatestSignerForChainID(tx.ChainId()), tx)
 	if err != nil {
-		return nil, err
+		b.logger.Error().Err(err).Msg("failed to calculate sender")
+		return nil, errs.ErrInternal
 	}
 
 	v, r, s := tx.RawSignatureValues()
@@ -176,6 +186,7 @@ func (b *BlockChainAPI) GetTransactionByBlockHashAndIndex(
 ) *RPCTransaction {
 	block, err := b.blocks.GetByID(blockHash)
 	if err != nil {
+		b.logger.Error().Err(err).Msg("failed to get block by id")
 		return nil
 	}
 
@@ -187,6 +198,7 @@ func (b *BlockChainAPI) GetTransactionByBlockHashAndIndex(
 	txHash := block.TransactionHashes[index]
 	tx, err := b.GetTransactionByHash(ctx, txHash)
 	if err != nil {
+		b.logger.Error().Err(err).Msg("failed to get transaction by id")
 		return nil
 	}
 
@@ -222,8 +234,14 @@ func (b *BlockChainAPI) GetTransactionByBlockNumberAndIndex(
 func (b *BlockChainAPI) GetTransactionReceipt(
 	ctx context.Context,
 	hash common.Hash,
-) (*types.Receipt, error) { // todo validate we can use the types directly, check the json struct directives
-	return b.receipts.GetByTransactionID(hash)
+) (*types.Receipt, error) {
+	rcp, err := b.receipts.GetByTransactionID(hash)
+	if err != nil {
+		b.logger.Error().Err(err).Msg("failed to get receipt by id")
+		return nil, errs.ErrInternal
+	}
+
+	return rcp, nil
 }
 
 // Coinbase is the address that mining rewards will be sent to (alias for Etherbase).
@@ -237,7 +255,7 @@ func (b *BlockChainAPI) GetBlockByHash(
 	ctx context.Context,
 	hash common.Hash,
 	fullTx bool,
-) (map[string]interface{}, error) { // todo validate we can use the types directly
+) (map[string]interface{}, error) { // todo use block type directly
 	block := map[string]interface{}{}
 
 	bl, err := b.blocks.GetByID(hash)
@@ -384,7 +402,18 @@ func (b *BlockChainAPI) Call(
 	overrides *StateOverride,
 	blockOverrides *BlockOverrides,
 ) (hexutil.Bytes, error) {
-	return b.evm.Call(ctx, *args.To, *args.Input)
+	if args.To == nil || args.Input == nil {
+		return nil, nil
+		//return nil, errs.ErrInvalid
+	}
+
+	res, err := b.evm.Call(ctx, *args.To, *args.Input)
+	if err != nil {
+		b.logger.Error().Err(err).Msg("failed to execute call")
+		return nil, err
+	}
+
+	return res, nil
 }
 
 // GetLogs returns logs matching the given argument that are stored within the state.
@@ -422,7 +451,7 @@ func (b *BlockChainAPI) GetTransactionCount(
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (*hexutil.Uint64, error) {
 	// for now we only support indexing at latest block
-	if blockNumberOrHash != nil {
+	if blockNumberOrHash != nil && *blockNumberOrHash.BlockNumber != rpc.LatestBlockNumber {
 		return nil, errs.ErrNotSupported
 	}
 
