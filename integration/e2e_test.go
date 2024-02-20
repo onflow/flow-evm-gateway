@@ -432,7 +432,7 @@ func TestIntegration_API_DeployEvents(t *testing.T) {
 	}
 
 	rpcTester := &rpcTest{
-		url: fmt.Sprintf("http://%s:%d/rpc", cfg.RPCHost, cfg.RPCPort),
+		url: fmt.Sprintf("http://%s:%d", cfg.RPCHost, cfg.RPCPort),
 	}
 
 	go func() {
