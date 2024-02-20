@@ -166,6 +166,8 @@ func (e *EVM) signAndSend(ctx context.Context, script []byte, args ...cadence.Va
 		return flow.EmptyID, fmt.Errorf("failed to send transaction: %w", err)
 	}
 
+	// todo should we wait for the transaction result?
+
 	return flowTx.ID(), nil
 }
 
