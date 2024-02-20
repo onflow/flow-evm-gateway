@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/filters"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	errs "github.com/onflow/flow-evm-gateway/api/errors"
 	"github.com/onflow/flow-evm-gateway/config"
@@ -463,6 +464,21 @@ func (b *BlockChainAPI) GetTransactionCount(
 	return (*hexutil.Uint64)(&nonce), nil
 }
 
+// EstimateGas returns the lowest possible gas limit that allows the transaction to run
+// successfully at block `blockNrOrHash`, or the latest block if `blockNrOrHash` is unspecified. It
+// returns error if the transaction would revert or if there are unexpected failures. The returned
+// value is capped by both `args.Gas` (if non-nil & non-zero) and the backend's RPCGasCap
+// configuration (if non-zero).
+func (b *BlockChainAPI) EstimateGas(
+	ctx context.Context,
+	args TransactionArgs,
+	blockNumberOrHash *rpc.BlockNumberOrHash,
+	overrides *StateOverride,
+) (hexutil.Uint64, error) {
+	// todo we return max gas limit until we have gas estimation in place
+	return hexutil.Uint64(params.MaxGasLimit), nil
+}
+
 /* ====================================================================================================================
 
  NOT SUPPORTED SECTION
@@ -546,20 +562,6 @@ func (b *BlockChainAPI) NewPendingTransactionFilter(fullTx *bool) rpc.ID {
 // Accounts returns the collection of accounts this node manages.
 func (b *BlockChainAPI) Accounts() []common.Address {
 	return nil
-}
-
-// EstimateGas returns the lowest possible gas limit that allows the transaction to run
-// successfully at block `blockNrOrHash`, or the latest block if `blockNrOrHash` is unspecified. It
-// returns error if the transaction would revert or if there are unexpected failures. The returned
-// value is capped by both `args.Gas` (if non-nil & non-zero) and the backend's RPCGasCap
-// configuration (if non-zero).
-func (b *BlockChainAPI) EstimateGas(
-	ctx context.Context,
-	args TransactionArgs,
-	blockNumberOrHash *rpc.BlockNumberOrHash,
-	overrides *StateOverride,
-) (hexutil.Uint64, error) {
-	return 0, errs.ErrNotSupported
 }
 
 // GetUncleByBlockHashAndIndex returns the uncle block for the given block hash and index.
