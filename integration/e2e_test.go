@@ -6,7 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/onflow/flow-evm-gateway/cmd"
+	"github.com/onflow/flow-evm-gateway/bootstrap"
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/services/logs"
 	"github.com/onflow/flow-go/fvm/evm/emulator"
@@ -436,7 +436,7 @@ func TestIntegration_API_DeployEvents(t *testing.T) {
 	}
 
 	go func() {
-		err = cmd.Start(cfg)
+		err = bootstrap.Start(cfg)
 		require.NoError(t, err)
 	}()
 	time.Sleep(500 * time.Millisecond) // some time to startup
