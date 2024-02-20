@@ -180,9 +180,12 @@ func (e *EVM) GetBalance(ctx context.Context, address common.Address, height uin
 
 	e.logger.Info().Str("address", address.String()).Msg("get balance")
 
-	// todo this will change once we update to latest flow-go, temp solution
-	bal := val.(cadence.UFix64)
-	return big.NewInt(int64(bal) * 10000000000), nil
+	// sanity check, should never occur
+	if _, ok := val.(cadence.UInt); !ok {
+		e.logger.Panic().Msg(fmt.Sprintf("failed to convert balance %v to UInt", val))
+	}
+
+	return val.(cadence.UInt).ToGoValue().(*big.Int), nil
 }
 
 func (e *EVM) Call(ctx context.Context, address common.Address, data []byte) ([]byte, error) {

@@ -129,29 +129,29 @@ func fundEOA(
 	flowAmount cadence.UFix64,
 	eoaAddress common.Address,
 ) (*sdk.TransactionResult, error) {
+	wei := (uint)(flowAmount.ToGoValue().(uint64)*10000000000) - 1000000000000000000 // convert ufix to wei and subtract 1 flow
+	weiAmount := cadence.NewUInt(wei)
 	// create a new funded COA and fund an EOA to be used for in tests
 	code := `
-	transaction(amount: UFix64, eoaAddress: [UInt8; 20]) {
+	transaction(weiAmount: UInt, flowAmount: UFix64, eoaAddress: [UInt8; 20]) {
 		let fundVault: @FlowToken.Vault
 	
 		prepare(signer: auth(Storage) &Account) {
 			let vaultRef = signer.storage.borrow<auth(FungibleToken.Withdraw) &FlowToken.Vault>(from: /storage/flowTokenVault)
 				?? panic("Could not borrow reference to the owner's Vault!")
 	
-			self.fundVault <- vaultRef.withdraw(amount: amount) as! @FlowToken.Vault
+			self.fundVault <- vaultRef.withdraw(amount: flowAmount) as! @FlowToken.Vault
 		}
 	
 		execute {
 			let acc <- EVM.createBridgedAccount()
 			acc.deposit(from: <-self.fundVault)
 
-			let transferValue = amount - 1.0
-
 			let result = acc.call(
 				to: EVM.EVMAddress(bytes: eoaAddress), 
 				data: [], 
 				gasLimit: 300000, 
-				value: EVM.Balance(flow: transferValue)
+				value: EVM.Balance(attoflow: weiAmount)
 			)
 			
 			log(result)
@@ -164,7 +164,7 @@ func fundEOA(
 		return nil, err
 	}
 
-	return flowSendTransaction(emu, code, flowAmount, eoaBytes)
+	return flowSendTransaction(emu, code, weiAmount, flowAmount, eoaBytes)
 }
 
 // flowSendTransaction sends an evm transaction to the emulator, the code provided doesn't

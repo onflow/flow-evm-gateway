@@ -451,7 +451,7 @@ func TestIntegration_API_DeployEvents(t *testing.T) {
 	res, err := fundEOA(emu, flowAmount, fundEOAAddress)
 	require.NoError(t, err)
 	require.NoError(t, res.Error)
-	assert.Len(t, res.Events, 6) // 4 evm events + 2 cadence events
+	assert.Len(t, res.Events, 9)
 
 	eoaKey, err := crypto.HexToECDSA(fundEOARawKey)
 	require.NoError(t, err)
@@ -486,9 +486,7 @@ func TestIntegration_API_DeployEvents(t *testing.T) {
 	// check the deployment transaction and receipt
 	deployHash := blkRpc.Transactions[0]
 
-	// todo waiting bugfix https://github.com/onflow/flow-go/pull/5408
-	// require.Equal(t, hash.String(), deployHash)
-	// here
+	require.Equal(t, hash.String(), deployHash)
 	txRpc, err := rpcTester.getTx(deployHash)
 	require.NoError(t, err)
 
