@@ -87,6 +87,7 @@ func TestBlock(t *testing.T) {
 		blocks := NewBlocks(db)
 		err := blocks.InitCadenceHeight(1)
 		require.NoError(t, err)
+		_ = blocks.Store(2, mocks.NewBlock(1)) // init
 
 		bl, err := blocks.GetByHeight(11)
 		require.ErrorIs(t, err, errors.NotFound)

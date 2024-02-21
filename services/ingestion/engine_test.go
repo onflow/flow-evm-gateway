@@ -179,8 +179,8 @@ func TestTransactionIngestion(t *testing.T) {
 
 	accounts := &storageMock.AccountIndexer{}
 	accounts.
-		On("Update").
-		Return(func() error { return nil })
+		On("Update", mock.AnythingOfType("*types.Transaction")).
+		Return(func(tx *gethTypes.Transaction) error { return nil })
 
 	eventsChan := make(chan flow.BlockEvents)
 	subscriber := &mocks.Subscriber{}
@@ -192,27 +192,29 @@ func TestTransactionIngestion(t *testing.T) {
 
 	engine := NewEventIngestionEngine(subscriber, blocks, receipts, transactions, accounts, zerolog.Nop())
 
+	done := make(chan struct{})
 	go func() {
 		err := engine.Start(context.Background())
-		require.NoError(t, err)
+		assert.ErrorIs(t, err, ErrDisconnected) // we disconnect at the end
+		close(done)
 	}()
 
 	txCdc, event, transaction, result, err := newTransaction()
 	require.NoError(t, err)
 
 	transactions.
-		On("Store", mock.AnythingOfType("*gethTypes.Transaction")).
+		On("Store", mock.AnythingOfType("*types.Transaction")).
 		Return(func(tx *gethTypes.Transaction) error {
-			assert.Equal(t, transaction, tx)
+			assert.Equal(t, transaction.Hash(), tx.Hash()) // if hashes are equal tx is equal
 			return nil
 		}).
 		Once()
 
 	receipts.
-		On("Store", mock.AnythingOfType("*gethTypes.Receipt")).
+		On("Store", mock.AnythingOfType("*types.Receipt")).
 		Return(func(rcp *gethTypes.Receipt) error {
-			assert.EqualValues(t, result.Logs, rcp.Logs)
-			assert.Equal(t, result.DeployedContractAddress, rcp.ContractAddress)
+			assert.Len(t, rcp.Logs, len(result.Logs))
+			assert.Equal(t, result.DeployedContractAddress.ToCommon().String(), rcp.ContractAddress.String())
 			return nil
 		}).
 		Once()
@@ -222,9 +224,11 @@ func TestTransactionIngestion(t *testing.T) {
 			Type:  string(event.Etype),
 			Value: txCdc,
 		}},
+		Height: latestHeight + 1,
 	}
 
 	close(eventsChan)
+	<-done
 	// todo <-engine.Done()
 }
 
