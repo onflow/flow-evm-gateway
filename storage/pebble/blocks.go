@@ -26,8 +26,9 @@ func WithInitHeight(height uint64) BlockOption {
 }
 
 type Blocks struct {
-	store       *Storage
-	mux         sync.RWMutex
+	store *Storage
+	mux   sync.RWMutex
+	// todo LRU caching with size limit
 	heightCache map[byte]uint64
 }
 
