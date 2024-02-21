@@ -9,14 +9,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"os"
 	"testing"
 )
 
 // tests that make sure the implementation conform to the interface expected behaviour
 func TestBlocks(t *testing.T) {
 	runDB("blocks", t, func(t *testing.T, db *Storage) {
-		bl, err := NewBlocks(db, WithInitHeight(1))
+		bl := NewBlocks(db)
+		err := bl.InitCadenceHeight(1)
 		require.NoError(t, err)
 		suite.Run(t, &storage.BlockTestSuite{Blocks: bl})
 	})
@@ -25,7 +25,8 @@ func TestBlocks(t *testing.T) {
 func TestReceipts(t *testing.T) {
 	runDB("receipts", t, func(t *testing.T, db *Storage) {
 		// prepare the blocks database since they track heights which are used in receipts as well
-		bl, err := NewBlocks(db, WithInitHeight(1))
+		bl := NewBlocks(db)
+		err := bl.InitCadenceHeight(1)
 		require.NoError(t, err)
 		err = bl.Store(30, mocks.NewBlock(20)) // update latest height
 		require.NoError(t, err)
@@ -50,7 +51,8 @@ func TestBlock(t *testing.T) {
 
 	runDB("store block", t, func(t *testing.T, db *Storage) {
 		bl := mocks.NewBlock(10)
-		blocks, err := NewBlocks(db, WithInitHeight(1))
+		blocks := NewBlocks(db)
+		err := blocks.InitCadenceHeight(1)
 		require.NoError(t, err)
 
 		err = blocks.Store(20, bl)
@@ -61,7 +63,8 @@ func TestBlock(t *testing.T) {
 		const height = uint64(12)
 		bl := mocks.NewBlock(height)
 
-		blocks, err := NewBlocks(db, WithInitHeight(1))
+		blocks := NewBlocks(db)
+		err := blocks.InitCadenceHeight(1)
 		require.NoError(t, err)
 
 		err = blocks.Store(30, bl)
@@ -80,7 +83,8 @@ func TestBlock(t *testing.T) {
 	})
 
 	runDB("get not found block error", t, func(t *testing.T, db *Storage) {
-		blocks, err := NewBlocks(db, WithInitHeight(1))
+		blocks := NewBlocks(db)
+		err := blocks.InitCadenceHeight(1)
 		require.NoError(t, err)
 
 		bl, err := blocks.GetByHeight(11)
@@ -94,11 +98,7 @@ func TestBlock(t *testing.T) {
 }
 
 func runDB(name string, t *testing.T, f func(t *testing.T, db *Storage)) {
-	dir, err := os.MkdirTemp("", "flow-testing-temp-")
-	require.NoError(t, err)
-	defer func() {
-		require.NoError(t, os.RemoveAll(dir))
-	}()
+	dir := t.TempDir()
 
 	db, err := New(dir, zerolog.New(zerolog.NewTestWriter(t)))
 	require.NoError(t, err)
