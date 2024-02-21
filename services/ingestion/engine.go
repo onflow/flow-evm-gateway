@@ -16,14 +16,14 @@ var ErrDisconnected = errors.New("disconnected")
 var _ models.Engine = &Engine{}
 
 type Engine struct {
-	subscriber   EventSubscriber
-	blocks       storage.BlockIndexer
-	receipts     storage.ReceiptIndexer
-	transactions storage.TransactionIndexer
-	accounts     storage.AccountIndexer
-	log          zerolog.Logger
-	lastHeight   *models.SequentialHeight
-	status       *models.EngineStatus
+	subscriber    EventSubscriber
+	blocks        storage.BlockIndexer
+	receipts      storage.ReceiptIndexer
+	transactions  storage.TransactionIndexer
+	accounts      storage.AccountIndexer
+	log           zerolog.Logger
+	evmLastHeight *models.SequentialHeight
+	status        *models.EngineStatus
 }
 
 func NewEventIngestionEngine(
@@ -71,16 +71,6 @@ func (e *Engine) Start(ctx context.Context) error {
 	latestCadence, err := e.blocks.LatestCadenceHeight()
 	if err != nil {
 		return fmt.Errorf("failed to get latest cadence height: %w", err)
-	}
-
-	// only init latest height if not set
-	if e.lastHeight == nil {
-		e.lastHeight = models.NewSequentialHeight(latestCadence)
-	} else { // otherwise make sure the latest height is same as the one set on the engine
-		err = e.lastHeight.Increment(latestCadence)
-		if err != nil {
-			return err
-		}
 	}
 
 	e.log.Info().Uint64("start-cadence-height", latestCadence).Msg("starting ingestion")
@@ -157,6 +147,16 @@ func (e *Engine) processBlockEvent(cadenceHeight uint64, event cadence.Event) er
 		return err
 	}
 
+	// only init latest height if not set
+	if e.evmLastHeight == nil {
+		e.evmLastHeight = models.NewSequentialHeight(block.Height)
+	} else { // otherwise make sure the latest height is same as the one set on the engine
+		err = e.evmLastHeight.Increment(block.Height)
+		if err != nil {
+			return err
+		}
+	}
+
 	h, _ := block.Hash()
 	e.log.Info().
 		Str("hash", h.Hex()).
@@ -165,8 +165,8 @@ func (e *Engine) processBlockEvent(cadenceHeight uint64, event cadence.Event) er
 		Str("tx-hash", block.TransactionHashes[0].Hex()). // now we only have 1 tx per block
 		Msg("new evm block executed event")
 
-	if err = e.lastHeight.Increment(block.Height); err != nil {
-		return fmt.Errorf("invalid block height, expected %d, got %d: %w", e.lastHeight.Load(), block.Height, err)
+	if err = e.evmLastHeight.Increment(block.Height); err != nil {
+		return fmt.Errorf("invalid block height, expected %d, got %d: %w", e.evmLastHeight.Load(), block.Height, err)
 	}
 
 	return e.blocks.Store(cadenceHeight, block)
