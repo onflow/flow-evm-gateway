@@ -73,6 +73,12 @@ func (e *Engine) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to get latest cadence height: %w", err)
 	}
 
+	// todo we increase the latest indexed cadence height by one, but this assumes the last index of data
+	// was successful, in case of crash we would need to reindex. We do this now because nonces are not
+	// mapped to heights, which means the update to account is not idempotent, once update to account is
+	// idempotent we should remove this increment by 1.
+	latestCadence += 1
+
 	e.log.Info().Uint64("start-cadence-height", latestCadence).Msg("starting ingestion")
 
 	events, errs, err := e.subscriber.Subscribe(ctx, latestCadence)
