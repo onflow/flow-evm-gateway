@@ -79,8 +79,7 @@ func (b *BlockChainAPI) ChainId() *hexutil.Big {
 func (b *BlockChainAPI) BlockNumber() (hexutil.Uint64, error) {
 	latestBlockHeight, err := b.blocks.LatestEVMHeight()
 	if err != nil {
-		b.logger.Error().Err(err).Msg("failed to get latest height")
-		return 0, err
+		return 0, nil
 	}
 
 	return hexutil.Uint64(latestBlockHeight), nil
