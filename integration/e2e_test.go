@@ -11,7 +11,6 @@ import (
 	"github.com/onflow/flow-evm-gateway/services/logs"
 	"github.com/onflow/flow-go/fvm/evm/emulator"
 	"math/big"
-	"os"
 	"testing"
 	"time"
 
@@ -43,11 +42,7 @@ var (
 func TestIntegration_TransferValue(t *testing.T) {
 	srv, err := startEmulator()
 	require.NoError(t, err)
-
-	dbDir := "./db-test"
-	defer func() {
-		_ = os.Remove(dbDir)
-	}()
+	dbDir := t.TempDir()
 
 	ctx, cancelIngestion := context.WithCancel(context.Background())
 	blocks, receipts, txs, err := startEventIngestionEngine(ctx, dbDir)
@@ -143,11 +138,7 @@ func TestIntegration_DeployCallContract(t *testing.T) {
 
 	srv, err := startEmulator()
 	require.NoError(t, err)
-
-	dbDir := "./db-test"
-	defer func() {
-		_ = os.Remove(dbDir)
-	}()
+	dbDir := t.TempDir()
 
 	ctx, cancelIngestion := context.WithCancel(context.Background())
 	blocks, receipts, txs, err := startEventIngestionEngine(ctx, dbDir)
@@ -407,11 +398,7 @@ func TestIntegration_API_DeployEvents(t *testing.T) {
 	srv, err := startEmulator()
 	require.NoError(t, err)
 	emu := srv.Emulator()
-
-	dbDir := "./db-test"
-	t.Cleanup(func() {
-		_ = os.Remove(dbDir)
-	})
+	dbDir := t.TempDir()
 
 	gwAcc := emu.ServiceKey()
 	gwKey := gwAcc.PrivateKey
