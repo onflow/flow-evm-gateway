@@ -19,16 +19,16 @@ import (
 )
 
 var (
-	//go:embed cadence/bridged_account_call.cdc
+	//go:embed cadence/call.cdc
 	callScript []byte
 
-	//go:embed cadence/evm_run.cdc
+	//go:embed cadence/run.cdc
 	runTxScript []byte
 
-	//go:embed cadence/evm_address_balance.cdc
+	//go:embed cadence/get_balance.cdc
 	getBalanceScript []byte
 
-	//go:embed cadence/create_bridged_account.cdc
+	//go:embed cadence/create_coa.cdc
 	createCOAScript []byte
 
 	byteArrayType = cadence.NewVariableSizedArrayType(cadence.UInt8Type)
