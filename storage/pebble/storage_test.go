@@ -27,7 +27,7 @@ func TestReceipts(t *testing.T) {
 		// prepare the blocks database since they track heights which are used in receipts as well
 		bl, err := NewBlocks(db, WithInitHeight(1))
 		require.NoError(t, err)
-		err = bl.Store(mocks.NewBlock(20)) // update latest height
+		err = bl.Store(30, mocks.NewBlock(20)) // update latest height
 		require.NoError(t, err)
 
 		suite.Run(t, &storage.ReceiptTestSuite{ReceiptIndexer: NewReceipts(db)})
@@ -53,7 +53,7 @@ func TestBlock(t *testing.T) {
 		blocks, err := NewBlocks(db, WithInitHeight(1))
 		require.NoError(t, err)
 
-		err = blocks.Store(bl)
+		err = blocks.Store(20, bl)
 		require.NoError(t, err)
 	})
 
@@ -64,7 +64,7 @@ func TestBlock(t *testing.T) {
 		blocks, err := NewBlocks(db, WithInitHeight(1))
 		require.NoError(t, err)
 
-		err = blocks.Store(bl)
+		err = blocks.Store(30, bl)
 		require.NoError(t, err)
 
 		block, err := blocks.GetByHeight(height)

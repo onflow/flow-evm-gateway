@@ -77,7 +77,7 @@ func (b *BlockTestSuite) TestStore() {
 }
 
 func (b *BlockTestSuite) TestHeights() {
-	b.Run("first height", func() {
+	b.Run("first EVM height", func() {
 		for i := 0; i < 5; i++ {
 			first, err := b.Blocks.FirstEVMHeight()
 			b.Require().NoError(err)
@@ -85,12 +85,12 @@ func (b *BlockTestSuite) TestHeights() {
 
 			// shouldn't affect first height
 			lastHeight := uint64(100 + i)
-			err = b.Blocks.Store(lastHeight, mocks.NewBlock(lastHeight))
+			err = b.Blocks.Store(lastHeight+10, mocks.NewBlock(lastHeight))
 			b.Require().NoError(err)
 		}
 	})
 
-	b.Run("last height", func() {
+	b.Run("last EVM height", func() {
 		for i := 0; i < 5; i++ {
 			lastHeight := uint64(100 + i)
 			err := b.Blocks.Store(lastHeight+10, mocks.NewBlock(lastHeight))
@@ -99,6 +99,33 @@ func (b *BlockTestSuite) TestHeights() {
 			last, err := b.Blocks.LatestEVMHeight()
 			b.Require().NoError(err)
 			b.Require().Equal(lastHeight, last)
+		}
+	})
+
+	b.Run("last Cadence height", func() {
+		for i := 0; i < 5; i++ {
+			lastHeight := uint64(100 + i)
+			err := b.Blocks.Store(lastHeight, mocks.NewBlock(lastHeight-10))
+			b.Require().NoError(err)
+
+			last, err := b.Blocks.LatestCadenceHeight()
+			b.Require().NoError(err)
+			b.Require().Equal(lastHeight, last)
+		}
+	})
+
+	b.Run("Cadence height from EVM height", func() {
+		evmHeights := []uint64{10, 11, 12, 13}
+		cadenceHeights := []uint64{20, 24, 26, 27}
+		for i, evmHeight := range evmHeights {
+			err := b.Blocks.Store(cadenceHeights[i], mocks.NewBlock(evmHeight))
+			b.Require().NoError(err)
+		}
+
+		for i, evmHeight := range evmHeights {
+			cadence, err := b.Blocks.GetCadenceHeight(evmHeight)
+			b.Require().NoError(err)
+			b.Assert().Equal(cadenceHeights[i], cadence)
 		}
 	})
 }
