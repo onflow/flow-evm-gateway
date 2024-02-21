@@ -14,6 +14,7 @@ generate:
 	mockery --dir=storage --name=BlockIndexer --output=storage/mocks
 	mockery --dir=storage --name=ReceiptIndexer --output=storage/mocks
 	mockery --dir=storage --name=TransactionIndexer --output=storage/mocks
+	mockery --dir=storage --name=AccountIndexer --output=storage/mocks
 	mockery --all --dir=services/events --output=services/events/mocks
 
 .PHONY: ci
