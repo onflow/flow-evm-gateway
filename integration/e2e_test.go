@@ -409,9 +409,9 @@ func TestIntegration_API_DeployEvents(t *testing.T) {
 	emu := srv.Emulator()
 
 	dbDir := "./db-test"
-	defer func() {
+	t.Cleanup(func() {
 		_ = os.Remove(dbDir)
-	}()
+	})
 
 	gwAcc := emu.ServiceKey()
 	gwKey := gwAcc.PrivateKey
