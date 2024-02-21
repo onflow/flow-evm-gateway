@@ -83,7 +83,7 @@ func (e *Engine) Start(ctx context.Context) error {
 
 	events, errs, err := e.subscriber.Subscribe(ctx, latestCadence)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to subscribe to events: %w", err)
 	}
 
 	e.status.Ready()
