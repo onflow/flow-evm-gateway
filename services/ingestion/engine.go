@@ -193,7 +193,7 @@ func (e *Engine) processTransactionEvent(event cadence.Event) error {
 		Str("contract-address", receipt.ContractAddress.String()).
 		Int("log-count", len(receipt.Logs)).
 		Str("receipt-tx-hash", receipt.TxHash.String()).
-		Str("tx hash", tx.Hash().String()).
+		Str("tx-hash", tx.Hash().String()).
 		Msg("ingesting new transaction executed event")
 
 	// todo think if we could introduce batching
