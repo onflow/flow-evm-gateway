@@ -164,7 +164,7 @@ func (r *Receipts) BloomsForBlockRange(start, end *big.Int) ([]*gethTypes.Bloom,
 }
 
 func (r *Receipts) getFirstLast() (uint64, uint64, error) {
-	l, err := r.store.get(latestHeightKey)
+	l, err := r.store.get(latestEVMHeightKey)
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed getting latest height: %w", err)
 	}
@@ -174,7 +174,7 @@ func (r *Receipts) getFirstLast() (uint64, uint64, error) {
 		return r.first, last, nil
 	}
 
-	first, err := r.store.get(firstHeightKey)
+	first, err := r.store.get(firstEVMHeightKey)
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed getting first height: %w", err)
 	}
