@@ -72,7 +72,7 @@ func NewBlockChainAPI(
 // wasn't synced up to a block where EIP-155 is enabled, but this behavior caused issues
 // in CL clients.
 func (b *BlockChainAPI) ChainId() *hexutil.Big {
-	return (*hexutil.Big)(b.config.ChainID)
+	return (*hexutil.Big)(b.config.EVMNetworkID)
 }
 
 // BlockNumber returns the block number of the chain head.
