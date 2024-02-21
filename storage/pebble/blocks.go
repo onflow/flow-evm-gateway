@@ -164,6 +164,15 @@ func (b *Blocks) getBlock(keyCode byte, key []byte) (*types.Block, error) {
 }
 
 func (b *Blocks) setLastHeight(height uint64) error {
+	// if first height was not yet set and cached
+	if _, ok := b.heightCache[firstEVMHeightKey]; !ok {
+		err := b.store.set(firstEVMHeightKey, nil, uint64Bytes(height))
+		if err != nil {
+			return fmt.Errorf("failed to set latest block height: %w", err)
+		}
+		b.heightCache[firstEVMHeightKey] = height
+	}
+
 	err := b.store.set(latestEVMHeightKey, nil, uint64Bytes(height))
 	if err != nil {
 		return fmt.Errorf("failed to set latest block height: %w", err)
