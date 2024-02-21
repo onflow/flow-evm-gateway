@@ -59,10 +59,15 @@ func (r *Receipts) GetByTransactionID(ID common.Hash) (*gethTypes.Receipt, error
 
 	height, err := r.store.get(receiptTxIDToHeightKey, ID.Bytes())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get receipt by tx ID: %w", err)
 	}
 
-	return r.getByBlockHeight(height)
+	rcp, err := r.getByBlockHeight(height)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get receipt by height: %w", err)
+	}
+
+	return rcp, nil
 }
 
 func (r *Receipts) GetByBlockHeight(height *big.Int) (*gethTypes.Receipt, error) {

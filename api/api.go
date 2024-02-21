@@ -259,7 +259,7 @@ func (b *BlockChainAPI) GetTransactionReceipt(
 			return nil, errs.ErrInternal
 		}
 
-		return nil, err
+		return nil, fmt.Errorf("failed to get transaction receipt: %w", err)
 	}
 
 	return rcp, nil
