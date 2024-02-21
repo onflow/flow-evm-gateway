@@ -272,10 +272,13 @@ func (e *EVM) replaceImports(script []byte) []byte {
 	}
 
 	s := string(script)
-	addr := addresses[e.network]
-	s = strings.ReplaceAll(s, "import EVM", fmt.Sprintf("import EVM from %s", addr["EVM"]))
-	s = strings.ReplaceAll(s, "import FungibleToken", fmt.Sprintf("import EVM from %s", addr["FungibleToken"]))
-	s = strings.ReplaceAll(s, "import FlowToken", fmt.Sprintf("import EVM from %s", addr["FlowToken"]))
+	// iterate over all the import name and address pairs and replace them in script
+	for imp, addr := range addresses[e.network] {
+		s = strings.ReplaceAll(s,
+			fmt.Sprintf("import %s", imp),
+			fmt.Sprintf("import %s from %s", imp, addr),
+		)
+	}
 
 	return []byte(s)
 }
