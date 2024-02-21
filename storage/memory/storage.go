@@ -112,7 +112,7 @@ func (s BlockStorage) GetByID(ID common.Hash) (*types.Block, error) {
 	return block, nil
 }
 
-func (s BlockStorage) Store(block *types.Block) error {
+func (s BlockStorage) Store(cadenceHeight uint64, block *types.Block) error {
 	s.base.mu.Lock()
 	defer s.base.mu.Unlock()
 
@@ -142,7 +142,17 @@ func (s BlockStorage) Store(block *types.Block) error {
 	return nil
 }
 
-func (s BlockStorage) LatestHeight() (uint64, error) {
+func (s BlockStorage) LatestCadenceHeight() (uint64, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (s BlockStorage) GetCadenceHeight(evmHeight uint64) (uint64, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (s BlockStorage) LatestEVMHeight() (uint64, error) {
 	s.base.mu.RLock()
 	defer s.base.mu.RUnlock()
 
@@ -152,7 +162,7 @@ func (s BlockStorage) LatestHeight() (uint64, error) {
 	return s.base.lastHeight, nil
 }
 
-func (s BlockStorage) FirstHeight() (uint64, error) {
+func (s BlockStorage) FirstEVMHeight() (uint64, error) {
 	s.base.mu.RLock()
 	defer s.base.mu.RUnlock()
 
