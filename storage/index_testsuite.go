@@ -21,7 +21,7 @@ func (b *BlockTestSuite) TestGet() {
 	b.Run("existing block", func() {
 		height := uint64(1)
 		block := mocks.NewBlock(height)
-		err := b.Blocks.Store(block)
+		err := b.Blocks.Store(height+1, block)
 		b.Require().NoError(err)
 
 		ID, err := block.Hash()
@@ -52,17 +52,17 @@ func (b *BlockTestSuite) TestStore() {
 	block := mocks.NewBlock(10)
 
 	b.Run("success", func() {
-		err := b.Blocks.Store(block)
+		err := b.Blocks.Store(2, block)
 		b.Require().NoError(err)
 
 		// we allow overwriting blocks to make the actions idempotent
-		err = b.Blocks.Store(block)
+		err = b.Blocks.Store(2, block)
 		b.Require().NoError(err)
 	})
 
 	b.Run("store multiple blocks, and get one", func() {
 		for i := 0; i < 10; i++ {
-			err := b.Blocks.Store(mocks.NewBlock(uint64(10 + i)))
+			err := b.Blocks.Store(uint64(i+5), mocks.NewBlock(uint64(10+i)))
 			b.Require().NoError(err)
 		}
 
@@ -79,13 +79,13 @@ func (b *BlockTestSuite) TestStore() {
 func (b *BlockTestSuite) TestHeights() {
 	b.Run("first height", func() {
 		for i := 0; i < 5; i++ {
-			first, err := b.Blocks.FirstHeight()
+			first, err := b.Blocks.FirstEVMHeight()
 			b.Require().NoError(err)
 			b.Require().Equal(uint64(1), first)
 
 			// shouldn't affect first height
 			lastHeight := uint64(100 + i)
-			err = b.Blocks.Store(mocks.NewBlock(lastHeight))
+			err = b.Blocks.Store(lastHeight, mocks.NewBlock(lastHeight))
 			b.Require().NoError(err)
 		}
 	})
@@ -93,10 +93,10 @@ func (b *BlockTestSuite) TestHeights() {
 	b.Run("last height", func() {
 		for i := 0; i < 5; i++ {
 			lastHeight := uint64(100 + i)
-			err := b.Blocks.Store(mocks.NewBlock(lastHeight))
+			err := b.Blocks.Store(lastHeight+10, mocks.NewBlock(lastHeight))
 			b.Require().NoError(err)
 
-			last, err := b.Blocks.LatestHeight()
+			last, err := b.Blocks.LatestEVMHeight()
 			b.Require().NoError(err)
 			b.Require().Equal(lastHeight, last)
 		}
