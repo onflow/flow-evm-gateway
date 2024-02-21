@@ -47,7 +47,7 @@ func NewBlocks(store *Storage, opts ...BlockOption) (*Blocks, error) {
 	return blk, nil
 }
 
-func (b *Blocks) Store(block *types.Block) error {
+func (b *Blocks) Store(cadenceHeight uint64, block *types.Block) error {
 	b.mux.Lock()
 	defer b.mux.Unlock()
 
@@ -62,13 +62,17 @@ func (b *Blocks) Store(block *types.Block) error {
 	}
 
 	// todo batch operations
-	height := uint64Bytes(block.Height)
-	if err := b.store.set(blockHeightKey, height, val); err != nil {
+	evmHeight := uint64Bytes(block.Height)
+	if err := b.store.set(blockHeightKey, evmHeight, val); err != nil {
 		return err
 	}
 
 	// todo check if what is more often used block by id or block by height and fix accordingly if needed
-	if err := b.store.set(blockIDToHeightKey, id.Bytes(), height); err != nil {
+	if err := b.store.set(blockIDToHeightKey, id.Bytes(), evmHeight); err != nil {
+		return err
+	}
+
+	if err := b.store.set(evmHeightToCadenceHeightKey, evmHeight, uint64Bytes(cadenceHeight)); err != nil {
 		return err
 	}
 
@@ -79,12 +83,12 @@ func (b *Blocks) GetByHeight(height uint64) (*types.Block, error) {
 	b.mux.RLock()
 	defer b.mux.RUnlock()
 
-	first, err := b.FirstHeight()
+	first, err := b.FirstEVMHeight()
 	if err != nil {
 		return nil, err
 	}
 
-	last, err := b.LatestHeight()
+	last, err := b.LatestEVMHeight()
 	if err != nil {
 		return nil, err
 	}
@@ -109,12 +113,39 @@ func (b *Blocks) GetByID(ID common.Hash) (*types.Block, error) {
 	return b.getBlock(blockHeightKey, height)
 }
 
-func (b *Blocks) LatestHeight() (uint64, error) {
-	return b.getHeight(latestHeightKey)
+func (b *Blocks) LatestEVMHeight() (uint64, error) {
+	return b.getHeight(latestEVMHeightKey)
 }
 
-func (b *Blocks) FirstHeight() (uint64, error) {
-	return b.getHeight(firstHeightKey)
+func (b *Blocks) FirstEVMHeight() (uint64, error) {
+	return b.getHeight(firstEVMHeightKey)
+}
+
+func (b *Blocks) LatestCadenceHeight() (uint64, error) {
+	b.mux.RLock()
+	defer b.mux.RUnlock()
+
+	latestEVM, err := b.getHeight(latestEVMHeightKey)
+	if err != nil {
+		return 0, err
+	}
+
+	return b.getCadenceHeight(latestEVM)
+}
+
+func (b *Blocks) getCadenceHeight(evmHeight uint64) (uint64, error) {
+	val, err := b.store.get(evmHeightToCadenceHeightKey, uint64Bytes(evmHeight))
+	if err != nil {
+		return 0, err
+	}
+
+	return binary.BigEndian.Uint64(val), nil
+}
+
+func (b *Blocks) GetCadenceHeight(evmHeight uint64) (uint64, error) {
+	b.mux.RLock()
+	defer b.mux.RUnlock()
+	return b.getCadenceHeight(evmHeight)
 }
 
 func (b *Blocks) getBlock(keyCode byte, key []byte) (*types.Block, error) {
@@ -127,12 +158,12 @@ func (b *Blocks) getBlock(keyCode byte, key []byte) (*types.Block, error) {
 }
 
 func (b *Blocks) setLastHeight(height uint64) error {
-	err := b.store.set(latestHeightKey, nil, uint64Bytes(height))
+	err := b.store.set(latestEVMHeightKey, nil, uint64Bytes(height))
 	if err != nil {
 		return err
 	}
 	// update cache
-	b.heightCache[latestHeightKey] = height
+	b.heightCache[latestEVMHeightKey] = height
 	return nil
 }
 
@@ -158,19 +189,19 @@ func (b *Blocks) getHeight(keyCode byte) (uint64, error) {
 }
 
 func (b *Blocks) storeInitHeight(height uint64) error {
-	_, err := b.store.get(firstHeightKey)
+	_, err := b.store.get(firstEVMHeightKey)
 	if err != nil && !errors.Is(err, errs.NotFound) {
 		return fmt.Errorf("existing first height can not be overwritten")
 	}
-	_, err = b.store.get(latestHeightKey)
+	_, err = b.store.get(latestEVMHeightKey)
 	if err != nil && !errors.Is(err, errs.NotFound) {
 		return fmt.Errorf("existing latest height can not be overwritten")
 	}
 
 	// todo batch
-	if err := b.store.set(firstHeightKey, nil, uint64Bytes(height)); err != nil {
+	if err := b.store.set(firstEVMHeightKey, nil, uint64Bytes(height)); err != nil {
 		return err
 	}
 
-	return b.store.set(latestHeightKey, nil, uint64Bytes(height))
+	return b.store.set(latestEVMHeightKey, nil, uint64Bytes(height))
 }
