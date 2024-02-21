@@ -134,8 +134,6 @@ func TestIntegration_TransferValue(t *testing.T) {
 //
 // The test then proceeds on testing filtering of events
 func TestIntegration_DeployCallContract(t *testing.T) {
-	t.Skip()
-
 	srv, err := startEmulator()
 	require.NoError(t, err)
 	dbDir := t.TempDir()
