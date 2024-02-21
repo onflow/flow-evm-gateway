@@ -63,7 +63,7 @@ func TestIntegration_TransferValue(t *testing.T) {
 	res, err := fundEOA(emu, flowAmount, fundEOAAddress)
 	require.NoError(t, err)
 	require.NoError(t, res.Error)
-	assert.Len(t, res.Events, 6) // 4 evm events + 2 cadence events
+	assert.Len(t, res.Events, 9) // 4 evm events + 2 cadence events
 
 	transferWei := flowToWei(1)
 	fundEOAKey, err := crypto.HexToECDSA(fundEOARawKey)
@@ -73,29 +73,29 @@ func TestIntegration_TransferValue(t *testing.T) {
 	res, evmID, err := evmSignAndRun(emu, transferWei, params.TxGas, fundEOAKey, 0, &transferEOAAdress, nil)
 	require.NoError(t, err)
 	require.NoError(t, res.Error)
-	assert.Len(t, res.Events, 2)
+	assert.Len(t, res.Events, 5)
 
 	time.Sleep(2 * time.Second) // todo change
 
-	// block 1 comes from calling evm.deposit
-	blk, err := blocks.GetByHeight(1)
-	require.NoError(t, err)
-	assert.Equal(t, uint64(1), blk.Height)
-
-	assert.Equal(t, fundWei.Cmp(blk.TotalSupply), 0)
-	require.Len(t, blk.TransactionHashes, 1)
-
-	// block 2 comes from calling evm.call to transfer to eoa 1
-	blk, err = blocks.GetByHeight(2)
+	// block 2 comes from calling evm.deposit
+	blk, err := blocks.GetByHeight(2)
 	require.NoError(t, err)
 	assert.Equal(t, uint64(2), blk.Height)
+
 	assert.Equal(t, fundWei.Cmp(blk.TotalSupply), 0)
 	require.Len(t, blk.TransactionHashes, 1)
 
-	// block 3 comes from calling evm.call to transfer from eoa 1 to eoa 2
+	// block 3 comes from calling evm.call to transfer to eoa 1
 	blk, err = blocks.GetByHeight(3)
 	require.NoError(t, err)
 	assert.Equal(t, uint64(3), blk.Height)
+	assert.Equal(t, fundWei.Cmp(blk.TotalSupply), 0)
+	require.Len(t, blk.TransactionHashes, 1)
+
+	// block 5 comes from calling evm.call to transfer from eoa 1 to eoa 2
+	blk, err = blocks.GetByHeight(5)
+	require.NoError(t, err)
+	assert.Equal(t, uint64(5), blk.Height)
 	assert.Equal(t, fundWei.Cmp(blk.TotalSupply), 0)
 	require.Len(t, blk.TransactionHashes, 1)
 
