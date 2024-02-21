@@ -1,7 +1,7 @@
 .PHONY: test
 test:
 	# test all packages
-	go test -cover -parallel 8 ./...
+	go test -cover ./...
 
 .PHONY: check-tidy
 check-tidy:
