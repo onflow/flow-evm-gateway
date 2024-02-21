@@ -3,12 +3,13 @@ package config
 import (
 	"flag"
 	"fmt"
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/crypto"
 	"github.com/onflow/flow-go/fvm/evm/emulator"
-	"math/big"
 )
 
 const (
@@ -53,7 +54,7 @@ func FromFlags() (*Config, error) {
 
 	// parse from flags
 	flag.StringVar(&cfg.DatabaseDir, "database-dir", "./db", "path to the directory for the database")
-	flag.StringVar(&cfg.RPCHost, "rpc-host", "localhost", "host for the RPC API server")
+	flag.StringVar(&cfg.RPCHost, "rpc-host", "", "host for the RPC API server")
 	flag.IntVar(&cfg.RPCPort, "rpc-port", 3000, "port for the RPC API server")
 	flag.StringVar(&cfg.AccessNodeGRPCHost, "access-node-grpc-host", "localhost:3569", "host to the flow access node gRPC API")
 	flag.Uint64Var(&cfg.InitCadenceHeight, "init-cadence-height", EmptyHeight, "init cadence block height from where the event ingestion will start. WARNING: you should only provide this if there are no existing values in the database")
