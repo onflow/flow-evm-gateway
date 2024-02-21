@@ -26,10 +26,9 @@ type Config struct {
 	// todo maybe merge port into host as it's for AN
 	RPCHost string
 	// todo support also just specifying latest height
-	// InitHeight provides initial heights for EVM block height
-	// useful only on a cold-start with an empty database, otherwise
-	// should be avoided or an error will be thrown.
-	InitHeight uint64
+	// InitCadenceHeight provides initial heights for Cadence block height
+	// useful only on a cold-start with an empty database
+	InitCadenceHeight uint64
 	// ChainID provides the EVM chain ID.
 	ChainID *big.Int
 	// Coinbase is EVM address that collects the EVM operator fees collected
@@ -55,7 +54,7 @@ func FromFlags() (*Config, error) {
 	flag.StringVar(&cfg.RPCHost, "rpc-host", "localhost", "host for the RPC API server")
 	flag.IntVar(&cfg.RPCPort, "rpc-port", 3000, "port for the RPC API server")
 	flag.StringVar(&cfg.AccessNodeGRPCHost, "access-node-grpc-host", "localhost:3569", "host to the flow access node gRPC API")
-	flag.Uint64Var(&cfg.InitHeight, "init-height", EmptyHeight, "init cadence block height from where the event ingestion will start. WARNING: you should only provide this if there are no existing values in the database, otherwise an error will be thrown")
+	flag.Uint64Var(&cfg.InitCadenceHeight, "init-cadence-height", EmptyHeight, "init cadence block height from where the event ingestion will start. WARNING: you should only provide this if there are no existing values in the database")
 	flag.StringVar(&network, "network-id", "testnet", "EVM network ID (testnet, mainnet)")
 	flag.StringVar(&coinbase, "coinbase", "", "coinbase address to use for fee collection")
 	flag.StringVar(&gas, "gas-price", "1", "static gas price used for EVM transactions")

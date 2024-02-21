@@ -422,7 +422,7 @@ func TestIntegration_API_DeployEvents(t *testing.T) {
 		AccessNodeGRPCHost: "localhost:3569", // emulator
 		RPCPort:            3001,
 		RPCHost:            "127.0.0.1",
-		InitHeight:         0,
+		InitCadenceHeight:  0,
 		ChainID:            emulator.FlowEVMTestnetChainID,
 		Coinbase:           fundEOAAddress,
 		COAAddress:         gwAddress,

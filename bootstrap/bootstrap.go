@@ -34,26 +34,13 @@ func Start(cfg *config.Config) error {
 	receipts := pebble.NewReceipts(pebbleDB)
 	accounts := pebble.NewAccounts(pebbleDB)
 
-	// if initialization height is provided use that to bootstrap the database, but only if it's empty
-	if cfg.InitHeight != config.EmptyHeight {
-		logger.Info().
-			Uint64("init height", cfg.InitHeight).
-			Msg("initializing the indexer with init height")
-
-		val, err := blocks.LatestCadenceHeight()
-		if errors.Is(err, storageErrs.NotInitialized) { // if database is empty we allow init
-			err = blocks.InitHeight(cfg.InitHeight)
-			if err != nil {
-				return fmt.Errorf("failed to init height: %w", err)
-			}
-		} else { // otherwise we ignore init height and warn
-			logger.Warn().
-				Uint64("current latest height", val).
-				Msg("setting init height value no an already initialized database is not possible")
+	latestCadenceHeight, err := blocks.LatestCadenceHeight()
+	if errors.Is(err, storageErrs.NotInitialized) {
+		if cfg.InitCadenceHeight == config.EmptyHeight {
+			return fmt.Errorf("must provide init cadence height on an empty database")
 		}
+		latestCadenceHeight = cfg.InitCadenceHeight
 	}
-
-	fmt.Println("#here 4")
 
 	go func() {
 		err := startServer(cfg, blocks, transactions, receipts, accounts, logger)
@@ -62,7 +49,7 @@ func Start(cfg *config.Config) error {
 		}
 	}()
 
-	err = startIngestion(cfg, blocks, transactions, receipts, accounts, logger)
+	err = startIngestion(cfg, latestCadenceHeight, blocks, transactions, receipts, accounts, logger)
 	if err != nil {
 		return fmt.Errorf("failed to start event ingestion: %w", err)
 	}
@@ -72,6 +59,7 @@ func Start(cfg *config.Config) error {
 
 func startIngestion(
 	cfg *config.Config,
+	initCadenceHeight uint64,
 	blocks storage.BlockIndexer,
 	transactions storage.TransactionIndexer,
 	receipts storage.ReceiptIndexer,
@@ -80,21 +68,6 @@ func startIngestion(
 ) error {
 	logger.Info().Msg("starting up event ingestion")
 
-	latest, err := blocks.LatestEVMHeight()
-	if err != nil {
-		return err
-	}
-
-	first, err := blocks.FirstEVMHeight()
-	if err != nil {
-		return err
-	}
-
-	latestCadence, err := blocks.LatestCadenceHeight()
-	if err != nil {
-		return err
-	}
-
 	client, err := grpc.NewClient(cfg.AccessNodeGRPCHost)
 	if err != nil {
 		return err
@@ -102,16 +75,20 @@ func startIngestion(
 
 	blk, err := client.GetLatestBlock(context.Background(), false)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get latest cadence block: %w", err)
+	}
+
+	// make sure the provided block to start the indexing can be loaded
+	_, err = client.GetBlockByHeight(context.Background(), initCadenceHeight)
+	if err != nil {
+		return fmt.Errorf("failed to get provided cadence height: %w", err)
 	}
 
 	logger.Info().
-		Uint64("first evm", first).
-		Uint64("latest evm", latest).
-		Uint64("latest cadence", latestCadence).
-		Uint64("cadence height", blk.Height).
-		Uint64("cadence heights to index", blk.Height-latestCadence).
-		Msg("indexing block heights status")
+		Uint64("start height", initCadenceHeight).
+		Uint64("latest network height", blk.Height).
+		Uint64("heights to index", blk.Height-initCadenceHeight).
+		Msg("indexing cadence height information")
 
 	subscriber := ingestion.NewRPCSubscriber(client)
 	engine := ingestion.NewEventIngestionEngine(

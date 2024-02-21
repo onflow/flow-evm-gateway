@@ -177,12 +177,3 @@ func (b *Blocks) getHeight(keyCode byte) (uint64, error) {
 	b.heightCache[keyCode] = h
 	return h, nil
 }
-
-func (b *Blocks) InitHeight(height uint64) error {
-	// todo batch
-	if err := b.store.set(firstEVMHeightKey, nil, uint64Bytes(height)); err != nil {
-		return err
-	}
-
-	return b.store.set(latestEVMHeightKey, nil, uint64Bytes(height))
-}
