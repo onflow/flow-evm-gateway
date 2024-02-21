@@ -1,5 +1,7 @@
 #!/bin/bash
-if [ "$FLOW_NETWORK" = "crescendo" ]; then
+if [ "$FLOW_NETWORK" = "testnet" || "$FLOW_NETWORK" = "mainnet" || "$FLOW_NETWORK" = "canary" || ]; then
+  ./evm-gateway --network=$FLOW_NETWORK
+else 
   # Start the first process & redirect output to a temporary file
   ./flow-x86_64-linux- emulator --evm-enabled > temp_output.txt &
 
@@ -21,6 +23,4 @@ if [ "$FLOW_NETWORK" = "crescendo" ]; then
 
   # Clean up temporary file
   rm temp_output.txt
-else 
-  ./evm-gateway --network=$FLOW_NETWORK
 fi
