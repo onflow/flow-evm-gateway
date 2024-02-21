@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/rs/cors"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -92,7 +93,7 @@ func (h *httpServer) EnableRPC(apis []rpc.API) error {
 	}
 
 	h.httpHandler = &rpcHandler{
-		Handler: srv,
+		Handler: newCorsHandler(srv, []string{"*"}),
 		server:  srv,
 	}
 
@@ -321,4 +322,18 @@ func checkPath(r *http.Request, path string) bool {
 func isWebSocket(r *http.Request) bool {
 	return strings.EqualFold(r.Header.Get("Upgrade"), "websocket") &&
 		strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade")
+}
+
+func newCorsHandler(srv http.Handler, allowedOrigins []string) http.Handler {
+	// disable CORS support if user has not specified a custom CORS configuration
+	if len(allowedOrigins) == 0 {
+		return srv
+	}
+	c := cors.New(cors.Options{
+		AllowedOrigins: allowedOrigins,
+		AllowedMethods: []string{http.MethodPost, http.MethodGet},
+		AllowedHeaders: []string{"*"},
+		MaxAge:         600,
+	})
+	return c.Handler(srv)
 }

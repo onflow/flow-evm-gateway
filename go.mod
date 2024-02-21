@@ -8,6 +8,7 @@ require (
 	github.com/onflow/cadence v1.0.0-M6
 	github.com/onflow/flow-go v0.33.2-0.20240213000303-9fb4c62e8291
 	github.com/onflow/flow-go-sdk v1.0.0-M3
+	github.com/rs/cors v1.8.0
 	github.com/rs/zerolog v1.31.0
 	github.com/stretchr/testify v1.8.4
 	google.golang.org/grpc v1.59.0
