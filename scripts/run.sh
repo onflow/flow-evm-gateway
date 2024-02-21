@@ -1,5 +1,5 @@
 #!/bin/bash
-if [ "$FLOW_NETWORK" = "testnet" || "$FLOW_NETWORK" = "mainnet" || "$FLOW_NETWORK" = "canary" || "$FLOW_NETWORK" = "crescendo" ]; then
+if [ "$FLOW_NETWORK" = "testnet" ] || [ "$FLOW_NETWORK" = "mainnet" ] || [ "$FLOW_NETWORK" = "canary" ] || [ "$FLOW_NETWORK" = "crescendo" ]; then
   ./evm-gateway --network=$FLOW_NETWORK
 else 
   # Start the first process & redirect output to a temporary file
