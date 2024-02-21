@@ -17,5 +17,5 @@ FROM debian:latest
 WORKDIR /flow-evm-gateway
 COPY --from=builder /flow-evm-gateway/evm-gateway /flow-evm-gateway/evm-gateway
 COPY --from=builder /flow-evm-gateway/scripts/run.sh /flow-evm-gateway/run.sh
-EXPOSE 8545
+EXPOSE 3000
 CMD cd /flow-evm-gateway && ./run.sh
