@@ -16,11 +16,11 @@ transaction(amount: UFix64) {
     }
 
     execute {
-        let account <- EVM.createBridgedAccount()
+        let account <- EVM.createCadenceOwnedAccount()
         log(account.address())
         account.deposit(from: <-self.sentVault)
 
         log(account.balance())
-        self.auth.storage.save<@EVM.BridgedAccount>(<-account, to: StoragePath(identifier: "evm")!)
+        self.auth.storage.save<@EVM.CadenceOwnedAccount>(<-account, to: StoragePath(identifier: "evm")!)
     }
 }
