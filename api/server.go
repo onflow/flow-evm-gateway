@@ -207,7 +207,12 @@ func (h *httpServer) disableRPC() bool {
 func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Check if WebSocket request and serve if JSON-RPC over WebSocket is enabled
 	if b, err := io.ReadAll(r.Body); err == nil {
-		h.log.Debug().Str("body", string(b)).Str("url", r.URL.String()).Msg("API request")
+		h.log.Debug().
+			Str("body", string(b)).
+			Str("url", r.URL.String()).
+			Bool("ws", isWebSocket(r)).
+			Msg("API request")
+
 		r.Body = io.NopCloser(bytes.NewBuffer(b))
 		r.Body.Close()
 	}

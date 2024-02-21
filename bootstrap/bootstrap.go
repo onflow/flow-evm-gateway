@@ -141,9 +141,10 @@ func startServer(
 	accounts storage.AccountIndexer,
 	logger zerolog.Logger,
 ) error {
-	logger.Info().Msg("starting up RPC server")
+	l := logger.With().Str("component", "API").Logger()
+	l.Info().Msg("starting up RPC server")
 
-	srv := api.NewHTTPServer(logger, rpc.DefaultHTTPTimeouts)
+	srv := api.NewHTTPServer(l, rpc.DefaultHTTPTimeouts)
 
 	client, err := grpc.NewClient(cfg.AccessNodeGRPCHost)
 	if err != nil {
