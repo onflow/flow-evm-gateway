@@ -68,8 +68,7 @@ func (e *Engine) Stop() {
 // Consume the events provided by the event subscriber.
 // Each event is then processed by the event processing methods.
 func (e *Engine) Start(ctx context.Context) error {
-	// todo support starting from other heights, we probably need to add another storage for cadence heights
-	latest, err := e.blocks.LatestHeight()
+	latest, err := e.blocks.LatestCadenceHeight()
 	if err != nil {
 		return err
 	}
@@ -135,7 +134,7 @@ func (e *Engine) processEvents(events flow.BlockEvents) error {
 
 	for _, event := range events.Events {
 		if models.IsBlockExecutedEvent(event.Value) {
-			err := e.processBlockEvent(event.Value)
+			err := e.processBlockEvent(events.Height, event.Value)
 			if err != nil {
 				return err
 			}
@@ -152,7 +151,7 @@ func (e *Engine) processEvents(events flow.BlockEvents) error {
 	return nil
 }
 
-func (e *Engine) processBlockEvent(event cadence.Event) error {
+func (e *Engine) processBlockEvent(cadenceHeight uint64, event cadence.Event) error {
 	block, err := models.DecodeBlock(event)
 	if err != nil {
 		return err
@@ -170,7 +169,7 @@ func (e *Engine) processBlockEvent(event cadence.Event) error {
 		return fmt.Errorf("invalid block height, expected %d, got %d: %w", e.lastHeight.Load(), block.Height, err)
 	}
 
-	return e.blocks.Store(block)
+	return e.blocks.Store(cadenceHeight, block)
 }
 
 func (e *Engine) processTransactionEvent(event cadence.Event) error {
