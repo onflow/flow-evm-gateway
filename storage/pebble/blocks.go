@@ -14,17 +14,6 @@ import (
 
 var _ storage.BlockIndexer = &Blocks{}
 
-type BlockOption func(block *Blocks) error
-
-// WithInitHeight sets the first and last height to the provided value,
-// this should be used to initialize an empty database, if the first and last
-// heights are already set an error will be returned.
-func WithInitHeight(height uint64) BlockOption {
-	return func(block *Blocks) error {
-		return block.storeInitHeight(height)
-	}
-}
-
 type Blocks struct {
 	store *Storage
 	mux   sync.RWMutex
@@ -32,20 +21,12 @@ type Blocks struct {
 	heightCache map[byte]uint64
 }
 
-func NewBlocks(store *Storage, opts ...BlockOption) (*Blocks, error) {
-	blk := &Blocks{
+func NewBlocks(store *Storage) *Blocks {
+	return &Blocks{
 		store:       store,
 		mux:         sync.RWMutex{},
 		heightCache: make(map[byte]uint64),
 	}
-
-	for _, opt := range opts {
-		if err := opt(blk); err != nil {
-			return nil, err
-		}
-	}
-
-	return blk, nil
 }
 
 func (b *Blocks) Store(cadenceHeight uint64, block *types.Block) error {
@@ -131,7 +112,15 @@ func (b *Blocks) LatestCadenceHeight() (uint64, error) {
 		return 0, err
 	}
 
-	return b.getCadenceHeight(latestEVM)
+	height, err := b.getCadenceHeight(latestEVM)
+	if err != nil {
+		if errors.Is(err, errs.NotFound) {
+			return 0, errs.NotInitialized
+		}
+		return 0, fmt.Errorf("failed to get latest cadence height: %w", err)
+	}
+
+	return height, nil
 }
 
 func (b *Blocks) getCadenceHeight(evmHeight uint64) (uint64, error) {
@@ -189,16 +178,7 @@ func (b *Blocks) getHeight(keyCode byte) (uint64, error) {
 	return h, nil
 }
 
-func (b *Blocks) storeInitHeight(height uint64) error {
-	_, err := b.store.get(firstEVMHeightKey)
-	if err != nil && !errors.Is(err, errs.NotFound) {
-		return fmt.Errorf("existing first height can not be overwritten")
-	}
-	_, err = b.store.get(latestEVMHeightKey)
-	if err != nil && !errors.Is(err, errs.NotFound) {
-		return fmt.Errorf("existing latest height can not be overwritten")
-	}
-
+func (b *Blocks) InitHeight(height uint64) error {
 	// todo batch
 	if err := b.store.set(firstEVMHeightKey, nil, uint64Bytes(height)); err != nil {
 		return err

@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/onflow/flow-evm-gateway/api"
@@ -9,6 +10,7 @@ import (
 	"github.com/onflow/flow-evm-gateway/services/ingestion"
 	"github.com/onflow/flow-evm-gateway/services/requester"
 	"github.com/onflow/flow-evm-gateway/storage"
+	storageErrs "github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
 	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/onflow/flow-go-sdk/crypto"
@@ -27,19 +29,31 @@ func Start(cfg *config.Config) error {
 		return err
 	}
 
-	opts := make([]pebble.BlockOption, 0)
-	// if initialization height is provided use that to bootstrap the database
-	if cfg.InitHeight != config.EmptyHeight {
-		opts = append(opts, pebble.WithInitHeight(cfg.InitHeight))
-	}
-
-	blocks, err := pebble.NewBlocks(pebbleDB, opts...)
-	if err != nil {
-		return err
-	}
+	blocks := pebble.NewBlocks(pebbleDB)
 	transactions := pebble.NewTransactions(pebbleDB)
 	receipts := pebble.NewReceipts(pebbleDB)
 	accounts := pebble.NewAccounts(pebbleDB)
+
+	// if initialization height is provided use that to bootstrap the database, but only if it's empty
+	if cfg.InitHeight != config.EmptyHeight {
+		logger.Info().
+			Uint64("init height", cfg.InitHeight).
+			Msg("initializing the indexer with init height")
+
+		val, err := blocks.LatestCadenceHeight()
+		if errors.Is(err, storageErrs.NotInitialized) { // if database is empty we allow init
+			err = blocks.InitHeight(cfg.InitHeight)
+			if err != nil {
+				return fmt.Errorf("failed to init height: %w", err)
+			}
+		} else { // otherwise we ignore init height and warn
+			logger.Warn().
+				Uint64("current latest height", val).
+				Msg("setting init height value no an already initialized database is not possible")
+		}
+	}
+
+	fmt.Println("#here 4")
 
 	go func() {
 		err := startServer(cfg, blocks, transactions, receipts, accounts, logger)
@@ -66,17 +80,20 @@ func startIngestion(
 ) error {
 	logger.Info().Msg("starting up event ingestion")
 
-	latest, err := blocks.LatestHeight()
+	latest, err := blocks.LatestEVMHeight()
 	if err != nil {
 		return err
 	}
 
-	first, err := blocks.FirstHeight()
+	first, err := blocks.FirstEVMHeight()
 	if err != nil {
 		return err
 	}
 
-	logger.Info().Uint64("first", first).Uint64("latest", latest).Msg("index already contains data")
+	latestCadence, err := blocks.LatestCadenceHeight()
+	if err != nil {
+		return err
+	}
 
 	client, err := grpc.NewClient(cfg.AccessNodeGRPCHost)
 	if err != nil {
@@ -88,7 +105,13 @@ func startIngestion(
 		return err
 	}
 
-	logger.Info().Uint64("cadence height", blk.Height).Msg("latest flow block on the network")
+	logger.Info().
+		Uint64("first evm", first).
+		Uint64("latest evm", latest).
+		Uint64("latest cadence", latestCadence).
+		Uint64("cadence height", blk.Height).
+		Uint64("cadence heights to index", blk.Height-latestCadence).
+		Msg("indexing block heights status")
 
 	subscriber := ingestion.NewRPCSubscriber(client)
 	engine := ingestion.NewEventIngestionEngine(
