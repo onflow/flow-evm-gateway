@@ -58,6 +58,10 @@ func (b *Blocks) Store(cadenceHeight uint64, block *types.Block) error {
 		return fmt.Errorf("failed to store block: %w", err)
 	}
 
+	if err := b.store.set(latestCadenceHeightKey, nil, uint64Bytes(cadenceHeight)); err != nil {
+		return fmt.Errorf("failed to store block: %w", err)
+	}
+
 	return b.setLastHeight(block.Height)
 }
 
