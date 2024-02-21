@@ -157,7 +157,7 @@ func startServer(
 		return fmt.Errorf("failed to create a COA signer: %w", err)
 	}
 
-	evm, err := requester.NewEVM(client, cfg.COAAddress, signer, true, logger)
+	evm, err := requester.NewEVM(client, cfg.COAAddress, signer, cfg.FlowNetworkID, true, logger)
 	if err != nil {
 		return fmt.Errorf("failed to create EVM requester: %w", err)
 	}

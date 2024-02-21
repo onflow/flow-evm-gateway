@@ -58,7 +58,7 @@ func FromFlags() (*Config, error) {
 	flag.StringVar(&cfg.AccessNodeGRPCHost, "access-node-grpc-host", "localhost:3569", "host to the flow access node gRPC API")
 	flag.Uint64Var(&cfg.InitCadenceHeight, "init-cadence-height", EmptyHeight, "init cadence block height from where the event ingestion will start. WARNING: you should only provide this if there are no existing values in the database")
 	flag.StringVar(&evmNetwork, "emv-network-id", "testnet", "EVM network ID (testnet, mainnet)")
-	flag.StringVar(&cfg.FlowNetworkID, "flow-network-id", "testnet", "EVM network ID (emulator, previewnet)")
+	flag.StringVar(&cfg.FlowNetworkID, "flow-network-id", "emulator", "EVM network ID (emulator, previewnet)")
 	flag.StringVar(&coinbase, "coinbase", "", "coinbase address to use for fee collection")
 	flag.StringVar(&gas, "gas-price", "1", "static gas price used for EVM transactions")
 	flag.StringVar(&coa, "coa-address", "", "Flow address that holds COA account used for submitting transactions")
