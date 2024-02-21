@@ -21,8 +21,9 @@ const (
 	accountBalanceKey = byte(31)
 
 	// special keys
-	latestEVMHeightKey = byte(100)
-	firstEVMHeightKey  = byte(101)
+	latestEVMHeightKey     = byte(100)
+	firstEVMHeightKey      = byte(101)
+	latestCadenceHeightKey = byte(102)
 )
 
 // makePrefix makes a key used internally to store the values

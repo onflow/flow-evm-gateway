@@ -34,12 +34,14 @@ func Start(cfg *config.Config) error {
 	receipts := pebble.NewReceipts(pebbleDB)
 	accounts := pebble.NewAccounts(pebbleDB)
 
-	latestCadenceHeight, err := blocks.LatestCadenceHeight()
-	if errors.Is(err, storageErrs.NotInitialized) {
+	// if database is not initialized require init height
+	if _, err := blocks.LatestCadenceHeight(); errors.Is(err, storageErrs.NotInitialized) {
 		if cfg.InitCadenceHeight == config.EmptyHeight {
 			return fmt.Errorf("must provide init cadence height on an empty database")
 		}
-		latestCadenceHeight = cfg.InitCadenceHeight
+		if err := blocks.InitCadenceHeight(cfg.InitCadenceHeight); err != nil {
+			return err
+		}
 	}
 
 	go func() {
@@ -49,7 +51,7 @@ func Start(cfg *config.Config) error {
 		}
 	}()
 
-	err = startIngestion(cfg, latestCadenceHeight, blocks, transactions, receipts, accounts, logger)
+	err = startIngestion(cfg, blocks, transactions, receipts, accounts, logger)
 	if err != nil {
 		return fmt.Errorf("failed to start event ingestion: %w", err)
 	}
@@ -59,7 +61,6 @@ func Start(cfg *config.Config) error {
 
 func startIngestion(
 	cfg *config.Config,
-	initCadenceHeight uint64,
 	blocks storage.BlockIndexer,
 	transactions storage.TransactionIndexer,
 	receipts storage.ReceiptIndexer,
@@ -78,16 +79,21 @@ func startIngestion(
 		return fmt.Errorf("failed to get latest cadence block: %w", err)
 	}
 
+	latestCadenceHeight, err := blocks.LatestCadenceHeight()
+	if err != nil {
+		return err
+	}
+
 	// make sure the provided block to start the indexing can be loaded
-	_, err = client.GetBlockByHeight(context.Background(), initCadenceHeight)
+	_, err = client.GetBlockByHeight(context.Background(), latestCadenceHeight)
 	if err != nil {
 		return fmt.Errorf("failed to get provided cadence height: %w", err)
 	}
 
 	logger.Info().
-		Uint64("start height", initCadenceHeight).
+		Uint64("start height", latestCadenceHeight).
 		Uint64("latest network height", blk.Height).
-		Uint64("heights to index", blk.Height-initCadenceHeight).
+		Uint64("heights to index", blk.Height-latestCadenceHeight).
 		Msg("indexing cadence height information")
 
 	subscriber := ingestion.NewRPCSubscriber(client)

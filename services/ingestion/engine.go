@@ -70,7 +70,7 @@ func (e *Engine) Stop() {
 func (e *Engine) Start(ctx context.Context) error {
 	latest, err := e.blocks.LatestCadenceHeight()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get latest cadence height: %w", err)
 	}
 
 	// only init latest height if not set
