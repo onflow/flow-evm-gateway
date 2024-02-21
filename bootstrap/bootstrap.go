@@ -39,6 +39,10 @@ func Start(cfg *config.Config) error {
 		if cfg.InitCadenceHeight == config.EmptyHeight {
 			return fmt.Errorf("must provide init cadence height on an empty database")
 		}
+		logger.Info().
+			Uint64("cadence-height", cfg.InitCadenceHeight).
+			Msg("database cadence height init")
+
 		if err := blocks.InitCadenceHeight(cfg.InitCadenceHeight); err != nil {
 			return err
 		}
@@ -91,9 +95,9 @@ func startIngestion(
 	}
 
 	logger.Info().
-		Uint64("start height", latestCadenceHeight).
-		Uint64("latest network height", blk.Height).
-		Uint64("heights to index", blk.Height-latestCadenceHeight).
+		Uint64("start-height", latestCadenceHeight).
+		Uint64("latest-network-height", blk.Height).
+		Uint64("missed-heights", blk.Height-latestCadenceHeight).
 		Msg("indexing cadence height information")
 
 	subscriber := ingestion.NewRPCSubscriber(client)

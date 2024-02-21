@@ -68,24 +68,24 @@ func (e *Engine) Stop() {
 // Consume the events provided by the event subscriber.
 // Each event is then processed by the event processing methods.
 func (e *Engine) Start(ctx context.Context) error {
-	latest, err := e.blocks.LatestCadenceHeight()
+	latestCadence, err := e.blocks.LatestCadenceHeight()
 	if err != nil {
 		return fmt.Errorf("failed to get latest cadence height: %w", err)
 	}
 
 	// only init latest height if not set
 	if e.lastHeight == nil {
-		e.lastHeight = models.NewSequentialHeight(latest)
+		e.lastHeight = models.NewSequentialHeight(latestCadence)
 	} else { // otherwise make sure the latest height is same as the one set on the engine
-		err = e.lastHeight.Increment(latest)
+		err = e.lastHeight.Increment(latestCadence)
 		if err != nil {
 			return err
 		}
 	}
 
-	e.log.Info().Uint64("start height", latest).Msg("starting ingestion")
+	e.log.Info().Uint64("start-cadence-height", latestCadence).Msg("starting ingestion")
 
-	events, errs, err := e.subscriber.Subscribe(ctx, latest)
+	events, errs, err := e.subscriber.Subscribe(ctx, latestCadence)
 	if err != nil {
 		return err
 	}
@@ -128,8 +128,8 @@ func (e *Engine) Start(ctx context.Context) error {
 // processEvents iterates all the events and decides based on the type how to process them.
 func (e *Engine) processEvents(events flow.BlockEvents) error {
 	e.log.Debug().
-		Uint64("cadence height", events.Height).
-		Int("cadence event length", len(events.Events)).
+		Uint64("cadence-height", events.Height).
+		Int("cadence-event-length", len(events.Events)).
 		Msg("received new cadence evm events")
 
 	for _, event := range events.Events {
@@ -160,9 +160,9 @@ func (e *Engine) processBlockEvent(cadenceHeight uint64, event cadence.Event) er
 	h, _ := block.Hash()
 	e.log.Info().
 		Str("hash", h.Hex()).
-		Uint64("evm height", block.Height).
-		Str("parent hash", block.ParentBlockHash.String()).
-		Str("tx hash", block.TransactionHashes[0].Hex()). // now we only have 1 tx per block
+		Uint64("evm-height", block.Height).
+		Str("parent-hash", block.ParentBlockHash.String()).
+		Str("tx-hash", block.TransactionHashes[0].Hex()). // now we only have 1 tx per block
 		Msg("new evm block executed event")
 
 	if err = e.lastHeight.Increment(block.Height); err != nil {
@@ -190,9 +190,9 @@ func (e *Engine) processTransactionEvent(event cadence.Event) error {
 	}
 
 	e.log.Info().
-		Str("contract address", receipt.ContractAddress.String()).
-		Int("log count", len(receipt.Logs)).
-		Str("receipt tx hash", receipt.TxHash.String()).
+		Str("contract-address", receipt.ContractAddress.String()).
+		Int("log-count", len(receipt.Logs)).
+		Str("receipt-tx-hash", receipt.TxHash.String()).
 		Str("tx hash", tx.Hash().String()).
 		Msg("ingesting new transaction executed event")
 
