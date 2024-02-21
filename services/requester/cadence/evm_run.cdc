@@ -1,5 +1,4 @@
-// TODO(m-Peter): Use proper address for each network
-import EVM from 0xf8d6e0586b0a20c7
+import EVM
 
 transaction(encodedTx: [UInt8]) {
     let bridgedAccount: &EVM.BridgedAccount

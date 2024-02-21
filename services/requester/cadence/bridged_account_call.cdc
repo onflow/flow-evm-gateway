@@ -1,5 +1,4 @@
-// TODO(m-Peter): Use proper address for each network
-import EVM from 0xf8d6e0586b0a20c7
+import EVM
 
 access(all)
 fun main(data: [UInt8], contractAddress: [UInt8; 20]): [UInt8] {

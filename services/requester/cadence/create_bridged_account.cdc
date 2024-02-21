@@ -1,6 +1,6 @@
-import EVM from 0xf8d6e0586b0a20c7 // todo dynamically set
-import FungibleToken from 0xee82856bf20e2aa6
-import FlowToken from 0x0ae53cb6e3f42a79
+import EVM
+import FungibleToken
+import FlowToken
 
 transaction(amount: UFix64) {
     let sentVault: @FlowToken.Vault
