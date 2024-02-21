@@ -174,6 +174,9 @@ func (e *EVM) signAndSend(ctx context.Context, script []byte, args ...cadence.Va
 	}
 
 	// todo should we wait for the transaction result?
+	// we should handle a case where flow transaction is failed but we will get a result back, it would only be failed,
+	// but there is no evm transaction. So if we submit an evm tx and get back an ID and then we wait for receipt
+	// we would never get it, but this failure of sending flow transaction could somehow help with this case
 
 	return flowTx.ID(), nil
 }
