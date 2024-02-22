@@ -231,7 +231,7 @@ func (e *EVM) Call(ctx context.Context, address common.Address, data []byte) ([]
 
 	value, err := e.client.ExecuteScriptAtLatestBlock(
 		ctx,
-		e.replaceAddresses(data),
+		e.replaceAddresses(callScript),
 		[]cadence.Value{txData, toAddress},
 	)
 	if err != nil {
