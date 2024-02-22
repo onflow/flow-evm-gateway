@@ -116,6 +116,10 @@ func NewEVM(
 }
 
 func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash, error) {
+	e.logger.Debug().
+		Str("data", fmt.Sprintf("%x", data)).
+		Msg("send raw transaction")
+
 	tx := &types.Transaction{}
 	err := tx.DecodeRLP(
 		rlp.NewStream(
@@ -144,7 +148,7 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 		Str("to", to).
 		Str("value", tx.Value().String()).
 		Str("data", fmt.Sprintf("%x", tx.Data())).
-		Msg("raw transaction submitted")
+		Msg("raw transaction sent")
 
 	return tx.Hash(), nil
 }
@@ -220,26 +224,25 @@ func (e *EVM) Call(ctx context.Context, address common.Address, data []byte) ([]
 	txData := cadenceArrayFromBytes(data).WithType(byteArrayType)
 	toAddress := cadenceArrayFromBytes(address.Bytes()).WithType(addressType)
 
-	e.logger.Info().
+	e.logger.Debug().
 		Str("address", address.Hex()).
-		Str("data", string(data)).
+		Str("data", fmt.Sprintf("%x", data)).
 		Msg("call")
 
-	tx := &types.Transaction{}
-	if err := tx.UnmarshalBinary(data); err != nil {
-		return nil, fmt.Errorf("failed to decode tx in call: %w", err)
-	}
-
-	// replace gas limit with the one set on tx
-	script := strings.ReplaceAll(string(callScript), "0xGAS", fmt.Sprintf("%d", tx.Gas()))
-
-	// replace all the addresses
-	replaced := e.replaceAddresses([]byte(script))
-
-	value, err := e.client.ExecuteScriptAtLatestBlock(ctx, replaced, []cadence.Value{txData, toAddress})
+	value, err := e.client.ExecuteScriptAtLatestBlock(
+		ctx,
+		e.replaceAddresses(data),
+		[]cadence.Value{txData, toAddress},
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute script: %w", err)
 	}
+
+	e.logger.Info().
+		Str("address", address.Hex()).
+		Str("data", fmt.Sprintf("%x", data)).
+		Str("result", value.String()).
+		Msg("call executed")
 
 	return bytesFromCadenceArray(value)
 }

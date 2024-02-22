@@ -10,7 +10,7 @@ fun main(data: [UInt8], contractAddress: [UInt8; 20]): [UInt8] {
     return coa.call(
         to: EVM.EVMAddress(bytes: contractAddress),
         data: data,
-        gasLimit: 0xGAS,
+        gasLimit: 15000000, // todo make it configurable, max for now
         value: EVM.Balance(attoflow: 0)
     )
 }
