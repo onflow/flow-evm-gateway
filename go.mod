@@ -6,7 +6,7 @@ require (
 	github.com/cockroachdb/pebble v0.0.0-20230928194634-aa077af62593
 	github.com/ethereum/go-ethereum v1.13.5
 	github.com/onflow/cadence v1.0.0-M7
-	github.com/onflow/flow-go v0.33.2-0.20240220142056-d1573c75f26c
+	github.com/onflow/flow-go v0.34.0-crescendo-preview.1
 	github.com/onflow/flow-go-sdk v1.0.0-M4
 	github.com/rs/zerolog v1.31.0
 	github.com/stretchr/testify v1.8.4
