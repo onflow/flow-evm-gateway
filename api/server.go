@@ -225,11 +225,17 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// enable logging responses
+	logW := &loggingResponseWriter{
+		ResponseWriter: w,
+		logger:         h.log,
+	}
+
 	// If JSON-RPC over HTTP is enabled, try to serve the request
 	rpc := recoverHandler(h.log, h.httpHandler)
 	if rpc != nil {
 		if checkPath(r, "") {
-			rpc.ServeHTTP(w, r)
+			rpc.ServeHTTP(logW, r)
 			return
 		}
 	}
@@ -363,4 +369,20 @@ func recoverHandler(logger zerolog.Logger, h http.Handler) http.Handler {
 		}()
 		h.ServeHTTP(w, r)
 	})
+}
+
+var _ http.ResponseWriter = &loggingResponseWriter{}
+
+type loggingResponseWriter struct {
+	http.ResponseWriter
+	logger zerolog.Logger
+}
+
+func (w *loggingResponseWriter) Write(data []byte) (int, error) {
+	w.logger.Debug().Str("data", string(data)).Msg("API response")
+	return w.ResponseWriter.Write(data)
+}
+
+func (w *loggingResponseWriter) WriteHeader(statusCode int) {
+	w.ResponseWriter.WriteHeader(statusCode)
 }
