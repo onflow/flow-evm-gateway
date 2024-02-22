@@ -132,3 +132,12 @@ type BlockOverrides struct {
 	BaseFee     *hexutil.Big
 	BlobBaseFee *hexutil.Big
 }
+
+type Block struct {
+	Hash         common.Hash
+	Number       hexutil.Uint64
+	ParentHash   common.Hash
+	ReceiptsRoot common.Hash
+	Transactions []common.Hash
+	// todo add more fields needed
+}
