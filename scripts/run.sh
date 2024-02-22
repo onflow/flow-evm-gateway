@@ -1,4 +1,17 @@
 #!/bin/bash
+
+## from https://cloud.google.com/run/docs/tutorials/network-filesystems-filestore
+set -eo pipefail
+
+MNT_DIR='./db'
+
+# Create mount directory for service.
+mkdir -p $MNT_DIR
+
+echo "Mounting Cloud Filestore."
+mount -o nolock $FILESTORE_MOUNT_POINT $MNT_DIR
+echo "Mounting completed."
+
 ./evm-gateway --access-node-grpc-host access-001.previewnet1.nodes.onflow.org:9000 \
   --init-cadence-height 93680 \
   --flow-network-id previewnet \
