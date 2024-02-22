@@ -9,6 +9,8 @@ MNT_DIR='./db'
 mkdir -p $MNT_DIR
 
 echo "Mounting Cloud Filestore."
+echo $FILESTORE_MOUNT_POINT
+echo $MNT_DIR
 mount -o nolock $FILESTORE_MOUNT_POINT $MNT_DIR
 echo "Mounting completed."
 
