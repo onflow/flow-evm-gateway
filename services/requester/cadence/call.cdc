@@ -2,14 +2,15 @@ import EVM
 
 access(all)
 fun main(data: [UInt8], contractAddress: [UInt8; 20]): [UInt8] {
-    let coa <- EVM.createCadenceOwnedAccount()
+    let account = getAuthAccount<auth(Storage) &Account>(Address(0xCOA))
 
-    let res = coa.call(
+    let coa = account.storage.borrow<&EVM.CadenceOwnedAccount>(from: /storage/evm)
+        ?? panic("Could not borrow reference to the COA!")
+
+    return coa.call(
         to: EVM.EVMAddress(bytes: contractAddress),
         data: data,
-        gasLimit: 300000, // TODO(m-Peter): Maybe also pass this as script argument
+        gasLimit: 0xGAS,
         value: EVM.Balance(attoflow: 0)
     )
-    destroy coa
-    return res
 }

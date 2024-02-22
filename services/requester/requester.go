@@ -106,7 +106,7 @@ func NewEVM(
 		// we ignore errors for now since creation of already existing COA resource will fail, which is fine for now
 		id, err := evm.signAndSend(
 			context.Background(),
-			evm.replaceImports(createCOAScript),
+			evm.replaceAddresses(createCOAScript),
 			cadence.UFix64(coaFundingBalance),
 		)
 		logger.Info().Err(err).Str("id", id.String()).Msg("COA resource auto-created")
@@ -127,7 +127,7 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 	// todo make sure the gas price is not bellow the configured gas price
 	flowID, err := e.signAndSend(
 		ctx,
-		e.replaceImports(runTxScript),
+		e.replaceAddresses(runTxScript),
 		cadenceArrayFromBytes(data),
 	)
 	if err != nil {
@@ -198,7 +198,7 @@ func (e *EVM) GetBalance(ctx context.Context, address common.Address, height uin
 
 	val, err := e.client.ExecuteScriptAtLatestBlock(
 		ctx,
-		e.replaceImports(getBalanceScript),
+		e.replaceAddresses(getBalanceScript),
 		[]cadence.Value{addr},
 	)
 	if err != nil {
@@ -225,11 +225,18 @@ func (e *EVM) Call(ctx context.Context, address common.Address, data []byte) ([]
 		Str("data", string(data)).
 		Msg("call")
 
-	value, err := e.client.ExecuteScriptAtLatestBlock(
-		ctx,
-		e.replaceImports(callScript),
-		[]cadence.Value{txData, toAddress},
-	)
+	tx := &types.Transaction{}
+	if err := tx.UnmarshalBinary(data); err != nil {
+		return nil, fmt.Errorf("failed to decode tx in call: %w", err)
+	}
+
+	// replace gas limit with the one set on tx
+	script := strings.ReplaceAll(string(callScript), "0xGAS", fmt.Sprintf("%d", tx.Gas()))
+
+	// replace all the addresses
+	replaced := e.replaceAddresses([]byte(script))
+
+	value, err := e.client.ExecuteScriptAtLatestBlock(ctx, replaced, []cadence.Value{txData, toAddress})
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute script: %w", err)
 	}
@@ -255,8 +262,8 @@ func (e *EVM) getSignerNetworkInfo(ctx context.Context) (int, uint64, error) {
 	return 0, 0, fmt.Errorf("provided account address and signer keys do not match")
 }
 
-// replaceImports replace the import addresses based on the network
-func (e *EVM) replaceImports(script []byte) []byte {
+// replaceAddresses replace the addresses based on the network
+func (e *EVM) replaceAddresses(script []byte) []byte {
 	// todo use the FVM configured addresses once the previewnet is added, this should all be replaced once flow-go is updated
 	addresses := map[string]map[string]string{
 		"previewnet": {
@@ -279,6 +286,9 @@ func (e *EVM) replaceImports(script []byte) []byte {
 			fmt.Sprintf("import %s from %s", imp, addr),
 		)
 	}
+
+	// also replace COA address if used (in scripts)
+	s = strings.ReplaceAll(s, "0xCOA", e.address.HexWithPrefix())
 
 	return []byte(s)
 }
