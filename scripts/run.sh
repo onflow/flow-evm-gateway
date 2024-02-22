@@ -8,10 +8,12 @@ MNT_DIR='./db'
 # Create mount directory for service.
 mkdir -p $MNT_DIR
 
+ping 10.111.134.98
+
 echo "Mounting Cloud Filestore."
 echo $FILESTORE_MOUNT_POINT
 echo $MNT_DIR
-mount -t nfs4 -o nolock $FILESTORE_MOUNT_POINT $MNT_DIR
+mount -o nolock $FILESTORE_MOUNT_POINT $MNT_DIR
 echo "Mounting completed."
 
 ./evm-gateway --access-node-grpc-host access-001.previewnet1.nodes.onflow.org:9000 \
