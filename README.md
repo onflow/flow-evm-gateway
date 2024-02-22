@@ -27,9 +27,9 @@ FlowEVM has public RPC endpoints available for the following environments:
 | Network Name    | FlowEVM Crescendo PreviewNet           |
 | Description     | The public RPC URL for FlowEVM Preview |
 | RPC Endpoint    | https://crescendo.evm.nodes.onflow.org |
-| Chain ID        | Coming Soon                            |
+| Chain ID        | 646                                    |
 | Currency Symbol | FLOW                                   |
-| Block Explorer  | TBD                                    |
+| Block Explorer  | https://crescendo.flowdiver.io         |
 
 | Name            | Value                                  |
 |-----------------|----------------------------------------|
@@ -38,16 +38,16 @@ FlowEVM has public RPC endpoints available for the following environments:
 | RPC Endpoint    | https://testnet.evm.nodes.onflow.org   |
 | Chain ID        | Coming Soon                            |
 | Currency Symbol | FLOW                                   |
-| Block Explorer  | TBD                                    |
+| Block Explorer  | https://testnet.flowdiver.io           |
 
 | Name            | Value                                  |
 |-----------------|----------------------------------------|
 | Network Name    | FlowEVM Mainnet                        |
 | Description     | The public RPC URL for FlowEVM mainnet |
-| RPC Endpoint    | https://mainnet.evm.nodes.onflow.org    |
-| Chain ID        | Coming Soon                            |
+| RPC Endpoint    | https://mainnet.evm.nodes.onflow.org   |
+| Chain ID        | 747                                    |
 | Currency Symbol | FLOW                                   |
-| Block Explorer  | TBD                                    |
+| Block Explorer  | https://flowdiver.io                   |
 
 
 # Launch a FlowEVM Gateway node
