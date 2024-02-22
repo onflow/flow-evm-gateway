@@ -123,18 +123,18 @@ func (e *Engine) processEvents(events flow.BlockEvents) error {
 		Msg("received new cadence evm events")
 
 	for _, event := range events.Events {
-		if models.IsBlockExecutedEvent(event.Value) {
-			err := e.processBlockEvent(events.Height, event.Value)
-			if err != nil {
-				return err
-			}
-		} else if models.IsTransactionExecutedEvent(event.Value) {
-			err := e.processTransactionEvent(event.Value)
-			if err != nil {
-				return err
-			}
-		} else {
+		var err error
+		switch {
+		case models.IsBlockExecutedEvent(event.Value):
+			err = e.processBlockEvent(events.Height, event.Value)
+		case models.IsTransactionExecutedEvent(event.Value):
+			err = e.processTransactionEvent(event.Value)
+		default:
 			return fmt.Errorf("invalid event type") // should never happen
+		}
+
+		if err != nil {
+			return fmt.Errorf("failed to process event: %w", err)
 		}
 	}
 
@@ -144,17 +144,17 @@ func (e *Engine) processEvents(events flow.BlockEvents) error {
 func (e *Engine) processBlockEvent(cadenceHeight uint64, event cadence.Event) error {
 	block, err := models.DecodeBlock(event)
 	if err != nil {
-		return err
+		return fmt.Errorf("could not decode block event: %w", err)
 	}
 
 	// only init latest height if not set
 	if e.evmLastHeight == nil {
 		e.evmLastHeight = models.NewSequentialHeight(block.Height)
-	} else { // otherwise make sure the latest height is same as the one set on the engine
-		err = e.evmLastHeight.Increment(block.Height)
-		if err != nil {
-			return err
-		}
+	}
+
+	// make sure the latest height is increasing sequentially or is same as latest
+	if err = e.evmLastHeight.Increment(block.Height); err != nil {
+		return fmt.Errorf("invalid block height, expected %d, got %d: %w", e.evmLastHeight.Load(), block.Height, err)
 	}
 
 	h, _ := block.Hash()
@@ -165,17 +165,13 @@ func (e *Engine) processBlockEvent(cadenceHeight uint64, event cadence.Event) er
 		Str("tx-hash", block.TransactionHashes[0].Hex()). // now we only have 1 tx per block
 		Msg("new evm block executed event")
 
-	if err = e.evmLastHeight.Increment(block.Height); err != nil {
-		return fmt.Errorf("invalid block height, expected %d, got %d: %w", e.evmLastHeight.Load(), block.Height, err)
-	}
-
 	return e.blocks.Store(cadenceHeight, block)
 }
 
 func (e *Engine) processTransactionEvent(event cadence.Event) error {
 	tx, err := models.DecodeTransaction(event)
 	if err != nil {
-		return err
+		return fmt.Errorf("could not decode transaction event: %w", err)
 	}
 
 	// in case we have a direct call transaction we ignore it for now
@@ -186,7 +182,7 @@ func (e *Engine) processTransactionEvent(event cadence.Event) error {
 
 	receipt, err := models.DecodeReceipt(event)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to decode receipt: %w", err)
 	}
 
 	e.log.Info().
@@ -198,15 +194,15 @@ func (e *Engine) processTransactionEvent(event cadence.Event) error {
 
 	// todo think if we could introduce batching
 	if err := e.transactions.Store(tx); err != nil {
-		return err
+		return fmt.Errorf("failed to store tx: %w", err)
 	}
 
 	if err := e.accounts.Update(tx, receipt); err != nil {
-		return err
+		return fmt.Errorf("failed to update accounts: %w", err)
 	}
 
 	if err := e.receipts.Store(receipt); err != nil {
-		return err
+		return fmt.Errorf("failed to store receipt: %w", err)
 	}
 
 	return nil
