@@ -5,11 +5,13 @@ go 1.20
 require (
 	github.com/cockroachdb/pebble v0.0.0-20230928194634-aa077af62593
 	github.com/ethereum/go-ethereum v1.13.5
+	github.com/goccy/go-json v0.10.2
 	github.com/onflow/cadence v1.0.0-M8
 	github.com/onflow/flow-go v0.34.0-crescendo-preview.1.0.20240222213538-3677206d445c
 	github.com/onflow/flow-go-sdk v1.0.0-M5
 	github.com/rs/zerolog v1.31.0
 	github.com/stretchr/testify v1.8.4
+	golang.org/x/exp v0.0.0-20240119083558-1b970713d09a
 )
 
 require (
@@ -164,7 +166,6 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.26.0 // indirect
 	golang.org/x/crypto v0.18.0 // indirect
-	golang.org/x/exp v0.0.0-20240119083558-1b970713d09a // indirect
 	golang.org/x/mod v0.14.0 // indirect
 	golang.org/x/net v0.20.0 // indirect
 	golang.org/x/sync v0.6.0 // indirect
