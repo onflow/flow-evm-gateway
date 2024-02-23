@@ -23,6 +23,7 @@ RUN apt-get update -y && apt-get install -y \
     tini \
     nfs-common \
 	libtool \ 
+    iputils-ping \
     && apt-get clean
 
 # Set fallback mount directory

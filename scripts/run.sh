@@ -17,7 +17,8 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
-modprobe nfs
+ping 10.111.134.98 > ping.txt
+cat ping.txt
 
 # Create mount directory for service.
 mkdir -p $MNT_DIR
