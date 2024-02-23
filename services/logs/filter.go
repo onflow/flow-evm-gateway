@@ -2,11 +2,12 @@ package logs
 
 import (
 	"fmt"
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/onflow/flow-evm-gateway/storage"
-	"math/big"
-	"slices"
+	"golang.org/x/exp/slices"
 )
 
 // FilterCriteria for log filtering.
@@ -182,11 +183,7 @@ func exactMatch(log *gethTypes.Log, criteria FilterCriteria) bool {
 		}
 	}
 
-	if !slices.Contains(criteria.Addresses, log.Address) {
-		return false
-	}
-
-	return true
+	return slices.Contains(criteria.Addresses, log.Address)
 }
 
 // bloomMatch takes a bloom value and tests if the addresses and topics provided pass the bloom filter.

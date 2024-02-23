@@ -5,14 +5,15 @@ import (
 	_ "embed"
 	"encoding/hex"
 	"fmt"
+	"math/big"
+	"testing"
+	"time"
+
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/onflow/flow-evm-gateway/bootstrap"
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/services/logs"
 	"github.com/onflow/flow-go/fvm/evm/emulator"
-	"math/big"
-	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
@@ -419,6 +420,7 @@ func TestIntegration_API_DeployEvents(t *testing.T) {
 		RPCPort:            3001,
 		RPCHost:            "127.0.0.1",
 		InitCadenceHeight:  0,
+		FlowNetworkID:      "emulator",
 		EVMNetworkID:       emulator.FlowEVMTestnetChainID,
 		Coinbase:           fundEOAAddress,
 		COAAddress:         gwAddress,
