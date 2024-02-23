@@ -12,5 +12,5 @@ fun main(data: [UInt8], contractAddress: [UInt8; 20]): [UInt8] {
         data: data,
         gasLimit: 15000000, // todo make it configurable, max for now
         value: EVM.Balance(attoflow: 0)
-    )
+    ).data
 }
