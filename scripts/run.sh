@@ -17,7 +17,7 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
-traceeroute $FILESTORE_IP_ADDRESS
+traceroute $FILESTORE_IP_ADDRESS
 telnet $FILESTORE_IP_ADDRESS 2049
 
 # Create mount directory for service.
