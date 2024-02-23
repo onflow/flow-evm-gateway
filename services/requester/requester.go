@@ -89,7 +89,11 @@ func NewEVM(
 	}
 
 	if acc.Balance < minFlowBalance {
-		return nil, fmt.Errorf("COA account must be funded with at least %d Flow", minFlowBalance)
+		return nil, fmt.Errorf(
+			"COA account must be funded with at least %d Flow, but has balance of: %d",
+			minFlowBalance,
+			acc.Balance,
+		)
 	}
 
 	evm := &EVM{

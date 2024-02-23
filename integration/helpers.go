@@ -75,7 +75,7 @@ func startEmulator() (*server.EmulatorServer, error) {
 	return srv, nil
 }
 
-// startEventIngestionEngine will start up the event engine with the grpc subscriber
+// startEventIngestionEngine will start up the sdkEvent engine with the grpc subscriber
 // listening for events.
 // todo for now we return index storage as a way to check the data if it was correctly
 // indexed this will be in future replaced with evm gateway API access
