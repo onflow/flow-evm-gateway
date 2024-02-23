@@ -254,7 +254,6 @@ func (e *EVM) getSignerNetworkInfo(ctx context.Context) (int, uint64, error) {
 		return 0, 0, err
 	}
 
-	// todo support key rotation
 	signerPub := e.signer.PublicKey()
 	for _, k := range account.Keys {
 		if k.PublicKey.Equals(signerPub) {

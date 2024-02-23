@@ -57,8 +57,12 @@ func (k *KeyRotationSigner) Sign(message []byte) ([]byte, error) {
 	return sig, err
 }
 
-// PublicKey returns the current public key.
+// PublicKey returns the current public key which is available for signing.
 func (k *KeyRotationSigner) PublicKey() crypto.PublicKey {
+	// todo make this function to wait if the transactions that used this public key
+	// is not yet executed on the network, this is so it prevents using
+	// the same public key for fetching key sequence number before the transaction
+	// that already used it is not executed and thus the key would be incremented.
 	k.mux.RLock()
 	defer k.mux.RUnlock()
 	return k.keys[k.index].PublicKey()
