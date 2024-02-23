@@ -23,6 +23,7 @@ RUN apt-get update -y && apt-get install -y \
     tini \
     nfs-common \
 	  libtool \ 
+    telnet \
     netbase \
     && apt-get clean
 
