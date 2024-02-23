@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ## from https://cloud.google.com/run/docs/tutorials/network-filesystems-filestore
-set -eo pipefail
+# set -eo pipefail
 
 # modprobe nfs
 # Create mount directory for service.
