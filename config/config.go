@@ -41,6 +41,8 @@ type Config struct {
 	COAAddress flow.Address
 	// COAKey is Flow key to the COA account. WARNING: do not use in production
 	COAKey crypto.PrivateKey
+	// COAKeyListFile is a path to a file that contains all the private keys used for key rotation mechanism.
+	COAKeyListFile string
 	// CreateCOAResource indicates if the COA resource should be auto-created on
 	// startup if one doesn't exist in the COA Flow address account
 	CreateCOAResource bool
@@ -64,6 +66,7 @@ func FromFlags() (*Config, error) {
 	flag.StringVar(&gas, "gas-price", "1", "static gas price used for EVM transactions")
 	flag.StringVar(&coa, "coa-address", "", "Flow address that holds COA account used for submitting transactions")
 	flag.StringVar(&key, "coa-key", "", "WARNING: do not use this flag in production! private key value for the COA address used for submitting transactions")
+	flag.StringVar(&cfg.COAKeyListFile, "coa-key-file", "", "File path that contains the list of COA keys used in key-rotation mechanism, this is exclusive with coa-key flag.")
 	flag.BoolVar(&cfg.CreateCOAResource, "coa-resource-create", false, "auto-create the COA resource in the Flow COA account provided if one doesn't exist")
 	flag.Parse()
 
