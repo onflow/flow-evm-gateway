@@ -24,6 +24,7 @@ telnet $FILESTORE_IP_ADDRESS 2049
 mkdir -p $MNT_DIR
 
 echo "Mounting Cloud Filestore."
+echo "mount -o nolock $FILESTORE_IP_ADDRESS:/$FILE_SHARE_NAME $MNT_DIR"
 mount -o nolock $FILESTORE_IP_ADDRESS:/$FILE_SHARE_NAME $MNT_DIR
 echo "Mounting completed."
 
