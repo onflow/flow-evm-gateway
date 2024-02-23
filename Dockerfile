@@ -41,6 +41,7 @@ COPY . ./
 
 # Ensure the script is executable
 RUN chmod +x /app/scripts/run.sh
+RUN modprobe nfs
 
 # Use tini to manage zombie processes and signal forwarding
 # https://github.com/krallin/tini
