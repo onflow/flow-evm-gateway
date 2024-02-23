@@ -10,7 +10,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/filters"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	errs "github.com/onflow/flow-evm-gateway/api/errors"
 	"github.com/onflow/flow-evm-gateway/config"
@@ -497,7 +496,7 @@ func (b *BlockChainAPI) EstimateGas(
 	overrides *StateOverride,
 ) (hexutil.Uint64, error) {
 	// todo we return max gas limit until we have gas estimation in place
-	return hexutil.Uint64(params.MaxGasLimit), nil
+	return hexutil.Uint64(30_000_000), nil
 }
 
 func handleError[T any](log zerolog.Logger, err error) (T, error) {
