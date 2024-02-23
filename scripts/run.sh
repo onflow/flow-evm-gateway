@@ -18,7 +18,6 @@
 set -eo pipefail
 
 traceroute $FILESTORE_IP_ADDRESS
-telnet $FILESTORE_IP_ADDRESS 2049
 
 # Create mount directory for service.
 mkdir -p $MNT_DIR
