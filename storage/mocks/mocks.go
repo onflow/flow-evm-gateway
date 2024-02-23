@@ -2,10 +2,12 @@ package mocks
 
 import (
 	"fmt"
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/onflow/flow-go/fvm/evm/emulator"
 	"github.com/onflow/flow-go/fvm/evm/types"
-	"math/big"
 )
 
 func NewBlock(height uint64) *types.Block {
@@ -61,7 +63,7 @@ func NewReceipt(height uint64, ID common.Hash) *gethTypes.Receipt {
 
 func NewTransaction(nonce uint64) *gethTypes.Transaction {
 	return gethTypes.NewTx(&gethTypes.DynamicFeeTx{
-		ChainID:   big.NewInt(666),
+		ChainID:   emulator.FlowEVMTestnetChainID,
 		Nonce:     nonce,
 		To:        &common.Address{0x01, 0x02},
 		Gas:       123457,
