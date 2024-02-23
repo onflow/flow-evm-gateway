@@ -17,7 +17,8 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
-ping -c 4 $FILESTORE_IP_ADDRESS
+traceeroute $FILESTORE_IP_ADDRESS
+telnet $FILESTORE_IP_ADDRESS 2049
 
 # Create mount directory for service.
 mkdir -p $MNT_DIR

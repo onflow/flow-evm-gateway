@@ -24,6 +24,8 @@ RUN apt-get update -y && apt-get install -y \
     nfs-common \
 	  libtool \ 
     iputils-ping \
+    telnet \
+    traceroute \
     && apt-get clean
 
 # Set fallback mount directory
