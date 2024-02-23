@@ -14,6 +14,7 @@
 # echo "Mounting completed."
 
 ./evm-gateway --access-node-grpc-host access-001.previewnet1.nodes.onflow.org:9000 \
+  --init-cadence-height 15760 \
   --flow-network-id previewnet \
   --coinbase FACF71692421039876a5BB4F10EF7A439D8ef61E \
   --coa-address 0x47ea2d585be47c7c \
