@@ -23,9 +23,7 @@ RUN apt-get update -y && apt-get install -y \
     tini \
     nfs-common \
 	  libtool \ 
-    iputils-ping \
-    telnet \
-    traceroute \
+    netbase \
     && apt-get clean
 
 # Set fallback mount directory
