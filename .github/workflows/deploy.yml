@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - gregor/dev
+      - nialexsan/network-volume
 
 env:
   DOCKER_IMAGE_URL: ${{ vars.GCP_DOCKER_IMAGE_URL }}:${{ github.sha }}
