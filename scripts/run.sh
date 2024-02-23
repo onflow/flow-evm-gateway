@@ -17,8 +17,6 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
-traceroute $FILESTORE_IP_ADDRESS
-
 # Create mount directory for service.
 mkdir -p $MNT_DIR
 
