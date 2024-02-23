@@ -40,12 +40,12 @@ RUN npm install --only=production
 COPY . ./
 
 # Ensure the script is executable
-RUN chmod +x /app/run.sh
+RUN chmod +x /app/scripts/run.sh
 
 # Use tini to manage zombie processes and signal forwarding
 # https://github.com/krallin/tini
 ENTRYPOINT ["/usr/bin/tini", "--"]
 
 # Pass the wrapper script as arguments to tini
-CMD ["/app/run.sh"]
+CMD ["/app/scripts/run.sh"]
 # [END cloudrun_fs_dockerfile]
