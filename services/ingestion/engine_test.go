@@ -282,7 +282,13 @@ func newTransaction() (cadence.Event, *types.Event, *gethTypes.Transaction, *typ
 		return cadence.Event{}, nil, nil, nil, err
 	}
 
-	ev := types.NewTransactionExecutedEvent(1, txEnc.Bytes(), tx.Hash(), res)
+	ev := types.NewTransactionExecutedEvent(
+		1,
+		txEnc.Bytes(),
+		common.HexToHash("0x1"),
+		tx.Hash(),
+		res,
+	)
 
 	cdcEv, err := ev.Payload.CadenceEvent()
 

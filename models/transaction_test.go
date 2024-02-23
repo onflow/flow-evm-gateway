@@ -43,7 +43,13 @@ func createTestEvent(t *testing.T) (cadence.Event, *gethTypes.Transaction, *type
 	err := tx.EncodeRLP(&txEnc)
 	require.NoError(t, err)
 
-	ev := types.NewTransactionExecutedEvent(1, txEnc.Bytes(), tx.Hash(), res)
+	ev := types.NewTransactionExecutedEvent(
+		1,
+		txEnc.Bytes(),
+		common.HexToHash("0x1"),
+		tx.Hash(),
+		res,
+	)
 
 	cdcEv, err := ev.Payload.CadenceEvent()
 	require.NoError(t, err)
