@@ -22,7 +22,7 @@ mkdir -p $MNT_DIR
 
 echo "Mounting Cloud Filestore."
 echo "mount -o nolock $FILESTORE_IP_ADDRESS:/$FILE_SHARE_NAME $MNT_DIR"
-mount -o nolock $FILESTORE_IP_ADDRESS:/$FILE_SHARE_NAME $MNT_DIR
+mount --verbose -t nfs -o vers=3 -o nolock $FILESTORE_IP_ADDRESS:/$FILE_SHARE_NAME $MNT_DIR
 echo "Mounting completed."
 
 # Start the application
