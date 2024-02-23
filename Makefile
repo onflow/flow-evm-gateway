@@ -3,6 +3,11 @@ test:
 	# test all packages
 	go test -cover ./...
 
+.PHONY: e2e-test
+e2e-test:
+	# test all packages
+	cd integration && go test -cover ./...
+
 .PHONY: check-tidy
 check-tidy:
 	go mod tidy
@@ -18,7 +23,7 @@ generate:
 	mockery --all --dir=services/events --output=services/events/mocks
 
 .PHONY: ci
-ci: check-tidy test
+ci: check-tidy test e2e-test
 
 .PHONY: start-emulator
 start-emulator:
