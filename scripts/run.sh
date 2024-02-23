@@ -17,8 +17,7 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
-ping 10.111.134.98 > ping.txt
-cat ping.txt
+ping -c 4 10.111.134.98
 
 # Create mount directory for service.
 mkdir -p $MNT_DIR
