@@ -3,12 +3,9 @@
 ## from https://cloud.google.com/run/docs/tutorials/network-filesystems-filestore
 set -eo pipefail
 
-MNT_DIR='./db'
 # modprobe nfs
 # Create mount directory for service.
 mkdir -p $MNT_DIR
-
-ping 10.111.134.98
 
 echo "Mounting Cloud Filestore."
 echo $FILESTORE_MOUNT_POINT
