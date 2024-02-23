@@ -1,15 +1,18 @@
 package requester
 
 import (
+	"fmt"
 	"github.com/onflow/flow-go-sdk/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/maps"
+	"sync"
 	"testing"
 )
 
 func Test_KeyRotation(t *testing.T) {
 
-	t.Run("test keys being rotated correctly in non-concurrent access", func(t *testing.T) {
+	t.Run("keys being rotated correctly in non-concurrent access", func(t *testing.T) {
 		keys := testKeys(t)
 		krs, err := NewKeyRotationSigner(keys, crypto.SHA3_256)
 		require.NoError(t, err)
@@ -17,17 +20,68 @@ func Test_KeyRotation(t *testing.T) {
 		data := []byte("foo")
 		// make sure we make enough iterations and are odd
 		for i := 0; i < len(keys)*3+3; i++ {
-			sig, err := krs.Sign(data)
-			require.NoError(t, err)
-
 			// make sure we used the correct key to sign and it matches pub key
 			index := i % len(keys)
 			pk := keys[index]
-			assert.True(t, pk.PublicKey().Equals(krs.PublicKey()))
+			krsPubKey := krs.PublicKey()
 
-			valid, err := krs.PublicKey().Verify(sig, data, krs.hasher)
+			assert.True(t, pk.PublicKey().Equals(krsPubKey), fmt.Sprintf(
+				"pub key not correct, should be: %s, but is: %s",
+				pk.PublicKey().String(),
+				krs.PublicKey().String(),
+			))
+
+			sig, err := krs.Sign(data)
 			require.NoError(t, err)
-			assert.True(t, valid)
+
+			valid, err := krsPubKey.Verify(sig, data, krs.hasher)
+			require.NoError(t, err)
+			assert.True(t, valid, "signature not valid for key")
+		}
+	})
+
+	// this test makes sure that if we concurrently sign we use each key the same times
+	t.Run("keys being correctly rotate in concurrent access", func(t *testing.T) {
+		keys := testKeys(t)
+		krs, err := NewKeyRotationSigner(keys, crypto.SHA3_256)
+		require.NoError(t, err)
+
+		data := []byte("bar")
+		keyIterations := 20                     // 10 times each key
+		iterations := len(keys) * keyIterations // total iterations
+		sigs := make(chan []byte, iterations)
+
+		wg := sync.WaitGroup{}
+		wg.Add(iterations)
+
+		for i := 0; i < iterations; i++ {
+			go func() {
+				sig, err := krs.Sign(data)
+				sigs <- sig
+				require.NoError(t, err)
+				wg.Done()
+			}()
+		}
+
+		wg.Wait()
+		close(sigs)
+		counters := make(map[int]int)
+		// check if each key was used same times
+		for sig := range sigs {
+			// validate signature to check which key was used
+			for keyIndex, pk := range krs.keys {
+				ok, _ := pk.PublicKey().Verify(sig, data, krs.hasher)
+				if ok {
+					counters[keyIndex]++
+				}
+			}
+		}
+
+		// make sure we have correct number of keys used
+		assert.Len(t, maps.Keys(counters), len(keys))
+
+		for _, c := range counters {
+			assert.Equal(t, keyIterations, c)
 		}
 	})
 
