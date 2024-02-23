@@ -85,11 +85,33 @@ func FromFlags() (*Config, error) {
 		return nil, fmt.Errorf("invalid COA address value")
 	}
 
-	pkey, err := crypto.DecodePrivateKeyHex(crypto.ECDSA_P256, key)
-	if err != nil {
-		return nil, fmt.Errorf("invalid COA key: %w", err)
+	if key != "" {
+		pkey, err := crypto.DecodePrivateKeyHex(crypto.ECDSA_P256, key)
+		if err != nil {
+			return nil, fmt.Errorf("invalid COA key: %w", err)
+		}
+		cfg.COAKey = pkey
+	} else if keysPath != "" {
+		raw, err := io.ReadFile(keysPath)
+		if err != nil {
+			return nil, fmt.Errorf("could not read the file containing list of keys for key-rotation mechanism, check if coa-key-file specifies valid path: %w", err)
+		}
+		var keysJSON []string
+		if err := json.Unmarshal(raw, &keysJSON); err != nil {
+			return nil, fmt.Errorf("could not parse file containing the list of keys for key-rotation, make sure keys are in JSON array format: %w", err)
+		}
+
+		cfg.COAKeys = make([]crypto.PrivateKey, len(keysJSON))
+		for i, k := range keysJSON {
+			pk, err := crypto.DecodePrivateKeyHex(crypto.ECDSA_P256, k) // todo support different algos
+			if err != nil {
+				return nil, fmt.Errorf("a key from the COA key list file is not valid, key %s, error: %w", k, err)
+			}
+			cfg.COAKeys[i] = pk
+		}
+	} else {
+		return nil, fmt.Errorf("must either provide coa-key or coa-key-path flag")
 	}
-	cfg.COAKey = pkey
 
 	switch evmNetwork {
 	case "testnet":
@@ -98,24 +120,6 @@ func FromFlags() (*Config, error) {
 		cfg.EVMNetworkID = emulator.FlowEVMMainnetChainID
 	default:
 		return nil, fmt.Errorf("EVM network ID not supported")
-	}
-
-	raw, err := io.ReadFile(keysPath)
-	if err != nil {
-		return nil, fmt.Errorf("could not read the file containing list of keys for key-rotation mechanism, check if coa-key-file specifies valid path: %w", err)
-	}
-	var keysJSON []string
-	if err := json.Unmarshal(raw, &keysJSON); err != nil {
-		return nil, fmt.Errorf("could not parse file containing the list of keys for key-rotation, make sure keys are in JSON array format: %w", err)
-	}
-
-	cfg.COAKeys = make([]crypto.PrivateKey, len(keysJSON))
-	for i, k := range keysJSON {
-		pk, err := crypto.DecodePrivateKeyHex(crypto.ECDSA_P256, k) // todo support different algos
-		if err != nil {
-			return nil, fmt.Errorf("a key from the COA key list file is not valid, key %s, error: %w", k, err)
-		}
-		cfg.COAKeys[i] = pk
 	}
 
 	if cfg.FlowNetworkID != "previewnet" && cfg.FlowNetworkID != "emulator" {
