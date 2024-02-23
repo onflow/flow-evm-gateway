@@ -3,7 +3,7 @@ package requester
 import (
 	"fmt"
 	"github.com/onflow/flow-go-sdk/crypto"
-	"sync/atomic"
+	"sync"
 )
 
 var _ crypto.Signer = &KeyRotationSigner{}
@@ -17,10 +17,11 @@ var _ crypto.Signer = &KeyRotationSigner{}
 // get executed so the new sequence key can be obtained.
 // The signer is concurrency-safe.
 type KeyRotationSigner struct {
+	mux    sync.RWMutex
 	keys   []crypto.PrivateKey
 	hasher crypto.Hasher
-	index  *atomic.Int32
-	keyLen int32
+	index  int
+	keyLen int
 }
 
 func NewKeyRotationSigner(keys []crypto.PrivateKey, hashAlgo crypto.HashAlgorithm) (*KeyRotationSigner, error) {
@@ -37,35 +38,28 @@ func NewKeyRotationSigner(keys []crypto.PrivateKey, hashAlgo crypto.HashAlgorith
 		return nil, fmt.Errorf("signer with hasher %s can't be instantiated with this function", hashAlgo)
 	}
 
-	// init the key index to 0 value
-	i := &atomic.Int32{}
-	i.Store(0)
-
 	return &KeyRotationSigner{
 		keys:   keys,
 		hasher: hasher,
-		index:  i,
-		keyLen: int32(len(keys)),
+		keyLen: len(keys),
 	}, nil
 }
 
+// Sign signs the message and then rotates to the next key.
+// note: if you want to get the public key pair, you should first call
+// PublicKey and then Sign.
 func (k *KeyRotationSigner) Sign(message []byte) ([]byte, error) {
-	return k.nextKey().Sign(message, k.hasher)
+	k.mux.Lock()
+	defer k.mux.Unlock()
+
+	sig, err := k.keys[k.index].Sign(message, k.hasher)
+	k.index = (k.index + 1) % k.keyLen
+	return sig, err
 }
 
+// PublicKey returns the current public key.
 func (k *KeyRotationSigner) PublicKey() crypto.PublicKey {
-	current := k.index.Load()
-	return k.keys[current].PublicKey()
-}
-
-func (k *KeyRotationSigner) nextKey() crypto.PrivateKey {
-	for {
-		current := k.index.Load()
-		// this makes sure the index is always rotating within the bounds of the keys slice
-		next := (current + 1) % k.keyLen
-
-		if k.index.CompareAndSwap(current, next) {
-			return k.keys[next]
-		}
-	}
+	k.mux.RLock()
+	defer k.mux.RUnlock()
+	return k.keys[k.index].PublicKey()
 }
