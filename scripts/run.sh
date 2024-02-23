@@ -17,6 +17,8 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
+modprobe nfs
+
 # Create mount directory for service.
 mkdir -p $MNT_DIR
 
