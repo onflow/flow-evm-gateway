@@ -6,6 +6,13 @@ import (
 	"crypto/ecdsa"
 	"encoding/hex"
 	"fmt"
+	"io"
+	"math/big"
+	"net/http"
+	"os"
+	"strings"
+	"time"
+
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -28,12 +35,6 @@ import (
 	"github.com/onflow/flow-go/fvm/systemcontracts"
 	"github.com/onflow/flow-go/model/flow"
 	"github.com/rs/zerolog"
-	"io"
-	"math/big"
-	"net/http"
-	"os"
-	"strings"
-	"time"
 )
 
 const testPrivateKey = "61ceacbdce419e25ee8e7c2beceee170a05c9cab1e725a955b15ba94dcd747d2"
@@ -149,7 +150,7 @@ func fundEOA(
 		}
 	
 		execute {
-			let acc <- EVM.createBridgedAccount()
+			let acc <- EVM.createCadenceOwnedAccount()
 			acc.deposit(from: <-self.fundVault)
 
 			let result = acc.call(
@@ -293,7 +294,7 @@ func evmRunTransaction(emu emulator.Emulator, signedTx []byte) (*sdk.Transaction
 		prepare(signer: auth(Storage) &Account) {}
 
 		execute {
-			let feeAcc <- EVM.createBridgedAccount()
+			let feeAcc <- EVM.createCadenceOwnedAccount()
 			EVM.run(tx: encodedTx, coinbase: feeAcc.address())
 			destroy feeAcc
 		}

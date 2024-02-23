@@ -5,6 +5,10 @@ import (
 	_ "embed"
 	"encoding/hex"
 	"fmt"
+	"math/big"
+	"testing"
+	"time"
+
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/onflow/flow-emulator/convert"
 	"github.com/onflow/flow-evm-gateway/bootstrap"
@@ -14,9 +18,6 @@ import (
 	sdkCrypto "github.com/onflow/flow-go-sdk/crypto"
 	"github.com/onflow/flow-go-sdk/templates"
 	"github.com/onflow/flow-go/fvm/evm/emulator"
-	"math/big"
-	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
@@ -418,6 +419,7 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 		RPCPort:            3001,
 		RPCHost:            "127.0.0.1",
 		InitCadenceHeight:  0,
+		FlowNetworkID:      "emulator",
 		EVMNetworkID:       emulator.FlowEVMTestnetChainID,
 		Coinbase:           fundEOAAddress,
 		COAAddress:         gwAddress,
