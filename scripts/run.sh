@@ -17,13 +17,13 @@
 #!/usr/bin/env bash
 set -eo pipefail
 
-ping -c 4 10.111.134.98
+ping -c 4 $FILESTORE_IP_ADDRESS
 
 # Create mount directory for service.
 mkdir -p $MNT_DIR
 
 echo "Mounting Cloud Filestore."
-mount -o nolock 10.111.134.98:/pebble $MNT_DIR
+mount -o nolock $FILESTORE_IP_ADDRESS:/$FILE_SHARE_NAME $MNT_DIR
 echo "Mounting completed."
 
 # Start the application
