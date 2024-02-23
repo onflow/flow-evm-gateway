@@ -19,5 +19,5 @@
   --coinbase FACF71692421039876a5BB4F10EF7A439D8ef61E \
   --coa-address 0x47ea2d585be47c7c \
   --coa-key 3588afb4f47fd68242478c30aedef7f81a8c71f7d4213460f81aeab771f2e4a3 \
-  --coa-resource-create
+  --coa-resource-create \
   --gas-price 0
