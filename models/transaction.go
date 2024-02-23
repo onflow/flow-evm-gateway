@@ -4,21 +4,24 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/onflow/cadence"
 	cdcCommon "github.com/onflow/cadence/runtime/common"
 	"github.com/onflow/flow-go/fvm/evm/types"
-	"math/big"
 )
 
 type txEventPayload struct {
 	BlockHeight             uint64 `cadence:"blockHeight"`
+	BlockHash               string `cadence:"blockHash"`
 	TransactionHash         string `cadence:"transactionHash"`
 	Transaction             string `cadence:"transaction"`
-	TransactionType         int    `cadence:"transactionType"`
 	Failed                  bool   `cadence:"failed"`
+	VMError                 string `cadence:"vmError"`
+	TransactionType         uint8  `cadence:"transactionType"`
 	GasConsumed             uint64 `cadence:"gasConsumed"`
 	DeployedContractAddress string `cadence:"deployedContractAddress"`
 	ReturnedValue           string `cadence:"returnedValue"`
