@@ -1,25 +1,32 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# Copyright 2023 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-## from https://cloud.google.com/run/docs/tutorials/network-filesystems-filestore
+# [START cloudrun_fs_script]
+#!/usr/bin/env bash
 set -eo pipefail
 
-MNT_DIR='./db'
-# modprobe nfs
 # Create mount directory for service.
 mkdir -p $MNT_DIR
 
-ping 10.111.134.98
-
 echo "Mounting Cloud Filestore."
-echo $FILESTORE_MOUNT_POINT
-echo $MNT_DIR
-mount -o nolock $FILESTORE_MOUNT_POINT $MNT_DIR
+mount -o nolock 10.111.134.98:/pebble $MNT_DIR
 echo "Mounting completed."
 
-./evm-gateway --access-node-grpc-host access-001.previewnet1.nodes.onflow.org:9000 \
-  --init-cadence-height 93680 \
-  --flow-network-id previewnet \
-  --coinbase FACF71692421039876a5BB4F10EF7A439D8ef61E \
-  --coa-address 0xa8a7a61c869b028a \
-  --coa-key 290139481555cd366e1bc594c2981941af29e8ea7fbc4e21796ff62db415df1c \
-  --coa-resource-create
+# Start the application
+node index.js &
+
+# Exit immediately when one of the background processes terminate.
+wait -n
+# [END cloudrun_fs_script]
