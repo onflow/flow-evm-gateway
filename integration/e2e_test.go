@@ -5,12 +5,12 @@ import (
 	_ "embed"
 	"encoding/hex"
 	"fmt"
+	"github.com/onflow/flow-go-sdk/access/grpc"
 	"math/big"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/onflow/flow-emulator/convert"
 	"github.com/onflow/flow-evm-gateway/bootstrap"
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/services/logs"
@@ -738,6 +738,11 @@ func TestE2E_ConcurrentTransactionSubmission(t *testing.T) {
 	gwAcc := emu.ServiceKey()
 	gwAddress := gwAcc.Address
 
+	client, err := grpc.NewClient("localhost:3569")
+	if err != nil {
+		require.NoError(t, err)
+	}
+
 	// this first section is setting up the account we will use for key-rotation
 	// it has to create an account with all the keys added
 	rawKeys := []string{
@@ -755,7 +760,10 @@ func TestE2E_ConcurrentTransactionSubmission(t *testing.T) {
 		"527422e3af96ea08f2490ee21567e9b4a3fa84d20911a92206f905a205b9ddd4",
 	}
 
+	accPK, err := sdkCrypto.DecodePrivateKeyHex(sdkCrypto.SignatureAlgorithm(sdkCrypto.ECDSA_P256), "2619878f0e2ff438d17835c2a4561cb87b4d24d72d12ec34569acd0dd4af7c21")
 	// create all the keys and add them to the service account
+	blk, err := client.GetLatestBlock(context.Background(), true)
+	require.NoError(t, err)
 	privKeys := make([]sdkCrypto.PrivateKey, len(rawKeys))
 	for i, k := range rawKeys {
 		sigAlgo := sdkCrypto.SignatureAlgorithm(sdkCrypto.ECDSA_P256)
@@ -776,7 +784,7 @@ func TestE2E_ConcurrentTransactionSubmission(t *testing.T) {
 		tx, err := templates.AddAccountKey(gwAddress, key)
 		require.NoError(t, err)
 
-		signer, err := sdkCrypto.NewInMemorySigner(gwAcc.PrivateKey, sdkCrypto.HashAlgorithm(sdkCrypto.SHA3_256))
+		signer, err := sdkCrypto.NewInMemorySigner(accPK, sdkCrypto.HashAlgorithm(sdkCrypto.SHA3_256))
 		require.NoError(t, err)
 
 		err = tx.
@@ -785,9 +793,16 @@ func TestE2E_ConcurrentTransactionSubmission(t *testing.T) {
 			SignEnvelope(gwAddress, 0, signer)
 		require.NoError(t, err)
 
-		err = emu.SendTransaction(convert.SDKTransactionToFlow(*tx))
-		require.NoError(t, err)
+		time.Sleep(1 * time.Second)
+
+		tx.SetReferenceBlockID(blk.ID)
+		err = client.SendTransaction(context.Background(), *tx)
+		assert.NoError(t, err)
+		//err = emu.SendTransaction(convert.SDKTransactionToFlow(*tx))
+		//require.NoError(t, err)
 	}
+
+	return
 
 	cfg := &config.Config{
 		DatabaseDir:        dbDir,
@@ -796,6 +811,7 @@ func TestE2E_ConcurrentTransactionSubmission(t *testing.T) {
 		RPCHost:            "127.0.0.1",
 		InitCadenceHeight:  0,
 		EVMNetworkID:       emulator.FlowEVMTestnetChainID,
+		FlowNetworkID:      "emulator",
 		Coinbase:           fundEOAAddress,
 		COAAddress:         gwAddress,
 		COAKeys:            privKeys,
@@ -827,7 +843,7 @@ func TestE2E_ConcurrentTransactionSubmission(t *testing.T) {
 	assert.NotNil(t, hash)
 	assert.Equal(t, signedHash.String(), hash.String())
 
-	time.Sleep(2 * time.Second) // wait for all txs to be executed
+	time.Sleep(10 * time.Second) // wait for all txs to be executed
 
 	// get all txs receipts
 

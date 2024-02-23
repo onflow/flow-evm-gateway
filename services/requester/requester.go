@@ -134,9 +134,10 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 	)
 
 	// todo make sure the gas price is not bellow the configured gas price
+	script := e.replaceAddresses(runTxScript)
 	flowID, err := e.signAndSend(
 		ctx,
-		e.replaceAddresses(runTxScript),
+		script,
 		cadenceArrayFromBytes(data),
 	)
 	if err != nil {
@@ -154,6 +155,12 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 		Str("value", tx.Value().String()).
 		Str("data", fmt.Sprintf("%x", tx.Data())).
 		Msg("raw transaction sent")
+
+	res, err := e.client.GetTransactionResult(context.Background(), flowID)
+	fmt.Println("------------------------------------------------------------")
+	fmt.Println(string(script))
+	fmt.Println(res, err)
+	fmt.Println("------------------------------------------------------------")
 
 	return tx.Hash(), nil
 }
