@@ -51,7 +51,8 @@ func Start(cfg *config.Config) error {
 	go func() {
 		err := startServer(cfg, blocks, transactions, receipts, accounts, logger)
 		if err != nil {
-			logger.Fatal().Err(fmt.Errorf("failed to start RPC server: %w", err))
+			logger.Error().Err(err).Msg("failed to start the API server")
+			panic(err)
 		}
 	}()
 
@@ -121,7 +122,7 @@ func startIngestion(
 
 	<-engine.Ready() // wait for engine to be ready
 
-	logger.Info().Msg("EVM gateway start up successful")
+	logger.Info().Msg("Ingestion start up successful")
 
 	gracefulShutdown := make(chan os.Signal, 1)
 	signal.Notify(gracefulShutdown, syscall.SIGINT, syscall.SIGTERM)
