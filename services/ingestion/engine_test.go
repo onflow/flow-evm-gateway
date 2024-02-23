@@ -3,6 +3,9 @@ package ingestion
 import (
 	"bytes"
 	"context"
+	"math/big"
+	"testing"
+
 	"github.com/ethereum/go-ethereum/common"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/onflow/cadence"
@@ -15,8 +18,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"math/big"
-	"testing"
 )
 
 func TestSerialBlockIngestion(t *testing.T) {
@@ -41,7 +42,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 		eventsChan := make(chan flow.BlockEvents)
 		subscriber := &mocks.Subscriber{}
 		subscriber.
-			On("Subscribe", mock.AnythingOfType("context.backgroundCtx"), mock.AnythingOfType("uint64")).
+			On("Subscribe", mock.AnythingOfType("*context.emptyCtx"), mock.AnythingOfType("uint64")).
 			Return(func(ctx context.Context, latest uint64) (<-chan flow.BlockEvents, <-chan error, error) {
 				return eventsChan, make(<-chan error), nil
 			})
@@ -108,7 +109,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 		eventsChan := make(chan flow.BlockEvents)
 		subscriber := &mocks.Subscriber{}
 		subscriber.
-			On("Subscribe", mock.AnythingOfType("context.backgroundCtx"), mock.AnythingOfType("uint64")).
+			On("Subscribe", mock.AnythingOfType("*context.emptyCtx"), mock.AnythingOfType("uint64")).
 			Return(func(ctx context.Context, latest uint64) (<-chan flow.BlockEvents, <-chan error, error) {
 				return eventsChan, make(<-chan error), nil
 			})
@@ -120,7 +121,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 		go func() {
 			err := engine.Start(context.Background())
 			assert.ErrorIs(t, err, models.InvalidHeightErr)
-			assert.EqualError(t, err, "invalid block height, expected 11, got 20: invalid height")
+			assert.EqualError(t, err, "failed to process event: invalid block height, expected 11, got 20: invalid height")
 			close(waitErr)
 		}()
 
@@ -179,13 +180,13 @@ func TestTransactionIngestion(t *testing.T) {
 
 	accounts := &storageMock.AccountIndexer{}
 	accounts.
-		On("Update", mock.AnythingOfType("*types.Transaction")).
-		Return(func(tx *gethTypes.Transaction) error { return nil })
+		On("Update", mock.AnythingOfType("*types.Transaction"), mock.AnythingOfType("*types.Receipt")).
+		Return(func(tx *gethTypes.Transaction, receipt *gethTypes.Receipt) error { return nil })
 
 	eventsChan := make(chan flow.BlockEvents)
 	subscriber := &mocks.Subscriber{}
 	subscriber.
-		On("Subscribe", mock.AnythingOfType("context.backgroundCtx"), mock.AnythingOfType("uint64")).
+		On("Subscribe", mock.AnythingOfType("*context.emptyCtx"), mock.AnythingOfType("uint64")).
 		Return(func(ctx context.Context, latest uint64) (<-chan flow.BlockEvents, <-chan error, error) {
 			return eventsChan, make(<-chan error), nil
 		})
@@ -251,7 +252,7 @@ func newBlock(height uint64) (cadence.Event, *types.Block, *types.Event, error) 
 
 func newTransaction() (cadence.Event, *types.Event, *gethTypes.Transaction, *types.Result, error) {
 	res := &types.Result{
-		Failed:                  false,
+		VMError:                 nil,
 		TxType:                  1,
 		GasConsumed:             1337,
 		DeployedContractAddress: types.Address{0x5, 0x6, 0x7},
