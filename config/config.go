@@ -3,6 +3,8 @@ package config
 import (
 	"flag"
 	"fmt"
+	"github.com/goccy/go-json"
+	"github.com/onflow/flow-go/utils/io"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -41,8 +43,8 @@ type Config struct {
 	COAAddress flow.Address
 	// COAKey is Flow key to the COA account. WARNING: do not use in production
 	COAKey crypto.PrivateKey
-	// COAKeyListFile is a path to a file that contains all the private keys used for key rotation mechanism.
-	COAKeyListFile string
+	// COAKeys is a slice of all the keys that will be used in key-rotation mechanism.
+	COAKeys []crypto.PrivateKey
 	// CreateCOAResource indicates if the COA resource should be auto-created on
 	// startup if one doesn't exist in the COA Flow address account
 	CreateCOAResource bool
@@ -52,7 +54,7 @@ type Config struct {
 
 func FromFlags() (*Config, error) {
 	cfg := &Config{}
-	var evmNetwork, coinbase, gas, coa, key string
+	var evmNetwork, coinbase, gas, coa, key, keysPath string
 
 	// parse from flags
 	flag.StringVar(&cfg.DatabaseDir, "database-dir", "./db", "path to the directory for the database")
@@ -66,7 +68,7 @@ func FromFlags() (*Config, error) {
 	flag.StringVar(&gas, "gas-price", "1", "static gas price used for EVM transactions")
 	flag.StringVar(&coa, "coa-address", "", "Flow address that holds COA account used for submitting transactions")
 	flag.StringVar(&key, "coa-key", "", "WARNING: do not use this flag in production! private key value for the COA address used for submitting transactions")
-	flag.StringVar(&cfg.COAKeyListFile, "coa-key-file", "", "File path that contains the list of COA keys used in key-rotation mechanism, this is exclusive with coa-key flag.")
+	flag.StringVar(&keysPath, "coa-key-file", "", "File path that contains JSON array of COA keys used in key-rotation mechanism, this is exclusive with coa-key flag.")
 	flag.BoolVar(&cfg.CreateCOAResource, "coa-resource-create", false, "auto-create the COA resource in the Flow COA account provided if one doesn't exist")
 	flag.Parse()
 
@@ -96,6 +98,24 @@ func FromFlags() (*Config, error) {
 		cfg.EVMNetworkID = emulator.FlowEVMMainnetChainID
 	default:
 		return nil, fmt.Errorf("EVM network ID not supported")
+	}
+
+	raw, err := io.ReadFile(keysPath)
+	if err != nil {
+		return nil, fmt.Errorf("could not read the file containing list of keys for key-rotation mechanism, check if coa-key-file specifies valid path: %w", err)
+	}
+	var keysJSON []string
+	if err := json.Unmarshal(raw, &keysJSON); err != nil {
+		return nil, fmt.Errorf("could not parse file containing the list of keys for key-rotation, make sure keys are in JSON array format: %w", err)
+	}
+
+	cfg.COAKeys = make([]crypto.PrivateKey, len(keysJSON))
+	for i, k := range keysJSON {
+		pk, err := crypto.DecodePrivateKeyHex(crypto.ECDSA_P256, k) // todo support different algos
+		if err != nil {
+			return nil, fmt.Errorf("a key from the COA key list file is not valid, key %s, error: %w", k, err)
+		}
+		cfg.COAKeys[i] = pk
 	}
 
 	if cfg.FlowNetworkID != "previewnet" && cfg.FlowNetworkID != "emulator" {
