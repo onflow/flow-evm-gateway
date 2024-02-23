@@ -151,8 +151,17 @@ func startServer(
 		return err
 	}
 
-	// todo abstract signer and support multiple different signers, for now only in-memory
-	signer, err := crypto.NewInMemorySigner(cfg.COAKey, crypto.SHA3_256)
+	// create the signer based on either a single coa key being provided and using a simple in-memory
+	// signer, or multiple keys being provided and using signer with key-rotation mechanism.
+	var signer crypto.Signer
+	switch {
+	case cfg.COAKey != nil:
+		signer, err = crypto.NewInMemorySigner(cfg.COAKey, crypto.SHA3_256)
+	case cfg.COAKeys != nil:
+		signer, err = requester.NewKeyRotationSigner(cfg.COAKeys, crypto.SHA3_256)
+	default:
+		return fmt.Errorf("must either provide single COA key, or list of COA keys")
+	}
 	if err != nil {
 		return fmt.Errorf("failed to create a COA signer: %w", err)
 	}
