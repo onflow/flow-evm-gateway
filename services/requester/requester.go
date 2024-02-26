@@ -156,12 +156,6 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 		Str("data", fmt.Sprintf("%x", tx.Data())).
 		Msg("raw transaction sent")
 
-	res, err := e.client.GetTransactionResult(context.Background(), flowID)
-	fmt.Println("------------------------------------------------------------")
-	fmt.Println(string(script))
-	fmt.Println(res, err)
-	fmt.Println("------------------------------------------------------------")
-
 	return tx.Hash(), nil
 }
 
