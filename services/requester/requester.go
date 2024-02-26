@@ -205,9 +205,9 @@ func (e *EVM) signAndSend(ctx context.Context, script []byte, args ...cadence.Va
 		if res.Error != nil {
 			e.logger.Error().
 				Str("flow-id", flowTx.ID().String()).
-				Err(fmt.Errorf("requester flow transaction submitted failed to executed: %w", res.Error))
+				Err(fmt.Errorf("flow transaction failed to execute: %w", res.Error))
 		} else {
-			e.logger.Debug().Str("flow-id", flowTx.ID().String()).Msg("flow transaction executed on network")
+			e.logger.Debug().Str("flow-id", flowTx.ID().String()).Msg("flow transaction executed successfully")
 		}
 	}(flowTx)
 
