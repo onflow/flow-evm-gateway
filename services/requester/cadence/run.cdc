@@ -10,6 +10,7 @@ transaction(encodedTx: [UInt8]) {
 
     execute {
         let result = EVM.run(tx: encodedTx, coinbase: self.coa.address())
+        // todo only temporary until we correctly handle failure events
         assert(
             result.status == EVM.Status.successful,
             message: "failed to execute evm transaction: ".concat(result.errorCode.toString())
