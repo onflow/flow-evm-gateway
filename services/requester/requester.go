@@ -200,23 +200,23 @@ func (e *EVM) signAndSend(ctx context.Context, script []byte, args ...cadence.Va
 	// we would never get it, but this failure of sending flow transaction could somehow help with this case
 
 	// this is only used for debugging purposes
-	if e.logger.GetLevel() == zerolog.DebugLevel {
-		go func(tx *flow.Transaction) {
-			res, _ := e.client.GetTransactionResult(context.Background(), flowTx.ID())
-			if res.Error != nil {
-				e.logger.Error().
-					Str("flow-id", flowTx.ID().String()).
-					Err(fmt.Errorf("flow transaction failed to execute: %w", res.Error))
-				return
-			}
-
-			e.logger.Debug().
+	go func(tx *flow.Transaction) {
+		res, _ := e.client.GetTransactionResult(context.Background(), flowTx.ID())
+		if res.Error != nil {
+			e.logger.Error().
 				Str("flow-id", flowTx.ID().String()).
-				Uint64("cadence-height", res.BlockHeight).
-				Str("events", fmt.Sprintf("%v", res.Events)).
-				Msg("flow transaction executed successfully")
-		}(flowTx)
-	}
+				Err(res.Error).
+				Msg("flow transaction failed to execute")
+			return
+		}
+
+		e.logger.Debug().
+			Str("flow-id", flowTx.ID().String()).
+			Uint64("cadence-height", res.BlockHeight).
+			Str("events", fmt.Sprintf("%v", res.Events)).
+			Str("script", string(flowTx.Script)).
+			Msg("flow transaction executed successfully")
+	}(flowTx)
 
 	return flowTx.ID(), nil
 }
