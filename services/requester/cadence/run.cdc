@@ -9,6 +9,9 @@ transaction(encodedTx: [UInt8]) {
     }
 
     execute {
-        EVM.run(tx: encodedTx, coinbase: self.coa.address())
+        let result = EVM.run(tx: encodedTx, coinbase: self.coa.address())
+        if (result.status != EVM.Status.successful) {
+            panic("failed to execute transaction")
+        }
     }
 }
