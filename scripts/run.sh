@@ -1,22 +1,23 @@
 #!/bin/bash
 
 ## from https://cloud.google.com/run/docs/tutorials/network-filesystems-filestore
-set -eo pipefail
+# set -eo pipefail
 
 # modprobe nfs
 # Create mount directory for service.
-mkdir -p $MNT_DIR
+# mkdir -p $MNT_DIR
 
-echo "Mounting Cloud Filestore."
-echo $FILESTORE_MOUNT_POINT
-echo $MNT_DIR
-mount -o nolock $FILESTORE_MOUNT_POINT $MNT_DIR
-echo "Mounting completed."
+# echo "Mounting Cloud Filestore."
+# echo $FILESTORE_MOUNT_POINT
+# echo $MNT_DIR
+# mount -o nolock $FILESTORE_MOUNT_POINT $MNT_DIR
+# echo "Mounting completed."
 
 ./evm-gateway --access-node-grpc-host access-001.previewnet1.nodes.onflow.org:9000 \
-  --init-cadence-height 93680 \
+  --init-cadence-height 24310 \
   --flow-network-id previewnet \
   --coinbase FACF71692421039876a5BB4F10EF7A439D8ef61E \
-  --coa-address 0xa8a7a61c869b028a \
-  --coa-key 290139481555cd366e1bc594c2981941af29e8ea7fbc4e21796ff62db415df1c \
-  --coa-resource-create
+  --coa-address 0x47ea2d585be47c7c \
+  --coa-key 3588afb4f47fd68242478c30aedef7f81a8c71f7d4213460f81aeab771f2e4a3 \
+  --coa-resource-create \
+  --gas-price 0

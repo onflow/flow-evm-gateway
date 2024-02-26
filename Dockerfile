@@ -15,9 +15,9 @@ RUN chmod a+x ./scripts/run.sh
 # RUN APP
 FROM debian:latest
 WORKDIR /flow-evm-gateway
-ENV MNT_DIR /flow-evm-gateway/db
+# ENV MNT_DIR /flow-evm-gateway/db
 RUN apt-get update
-RUN apt-get install -y nfs-common
+# RUN apt-get install -y nfs-common
 COPY --from=builder /flow-evm-gateway/evm-gateway /flow-evm-gateway/evm-gateway
 COPY --from=builder /flow-evm-gateway/scripts/run.sh /flow-evm-gateway/run.sh
 EXPOSE 3000
