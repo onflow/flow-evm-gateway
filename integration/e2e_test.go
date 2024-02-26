@@ -762,9 +762,10 @@ func TestE2E_ConcurrentTransactionSubmission(t *testing.T) {
 		FlowNetworkID:      "emulator",
 		Coinbase:           fundEOAAddress,
 		COAAddress:         *createdAddr,
-		COAKeys:            keys,
-		CreateCOAResource:  true,
-		GasPrice:           new(big.Int).SetUint64(0),
+		//COAKeys:            keys,
+		COAKey:            keys[0],
+		CreateCOAResource: true,
+		GasPrice:          new(big.Int).SetUint64(0),
 	}
 
 	rpcTester := &rpcTest{
