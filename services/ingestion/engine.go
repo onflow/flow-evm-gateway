@@ -99,6 +99,7 @@ func (e *Engine) Start(ctx context.Context) error {
 
 			err = e.processEvents(blockEvents)
 			if err != nil {
+				e.log.Error().Err(fmt.Errorf("error procesing Flow EVM events: %w", err))
 				return err
 			}
 
@@ -170,14 +171,17 @@ func (e *Engine) processBlockEvent(cadenceHeight uint64, event cadence.Event) er
 }
 
 func (e *Engine) processTransactionEvent(event cadence.Event) error {
+	fmt.Println("TRANSACTIONS -----> ", event.String())
 	tx, err := models.DecodeTransaction(event)
 	if err != nil {
+		fmt.Println("#####", err)
 		return fmt.Errorf("could not decode transaction event: %w", err)
 	}
 
 	// in case we have a direct call transaction we ignore it for now
 	// todo support indexing of direct calls
 	if tx == nil {
+		e.log.Debug().Str("event", event.String()).Msg("skipping direct call")
 		return nil
 	}
 
