@@ -65,6 +65,7 @@ func startEmulator() (*server.EmulatorServer, error) {
 		EVMEnabled:             true,
 		WithContracts:          true,
 		Host:                   "localhost",
+		TransactionExpiry:      10,
 		TransactionMaxGasLimit: flow.DefaultMaxTransactionGasLimit,
 	})
 
@@ -198,11 +199,17 @@ func flowSendTransaction(
 	log := logger.With().Str("component", "adapter").Logger().Level(zerolog.DebugLevel)
 	adapter := adapters.NewSDKAdapter(&log, emu)
 
+	blk, _, err := adapter.GetLatestBlock(context.Background(), true)
+	if err != nil {
+		return nil, err
+	}
+
 	tx := sdk.NewTransaction().
 		SetScript(codeWrapper).
 		SetComputeLimit(flow.DefaultMaxTransactionGasLimit).
 		SetProposalKey(key.Address, key.Index, key.SequenceNumber).
 		SetPayer(key.Address).
+		SetReferenceBlockID(blk.ID).
 		AddAuthorizer(key.Address)
 
 	for _, arg := range args {

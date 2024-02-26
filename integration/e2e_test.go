@@ -751,6 +751,7 @@ func TestE2E_ConcurrentTransactionSubmission(t *testing.T) {
 		"0x0ae53cb6e3f42a79",
 		gwAcc.PrivateKey,
 	)
+	require.NoError(t, err)
 
 	cfg := &config.Config{
 		DatabaseDir:        dbDir,
@@ -788,6 +789,9 @@ func TestE2E_ConcurrentTransactionSubmission(t *testing.T) {
 
 	testAddr := common.HexToAddress("55253ed90B70b96C73092D8680915aaF50081194")
 
+	// disable auto-mine so we can control delays
+	emu.DisableAutoMine()
+
 	totalTxs := keyCount*5 + 3
 	hashes := make([]common.Hash, totalTxs)
 	for i := 0; i < totalTxs; i++ {
@@ -801,9 +805,14 @@ func TestE2E_ConcurrentTransactionSubmission(t *testing.T) {
 		assert.NotNil(t, hash)
 		assert.Equal(t, signedHash.String(), hash.String())
 		hashes[i] = signedHash
+
+		// execute commit block every 3 blocks so we make sure we should have conflicts with seq numbers if keys not rotated
+		if i%3 == 0 {
+			_, _, _ = emu.ExecuteAndCommitBlock()
+		}
 	}
 
-	time.Sleep(1 * time.Second) // wait for all txs to be executed
+	time.Sleep(5 * time.Second) // wait for all txs to be executed
 
 	for _, h := range hashes {
 		rcp, err := rpcTester.getReceipt(h.String())
