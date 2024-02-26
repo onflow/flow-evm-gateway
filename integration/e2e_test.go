@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/onflow/flow-evm-gateway/bootstrap"
 	"github.com/onflow/flow-evm-gateway/config"
@@ -458,6 +459,16 @@ func TestIntegration_API_DeployEvents(t *testing.T) {
 	require.NoError(t, err)
 
 	time.Sleep(1 * time.Second)
+
+	// estimate gas
+	gasUsed, err := rpcTester.estimateGas(fundEOAAddress, deployData, 200_000)
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "contract creation code storage out of gas")
+	assert.Equal(t, hexutil.Uint64(0), gasUsed)
+
+	gasUsed, err = rpcTester.estimateGas(fundEOAAddress, deployData, 250_000)
+	require.NoError(t, err)
+	assert.Equal(t, hexutil.Uint64(215_324), gasUsed)
 
 	// check balance
 	balance, err := rpcTester.getBalance(fundEOAAddress)
