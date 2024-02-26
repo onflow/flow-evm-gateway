@@ -12,9 +12,6 @@ import (
 	"github.com/onflow/flow-go/fvm/evm/emulator"
 )
 
-// address:  658bdf435d810c91414ec09147daa6db62406379
-const eoaTestAccount1KeyHex = "9c647b8b7c4e7c3490668fb6c11473619db80c93704c70893d3813af4090c39c"
-
 type eoaTestAccount struct {
 	address gethCommon.Address
 	key     *ecdsa.PrivateKey
@@ -65,8 +62,8 @@ func (a *eoaTestAccount) prepareAndSignTx(
 	return tx
 }
 
-func newEOATestAccount() *eoaTestAccount {
-	key, _ := gethCrypto.HexToECDSA(eoaTestAccount1KeyHex)
+func newEOATestAccount(keyHex string) *eoaTestAccount {
+	key, _ := gethCrypto.HexToECDSA(keyHex)
 	address := gethCrypto.PubkeyToAddress(key.PublicKey)
 	signer := emulator.GetDefaultSigner()
 

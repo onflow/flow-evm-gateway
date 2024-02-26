@@ -504,7 +504,7 @@ func (b *BlockChainAPI) EstimateGas(
 		data = *args.Input
 	}
 
-	eoa := newEOATestAccount()
+	eoa := newEOATestAccount(b.config.COAKey.String()[2:])
 	txData := eoa.PrepareSignAndEncodeTx(
 		args.To,
 		data,

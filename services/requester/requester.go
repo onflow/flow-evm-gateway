@@ -280,6 +280,8 @@ func (e *EVM) EstimateGas(ctx context.Context, data []byte) (uint64, error) {
 	}
 
 	// sanity check, should never occur
+	// TODO(m-Peter): Consider adding a decoder for EVM.Result struct
+	// to a Go value/type.
 	if _, ok := value.(cadence.Array); !ok {
 		e.logger.Panic().Msg(fmt.Sprintf("failed to convert value to array: %v", value))
 	}
@@ -367,6 +369,7 @@ func bytesFromCadenceArray(value cadence.Value) ([]byte, error) {
 	return res, nil
 }
 
+// TODO(m-Peter): Consider moving this to flow-go repository
 func getErrorForCode(errorCode uint64) error {
 	switch evmTypes.ErrorCode(errorCode) {
 	case evmTypes.ValidationErrCodeInvalidBalance:

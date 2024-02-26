@@ -537,7 +537,7 @@ func (r *rpcTest) getBalance(address common.Address) (*hexutil.Big, error) {
 func (r *rpcTest) estimateGas(
 	from common.Address,
 	data []byte,
-	gas uint64,
+	gasLimit uint64,
 ) (hexutil.Uint64, error) {
 	rpcRes, err := r.request(
 		"eth_estimateGas",
@@ -545,7 +545,7 @@ func (r *rpcTest) estimateGas(
 			`[{"from":"%s","data":"0x%s","gas":"%s"}]`,
 			from.Hex(),
 			hex.EncodeToString(data),
-			hexutil.Uint64(gas),
+			hexutil.Uint64(gasLimit),
 		),
 	)
 	if err != nil {
