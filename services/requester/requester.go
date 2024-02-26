@@ -128,6 +128,9 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 			uint64(len(data)),
 		),
 	)
+	if err != nil {
+		return common.Hash{}, err
+	}
 
 	// todo make sure the gas price is not bellow the configured gas price
 	flowID, err := e.signAndSend(
