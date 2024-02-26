@@ -17,6 +17,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go-sdk/access"
+
+	gethCore "github.com/ethereum/go-ethereum/core"
+	gethVM "github.com/ethereum/go-ethereum/core/vm"
+	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 )
 
 var (
@@ -31,6 +35,9 @@ var (
 
 	//go:embed cadence/create_coa.cdc
 	createCOAScript []byte
+
+	//go:embed cadence/estimate_gas.cdc
+	estimateGasScript []byte
 
 	byteArrayType = cadence.NewVariableSizedArrayType(cadence.UInt8Type)
 	addressType   = cadence.NewConstantSizedArrayType(
@@ -56,6 +63,11 @@ type Requester interface {
 	// Note, this function doesn't make and changes in the state/blockchain and is
 	// useful to execute and retrieve values.
 	Call(ctx context.Context, address common.Address, data []byte) ([]byte, error)
+
+	// EstimateGas executes the given signed transaction data on the state.
+	// Note, this function doesn't make any changes in the state/blockchain and is
+	// useful to executed and retrieve the gas consumption and possible failures.
+	EstimateGas(ctx context.Context, data []byte) (uint64, error)
 }
 
 var _ Requester = &EVM{}
@@ -251,6 +263,38 @@ func (e *EVM) Call(ctx context.Context, address common.Address, data []byte) ([]
 	return bytesFromCadenceArray(value)
 }
 
+func (e *EVM) EstimateGas(ctx context.Context, data []byte) (uint64, error) {
+	e.logger.Debug().
+		Str("data", fmt.Sprintf("%x", data)).
+		Msg("estimate gas")
+
+	txData := cadenceArrayFromBytes(data).WithType(byteArrayType)
+
+	value, err := e.client.ExecuteScriptAtLatestBlock(
+		ctx,
+		e.replaceAddresses(estimateGasScript),
+		[]cadence.Value{txData},
+	)
+	if err != nil {
+		return 0, fmt.Errorf("failed to execute script: %w", err)
+	}
+
+	// sanity check, should never occur
+	if _, ok := value.(cadence.Array); !ok {
+		e.logger.Panic().Msg(fmt.Sprintf("failed to convert value to array: %v", value))
+	}
+
+	result := value.(cadence.Array)
+	errorCode := result.Values[0].ToGoValue().(uint64)
+
+	if errorCode != 0 {
+		return 0, getErrorForCode(errorCode)
+	}
+
+	gasUsed := result.Values[1].ToGoValue().(uint64)
+	return gasUsed, nil
+}
+
 // getSignerNetworkInfo loads the signer account from network and returns key index and sequence number
 func (e *EVM) getSignerNetworkInfo(ctx context.Context) (int, uint64, error) {
 	account, err := e.client.GetAccount(ctx, e.address)
@@ -321,4 +365,83 @@ func bytesFromCadenceArray(value cadence.Value) ([]byte, error) {
 	}
 
 	return res, nil
+}
+
+func getErrorForCode(errorCode uint64) error {
+	switch evmTypes.ErrorCode(errorCode) {
+	case evmTypes.ValidationErrCodeInvalidBalance:
+		return evmTypes.ErrInvalidBalance
+	case evmTypes.ValidationErrCodeInsufficientComputation:
+		return evmTypes.ErrInsufficientComputation
+	case evmTypes.ValidationErrCodeUnAuthroizedMethodCall:
+		return evmTypes.ErrUnAuthroizedMethodCall
+	case evmTypes.ValidationErrCodeWithdrawBalanceRounding:
+		return evmTypes.ErrWithdrawBalanceRounding
+	case evmTypes.ValidationErrCodeGasUintOverflow:
+		return gethVM.ErrGasUintOverflow
+	case evmTypes.ValidationErrCodeNonceTooLow:
+		return gethCore.ErrNonceTooLow
+	case evmTypes.ValidationErrCodeNonceTooHigh:
+		return gethCore.ErrNonceTooHigh
+	case evmTypes.ValidationErrCodeNonceMax:
+		return gethCore.ErrNonceMax
+	case evmTypes.ValidationErrCodeGasLimitReached:
+		return gethCore.ErrGasLimitReached
+	case evmTypes.ValidationErrCodeInsufficientFundsForTransfer:
+		return gethCore.ErrInsufficientFundsForTransfer
+	case evmTypes.ValidationErrCodeMaxInitCodeSizeExceeded:
+		return gethCore.ErrMaxInitCodeSizeExceeded
+	case evmTypes.ValidationErrCodeInsufficientFunds:
+		return gethCore.ErrInsufficientFunds
+	case evmTypes.ValidationErrCodeIntrinsicGas:
+		return gethCore.ErrIntrinsicGas
+	case evmTypes.ValidationErrCodeTxTypeNotSupported:
+		return gethCore.ErrTxTypeNotSupported
+	case evmTypes.ValidationErrCodeTipAboveFeeCap:
+		return gethCore.ErrTipAboveFeeCap
+	case evmTypes.ValidationErrCodeTipVeryHigh:
+		return gethCore.ErrTipVeryHigh
+	case evmTypes.ValidationErrCodeFeeCapVeryHigh:
+		return gethCore.ErrFeeCapVeryHigh
+	case evmTypes.ValidationErrCodeFeeCapTooLow:
+		return gethCore.ErrFeeCapTooLow
+	case evmTypes.ValidationErrCodeSenderNoEOA:
+		return gethCore.ErrSenderNoEOA
+	case evmTypes.ValidationErrCodeBlobFeeCapTooLow:
+		return gethCore.ErrBlobFeeCapTooLow
+	case evmTypes.ExecutionErrCodeOutOfGas:
+		return gethVM.ErrOutOfGas
+	case evmTypes.ExecutionErrCodeCodeStoreOutOfGas:
+		return gethVM.ErrCodeStoreOutOfGas
+	case evmTypes.ExecutionErrCodeDepth:
+		return gethVM.ErrDepth
+	case evmTypes.ExecutionErrCodeInsufficientBalance:
+		return gethVM.ErrInsufficientBalance
+	case evmTypes.ExecutionErrCodeContractAddressCollision:
+		return gethVM.ErrContractAddressCollision
+	case evmTypes.ExecutionErrCodeExecutionReverted:
+		return gethVM.ErrExecutionReverted
+	case evmTypes.ExecutionErrCodeMaxInitCodeSizeExceeded:
+		return gethVM.ErrMaxInitCodeSizeExceeded
+	case evmTypes.ExecutionErrCodeMaxCodeSizeExceeded:
+		return gethVM.ErrMaxCodeSizeExceeded
+	case evmTypes.ExecutionErrCodeInvalidJump:
+		return gethVM.ErrInvalidJump
+	case evmTypes.ExecutionErrCodeWriteProtection:
+		return gethVM.ErrWriteProtection
+	case evmTypes.ExecutionErrCodeReturnDataOutOfBounds:
+		return gethVM.ErrReturnDataOutOfBounds
+	case evmTypes.ExecutionErrCodeGasUintOverflow:
+		return gethVM.ErrGasUintOverflow
+	case evmTypes.ExecutionErrCodeInvalidCode:
+		return gethVM.ErrInvalidCode
+	case evmTypes.ExecutionErrCodeNonceUintOverflow:
+		return gethVM.ErrNonceUintOverflow
+	case evmTypes.ValidationErrCodeMisc:
+		return fmt.Errorf("validation error: %d", errorCode)
+	case evmTypes.ExecutionErrCodeMisc:
+		return fmt.Errorf("execution error: %d", errorCode)
+	}
+
+	return fmt.Errorf("unknown error code: %d", errorCode)
 }

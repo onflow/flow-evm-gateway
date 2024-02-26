@@ -5,6 +5,8 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -495,8 +497,29 @@ func (b *BlockChainAPI) EstimateGas(
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 	overrides *StateOverride,
 ) (hexutil.Uint64, error) {
-	// todo we return max gas limit until we have gas estimation in place
-	return hexutil.Uint64(30_000_000), nil
+	var data []byte
+	if args.Data != nil {
+		data = *args.Data
+	} else if args.Input != nil {
+		data = *args.Input
+	}
+
+	eoa := newEOATestAccount()
+	txData := eoa.PrepareSignAndEncodeTx(
+		args.To,
+		data,
+		(*big.Int)(args.Value),
+		uint64(*args.Gas),
+		(*big.Int)(args.GasPrice),
+	)
+
+	gas, err := b.evm.EstimateGas(ctx, txData)
+	if err != nil {
+		b.logger.Error().Err(err).Msg("failed to estimate gas")
+		return hexutil.Uint64(0), err
+	}
+
+	return hexutil.Uint64(gas), nil
 }
 
 func handleError[T any](log zerolog.Logger, err error) (T, error) {

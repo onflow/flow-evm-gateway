@@ -534,6 +534,33 @@ func (r *rpcTest) getBalance(address common.Address) (*hexutil.Big, error) {
 	return &u, nil
 }
 
+func (r *rpcTest) estimateGas(
+	from common.Address,
+	data []byte,
+	gas uint64,
+) (hexutil.Uint64, error) {
+	rpcRes, err := r.request(
+		"eth_estimateGas",
+		fmt.Sprintf(
+			`[{"from":"%s","data":"0x%s","gas":"%s"}]`,
+			from.Hex(),
+			hex.EncodeToString(data),
+			hexutil.Uint64(gas),
+		),
+	)
+	if err != nil {
+		return hexutil.Uint64(0), err
+	}
+
+	var gasUsed hexutil.Uint64
+	err = json.Unmarshal(rpcRes, &gasUsed)
+	if err != nil {
+		return hexutil.Uint64(0), err
+	}
+
+	return gasUsed, nil
+}
+
 func uintHex(x uint64) string {
 	return fmt.Sprintf("0x%x", x)
 }
