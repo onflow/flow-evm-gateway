@@ -121,7 +121,7 @@ func startEventIngestionEngine(ctx context.Context, dbDir string) (
 	go func() {
 		err = engine.Start(ctx)
 		if err != nil {
-			logger.Error().Err(err)
+			logger.Error().Err(err).Msg("failed to start ingestion engine")
 			panic(err)
 		}
 	}()

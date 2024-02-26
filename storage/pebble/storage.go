@@ -83,7 +83,7 @@ func (s *Storage) get(keyCode byte, key ...[]byte) ([]byte, error) {
 	defer func(closer io.Closer) {
 		err = closer.Close()
 		if err != nil {
-			s.log.Error().Err(err)
+			s.log.Error().Err(err).Msg("failed to close storage")
 		}
 	}(closer)
 

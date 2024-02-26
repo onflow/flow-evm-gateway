@@ -99,7 +99,7 @@ func (e *Engine) Start(ctx context.Context) error {
 
 			err = e.processEvents(blockEvents)
 			if err != nil {
-				e.log.Error().Err(fmt.Errorf("error procesing Flow EVM events: %w", err))
+				e.log.Error().Err(err).Msg("failed to process EVM events")
 				return err
 			}
 
@@ -171,10 +171,8 @@ func (e *Engine) processBlockEvent(cadenceHeight uint64, event cadence.Event) er
 }
 
 func (e *Engine) processTransactionEvent(event cadence.Event) error {
-	fmt.Println("TRANSACTIONS -----> ", event.String())
 	tx, err := models.DecodeTransaction(event)
 	if err != nil {
-		fmt.Println("#####", err)
 		return fmt.Errorf("could not decode transaction event: %w", err)
 	}
 
