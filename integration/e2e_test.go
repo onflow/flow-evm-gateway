@@ -14,9 +14,6 @@ import (
 	"github.com/onflow/flow-evm-gateway/bootstrap"
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/services/logs"
-	"github.com/onflow/flow-go-sdk"
-	sdkCrypto "github.com/onflow/flow-go-sdk/crypto"
-	"github.com/onflow/flow-go-sdk/templates"
 	"github.com/onflow/flow-go/fvm/evm/emulator"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -737,86 +734,37 @@ func TestE2E_ConcurrentTransactionSubmission(t *testing.T) {
 
 	gwAcc := emu.ServiceKey()
 	gwAddress := gwAcc.Address
+	host := "localhost:3569" // emulator
 
-	client, err := grpc.NewClient("localhost:3569")
-	if err != nil {
-		require.NoError(t, err)
-	}
-
-	// this first section is setting up the account we will use for key-rotation
-	// it has to create an account with all the keys added
-	rawKeys := []string{
-		"e82b6b746bbd9cd687fae8d0c7c5a2f32fe0496839a908aa80f840b27344a13b",
-		"2504246efc55f863c3278e4e6f0bbb6d2c5484c3f7669a6c9ac45ee072a21fc0",
-		"7e20cf9383853f850f342ada91071661df00ec0be28afd4a4bc502d101e2fbed",
-		"2a06a8cf79b7f7cc2e56cb55de677920cc4e0d70404bdfe6a15c64625459ca80",
-		"311ed662abd573ed1f7109f1dd2e16755cf922fe0780d8ce2d36ce62f4301965",
-		"9e99bb359eb56fb66574a42c47d9e4044876115a161c81525531aea2607e0ee8",
-		"a6615daa29c08b65d1cc877e36337a67287dcb3cc6e8975289a014ef98ab5e09",
-		"cc2c4821d3b360dee3cdb7fdd10c1545f62330b6fcec95e05c1adeb194c4c454",
-		"b1e758d403486ac8c4de15c4c5e930bfb7721afcb680f442c996f528ed164127",
-		"1a89809b954aa5d207d9b6e9bef391d21dee8c99f83f23f9bf723fa40a587258",
-		"0c536616db4be10e312a775f817186c5f704f78fe4b9ac888bd8da28fedc529f",
-		"527422e3af96ea08f2490ee21567e9b4a3fa84d20911a92206f905a205b9ddd4",
-	}
-
-	accPK, err := sdkCrypto.DecodePrivateKeyHex(sdkCrypto.SignatureAlgorithm(sdkCrypto.ECDSA_P256), "2619878f0e2ff438d17835c2a4561cb87b4d24d72d12ec34569acd0dd4af7c21")
-	// create all the keys and add them to the service account
-	blk, err := client.GetLatestBlock(context.Background(), true)
+	client, err := grpc.NewClient(host)
 	require.NoError(t, err)
-	privKeys := make([]sdkCrypto.PrivateKey, len(rawKeys))
-	for i, k := range rawKeys {
-		sigAlgo := sdkCrypto.SignatureAlgorithm(sdkCrypto.ECDSA_P256)
-		pk, err := sdkCrypto.DecodePrivateKeyHex(sigAlgo, k)
-		require.NoError(t, err)
 
-		privKeys[i] = pk
-		key := &flow.AccountKey{
-			Index:          i,
-			PublicKey:      pk.PublicKey(),
-			SigAlgo:        sigAlgo,
-			HashAlgo:       sdkCrypto.HashAlgorithm(sdkCrypto.SHA3_256),
-			Weight:         1000,
-			SequenceNumber: 0,
-			Revoked:        false,
-		}
+	time.Sleep(500 * time.Millisecond) // some time to startup
 
-		tx, err := templates.AddAccountKey(gwAddress, key)
-		require.NoError(t, err)
-
-		signer, err := sdkCrypto.NewInMemorySigner(accPK, sdkCrypto.HashAlgorithm(sdkCrypto.SHA3_256))
-		require.NoError(t, err)
-
-		err = tx.
-			SetPayer(gwAddress).
-			SetProposalKey(gwAddress, 0, uint64(i+1)).
-			SignEnvelope(gwAddress, 0, signer)
-		require.NoError(t, err)
-
-		time.Sleep(1 * time.Second)
-
-		tx.SetReferenceBlockID(blk.ID)
-		err = client.SendTransaction(context.Background(), *tx)
-		assert.NoError(t, err)
-		//err = emu.SendTransaction(convert.SDKTransactionToFlow(*tx))
-		//require.NoError(t, err)
-	}
-
-	return
+	// create new account with keys used for key-rotation
+	keyCount := 5
+	createdAddr, keys, err := bootstrap.CreateMultiKeyAccount(
+		client,
+		keyCount,
+		gwAddress,
+		"0xee82856bf20e2aa6",
+		"0x0ae53cb6e3f42a79",
+		gwAcc.PrivateKey,
+	)
 
 	cfg := &config.Config{
 		DatabaseDir:        dbDir,
-		AccessNodeGRPCHost: "localhost:3569", // emulator
+		AccessNodeGRPCHost: host,
 		RPCPort:            3001,
 		RPCHost:            "127.0.0.1",
 		InitCadenceHeight:  0,
 		EVMNetworkID:       emulator.FlowEVMTestnetChainID,
 		FlowNetworkID:      "emulator",
 		Coinbase:           fundEOAAddress,
-		COAAddress:         gwAddress,
-		COAKeys:            privKeys,
+		COAAddress:         *createdAddr,
+		COAKeys:            keys,
 		CreateCOAResource:  true,
-		GasPrice:           new(big.Int).SetUint64(1),
+		GasPrice:           new(big.Int).SetUint64(0),
 	}
 
 	rpcTester := &rpcTest{
@@ -829,27 +777,39 @@ func TestE2E_ConcurrentTransactionSubmission(t *testing.T) {
 	}()
 	time.Sleep(500 * time.Millisecond) // some time to startup
 
+	flowAmount, _ := cadence.NewUFix64("5.0")
+	res, err := fundEOA(emu, flowAmount, fundEOAAddress)
+	require.NoError(t, err)
+	require.NoError(t, res.Error)
+	assert.Len(t, res.Events, 9)
+
 	eoaKey, err := crypto.HexToECDSA(fundEOARawKey)
 	require.NoError(t, err)
+
 	testAddr := common.HexToAddress("55253ed90B70b96C73092D8680915aaF50081194")
 
-	nonce := uint64(0)
-	signed, signedHash, err := evmSign(big.NewInt(10), 21000, eoaKey, nonce, &testAddr, nil)
-	nonce++
-	require.NoError(t, err)
+	totalTxs := keyCount*5 + 3
+	hashes := make([]common.Hash, totalTxs)
+	for i := 0; i < totalTxs; i++ {
+		nonce := uint64(i)
+		signed, signedHash, err := evmSign(big.NewInt(10), 21000, eoaKey, nonce, &testAddr, nil)
+		nonce++
+		require.NoError(t, err)
 
-	hash, err := rpcTester.sendRawTx(signed)
-	require.NoError(t, err)
-	assert.NotNil(t, hash)
-	assert.Equal(t, signedHash.String(), hash.String())
+		hash, err := rpcTester.sendRawTx(signed)
+		require.NoError(t, err)
+		assert.NotNil(t, hash)
+		assert.Equal(t, signedHash.String(), hash.String())
+		hashes[i] = signedHash
+	}
 
-	time.Sleep(10 * time.Second) // wait for all txs to be executed
+	time.Sleep(1 * time.Second) // wait for all txs to be executed
 
-	// get all txs receipts
-
-	rcp, err := rpcTester.getReceipt(hash.String())
-	require.NoError(t, err)
-	assert.Equal(t, uint64(1), rcp.Status)
+	for _, h := range hashes {
+		rcp, err := rpcTester.getReceipt(h.String())
+		require.NoError(t, err)
+		assert.Equal(t, uint64(1), rcp.Status)
+	}
 }
 
 // checkSumLogValue makes sure the match is correct by checking sum value
