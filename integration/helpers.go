@@ -58,13 +58,14 @@ func startEmulator() (*server.EmulatorServer, error) {
 
 	log := logger.With().Str("component", "emulator").Logger().Level(zerolog.DebugLevel)
 	srv := server.NewEmulatorServer(&log, &server.Config{
-		ServicePrivateKey:  pkey,
-		ServiceKeySigAlgo:  crypto.ECDSA_P256,
-		ServiceKeyHashAlgo: crypto.SHA3_256,
-		GenesisTokenSupply: genesisToken,
-		EVMEnabled:         true,
-		WithContracts:      true,
-		Host:               "localhost",
+		ServicePrivateKey:      pkey,
+		ServiceKeySigAlgo:      crypto.ECDSA_P256,
+		ServiceKeyHashAlgo:     crypto.SHA3_256,
+		GenesisTokenSupply:     genesisToken,
+		EVMEnabled:             true,
+		WithContracts:          true,
+		Host:                   "localhost",
+		TransactionMaxGasLimit: flow.DefaultMaxTransactionGasLimit,
 	})
 
 	go func() {
