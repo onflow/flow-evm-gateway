@@ -199,6 +199,18 @@ func (e *EVM) signAndSend(ctx context.Context, script []byte, args ...cadence.Va
 	// but there is no evm transaction. So if we submit an evm tx and get back an ID and then we wait for receipt
 	// we would never get it, but this failure of sending flow transaction could somehow help with this case
 
+	// this is only used for debugging purposes
+	go func(tx *flow.Transaction) {
+		res, _ := e.client.GetTransactionResult(context.Background(), flowTx.ID())
+		if res.Error != nil {
+			e.logger.Error().
+				Str("flow-id", flowTx.ID().String()).
+				Err(fmt.Errorf("requester flow transaction submitted failed to executed: %w", res.Error))
+		} else {
+			e.logger.Debug().Str("flow-id", flowTx.ID().String()).Msg("flow transaction executed on network")
+		}
+	}(flowTx)
+
 	return flowTx.ID(), nil
 }
 
