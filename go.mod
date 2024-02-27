@@ -5,9 +5,9 @@ go 1.20
 require (
 	github.com/cockroachdb/pebble v0.0.0-20230928194634-aa077af62593
 	github.com/ethereum/go-ethereum v1.13.5
-	github.com/onflow/cadence v1.0.0-M5
-	github.com/onflow/flow-go v0.33.2-0.20240206152112-9f46beab5fe0
-	github.com/onflow/flow-go-sdk v1.0.0-M2
+	github.com/onflow/cadence v1.0.0-M7
+	github.com/onflow/flow-go v0.34.0-crescendo-preview.1
+	github.com/onflow/flow-go-sdk v1.0.0-M4
 	github.com/rs/zerolog v1.31.0
 	github.com/stretchr/testify v1.8.4
 )
@@ -109,11 +109,11 @@ require (
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
 	github.com/onflow/atree v0.6.1-0.20230711151834-86040b30171f // indirect
 	github.com/onflow/crypto v0.25.0 // indirect
-	github.com/onflow/flow-core-contracts/lib/go/contracts v0.15.1-0.20240125214229-b7a95136dd0d // indirect
-	github.com/onflow/flow-core-contracts/lib/go/templates v0.15.1-0.20240125214229-b7a95136dd0d // indirect
-	github.com/onflow/flow-ft/lib/go/contracts v0.7.1-0.20240125205519-2e80d9b4bd01 // indirect
-	github.com/onflow/flow-nft/lib/go/contracts v1.1.1-0.20240125205553-d2b571fb3fad // indirect
-	github.com/onflow/flow/protobuf/go/flow v0.3.2-0.20231213135419-ae911cc351a2 // indirect
+	github.com/onflow/flow-core-contracts/lib/go/contracts v0.15.2-0.20240206003101-928bf99024d7 // indirect
+	github.com/onflow/flow-core-contracts/lib/go/templates v0.15.2-0.20240206003101-928bf99024d7 // indirect
+	github.com/onflow/flow-ft/lib/go/contracts v0.7.1-0.20240205224107-320aa3cf09e0 // indirect
+	github.com/onflow/flow-nft/lib/go/contracts v1.1.1-0.20240205233530-86ee8c352fa6 // indirect
+	github.com/onflow/flow/protobuf/go/flow v0.3.7 // indirect
 	github.com/onflow/sdks v0.5.1-0.20230912225508-b35402f12bba // indirect
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58 // indirect
@@ -185,3 +185,5 @@ require (
 	lukechampine.com/blake3 v1.2.1 // indirect
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
+
+replace github.com/onflow/crypto => github.com/onflow/crypto v0.24.9
