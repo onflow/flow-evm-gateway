@@ -48,8 +48,9 @@ func DecodeBlock(event cadence.Event) (*types.Block, error) {
 	}, nil
 }
 
+var BlockExecutedEventType = (types.EVMLocation{}).TypeID(nil, string(types.EventTypeBlockExecuted))
+
 // IsBlockExecutedEvent checks whether event contains block executed data.
 func IsBlockExecutedEvent(event cadence.Event) bool {
-	blockExecutedType := (types.EVMLocation{}).TypeID(nil, string(types.EventTypeBlockExecuted))
-	return cdcCommon.TypeID(event.EventType.ID()) == blockExecutedType
+	return cdcCommon.TypeID(event.EventType.ID()) == BlockExecutedEventType
 }

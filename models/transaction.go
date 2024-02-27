@@ -103,7 +103,8 @@ func DecodeTransaction(event cadence.Event) (*gethTypes.Transaction, error) {
 	return &tx, nil
 }
 
+var TransactionExecutedEventType = (types.EVMLocation{}).TypeID(nil, string(types.EventTypeTransactionExecuted))
+
 func IsTransactionExecutedEvent(event cadence.Event) bool {
-	txExecutedType := (types.EVMLocation{}).TypeID(nil, string(types.EventTypeTransactionExecuted))
-	return cdcCommon.TypeID(event.EventType.ID()) == txExecutedType
+	return cdcCommon.TypeID(event.EventType.ID()) == TransactionExecutedEventType
 }

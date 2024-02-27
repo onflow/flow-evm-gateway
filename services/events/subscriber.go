@@ -2,13 +2,10 @@ package events
 
 import (
 	"context"
+	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access"
-	"github.com/onflow/flow-go/fvm/evm/types"
 )
-
-var blockExecutedType = (types.EVMLocation{}).TypeID(nil, string(types.EventTypeBlockExecuted))
-var txExecutedType = (types.EVMLocation{}).TypeID(nil, string(types.EventTypeTransactionExecuted))
 
 type Subscriber interface {
 	// Subscribe to relevant events from the provided block height.
@@ -24,8 +21,8 @@ type RPCSubscriber struct {
 func (r *RPCSubscriber) Subscribe(ctx context.Context, height uint64) (<-chan flow.BlockEvents, <-chan error, error) {
 	filter := flow.EventFilter{
 		EventTypes: []string{
-			string(blockExecutedType),
-			string(txExecutedType),
+			string(models.BlockExecutedEventType),
+			string(models.TransactionExecutedEventType),
 		},
 	}
 
