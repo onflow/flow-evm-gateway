@@ -244,7 +244,9 @@ func TestRangeFilter(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			filter := NewRangeFilter(*tt.start, *tt.end, tt.criteria, receiptStorage())
+			filter, err := NewRangeFilter(*tt.start, *tt.end, tt.criteria, receiptStorage())
+			require.NoError(t, err)
+
 			logs, err := filter.Match()
 
 			require.NoError(t, err)

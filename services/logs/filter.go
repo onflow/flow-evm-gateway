@@ -27,7 +27,7 @@ type FilterCriteria struct {
 // Filter interface { Match() (chan *gethTypes.Log, error) }
 
 // RangeFilter matches all the indexed logs within the range defined as
-// start and end block height. The start must be strictly smaller than end value.
+// start and end block height. The start must be strictly smaller or equal than end value.
 type RangeFilter struct {
 	start, end *big.Int
 	criteria   FilterCriteria
@@ -38,20 +38,20 @@ func NewRangeFilter(
 	start, end big.Int,
 	criteria FilterCriteria,
 	receipts storage.ReceiptIndexer,
-) *RangeFilter {
+) (*RangeFilter, error) {
+	if start.Cmp(&end) > 0 {
+		return nil, fmt.Errorf("invalid start and end block height, start must be smaller or equal than end value")
+	}
+
 	return &RangeFilter{
 		start:    &start,
 		end:      &end,
 		criteria: criteria,
 		receipts: receipts,
-	}
+	}, nil
 }
 
 func (r *RangeFilter) Match() ([]*gethTypes.Log, error) {
-	if r.start.Cmp(r.end) != -1 {
-		return nil, fmt.Errorf("invalid start and end block height, start must be smaller than end value")
-	}
-
 	blooms, heights, err := r.receipts.BloomsForBlockRange(r.start, r.end)
 	if err != nil {
 		return nil, err
@@ -140,27 +140,25 @@ func NewStreamFilter(criteria FilterCriteria, receipts chan *gethTypes.Receipt) 
 	}
 }
 
-func (s *StreamFilter) Match() (chan *gethTypes.Log, error) {
+func (s *StreamFilter) Match() (<-chan *gethTypes.Log, error) {
 	logs := make(chan *gethTypes.Log)
 
 	go func() {
 		defer close(logs)
 
 		for {
-			select {
-			case receipt, ok := <-s.receiptStream:
-				if !ok {
-					return // exit the goroutine if receiptStream is closed
-				}
+			receipt, ok := <-s.receiptStream
+			if !ok {
+				return // exit the goroutine if receiptStream is closed
+			}
 
-				if !bloomMatch(receipt.Bloom, s.criteria) {
-					continue
-				}
+			if !bloomMatch(receipt.Bloom, s.criteria) {
+				continue
+			}
 
-				for _, log := range receipt.Logs {
-					if exactMatch(log, s.criteria) {
-						logs <- log
-					}
+			for _, log := range receipt.Logs {
+				if exactMatch(log, s.criteria) {
+					logs <- log
 				}
 			}
 		}
@@ -169,8 +167,9 @@ func (s *StreamFilter) Match() (chan *gethTypes.Log, error) {
 	return logs, nil
 }
 
-// exactMatch checks the topic and address values of the log match the filer exactly.
+// exactMatch checks the topic and address values of the log match the filter exactly.
 func exactMatch(log *gethTypes.Log, criteria FilterCriteria) bool {
+	// check criteria doesn't have more topics than the log, but it can have less due to wildcards
 	if len(criteria.Topics) > len(log.Topics) {
 		return false
 	}
