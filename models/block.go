@@ -5,6 +5,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/onflow/cadence"
 	cdcCommon "github.com/onflow/cadence/runtime/common"
+	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go/fvm/evm/types"
 )
 
@@ -48,7 +49,7 @@ func DecodeBlock(event cadence.Event) (*types.Block, error) {
 	}, nil
 }
 
-var BlockExecutedEventType = (types.EVMLocation{}).TypeID(nil, string(types.EventTypeBlockExecuted))
+var BlockExecutedEventType = (flow.EVMLocation{}).TypeID(nil, string(types.EventTypeBlockExecuted))
 
 // IsBlockExecutedEvent checks whether event contains block executed data.
 func IsBlockExecutedEvent(event cadence.Event) bool {

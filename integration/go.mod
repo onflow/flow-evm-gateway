@@ -8,8 +8,8 @@ require (
 	github.com/onflow/cadence v1.0.0-M8
 	github.com/onflow/flow-emulator v1.0.0-M7
 	github.com/onflow/flow-evm-gateway v0.0.0-20240201154855-4d4d3d3f19c7
-	github.com/onflow/flow-go v0.34.0-crescendo-preview.1.0.20240222213538-3677206d445c
-	github.com/onflow/flow-go-sdk v1.0.0-M5
+	github.com/onflow/flow-go v0.34.0-crescendo-preview.4
+	github.com/onflow/flow-go-sdk v1.0.0-M6
 	github.com/rs/zerolog v1.31.0
 	github.com/stretchr/testify v1.8.4
 )

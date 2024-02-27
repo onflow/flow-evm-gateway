@@ -7,8 +7,8 @@ require (
 	github.com/ethereum/go-ethereum v1.13.5
 	github.com/goccy/go-json v0.10.2
 	github.com/onflow/cadence v1.0.0-M8
-	github.com/onflow/flow-go v0.34.0-crescendo-preview.1.0.20240222213538-3677206d445c
-	github.com/onflow/flow-go-sdk v1.0.0-M5
+	github.com/onflow/flow-go v0.34.0-crescendo-preview.4
+	github.com/onflow/flow-go-sdk v1.0.0-M6
 	github.com/rs/cors v1.8.0
 	github.com/rs/zerolog v1.31.0
 	github.com/stretchr/testify v1.8.4

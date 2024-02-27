@@ -185,7 +185,7 @@ func (b *BlockChainAPI) GetTransactionByBlockHashAndIndex(
 	ctx context.Context,
 	blockHash common.Hash,
 	index hexutil.Uint,
-) (*RPCTransaction, error) { // todo add error to the return type
+) (*RPCTransaction, error) {
 	block, err := b.blocks.GetByID(blockHash)
 	if err != nil {
 		return handleError[*RPCTransaction](b.logger, err)
@@ -210,7 +210,7 @@ func (b *BlockChainAPI) GetTransactionByBlockNumberAndIndex(
 	ctx context.Context,
 	blockNumber rpc.BlockNumber,
 	index hexutil.Uint,
-) (*RPCTransaction, error) { // todo add error to the return type
+) (*RPCTransaction, error) {
 	block, err := b.blocks.GetByHeight(uint64(blockNumber))
 	if err != nil {
 		return handleError[*RPCTransaction](b.logger, err)
@@ -244,11 +244,6 @@ func (b *BlockChainAPI) GetTransactionReceipt(
 	if err != nil {
 		return handleError[*types.Receipt](b.logger, err)
 	}
-
-	// todo workaround until new version of flow-go is released
-	blk, _ := b.blocks.GetByHeight(rcp.BlockNumber.Uint64())
-	h, _ := blk.Hash()
-	rcp.BlockHash = h
 
 	return rcp, nil
 }
@@ -335,7 +330,7 @@ func (b *BlockChainAPI) GetBlockByNumber(
 func (b *BlockChainAPI) GetBlockReceipts(
 	ctx context.Context,
 	numHash rpc.BlockNumberOrHash,
-) ([]*types.Receipt, error) { // todo validate return type
+) ([]*types.Receipt, error) {
 	var (
 		block *evmTypes.Block
 		err   error

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
+	"github.com/onflow/flow-go-sdk"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -128,7 +129,7 @@ func DecodeTransaction(event cadence.Event) (*gethTypes.Transaction, error) {
 	return &tx, nil
 }
 
-var TransactionExecutedEventType = (types.EVMLocation{}).TypeID(nil, string(types.EventTypeTransactionExecuted))
+var TransactionExecutedEventType = (flow.EVMLocation{}).TypeID(nil, string(types.EventTypeTransactionExecuted))
 
 func IsTransactionExecutedEvent(event cadence.Event) bool {
 	return cdcCommon.TypeID(event.EventType.ID()) == TransactionExecutedEventType
