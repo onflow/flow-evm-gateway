@@ -1,4 +1,4 @@
-package events
+package ingestion
 
 import (
 	"context"
@@ -13,48 +13,50 @@ import (
 
 var ErrDisconnected = errors.New("disconnected")
 
-var _ models.Engine = &EventIngestionEngine{}
+var _ models.Engine = &Engine{}
 
-type EventIngestionEngine struct {
-	subscriber   Subscriber
+type Engine struct {
+	subscriber   EventSubscriber
 	blocks       storage.BlockIndexer
 	receipts     storage.ReceiptIndexer
 	transactions storage.TransactionIndexer
-	logs         zerolog.Logger
+	log          zerolog.Logger
 	lastHeight   *models.SequentialHeight
 	status       *models.EngineStatus
 }
 
 func NewEventIngestionEngine(
-	subscriber Subscriber,
+	subscriber EventSubscriber,
 	blocks storage.BlockIndexer,
 	receipts storage.ReceiptIndexer,
 	transactions storage.TransactionIndexer,
-	logs zerolog.Logger,
-) *EventIngestionEngine {
-	return &EventIngestionEngine{
+	log zerolog.Logger,
+) *Engine {
+	log = log.With().Str("component", "ingestion").Logger()
+
+	return &Engine{
 		subscriber:   subscriber,
 		blocks:       blocks,
 		receipts:     receipts,
 		transactions: transactions,
-		logs:         logs,
+		log:          log,
 		status:       models.NewEngineStatus(),
 	}
 }
 
 // Ready signals when the engine has started.
-func (e *EventIngestionEngine) Ready() <-chan struct{} {
+func (e *Engine) Ready() <-chan struct{} {
 	return e.status.IsReady()
 }
 
 // Done signals when the engine has stopped.
-func (e *EventIngestionEngine) Done() <-chan struct{} {
+func (e *Engine) Done() <-chan struct{} {
 	// return e.status.IsDone()
 	return nil
 }
 
 // Stop the engine.
-func (e *EventIngestionEngine) Stop() {
+func (e *Engine) Stop() {
 	// todo
 }
 
@@ -62,7 +64,8 @@ func (e *EventIngestionEngine) Stop() {
 // to the event subscribers as a starting point.
 // Consume the events provided by the event subscriber.
 // Each event is then processed by the event processing methods.
-func (e *EventIngestionEngine) Start(ctx context.Context) error {
+func (e *Engine) Start(ctx context.Context) error {
+	// todo support starting from other heights, we probably need to add another storage for cadence heights
 	latest, err := e.blocks.LatestHeight()
 	if err != nil {
 		return err
@@ -78,7 +81,7 @@ func (e *EventIngestionEngine) Start(ctx context.Context) error {
 		}
 	}
 
-	e.logs.Info().Uint64("start height", latest).Msg("starting ingestion")
+	e.log.Info().Uint64("start-height", latest).Msg("starting ingestion")
 
 	events, errs, err := e.subscriber.Subscribe(ctx, latest)
 	if err != nil {
@@ -90,7 +93,7 @@ func (e *EventIngestionEngine) Start(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			e.logs.Info().Msg("event ingestion received done signal")
+			e.log.Info().Msg("event ingestion received done signal")
 			return nil
 
 		case blockEvents, ok := <-events:
@@ -115,13 +118,17 @@ func (e *EventIngestionEngine) Start(ctx context.Context) error {
 				return ErrDisconnected
 			}
 
-			return err
+			return errors.Join(err, ErrDisconnected)
 		}
 	}
 }
 
 // processEvents iterates all the events and decides based on the type how to process them.
-func (e *EventIngestionEngine) processEvents(events flow.BlockEvents) error {
+func (e *Engine) processEvents(events flow.BlockEvents) error {
+	e.log.Debug().
+		Uint64("cadence-height", events.Height).
+		Int("cadence-event-length", len(events.Events)).
+		Msg("received new cadence evm events")
 
 	for _, event := range events.Events {
 		if models.IsBlockExecutedEvent(event.Value) {
@@ -142,16 +149,16 @@ func (e *EventIngestionEngine) processEvents(events flow.BlockEvents) error {
 	return nil
 }
 
-func (e *EventIngestionEngine) processBlockEvent(event cadence.Event) error {
+func (e *Engine) processBlockEvent(event cadence.Event) error {
 	block, err := models.DecodeBlock(event)
 	if err != nil {
 		return err
 	}
 
-	e.logs.Info().
-		Uint64("height", block.Height).
-		Str("parent hash", block.ParentBlockHash.String()).
-		Msg("ingesting new block executed event")
+	e.log.Info().
+		Uint64("evm-height", block.Height).
+		Str("parent-hash", block.ParentBlockHash.String()).
+		Msg("new evm block executed event")
 
 	if err = e.lastHeight.Increment(block.Height); err != nil {
 		return fmt.Errorf("invalid block height, expected %d, got %d: %w", e.lastHeight.Load(), block.Height, err)
@@ -160,10 +167,16 @@ func (e *EventIngestionEngine) processBlockEvent(event cadence.Event) error {
 	return e.blocks.Store(block)
 }
 
-func (e *EventIngestionEngine) processTransactionEvent(event cadence.Event) error {
+func (e *Engine) processTransactionEvent(event cadence.Event) error {
 	tx, err := models.DecodeTransaction(event)
 	if err != nil {
 		return err
+	}
+
+	// in case we have a direct call transaction we ignore it for now
+	// todo support indexing of direct calls
+	if tx == nil {
+		return nil
 	}
 
 	receipt, err := models.DecodeReceipt(event)
@@ -171,11 +184,11 @@ func (e *EventIngestionEngine) processTransactionEvent(event cadence.Event) erro
 		return err
 	}
 
-	e.logs.Info().
-		Str("contract address", receipt.ContractAddress.String()).
-		Int("log count", len(receipt.Logs)).
-		Str("receipt tx hash", receipt.TxHash.String()).
-		Str("tx hash", tx.Hash().String()).
+	e.log.Info().
+		Str("contract-address", receipt.ContractAddress.String()).
+		Int("log-count", len(receipt.Logs)).
+		Str("receipt-tx-hash", receipt.TxHash.String()).
+		Str("tx-hash", tx.Hash().String()).
 		Msg("ingesting new transaction executed event")
 
 	err = e.transactions.Store(tx)

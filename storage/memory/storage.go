@@ -51,14 +51,28 @@ func baseStorageFactory() *baseStorage {
 
 var _ storage.BlockIndexer = &BlockStorage{}
 
+type BlockOption func(block *BlockStorage)
+
+func WithLatestHeight(latest uint64) BlockOption {
+	return func(block *BlockStorage) {
+		block.base.lastHeight = latest
+	}
+}
+
 type BlockStorage struct {
 	base *baseStorage
 }
 
-func NewBlockStorage() *BlockStorage {
-	return &BlockStorage{
+func NewBlockStorage(opts ...BlockOption) *BlockStorage {
+	blk := &BlockStorage{
 		base: baseStorageFactory(),
 	}
+
+	for _, opt := range opts {
+		opt(blk)
+	}
+
+	return blk
 }
 
 func (s BlockStorage) GetByHeight(height uint64) (*types.Block, error) {
@@ -204,7 +218,7 @@ func (r ReceiptStorage) GetByBlockHeight(height *big.Int) (*gethTypes.Receipt, e
 	return receipt, nil
 }
 
-func (r ReceiptStorage) BloomsForBlockRange(start, end *big.Int) ([]gethTypes.Bloom, []*big.Int, error) {
+func (r ReceiptStorage) BloomsForBlockRange(start, end *big.Int) ([]*gethTypes.Bloom, []*big.Int, error) {
 	r.base.mu.RLock()
 	defer r.base.mu.RUnlock()
 
@@ -213,7 +227,7 @@ func (r ReceiptStorage) BloomsForBlockRange(start, end *big.Int) ([]gethTypes.Bl
 		return nil, nil, errors.InvalidRange
 	}
 
-	blooms := make([]gethTypes.Bloom, 0)
+	blooms := make([]*gethTypes.Bloom, 0)
 	heights := make([]*big.Int, 0)
 
 	// Iterate through the range of block heights and add the blooms to the result
@@ -222,7 +236,7 @@ func (r ReceiptStorage) BloomsForBlockRange(start, end *big.Int) ([]gethTypes.Bl
 		if !exists {
 			return nil, nil, fmt.Errorf("bloom by height not found") // this should not happen
 		}
-		blooms = append(blooms, b)
+		blooms = append(blooms, &b)
 		heights = append(heights, big.NewInt(int64(i)))
 	}
 
