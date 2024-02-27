@@ -4,7 +4,7 @@ import "context"
 
 // Engine defines a processing unit
 type Engine interface {
-	// Start the engine with context, errors are not expected.
+	// Run the engine with context, errors are not expected.
 	Run(ctx context.Context) error
 	// Stop the engine.
 	Stop()
