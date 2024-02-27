@@ -99,7 +99,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 		// catch eventual error due to out of sequence block height
 		go func() {
 			err := engine.Start(context.Background())
-			assert.ErrorIs(t, err, models.InvalidHeightErr)
+			assert.ErrorIs(t, err, models.ErrInvalidHeight)
 			assert.EqualError(t, err, "invalid block height, expected 11, got 20: invalid height")
 			waitErr <- struct{}{}
 		}()
