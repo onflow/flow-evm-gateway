@@ -51,7 +51,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 
 		done := make(chan struct{})
 		go func() {
-			err := engine.Start(context.Background())
+			err := engine.Run(context.Background())
 			assert.ErrorIs(t, err, ErrDisconnected) // we disconnect at the end
 			close(done)
 		}()
@@ -119,8 +119,8 @@ func TestSerialBlockIngestion(t *testing.T) {
 		waitErr := make(chan struct{})
 		// catch eventual error due to out of sequence block height
 		go func() {
-			err := engine.Start(context.Background())
-			assert.ErrorIs(t, err, models.InvalidHeightErr)
+			err := engine.Run(context.Background())
+			assert.ErrorIs(t, err, models.ErrInvalidHeight)
 			assert.EqualError(t, err, "failed to process event: invalid block height, expected 11, got 20: invalid height")
 			close(waitErr)
 		}()
@@ -195,7 +195,7 @@ func TestTransactionIngestion(t *testing.T) {
 
 	done := make(chan struct{})
 	go func() {
-		err := engine.Start(context.Background())
+		err := engine.Run(context.Background())
 		assert.ErrorIs(t, err, ErrDisconnected) // we disconnect at the end
 		close(done)
 	}()

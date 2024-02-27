@@ -5,7 +5,7 @@ import "context"
 // Engine defines a processing unit
 type Engine interface {
 	// Start the engine with context, errors are not expected.
-	Start(ctx context.Context) error
+	Run(ctx context.Context) error
 	// Stop the engine.
 	Stop()
 	// Done signals the engine was stopped.
@@ -37,9 +37,9 @@ func (r *RestartableEngine) Ready() <-chan struct{} {
 	return r.engine.Ready()
 }
 
-func (r *RestartableEngine) Start(ctx context.Context) error {
+func (r *RestartableEngine) Run(ctx context.Context) error {
 	// todo add restart logic
-	return r.engine.Start(ctx)
+	return r.engine.Run(ctx)
 }
 
 type EngineStatus struct {
@@ -68,14 +68,14 @@ func (e *EngineStatus) IsDone() <-chan struct{} {
 	return e.done
 }
 
-func (e *EngineStatus) Ready() {
+func (e *EngineStatus) MarkReady() {
 	close(e.ready)
 }
 
-func (e *EngineStatus) Done() {
+func (e *EngineStatus) MarkDone() {
 	close(e.done)
 }
 
-func (e *EngineStatus) Stop() {
+func (e *EngineStatus) MarkStopped() {
 	close(e.stop)
 }

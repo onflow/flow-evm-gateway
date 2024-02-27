@@ -13,7 +13,7 @@ func TestSequentialHeight(t *testing.T) {
 	require.NoError(t, h.Increment(7)) // idempotent
 
 	// invalid
-	require.ErrorIs(t, h.Increment(9), InvalidHeightErr)
-	require.ErrorIs(t, h.Increment(5), InvalidHeightErr)
-	require.ErrorIs(t, h.Increment(math.MaxUint64), InvalidHeightErr)
+	require.ErrorIs(t, h.Increment(9), ErrInvalidHeight)
+	require.ErrorIs(t, h.Increment(5), ErrInvalidHeight)
+	require.ErrorIs(t, h.Increment(math.MaxUint64), ErrInvalidHeight)
 }

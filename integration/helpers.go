@@ -123,7 +123,7 @@ func startEventIngestionEngine(ctx context.Context, dbDir string) (
 	engine := ingestion.NewEventIngestionEngine(subscriber, blocks, receipts, txs, accounts, log)
 
 	go func() {
-		err = engine.Start(ctx)
+		err = engine.Run(ctx)
 		if err != nil {
 			logger.Error().Err(err).Msg("failed to start ingestion engine")
 			panic(err)

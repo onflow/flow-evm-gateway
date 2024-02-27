@@ -75,7 +75,7 @@ func (s *Storage) get(keyCode byte, key ...[]byte) ([]byte, error) {
 	data, closer, err := s.db.Get(prefixedKey)
 	if err != nil {
 		if errors.Is(err, pebble.ErrNotFound) {
-			return nil, errs.NotFound
+			return nil, errs.ErrNotFound
 		}
 		return nil, err
 	}

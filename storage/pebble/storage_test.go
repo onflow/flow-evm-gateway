@@ -90,11 +90,11 @@ func TestBlock(t *testing.T) {
 		_ = blocks.Store(2, mocks.NewBlock(1)) // init
 
 		bl, err := blocks.GetByHeight(11)
-		require.ErrorIs(t, err, errors.NotFound)
+		require.ErrorIs(t, err, errors.ErrNotFound)
 		require.Nil(t, bl)
 
 		bl, err = blocks.GetByID(common.Hash{0x1})
-		require.ErrorIs(t, err, errors.NotFound)
+		require.ErrorIs(t, err, errors.ErrNotFound)
 		require.Nil(t, bl)
 	})
 }
