@@ -88,7 +88,7 @@ func (e *Engine) Start(ctx context.Context) error {
 		return err
 	}
 
-	e.status.Ready()
+	e.status.MarkReady()
 
 	for {
 		select {

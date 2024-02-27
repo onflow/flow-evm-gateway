@@ -68,14 +68,14 @@ func (e *EngineStatus) IsDone() <-chan struct{} {
 	return e.done
 }
 
-func (e *EngineStatus) Ready() {
+func (e *EngineStatus) MarkReady() {
 	close(e.ready)
 }
 
-func (e *EngineStatus) Done() {
+func (e *EngineStatus) MarkDone() {
 	close(e.done)
 }
 
-func (e *EngineStatus) Stop() {
+func (e *EngineStatus) MarkStopped() {
 	close(e.stop)
 }

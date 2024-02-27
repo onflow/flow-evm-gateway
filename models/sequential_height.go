@@ -28,7 +28,7 @@ func NewSequentialHeight(init uint64) *SequentialHeight {
 func (s *SequentialHeight) Increment(nextHeight uint64) error {
 	for {
 		current := s.height.Load()
-		if nextHeight-current > 1 {
+		if nextHeight < current || nextHeight-current > 1 {
 			return InvalidHeightErr
 		}
 
