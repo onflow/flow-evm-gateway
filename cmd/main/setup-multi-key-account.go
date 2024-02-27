@@ -14,7 +14,7 @@ import (
 This command creates a new account with multiple keys, which are saved to keys.json for later
 use with running the gateway in a key-rotation mode (used with --coa-key-file flag).
 */
-func main() {
+func setupKey() {
 	var (
 		keyCount                                         int
 		keyFlag, addressFlag, hostFlag, ftFlag, flowFlag string
