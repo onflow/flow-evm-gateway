@@ -134,12 +134,12 @@ func (e *Engine) processEvents(events flow.BlockEvents) error {
 		if models.IsBlockExecutedEvent(event.Value) {
 			err := e.processBlockEvent(event.Value)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to process block event: %w", err)
 			}
 		} else if models.IsTransactionExecutedEvent(event.Value) {
 			err := e.processTransactionEvent(event.Value)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to process transaction event: %w", err)
 			}
 		} else {
 			return fmt.Errorf("invalid event type") // should never happen
