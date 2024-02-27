@@ -1,15 +1,17 @@
 #!/bin/bash
-
+if [ "$FLOW_NETWORK" = "testnet" ] || [ "$FLOW_NETWORK" = "mainnet" ] || [ "$FLOW_NETWORK" = "canarynet" ] || [ "$FLOW_NETWORK" = "crescendo" ]; then
+  ./evm-gateway --network=$FLOW_NETWORK
+else
 ## from https://cloud.google.com/run/docs/tutorials/network-filesystems-filestore
 # set -eo pipefail
 
-# modprobe nfs
+  # modprobe nfs
 # Create mount directory for service.
-# mkdir -p $MNT_DIR
+  # mkdir -p $MNT_DIR
 
-# echo "Mounting Cloud Filestore."
+  # echo "Mounting Cloud Filestore."
 # echo $FILESTORE_MOUNT_POINT
-# echo $MNT_DIR
+  # echo $MNT_DIR
 # mount -o nolock $FILESTORE_MOUNT_POINT $MNT_DIR
 # echo "Mounting completed."
 

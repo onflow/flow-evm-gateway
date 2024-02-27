@@ -2,6 +2,21 @@
 
 # EVM Gateway
 
+**EVM Gateway enables seamless interaction with the Flow EVM, mirroring the experience of engaging with any other EVM blockchain.**
+
+FlowEVM Gateway implements the Ethereum JSON-RPC API for the [FlowEVM](https://developers.flow.com/evm/about) which conforms to the Ethereum [JSON-RPC specification](https://ethereum.github.io/execution-apis/api-documentation/). FlowEVM Gateway is specifically designed to integrate with the FlowEVM environment on the Flow blockchain. Rather than implementing the full `geth` stack, the JSON-RPC API available in FlowEVM Gateway is a lightweight implementation which uses Flow's underlying consensus and smart contract language, [Cadence](https://cadence-lang.org/docs/), to handle calls received by the FlowEVM Gateway. For those interested in the underlying implementation details please refer to the [FLIP #243](https://github.com/onflow/flips/issues/243) (FlowEVM Gateway) and [FLIP #223](https://github.com/onflow/flips/issues/223) (FlowEVM Core) improvement proposals. 
+
+FlowEVM Gateway is compatible with the majority of standard Ethereum JSON-RPC APIs allowing seamless integration with existing Ethereum-compatible web3 tools via HTTP. FlowEVM Gateway honors Ethereum's JSON-RPC namespace system, grouping RPC methods into categories based on their specific purpose. Each method name is constructed using the namespace, an underscore, and the specific method name in that namespace. For example, the `eth_call` method is located within the `eth` namespace.
+
+Listed below are the JSON-RPC namespaces currently supported by the FlowEVM Gateway:
+
+* `eth`
+* `web3`
+* `net`
+<img src="https://assets-global.website-files.com/5f734f4dbd95382f4fdfa0ea/65b0115890bbda5c804f7524_donuts%202-p-500.png" alt="evm" width="300"/>
+
+# EVM Gateway
+
 
 **EVM Gateway enables seamless interaction with the Flow EVM, mirroring the experience of engaging with any other EVM blockchain.**
 
@@ -77,3 +92,34 @@ We welcome contributions from the community! Please read our Contributing Guide 
 
 ## License
 EVM Gateway is released under the Apache License 2.0. See the LICENSE file for more details.
+
+# FlowEVM Gateway Endpoints
+
+FlowEVM has public RPC endpoints available for the following environments:
+
+| Name            | Value                                  |
+|-----------------|----------------------------------------|
+| Network Name    | FlowEVM Crescendo PreviewNet           |
+| Description     | The public RPC URL for FlowEVM Preview |
+| RPC Endpoint    | https://crescendo.evm.nodes.onflow.org |
+| Chain ID        | 646                                    |
+| Currency Symbol | FLOW                                   |
+| Block Explorer  | https://crescendo.flowdiver.io         |
+
+| Name            | Value                                  |
+|-----------------|----------------------------------------|
+| Network Name    | FlowEVM Testnet                        |
+| Description     | The public RPC URL for FlowEVM testnet |
+| RPC Endpoint    | https://testnet.evm.nodes.onflow.org   |
+| Chain ID        | Coming Soon                            |
+| Currency Symbol | FLOW                                   |
+| Block Explorer  | https://testnet.flowdiver.io           |
+
+| Name            | Value                                  |
+|-----------------|----------------------------------------|
+| Network Name    | FlowEVM Mainnet                        |
+| Description     | The public RPC URL for FlowEVM mainnet |
+| RPC Endpoint    | https://mainnet.evm.nodes.onflow.org   |
+| Chain ID        | 747                                    |
+| Currency Symbol | FLOW                                   |
+| Block Explorer  | https://flowdiver.io                   |
