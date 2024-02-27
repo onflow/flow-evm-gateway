@@ -119,11 +119,9 @@ func TestIntegration_TransferValue(t *testing.T) {
 	assert.Len(t, rcp.Logs, 0)
 	assert.Equal(t, blk.Height, rcp.BlockNumber.Uint64())
 	assert.Equal(t, gethTypes.ReceiptStatusSuccessful, rcp.Status)
-	/* todo add block hash in evm core sdkEvent
 	h, err := blk.Hash()
 	require.NoError(t, err)
 	assert.Equal(t, h, rcp.BlockHash)
-	*/
 }
 
 // TestIntegration_DeployCallContract executes interactions with EVM that produce events
@@ -300,9 +298,8 @@ func TestIntegration_DeployCallContract(t *testing.T) {
 		// check the sum call sdkEvent
 		sumLog := rcp.Logs[0]
 		assert.Equal(t, contractAddress.Hex(), sumLog.Address.Hex())
-		// todo https://github.com/onflow/flow-go/blob/b3279863c7787d112128188a243905a43ec1654a/fvm/evm/emulator/emulator.go#L397
-		//assert.Equal(t, blk.Height, sumLog.BlockNumber)
-		//assert.Equal(t, sumHash.Hex(), sumLog.TxHash.Hex())
+		assert.Equal(t, blk.Height, sumLog.BlockNumber)
+		assert.Equal(t, sumHash.Hex(), sumLog.TxHash.Hex())
 		assert.Equal(t, fundEOAAddress, common.HexToAddress(sumLog.Topics[1].Hex())) // topic 1 is caller argument
 		assert.Equal(t, sumA.Cmp(sumLog.Topics[2].Big()), 0)                         // topic 2 is argument sumA
 		assert.Equal(t, sumB.Cmp(sumLog.Topics[3].Big()), 0)                         // topic 3 is argument sumB
@@ -650,9 +647,6 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 		// check the sum call sdkEvent
 		sumLog := rcp.Logs[0]
 		assert.Equal(t, contractAddress.Hex(), sumLog.Address.Hex())
-		// todo https://github.com/onflow/flow-go/blob/b3279863c7787d112128188a243905a43ec1654a/fvm/evm/emulator/emulator.go#L397
-		//assert.Equal(t, blk.Height, sumLog.BlockNumber)
-		//assert.Equal(t, sumHash.Hex(), sumLog.TxHash.Hex())
 		assert.Equal(t, fundEOAAddress, common.HexToAddress(sumLog.Topics[1].Hex())) // topic 1 is caller argument
 		assert.Equal(t, sumA.Cmp(sumLog.Topics[2].Big()), 0)                         // topic 2 is argument sumA
 		assert.Equal(t, sumB.Cmp(sumLog.Topics[3].Big()), 0)                         // topic 3 is argument sumB
