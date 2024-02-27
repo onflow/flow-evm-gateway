@@ -6,6 +6,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+var DefaultGasPrice = big.NewInt(8049999872)
+
 // TODO(m-Peter) Add more config options, such as:
 // - host
 // - port
@@ -13,6 +15,10 @@ import (
 // - whether JSON-RPC is exposed HTTP/WebSocket or both
 // - some connection timeout options etc
 type Config struct {
-	ChainID  *big.Int
-	Coinbase common.Address
+	ChainID   *big.Int
+	Coinbase  common.Address
+	GasPrice  *big.Int
+	Host      string
+	Port      int
+	AccessURL string
 }

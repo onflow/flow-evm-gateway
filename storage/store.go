@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"math/big"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -16,7 +17,7 @@ import (
 type BlockExecutedPayload struct {
 	Height            uint64
 	Hash              string
-	TotalSupply       uint64
+	TotalSupply       *big.Int
 	ParentBlockHash   string
 	ReceiptRoot       string
 	TransactionHashes []string
@@ -46,12 +47,12 @@ func NewBlockExecutedPayload(
 	blockExecutedPayload.Hash = hash
 
 	totalSupplyFieldValue := blockExecutedEvent.GetFieldValues()[2]
-	totalSupplyCadenceValue, ok := totalSupplyFieldValue.(cadence.UInt64)
+	totalSupplyCadenceValue, ok := totalSupplyFieldValue.(cadence.Int)
 	if !ok {
 		return nil, fmt.Errorf("unable to decode Cadence event")
 	}
 
-	totalSupply := totalSupplyCadenceValue.ToGoValue().(uint64)
+	totalSupply := totalSupplyCadenceValue.ToGoValue().(*big.Int)
 	blockExecutedPayload.TotalSupply = totalSupply
 
 	parentBlockHashFieldValue := blockExecutedEvent.GetFieldValues()[3]
@@ -191,12 +192,13 @@ func NewTransactionExecutedPayload(
 }
 
 type Store struct {
-	mu             sync.RWMutex
-	logsByTopic    map[string][]*types.Log
-	latestHeight   uint64
-	accountNonce   map[common.Address]uint64
-	blocksByNumber map[uint64]*BlockExecutedPayload
-	txByHash       map[common.Hash]*TransactionExecutedPayload
+	mu                sync.RWMutex
+	logsByTopic       map[string][]*types.Log
+	latestHeight      uint64
+	accountNonce      map[common.Address]uint64
+	blocksByNumber    map[uint64]*BlockExecutedPayload
+	txByHash          map[common.Hash]*TransactionExecutedPayload
+	blockHashToNumber map[common.Hash]uint64
 }
 
 // NewStore returns a new in-memory Store implementation.
@@ -206,10 +208,11 @@ type Store struct {
 // `latestHeight` in `NewStore`.
 func NewStore() *Store {
 	return &Store{
-		accountNonce:   make(map[common.Address]uint64),
-		logsByTopic:    make(map[string][]*types.Log),
-		txByHash:       make(map[common.Hash]*TransactionExecutedPayload),
-		blocksByNumber: make(map[uint64]*BlockExecutedPayload),
+		accountNonce:      make(map[common.Address]uint64),
+		logsByTopic:       make(map[string][]*types.Log),
+		txByHash:          make(map[common.Hash]*TransactionExecutedPayload),
+		blocksByNumber:    make(map[uint64]*BlockExecutedPayload),
+		blockHashToNumber: make(map[common.Hash]uint64),
 	}
 }
 
@@ -316,6 +319,8 @@ func (s *Store) StoreBlock(ctx context.Context, blockPayload cadence.Event) erro
 	}
 
 	s.blocksByNumber[blockExecutedPayload.Height] = blockExecutedPayload
+	blockHash := common.HexToHash(blockExecutedPayload.Hash)
+	s.blockHashToNumber[blockHash] = blockExecutedPayload.Height
 	s.latestHeight = blockExecutedPayload.Height
 
 	return nil
@@ -328,6 +333,25 @@ func (s *Store) GetBlockByNumber(
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
+	blockExecutedPayload, ok := s.blocksByNumber[blockNumber]
+	if !ok {
+		return nil, fmt.Errorf("unable to find block for number: %d", blockNumber)
+	}
+
+	return blockExecutedPayload, nil
+}
+
+func (s *Store) GetBlockByHash(
+	ctx context.Context,
+	hash common.Hash,
+) (*BlockExecutedPayload, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	blockNumber, ok := s.blockHashToNumber[hash]
+	if !ok {
+		return nil, fmt.Errorf("unable to find block for hash: %s", hash)
+	}
 	blockExecutedPayload, ok := s.blocksByNumber[blockNumber]
 	if !ok {
 		return nil, fmt.Errorf("unable to find block for number: %d", blockNumber)

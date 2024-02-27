@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"math/big"
 	"runtime"
 	"time"
 
@@ -16,34 +17,55 @@ import (
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access/grpc"
+	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/rs/zerolog"
 )
 
-const (
-	defaultAccessURL = grpc.EmulatorHost
-	coinbaseAddr     = "0xf02c1c8e6114b1dbe8937a39260b5b0a374432bb"
-)
+const coinbaseAddr = "0xf02c1c8e6114b1dbe8937a39260b5b0a374432bb"
 
-// TODO(m-Peter): These should be updates to the EVM location,
-// as soon as it gets merged.
+var blockExecutedType = (types.EVMLocation{}).TypeID(nil, string(types.EventTypeBlockExecuted))
+var txExecutedType = (types.EVMLocation{}).TypeID(nil, string(types.EventTypeTransactionExecuted))
+
 var evmEventTypes = []string{
-	"flow.evm.BlockExecuted",
-	"flow.evm.TransactionExecuted",
+	string(blockExecutedType),
+	string(txExecutedType),
 }
 
 func main() {
-	var network, coinbase string
+	var network, coinbase, host string
+	var gasPrice int64
+	var port int
 
-	flag.StringVar(&network, "network", "testnet", "network to connect the gateway to")
+	flag.StringVar(&network, "network", "emulator", "network to connect the gateway to")
 	flag.StringVar(&coinbase, "coinbase", coinbaseAddr, "coinbase address to use for fee collection")
+	flag.StringVar(&host, "host", "", "address to run the gateway")
+	flag.Int64Var(&gasPrice, "gasPrice", api.DefaultGasPrice.Int64(), "gas price for transactions")
+	flag.IntVar(&port, "port", 8545, "port to run the gateway")
 	flag.Parse()
 
-	config := &api.Config{}
-	config.Coinbase = common.HexToAddress(coinbase)
+	config := &api.Config{
+		Coinbase:  common.HexToAddress(coinbase),
+		GasPrice:  big.NewInt(gasPrice),
+		Host:      host,
+		Port:      port,
+		AccessURL: grpc.EmulatorHost,
+	}
+
 	if network == "testnet" {
 		config.ChainID = api.FlowEVMTestnetChainID
+		config.AccessURL = grpc.TestnetHost
 	} else if network == "mainnet" {
 		config.ChainID = api.FlowEVMMainnetChainID
+		config.AccessURL = grpc.MainnetHost
+	} else if network == "canarynet" {
+		config.ChainID = api.FlowEVMTestnetChainID
+		config.AccessURL = grpc.CanarynetHost
+	} else if network == "crescendo" {
+		config.ChainID = api.FlowEVMTestnetChainID
+		config.AccessURL = grpc.CrescendoHost
+	} else if network == "emulator" {
+		config.ChainID = api.FlowEVMTestnetChainID
+		config.AccessURL = grpc.EmulatorHost
 	} else {
 		panic(fmt.Errorf("unknown network: %s", network))
 	}
@@ -54,14 +76,19 @@ func main() {
 
 	logger := zerolog.New(zerolog.NewConsoleWriter()).With().Timestamp().Logger()
 	runServer(config, store, logger)
-	runIndexer(ctx, store, logger)
+	runIndexer(config, ctx, store, logger)
 
 	runtime.Goexit()
 }
 
-func runIndexer(ctx context.Context, store *storage.Store, logger zerolog.Logger) {
+func runIndexer(
+	config *api.Config,
+	ctx context.Context,
+	store *storage.Store,
+	logger zerolog.Logger,
+) {
 	flowClient, err := grpc.NewBaseClient(
-		defaultAccessURL,
+		config.AccessURL,
 		goGrpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {
@@ -86,7 +113,7 @@ func runIndexer(ctx context.Context, store *storage.Store, logger zerolog.Logger
 
 		var err error
 		flowClient, err := grpc.NewBaseClient(
-			defaultAccessURL,
+			config.AccessURL,
 			goGrpc.WithTransportCredentials(insecure.NewCredentials()),
 		)
 		if err != nil {
@@ -136,13 +163,19 @@ func runIndexer(ctx context.Context, store *storage.Store, logger zerolog.Logger
 
 			for _, event := range response.Events {
 				logger.Info().Msgf("  %s", event.Value)
-				if event.Type == "flow.evm.TransactionExecuted" {
-					store.StoreTransaction(ctx, event.Value)
+				if event.Type == "evm.TransactionExecuted" {
+					err := store.StoreTransaction(ctx, event.Value)
+					if err != nil {
+						logger.Error().Msgf("got error when storing tx: %s", err)
+					}
 					store.UpdateAccountNonce(ctx, event.Value)
 					store.StoreLog(ctx, event.Value)
 				}
-				if event.Type == "flow.evm.BlockExecuted" {
-					store.StoreBlock(ctx, event.Value)
+				if event.Type == "evm.BlockExecuted" {
+					err := store.StoreBlock(ctx, event.Value)
+					if err != nil {
+						logger.Error().Msgf("got error when storing block: %s", err)
+					}
 				}
 			}
 
@@ -167,14 +200,19 @@ func runIndexer(ctx context.Context, store *storage.Store, logger zerolog.Logger
 
 func runServer(config *api.Config, store *storage.Store, logger zerolog.Logger) {
 	srv := api.NewHTTPServer(logger, rpc.DefaultHTTPTimeouts)
-	supportedAPIs := api.SupportedAPIs(config, store)
+	flowClient, err := api.NewFlowClient(config.AccessURL)
+	if err != nil {
+		panic(err)
+	}
+	blockchainAPI := api.NewBlockChainAPI(config, store, flowClient)
+	supportedAPIs := api.SupportedAPIs(blockchainAPI)
 
 	srv.EnableRPC(supportedAPIs)
 	srv.EnableWS(supportedAPIs)
 
-	srv.SetListenAddr("localhost", 8545)
+	srv.SetListenAddr(config.Host, config.Port)
 
-	err := srv.Start()
+	err = srv.Start()
 	if err != nil {
 		panic(err)
 	}
