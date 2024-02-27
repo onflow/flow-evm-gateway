@@ -63,7 +63,7 @@ func TestIntegration_TransferValue(t *testing.T) {
 	res, err := fundEOA(emu, flowAmount, fundEOAAddress)
 	require.NoError(t, err)
 	require.NoError(t, res.Error)
-	assert.Len(t, res.Events, 9) // 4 evm events + 2 cadence events
+	assert.Len(t, res.Events, 9) // 7 evm events + 2 cadence events
 
 	transferWei := flowToWei(1)
 	fundEOAKey, err := crypto.HexToECDSA(fundEOARawKey)
