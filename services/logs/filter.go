@@ -18,7 +18,7 @@ type FilterCriteria struct {
 // Filter interface { Match() (chan *gethTypes.Log, error) }
 
 // RangeFilter matches all the indexed logs within the range defined as
-// start and end block height. The start must be strictly smaller than end value.
+// start and end block height. The start must be strictly smaller or equal than end value.
 type RangeFilter struct {
 	start, end *big.Int
 	criteria   FilterCriteria
@@ -29,20 +29,20 @@ func NewRangeFilter(
 	start, end big.Int,
 	criteria FilterCriteria,
 	receipts storage.ReceiptIndexer,
-) *RangeFilter {
+) (*RangeFilter, error) {
+	if start.Cmp(&end) > 0 {
+		return nil, fmt.Errorf("invalid start and end block height, start must be smaller or equal than end value")
+	}
+
 	return &RangeFilter{
 		start:    &start,
 		end:      &end,
 		criteria: criteria,
 		receipts: receipts,
-	}
+	}, nil
 }
 
 func (r *RangeFilter) Match() ([]*gethTypes.Log, error) {
-	if r.start.Cmp(r.end) != -1 {
-		return nil, fmt.Errorf("invalid start and end block height, start must be smaller than end value")
-	}
-
 	blooms, heights, err := r.receipts.BloomsForBlockRange(r.start, r.end)
 	if err != nil {
 		return nil, err
