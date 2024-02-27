@@ -37,12 +37,12 @@ func (b *BlockTestSuite) TestGet() {
 		// non-existing id
 		bl, err := b.Blocks.GetByID(common.HexToHash("0x10"))
 		b.Require().Nil(bl)
-		b.Require().ErrorIs(err, errors.NotFound)
+		b.Require().ErrorIs(err, errors.ErrNotFound)
 
 		// non-existing height
 		bl, err = b.Blocks.GetByHeight(uint64(200))
 		b.Require().Nil(bl)
-		b.Require().ErrorIs(err, errors.NotFound)
+		b.Require().ErrorIs(err, errors.ErrNotFound)
 	})
 }
 
@@ -130,7 +130,7 @@ func (s *ReceiptTestSuite) TestGetReceiptByTransactionID() {
 		nonExistingTxHash := common.HexToHash("0x123")
 		retReceipt, err := s.ReceiptIndexer.GetByTransactionID(nonExistingTxHash)
 		s.Require().Nil(retReceipt)
-		s.Require().ErrorIs(err, errors.NotFound)
+		s.Require().ErrorIs(err, errors.ErrNotFound)
 	})
 }
 
@@ -148,7 +148,7 @@ func (s *ReceiptTestSuite) TestGetReceiptByBlockID() {
 	s.Run("non-existing block height", func() {
 		retReceipt, err := s.ReceiptIndexer.GetByBlockHeight(big.NewInt(1337))
 		s.Require().Nil(retReceipt)
-		s.Require().ErrorIs(err, errors.NotFound)
+		s.Require().ErrorIs(err, errors.ErrNotFound)
 	})
 }
 
@@ -179,7 +179,7 @@ func (s *ReceiptTestSuite) TestBloomsForBlockRange() {
 		start := big.NewInt(10)
 		end := big.NewInt(5) // end is less than start
 		blooms, heights, err := s.ReceiptIndexer.BloomsForBlockRange(start, end)
-		s.Require().ErrorIs(err, errors.InvalidRange)
+		s.Require().ErrorIs(err, errors.ErrInvalidRange)
 		s.Require().Nil(heights)
 		s.Require().Nil(blooms)
 	})
@@ -188,7 +188,7 @@ func (s *ReceiptTestSuite) TestBloomsForBlockRange() {
 		start := big.NewInt(100)
 		end := big.NewInt(105)
 		blooms, heights, err := s.ReceiptIndexer.BloomsForBlockRange(start, end)
-		s.Require().ErrorIs(err, errors.InvalidRange)
+		s.Require().ErrorIs(err, errors.ErrInvalidRange)
 		s.Require().Nil(blooms)
 		s.Require().Nil(heights)
 	})
@@ -261,6 +261,6 @@ func (s *TransactionTestSuite) TestGetTransaction() {
 		nonExistingTxHash := common.HexToHash("0x789")
 		retTx, err := s.TransactionIndexer.Get(nonExistingTxHash)
 		s.Require().Nil(retTx)
-		s.Require().ErrorIs(err, errors.NotFound)
+		s.Require().ErrorIs(err, errors.ErrNotFound)
 	})
 }

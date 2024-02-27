@@ -78,11 +78,11 @@ func TestBlock(t *testing.T) {
 		require.NoError(t, err)
 
 		bl, err := blocks.GetByHeight(11)
-		require.ErrorIs(t, err, errors.NotFound)
+		require.ErrorIs(t, err, errors.ErrNotFound)
 		require.Nil(t, bl)
 
 		bl, err = blocks.GetByID(common.Hash{0x1})
-		require.ErrorIs(t, err, errors.NotFound)
+		require.ErrorIs(t, err, errors.ErrNotFound)
 		require.Nil(t, bl)
 	})
 }

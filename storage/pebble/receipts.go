@@ -98,7 +98,7 @@ func (r *Receipts) getByBlockHeight(height []byte) (*gethTypes.Receipt, error) {
 
 func (r *Receipts) BloomsForBlockRange(start, end *big.Int) ([]*gethTypes.Bloom, []*big.Int, error) {
 	if start.Cmp(end) > 0 {
-		return nil, nil, fmt.Errorf("start is bigger than end: %w", errors.InvalidRange)
+		return nil, nil, fmt.Errorf("start is bigger than end: %w", errors.ErrInvalidRange)
 	}
 
 	// make sure the first and last height are within indexed values
@@ -113,7 +113,7 @@ func (r *Receipts) BloomsForBlockRange(start, end *big.Int) ([]*gethTypes.Bloom,
 			start,
 			first,
 			last,
-			errors.InvalidRange,
+			errors.ErrInvalidRange,
 		)
 	}
 
@@ -123,7 +123,7 @@ func (r *Receipts) BloomsForBlockRange(start, end *big.Int) ([]*gethTypes.Bloom,
 			start,
 			first,
 			last,
-			errors.InvalidRange,
+			errors.ErrInvalidRange,
 		)
 	}
 

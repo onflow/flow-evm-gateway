@@ -92,7 +92,7 @@ func (b *Blocks) GetByHeight(height uint64) (*types.Block, error) {
 
 	// check if the requested height is within the known range
 	if height < first || height > last {
-		return nil, errs.NotFound
+		return nil, errs.ErrNotFound
 	}
 
 	return b.getBlock(blockHeightKey, uint64Bytes(height))
@@ -153,8 +153,8 @@ func (b *Blocks) getHeight(keyCode byte) (uint64, error) {
 
 	val, err := b.store.get(keyCode)
 	if err != nil {
-		if errors.Is(err, errs.NotFound) {
-			return 0, errs.NotInitialized
+		if errors.Is(err, errs.ErrNotFound) {
+			return 0, errs.ErrNotInitialized
 		}
 		return 0, fmt.Errorf("failed to get height: %w", err)
 	}
@@ -166,11 +166,11 @@ func (b *Blocks) getHeight(keyCode byte) (uint64, error) {
 
 func (b *Blocks) storeInitHeight(height uint64) error {
 	_, err := b.store.get(firstHeightKey)
-	if err != nil && !errors.Is(err, errs.NotFound) {
+	if err != nil && !errors.Is(err, errs.ErrNotFound) {
 		return fmt.Errorf("existing first height can not be overwritten")
 	}
 	_, err = b.store.get(latestHeightKey)
-	if err != nil && !errors.Is(err, errs.NotFound) {
+	if err != nil && !errors.Is(err, errs.ErrNotFound) {
 		return fmt.Errorf("existing latest height can not be overwritten")
 	}
 

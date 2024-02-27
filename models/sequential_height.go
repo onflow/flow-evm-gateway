@@ -5,7 +5,7 @@ import (
 	"sync/atomic"
 )
 
-var InvalidHeightErr = errors.New("invalid height")
+var InvalidHeightErr = "invalid height")
 
 // SequentialHeight tracks a block height and enforces rules about
 // the valid next height.
