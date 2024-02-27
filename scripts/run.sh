@@ -1,5 +1,5 @@
 #!/bin/bash
-if [ "$FLOW_NETWORK" = "testnet" ] || [ "$FLOW_NETWORK" = "mainnet" ] || [ "$FLOW_NETWORK" = "canarynet" ] || [ "$FLOW_NETWORK" = "crescendo" ]; then
+if [ "$FLOW_NETWORK" = "testnet" ] || [ "$FLOW_NETWORK" = "mainnet" ] || [ "$FLOW_NETWORK" = "canarynet" ] || [ "$FLOW_NETWORK" = "previewnet" ]; then
   ./evm-gateway --flow-network-id=$FLOW_NETWORK
 else
   ./evm-gateway --access-node-grpc-host access-001.previewnet1.nodes.onflow.org:9000 \
