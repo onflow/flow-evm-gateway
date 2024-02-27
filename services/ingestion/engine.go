@@ -60,11 +60,11 @@ func (e *Engine) Stop() {
 	// todo
 }
 
-// Start the event ingestion engine. Load the latest height that was stored and provide it
+// Run the event ingestion engine. Load the latest height that was stored and provide it
 // to the event subscribers as a starting point.
 // Consume the events provided by the event subscriber.
 // Each event is then processed by the event processing methods.
-func (e *Engine) Start(ctx context.Context) error {
+func (e *Engine) Run(ctx context.Context) error {
 	// todo support starting from other heights, we probably need to add another storage for cadence heights
 	latest, err := e.blocks.LatestHeight()
 	if err != nil {

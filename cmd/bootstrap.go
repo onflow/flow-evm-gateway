@@ -91,7 +91,7 @@ func startIngestion(
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
-		err = engine.Start(ctx)
+		err = engine.Run(ctx)
 		if err != nil {
 			logger.Error().Err(err)
 			panic(err)
