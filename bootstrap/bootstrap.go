@@ -36,7 +36,7 @@ func Start(cfg *config.Config) error {
 	accounts := pebble.NewAccounts(pebbleDB)
 
 	// if database is not initialized require init height
-	if _, err := blocks.LatestCadenceHeight(); errors.Is(err, storageErrs.NotInitialized) {
+	if _, err := blocks.LatestCadenceHeight(); errors.Is(err, storageErrs.ErrNotInitialized) {
 		if cfg.InitCadenceHeight == config.EmptyHeight {
 			return fmt.Errorf("must provide init cadence height on an empty database")
 		}
@@ -114,7 +114,7 @@ func startIngestion(
 
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
-		err = engine.Start(ctx)
+		err = engine.Run(ctx)
 		if err != nil {
 			logger.Error().Err(err).Msg("failed to start ingestion engine")
 			panic(err)
