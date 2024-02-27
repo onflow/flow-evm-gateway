@@ -81,7 +81,7 @@ func (e *Engine) Start(ctx context.Context) error {
 		}
 	}
 
-	e.log.Info().Uint64("start height", latest).Msg("starting ingestion")
+	e.log.Info().Uint64("start-height", latest).Msg("starting ingestion")
 
 	events, errs, err := e.subscriber.Subscribe(ctx, latest)
 	if err != nil {
@@ -126,8 +126,8 @@ func (e *Engine) Start(ctx context.Context) error {
 // processEvents iterates all the events and decides based on the type how to process them.
 func (e *Engine) processEvents(events flow.BlockEvents) error {
 	e.log.Debug().
-		Uint64("cadence height", events.Height).
-		Int("cadence event length", len(events.Events)).
+		Uint64("cadence-height", events.Height).
+		Int("cadence-event-length", len(events.Events)).
 		Msg("received new cadence evm events")
 
 	for _, event := range events.Events {
@@ -156,8 +156,8 @@ func (e *Engine) processBlockEvent(event cadence.Event) error {
 	}
 
 	e.log.Info().
-		Uint64("evm height", block.Height).
-		Str("parent hash", block.ParentBlockHash.String()).
+		Uint64("evm-height", block.Height).
+		Str("parent-hash", block.ParentBlockHash.String()).
 		Msg("new evm block executed event")
 
 	if err = e.lastHeight.Increment(block.Height); err != nil {
@@ -185,10 +185,10 @@ func (e *Engine) processTransactionEvent(event cadence.Event) error {
 	}
 
 	e.log.Info().
-		Str("contract address", receipt.ContractAddress.String()).
-		Int("log count", len(receipt.Logs)).
-		Str("receipt tx hash", receipt.TxHash.String()).
-		Str("tx hash", tx.Hash().String()).
+		Str("contract-address", receipt.ContractAddress.String()).
+		Int("log-count", len(receipt.Logs)).
+		Str("receipt-tx-hash", receipt.TxHash.String()).
+		Str("tx-hash", tx.Hash().String()).
 		Msg("ingesting new transaction executed event")
 
 	err = e.transactions.Store(tx)

@@ -84,7 +84,7 @@ func startIngestion(
 		return err
 	}
 
-	logger.Info().Uint64("cadence height", blk.Height).Msg("latest flow block on the network")
+	logger.Info().Uint64("cadence-height", blk.Height).Msg("latest flow block on the network")
 
 	subscriber := ingestion.NewRPCSubscriber(client)
 	engine := ingestion.NewEventIngestionEngine(subscriber, blocks, receipts, transactions, logger)
