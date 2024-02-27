@@ -103,10 +103,15 @@ func startEventIngestionEngine(ctx context.Context, dbDir string) (
 		return nil, nil, nil, err
 	}
 
-	blocks, err := pebble.NewBlocks(db, pebble.WithInitHeight(blk.Height))
+	blocks := pebble.NewBlocks(db)
 	receipts := pebble.NewReceipts(db)
 	accounts := pebble.NewAccounts(db)
 	txs := pebble.NewTransactions(db)
+
+	err = blocks.InitCadenceHeight(blk.Height)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 
 	log = logger.With().Str("component", "ingestion").Logger()
 	engine := ingestion.NewEventIngestionEngine(subscriber, blocks, receipts, txs, accounts, log)

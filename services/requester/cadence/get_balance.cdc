@@ -1,4 +1,4 @@
-import EVM from 0xf8d6e0586b0a20c7
+import EVM
 
 access(all)
 fun main(addressBytes: [UInt8; 20]): UInt {

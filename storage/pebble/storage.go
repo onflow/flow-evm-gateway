@@ -65,12 +65,8 @@ func New(dir string, log zerolog.Logger) (*Storage, error) {
 }
 
 func (s *Storage) set(keyCode byte, key []byte, value []byte) error {
-	// by default, we disable sync since write operations are idempotent and since crash is not expected to be common
-	// we can rely on idempotency to resolve such a crash and gain performance benefits of having sync off
-	writeOpts := &pebble.WriteOptions{Sync: false}
-
 	prefixedKey := makePrefix(keyCode, key)
-	return s.db.Set(prefixedKey, value, writeOpts)
+	return s.db.Set(prefixedKey, value, nil)
 }
 
 func (s *Storage) get(keyCode byte, key ...[]byte) ([]byte, error) {

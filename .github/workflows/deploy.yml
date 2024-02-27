@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - gregor/index/previewnet-testing-fixes
 
 env:
   DOCKER_IMAGE_URL: ${{ vars.GCP_DOCKER_IMAGE_URL }}:${{ github.sha }}

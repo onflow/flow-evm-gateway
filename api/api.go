@@ -72,18 +72,17 @@ func NewBlockChainAPI(
 // wasn't synced up to a block where EIP-155 is enabled, but this behavior caused issues
 // in CL clients.
 func (b *BlockChainAPI) ChainId() *hexutil.Big {
-	return (*hexutil.Big)(b.config.ChainID)
+	return (*hexutil.Big)(b.config.EVMNetworkID)
 }
 
 // BlockNumber returns the block number of the chain head.
-func (b *BlockChainAPI) BlockNumber() hexutil.Uint64 {
-	latestBlockHeight, err := b.blocks.LatestHeight()
+func (b *BlockChainAPI) BlockNumber() (hexutil.Uint64, error) {
+	latestBlockHeight, err := b.blocks.LatestEVMHeight()
 	if err != nil {
-		b.logger.Error().Err(err).Msg("failed to get latest height")
-		return 0
+		return handleError[hexutil.Uint64](b.logger, err)
 	}
 
-	return hexutil.Uint64(latestBlockHeight)
+	return hexutil.Uint64(latestBlockHeight), nil
 }
 
 // Syncing returns false in case the node is currently not syncing with the network. It can be up-to-date or has not
@@ -143,20 +142,12 @@ func (b *BlockChainAPI) GetTransactionByHash(
 ) (*RPCTransaction, error) {
 	tx, err := b.transactions.Get(hash)
 	if err != nil {
-		if !errors.Is(err, storageErrs.NotFound) {
-			b.logger.Error().Err(err).Msg("failed to get transaction by hash")
-			return nil, errs.ErrInternal
-		}
-		return nil, err
+		return handleError[*RPCTransaction](b.logger, err)
 	}
 
 	rcp, err := b.receipts.GetByTransactionID(tx.Hash())
 	if err != nil {
-		if !errors.Is(err, storageErrs.NotFound) {
-			b.logger.Error().Err(err).Msg("failed to get receipt by hash")
-			return nil, errs.ErrInternal
-		}
-		return nil, err
+		return handleError[*RPCTransaction](b.logger, err)
 	}
 
 	from, err := types.Sender(types.LatestSignerForChainID(tx.ChainId()), tx)
@@ -193,26 +184,24 @@ func (b *BlockChainAPI) GetTransactionByBlockHashAndIndex(
 	ctx context.Context,
 	blockHash common.Hash,
 	index hexutil.Uint,
-) *RPCTransaction { // todo add error to the return type
+) (*RPCTransaction, error) { // todo add error to the return type
 	block, err := b.blocks.GetByID(blockHash)
 	if err != nil {
-		b.logger.Error().Err(err).Msg("failed to get block by id")
-		return nil
+		return handleError[*RPCTransaction](b.logger, err)
 	}
 
 	highestIndex := len(block.TransactionHashes) - 1
 	if index > hexutil.Uint(highestIndex) {
-		return nil
+		return nil, nil
 	}
 
 	txHash := block.TransactionHashes[index]
 	tx, err := b.GetTransactionByHash(ctx, txHash)
 	if err != nil {
-		b.logger.Error().Err(err).Msg("failed to get transaction by id")
-		return nil
+		return handleError[*RPCTransaction](b.logger, err)
 	}
 
-	return tx
+	return tx, nil
 }
 
 // GetTransactionByBlockNumberAndIndex returns the transaction for the given block number and index.
@@ -220,31 +209,24 @@ func (b *BlockChainAPI) GetTransactionByBlockNumberAndIndex(
 	ctx context.Context,
 	blockNumber rpc.BlockNumber,
 	index hexutil.Uint,
-) *RPCTransaction { // todo add error to the return type
+) (*RPCTransaction, error) { // todo add error to the return type
 	block, err := b.blocks.GetByHeight(uint64(blockNumber))
 	if err != nil {
-		if !errors.Is(err, storageErrs.NotFound) {
-			b.logger.Error().Err(err).Msg("failed to get block by height")
-		}
-		return nil
+		return handleError[*RPCTransaction](b.logger, err)
 	}
 
 	highestIndex := len(block.TransactionHashes) - 1
 	if index > hexutil.Uint(highestIndex) {
-		return nil
+		return nil, nil
 	}
 
 	txHash := block.TransactionHashes[index]
 	tx, err := b.GetTransactionByHash(ctx, txHash)
 	if err != nil {
-		if !errors.Is(err, storageErrs.NotFound) {
-			b.logger.Error().Err(err).Msg("failed to get transaction by hash")
-		}
-
-		return nil
+		return handleError[*RPCTransaction](b.logger, err)
 	}
 
-	return tx
+	return tx, nil
 }
 
 // GetTransactionReceipt returns the transaction receipt for the given transaction hash.
@@ -252,15 +234,20 @@ func (b *BlockChainAPI) GetTransactionReceipt(
 	ctx context.Context,
 	hash common.Hash,
 ) (*types.Receipt, error) {
+	_, err := b.transactions.Get(hash)
+	if err != nil {
+		return handleError[*types.Receipt](b.logger, err)
+	}
+
 	rcp, err := b.receipts.GetByTransactionID(hash)
 	if err != nil {
-		if !errors.Is(err, storageErrs.NotFound) {
-			b.logger.Error().Err(err).Msg("failed to get transaction by ID")
-			return nil, errs.ErrInternal
-		}
-
-		return nil, err
+		return handleError[*types.Receipt](b.logger, err)
 	}
+
+	// todo workaround until new version of flow-go is released
+	blk, _ := b.blocks.GetByHeight(rcp.BlockNumber.Uint64())
+	h, _ := blk.Hash()
+	rcp.BlockHash = h
 
 	return rcp, nil
 }
@@ -276,16 +263,10 @@ func (b *BlockChainAPI) GetBlockByHash(
 	ctx context.Context,
 	hash common.Hash,
 	fullTx bool,
-) (map[string]interface{}, error) { // todo change return type to return block type
-	block := map[string]interface{}{}
-
+) (*Block, error) {
 	bl, err := b.blocks.GetByID(hash)
 	if err != nil {
-		if !errors.Is(err, storageErrs.NotFound) {
-			b.logger.Error().Err(err).Msg("failed to get latest block height")
-			return nil, errs.ErrInternal
-		}
-		return nil, err
+		return handleError[*Block](b.logger, err)
 	}
 
 	h, err := bl.Hash()
@@ -294,13 +275,13 @@ func (b *BlockChainAPI) GetBlockByHash(
 		return nil, errs.ErrInternal
 	}
 
-	block["hash"] = h
-	block["number"] = hexutil.Uint64(bl.Height)
-	block["parentHash"] = bl.ParentBlockHash
-	block["receiptsRoot"] = bl.ReceiptRoot
-	block["transactions"] = bl.TransactionHashes
-
-	return block, nil
+	return &Block{
+		Hash:         h,
+		Number:       hexutil.Uint64(bl.Height),
+		ParentHash:   bl.ParentBlockHash,
+		ReceiptsRoot: bl.ReceiptRoot,
+		Transactions: bl.TransactionHashes,
+	}, nil
 }
 
 // GetBlockByNumber returns the requested canonical block.
@@ -314,35 +295,24 @@ func (b *BlockChainAPI) GetBlockByNumber(
 	ctx context.Context,
 	blockNumber rpc.BlockNumber,
 	fullTx bool,
-) (map[string]interface{}, error) { // todo change return type to return block type
-	if fullTx {
-		return nil, errs.ErrNotSupported
+) (*Block, error) {
+	if fullTx { // todo support full tx
+		b.logger.Warn().Msg("not supported getting full txs")
 	}
-
-	block := map[string]interface{}{}
 
 	height := uint64(blockNumber)
 	var err error
-	if blockNumber == -2 {
-		height, err = b.blocks.LatestHeight()
+	// todo for now we treat all special blocks as latest, think which special statuses we can even support on Flow
+	if blockNumber < 0 {
+		height, err = b.blocks.LatestEVMHeight()
 		if err != nil {
-			if !errors.Is(err, storageErrs.NotFound) {
-				b.logger.Error().Err(err).Msg("failed to get latest block height")
-				return nil, errs.ErrInternal
-			}
-			return nil, err
+			return handleError[*Block](b.logger, err)
 		}
-	} else if blockNumber < 0 {
-		return nil, fmt.Errorf("not supported")
 	}
 
 	bl, err := b.blocks.GetByHeight(height)
 	if err != nil {
-		if !errors.Is(err, storageErrs.NotFound) {
-			b.logger.Error().Err(err).Msg("failed to get block by height")
-			return nil, errs.ErrInternal
-		}
-		return nil, err
+		return handleError[*Block](b.logger, err)
 	}
 
 	h, err := bl.Hash()
@@ -351,13 +321,13 @@ func (b *BlockChainAPI) GetBlockByNumber(
 		return nil, errs.ErrInternal
 	}
 
-	block["hash"] = h
-	block["number"] = hexutil.Uint64(bl.Height)
-	block["parentHash"] = bl.ParentBlockHash
-	block["receiptsRoot"] = bl.ReceiptRoot
-	block["transactions"] = bl.TransactionHashes
-
-	return block, nil
+	return &Block{
+		Hash:         h,
+		Number:       hexutil.Uint64(bl.Height),
+		ParentHash:   bl.ParentBlockHash,
+		ReceiptsRoot: bl.ReceiptRoot,
+		Transactions: bl.TransactionHashes,
+	}, nil
 }
 
 // GetBlockReceipts returns the block receipts for the given block hash or number or tag.
@@ -380,19 +350,14 @@ func (b *BlockChainAPI) GetBlockReceipts(
 		)
 	}
 	if err != nil {
-		if !errors.Is(err, storageErrs.NotFound) {
-			b.logger.Error().Err(err).Msg("failed to get receipt")
-			return nil, errs.ErrInternal
-		}
-
-		return nil, err
+		return handleError[[]*types.Receipt](b.logger, err)
 	}
 
 	receipts := make([]*types.Receipt, len(block.TransactionHashes))
 	for i, hash := range block.TransactionHashes {
 		rcp, err := b.receipts.GetByTransactionID(hash)
 		if err != nil {
-			return nil, err
+			return handleError[[]*types.Receipt](b.logger, err)
 		}
 		receipts[i] = rcp
 	}
@@ -404,39 +369,33 @@ func (b *BlockChainAPI) GetBlockReceipts(
 func (b *BlockChainAPI) GetBlockTransactionCountByHash(
 	ctx context.Context,
 	blockHash common.Hash,
-) *hexutil.Uint {
+) (*hexutil.Uint, error) {
 	block, err := b.blocks.GetByID(blockHash)
 	if err != nil {
-		if !errors.Is(err, storageErrs.NotFound) {
-			b.logger.Error().Err(err).Msg("failed to get block by ID")
-		}
-		return nil
+		return handleError[*hexutil.Uint](b.logger, err)
 	}
 
 	count := hexutil.Uint(len(block.TransactionHashes))
-	return &count
+	return &count, nil
 }
 
 // GetBlockTransactionCountByNumber returns the number of transactions in the block with the given block number.
 func (b *BlockChainAPI) GetBlockTransactionCountByNumber(
 	ctx context.Context,
 	blockNumber rpc.BlockNumber,
-) *hexutil.Uint {
+) (*hexutil.Uint, error) {
 	if blockNumber < rpc.EarliestBlockNumber {
 		// todo handle block number for negative special values in all APIs
-		return nil
+		return nil, errs.ErrNotSupported
 	}
 
 	block, err := b.blocks.GetByHeight(uint64(blockNumber))
 	if err != nil {
-		if !errors.Is(err, storageErrs.NotFound) {
-			b.logger.Error().Err(err).Msg("failed to get block by height")
-		}
-		return nil
+		return handleError[*hexutil.Uint](b.logger, err)
 	}
 
 	count := hexutil.Uint(len(block.TransactionHashes))
-	return &count
+	return &count, nil
 }
 
 // Call executes the given transaction on the state for the given block number.
@@ -463,13 +422,16 @@ func (b *BlockChainAPI) Call(
 	} else if args.Input != nil {
 		data = *args.Input
 	} else {
-		return nil, fmt.Errorf("must provide either data or input values: %w", errs.ErrInvalid)
+		return nil, errors.Join(
+			errs.ErrInvalid,
+			fmt.Errorf("must provide either data or input values: %w", errs.ErrInvalid),
+		)
 	}
 
 	res, err := b.evm.Call(ctx, *args.To, data)
 	if err != nil {
 		b.logger.Error().Err(err).Msg("failed to execute call")
-		return nil, err
+		return nil, errs.ErrInternal
 	}
 
 	return res, nil
@@ -509,9 +471,9 @@ func (b *BlockChainAPI) GetTransactionCount(
 	address common.Address,
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (*hexutil.Uint64, error) {
-	// for now we only support indexing at latest block
+	// todo support previous nonce
 	if blockNumberOrHash != nil && *blockNumberOrHash.BlockNumber != rpc.LatestBlockNumber {
-		return nil, errs.ErrNotSupported
+		b.logger.Warn().Msg("transaction count for special blocks not supported") // but still return latest for now
 	}
 
 	nonce, err := b.accounts.GetNonce(&address)
@@ -536,6 +498,17 @@ func (b *BlockChainAPI) EstimateGas(
 ) (hexutil.Uint64, error) {
 	// todo we return max gas limit until we have gas estimation in place
 	return hexutil.Uint64(params.MaxGasLimit), nil
+}
+
+func handleError[T any](log zerolog.Logger, err error) (T, error) {
+	var zero T
+	if errors.Is(err, storageErrs.NotFound) {
+		// as per specification returning nil and nil for not found resources
+		return zero, nil
+	}
+
+	log.Error().Err(err).Msg("failed to get latest block height")
+	return zero, errs.ErrInternal
 }
 
 /* ====================================================================================================================

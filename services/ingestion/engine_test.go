@@ -27,11 +27,16 @@ func TestSerialBlockIngestion(t *testing.T) {
 
 		blocks := &storageMock.BlockIndexer{}
 		blocks.
-			On("LatestHeight").
+			On("LatestCadenceHeight").
 			Return(func() (uint64, error) {
 				return latestHeight, nil
 			}).
 			Once() // make sure this isn't called multiple times
+
+		accounts := &storageMock.AccountIndexer{}
+		accounts.
+			On("Update").
+			Return(func() error { return nil })
 
 		eventsChan := make(chan flow.BlockEvents)
 		subscriber := &mocks.Subscriber{}
@@ -41,21 +46,28 @@ func TestSerialBlockIngestion(t *testing.T) {
 				return eventsChan, make(<-chan error), nil
 			})
 
-		engine := NewEventIngestionEngine(subscriber, blocks, receipts, transactions, zerolog.Nop())
+		engine := NewEventIngestionEngine(subscriber, blocks, receipts, transactions, accounts, zerolog.Nop())
 
+		done := make(chan struct{})
 		go func() {
 			err := engine.Start(context.Background())
-			require.NoError(t, err)
+			assert.ErrorIs(t, err, ErrDisconnected) // we disconnect at the end
+			close(done)
 		}()
 
-		for i := latestHeight + 1; i < latestHeight+20; i++ {
+		storedCounter := 0
+		runs := uint64(20)
+		for i := latestHeight + 1; i < latestHeight+runs; i++ {
+			cadenceHeight := i + 10
 			blockCdc, block, blockEvent, err := newBlock(i)
 			require.NoError(t, err)
 
 			blocks.
-				On("Store", mock.AnythingOfType("*types.Block")).
-				Return(func(storeBlock *types.Block) error {
+				On("Store", mock.AnythingOfType("uint64"), mock.AnythingOfType("*types.Block")).
+				Return(func(h uint64, storeBlock *types.Block) error {
 					assert.Equal(t, block, storeBlock)
+					assert.Equal(t, cadenceHeight, h)
+					storedCounter++
 					return nil
 				}).
 				Once()
@@ -65,10 +77,13 @@ func TestSerialBlockIngestion(t *testing.T) {
 					Type:  string(blockEvent.Etype),
 					Value: blockCdc,
 				}},
+				Height: cadenceHeight,
 			}
 		}
 
 		close(eventsChan)
+		<-done
+		assert.Equal(t, runs-1, uint64(storedCounter))
 		// todo <-engine.Done()
 	})
 
@@ -79,11 +94,16 @@ func TestSerialBlockIngestion(t *testing.T) {
 
 		blocks := &storageMock.BlockIndexer{}
 		blocks.
-			On("LatestHeight").
+			On("LatestCadenceHeight").
 			Return(func() (uint64, error) {
 				return latestHeight, nil
 			}).
 			Once() // make sure this isn't called multiple times
+
+		accounts := &storageMock.AccountIndexer{}
+		accounts.
+			On("Update").
+			Return(func() error { return nil })
 
 		eventsChan := make(chan flow.BlockEvents)
 		subscriber := &mocks.Subscriber{}
@@ -93,7 +113,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 				return eventsChan, make(<-chan error), nil
 			})
 
-		engine := NewEventIngestionEngine(subscriber, blocks, receipts, transactions, zerolog.Nop())
+		engine := NewEventIngestionEngine(subscriber, blocks, receipts, transactions, accounts, zerolog.Nop())
 
 		waitErr := make(chan struct{})
 		// catch eventual error due to out of sequence block height
@@ -101,17 +121,19 @@ func TestSerialBlockIngestion(t *testing.T) {
 			err := engine.Start(context.Background())
 			assert.ErrorIs(t, err, models.InvalidHeightErr)
 			assert.EqualError(t, err, "invalid block height, expected 11, got 20: invalid height")
-			waitErr <- struct{}{}
+			close(waitErr)
 		}()
 
 		// first create one successful block event
 		blockCdc, block, blockEvent, err := newBlock(latestHeight + 1)
+		cadenceHeight := latestHeight + 10
 		require.NoError(t, err)
 
 		blocks.
-			On("Store", mock.AnythingOfType("*types.Block")).
-			Return(func(storeBlock *types.Block) error {
+			On("Store", mock.AnythingOfType("uint64"), mock.AnythingOfType("*types.Block")).
+			Return(func(h uint64, storeBlock *types.Block) error {
 				assert.Equal(t, block, storeBlock)
+				assert.Equal(t, cadenceHeight, h)
 				return nil
 			}).
 			Once() // this should only be called for first valid block
@@ -121,6 +143,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 				Type:  string(blockEvent.Etype),
 				Value: blockCdc,
 			}},
+			Height: cadenceHeight,
 		}
 
 		// fail with next block height being incorrect
@@ -132,6 +155,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 				Type:  string(blockEvent.Etype),
 				Value: blockCdc,
 			}},
+			Height: cadenceHeight + 1,
 		}
 
 		close(eventsChan)
@@ -147,11 +171,16 @@ func TestTransactionIngestion(t *testing.T) {
 
 	blocks := &storageMock.BlockIndexer{}
 	blocks.
-		On("LatestHeight").
+		On("LatestCadenceHeight").
 		Return(func() (uint64, error) {
 			return latestHeight, nil
 		}).
 		Once() // make sure this isn't called multiple times
+
+	accounts := &storageMock.AccountIndexer{}
+	accounts.
+		On("Update", mock.AnythingOfType("*types.Transaction")).
+		Return(func(tx *gethTypes.Transaction) error { return nil })
 
 	eventsChan := make(chan flow.BlockEvents)
 	subscriber := &mocks.Subscriber{}
@@ -161,29 +190,31 @@ func TestTransactionIngestion(t *testing.T) {
 			return eventsChan, make(<-chan error), nil
 		})
 
-	engine := NewEventIngestionEngine(subscriber, blocks, receipts, transactions, zerolog.Nop())
+	engine := NewEventIngestionEngine(subscriber, blocks, receipts, transactions, accounts, zerolog.Nop())
 
+	done := make(chan struct{})
 	go func() {
 		err := engine.Start(context.Background())
-		require.NoError(t, err)
+		assert.ErrorIs(t, err, ErrDisconnected) // we disconnect at the end
+		close(done)
 	}()
 
 	txCdc, event, transaction, result, err := newTransaction()
 	require.NoError(t, err)
 
 	transactions.
-		On("Store", mock.AnythingOfType("*gethTypes.Transaction")).
+		On("Store", mock.AnythingOfType("*types.Transaction")).
 		Return(func(tx *gethTypes.Transaction) error {
-			assert.Equal(t, transaction, tx)
+			assert.Equal(t, transaction.Hash(), tx.Hash()) // if hashes are equal tx is equal
 			return nil
 		}).
 		Once()
 
 	receipts.
-		On("Store", mock.AnythingOfType("*gethTypes.Receipt")).
+		On("Store", mock.AnythingOfType("*types.Receipt")).
 		Return(func(rcp *gethTypes.Receipt) error {
-			assert.EqualValues(t, result.Logs, rcp.Logs)
-			assert.Equal(t, result.DeployedContractAddress, rcp.ContractAddress)
+			assert.Len(t, rcp.Logs, len(result.Logs))
+			assert.Equal(t, result.DeployedContractAddress.ToCommon().String(), rcp.ContractAddress.String())
 			return nil
 		}).
 		Once()
@@ -193,9 +224,11 @@ func TestTransactionIngestion(t *testing.T) {
 			Type:  string(event.Etype),
 			Value: txCdc,
 		}},
+		Height: latestHeight + 1,
 	}
 
 	close(eventsChan)
+	<-done
 	// todo <-engine.Done()
 }
 

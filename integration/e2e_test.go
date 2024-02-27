@@ -11,7 +11,6 @@ import (
 	"github.com/onflow/flow-evm-gateway/services/logs"
 	"github.com/onflow/flow-go/fvm/evm/emulator"
 	"math/big"
-	"os"
 	"testing"
 	"time"
 
@@ -43,11 +42,7 @@ var (
 func TestIntegration_TransferValue(t *testing.T) {
 	srv, err := startEmulator()
 	require.NoError(t, err)
-
-	dbDir := "./db-test"
-	defer func() {
-		_ = os.Remove(dbDir)
-	}()
+	dbDir := t.TempDir()
 
 	ctx, cancelIngestion := context.WithCancel(context.Background())
 	blocks, receipts, txs, err := startEventIngestionEngine(ctx, dbDir)
@@ -68,7 +63,7 @@ func TestIntegration_TransferValue(t *testing.T) {
 	res, err := fundEOA(emu, flowAmount, fundEOAAddress)
 	require.NoError(t, err)
 	require.NoError(t, res.Error)
-	assert.Len(t, res.Events, 6) // 4 evm events + 2 cadence events
+	assert.Len(t, res.Events, 9) // 7 evm events + 2 cadence events
 
 	transferWei := flowToWei(1)
 	fundEOAKey, err := crypto.HexToECDSA(fundEOARawKey)
@@ -78,29 +73,29 @@ func TestIntegration_TransferValue(t *testing.T) {
 	res, evmID, err := evmSignAndRun(emu, transferWei, params.TxGas, fundEOAKey, 0, &transferEOAAdress, nil)
 	require.NoError(t, err)
 	require.NoError(t, res.Error)
-	assert.Len(t, res.Events, 2)
+	assert.Len(t, res.Events, 5)
 
 	time.Sleep(2 * time.Second) // todo change
 
-	// block 1 comes from calling evm.deposit
-	blk, err := blocks.GetByHeight(1)
-	require.NoError(t, err)
-	assert.Equal(t, uint64(1), blk.Height)
-
-	assert.Equal(t, fundWei.Cmp(blk.TotalSupply), 0)
-	require.Len(t, blk.TransactionHashes, 1)
-
-	// block 2 comes from calling evm.call to transfer to eoa 1
-	blk, err = blocks.GetByHeight(2)
+	// block 2 comes from calling evm.deposit
+	blk, err := blocks.GetByHeight(2)
 	require.NoError(t, err)
 	assert.Equal(t, uint64(2), blk.Height)
+
 	assert.Equal(t, fundWei.Cmp(blk.TotalSupply), 0)
 	require.Len(t, blk.TransactionHashes, 1)
 
-	// block 3 comes from calling evm.call to transfer from eoa 1 to eoa 2
+	// block 3 comes from calling evm.call to transfer to eoa 1
 	blk, err = blocks.GetByHeight(3)
 	require.NoError(t, err)
 	assert.Equal(t, uint64(3), blk.Height)
+	assert.Equal(t, fundWei.Cmp(blk.TotalSupply), 0)
+	require.Len(t, blk.TransactionHashes, 1)
+
+	// block 5 comes from calling evm.call to transfer from eoa 1 to eoa 2
+	blk, err = blocks.GetByHeight(5)
+	require.NoError(t, err)
+	assert.Equal(t, uint64(5), blk.Height)
 	assert.Equal(t, fundWei.Cmp(blk.TotalSupply), 0)
 	require.Len(t, blk.TransactionHashes, 1)
 
@@ -139,15 +134,9 @@ func TestIntegration_TransferValue(t *testing.T) {
 //
 // The test then proceeds on testing filtering of events
 func TestIntegration_DeployCallContract(t *testing.T) {
-	t.Skip()
-
 	srv, err := startEmulator()
 	require.NoError(t, err)
-
-	dbDir := "./db-test"
-	defer func() {
-		_ = os.Remove(dbDir)
-	}()
+	dbDir := t.TempDir()
 
 	ctx, cancelIngestion := context.WithCancel(context.Background())
 	blocks, receipts, txs, err := startEventIngestionEngine(ctx, dbDir)
@@ -170,7 +159,7 @@ func TestIntegration_DeployCallContract(t *testing.T) {
 	res, err := fundEOA(emu, flowAmount, fundEOAAddress)
 	require.NoError(t, err)
 	require.NoError(t, res.Error)
-	assert.Len(t, res.Events, 6) // 4 evm events + 2 cadence events
+	assert.Len(t, res.Events, 9)
 
 	eoaKey, err := crypto.HexToECDSA(fundEOARawKey)
 	require.NoError(t, err)
@@ -185,8 +174,11 @@ func TestIntegration_DeployCallContract(t *testing.T) {
 
 	time.Sleep(1 * time.Second) // todo change
 
-	// block 3 comes from contract deployment
-	blk, err := blocks.GetByHeight(3)
+	latest, err := blocks.LatestEVMHeight()
+	require.NoError(t, err)
+
+	// block comes from contract deployment
+	blk, err := blocks.GetByHeight(latest)
 	require.NoError(t, err)
 	require.Len(t, blk.TransactionHashes, 1)
 
@@ -217,10 +209,13 @@ func TestIntegration_DeployCallContract(t *testing.T) {
 
 	time.Sleep(1 * time.Second)
 
-	// block 4 comes from contract interaction
-	blk, err = blocks.GetByHeight(4)
+	// block comes from contract interaction
+	// we have to increment by two always, because each evmSignAndRun produces
+	// two blocks, one for creating COA and other for running tx
+	latest += 2
+	blk, err = blocks.GetByHeight(latest)
 	require.NoError(t, err)
-	assert.Equal(t, uint64(4), blk.Height)
+	assert.Equal(t, latest, blk.Height)
 	require.Len(t, blk.TransactionHashes, 1)
 
 	interactHash := blk.TransactionHashes[0]
@@ -234,7 +229,7 @@ func TestIntegration_DeployCallContract(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, gethTypes.ReceiptStatusSuccessful, rcp.Status)
 	assert.Equal(t, interactHash, rcp.TxHash)
-	assert.Equal(t, uint64(4), rcp.BlockNumber.Uint64())
+	assert.Equal(t, latest, rcp.BlockNumber.Uint64())
 	assert.Len(t, rcp.Logs, 0)
 
 	callStore, err := storeContract.call("store", big.NewInt(1337))
@@ -248,10 +243,11 @@ func TestIntegration_DeployCallContract(t *testing.T) {
 
 	time.Sleep(1 * time.Second)
 
-	// block 5 comes from contract store interaction
-	blk, err = blocks.GetByHeight(5)
+	// block comes from contract store interaction
+	latest += 2
+	blk, err = blocks.GetByHeight(latest)
 	require.NoError(t, err)
-	assert.Equal(t, uint64(5), blk.Height)
+	assert.Equal(t, latest, blk.Height)
 	require.Len(t, blk.TransactionHashes, 1)
 
 	interactHash = blk.TransactionHashes[0]
@@ -265,10 +261,11 @@ func TestIntegration_DeployCallContract(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, gethTypes.ReceiptStatusSuccessful, rcp.Status)
 	assert.Equal(t, interactHash, rcp.TxHash)
-	assert.Equal(t, uint64(5), rcp.BlockNumber.Uint64())
+	assert.Equal(t, latest, rcp.BlockNumber.Uint64())
 	assert.Len(t, rcp.Logs, 0)
 
 	// step 6 - call event emitting function with different values
+	heights := make([]uint64, 0)
 	for i := 0; i < 4; i++ {
 		sumA := big.NewInt(5)
 		sumB := big.NewInt(int64(3 + i))
@@ -281,10 +278,12 @@ func TestIntegration_DeployCallContract(t *testing.T) {
 
 		time.Sleep(1 * time.Second)
 
-		// block 6 is produced by above call to the sum that emits event
-		blk, err = blocks.GetByHeight(uint64(6 + i))
+		// block is produced by above call to the sum that emits event
+		latest += 2
+		blk, err = blocks.GetByHeight(latest)
 		require.NoError(t, err)
 		require.Len(t, blk.TransactionHashes, 1)
+		heights = append(heights, blk.Height)
 
 		sumHash := blk.TransactionHashes[0]
 		tx, err = txs.Get(sumHash)
@@ -309,14 +308,14 @@ func TestIntegration_DeployCallContract(t *testing.T) {
 	}
 
 	// test filtering of events by different filter parameters, we have the following state:
-	// block height 6 - event topics (eoa, 5, 3)
-	// block height 7 - event topics (eoa, 5, 4)
-	// block height 8 - event topics (eoa, 5, 5)
-	// block height 9 - event topics (eoa, 5, 6)
+	// block height 9 - event topics (eoa, 5, 3)
+	// block height 10 - event topics (eoa, 5, 4)
+	// block height 11 - event topics (eoa, 5, 5)
+	// block height 12 - event topics (eoa, 5, 6)
 
 	// successfully filter by block id with found single match for each block
-	for i := 0; i < 4; i++ {
-		blk, err = blocks.GetByHeight(uint64(6 + i))
+	for i, height := range heights {
+		blk, err = blocks.GetByHeight(height)
 		require.NoError(t, err)
 		blkID, err := blk.Hash()
 		require.NoError(t, err)
@@ -340,7 +339,7 @@ func TestIntegration_DeployCallContract(t *testing.T) {
 	}
 
 	// invalid filter by block id with wrong topic value
-	blk, err = blocks.GetByHeight(6)
+	blk, err = blocks.GetByHeight(heights[0])
 	require.NoError(t, err)
 	blkID, err := blk.Hash()
 	require.NoError(t, err)
@@ -372,7 +371,9 @@ func TestIntegration_DeployCallContract(t *testing.T) {
 		}},
 	}
 
-	matches, err = logs.NewRangeFilter(*big.NewInt(6), *big.NewInt(9), filter, receipts).Match()
+	first := int64(heights[0])
+	last := int64(heights[len(heights)-1])
+	matches, err = logs.NewRangeFilter(*big.NewInt(first), *big.NewInt(last), filter, receipts).Match()
 	require.NoError(t, err)
 	require.Len(t, matches, 1)
 	assert.NoError(t, checkSumLogValue(storeContract, sumA, sumB, matches[0].Data))
@@ -387,14 +388,13 @@ func TestIntegration_DeployCallContract(t *testing.T) {
 		}},
 	}
 
-	matches, err = logs.NewRangeFilter(*big.NewInt(6), *big.NewInt(9), filter, receipts).Match()
+	matches, err = logs.NewRangeFilter(*big.NewInt(first), *big.NewInt(last), filter, receipts).Match()
 	require.NoError(t, err)
 	require.Len(t, matches, 4)
 	assert.NoError(t, checkSumLogValue(storeContract, sumA, big.NewInt(3), matches[0].Data))
 	assert.NoError(t, checkSumLogValue(storeContract, sumA, big.NewInt(4), matches[1].Data))
 	assert.NoError(t, checkSumLogValue(storeContract, sumA, big.NewInt(5), matches[2].Data))
 	assert.NoError(t, checkSumLogValue(storeContract, sumA, big.NewInt(6), matches[3].Data))
-
 }
 
 // todo we could optimize these tests to support both above integration testing of storage and engines
@@ -407,11 +407,7 @@ func TestIntegration_API_DeployEvents(t *testing.T) {
 	srv, err := startEmulator()
 	require.NoError(t, err)
 	emu := srv.Emulator()
-
-	dbDir := "./db-test"
-	defer func() {
-		_ = os.Remove(dbDir)
-	}()
+	dbDir := t.TempDir()
 
 	gwAcc := emu.ServiceKey()
 	gwKey := gwAcc.PrivateKey
@@ -422,8 +418,8 @@ func TestIntegration_API_DeployEvents(t *testing.T) {
 		AccessNodeGRPCHost: "localhost:3569", // emulator
 		RPCPort:            3001,
 		RPCHost:            "127.0.0.1",
-		InitHeight:         0,
-		ChainID:            emulator.FlowEVMTestnetChainID,
+		InitCadenceHeight:  0,
+		EVMNetworkID:       emulator.FlowEVMTestnetChainID,
 		Coinbase:           fundEOAAddress,
 		COAAddress:         gwAddress,
 		COAKey:             gwKey,
@@ -568,7 +564,7 @@ func TestIntegration_API_DeployEvents(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, nonce, eoaNonce)
 
-	// block 6 comes from contract store interaction
+	// block comes from contract store interaction
 	blkRpc, err = rpcTester.getBlock(8)
 	require.NoError(t, err)
 	assert.Equal(t, uintHex(8), blkRpc.Number)
@@ -611,7 +607,7 @@ func TestIntegration_API_DeployEvents(t *testing.T) {
 
 		time.Sleep(1 * time.Second)
 
-		// block 6 is produced by above call to the sum that emits event
+		// block is produced by above call to the sum that emits event
 		blkRpc, err = rpcTester.getBlock(uint64(9 + i))
 		require.NoError(t, err)
 		require.Len(t, blkRpc.Transactions, 1)

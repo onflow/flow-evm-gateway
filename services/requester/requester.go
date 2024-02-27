@@ -11,6 +11,7 @@ import (
 	"github.com/onflow/flow-go-sdk/crypto"
 	"github.com/rs/zerolog"
 	"math/big"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/onflow/cadence"
@@ -18,16 +19,16 @@ import (
 )
 
 var (
-	//go:embed cadence/bridged_account_call.cdc
+	//go:embed cadence/call.cdc
 	callScript []byte
 
-	//go:embed cadence/evm_run.cdc
+	//go:embed cadence/run.cdc
 	runTxScript []byte
 
-	//go:embed cadence/evm_address_balance.cdc
+	//go:embed cadence/get_balance.cdc
 	getBalanceScript []byte
 
-	//go:embed cadence/create_bridged_account.cdc
+	//go:embed cadence/create_coa.cdc
 	createCOAScript []byte
 
 	byteArrayType = cadence.NewVariableSizedArrayType(cadence.UInt8Type)
@@ -63,12 +64,14 @@ type EVM struct {
 	client  access.Client
 	address flow.Address
 	signer  crypto.Signer
+	network string // todo change the type to FVM type once the "previewnet" is added
 }
 
 func NewEVM(
 	client access.Client,
 	address flow.Address,
 	signer crypto.Signer,
+	network string,
 	createCOA bool,
 	logger zerolog.Logger,
 ) (*EVM, error) {
@@ -86,7 +89,7 @@ func NewEVM(
 	}
 
 	if acc.Balance < minFlowBalance {
-		return nil, fmt.Errorf("COA account must be funded with at least %f Flow", minFlowBalance)
+		return nil, fmt.Errorf("COA account must be funded with at least %d Flow", minFlowBalance)
 	}
 
 	evm := &EVM{
@@ -94,13 +97,18 @@ func NewEVM(
 		address: address,
 		signer:  signer,
 		logger:  logger,
+		network: network,
 	}
 
 	// create COA on the account
 	// todo improve this to first check if coa exists and only if it doesn't create it, if it doesn't and the flag is false return an error
 	if createCOA {
 		// we ignore errors for now since creation of already existing COA resource will fail, which is fine for now
-		id, err := evm.signAndSend(context.Background(), createCOAScript, cadence.UFix64(coaFundingBalance))
+		id, err := evm.signAndSend(
+			context.Background(),
+			evm.replaceAddresses(createCOAScript),
+			cadence.UFix64(coaFundingBalance),
+		)
 		logger.Info().Err(err).Str("id", id.String()).Msg("COA resource auto-created")
 	}
 
@@ -108,6 +116,10 @@ func NewEVM(
 }
 
 func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash, error) {
+	e.logger.Debug().
+		Str("data", fmt.Sprintf("%x", data)).
+		Msg("send raw transaction")
+
 	tx := &types.Transaction{}
 	err := tx.DecodeRLP(
 		rlp.NewStream(
@@ -117,8 +129,11 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 	)
 
 	// todo make sure the gas price is not bellow the configured gas price
-
-	flowID, err := e.signAndSend(ctx, runTxScript, cadenceArrayFromBytes(data))
+	flowID, err := e.signAndSend(
+		ctx,
+		e.replaceAddresses(runTxScript),
+		cadenceArrayFromBytes(data),
+	)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -133,7 +148,7 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 		Str("to", to).
 		Str("value", tx.Value().String()).
 		Str("data", fmt.Sprintf("%x", tx.Data())).
-		Msg("raw transaction submitted")
+		Msg("raw transaction sent")
 
 	return tx.Hash(), nil
 }
@@ -174,6 +189,9 @@ func (e *EVM) signAndSend(ctx context.Context, script []byte, args ...cadence.Va
 	}
 
 	// todo should we wait for the transaction result?
+	// we should handle a case where flow transaction is failed but we will get a result back, it would only be failed,
+	// but there is no evm transaction. So if we submit an evm tx and get back an ID and then we wait for receipt
+	// we would never get it, but this failure of sending flow transaction could somehow help with this case
 
 	return flowTx.ID(), nil
 }
@@ -182,7 +200,11 @@ func (e *EVM) GetBalance(ctx context.Context, address common.Address, height uin
 	// todo make sure provided height is used
 	addr := cadenceArrayFromBytes(address.Bytes()).WithType(addressType)
 
-	val, err := e.client.ExecuteScriptAtLatestBlock(ctx, getBalanceScript, []cadence.Value{addr})
+	val, err := e.client.ExecuteScriptAtLatestBlock(
+		ctx,
+		e.replaceAddresses(getBalanceScript),
+		[]cadence.Value{addr},
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -202,15 +224,25 @@ func (e *EVM) Call(ctx context.Context, address common.Address, data []byte) ([]
 	txData := cadenceArrayFromBytes(data).WithType(byteArrayType)
 	toAddress := cadenceArrayFromBytes(address.Bytes()).WithType(addressType)
 
-	e.logger.Info().
+	e.logger.Debug().
 		Str("address", address.Hex()).
-		Str("data", string(data)).
+		Str("data", fmt.Sprintf("%x", data)).
 		Msg("call")
 
-	value, err := e.client.ExecuteScriptAtLatestBlock(ctx, callScript, []cadence.Value{txData, toAddress})
+	value, err := e.client.ExecuteScriptAtLatestBlock(
+		ctx,
+		e.replaceAddresses(callScript),
+		[]cadence.Value{txData, toAddress},
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute script: %w", err)
 	}
+
+	e.logger.Info().
+		Str("address", address.Hex()).
+		Str("data", fmt.Sprintf("%x", data)).
+		Str("result", value.String()).
+		Msg("call executed")
 
 	return bytesFromCadenceArray(value)
 }
@@ -231,6 +263,37 @@ func (e *EVM) getSignerNetworkInfo(ctx context.Context) (int, uint64, error) {
 	}
 
 	return 0, 0, fmt.Errorf("provided account address and signer keys do not match")
+}
+
+// replaceAddresses replace the addresses based on the network
+func (e *EVM) replaceAddresses(script []byte) []byte {
+	// todo use the FVM configured addresses once the previewnet is added, this should all be replaced once flow-go is updated
+	addresses := map[string]map[string]string{
+		"previewnet": {
+			"EVM":           "0xb6763b4399a888c8",
+			"FungibleToken": "0xa0225e7000ac82a9",
+			"FlowToken":     "0x4445e7ad11568276",
+		},
+		"emulator": {
+			"EVM":           "0xf8d6e0586b0a20c7",
+			"FungibleToken": "0xee82856bf20e2aa6",
+			"FlowToken":     "0x0ae53cb6e3f42a79",
+		},
+	}
+
+	s := string(script)
+	// iterate over all the import name and address pairs and replace them in script
+	for imp, addr := range addresses[e.network] {
+		s = strings.ReplaceAll(s,
+			fmt.Sprintf("import %s", imp),
+			fmt.Sprintf("import %s from %s", imp, addr),
+		)
+	}
+
+	// also replace COA address if used (in scripts)
+	s = strings.ReplaceAll(s, "0xCOA", e.address.HexWithPrefix())
+
+	return []byte(s)
 }
 
 func cadenceArrayFromBytes(input []byte) cadence.Array {
