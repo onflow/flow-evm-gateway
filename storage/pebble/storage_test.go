@@ -99,6 +99,18 @@ func TestBlock(t *testing.T) {
 	})
 }
 
+func TestAccount(t *testing.T) {
+	t.Run("encoding decoding nonce data", func(t *testing.T) {
+		nonce := uint64(10)
+		height := uint64(20)
+		raw := encodeNonce(10, 20)
+		decNonce, decHeight, err := decodeNonce(raw)
+		require.NoError(t, err)
+		assert.Equal(t, nonce, decNonce)
+		assert.Equal(t, height, decHeight)
+	})
+}
+
 func runDB(name string, t *testing.T, f func(t *testing.T, db *Storage)) {
 	dir := t.TempDir()
 

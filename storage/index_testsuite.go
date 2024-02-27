@@ -303,6 +303,7 @@ func (a *AccountTestSuite) TestNonce() {
 
 	a.Run("update account and increase nonce", func() {
 		tx := mocks.NewTransaction(0)
+		rcp := mocks.NewReceipt(1, tx.Hash())
 		// todo add multiple accounts test
 		from := common.HexToAddress("FACF71692421039876a5BB4F10EF7A439D8ef61E")
 		rawKey := "f6d5333177711e562cabf1f311916196ee6ffc2a07966d9d4628094073bd5442"
@@ -316,7 +317,7 @@ func (a *AccountTestSuite) TestNonce() {
 		a.Require().Equal(uint64(0), nonce)
 
 		for i := 1; i < 5; i++ {
-			err = a.AccountIndexer.Update(tx)
+			err = a.AccountIndexer.Update(tx, rcp)
 			a.Require().NoError(err)
 
 			nonce, err = a.AccountIndexer.GetNonce(&from)

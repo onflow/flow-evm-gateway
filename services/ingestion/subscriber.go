@@ -34,6 +34,11 @@ func (r *RPCSubscriber) Subscribe(ctx context.Context, height uint64) (<-chan fl
 		},
 	}
 
+	_, err := r.client.GetBlockByHeight(ctx, height)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to subscribe for events, the block height %d doesn't exist: %w", height, err)
+	}
+
 	evs, errs, err := r.client.SubscribeEventsByBlockHeight(ctx, height, filter)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to subscribe to events by block height: %w", err)

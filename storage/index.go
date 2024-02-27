@@ -84,7 +84,7 @@ type TransactionIndexer interface {
 
 type AccountIndexer interface {
 	// Update account with executed transactions.
-	Update(tx *gethTypes.Transaction) error
+	Update(tx *gethTypes.Transaction, receipt *gethTypes.Receipt) error
 
 	// GetNonce gets an account nonce. If no nonce was indexed it returns 0.
 	// todo add getting nonce at provided block height / hash

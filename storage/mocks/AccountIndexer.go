@@ -66,13 +66,13 @@ func (_m *AccountIndexer) GetNonce(address *common.Address) (uint64, error) {
 	return r0, r1
 }
 
-// Update provides a mock function with given fields: tx
-func (_m *AccountIndexer) Update(tx *types.Transaction) error {
-	ret := _m.Called(tx)
+// Update provides a mock function with given fields: tx, receipt
+func (_m *AccountIndexer) Update(tx *types.Transaction, receipt *types.Receipt) error {
+	ret := _m.Called(tx, receipt)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(*types.Transaction) error); ok {
-		r0 = rf(tx)
+	if rf, ok := ret.Get(0).(func(*types.Transaction, *types.Receipt) error); ok {
+		r0 = rf(tx, receipt)
 	} else {
 		r0 = ret.Error(0)
 	}
