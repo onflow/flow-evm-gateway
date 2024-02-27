@@ -2,19 +2,20 @@ package models
 
 import (
 	"bytes"
+	"math/big"
+	"testing"
+
 	"github.com/ethereum/go-ethereum/common"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"math/big"
-	"testing"
 )
 
 func createTestEvent(t *testing.T) (cadence.Event, *gethTypes.Transaction, *types.Result) {
 	res := &types.Result{
-		Failed:                  false,
+		VMError:                 nil,
 		TxType:                  1,
 		GasConsumed:             1337,
 		DeployedContractAddress: types.Address{0x5, 0x6, 0x7},
@@ -42,7 +43,13 @@ func createTestEvent(t *testing.T) (cadence.Event, *gethTypes.Transaction, *type
 	err := tx.EncodeRLP(&txEnc)
 	require.NoError(t, err)
 
-	ev := types.NewTransactionExecutedEvent(1, txEnc.Bytes(), tx.Hash(), res)
+	ev := types.NewTransactionExecutedEvent(
+		1,
+		txEnc.Bytes(),
+		common.HexToHash("0x1"),
+		tx.Hash(),
+		res,
+	)
 
 	cdcEv, err := ev.Payload.CadenceEvent()
 	require.NoError(t, err)

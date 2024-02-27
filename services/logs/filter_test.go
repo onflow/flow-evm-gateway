@@ -1,6 +1,9 @@
 package logs
 
 import (
+	"math/big"
+	"testing"
+
 	"github.com/ethereum/go-ethereum/common"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/onflow/flow-evm-gateway/storage"
@@ -9,8 +12,6 @@ import (
 	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"math/big"
-	"testing"
 )
 
 var blocks = []*types.Block{
@@ -95,7 +96,7 @@ func blockStorage() storage.BlockIndexer {
 					return b, nil
 				}
 			}
-			return nil, errors.NotFound
+			return nil, errors.ErrNotFound
 		})
 
 	return blockStorage
@@ -115,18 +116,18 @@ func receiptStorage() storage.ReceiptIndexer {
 					return r, nil
 				}
 			}
-			return nil, errors.NotFound
+			return nil, errors.ErrNotFound
 		})
 
 	receiptStorage.
 		On("BloomsForBlockRange", mock.AnythingOfType("*big.Int"), mock.AnythingOfType("*big.Int")).
-		Return(func(start, end *big.Int) ([]gethTypes.Bloom, []*big.Int, error) {
-			blooms := make([]gethTypes.Bloom, 0)
+		Return(func(start, end *big.Int) ([]*gethTypes.Bloom, []*big.Int, error) {
+			blooms := make([]*gethTypes.Bloom, 0)
 			heights := make([]*big.Int, 0)
 
 			for _, r := range receipts {
 				if r.BlockNumber.Cmp(start) >= 0 && r.BlockNumber.Cmp(end) <= 0 {
-					blooms = append(blooms, r.Bloom)
+					blooms = append(blooms, &r.Bloom)
 					heights = append(heights, r.BlockNumber)
 				}
 			}

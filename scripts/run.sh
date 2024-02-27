@@ -1,26 +1,25 @@
 #!/bin/bash
 if [ "$FLOW_NETWORK" = "testnet" ] || [ "$FLOW_NETWORK" = "mainnet" ] || [ "$FLOW_NETWORK" = "canarynet" ] || [ "$FLOW_NETWORK" = "crescendo" ]; then
   ./evm-gateway --network=$FLOW_NETWORK
-else 
-  # Start the first process & redirect output to a temporary file
-  ./flow-x86_64-linux- emulator --evm-enabled > temp_output.txt &
+else
+## from https://cloud.google.com/run/docs/tutorials/network-filesystems-filestore
+# set -eo pipefail
 
-  # PID of the first process
-  FIRST_PROCESS_PID=$!
+  # modprobe nfs
+# Create mount directory for service.
+  # mkdir -p $MNT_DIR
 
-  # Monitor the temporary file for a specific output
-  PATTERN="3569"
-  while ! grep -q "$PATTERN" temp_output.txt; do
-    sleep 1
-  done
+  # echo "Mounting Cloud Filestore."
+# echo $FILESTORE_MOUNT_POINT
+  # echo $MNT_DIR
+# mount -o nolock $FILESTORE_MOUNT_POINT $MNT_DIR
+# echo "Mounting completed."
 
-  # Once the pattern is found, you can kill the first process if needed
-  # kill $FIRST_PROCESS_PID
-
-  # Run the second process
-
-  ./flow-x86_64-linux- transactions send /flow-evm-gateway/create_bridged_account.cdc 1500.0 --network=emulator --signer=emulator-account && ./evm-gateway
-
-  # Clean up temporary file
-  rm temp_output.txt
-fi
+./evm-gateway --access-node-grpc-host access-001.previewnet1.nodes.onflow.org:9000 \
+  --init-cadence-height 6479 \
+  --flow-network-id previewnet \
+  --coinbase FACF71692421039876a5BB4F10EF7A439D8ef61E \
+  --coa-address 0xaa6d2abaf5bfc626 \
+  --coa-key 555b8ccf5dd26d4fa575221791305481d3b23e47e3e1883001eba36d6b5e65ae \
+  --coa-resource-create \
+  --gas-price 0

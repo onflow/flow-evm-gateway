@@ -1,7 +1,12 @@
 .PHONY: test
 test:
 	# test all packages
-	go test -cover -parallel 8 ./...
+	go test -cover ./...
+
+.PHONY: e2e-test
+e2e-test:
+	# test all packages
+	cd integration && go test -cover ./...
 
 .PHONY: check-tidy
 check-tidy:
@@ -11,11 +16,14 @@ check-tidy:
 .PHONY: generate
 generate:
 	go get -d github.com/vektra/mockery/v2@v2.21.4
-	mockery --all --dir=storage --output=storage/mocks
-	mockery --name=FlowAccessClient --dir=api/mocksiface --structname=MockAccessClient --output=api/mocks
+	mockery --dir=storage --name=BlockIndexer --output=storage/mocks
+	mockery --dir=storage --name=ReceiptIndexer --output=storage/mocks
+	mockery --dir=storage --name=TransactionIndexer --output=storage/mocks
+	mockery --dir=storage --name=AccountIndexer --output=storage/mocks
+	mockery --all --dir=services/events --output=services/events/mocks
 
 .PHONY: ci
-ci: check-tidy test
+ci: check-tidy test e2e-test
 
 .PHONY: start-emulator
 start-emulator:

@@ -17,20 +17,20 @@ type ReceiptIndexer struct {
 }
 
 // BloomsForBlockRange provides a mock function with given fields: start, end
-func (_m *ReceiptIndexer) BloomsForBlockRange(start *big.Int, end *big.Int) ([]types.Bloom, []*big.Int, error) {
+func (_m *ReceiptIndexer) BloomsForBlockRange(start *big.Int, end *big.Int) ([]*types.Bloom, []*big.Int, error) {
 	ret := _m.Called(start, end)
 
-	var r0 []types.Bloom
+	var r0 []*types.Bloom
 	var r1 []*big.Int
 	var r2 error
-	if rf, ok := ret.Get(0).(func(*big.Int, *big.Int) ([]types.Bloom, []*big.Int, error)); ok {
+	if rf, ok := ret.Get(0).(func(*big.Int, *big.Int) ([]*types.Bloom, []*big.Int, error)); ok {
 		return rf(start, end)
 	}
-	if rf, ok := ret.Get(0).(func(*big.Int, *big.Int) []types.Bloom); ok {
+	if rf, ok := ret.Get(0).(func(*big.Int, *big.Int) []*types.Bloom); ok {
 		r0 = rf(start, end)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]types.Bloom)
+			r0 = ret.Get(0).([]*types.Bloom)
 		}
 	}
 

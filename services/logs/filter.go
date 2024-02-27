@@ -2,13 +2,22 @@ package logs
 
 import (
 	"fmt"
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/onflow/flow-evm-gateway/storage"
-	"math/big"
-	"slices"
+	"golang.org/x/exp/slices"
 )
 
+// FilterCriteria for log filtering.
+// Address of the contract emitting the log.
+// Topics that match the log topics, following the format:
+// [] “anything”
+// [A] “A in first position (and anything after)”
+// [null, B] “anything in first position AND B in second position (and anything after)”
+// [A, B] “A in first position AND B in second position (and anything after)”
+// [[A, B], [A, B]] “(A OR B) in first position AND (A OR B) in second position (and anything after)”
 type FilterCriteria struct {
 	Addresses []common.Address
 	Topics    [][]common.Hash
@@ -54,7 +63,7 @@ func (r *RangeFilter) Match() ([]*gethTypes.Log, error) {
 
 	logs := make([]*gethTypes.Log, 0)
 	for i, bloom := range blooms {
-		if !bloomMatch(bloom, r.criteria) {
+		if !bloomMatch(*bloom, r.criteria) {
 			continue
 		}
 
@@ -173,11 +182,7 @@ func exactMatch(log *gethTypes.Log, criteria FilterCriteria) bool {
 		}
 	}
 
-	if !slices.Contains(criteria.Addresses, log.Address) {
-		return false
-	}
-
-	return true
+	return slices.Contains(criteria.Addresses, log.Address)
 }
 
 // bloomMatch takes a bloom value and tests if the addresses and topics provided pass the bloom filter.
