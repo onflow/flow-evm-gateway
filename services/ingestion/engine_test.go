@@ -42,7 +42,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 		eventsChan := make(chan flow.BlockEvents)
 		subscriber := &mocks.Subscriber{}
 		subscriber.
-			On("Subscribe", mock.AnythingOfType("*context.emptyCtx"), mock.AnythingOfType("uint64")).
+			On("Subscribe", mock.Anything, mock.AnythingOfType("uint64")).
 			Return(func(ctx context.Context, latest uint64) (<-chan flow.BlockEvents, <-chan error, error) {
 				return eventsChan, make(<-chan error), nil
 			})
@@ -109,7 +109,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 		eventsChan := make(chan flow.BlockEvents)
 		subscriber := &mocks.Subscriber{}
 		subscriber.
-			On("Subscribe", mock.AnythingOfType("*context.emptyCtx"), mock.AnythingOfType("uint64")).
+			On("Subscribe", mock.Anything, mock.AnythingOfType("uint64")).
 			Return(func(ctx context.Context, latest uint64) (<-chan flow.BlockEvents, <-chan error, error) {
 				return eventsChan, make(<-chan error), nil
 			})
@@ -186,7 +186,7 @@ func TestTransactionIngestion(t *testing.T) {
 	eventsChan := make(chan flow.BlockEvents)
 	subscriber := &mocks.Subscriber{}
 	subscriber.
-		On("Subscribe", mock.AnythingOfType("*context.emptyCtx"), mock.AnythingOfType("uint64")).
+		On("Subscribe", mock.Anything, mock.AnythingOfType("uint64")).
 		Return(func(ctx context.Context, latest uint64) (<-chan flow.BlockEvents, <-chan error, error) {
 			return eventsChan, make(<-chan error), nil
 		})
