@@ -99,13 +99,13 @@ func (s BlockStorage) GetByID(ID common.Hash) (*types.Block, error) {
 }
 
 func (s BlockStorage) Store(block *types.Block) error {
-	s.base.mu.Lock()
-	defer s.base.mu.Unlock()
-
 	ID, err := block.Hash()
 	if err != nil {
 		return fmt.Errorf("block hash error: %w", err)
 	}
+
+	s.base.mu.Lock()
+	defer s.base.mu.Unlock()
 
 	// Check if the block already exists
 	_, exists := s.base.blocksIDs[ID]
