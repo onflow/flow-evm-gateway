@@ -8,26 +8,6 @@ FlowEVM Gateway implements the Ethereum JSON-RPC API for the [FlowEVM](https://d
 
 FlowEVM Gateway is compatible with the majority of standard Ethereum JSON-RPC APIs allowing seamless integration with existing Ethereum-compatible web3 tools via HTTP. FlowEVM Gateway honors Ethereum's JSON-RPC namespace system, grouping RPC methods into categories based on their specific purpose. Each method name is constructed using the namespace, an underscore, and the specific method name in that namespace. For example, the `eth_call` method is located within the `eth` namespace.
 
-Listed below are the JSON-RPC namespaces currently supported by the FlowEVM Gateway:
-
-* `eth`
-* `web3`
-* `net`
-<img src="https://assets-global.website-files.com/5f734f4dbd95382f4fdfa0ea/65b0115890bbda5c804f7524_donuts%202-p-500.png" alt="evm" width="300"/>
-
-# EVM Gateway
-
-
-**EVM Gateway enables seamless interaction with the Flow EVM, mirroring the experience of engaging with any other EVM blockchain.**
-
-EVM Gateway serves as a powerful API gateway, designed specifically to bridge the Ethereum Virtual Machine (EVM) with the Flow blockchain ecosystem. By exposing a JSON RPC API, it enables seamless access to EVM functionalities on Flow, creating a unified platform for developers to interact with and build upon.
-
-At its core, EVM Gateway is engineered to index EVM transactions and blocks produced within the EVM network hosted on Flow. This capability ensures that all relevant data—ranging from transaction details to block information—is accurately captured and made readily accessible to clients. Through its comprehensive indexing system, EVM Gateway provides an essential service for applications requiring up-to-date and historical EVM data.
-
-Beyond data provision, EVM Gateway plays a crucial role in transaction management. It accepts EVM-compatible transactions from clients, transforming them into Cadence transactions before submitting them to the Flow network. This process not only simplifies the transaction submission for users familiar with EVM ecosystems but also leverages Flow's unique features and benefits, thereby enhancing transaction efficiency and security.
-
-EVM Gateway stands as a testament to the collaborative potential of blockchain technologies. By integrating EVM's robust capabilities with Flow's innovative blockchain platform, it offers developers a versatile and powerful toolset. Whether you're building decentralized applications, conducting blockchain analysis, or integrating blockchain functionalities into existing systems, EVM Gateway provides the necessary infrastructure to bridge these two pioneering technologies.
-
 
 # Running
 Operating an EVM Gateway is straightforward. It can either be deployed locally alongside the Flow emulator or configured to connect with any active Flow networks supporting EVM. Given that the EVM Gateway depends solely on [Access Node APIs](https://developers.flow.com/networks/node-ops/access-onchain-data/access-nodes/accessing-data/access-api), it is compatible with any networks offering this API access.
