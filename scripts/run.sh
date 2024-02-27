@@ -1,23 +1,21 @@
 #!/bin/bash
 
-# Start the first process & redirect output to a temporary file
-./flow-x86_64-linux- emulator --evm-enabled > temp_output.txt &
+## from https://cloud.google.com/run/docs/tutorials/network-filesystems-filestore
+set -eo pipefail
 
-# PID of the first process
-FIRST_PROCESS_PID=$!
+MNT_DIR='./db'
 
-# Monitor the temporary file for a specific output
-PATTERN="3569"
-while ! grep -q "$PATTERN" temp_output.txt; do
-  sleep 1
-done
+# Create mount directory for service.
+mkdir -p $MNT_DIR
 
-# Once the pattern is found, you can kill the first process if needed
-# kill $FIRST_PROCESS_PID
+echo "Mounting Cloud Filestore."
+mount -o nolock $FILESTORE_MOUNT_POINT $MNT_DIR
+echo "Mounting completed."
 
-# Run the second process
-
-./flow-x86_64-linux- transactions send /flow-evm-gateway/create_bridged_account.cdc 1500.0 --network=emulator --signer=emulator-account && ./evm-gateway
-
-# Clean up temporary file
-rm temp_output.txt
+./evm-gateway --access-node-grpc-host access-001.previewnet1.nodes.onflow.org:9000 \
+  --init-cadence-height 93680 \
+  --flow-network-id previewnet \
+  --coinbase FACF71692421039876a5BB4F10EF7A439D8ef61E \
+  --coa-address 0xa8a7a61c869b028a \
+  --coa-key 290139481555cd366e1bc594c2981941af29e8ea7fbc4e21796ff62db415df1c \
+  --coa-resource-create

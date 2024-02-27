@@ -8,30 +8,41 @@ import (
 )
 
 type BlockIndexer interface {
-	// Store provided block.
+	// Store provided EVM block with the matching Cadence height.
 	// Expected errors:
 	// - errors.Duplicate if the block already exists
-	Store(block *types.Block) error
+	Store(cadenceHeight uint64, block *types.Block) error
 
-	// GetByHeight returns a block stored by height.
+	// GetByHeight returns an EVM block stored by EVM height.
 	// Expected errors:
 	// - errors.NotFound if the block is not found
 	GetByHeight(height uint64) (*types.Block, error)
 
-	// GetByID returns a block stored by ID.
+	// GetByID returns an EVM block stored by ID.
 	// Expected errors:
 	// - errors.NotFound if the block is not found
 	GetByID(ID common.Hash) (*types.Block, error)
 
-	// LatestHeight returns the latest stored block height.
+	// LatestEVMHeight returns the latest stored EVM block height.
 	// Expected errors:
 	// - errors.NotInitialized if the storage was not initialized
-	LatestHeight() (uint64, error)
+	LatestEVMHeight() (uint64, error)
 
-	// FirstHeight returns the first stored block height.
+	// FirstEVMHeight returns the first stored EVM block height.
 	// Expected errors:
 	// - errors.NotInitialized if the storage was not initialized
-	FirstHeight() (uint64, error)
+	FirstEVMHeight() (uint64, error)
+
+	// LatestCadenceHeight return the latest stored Cadence height.
+	// Expected errors:
+	// - errors.NotInitialized if the storage was not initialized
+	LatestCadenceHeight() (uint64, error)
+
+	// GetCadenceHeight returns the Cadence height that matches the
+	// provided EVM height. Each EVM block indexed contains a link
+	// to the Cadence height.
+	// - errors.NotFound if the height is not found
+	GetCadenceHeight(evmHeight uint64) (uint64, error)
 }
 
 type ReceiptIndexer interface {
@@ -69,4 +80,16 @@ type TransactionIndexer interface {
 	// Expected errors:
 	// - errors.NotFound if the transaction with the ID is not found.
 	Get(ID common.Hash) (*gethTypes.Transaction, error)
+}
+
+type AccountIndexer interface {
+	// Update account with executed transactions.
+	Update(tx *gethTypes.Transaction, receipt *gethTypes.Receipt) error
+
+	// GetNonce gets an account nonce. If no nonce was indexed it returns 0.
+	// todo add getting nonce at provided block height / hash
+	GetNonce(address *common.Address) (uint64, error)
+
+	// GetBalance gets an account balance. If no balance was indexed it returns 0.
+	GetBalance(address *common.Address) (*big.Int, error)
 }

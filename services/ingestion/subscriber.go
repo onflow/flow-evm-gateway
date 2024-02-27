@@ -2,6 +2,7 @@ package ingestion
 
 import (
 	"context"
+	"fmt"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access"
 	"github.com/onflow/flow-go/fvm/evm/types"
@@ -33,5 +34,16 @@ func (r *RPCSubscriber) Subscribe(ctx context.Context, height uint64) (<-chan fl
 		},
 	}
 
-	return r.client.SubscribeEventsByBlockHeight(ctx, height, filter)
+	_, err := r.client.GetBlockByHeight(ctx, height)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to subscribe for events, the block height %d doesn't exist: %w", height, err)
+	}
+
+	// todo revisit if we should use custom heartbeat interval grpc.WithHeartbeatInterval(1)
+	evs, errs, err := r.client.SubscribeEventsByBlockHeight(ctx, height, filter)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to subscribe to events by block height: %w", err)
+	}
+
+	return evs, errs, nil
 }

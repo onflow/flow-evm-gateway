@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/onflow/flow-evm-gateway/storage/mocks"
+	evmEmulator "github.com/onflow/flow-go/fvm/evm/emulator"
 	"github.com/stretchr/testify/suite"
 	"math/big"
 )
@@ -19,7 +21,7 @@ func (b *BlockTestSuite) TestGet() {
 	b.Run("existing block", func() {
 		height := uint64(1)
 		block := mocks.NewBlock(height)
-		err := b.Blocks.Store(block)
+		err := b.Blocks.Store(height+1, block)
 		b.Require().NoError(err)
 
 		ID, err := block.Hash()
@@ -50,17 +52,17 @@ func (b *BlockTestSuite) TestStore() {
 	block := mocks.NewBlock(10)
 
 	b.Run("success", func() {
-		err := b.Blocks.Store(block)
+		err := b.Blocks.Store(2, block)
 		b.Require().NoError(err)
 
 		// we allow overwriting blocks to make the actions idempotent
-		err = b.Blocks.Store(block)
+		err = b.Blocks.Store(2, block)
 		b.Require().NoError(err)
 	})
 
 	b.Run("store multiple blocks, and get one", func() {
 		for i := 0; i < 10; i++ {
-			err := b.Blocks.Store(mocks.NewBlock(uint64(10 + i)))
+			err := b.Blocks.Store(uint64(i+5), mocks.NewBlock(uint64(10+i)))
 			b.Require().NoError(err)
 		}
 
@@ -75,28 +77,55 @@ func (b *BlockTestSuite) TestStore() {
 }
 
 func (b *BlockTestSuite) TestHeights() {
-	b.Run("first height", func() {
+	b.Run("first EVM height", func() {
 		for i := 0; i < 5; i++ {
-			first, err := b.Blocks.FirstHeight()
+			first, err := b.Blocks.FirstEVMHeight()
 			b.Require().NoError(err)
 			b.Require().Equal(uint64(1), first)
 
 			// shouldn't affect first height
 			lastHeight := uint64(100 + i)
-			err = b.Blocks.Store(mocks.NewBlock(lastHeight))
+			err = b.Blocks.Store(lastHeight+10, mocks.NewBlock(lastHeight))
 			b.Require().NoError(err)
 		}
 	})
 
-	b.Run("last height", func() {
+	b.Run("last EVM height", func() {
 		for i := 0; i < 5; i++ {
 			lastHeight := uint64(100 + i)
-			err := b.Blocks.Store(mocks.NewBlock(lastHeight))
+			err := b.Blocks.Store(lastHeight+10, mocks.NewBlock(lastHeight))
 			b.Require().NoError(err)
 
-			last, err := b.Blocks.LatestHeight()
+			last, err := b.Blocks.LatestEVMHeight()
 			b.Require().NoError(err)
 			b.Require().Equal(lastHeight, last)
+		}
+	})
+
+	b.Run("last Cadence height", func() {
+		for i := 0; i < 5; i++ {
+			lastHeight := uint64(100 + i)
+			err := b.Blocks.Store(lastHeight, mocks.NewBlock(lastHeight-10))
+			b.Require().NoError(err)
+
+			last, err := b.Blocks.LatestCadenceHeight()
+			b.Require().NoError(err)
+			b.Require().Equal(lastHeight, last)
+		}
+	})
+
+	b.Run("Cadence height from EVM height", func() {
+		evmHeights := []uint64{10, 11, 12, 13}
+		cadenceHeights := []uint64{20, 24, 26, 27}
+		for i, evmHeight := range evmHeights {
+			err := b.Blocks.Store(cadenceHeights[i], mocks.NewBlock(evmHeight))
+			b.Require().NoError(err)
+		}
+
+		for i, evmHeight := range evmHeights {
+			cadence, err := b.Blocks.GetCadenceHeight(evmHeight)
+			b.Require().NoError(err)
+			b.Assert().Equal(cadenceHeights[i], cadence)
 		}
 	})
 }
@@ -262,5 +291,38 @@ func (s *TransactionTestSuite) TestGetTransaction() {
 		retTx, err := s.TransactionIndexer.Get(nonExistingTxHash)
 		s.Require().Nil(retTx)
 		s.Require().ErrorIs(err, errors.NotFound)
+	})
+}
+
+type AccountTestSuite struct {
+	suite.Suite
+	AccountIndexer AccountIndexer
+}
+
+func (a *AccountTestSuite) TestNonce() {
+
+	a.Run("update account and increase nonce", func() {
+		tx := mocks.NewTransaction(0)
+		rcp := mocks.NewReceipt(1, tx.Hash())
+		// todo add multiple accounts test
+		from := common.HexToAddress("FACF71692421039876a5BB4F10EF7A439D8ef61E")
+		rawKey := "f6d5333177711e562cabf1f311916196ee6ffc2a07966d9d4628094073bd5442"
+		key, err := crypto.HexToECDSA(rawKey)
+
+		tx, err = types.SignTx(tx, evmEmulator.GetDefaultSigner(), key)
+		a.Require().NoError(err)
+
+		nonce, err := a.AccountIndexer.GetNonce(&from)
+		a.Require().NoError(err)
+		a.Require().Equal(uint64(0), nonce)
+
+		for i := 1; i < 5; i++ {
+			err = a.AccountIndexer.Update(tx, rcp)
+			a.Require().NoError(err)
+
+			nonce, err = a.AccountIndexer.GetNonce(&from)
+			a.Require().NoError(err)
+			a.Require().Equal(uint64(i), nonce)
+		}
 	})
 }
