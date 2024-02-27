@@ -39,23 +39,23 @@ type TransactionArgs struct {
 	ChainID    *hexutil.Big      `json:"chainId,omitempty"`
 }
 
-// accessListResult returns an optional accesslist
+// AccessListResult returns an optional accesslist
 // It's the result of the `debug_createAccessList` RPC call.
 // It contains an error if the transaction itself failed.
-type accessListResult struct {
+type AccessListResult struct {
 	Accesslist *types.AccessList `json:"accessList"`
 	Error      string            `json:"error,omitempty"`
 	GasUsed    hexutil.Uint64    `json:"gasUsed"`
 }
 
-type feeHistoryResult struct {
+type FeeHistoryResult struct {
 	OldestBlock  *hexutil.Big     `json:"oldestBlock"`
 	Reward       [][]*hexutil.Big `json:"reward,omitempty"`
 	BaseFee      []*hexutil.Big   `json:"baseFeePerGas,omitempty"`
 	GasUsedRatio []float64        `json:"gasUsedRatio"`
 }
 
-// Result structs for GetProof
+// AccountResult structs for GetProof
 type AccountResult struct {
 	Address      common.Address  `json:"address"`
 	AccountProof []string        `json:"accountProof"`
@@ -131,4 +131,13 @@ type BlockOverrides struct {
 	Random      *common.Hash
 	BaseFee     *hexutil.Big
 	BlobBaseFee *hexutil.Big
+}
+
+type Block struct {
+	Hash         common.Hash
+	Number       hexutil.Uint64
+	ParentHash   common.Hash
+	ReceiptsRoot common.Hash
+	Transactions []common.Hash
+	// todo add more fields needed
 }

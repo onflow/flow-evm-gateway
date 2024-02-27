@@ -14,8 +14,8 @@ type BlockIndexer struct {
 	mock.Mock
 }
 
-// FirstHeight provides a mock function with given fields:
-func (_m *BlockIndexer) FirstHeight() (uint64, error) {
+// FirstEVMHeight provides a mock function with given fields:
+func (_m *BlockIndexer) FirstEVMHeight() (uint64, error) {
 	ret := _m.Called()
 
 	var r0 uint64
@@ -90,8 +90,32 @@ func (_m *BlockIndexer) GetByID(ID common.Hash) (*types.Block, error) {
 	return r0, r1
 }
 
-// LatestHeight provides a mock function with given fields:
-func (_m *BlockIndexer) LatestHeight() (uint64, error) {
+// GetCadenceHeight provides a mock function with given fields: evmHeight
+func (_m *BlockIndexer) GetCadenceHeight(evmHeight uint64) (uint64, error) {
+	ret := _m.Called(evmHeight)
+
+	var r0 uint64
+	var r1 error
+	if rf, ok := ret.Get(0).(func(uint64) (uint64, error)); ok {
+		return rf(evmHeight)
+	}
+	if rf, ok := ret.Get(0).(func(uint64) uint64); ok {
+		r0 = rf(evmHeight)
+	} else {
+		r0 = ret.Get(0).(uint64)
+	}
+
+	if rf, ok := ret.Get(1).(func(uint64) error); ok {
+		r1 = rf(evmHeight)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// LatestCadenceHeight provides a mock function with given fields:
+func (_m *BlockIndexer) LatestCadenceHeight() (uint64, error) {
 	ret := _m.Called()
 
 	var r0 uint64
@@ -114,13 +138,37 @@ func (_m *BlockIndexer) LatestHeight() (uint64, error) {
 	return r0, r1
 }
 
-// Store provides a mock function with given fields: block
-func (_m *BlockIndexer) Store(block *types.Block) error {
-	ret := _m.Called(block)
+// LatestEVMHeight provides a mock function with given fields:
+func (_m *BlockIndexer) LatestEVMHeight() (uint64, error) {
+	ret := _m.Called()
+
+	var r0 uint64
+	var r1 error
+	if rf, ok := ret.Get(0).(func() (uint64, error)); ok {
+		return rf()
+	}
+	if rf, ok := ret.Get(0).(func() uint64); ok {
+		r0 = rf()
+	} else {
+		r0 = ret.Get(0).(uint64)
+	}
+
+	if rf, ok := ret.Get(1).(func() error); ok {
+		r1 = rf()
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// Store provides a mock function with given fields: cadenceHeight, block
+func (_m *BlockIndexer) Store(cadenceHeight uint64, block *types.Block) error {
+	ret := _m.Called(cadenceHeight, block)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(*types.Block) error); ok {
-		r0 = rf(block)
+	if rf, ok := ret.Get(0).(func(uint64, *types.Block) error); ok {
+		r0 = rf(cadenceHeight, block)
 	} else {
 		r0 = ret.Error(0)
 	}

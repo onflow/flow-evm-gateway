@@ -6,8 +6,11 @@
 package api
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"strings"
@@ -171,14 +174,19 @@ func (h *httpServer) Start() error {
 	}
 
 	h.listener = listener
-	go h.server.Serve(listener)
+	go func() {
+		err = h.server.Serve(listener)
+		if err != nil {
+			h.log.Fatal().Err(err)
+		}
+	}()
 
 	if h.rpcAllowed() {
-		log.Info().Msg(fmt.Sprintf("JSON-RPC over HTTP enabled: %v/rpc", listener.Addr()))
+		log.Info().Msg(fmt.Sprintf("JSON-RPC over HTTP enabled: %v", listener.Addr()))
 	}
 
 	if h.wsAllowed() {
-		url := fmt.Sprintf("ws://%v/ws", listener.Addr())
+		url := fmt.Sprintf("ws://%v", listener.Addr())
 		log.Info().Msg(fmt.Sprint("JSON-RPC over WebSocket enabled: ", url))
 	}
 
@@ -198,19 +206,37 @@ func (h *httpServer) disableRPC() bool {
 
 func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Check if WebSocket request and serve if JSON-RPC over WebSocket is enabled
+	if b, err := io.ReadAll(r.Body); err == nil {
+		h.log.Debug().
+			Str("body", string(b)).
+			Str("url", r.URL.String()).
+			Bool("ws", isWebSocket(r)).
+			Msg("API request")
+
+		r.Body = io.NopCloser(bytes.NewBuffer(b))
+		r.Body.Close()
+	}
+
 	ws := h.wsHandler
 	if ws != nil && isWebSocket(r) {
-		if checkPath(r, "/ws") {
+		if checkPath(r, "") {
 			ws.ServeHTTP(w, r)
 			return
 		}
 	}
 
+	// enable logging responses
+	logW := &loggingResponseWriter{
+		ResponseWriter: w,
+		logger:         h.log,
+	}
+
 	// If JSON-RPC over HTTP is enabled, try to serve the request
-	rpc := h.httpHandler
+	// todo wrap with CORS handler in main branch
+	rpc := recoverHandler(h.log, h.httpHandler)
 	if rpc != nil {
-		if checkPath(r, "/rpc") {
-			rpc.ServeHTTP(w, r)
+		if checkPath(r, "") {
+			rpc.ServeHTTP(logW, r)
 			return
 		}
 	}
@@ -322,4 +348,42 @@ func checkPath(r *http.Request, path string) bool {
 func isWebSocket(r *http.Request) bool {
 	return strings.EqualFold(r.Header.Get("Upgrade"), "websocket") &&
 		strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade")
+}
+
+// recoverHandler adds a wrapper to handle panics
+func recoverHandler(logger zerolog.Logger, h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			r := recover()
+			if r != nil {
+				var err error
+				switch t := r.(type) {
+				case string:
+					err = errors.New(t)
+				case error:
+					err = t
+				}
+
+				logger.Error().Err(err).Msg("panic in the http server")
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
+		}()
+		h.ServeHTTP(w, r)
+	})
+}
+
+var _ http.ResponseWriter = &loggingResponseWriter{}
+
+type loggingResponseWriter struct {
+	http.ResponseWriter
+	logger zerolog.Logger
+}
+
+func (w *loggingResponseWriter) Write(data []byte) (int, error) {
+	w.logger.Debug().Str("data", string(data)).Msg("API response")
+	return w.ResponseWriter.Write(data)
+}
+
+func (w *loggingResponseWriter) WriteHeader(statusCode int) {
+	w.ResponseWriter.WriteHeader(statusCode)
 }

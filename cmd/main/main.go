@@ -1,27 +1,18 @@
 package main
 
 import (
+	"github.com/onflow/flow-evm-gateway/bootstrap"
 	"github.com/onflow/flow-evm-gateway/config"
-	"github.com/rs/zerolog"
 )
 
 func main() {
-	logger := zerolog.New(zerolog.NewConsoleWriter()).With().Timestamp().Logger()
-
 	cfg, err := config.FromFlags()
 	if err != nil {
-		logger.Fatal().Err(err)
+		panic(err)
 	}
 
-	go func() {
-		err := startServer(cfg, logger)
-		if err != nil {
-			logger.Fatal().Err(err)
-		}
-	}()
-
-	err = startIngestion(cfg)
+	err = bootstrap.Start(cfg)
 	if err != nil {
-		logger.Fatal().Err(err)
+		panic(err)
 	}
 }

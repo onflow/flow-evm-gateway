@@ -4,8 +4,9 @@ import "encoding/binary"
 
 const (
 	// block keys
-	blockHeightKey     = byte(1)
-	blockIDToHeightKey = byte(2)
+	blockHeightKey              = byte(1)
+	blockIDToHeightKey          = byte(2)
+	evmHeightToCadenceHeightKey = byte(3)
 
 	// transaction keys
 	txIDKey = byte(10)
@@ -15,9 +16,14 @@ const (
 	receiptHeightKey       = byte(21)
 	bloomHeightKey         = byte(22)
 
+	// account keys
+	accountNonceKey   = byte(30)
+	accountBalanceKey = byte(31)
+
 	// special keys
-	latestHeightKey = byte(100)
-	firstHeightKey  = byte(101)
+	latestEVMHeightKey     = byte(100)
+	firstEVMHeightKey      = byte(101)
+	latestCadenceHeightKey = byte(102)
 )
 
 // makePrefix makes a key used internally to store the values

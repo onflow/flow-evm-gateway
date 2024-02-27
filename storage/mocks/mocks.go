@@ -61,7 +61,7 @@ func NewReceipt(height uint64, ID common.Hash) *gethTypes.Receipt {
 
 func NewTransaction(nonce uint64) *gethTypes.Transaction {
 	return gethTypes.NewTx(&gethTypes.DynamicFeeTx{
-		ChainID:   big.NewInt(1),
+		ChainID:   big.NewInt(666),
 		Nonce:     nonce,
 		To:        &common.Address{0x01, 0x02},
 		Gas:       123457,
