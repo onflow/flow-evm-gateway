@@ -1,4 +1,4 @@
-package events
+package ingestion
 
 import (
 	"bytes"
@@ -7,7 +7,7 @@ import (
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-evm-gateway/models"
-	"github.com/onflow/flow-evm-gateway/services/events/mocks"
+	"github.com/onflow/flow-evm-gateway/services/ingestion/mocks"
 	storageMock "github.com/onflow/flow-evm-gateway/storage/mocks"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go/fvm/evm/types"

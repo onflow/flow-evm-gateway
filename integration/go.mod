@@ -3,6 +3,7 @@ module github.com/onflow/flow-evm-gateway/integration
 go 1.21.4
 
 require (
+	github.com/ethereum/go-ethereum v1.13.5
 	github.com/onflow/cadence v1.0.0-M5
 	github.com/onflow/flow-emulator v1.0.0-M2.0.20240206152418-4e3c7a81d221
 	github.com/onflow/flow-evm-gateway v0.0.0-20240201154855-4d4d3d3f19c7
@@ -44,7 +45,6 @@ require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/ef-ds/deque v1.0.4 // indirect
 	github.com/ethereum/c-kzg-4844 v0.4.0 // indirect
-	github.com/ethereum/go-ethereum v1.13.5 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.4.1-0.20230228173756-c0c9f774e40c // indirect
 	github.com/fxamacker/circlehash v0.3.0 // indirect

@@ -13,7 +13,7 @@ import (
 	"github.com/onflow/flow-emulator/adapters"
 	"github.com/onflow/flow-emulator/emulator"
 	"github.com/onflow/flow-emulator/server"
-	"github.com/onflow/flow-evm-gateway/services/events"
+	"github.com/onflow/flow-evm-gateway/services/ingestion"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
 	sdk "github.com/onflow/flow-go-sdk"
@@ -89,7 +89,7 @@ func startEventIngestionEngine(ctx context.Context, dbDir string) (
 		return nil, nil, nil, err
 	}
 
-	subscriber := events.NewRPCSubscriber(client)
+	subscriber := ingestion.NewRPCSubscriber(client)
 
 	log := logger.With().Str("component", "database").Logger()
 	db, err := pebble.New(dbDir, log)
@@ -102,7 +102,7 @@ func startEventIngestionEngine(ctx context.Context, dbDir string) (
 	txs := pebble.NewTransactions(db)
 
 	log = logger.With().Str("component", "ingestion").Logger()
-	engine := events.NewEventIngestionEngine(subscriber, blocks, receipts, txs, log)
+	engine := ingestion.NewEventIngestionEngine(subscriber, blocks, receipts, txs, log)
 
 	go func() {
 		err = engine.Start(ctx)
