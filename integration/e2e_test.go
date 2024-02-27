@@ -442,6 +442,11 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 		err = bootstrap.Start(cfg)
 		require.NoError(t, err)
 	}()
+
+	defer func() {
+		srv.Stop()
+	}()
+
 	time.Sleep(500 * time.Millisecond) // some time to startup
 
 	flowAmount, _ := cadence.NewUFix64("5.0")
@@ -757,6 +762,10 @@ func TestE2E_ConcurrentTransactionSubmission(t *testing.T) {
 
 	client, err := grpc.NewClient(host)
 	require.NoError(t, err)
+
+	defer func() {
+		srv.Stop()
+	}()
 
 	time.Sleep(500 * time.Millisecond) // some time to startup
 
