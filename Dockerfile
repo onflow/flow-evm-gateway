@@ -20,5 +20,5 @@ RUN apt-get update
 # RUN apt-get install -y nfs-common
 COPY --from=builder /flow-evm-gateway/evm-gateway /flow-evm-gateway/evm-gateway
 COPY --from=builder /flow-evm-gateway/scripts/run.sh /flow-evm-gateway/run.sh
-EXPOSE 3000
+EXPOSE 8545
 CMD cd /flow-evm-gateway && ./run.sh
