@@ -415,6 +415,12 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 	emu := srv.Emulator()
 	dbDir := t.TempDir()
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer func() {
+		cancel()
+		srv.Stop()
+	}()
+
 	gwAcc := emu.ServiceKey()
 	gwKey := gwAcc.PrivateKey
 	gwAddress := gwAcc.Address
@@ -439,12 +445,8 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 	}
 
 	go func() {
-		err = bootstrap.Start(cfg)
+		err = bootstrap.Start(ctx, cfg)
 		require.NoError(t, err)
-	}()
-
-	defer func() {
-		srv.Stop()
 	}()
 
 	time.Sleep(500 * time.Millisecond) // some time to startup
@@ -756,16 +758,18 @@ func TestE2E_ConcurrentTransactionSubmission(t *testing.T) {
 	emu := srv.Emulator()
 	dbDir := t.TempDir()
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer func() {
+		cancel()
+		srv.Stop()
+	}()
+
 	gwAcc := emu.ServiceKey()
 	gwAddress := gwAcc.Address
 	host := "localhost:3569" // emulator
 
 	client, err := grpc.NewClient(host)
 	require.NoError(t, err)
-
-	defer func() {
-		srv.Stop()
-	}()
 
 	time.Sleep(500 * time.Millisecond) // some time to startup
 
@@ -801,7 +805,7 @@ func TestE2E_ConcurrentTransactionSubmission(t *testing.T) {
 	}
 
 	go func() {
-		err = bootstrap.Start(cfg)
+		err = bootstrap.Start(ctx, cfg)
 		require.NoError(t, err)
 	}()
 	time.Sleep(500 * time.Millisecond) // some time to startup
