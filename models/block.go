@@ -2,8 +2,6 @@ package models
 
 import (
 	"fmt"
-	"github.com/onflow/flow-go-sdk"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/onflow/cadence"
 	cdcCommon "github.com/onflow/cadence/runtime/common"

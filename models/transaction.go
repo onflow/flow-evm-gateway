@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"github.com/onflow/flow-go-sdk"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
