@@ -15,12 +15,9 @@ import (
 	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/onflow/flow-go-sdk/crypto"
 	"github.com/rs/zerolog"
-	"os"
-	"os/signal"
-	"syscall"
 )
 
-func Start(cfg *config.Config) error {
+func Start(ctx context.Context, cfg *config.Config) error {
 	logger := zerolog.New(zerolog.NewConsoleWriter()).With().Timestamp().Logger()
 	logger.Level(zerolog.DebugLevel) // todo use cfg flag
 	logger.Info().Msg("starting up the EVM gateway")
@@ -50,14 +47,14 @@ func Start(cfg *config.Config) error {
 	}
 
 	go func() {
-		err := startServer(cfg, blocks, transactions, receipts, accounts, logger)
+		err := startServer(ctx, cfg, blocks, transactions, receipts, accounts, logger)
 		if err != nil {
 			logger.Error().Err(err).Msg("failed to start the API server")
 			panic(err)
 		}
 	}()
 
-	err = startIngestion(cfg, blocks, transactions, receipts, accounts, logger)
+	err = startIngestion(ctx, cfg, blocks, transactions, receipts, accounts, logger)
 	if err != nil {
 		return fmt.Errorf("failed to start event ingestion: %w", err)
 	}
@@ -66,6 +63,7 @@ func Start(cfg *config.Config) error {
 }
 
 func startIngestion(
+	ctx context.Context,
 	cfg *config.Config,
 	blocks storage.BlockIndexer,
 	transactions storage.TransactionIndexer,
@@ -112,7 +110,6 @@ func startIngestion(
 		logger,
 	)
 
-	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		err = engine.Run(ctx)
 		if err != nil {
@@ -124,18 +121,11 @@ func startIngestion(
 	<-engine.Ready() // wait for engine to be ready
 
 	logger.Info().Msg("Ingestion start up successful")
-
-	gracefulShutdown := make(chan os.Signal, 1)
-	signal.Notify(gracefulShutdown, syscall.SIGINT, syscall.SIGTERM)
-
-	<-gracefulShutdown
-	logger.Info().Msg("shutdown signal received, shutting down")
-	cancel()
-
 	return nil
 }
 
 func startServer(
+	ctx context.Context,
 	cfg *config.Config,
 	blocks storage.BlockIndexer,
 	transactions storage.TransactionIndexer,
@@ -201,6 +191,10 @@ func startServer(
 	}
 
 	logger.Info().Msgf("Server Started: %s", srv.ListenAddr())
+
+	<-ctx.Done()
+	logger.Info().Msg("Shutting down API server")
+	srv.Stop()
 
 	return nil
 }
