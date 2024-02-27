@@ -11,6 +11,7 @@ check-tidy:
 .PHONY: generate
 generate:
 	go get -d github.com/vektra/mockery/v2@v2.21.4
+	mockery --all --dir=storage --output=storage/mocks
 	mockery --name=FlowAccessClient --dir=api/mocksiface --structname=MockAccessClient --output=api/mocks
 
 .PHONY: ci
