@@ -376,8 +376,12 @@ func TestIntegration_DeployCallContract(t *testing.T) {
 
 	first := int64(heights[0])
 	last := int64(heights[len(heights)-1])
-	matches, err = logs.NewRangeFilter(*big.NewInt(first), *big.NewInt(last), filter, receipts).Match()
+	f, err := logs.NewRangeFilter(*big.NewInt(first), *big.NewInt(last), filter, receipts)
 	require.NoError(t, err)
+
+	matches, err = f.Match()
+	require.NoError(t, err)
+
 	require.Len(t, matches, 1)
 	assert.NoError(t, checkSumLogValue(storeContract, sumA, sumB, matches[0].Data))
 
@@ -391,8 +395,12 @@ func TestIntegration_DeployCallContract(t *testing.T) {
 		}},
 	}
 
-	matches, err = logs.NewRangeFilter(*big.NewInt(first), *big.NewInt(last), filter, receipts).Match()
+	f, err = logs.NewRangeFilter(*big.NewInt(first), *big.NewInt(last), filter, receipts)
 	require.NoError(t, err)
+
+	matches, err = f.Match()
+	require.NoError(t, err)
+
 	require.Len(t, matches, 4)
 	assert.NoError(t, checkSumLogValue(storeContract, sumA, big.NewInt(3), matches[0].Data))
 	assert.NoError(t, checkSumLogValue(storeContract, sumA, big.NewInt(4), matches[1].Data))
