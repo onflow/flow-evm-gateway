@@ -504,11 +504,17 @@ func (b *BlockChainAPI) EstimateGas(
 	}
 
 	eoa := newEOATestAccount(b.config.COAKey.String()[2:])
+	// Provide a high enough gas for the tx to be able to execute
+	gas := uint64(15_000_000)
+	if args.Gas != nil {
+		gas = uint64(*args.Gas)
+	}
+
 	txData := eoa.PrepareSignAndEncodeTx(
 		args.To,
 		data,
 		(*big.Int)(args.Value),
-		uint64(*args.Gas),
+		gas,
 		(*big.Int)(args.GasPrice),
 	)
 

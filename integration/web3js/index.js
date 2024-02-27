@@ -1,7 +1,7 @@
 const { Web3 } = require('web3');
 const web3Utils = require('web3-utils')
 const fs = require('fs');
-const web3 = new Web3("http://localhost:3000");
+const web3 = new Web3("http://localhost:8545");
 const storageABI = require("./storageABI.json");
 
 
@@ -23,9 +23,9 @@ let userAccount = web3.eth.accounts.privateKeyToAccount("0xf6d5333177711e562cabf
     // get the balance of the EOA account
     let balance = await getBalance()
     console.log("🎉 EOA balance is:", balance)
-    if (balance < 9) {
-        throw("make sure your EOA is funded with at least 9 Flow")
-    }
+    // if (balance < 9) {
+    //     throw("make sure your EOA is funded with at least 9 Flow")
+    // }
 
     // deploy the test contract, signed by EOA
     let address = await deployContract()
@@ -109,7 +109,7 @@ async function deployContract() {
         from: userAccount.address,
         data: data,
         value: '0',
-        gasPrice: '1',
+        gasPrice: '0',
     })
 
     return new Promise((res, rej) => {
