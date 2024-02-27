@@ -70,7 +70,7 @@ func (a *Accounts) getNonce(address common.Address) (uint64, uint64, error) {
 	val, err := a.store.get(accountNonceKey, address.Bytes())
 	if err != nil {
 		// if no nonce was yet saved for the account the nonce is 0
-		if errors.Is(err, errs.NotFound) {
+		if errors.Is(err, errs.ErrNotFound) {
 			return 0, 0, nil
 		}
 

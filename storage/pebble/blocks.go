@@ -123,8 +123,8 @@ func (b *Blocks) LatestCadenceHeight() (uint64, error) {
 
 	val, err := b.store.get(latestCadenceHeightKey)
 	if err != nil {
-		if errors.Is(err, errs.NotFound) {
-			return 0, errs.NotInitialized
+		if errors.Is(err, errs.ErrNotFound) {
+			return 0, errs.ErrNotInitialized
 		}
 		return 0, fmt.Errorf("failed to get latest cadence height: %w", err)
 	}
@@ -201,22 +201,4 @@ func (b *Blocks) getHeight(keyCode byte) (uint64, error) {
 	h := binary.BigEndian.Uint64(val)
 	b.heightCache[keyCode] = h
 	return h, nil
-}
-
-func (b *Blocks) storeInitHeight(height uint64) error {
-	_, err := b.store.get(firstHeightKey)
-	if err != nil && !errors.Is(err, errs.ErrNotFound) {
-		return fmt.Errorf("existing first height can not be overwritten")
-	}
-	_, err = b.store.get(latestHeightKey)
-	if err != nil && !errors.Is(err, errs.ErrNotFound) {
-		return fmt.Errorf("existing latest height can not be overwritten")
-	}
-
-	// todo batch
-	if err := b.store.set(firstHeightKey, nil, uint64Bytes(height)); err != nil {
-		return err
-	}
-
-	return b.store.set(latestHeightKey, nil, uint64Bytes(height))
 }
