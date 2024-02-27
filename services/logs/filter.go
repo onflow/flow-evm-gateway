@@ -138,20 +138,18 @@ func (s *StreamFilter) Match() (<-chan *gethTypes.Log, error) {
 		defer close(logs)
 
 		for {
-			select {
-			case receipt, ok := <-s.receiptStream:
-				if !ok {
-					return // exit the goroutine if receiptStream is closed
-				}
+			receipt, ok := <-s.receiptStream
+			if !ok {
+				return // exit the goroutine if receiptStream is closed
+			}
 
-				if !bloomMatch(receipt.Bloom, s.criteria) {
-					continue
-				}
+			if !bloomMatch(receipt.Bloom, s.criteria) {
+				continue
+			}
 
-				for _, log := range receipt.Logs {
-					if exactMatch(log, s.criteria) {
-						logs <- log
-					}
+			for _, log := range receipt.Logs {
+				if exactMatch(log, s.criteria) {
+					logs <- log
 				}
 			}
 		}
@@ -160,8 +158,9 @@ func (s *StreamFilter) Match() (<-chan *gethTypes.Log, error) {
 	return logs, nil
 }
 
-// exactMatch checks the topic and address values of the log match the filer exactly.
+// exactMatch checks the topic and address values of the log match the filter exactly.
 func exactMatch(log *gethTypes.Log, criteria FilterCriteria) bool {
+	// check criteria doesn't have more topics than the log, but it can have less due to wildcards
 	if len(criteria.Topics) > len(log.Topics) {
 		return false
 	}
