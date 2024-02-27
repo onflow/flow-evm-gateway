@@ -177,7 +177,8 @@ func (h *httpServer) Start() error {
 	go func() {
 		err = h.server.Serve(listener)
 		if err != nil {
-			h.log.Fatal().Err(err)
+			h.log.Err(err).Msg("failed to start API server")
+			panic(err)
 		}
 	}()
 

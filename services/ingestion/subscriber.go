@@ -8,8 +8,8 @@ import (
 	"github.com/onflow/flow-go/fvm/evm/types"
 )
 
-var blockExecutedType = (types.EVMLocation{}).TypeID(nil, string(types.EventTypeBlockExecuted))
-var txExecutedType = (types.EVMLocation{}).TypeID(nil, string(types.EventTypeTransactionExecuted))
+var blockExecutedType = (flow.EVMLocation{}).TypeID(nil, string(types.EventTypeBlockExecuted))
+var txExecutedType = (flow.EVMLocation{}).TypeID(nil, string(types.EventTypeTransactionExecuted))
 
 type EventSubscriber interface {
 	// Subscribe to relevant events from the provided block height.

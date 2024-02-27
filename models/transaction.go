@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
+	"github.com/onflow/flow-go-sdk"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -69,7 +70,7 @@ func DecodeReceipt(event cadence.Event) (*gethTypes.Receipt, error) {
 		BlobGasUsed:       0,              // todo check
 		BlobGasPrice:      nil,            // todo check
 		TransactionIndex:  0,              // todo add tx index in evm core event
-		BlockHash:         common.Hash{},  // todo add block hash in the evm core event
+		BlockHash:         common.HexToHash(tx.BlockHash),
 	}
 
 	if tx.Failed {
@@ -129,6 +130,6 @@ func DecodeTransaction(event cadence.Event) (*gethTypes.Transaction, error) {
 }
 
 func IsTransactionExecutedEvent(event cadence.Event) bool {
-	txExecutedType := (types.EVMLocation{}).TypeID(nil, string(types.EventTypeTransactionExecuted))
+	txExecutedType := (flow.EVMLocation{}).TypeID(nil, string(types.EventTypeTransactionExecuted))
 	return cdcCommon.TypeID(event.EventType.ID()) == txExecutedType
 }

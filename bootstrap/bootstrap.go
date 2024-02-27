@@ -22,6 +22,7 @@ import (
 
 func Start(cfg *config.Config) error {
 	logger := zerolog.New(zerolog.NewConsoleWriter()).With().Timestamp().Logger()
+	logger.Level(zerolog.DebugLevel) // todo use cfg flag
 	logger.Info().Msg("starting up the EVM gateway")
 
 	pebbleDB, err := pebble.New(cfg.DatabaseDir, logger)
@@ -51,7 +52,8 @@ func Start(cfg *config.Config) error {
 	go func() {
 		err := startServer(cfg, blocks, transactions, receipts, accounts, logger)
 		if err != nil {
-			logger.Fatal().Err(fmt.Errorf("failed to start RPC server: %w", err))
+			logger.Error().Err(err).Msg("failed to start the API server")
+			panic(err)
 		}
 	}()
 
@@ -114,14 +116,14 @@ func startIngestion(
 	go func() {
 		err = engine.Start(ctx)
 		if err != nil {
-			logger.Error().Err(err)
+			logger.Error().Err(err).Msg("failed to start ingestion engine")
 			panic(err)
 		}
 	}()
 
 	<-engine.Ready() // wait for engine to be ready
 
-	logger.Info().Msg("EVM gateway start up successful")
+	logger.Info().Msg("Ingestion start up successful")
 
 	gracefulShutdown := make(chan os.Signal, 1)
 	signal.Notify(gracefulShutdown, syscall.SIGINT, syscall.SIGTERM)
@@ -151,8 +153,17 @@ func startServer(
 		return err
 	}
 
-	// todo abstract signer and support multiple different signers, for now only in-memory
-	signer, err := crypto.NewInMemorySigner(cfg.COAKey, crypto.SHA3_256)
+	// create the signer based on either a single coa key being provided and using a simple in-memory
+	// signer, or multiple keys being provided and using signer with key-rotation mechanism.
+	var signer crypto.Signer
+	switch {
+	case cfg.COAKey != nil:
+		signer, err = crypto.NewInMemorySigner(cfg.COAKey, crypto.SHA3_256)
+	case cfg.COAKeys != nil:
+		signer, err = requester.NewKeyRotationSigner(cfg.COAKeys, crypto.SHA3_256)
+	default:
+		return fmt.Errorf("must either provide single COA key, or list of COA keys")
+	}
 	if err != nil {
 		return fmt.Errorf("failed to create a COA signer: %w", err)
 	}

@@ -5,6 +5,7 @@ go 1.20
 require (
 	github.com/cockroachdb/pebble v0.0.0-20230928194634-aa077af62593
 	github.com/ethereum/go-ethereum v1.13.5
+	github.com/goccy/go-json v0.10.2
 	github.com/onflow/cadence v1.0.0-M8
 	github.com/onflow/flow-go v0.34.0-crescendo-preview.1.0.20240222213538-3677206d445c
 	github.com/onflow/flow-go-sdk v1.0.0-M5

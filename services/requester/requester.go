@@ -102,7 +102,11 @@ func NewEVM(
 	}
 
 	if acc.Balance < minFlowBalance {
-		return nil, fmt.Errorf("COA account must be funded with at least %d Flow", minFlowBalance)
+		return nil, fmt.Errorf(
+			"COA account must be funded with at least %d Flow, but has balance of: %d",
+			minFlowBalance,
+			acc.Balance,
+		)
 	}
 
 	evm := &EVM{
@@ -145,9 +149,10 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 	}
 
 	// todo make sure the gas price is not bellow the configured gas price
+	script := e.replaceAddresses(runTxScript)
 	flowID, err := e.signAndSend(
 		ctx,
-		e.replaceAddresses(runTxScript),
+		script,
 		cadenceArrayFromBytes(data),
 	)
 	if err != nil {
@@ -208,6 +213,25 @@ func (e *EVM) signAndSend(ctx context.Context, script []byte, args ...cadence.Va
 	// we should handle a case where flow transaction is failed but we will get a result back, it would only be failed,
 	// but there is no evm transaction. So if we submit an evm tx and get back an ID and then we wait for receipt
 	// we would never get it, but this failure of sending flow transaction could somehow help with this case
+
+	// this is only used for debugging purposes
+	go func(tx *flow.Transaction) {
+		res, _ := e.client.GetTransactionResult(context.Background(), flowTx.ID())
+		if res.Error != nil {
+			e.logger.Error().
+				Str("flow-id", flowTx.ID().String()).
+				Err(res.Error).
+				Msg("flow transaction failed to execute")
+			return
+		}
+
+		e.logger.Debug().
+			Str("flow-id", flowTx.ID().String()).
+			Uint64("cadence-height", res.BlockHeight).
+			Str("events", fmt.Sprintf("%v", res.Events)).
+			Str("script", string(flowTx.Script)).
+			Msg("flow transaction executed successfully")
+	}(flowTx)
 
 	return flowTx.ID(), nil
 }
@@ -304,7 +328,6 @@ func (e *EVM) getSignerNetworkInfo(ctx context.Context) (int, uint64, error) {
 		return 0, 0, err
 	}
 
-	// todo support key rotation
 	signerPub := e.signer.PublicKey()
 	for _, k := range account.Keys {
 		if k.PublicKey.Equals(signerPub) {

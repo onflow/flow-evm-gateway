@@ -99,6 +99,7 @@ func (e *Engine) Start(ctx context.Context) error {
 
 			err = e.processEvents(blockEvents)
 			if err != nil {
+				e.log.Error().Err(err).Msg("failed to process EVM events")
 				return err
 			}
 
@@ -178,6 +179,7 @@ func (e *Engine) processTransactionEvent(event cadence.Event) error {
 	// in case we have a direct call transaction we ignore it for now
 	// todo support indexing of direct calls
 	if tx == nil {
+		e.log.Debug().Str("event", event.String()).Msg("skipping direct call")
 		return nil
 	}
 

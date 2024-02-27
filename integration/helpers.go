@@ -58,13 +58,15 @@ func startEmulator() (*server.EmulatorServer, error) {
 
 	log := logger.With().Str("component", "emulator").Logger().Level(zerolog.DebugLevel)
 	srv := server.NewEmulatorServer(&log, &server.Config{
-		ServicePrivateKey:  pkey,
-		ServiceKeySigAlgo:  crypto.ECDSA_P256,
-		ServiceKeyHashAlgo: crypto.SHA3_256,
-		GenesisTokenSupply: genesisToken,
-		EVMEnabled:         true,
-		WithContracts:      true,
-		Host:               "localhost",
+		ServicePrivateKey:      pkey,
+		ServiceKeySigAlgo:      crypto.ECDSA_P256,
+		ServiceKeyHashAlgo:     crypto.SHA3_256,
+		GenesisTokenSupply:     genesisToken,
+		EVMEnabled:             true,
+		WithContracts:          true,
+		Host:                   "localhost",
+		TransactionExpiry:      10,
+		TransactionMaxGasLimit: flow.DefaultMaxTransactionGasLimit,
 	})
 
 	go func() {
@@ -76,7 +78,7 @@ func startEmulator() (*server.EmulatorServer, error) {
 	return srv, nil
 }
 
-// startEventIngestionEngine will start up the event engine with the grpc subscriber
+// startEventIngestionEngine will start up the sdkEvent engine with the grpc subscriber
 // listening for events.
 // todo for now we return index storage as a way to check the data if it was correctly
 // indexed this will be in future replaced with evm gateway API access
@@ -120,7 +122,7 @@ func startEventIngestionEngine(ctx context.Context, dbDir string) (
 	go func() {
 		err = engine.Start(ctx)
 		if err != nil {
-			logger.Error().Err(err)
+			logger.Error().Err(err).Msg("failed to start ingestion engine")
 			panic(err)
 		}
 	}()
@@ -197,11 +199,17 @@ func flowSendTransaction(
 	log := logger.With().Str("component", "adapter").Logger().Level(zerolog.DebugLevel)
 	adapter := adapters.NewSDKAdapter(&log, emu)
 
+	blk, _, err := adapter.GetLatestBlock(context.Background(), true)
+	if err != nil {
+		return nil, err
+	}
+
 	tx := sdk.NewTransaction().
 		SetScript(codeWrapper).
 		SetComputeLimit(flow.DefaultMaxTransactionGasLimit).
 		SetProposalKey(key.Address, key.Index, key.SequenceNumber).
 		SetPayer(key.Address).
+		SetReferenceBlockID(blk.ID).
 		AddAuthorizer(key.Address)
 
 	for _, arg := range args {

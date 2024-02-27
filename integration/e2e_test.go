@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"encoding/hex"
 	"fmt"
+	"github.com/onflow/flow-go-sdk/access/grpc"
 	"math/big"
 	"testing"
 	"time"
@@ -39,8 +40,8 @@ var (
 // TestIntegration_TransferValue executes interactions in the EVM in the following order
 // 1. Create an COA using the createBridgedAccount - doesn't produce evm events
 // 2. Fund that COA - produces evm events with direct call with deposit subtype txs
-// 3. Transfer value from COA to "fund EOA" - produces evm event with direct call with call subtype txs
-// 4. Transfer value from "fund EOA" to another "transfer EOA" - produces evm transaction event
+// 3. Transfer value from COA to "fund EOA" - produces evm sdkEvent with direct call with call subtype txs
+// 4. Transfer value from "fund EOA" to another "transfer EOA" - produces evm transaction sdkEvent
 func TestIntegration_TransferValue(t *testing.T) {
 	srv, err := startEmulator()
 	require.NoError(t, err)
@@ -118,7 +119,7 @@ func TestIntegration_TransferValue(t *testing.T) {
 	assert.Len(t, rcp.Logs, 0)
 	assert.Equal(t, blk.Height, rcp.BlockNumber.Uint64())
 	assert.Equal(t, gethTypes.ReceiptStatusSuccessful, rcp.Status)
-	/* todo add block hash in evm core event
+	/* todo add block hash in evm core sdkEvent
 	h, err := blk.Hash()
 	require.NoError(t, err)
 	assert.Equal(t, h, rcp.BlockHash)
@@ -129,10 +130,10 @@ func TestIntegration_TransferValue(t *testing.T) {
 // and makes sure data is correctly indexed. The interactions are:
 // 1. Create an COA using the createBridgedAccount - doesn't produce evm events
 // 2. Fund that COA - produces evm events with direct call with deposit subtype txs
-// 3. Transfer value from COA to "fund EOA" - produces evm event with direct call with call subtype txs
-// 4. Deploy a contract using the EOA - produces block event as well as transaction executed event
-// 5. Execute a function on the new deployed contract that returns a value - produces block and tx executed event
-// 6. Execute a function that emits a log multiple times with different values - produces block and tx executed event with logs
+// 3. Transfer value from COA to "fund EOA" - produces evm sdkEvent with direct call with call subtype txs
+// 4. Deploy a contract using the EOA - produces block sdkEvent as well as transaction executed sdkEvent
+// 5. Execute a function on the new deployed contract that returns a value - produces block and tx executed sdkEvent
+// 6. Execute a function that emits a log multiple times with different values - produces block and tx executed sdkEvent with logs
 //
 // The test then proceeds on testing filtering of events
 func TestIntegration_DeployCallContract(t *testing.T) {
@@ -266,7 +267,7 @@ func TestIntegration_DeployCallContract(t *testing.T) {
 	assert.Equal(t, latest, rcp.BlockNumber.Uint64())
 	assert.Len(t, rcp.Logs, 0)
 
-	// step 6 - call event emitting function with different values
+	// step 6 - call sdkEvent emitting function with different values
 	heights := make([]uint64, 0)
 	for i := 0; i < 4; i++ {
 		sumA := big.NewInt(5)
@@ -280,7 +281,7 @@ func TestIntegration_DeployCallContract(t *testing.T) {
 
 		time.Sleep(1 * time.Second)
 
-		// block is produced by above call to the sum that emits event
+		// block is produced by above call to the sum that emits sdkEvent
 		latest += 2
 		blk, err = blocks.GetByHeight(latest)
 		require.NoError(t, err)
@@ -296,7 +297,7 @@ func TestIntegration_DeployCallContract(t *testing.T) {
 		assert.Equal(t, gethTypes.ReceiptStatusSuccessful, rcp.Status)
 		require.Len(t, rcp.Logs, 1)
 
-		// check the sum call event
+		// check the sum call sdkEvent
 		sumLog := rcp.Logs[0]
 		assert.Equal(t, contractAddress.Hex(), sumLog.Address.Hex())
 		// todo https://github.com/onflow/flow-go/blob/b3279863c7787d112128188a243905a43ec1654a/fvm/evm/emulator/emulator.go#L397
@@ -310,10 +311,10 @@ func TestIntegration_DeployCallContract(t *testing.T) {
 	}
 
 	// test filtering of events by different filter parameters, we have the following state:
-	// block height 9 - event topics (eoa, 5, 3)
-	// block height 10 - event topics (eoa, 5, 4)
-	// block height 11 - event topics (eoa, 5, 5)
-	// block height 12 - event topics (eoa, 5, 6)
+	// block height 9 - sdkEvent topics (eoa, 5, 3)
+	// block height 10 - sdkEvent topics (eoa, 5, 4)
+	// block height 11 - sdkEvent topics (eoa, 5, 5)
+	// block height 12 - sdkEvent topics (eoa, 5, 6)
 
 	// successfully filter by block id with found single match for each block
 	for i, height := range heights {
@@ -399,13 +400,8 @@ func TestIntegration_DeployCallContract(t *testing.T) {
 	assert.NoError(t, checkSumLogValue(storeContract, sumA, big.NewInt(6), matches[3].Data))
 }
 
-// todo we could optimize these tests to support both above integration testing of storage and engines
-// as well as the bellow API e2e testing. Most of the assertions are same, if requests would be
-// abstracted by an interface we could have two instances one for e2e and one for integration
-// and have one test to cover both, this would clear some test duplication.
-
 // This test does the same as TestIntegration_DeployCallContract but uses the API for e2e testing.
-func TestIntegration_API_DeployEvents(t *testing.T) {
+func TestE2E_API_DeployEvents(t *testing.T) {
 	srv, err := startEmulator()
 	require.NoError(t, err)
 	emu := srv.Emulator()
@@ -602,7 +598,7 @@ func TestIntegration_API_DeployEvents(t *testing.T) {
 	callStore, err = storeContract.call("store", big.NewInt(1337))
 	require.NoError(t, err)
 
-	// step 6 - call event emitting function with different values
+	// step 6 - call sdkEvent emitting function with different values
 	for i := 0; i < 4; i++ {
 		sumA := big.NewInt(5)
 		sumB := big.NewInt(int64(3 + i))
@@ -620,7 +616,7 @@ func TestIntegration_API_DeployEvents(t *testing.T) {
 
 		time.Sleep(1 * time.Second)
 
-		// block is produced by above call to the sum that emits event
+		// block is produced by above call to the sum that emits sdkEvent
 		blkRpc, err = rpcTester.getBlock(uint64(9 + i))
 		require.NoError(t, err)
 		require.Len(t, blkRpc.Transactions, 1)
@@ -636,7 +632,7 @@ func TestIntegration_API_DeployEvents(t *testing.T) {
 		assert.Equal(t, gethTypes.ReceiptStatusSuccessful, rcp.Status)
 		require.Len(t, rcp.Logs, 1)
 
-		// check the sum call event
+		// check the sum call sdkEvent
 		sumLog := rcp.Logs[0]
 		assert.Equal(t, contractAddress.Hex(), sumLog.Address.Hex())
 		// todo https://github.com/onflow/flow-go/blob/b3279863c7787d112128188a243905a43ec1654a/fvm/evm/emulator/emulator.go#L397
@@ -650,10 +646,10 @@ func TestIntegration_API_DeployEvents(t *testing.T) {
 	}
 
 	// test filtering of events by different filter parameters, we have the following state:
-	// block height 9 - event topics (eoa, 5, 3)
-	// block height 10 - event topics (eoa, 5, 4)
-	// block height 11 - event topics (eoa, 5, 5)
-	// block height 12 - event topics (eoa, 5, 6)
+	// block height 9 - sdkEvent topics (eoa, 5, 3)
+	// block height 10 - sdkEvent topics (eoa, 5, 4)
+	// block height 11 - sdkEvent topics (eoa, 5, 5)
+	// block height 12 - sdkEvent topics (eoa, 5, 6)
 
 	// successfully filter by block id with found single match for each block
 	for i := 0; i < 4; i++ {
@@ -738,6 +734,104 @@ func TestIntegration_API_DeployEvents(t *testing.T) {
 	assert.NoError(t, checkSumLogValue(storeContract, sumA, big.NewInt(6), matches[3].Data))
 }
 
+// TestE2E_ConcurrentTransactionSubmission test submits multiple transactions concurrently
+// and makes sure the transactions were submitted successfully. This is using the
+// key-rotation signer that can handle multiple concurrent transactions.
+func TestE2E_ConcurrentTransactionSubmission(t *testing.T) {
+	srv, err := startEmulator()
+	require.NoError(t, err)
+	emu := srv.Emulator()
+	dbDir := t.TempDir()
+
+	gwAcc := emu.ServiceKey()
+	gwAddress := gwAcc.Address
+	host := "localhost:3569" // emulator
+
+	client, err := grpc.NewClient(host)
+	require.NoError(t, err)
+
+	time.Sleep(500 * time.Millisecond) // some time to startup
+
+	// create new account with keys used for key-rotation
+	keyCount := 5
+	createdAddr, keys, err := bootstrap.CreateMultiKeyAccount(
+		client,
+		keyCount,
+		gwAddress,
+		"0xee82856bf20e2aa6",
+		"0x0ae53cb6e3f42a79",
+		gwAcc.PrivateKey,
+	)
+	require.NoError(t, err)
+
+	cfg := &config.Config{
+		DatabaseDir:        dbDir,
+		AccessNodeGRPCHost: host,
+		RPCPort:            3001,
+		RPCHost:            "127.0.0.1",
+		InitCadenceHeight:  0,
+		EVMNetworkID:       emulator.FlowEVMTestnetChainID,
+		FlowNetworkID:      "emulator",
+		Coinbase:           fundEOAAddress,
+		COAAddress:         *createdAddr,
+		COAKeys:            keys,
+		CreateCOAResource:  true,
+		GasPrice:           new(big.Int).SetUint64(0),
+	}
+
+	rpcTester := &rpcTest{
+		url: fmt.Sprintf("http://%s:%d", cfg.RPCHost, cfg.RPCPort),
+	}
+
+	go func() {
+		err = bootstrap.Start(cfg)
+		require.NoError(t, err)
+	}()
+	time.Sleep(500 * time.Millisecond) // some time to startup
+
+	flowAmount, _ := cadence.NewUFix64("5.0")
+	res, err := fundEOA(emu, flowAmount, fundEOAAddress)
+	require.NoError(t, err)
+	require.NoError(t, res.Error)
+	assert.Len(t, res.Events, 9)
+
+	eoaKey, err := crypto.HexToECDSA(fundEOARawKey)
+	require.NoError(t, err)
+
+	testAddr := common.HexToAddress("55253ed90B70b96C73092D8680915aaF50081194")
+
+	// disable auto-mine so we can control delays
+	emu.DisableAutoMine()
+
+	totalTxs := keyCount*5 + 3
+	hashes := make([]common.Hash, totalTxs)
+	for i := 0; i < totalTxs; i++ {
+		nonce := uint64(i)
+		signed, signedHash, err := evmSign(big.NewInt(10), 21000, eoaKey, nonce, &testAddr, nil)
+		nonce++
+		require.NoError(t, err)
+
+		hash, err := rpcTester.sendRawTx(signed)
+		require.NoError(t, err)
+		assert.NotNil(t, hash)
+		assert.Equal(t, signedHash.String(), hash.String())
+		hashes[i] = signedHash
+
+		// execute commit block every 3 blocks so we make sure we should have conflicts with seq numbers if keys not rotated
+		if i%3 == 0 {
+			_, _, _ = emu.ExecuteAndCommitBlock()
+		}
+	}
+
+	time.Sleep(5 * time.Second) // wait for all txs to be executed
+
+	for _, h := range hashes {
+		rcp, err := rpcTester.getReceipt(h.String())
+		require.NoError(t, err)
+		assert.Equal(t, uint64(1), rcp.Status)
+	}
+}
+
 // checkSumLogValue makes sure the match is correct by checking sum value
 func checkSumLogValue(c *contract, a *big.Int, b *big.Int, data []byte) error {
 	event, err := c.value("Calculated", data)
@@ -754,6 +848,3 @@ func checkSumLogValue(c *contract, a *big.Int, b *big.Int, data []byte) error {
 
 	return nil
 }
-
-// todo
-// test running a script using the API
