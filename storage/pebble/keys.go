@@ -32,7 +32,7 @@ func makePrefix(code byte, key ...[]byte) []byte {
 	prefix[0] = code
 
 	// allow for special keys
-	if key == nil {
+	if len(key) == 0 {
 		return prefix
 	}
 	if len(key) != 1 {

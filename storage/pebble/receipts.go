@@ -46,6 +46,7 @@ func (r *Receipts) Store(receipt *gethTypes.Receipt) error {
 		return err
 	}
 
+	// todo if there are more transactions per block we need to update this
 	if err := r.store.set(receiptHeightKey, height, val); err != nil {
 		return err
 	}

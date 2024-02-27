@@ -95,7 +95,7 @@ func startEventIngestionEngine(ctx context.Context, dbDir string) (
 
 	blk, err := client.GetLatestBlock(ctx, false)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, fmt.Errorf("error opening pebble db: %w", err)
 	}
 
 	subscriber := ingestion.NewRPCSubscriber(client)
@@ -107,6 +107,9 @@ func startEventIngestionEngine(ctx context.Context, dbDir string) (
 	}
 
 	blocks := pebble.NewBlocks(db)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("error creating blocks storage: %w", err)
+	}
 	receipts := pebble.NewReceipts(db)
 	accounts := pebble.NewAccounts(db)
 	txs := pebble.NewTransactions(db)
