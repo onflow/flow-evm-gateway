@@ -120,7 +120,7 @@ func startIngestion(
 
 	<-engine.Ready() // wait for engine to be ready
 
-	logger.Info().Msg("Ingestion start up successful")
+	logger.Info().Msg("ingestion start up successful")
 	return nil
 }
 
@@ -190,10 +190,10 @@ func startServer(
 		return err
 	}
 
-	logger.Info().Msgf("Server Started: %s", srv.ListenAddr())
+	logger.Info().Msgf("server Started: %s", srv.ListenAddr())
 
 	<-ctx.Done()
-	logger.Info().Msg("Shutting down API server")
+	logger.Info().Msg("shutting down API server")
 	srv.Stop()
 
 	return nil

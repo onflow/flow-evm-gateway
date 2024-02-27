@@ -96,7 +96,7 @@ func (h *httpServer) EnableRPC(apis []rpc.API) error {
 	}
 
 	h.httpHandler = &rpcHandler{
-		Handler: newCorsHandler(srv, []string{"*"}),
+		Handler: corsHandler(srv, []string{"*"}),
 		server:  srv,
 	}
 
@@ -178,7 +178,11 @@ func (h *httpServer) Start() error {
 	go func() {
 		err = h.server.Serve(listener)
 		if err != nil {
-			h.log.Err(err).Msg("failed to start API server")
+			if errors.Is(err, http.ErrServerClosed) {
+				h.logger.Warn().Msg("API server shutdown")
+				return
+			}
+			h.logger.Err(err).Msg("failed to start API server")
 			panic(err)
 		}
 	}()
@@ -209,7 +213,7 @@ func (h *httpServer) disableRPC() bool {
 func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Check if WebSocket request and serve if JSON-RPC over WebSocket is enabled
 	if b, err := io.ReadAll(r.Body); err == nil {
-		h.log.Debug().
+		h.logger.Debug().
 			Str("body", string(b)).
 			Str("url", r.URL.String()).
 			Bool("ws", isWebSocket(r)).
@@ -230,12 +234,12 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// enable logging responses
 	logW := &loggingResponseWriter{
 		ResponseWriter: w,
-		logger:         h.log,
+		logger:         h.logger,
 	}
 
 	// If JSON-RPC over HTTP is enabled, try to serve the request
 	// todo wrap with CORS handler in main branch
-	rpc := recoverHandler(h.log, h.httpHandler)
+	rpc := recoverHandler(h.logger, h.httpHandler)
 	if rpc != nil {
 		if checkPath(r, "") {
 			rpc.ServeHTTP(logW, r)
