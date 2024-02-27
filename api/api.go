@@ -455,9 +455,13 @@ func (b *BlockChainAPI) GetLogs(
 			Match()
 	}
 	if criteria.FromBlock != nil && criteria.ToBlock != nil {
-		return logs.
-			NewRangeFilter(*criteria.FromBlock, *criteria.ToBlock, filter, b.receipts).
-			Match()
+		f, err := logs.
+			NewRangeFilter(*criteria.FromBlock, *criteria.ToBlock, filter, b.receipts)
+		if err != nil {
+			return nil, err
+		}
+
+		return f.Match()
 	}
 
 	return nil, errors.Join(
@@ -524,7 +528,7 @@ func (b *BlockChainAPI) EstimateGas(
 
 func handleError[T any](log zerolog.Logger, err error) (T, error) {
 	var zero T
-	if errors.Is(err, storageErrs.NotFound) {
+	if errors.Is(err, storageErrs.ErrNotFound) {
 		// as per specification returning nil and nil for not found resources
 		return zero, nil
 	}
