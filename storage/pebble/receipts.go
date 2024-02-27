@@ -59,10 +59,15 @@ func (r *Receipts) GetByTransactionID(ID common.Hash) (*gethTypes.Receipt, error
 
 	height, err := r.store.get(receiptTxIDToHeightKey, ID.Bytes())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get receipt by tx ID: %w", err)
 	}
 
-	return r.getByBlockHeight(height)
+	rcp, err := r.getByBlockHeight(height)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get receipt by height: %w", err)
+	}
+
+	return rcp, nil
 }
 
 func (r *Receipts) GetByBlockHeight(height *big.Int) (*gethTypes.Receipt, error) {
@@ -119,7 +124,7 @@ func (r *Receipts) BloomsForBlockRange(start, end *big.Int) ([]*gethTypes.Bloom,
 	if end.Uint64() < first || end.Uint64() > last {
 		return nil, nil, fmt.Errorf(
 			"end value %d is not within the indexed range of [%d - %d]: %w",
-			start,
+			end,
 			first,
 			last,
 			errors.InvalidRange,
@@ -164,7 +169,7 @@ func (r *Receipts) BloomsForBlockRange(start, end *big.Int) ([]*gethTypes.Bloom,
 }
 
 func (r *Receipts) getFirstLast() (uint64, uint64, error) {
-	l, err := r.store.get(latestHeightKey)
+	l, err := r.store.get(latestEVMHeightKey)
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed getting latest height: %w", err)
 	}
@@ -174,7 +179,7 @@ func (r *Receipts) getFirstLast() (uint64, uint64, error) {
 		return r.first, last, nil
 	}
 
-	first, err := r.store.get(firstHeightKey)
+	first, err := r.store.get(firstEVMHeightKey)
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed getting first height: %w", err)
 	}

@@ -1,7 +1,8 @@
-package cmd
+package bootstrap
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/onflow/flow-evm-gateway/api"
@@ -9,6 +10,7 @@ import (
 	"github.com/onflow/flow-evm-gateway/services/ingestion"
 	"github.com/onflow/flow-evm-gateway/services/requester"
 	"github.com/onflow/flow-evm-gateway/storage"
+	storageErrs "github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
 	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/onflow/flow-go-sdk/crypto"
@@ -27,19 +29,24 @@ func Start(cfg *config.Config) error {
 		return err
 	}
 
-	opts := make([]pebble.BlockOption, 0)
-	// if initialization height is provided use that to bootstrap the database
-	if cfg.InitHeight != config.EmptyHeight {
-		opts = append(opts, pebble.WithInitHeight(cfg.InitHeight))
-	}
-
-	blocks, err := pebble.NewBlocks(pebbleDB, opts...)
-	if err != nil {
-		return err
-	}
+	blocks := pebble.NewBlocks(pebbleDB)
 	transactions := pebble.NewTransactions(pebbleDB)
 	receipts := pebble.NewReceipts(pebbleDB)
 	accounts := pebble.NewAccounts(pebbleDB)
+
+	// if database is not initialized require init height
+	if _, err := blocks.LatestCadenceHeight(); errors.Is(err, storageErrs.NotInitialized) {
+		if cfg.InitCadenceHeight == config.EmptyHeight {
+			return fmt.Errorf("must provide init cadence height on an empty database")
+		}
+		logger.Info().
+			Uint64("cadence-height", cfg.InitCadenceHeight).
+			Msg("database cadence height init")
+
+		if err := blocks.InitCadenceHeight(cfg.InitCadenceHeight); err != nil {
+			return err
+		}
+	}
 
 	go func() {
 		err := startServer(cfg, blocks, transactions, receipts, accounts, logger)
@@ -66,18 +73,6 @@ func startIngestion(
 ) error {
 	logger.Info().Msg("starting up event ingestion")
 
-	latest, err := blocks.LatestHeight()
-	if err != nil {
-		return err
-	}
-
-	first, err := blocks.FirstHeight()
-	if err != nil {
-		return err
-	}
-
-	logger.Info().Uint64("first", first).Uint64("latest", latest).Msg("index already contains data")
-
 	client, err := grpc.NewClient(cfg.AccessNodeGRPCHost)
 	if err != nil {
 		return err
@@ -85,10 +80,25 @@ func startIngestion(
 
 	blk, err := client.GetLatestBlock(context.Background(), false)
 	if err != nil {
+		return fmt.Errorf("failed to get latest cadence block: %w", err)
+	}
+
+	latestCadenceHeight, err := blocks.LatestCadenceHeight()
+	if err != nil {
 		return err
 	}
 
-	logger.Info().Uint64("cadence height", blk.Height).Msg("latest flow block on the network")
+	// make sure the provided block to start the indexing can be loaded
+	_, err = client.GetBlockByHeight(context.Background(), latestCadenceHeight)
+	if err != nil {
+		return fmt.Errorf("failed to get provided cadence height: %w", err)
+	}
+
+	logger.Info().
+		Uint64("start-height", latestCadenceHeight).
+		Uint64("latest-network-height", blk.Height).
+		Uint64("missed-heights", blk.Height-latestCadenceHeight).
+		Msg("indexing cadence height information")
 
 	subscriber := ingestion.NewRPCSubscriber(client)
 	engine := ingestion.NewEventIngestionEngine(
@@ -131,9 +141,10 @@ func startServer(
 	accounts storage.AccountIndexer,
 	logger zerolog.Logger,
 ) error {
-	logger.Info().Msg("starting up RPC server")
+	l := logger.With().Str("component", "API").Logger()
+	l.Info().Msg("starting up RPC server")
 
-	srv := api.NewHTTPServer(logger, rpc.DefaultHTTPTimeouts)
+	srv := api.NewHTTPServer(l, rpc.DefaultHTTPTimeouts)
 
 	client, err := grpc.NewClient(cfg.AccessNodeGRPCHost)
 	if err != nil {
@@ -146,7 +157,11 @@ func startServer(
 		return fmt.Errorf("failed to create a COA signer: %w", err)
 	}
 
-	evm := requester.NewEVM(client, cfg.COAAddress, signer)
+	evm, err := requester.NewEVM(client, cfg.COAAddress, signer, cfg.FlowNetworkID, true, logger)
+	if err != nil {
+		return fmt.Errorf("failed to create EVM requester: %w", err)
+	}
+
 	blockchainAPI := api.NewBlockChainAPI(
 		logger,
 		cfg,
@@ -166,7 +181,7 @@ func startServer(
 		return err
 	}
 
-	if err := srv.SetListenAddr("", 8545); err != nil {
+	if err := srv.SetListenAddr(cfg.RPCHost, cfg.RPCPort); err != nil {
 		return err
 	}
 
