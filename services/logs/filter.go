@@ -131,7 +131,7 @@ func NewStreamFilter(criteria FilterCriteria, receipts chan *gethTypes.Receipt) 
 	}
 }
 
-func (s *StreamFilter) Match() (chan *gethTypes.Log, error) {
+func (s *StreamFilter) Match() (<-chan *gethTypes.Log, error) {
 	logs := make(chan *gethTypes.Log)
 
 	go func() {
