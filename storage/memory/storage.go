@@ -51,14 +51,28 @@ func baseStorageFactory() *baseStorage {
 
 var _ storage.BlockIndexer = &BlockStorage{}
 
+type BlockOption func(block *BlockStorage)
+
+func WithLatestHeight(latest uint64) BlockOption {
+	return func(block *BlockStorage) {
+		block.base.lastHeight = latest
+	}
+}
+
 type BlockStorage struct {
 	base *baseStorage
 }
 
-func NewBlockStorage() *BlockStorage {
-	return &BlockStorage{
+func NewBlockStorage(opts ...BlockOption) *BlockStorage {
+	blk := &BlockStorage{
 		base: baseStorageFactory(),
 	}
+
+	for _, opt := range opts {
+		opt(blk)
+	}
+
+	return blk
 }
 
 func (s BlockStorage) GetByHeight(height uint64) (*types.Block, error) {
@@ -67,19 +81,19 @@ func (s BlockStorage) GetByHeight(height uint64) (*types.Block, error) {
 
 	// Check if the requested height is within the known range
 	if height < s.base.firstHeight || height > s.base.lastHeight {
-		return nil, errors.NotFound
+		return nil, errors.ErrNotFound
 	}
 
 	// Retrieve the block using the blockHeightsIDs map
 	blockID, exists := s.base.blockHeightsIDs[height]
 	if !exists {
-		return nil, errors.NotFound
+		return nil, errors.ErrNotFound
 	}
 
 	// Retrieve the block using the blocksIDs map
 	block, exists := s.base.blocksIDs[blockID]
 	if !exists {
-		return nil, errors.NotFound
+		return nil, errors.ErrNotFound
 	}
 
 	return block, nil
@@ -92,7 +106,7 @@ func (s BlockStorage) GetByID(ID common.Hash) (*types.Block, error) {
 	// Retrieve the block using the blocksIDs map
 	block, exists := s.base.blocksIDs[ID]
 	if !exists {
-		return nil, errors.NotFound
+		return nil, errors.ErrNotFound
 	}
 
 	return block, nil
@@ -110,7 +124,7 @@ func (s BlockStorage) Store(block *types.Block) error {
 	// Check if the block already exists
 	_, exists := s.base.blocksIDs[ID]
 	if exists {
-		return errors.Duplicate
+		return errors.ErrDuplicate
 	}
 
 	// Store the block in blocksIDs map and update blockHeightsIDs map
@@ -133,7 +147,7 @@ func (s BlockStorage) LatestHeight() (uint64, error) {
 	defer s.base.mu.RUnlock()
 
 	if s.base.lastHeight == unknownHeight {
-		return 0, errors.NotInitialized
+		return 0, errors.ErrNotInitialized
 	}
 	return s.base.lastHeight, nil
 }
@@ -143,7 +157,7 @@ func (s BlockStorage) FirstHeight() (uint64, error) {
 	defer s.base.mu.RUnlock()
 
 	if s.base.firstHeight == unknownHeight {
-		return 0, errors.NotInitialized
+		return 0, errors.ErrNotInitialized
 	}
 	return s.base.firstHeight, nil
 }
@@ -165,7 +179,7 @@ func (r ReceiptStorage) Store(receipt *gethTypes.Receipt) error {
 	defer r.base.mu.Unlock()
 
 	if _, ok := r.base.receiptsTxIDs[receipt.TxHash]; ok {
-		return errors.Duplicate
+		return errors.ErrDuplicate
 	}
 
 	r.base.receiptsTxIDs[receipt.TxHash] = receipt
@@ -181,7 +195,7 @@ func (r ReceiptStorage) GetByTransactionID(ID common.Hash) (*gethTypes.Receipt, 
 
 	receipt, exists := r.base.receiptsTxIDs[ID]
 	if !exists {
-		return nil, errors.NotFound
+		return nil, errors.ErrNotFound
 	}
 
 	return receipt, nil
@@ -193,27 +207,27 @@ func (r ReceiptStorage) GetByBlockHeight(height *big.Int) (*gethTypes.Receipt, e
 
 	txID, exists := r.base.receiptBlockHeightTxID[height.Uint64()]
 	if !exists {
-		return nil, errors.NotFound
+		return nil, errors.ErrNotFound
 	}
 
 	receipt, exists := r.base.receiptsTxIDs[txID]
 	if !exists {
-		return nil, errors.NotFound
+		return nil, errors.ErrNotFound
 	}
 
 	return receipt, nil
 }
 
-func (r ReceiptStorage) BloomsForBlockRange(start, end *big.Int) ([]gethTypes.Bloom, []*big.Int, error) {
+func (r ReceiptStorage) BloomsForBlockRange(start, end *big.Int) ([]*gethTypes.Bloom, []*big.Int, error) {
 	r.base.mu.RLock()
 	defer r.base.mu.RUnlock()
 
 	// make sure start is not bigger than end
 	if start.Cmp(end) > 0 {
-		return nil, nil, errors.InvalidRange
+		return nil, nil, errors.ErrInvalidRange
 	}
 
-	blooms := make([]gethTypes.Bloom, 0)
+	blooms := make([]*gethTypes.Bloom, 0)
 	heights := make([]*big.Int, 0)
 
 	// Iterate through the range of block heights and add the blooms to the result
@@ -222,7 +236,7 @@ func (r ReceiptStorage) BloomsForBlockRange(start, end *big.Int) ([]gethTypes.Bl
 		if !exists {
 			return nil, nil, fmt.Errorf("bloom by height not found") // this should not happen
 		}
-		blooms = append(blooms, b)
+		blooms = append(blooms, &b)
 		heights = append(heights, big.NewInt(int64(i)))
 	}
 
@@ -247,7 +261,7 @@ func (t TransactionStorage) Store(tx *gethTypes.Transaction) error {
 
 	_, exists := t.base.transactionsIDs[tx.Hash()]
 	if exists {
-		return errors.Duplicate
+		return errors.ErrDuplicate
 	}
 
 	t.base.transactionsIDs[tx.Hash()] = tx
@@ -260,7 +274,7 @@ func (t TransactionStorage) Get(ID common.Hash) (*gethTypes.Transaction, error) 
 
 	tx, exists := t.base.transactionsIDs[ID]
 	if !exists {
-		return nil, errors.NotFound
+		return nil, errors.ErrNotFound
 	}
 
 	return tx, nil

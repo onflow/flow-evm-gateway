@@ -52,10 +52,11 @@ type ReceiptIndexer interface {
 	GetByBlockHeight(height *big.Int) (*gethTypes.Receipt, error)
 
 	// BloomsForBlockRange returns slice of bloom values and a slice of block heights
-	// corresponding to each item in the bloom slice.
+	// corresponding to each item in the bloom slice. It only matches the blooms between
+	// inclusive start and end block height.
 	// Expected errors:
 	// - errors.InvalidRange if the block by the height was not indexed or if the end and start values are invalid.
-	BloomsForBlockRange(start, end *big.Int) ([]gethTypes.Bloom, []*big.Int, error)
+	BloomsForBlockRange(start, end *big.Int) ([]*gethTypes.Bloom, []*big.Int, error)
 }
 
 type TransactionIndexer interface {

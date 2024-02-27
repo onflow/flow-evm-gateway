@@ -8,8 +8,6 @@ import (
 	"github.com/onflow/flow-go/fvm/evm/types"
 )
 
-var blockExecutedType = (types.EVMLocation{}).TypeID(nil, string(types.EventTypeBlockExecuted))
-
 type blockEventPayload struct {
 	Height            uint64           `cadence:"height"`
 	Hash              string           `cadence:"hash"`
@@ -22,7 +20,7 @@ type blockEventPayload struct {
 // DecodeBlock takes a cadence event that contains executed block payload and
 // decodes it into the Block type.
 func DecodeBlock(event cadence.Event) (*types.Block, error) {
-	if cdcCommon.TypeID(event.EventType.ID()) != blockExecutedType {
+	if !IsBlockExecutedEvent(event) {
 		return nil, fmt.Errorf(
 			"invalid event type for decoding into block, received %s expected %s",
 			event.Type().ID(),
@@ -33,7 +31,7 @@ func DecodeBlock(event cadence.Event) (*types.Block, error) {
 	var b blockEventPayload
 	err := cadence.DecodeFields(event, &b)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to cadence decode block: %w", err)
 	}
 
 	hashes := make([]common.Hash, len(b.TransactionHashes))
@@ -48,4 +46,11 @@ func DecodeBlock(event cadence.Event) (*types.Block, error) {
 		ReceiptRoot:       common.HexToHash(b.ReceiptRoot),
 		TransactionHashes: hashes,
 	}, nil
+}
+
+var BlockExecutedEventType = (types.EVMLocation{}).TypeID(nil, string(types.EventTypeBlockExecuted))
+
+// IsBlockExecutedEvent checks whether event contains block executed data.
+func IsBlockExecutedEvent(event cadence.Event) bool {
+	return cdcCommon.TypeID(event.EventType.ID()) == BlockExecutedEventType
 }
