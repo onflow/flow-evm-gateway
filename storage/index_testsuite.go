@@ -111,19 +111,17 @@ func (s *ReceiptTestSuite) TestGetReceiptByTransactionID() {
 
 func (s *ReceiptTestSuite) TestGetReceiptByBlockID() {
 	s.Run("existing block ID", func() {
-		ID := common.HexToHash("0x1")
-		receipt := newReceipt(3, ID)
+		receipt := newReceipt(3, common.HexToHash("0x1"))
 		err := s.ReceiptIndexer.Store(receipt)
 		s.Require().NoError(err)
 
-		retReceipt, err := s.ReceiptIndexer.GetByBlockID(ID)
+		retReceipt, err := s.ReceiptIndexer.GetByBlockHeight(receipt.BlockNumber)
 		s.Require().NoError(err)
 		s.Require().Equal(receipt, retReceipt)
 	})
 
 	s.Run("non-existing block ID", func() {
-		nonExistingBlockHash := common.HexToHash("0x456")
-		retReceipt, err := s.ReceiptIndexer.GetByBlockID(nonExistingBlockHash)
+		retReceipt, err := s.ReceiptIndexer.GetByBlockHeight(big.NewInt(1337))
 		s.Require().Nil(retReceipt)
 		s.Require().ErrorIs(err, errors.NotFound)
 	})
@@ -143,26 +141,29 @@ func (s *ReceiptTestSuite) TestBloomsForBlockRange() {
 			s.Require().NoError(err)
 		}
 
-		blooms, err := s.ReceiptIndexer.BloomsForBlockRange(start, end)
+		blooms, heights, err := s.ReceiptIndexer.BloomsForBlockRange(start, end)
 		s.Require().NoError(err)
 		s.Require().Len(blooms, len(testBlooms))
+		s.Require().Len(heights, len(testBlooms))
 		s.Require().Equal(testBlooms, blooms)
 	})
 
 	s.Run("invalid block range", func() {
 		start := big.NewInt(10)
 		end := big.NewInt(5) // end is less than start
-		blooms, err := s.ReceiptIndexer.BloomsForBlockRange(start, end)
+		blooms, heights, err := s.ReceiptIndexer.BloomsForBlockRange(start, end)
 		s.Require().ErrorIs(err, errors.InvalidRange)
+		s.Require().Nil(heights)
 		s.Require().Nil(blooms)
 	})
 
 	s.Run("non-existing block range", func() {
 		start := big.NewInt(100)
 		end := big.NewInt(105)
-		blooms, err := s.ReceiptIndexer.BloomsForBlockRange(start, end)
+		blooms, heights, err := s.ReceiptIndexer.BloomsForBlockRange(start, end)
 		s.Require().NoError(err)
-		s.Require().Len(blooms, 0)
+		s.Require().Nil(blooms)
+		s.Require().Nil(heights)
 	})
 }
 

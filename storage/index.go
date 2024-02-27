@@ -45,17 +45,17 @@ type ReceiptIndexer interface {
 	// - errors.NotFound if the receipt is not found
 	GetByTransactionID(ID common.Hash) (*gethTypes.Receipt, error)
 
-	// GetByBlockID returns the receipt for the block ID.
+	// GetByBlockHeight returns the receipt for the block height.
 	// Expected errors:
 	// - errors.NotFound if the receipt is not found
 	// TODO right now one transaction per block, but this might change in future so the API needs to be updated.
-	GetByBlockID(ID common.Hash) (*gethTypes.Receipt, error)
+	GetByBlockHeight(height *big.Int) (*gethTypes.Receipt, error)
 
-	// BloomsForBlockRange returns bloom values for the block height range.
-	// Goes through all the blocks in the range if the range is valid and returns the bloom values.
+	// BloomsForBlockRange returns slice of bloom values and a slice of block heights
+	// corresponding to each item in the bloom slice.
 	// Expected errors:
 	// - errors.InvalidRange if the block by the height was not indexed or if the end and start values are invalid.
-	BloomsForBlockRange(start, end *big.Int) ([]*gethTypes.Bloom, error)
+	BloomsForBlockRange(start, end *big.Int) ([]gethTypes.Bloom, []*big.Int, error)
 }
 
 type TransactionIndexer interface {
