@@ -62,7 +62,7 @@ func (r *RangeFilter) Match() ([]*gethTypes.Log, error) {
 
 	logs := make([]*gethTypes.Log, 0)
 	for i, bloom := range blooms {
-		if !bloomMatch(bloom, r.criteria) {
+		if !bloomMatch(*bloom, r.criteria) {
 			continue
 		}
 

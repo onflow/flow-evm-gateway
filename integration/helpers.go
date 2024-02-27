@@ -13,9 +13,9 @@ import (
 	"github.com/onflow/flow-emulator/adapters"
 	"github.com/onflow/flow-emulator/emulator"
 	"github.com/onflow/flow-emulator/server"
-	"github.com/onflow/flow-evm-gateway/services/events"
+	"github.com/onflow/flow-evm-gateway/services/ingestion"
 	"github.com/onflow/flow-evm-gateway/storage"
-	"github.com/onflow/flow-evm-gateway/storage/memory"
+	"github.com/onflow/flow-evm-gateway/storage/pebble"
 	sdk "github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/onflow/flow-go-sdk/crypto"
@@ -73,7 +73,7 @@ func startEmulator() (*server.EmulatorServer, error) {
 // listening for events.
 // todo for now we return index storage as a way to check the data if it was correctly
 // indexed this will be in future replaced with evm gateway API access
-func startEventIngestionEngine(ctx context.Context) (
+func startEventIngestionEngine(ctx context.Context, dbDir string) (
 	storage.BlockIndexer,
 	storage.ReceiptIndexer,
 	storage.TransactionIndexer,
@@ -86,16 +86,27 @@ func startEventIngestionEngine(ctx context.Context) (
 
 	blk, err := client.GetLatestBlock(ctx, false)
 	if err != nil {
+		return nil, nil, nil, fmt.Errorf("error opening pebble db: %w", err)
+	}
+
+	subscriber := ingestion.NewRPCSubscriber(client)
+
+	log := logger.With().Str("component", "database").Logger()
+	db, err := pebble.New(dbDir, log)
+	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	subscriber := events.NewRPCSubscriber(client)
-	blocks := memory.NewBlockStorage(memory.WithLatestHeight(blk.Height))
-	receipts := memory.NewReceiptStorage()
-	txs := memory.NewTransactionStorage()
+	blocks, err := pebble.NewBlocks(db, pebble.WithInitHeight(blk.Height))
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("error creating blocks storage: %w", err)
+	}
 
-	log := logger.With().Str("component", "ingestion").Logger()
-	engine := events.NewEventIngestionEngine(subscriber, blocks, receipts, txs, log)
+	receipts := pebble.NewReceipts(db)
+	txs := pebble.NewTransactions(db)
+
+	log = logger.With().Str("component", "ingestion").Logger()
+	engine := ingestion.NewEventIngestionEngine(subscriber, blocks, receipts, txs, log)
 
 	go func() {
 		err = engine.Start(ctx)
