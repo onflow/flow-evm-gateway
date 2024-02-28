@@ -76,32 +76,32 @@ For more detailed information on configuration and deployment, refer to the Conf
 
 FlowEVM has public RPC endpoints available for the following environments:
 
-| Name            | Value                                        |
-|-----------------|----------------------------------------------|
-| Network Name    | Flow PreviewNet                              |
-| Description     | The public RPC URL for Flow PreviewNet       |
-| RPC Endpoint    | https://previewnet.evm.nodes.onflow.org      |
-| Chain ID        | 646                                          |
-| Currency Symbol | FLOW                                         |
-| Block Explorer  | https://previewnet.flowdiver.io              |
+| Name            | Value                                  |
+|-----------------|----------------------------------------|
+| Network Name    | Flow PreviewNet                        |
+| Description     | The public RPC URL for Flow PreviewNet |
+| RPC Endpoint    | https://previewnet.evm.nodes.onflow.org|
+| Chain ID        | 646                                    |
+| Currency Symbol | FLOW                                   |
+| Block Explorer  | https://previewnet.flowdiver.io        |
 
-| Name            | Value                                        |
-|-----------------|----------------------------------------------|
-| Network Name    | Flow Testnet                                 |
-| Description     | The public RPC URL for Flow testnet          |
-| RPC Endpoint    | https://testnet.evm.nodes.onflow.org         |
-| Chain ID        | Coming Soon                                  |
-| Currency Symbol | FLOW                                         |
-| Block Explorer  | https://testnet.flowdiver.io                 |
+| Name            | Value                                  |
+|-----------------|----------------------------------------|
+| Network Name    | Testnet                                |
+| Description     | The public RPC URL for Flow testnet    |
+| RPC Endpoint    | https://testnet.evm.nodes.onflow.org   |
+| Chain ID        | Coming Soon                            |
+| Currency Symbol | FLOW                                   |
+| Block Explorer  | https://testnet.flowdiver.io           |
 
-| Name            | Value                                        |
-|-----------------|----------------------------------------------|
-| Network Name    | Flow Mainnet                                 |
-| Description     | The public RPC URL for Flow mainnet          |
-| RPC Endpoint    | https://mainnet.evm.nodes.onflow.org         |
-| Chain ID        | 747                                          |
-| Currency Symbol | FLOW                                         |
-| Block Explorer  | https://flowdiver.io                         |
+| Name            | Value                                  |
+|-----------------|----------------------------------------|
+| Network Name    | Mainnet                                |
+| Description     | The public RPC URL for Flow mainnet    |
+| RPC Endpoint    | https://mainnet.evm.nodes.onflow.org   |
+| Chain ID        | 747                                    |
+| Currency Symbol | FLOW                                   |
+| Block Explorer  | https://flowdiver.io                   |
 
 # Supported namespaces and methods
 
