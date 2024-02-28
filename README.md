@@ -95,6 +95,8 @@ FlowEVM has public RPC endpoints available for the following environments:
 
 | Name            | Value                                  |
 |-----------------|----------------------------------------|
+| Network Name    | FlowEVM Testnet                        |
+| Description     | The public RPC URL for FlowEVM testnet |
 | RPC Endpoint    | https://testnet.evm.nodes.onflow.org   |
 | Chain ID        | Coming Soon                            |
 | Currency Symbol | FLOW                                   |
