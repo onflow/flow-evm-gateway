@@ -8,11 +8,58 @@ FlowEVM Gateway implements the Ethereum JSON-RPC API for the [FlowEVM](https://d
 
 FlowEVM Gateway is compatible with the majority of standard Ethereum JSON-RPC APIs allowing seamless integration with existing Ethereum-compatible web3 tools via HTTP. FlowEVM Gateway honors Ethereum's JSON-RPC namespace system, grouping RPC methods into categories based on their specific purpose. Each method name is constructed using the namespace, an underscore, and the specific method name in that namespace. For example, the `eth_call` method is located within the `eth` namespace.
 
-Listed below are the JSON-RPC namespaces currently supported by the FlowEVM Gateway:
+Listed below are the JSON-RPC namespaces and methods currently supported by the FlowEVM Gateway:
 
 * `eth`
+  * Supported 
+    * eth_chainId
+    * eth_blockNumber
+    * eth_coinbase
+    * eth_getLogs
+    * eth_getTransactionCount
+    * eth_getTransactionReceipt
+    * eth_getBlockByNumber
+    * eth_call
+    * eth_sendRawTransaction
+    * eth_getTransactionByHash
+    * eth_gasPrice 
+    * eth_getBalance
+    * eth_estimateGas
+    * eth_getTransactionByBlockNumberAndIndex
+    * eth_getTransactionByBlockHashAndIndex
+    * eth_getBlockByHash
+    * eth_getBlockReceipts
+    * eth_getBlockTransactionCountByHash
+    * eth_getBlockTransactionCountByNumber
+    * eth_accounts
+    * eth_sign
+    * eth_signTransaction
+    * eth_sendTransaction
+    * eth_getUncleCountByBlockHash // return empty
+    * eth_getUncleCountByBlockNumber // return empty
+    * eth_syncing // return false for now
+  * Unsupported but coming soon
+    * eth_createAccessList
+    * eth_feeHistory
+    * eth_maxPriorityFeePerGas
+    * eth_getCode
+    * eth_getProof
+    * eth_getStorageAt
+    * eth_newFilter
+    * eth_uninstallFilter
+    * eth_getFilterLogs
+    * eth_getFilterChanges
+    * eth_newBlockFilter
+    * eth_newPendingTransactionFilter
 * `web3`
+  * Supported
+    * web3_clientVersion
+    * sha3
 * `net`
+  * Supported
+    * net_listening
+    * net_peerCount
+    * net_version
 
 We also plan to add support for the `admin` namespace in the near future.
 
