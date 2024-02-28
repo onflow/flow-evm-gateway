@@ -503,30 +503,37 @@ func (b *BlockChainAPI) EstimateGas(
 		data = *args.Input
 	}
 
-	eoa := newEOATestAccount(b.config.COAKey.String()[2:])
-	// Provide a high enough gas for the tx to be able to execute
-	gas := uint64(15_000_000)
+	// provide a high enough gas for the tx to be able to execute
+	defaultGasLimit := uint64(15_000_000)
 	if args.Gas != nil {
-		gas = uint64(*args.Gas)
+		defaultGasLimit = uint64(*args.Gas)
 	}
 
-	txData := eoa.PrepareSignAndEncodeTx(
+	txData, err := signGasEstimationTx(
 		args.To,
 		data,
 		(*big.Int)(args.Value),
-		gas,
+		defaultGasLimit,
 		(*big.Int)(args.GasPrice),
 	)
+	if err != nil {
+		b.logger.Error().Err(err).Msg("failed to sign transaction for gas estimate")
+		return hexutil.Uint64(defaultGasLimit), nil // return default gas limit
+	}
 
-	gas, err := b.evm.EstimateGas(ctx, txData)
+	estimatedGas, err := b.evm.EstimateGas(ctx, txData)
 	if err != nil {
 		b.logger.Error().Err(err).Msg("failed to estimate gas")
 		return hexutil.Uint64(0), err
 	}
 
-	return hexutil.Uint64(gas), nil
+	return hexutil.Uint64(estimatedGas), nil
 }
 
+// handleError takes in an error and in case the error is of type ErrNotFound
+// it returns nil instead of an error since that is according to the API spec,
+// if the error is not of type ErrNotFound it will return the error and the generic
+// empty type.
 func handleError[T any](log zerolog.Logger, err error) (T, error) {
 	var zero T
 	if errors.Is(err, storageErrs.ErrNotFound) {
