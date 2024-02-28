@@ -517,7 +517,7 @@ func (b *BlockChainAPI) EstimateGas(
 	)
 	if err != nil {
 		b.logger.Error().Err(err).Msg("failed to sign transaction for gas estimate")
-		return hexutil.Uint64(0), err
+		return hexutil.Uint64(0), nil
 	}
 
 	estimatedGas, err := b.evm.EstimateGas(ctx, txData)
