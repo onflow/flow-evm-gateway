@@ -132,8 +132,8 @@ Listed below are the JSON-RPC namespaces and methods currently supported by the 
     * eth_sign
     * eth_signTransaction
     * eth_sendTransaction
-    * eth_getUncleCountByBlockHash // return empty
-    * eth_getUncleCountByBlockNumber // return empty
+    * eth_getUncleCountByBlockHash // return 0
+    * eth_getUncleCountByBlockNumber // return 0
     * eth_syncing // return false for now
   * Unsupported but coming soon
     * eth_createAccessList
