@@ -6,21 +6,13 @@
 
 FlowEVM Gateway implements the Ethereum JSON-RPC API for the [FlowEVM](https://developers.flow.com/evm/about) which conforms to the Ethereum [JSON-RPC specification](https://ethereum.github.io/execution-apis/api-documentation/). FlowEVM Gateway is specifically designed to integrate with the FlowEVM environment on the Flow blockchain. Rather than implementing the full `geth` stack, the JSON-RPC API available in FlowEVM Gateway is a lightweight implementation which uses Flow's underlying consensus and smart contract language, [Cadence](https://cadence-lang.org/docs/), to handle calls received by the FlowEVM Gateway. For those interested in the underlying implementation details please refer to the [FLIP #243](https://github.com/onflow/flips/issues/243) (FlowEVM Gateway) and [FLIP #223](https://github.com/onflow/flips/issues/223) (FlowEVM Core) improvement proposals. 
 
-FlowEVM Gateway is compatible with the majority of standard Ethereum JSON-RPC APIs allowing seamless integration with existing Ethereum-compatible web3 tools via HTTP. FlowEVM Gateway honors Ethereum's JSON-RPC namespace system, grouping RPC methods into categories based on their specific purpose. Each method name is constructed using the namespace, an underscore, and the specific method name in that namespace. For example, the `eth_call` method is located within the `eth` namespace.
-
-Listed below are the JSON-RPC namespaces currently supported by the FlowEVM Gateway:
-
-* `eth`
-* `web3`
-* `net`
-
-We also plan to add support for the `admin` namespace in the near future.
+FlowEVM Gateway is compatible with the majority of standard Ethereum JSON-RPC APIs allowing seamless integration with existing Ethereum-compatible web3 tools via HTTP. FlowEVM Gateway honors Ethereum's JSON-RPC namespace system, grouping RPC methods into categories based on their specific purpose. Each method name is constructed using the namespace, an underscore, and the specific method name in that namespace. For example, the `eth_call` method is located within the `eth` namespace. See below for details on methods currently supported or planned.
 
 ## Event subscription and filters
 
 FlowEVM Gateway also supports the standard Ethereum JSON-RPC event subscription and filters, enabling callers to subscribe to state logs, blocks or pending transactions changes.
 
-* TODO, add more specifics 
+* TODO more coming
 
 # Running
 Operating an EVM Gateway is straightforward. It can either be deployed locally alongside the Flow emulator or configured to connect with any active Flow networks supporting EVM. Given that the EVM Gateway depends solely on [Access Node APIs](https://developers.flow.com/networks/node-ops/access-onchain-data/access-nodes/accessing-data/access-api), it is compatible with any networks offering this API access.
@@ -84,32 +76,89 @@ For more detailed information on configuration and deployment, refer to the Conf
 
 FlowEVM has public RPC endpoints available for the following environments:
 
-| Name            | Value                                        |
-|-----------------|----------------------------------------------|
-| Network Name    | Flow PreviewNet                              |
-| Description     | The public RPC URL for Flow PreviewNet       |
-| RPC Endpoint    | https://previewnet.evm.nodes.onflow.org      |
-| Chain ID        | 646                                          |
-| Currency Symbol | FLOW                                         |
-| Block Explorer  | https://previewnet.flowdiver.io              |
+| Name            | Value                                  |
+|-----------------|----------------------------------------|
+| Network Name    | Flow PreviewNet                        |
+| Description     | The public RPC URL for Flow PreviewNet |
+| RPC Endpoint    | https://previewnet.evm.nodes.onflow.org|
+| Chain ID        | 646                                    |
+| Currency Symbol | FLOW                                   |
+| Block Explorer  | https://previewnet.flowdiver.io        |
 
-| Name            | Value                                        |
-|-----------------|----------------------------------------------|
-| Network Name    | Flow Testnet                                 |
-| Description     | The public RPC URL for Flow testnet          |
-| RPC Endpoint    | https://testnet.evm.nodes.onflow.org         |
-| Chain ID        | Coming Soon                                  |
-| Currency Symbol | FLOW                                         |
-| Block Explorer  | https://testnet.flowdiver.io                 |
+| Name            | Value                                  |
+|-----------------|----------------------------------------|
+| Network Name    | Testnet                                |
+| Description     | The public RPC URL for Flow testnet    |
+| RPC Endpoint    | https://testnet.evm.nodes.onflow.org   |
+| Chain ID        | Coming Soon                            |
+| Currency Symbol | FLOW                                   |
+| Block Explorer  | https://testnet.flowdiver.io           |
 
-| Name            | Value                                        |
-|-----------------|----------------------------------------------|
-| Network Name    | Flow Mainnet                                 |
-| Description     | The public RPC URL for Flow mainnet          |
-| RPC Endpoint    | https://mainnet.evm.nodes.onflow.org         |
-| Chain ID        | 747                                          |
-| Currency Symbol | FLOW                                         |
-| Block Explorer  | https://flowdiver.io                         |
+| Name            | Value                                  |
+|-----------------|----------------------------------------|
+| Network Name    | Mainnet                                |
+| Description     | The public RPC URL for Flow mainnet    |
+| RPC Endpoint    | https://mainnet.evm.nodes.onflow.org   |
+| Chain ID        | 747                                    |
+| Currency Symbol | FLOW                                   |
+| Block Explorer  | https://flowdiver.io                   |
+
+# Supported namespaces and methods
+
+Listed below are the JSON-RPC namespaces and methods currently supported by the FlowEVM Gateway:
+
+* `eth`
+  * Supported 
+    * eth_chainId
+    * eth_blockNumber
+    * eth_coinbase
+    * eth_getLogs
+    * eth_getTransactionCount
+    * eth_getTransactionReceipt
+    * eth_getBlockByNumber
+    * eth_call
+    * eth_sendRawTransaction
+    * eth_getTransactionByHash
+    * eth_gasPrice 
+    * eth_getBalance
+    * eth_estimateGas
+    * eth_getTransactionByBlockNumberAndIndex
+    * eth_getTransactionByBlockHashAndIndex
+    * eth_getBlockByHash
+    * eth_getBlockReceipts
+    * eth_getBlockTransactionCountByHash
+    * eth_getBlockTransactionCountByNumber
+    * eth_getUncleCountByBlockHash // return 0
+    * eth_getUncleCountByBlockNumber // return 0
+    * eth_syncing // return false for now
+  * Unsupported but coming soon
+    * eth_createAccessList
+    * eth_feeHistory
+    * eth_maxPriorityFeePerGas
+    * eth_getCode
+    * eth_getProof
+    * eth_getStorageAt
+    * eth_newFilter
+    * eth_uninstallFilter
+    * eth_getFilterLogs
+    * eth_getFilterChanges
+    * eth_newBlockFilter
+    * eth_newPendingTransactionFilter
+    * eth_accounts
+    * eth_sign
+    * eth_signTransaction
+    * eth_sendTransaction
+* `web3`
+  * Supported
+    * web3_clientVersion
+    * web_sha3
+* `net`
+  * Supported
+    * net_listening
+    * net_peerCount
+    * net_version
+
+We also plan to add support for the `admin` namespace in the near future.
 
 # Example queries
 
