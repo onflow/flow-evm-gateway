@@ -476,13 +476,27 @@ func (b *BlockChainAPI) GetTransactionCount(
 		b.logger.Warn().Msg("transaction count for special blocks not supported") // but still return latest for now
 	}
 
+	networkNonce, err := b.evm.GetNonce(ctx, address)
+	if err != nil {
+		b.logger.Error().Err(err).Msg("get nonce on network failed")
+	}
+
 	nonce, err := b.accounts.GetNonce(&address)
 	if err != nil {
 		b.logger.Error().Err(err).Msg("get nonce failed")
 		return nil, errs.ErrInternal
 	}
 
-	return (*hexutil.Uint64)(&nonce), nil
+	// compare both until we gain confidence in db nonce tracking working correctly
+	if nonce != networkNonce {
+		b.logger.Error().
+			Str("address", address.String()).
+			Uint64("network-nonce", networkNonce).
+			Uint64("db-nonce", nonce).
+			Msg("network nonce does not equal db nonce")
+	}
+
+	return (*hexutil.Uint64)(&networkNonce), nil
 }
 
 // EstimateGas returns the lowest possible gas limit that allows the transaction to run
