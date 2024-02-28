@@ -518,13 +518,13 @@ func (b *BlockChainAPI) EstimateGas(
 	)
 	if err != nil {
 		b.logger.Error().Err(err).Msg("failed to sign transaction for gas estimate")
-		return hexutil.Uint64(0), nil
+		return hexutil.Uint64(defaultGasLimit), nil // return default gas limit
 	}
 
 	estimatedGas, err := b.evm.EstimateGas(ctx, txData)
 	if err != nil {
 		b.logger.Error().Err(err).Msg("failed to estimate gas")
-		return hexutil.Uint64(defaultGasLimit), err // return default gas limit
+		return hexutil.Uint64(defaultGasLimit), nil // return default gas limit
 	}
 
 	return hexutil.Uint64(estimatedGas), nil
