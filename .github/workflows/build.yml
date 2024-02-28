@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - jp/testing-build-only-workflows
 
 env:
   DOCKER_IMAGE_URL: ${{ vars.REPO_DOCKER_IMAGE_URL }}:${{ github.sha }}
