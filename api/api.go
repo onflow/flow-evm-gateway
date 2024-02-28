@@ -501,8 +501,6 @@ func (b *BlockChainAPI) EstimateGas(
 		data = *args.Data
 	} else if args.Input != nil {
 		data = *args.Input
-	} else {
-		return hexutil.Uint64(0), errors.Join(errs.ErrInvalid, fmt.Errorf("either data or input fields has to be provided"))
 	}
 
 	// provide a high enough gas for the tx to be able to execute
