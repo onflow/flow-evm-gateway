@@ -3,10 +3,9 @@ package config
 import (
 	"flag"
 	"fmt"
-	"math/big"
-
 	"github.com/goccy/go-json"
 	"github.com/onflow/flow-go/utils/io"
+	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -109,7 +108,6 @@ func FromFlags() (*Config, error) {
 				return nil, fmt.Errorf("a key from the COA key list file is not valid, key %s, error: %w", k, err)
 			}
 			cfg.COAKeys[i] = pk
-			cfg.COAKey = pk
 		}
 	} else {
 		return nil, fmt.Errorf("must either provide coa-key or coa-key-path flag")
