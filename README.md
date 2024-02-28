@@ -128,10 +128,6 @@ Listed below are the JSON-RPC namespaces and methods currently supported by the 
     * eth_getBlockReceipts
     * eth_getBlockTransactionCountByHash
     * eth_getBlockTransactionCountByNumber
-    * eth_accounts
-    * eth_sign
-    * eth_signTransaction
-    * eth_sendTransaction
     * eth_getUncleCountByBlockHash // return 0
     * eth_getUncleCountByBlockNumber // return 0
     * eth_syncing // return false for now
@@ -148,6 +144,10 @@ Listed below are the JSON-RPC namespaces and methods currently supported by the 
     * eth_getFilterChanges
     * eth_newBlockFilter
     * eth_newPendingTransactionFilter
+    * eth_accounts
+    * eth_sign
+    * eth_signTransaction
+    * eth_sendTransaction
 * `web3`
   * Supported
     * web3_clientVersion
