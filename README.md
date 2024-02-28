@@ -6,62 +6,7 @@
 
 FlowEVM Gateway implements the Ethereum JSON-RPC API for the [FlowEVM](https://developers.flow.com/evm/about) which conforms to the Ethereum [JSON-RPC specification](https://ethereum.github.io/execution-apis/api-documentation/). FlowEVM Gateway is specifically designed to integrate with the FlowEVM environment on the Flow blockchain. Rather than implementing the full `geth` stack, the JSON-RPC API available in FlowEVM Gateway is a lightweight implementation which uses Flow's underlying consensus and smart contract language, [Cadence](https://cadence-lang.org/docs/), to handle calls received by the FlowEVM Gateway. For those interested in the underlying implementation details please refer to the [FLIP #243](https://github.com/onflow/flips/issues/243) (FlowEVM Gateway) and [FLIP #223](https://github.com/onflow/flips/issues/223) (FlowEVM Core) improvement proposals. 
 
-FlowEVM Gateway is compatible with the majority of standard Ethereum JSON-RPC APIs allowing seamless integration with existing Ethereum-compatible web3 tools via HTTP. FlowEVM Gateway honors Ethereum's JSON-RPC namespace system, grouping RPC methods into categories based on their specific purpose. Each method name is constructed using the namespace, an underscore, and the specific method name in that namespace. For example, the `eth_call` method is located within the `eth` namespace.
-
-Listed below are the JSON-RPC namespaces and methods currently supported by the FlowEVM Gateway:
-
-* `eth`
-  * Supported 
-    * eth_chainId
-    * eth_blockNumber
-    * eth_coinbase
-    * eth_getLogs
-    * eth_getTransactionCount
-    * eth_getTransactionReceipt
-    * eth_getBlockByNumber
-    * eth_call
-    * eth_sendRawTransaction
-    * eth_getTransactionByHash
-    * eth_gasPrice 
-    * eth_getBalance
-    * eth_estimateGas
-    * eth_getTransactionByBlockNumberAndIndex
-    * eth_getTransactionByBlockHashAndIndex
-    * eth_getBlockByHash
-    * eth_getBlockReceipts
-    * eth_getBlockTransactionCountByHash
-    * eth_getBlockTransactionCountByNumber
-    * eth_accounts
-    * eth_sign
-    * eth_signTransaction
-    * eth_sendTransaction
-    * eth_getUncleCountByBlockHash // return empty
-    * eth_getUncleCountByBlockNumber // return empty
-    * eth_syncing // return false for now
-  * Unsupported but coming soon
-    * eth_createAccessList
-    * eth_feeHistory
-    * eth_maxPriorityFeePerGas
-    * eth_getCode
-    * eth_getProof
-    * eth_getStorageAt
-    * eth_newFilter
-    * eth_uninstallFilter
-    * eth_getFilterLogs
-    * eth_getFilterChanges
-    * eth_newBlockFilter
-    * eth_newPendingTransactionFilter
-* `web3`
-  * Supported
-    * web3_clientVersion
-    * sha3
-* `net`
-  * Supported
-    * net_listening
-    * net_peerCount
-    * net_version
-
-We also plan to add support for the `admin` namespace in the near future.
+FlowEVM Gateway is compatible with the majority of standard Ethereum JSON-RPC APIs allowing seamless integration with existing Ethereum-compatible web3 tools via HTTP. FlowEVM Gateway honors Ethereum's JSON-RPC namespace system, grouping RPC methods into categories based on their specific purpose. Each method name is constructed using the namespace, an underscore, and the specific method name in that namespace. For example, the `eth_call` method is located within the `eth` namespace. See below for details on methods currently supported or planned.
 
 ## Event subscription and filters
 
@@ -157,6 +102,63 @@ FlowEVM has public RPC endpoints available for the following environments:
 | Chain ID        | 747                                          |
 | Currency Symbol | FLOW                                         |
 | Block Explorer  | https://flowdiver.io                         |
+
+# Supported namespaces and methods
+
+Listed below are the JSON-RPC namespaces and methods currently supported by the FlowEVM Gateway:
+
+* `eth`
+  * Supported 
+    * eth_chainId
+    * eth_blockNumber
+    * eth_coinbase
+    * eth_getLogs
+    * eth_getTransactionCount
+    * eth_getTransactionReceipt
+    * eth_getBlockByNumber
+    * eth_call
+    * eth_sendRawTransaction
+    * eth_getTransactionByHash
+    * eth_gasPrice 
+    * eth_getBalance
+    * eth_estimateGas
+    * eth_getTransactionByBlockNumberAndIndex
+    * eth_getTransactionByBlockHashAndIndex
+    * eth_getBlockByHash
+    * eth_getBlockReceipts
+    * eth_getBlockTransactionCountByHash
+    * eth_getBlockTransactionCountByNumber
+    * eth_accounts
+    * eth_sign
+    * eth_signTransaction
+    * eth_sendTransaction
+    * eth_getUncleCountByBlockHash // return empty
+    * eth_getUncleCountByBlockNumber // return empty
+    * eth_syncing // return false for now
+  * Unsupported but coming soon
+    * eth_createAccessList
+    * eth_feeHistory
+    * eth_maxPriorityFeePerGas
+    * eth_getCode
+    * eth_getProof
+    * eth_getStorageAt
+    * eth_newFilter
+    * eth_uninstallFilter
+    * eth_getFilterLogs
+    * eth_getFilterChanges
+    * eth_newBlockFilter
+    * eth_newPendingTransactionFilter
+* `web3`
+  * Supported
+    * web3_clientVersion
+    * sha3
+* `net`
+  * Supported
+    * net_listening
+    * net_peerCount
+    * net_version
+
+We also plan to add support for the `admin` namespace in the near future.
 
 # Example queries
 
