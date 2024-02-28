@@ -38,5 +38,5 @@ func signGasEstimationTx(
 		return nil, fmt.Errorf("failed to sign tx for gas estimation: %w", err)
 	}
 
-	return tx.MarshalJSON()
+	return tx.MarshalBinary()
 }
