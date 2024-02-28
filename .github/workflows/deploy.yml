@@ -60,9 +60,9 @@ jobs:
           service: ${{ vars.GCP_SERVICE }}
           image: ${{ env.DOCKER_IMAGE_URL }}
           
-  deploy-crescendo:
+  deploy-previewnet:
     needs: [build]
-    environment: crescendo
+    environment: previewnet
     runs-on: ubuntu-latest
     permissions:
       id-token: write
