@@ -151,7 +151,7 @@ Listed below are the JSON-RPC namespaces and methods currently supported by the 
 * `web3`
   * Supported
     * web3_clientVersion
-    * sha3
+    * web_sha3
 * `net`
   * Supported
     * net_listening
