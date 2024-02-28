@@ -84,6 +84,8 @@ For more detailed information on configuration and deployment, refer to the Conf
 
 FlowEVM has public RPC endpoints available for the following environments:
 
+| Name            | Value                                      |
+|-----------------|--------------------------------------------|
 | Network Name    | FlowEVM PreviewNet                         |
 | Description     | The public RPC URL for FlowEVM PreviewNet  |
 | RPC Endpoint    | https://previewnet.evm.nodes.onflow.org    |
