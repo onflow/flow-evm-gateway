@@ -39,6 +39,9 @@ var (
 	//go:embed cadence/estimate_gas.cdc
 	estimateGasScript []byte
 
+	//go:embed cadence/get_nonce.cdc
+	getNonceScript []byte
+
 	byteArrayType = cadence.NewVariableSizedArrayType(cadence.UInt8Type)
 	addressType   = cadence.NewConstantSizedArrayType(
 		common.AddressLength,
@@ -68,6 +71,9 @@ type Requester interface {
 	// Note, this function doesn't make any changes in the state/blockchain and is
 	// useful to executed and retrieve the gas consumption and possible failures.
 	EstimateGas(ctx context.Context, data []byte) (uint64, error)
+
+	// GetNonce gets nonce from the network.
+	GetNonce(ctx context.Context, address common.Address) (uint64, error)
 }
 
 var _ Requester = &EVM{}
@@ -257,6 +263,28 @@ func (e *EVM) GetBalance(ctx context.Context, address common.Address, height uin
 	}
 
 	return val.(cadence.UInt).ToGoValue().(*big.Int), nil
+}
+
+func (e *EVM) GetNonce(ctx context.Context, address common.Address) (uint64, error) {
+	addr := cadenceArrayFromBytes(address.Bytes()).WithType(addressType)
+
+	val, err := e.client.ExecuteScriptAtLatestBlock(
+		ctx,
+		e.replaceAddresses(getNonceScript),
+		[]cadence.Value{addr},
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	e.logger.Info().Str("address", address.String()).Msg("get nonce")
+
+	// sanity check, should never occur
+	if _, ok := val.(cadence.UInt64); !ok {
+		e.logger.Panic().Msg(fmt.Sprintf("failed to convert balance %v to UInt64", val))
+	}
+
+	return val.(cadence.UInt64).ToGoValue().(uint64), nil
 }
 
 func (e *EVM) Call(ctx context.Context, address common.Address, data []byte) ([]byte, error) {
