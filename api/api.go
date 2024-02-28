@@ -509,7 +509,8 @@ func (b *BlockChainAPI) EstimateGas(
 		defaultGasLimit = uint64(*args.Gas)
 	}
 
-	txData, err := signGasEstimationTx(args.To,
+	txData, err := signGasEstimationTx(
+		args.To,
 		data,
 		(*big.Int)(args.Value),
 		defaultGasLimit,
