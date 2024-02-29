@@ -28,15 +28,13 @@ type BlockIndexer interface {
 	// - errors.NotInitialized if the storage was not initialized
 	LatestEVMHeight() (uint64, error)
 
-	// FirstEVMHeight returns the first stored EVM block height.
-	// Expected errors:
-	// - errors.NotInitialized if the storage was not initialized
-	FirstEVMHeight() (uint64, error)
-
 	// LatestCadenceHeight return the latest stored Cadence height.
 	// Expected errors:
 	// - errors.NotInitialized if the storage was not initialized
 	LatestCadenceHeight() (uint64, error)
+
+	// SetLatestCadenceHeight sets the latest Cadence height.
+	SetLatestCadenceHeight(height uint64) error
 
 	// GetCadenceHeight returns the Cadence height that matches the
 	// provided EVM height. Each EVM block indexed contains a link
