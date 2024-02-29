@@ -8,14 +8,9 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/crypto"
 	"github.com/onflow/flow-go/fvm/evm/emulator"
-)
-
-const (
-	EmptyHeight = math.MaxUint64
 )
 
 type Config struct {
@@ -28,10 +23,6 @@ type Config struct {
 	// GRPCHost for the RPC API server
 	// todo maybe merge port into host as it's for AN
 	RPCHost string
-	// todo support also just specifying latest height
-	// InitCadenceHeight provides initial heights for Cadence block height
-	// useful only on a cold-start with an empty database
-	InitCadenceHeight uint64
 	// EVMNetworkID provides the EVM chain ID.
 	EVMNetworkID *big.Int
 	// FlowNetworkID is the Flow network ID that the EVM is hosted on (mainnet, testnet, emulator...)
@@ -61,7 +52,6 @@ func FromFlags() (*Config, error) {
 	flag.StringVar(&cfg.RPCHost, "rpc-host", "", "host for the RPC API server")
 	flag.IntVar(&cfg.RPCPort, "rpc-port", 8545, "port for the RPC API server")
 	flag.StringVar(&cfg.AccessNodeGRPCHost, "access-node-grpc-host", "localhost:3569", "host to the flow access node gRPC API")
-	flag.Uint64Var(&cfg.InitCadenceHeight, "init-cadence-height", EmptyHeight, "init cadence block height from where the event ingestion will start. WARNING: you should only provide this if there are no existing values in the database")
 	flag.StringVar(&evmNetwork, "evm-network-id", "testnet", "EVM network ID (testnet, mainnet)")
 	flag.StringVar(&cfg.FlowNetworkID, "flow-network-id", "emulator", "EVM network ID (emulator, previewnet)")
 	flag.StringVar(&coinbase, "coinbase", "", "coinbase address to use for fee collection")
