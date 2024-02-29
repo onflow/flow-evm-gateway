@@ -75,6 +75,34 @@ func startEmulator() (*server.EmulatorServer, error) {
 
 	time.Sleep(200 * time.Millisecond) // give it some time to start, dummy but ok for test
 
+	e := srv.Emulator()
+	b, err := e.GetLatestBlock()
+	if err != nil {
+		return nil, err
+	}
+	// mine one block to make sure we start at height 1, which is expected on normal network
+	addr := flow.Address(e.ServiceKey().Address)
+	emptyTx := &flow.TransactionBody{
+		ReferenceBlockID: b.ID(),
+		Script:           []byte(`transaction{}`),
+		ProposalKey: flow.ProposalKey{
+			Address:        addr,
+			KeyIndex:       0,
+			SequenceNumber: 2,
+		},
+		Payer: addr,
+	}
+	hasher, err := crypto.NewHasher(crypto.HashAlgorithm(crypto.SHA3_256))
+	if err != nil {
+		return nil, err
+	}
+	if err := emptyTx.SignEnvelope(addr, 0, e.ServiceKey().PrivateKey, hasher); err != nil {
+		return nil, err
+	}
+	if err := e.SendTransaction(emptyTx); err != nil {
+		return nil, err
+	}
+
 	return srv, nil
 }
 

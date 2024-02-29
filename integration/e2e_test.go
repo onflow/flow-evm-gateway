@@ -46,6 +46,7 @@ func TestIntegration_TransferValue(t *testing.T) {
 	srv, err := startEmulator()
 	require.NoError(t, err)
 	dbDir := t.TempDir()
+	emu := srv.Emulator()
 
 	ctx, cancelIngestion := context.WithCancel(context.Background())
 	blocks, receipts, txs, err := startEventIngestionEngine(ctx, dbDir)
@@ -55,8 +56,6 @@ func TestIntegration_TransferValue(t *testing.T) {
 		go func() { srv.Stop() }()
 		cancelIngestion()
 	}()
-
-	emu := srv.Emulator()
 
 	fundAmount := int64(5)
 	flowAmount, _ := cadence.NewUFix64("5.0")
@@ -427,7 +426,6 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 		AccessNodeGRPCHost: "localhost:3569", // emulator
 		RPCPort:            3001,
 		RPCHost:            "127.0.0.1",
-		InitCadenceHeight:  0,
 		FlowNetworkID:      "emulator",
 		EVMNetworkID:       emulator.FlowEVMTestnetChainID,
 		Coinbase:           fundEOAAddress,
@@ -784,7 +782,6 @@ func TestE2E_ConcurrentTransactionSubmission(t *testing.T) {
 		AccessNodeGRPCHost: host,
 		RPCPort:            3001,
 		RPCHost:            "127.0.0.1",
-		InitCadenceHeight:  0,
 		EVMNetworkID:       emulator.FlowEVMTestnetChainID,
 		FlowNetworkID:      "emulator",
 		Coinbase:           fundEOAAddress,
