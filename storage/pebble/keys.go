@@ -22,7 +22,6 @@ const (
 
 	// special keys
 	latestEVMHeightKey     = byte(100)
-	firstEVMHeightKey      = byte(101)
 	latestCadenceHeightKey = byte(102)
 )
 
