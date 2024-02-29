@@ -314,13 +314,14 @@ func (a *AccountTestSuite) TestNonce() {
 		}
 
 		// if run second time we should still see same nonce values, since they won't be incremented
+		// because we track nonce with evm height, and if same height is used twice we don't update
 		for i := 1; i < 5; i++ {
 			err = a.AccountIndexer.Update(tx, rcp)
 			a.Require().NoError(err)
 
 			nonce, err = a.AccountIndexer.GetNonce(&from)
 			a.Require().NoError(err)
-			a.Require().Equal(uint64(i), nonce)
+			a.Require().Equal(uint64(5), nonce) // always equal to latest nonce
 		}
 	})
 }

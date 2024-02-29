@@ -178,6 +178,9 @@ func TestTransactionIngestion(t *testing.T) {
 		}).
 		Once() // make sure this isn't called multiple times
 
+	blocks.On("SetLatestCadenceHeight").
+		Return(func() error { return nil })
+
 	accounts := &storageMock.AccountIndexer{}
 	accounts.
 		On("Update", mock.AnythingOfType("*types.Transaction"), mock.AnythingOfType("*types.Receipt")).
