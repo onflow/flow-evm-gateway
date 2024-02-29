@@ -77,18 +77,6 @@ func (b *BlockTestSuite) TestStore() {
 }
 
 func (b *BlockTestSuite) TestHeights() {
-	b.Run("first EVM height", func() {
-		for i := 0; i < 5; i++ {
-			first, err := b.Blocks.FirstEVMHeight()
-			b.Require().NoError(err)
-			b.Require().Equal(uint64(1), first)
-
-			// shouldn't affect first height
-			lastHeight := uint64(100 + i)
-			err = b.Blocks.Store(lastHeight+10, mocks.NewBlock(lastHeight))
-			b.Require().NoError(err)
-		}
-	})
 
 	b.Run("last EVM height", func() {
 		for i := 0; i < 5; i++ {
@@ -302,27 +290,43 @@ type AccountTestSuite struct {
 func (a *AccountTestSuite) TestNonce() {
 
 	a.Run("update account and increase nonce", func() {
-		tx := mocks.NewTransaction(0)
-		rcp := mocks.NewReceipt(1, tx.Hash())
 		// todo add multiple accounts test
 		from := common.HexToAddress("FACF71692421039876a5BB4F10EF7A439D8ef61E")
 		rawKey := "f6d5333177711e562cabf1f311916196ee6ffc2a07966d9d4628094073bd5442"
 		key, err := crypto.HexToECDSA(rawKey)
-
-		tx, err = types.SignTx(tx, evmEmulator.GetDefaultSigner(), key)
-		a.Require().NoError(err)
 
 		nonce, err := a.AccountIndexer.GetNonce(&from)
 		a.Require().NoError(err)
 		a.Require().Equal(uint64(0), nonce)
 
 		for i := 1; i < 5; i++ {
+			tx := mocks.NewTransaction(0)
+			rcp := mocks.NewReceipt(uint64(i+5), tx.Hash())
+			tx, err = types.SignTx(tx, evmEmulator.GetDefaultSigner(), key)
+			a.Require().NoError(err)
+
 			err = a.AccountIndexer.Update(tx, rcp)
 			a.Require().NoError(err)
 
 			nonce, err = a.AccountIndexer.GetNonce(&from)
 			a.Require().NoError(err)
 			a.Require().Equal(uint64(i), nonce)
+		}
+
+		// if run second time we should still see same nonce values, since they won't be incremented
+		// because we track nonce with evm height, and if same height is used twice we don't update
+		for i := 1; i < 5; i++ {
+			tx := mocks.NewTransaction(0)
+			rcp := mocks.NewReceipt(uint64(i+5), tx.Hash())
+			tx, err = types.SignTx(tx, evmEmulator.GetDefaultSigner(), key)
+			a.Require().NoError(err)
+
+			err = a.AccountIndexer.Update(tx, rcp)
+			a.Require().NoError(err)
+
+			nonce, err = a.AccountIndexer.GetNonce(&from)
+			a.Require().NoError(err)
+			a.Require().Equal(uint64(4), nonce) // always equal to latest nonce
 		}
 	})
 }

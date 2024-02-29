@@ -16,7 +16,7 @@ import (
 func TestBlocks(t *testing.T) {
 	runDB("blocks", t, func(t *testing.T, db *Storage) {
 		bl := NewBlocks(db)
-		err := bl.InitCadenceHeight(1)
+		err := bl.InitHeights()
 		require.NoError(t, err)
 		suite.Run(t, &storage.BlockTestSuite{Blocks: bl})
 	})
@@ -26,7 +26,7 @@ func TestReceipts(t *testing.T) {
 	runDB("receipts", t, func(t *testing.T, db *Storage) {
 		// prepare the blocks database since they track heights which are used in receipts as well
 		bl := NewBlocks(db)
-		err := bl.InitCadenceHeight(1)
+		err := bl.InitHeights()
 		require.NoError(t, err)
 		err = bl.Store(30, mocks.NewBlock(10)) // update first and latest height
 		err = bl.Store(30, mocks.NewBlock(20)) // update latest
@@ -53,7 +53,7 @@ func TestBlock(t *testing.T) {
 	runDB("store block", t, func(t *testing.T, db *Storage) {
 		bl := mocks.NewBlock(10)
 		blocks := NewBlocks(db)
-		err := blocks.InitCadenceHeight(1)
+		err := blocks.InitHeights()
 		require.NoError(t, err)
 
 		err = blocks.Store(20, bl)
@@ -65,7 +65,7 @@ func TestBlock(t *testing.T) {
 		bl := mocks.NewBlock(height)
 
 		blocks := NewBlocks(db)
-		err := blocks.InitCadenceHeight(1)
+		err := blocks.InitHeights()
 		require.NoError(t, err)
 
 		err = blocks.Store(30, bl)
@@ -85,7 +85,7 @@ func TestBlock(t *testing.T) {
 
 	runDB("get not found block error", t, func(t *testing.T, db *Storage) {
 		blocks := NewBlocks(db)
-		err := blocks.InitCadenceHeight(1)
+		err := blocks.InitHeights()
 		require.NoError(t, err)
 		_ = blocks.Store(2, mocks.NewBlock(1)) // init
 

@@ -19,7 +19,6 @@ var _ storage.ReceiptIndexer = &Receipts{}
 type Receipts struct {
 	store *Storage
 	mux   sync.RWMutex
-	first uint64
 }
 
 func NewReceipts(store *Storage) *Receipts {
@@ -107,26 +106,24 @@ func (r *Receipts) BloomsForBlockRange(start, end *big.Int) ([]*gethTypes.Bloom,
 	}
 
 	// make sure the first and last height are within indexed values
-	first, last, err := r.getFirstLast()
+	last, err := r.getLast()
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed getting first and last height: %w", err)
 	}
 
-	if start.Uint64() < first || start.Uint64() > last {
+	if start.Uint64() > last {
 		return nil, nil, fmt.Errorf(
-			"start value %d is not within the indexed range of [%d - %d]: %w",
+			"start value %d is not within the indexed range of [0 - %d]: %w",
 			start,
-			first,
 			last,
 			errors.ErrInvalidRange,
 		)
 	}
 
-	if end.Uint64() < first || end.Uint64() > last {
+	if end.Uint64() > last {
 		return nil, nil, fmt.Errorf(
-			"end value %d is not within the indexed range of [%d - %d]: %w",
+			"end value %d is not within the indexed range of [0 - %d]: %w",
 			end,
-			first,
 			last,
 			errors.ErrInvalidRange,
 		)
@@ -169,22 +166,11 @@ func (r *Receipts) BloomsForBlockRange(start, end *big.Int) ([]*gethTypes.Bloom,
 	return blooms, heights, nil
 }
 
-func (r *Receipts) getFirstLast() (uint64, uint64, error) {
+func (r *Receipts) getLast() (uint64, error) {
 	l, err := r.store.get(latestEVMHeightKey)
 	if err != nil {
-		return 0, 0, fmt.Errorf("failed getting latest height: %w", err)
-	}
-	last := binary.BigEndian.Uint64(l)
-
-	if r.first != 0 {
-		return r.first, last, nil
+		return 0, fmt.Errorf("failed getting latest height: %w", err)
 	}
 
-	first, err := r.store.get(firstEVMHeightKey)
-	if err != nil {
-		return 0, 0, fmt.Errorf("failed getting first height: %w", err)
-	}
-
-	r.first = binary.BigEndian.Uint64(first)
-	return r.first, last, nil
+	return binary.BigEndian.Uint64(l), nil
 }
