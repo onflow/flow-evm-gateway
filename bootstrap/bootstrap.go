@@ -34,16 +34,10 @@ func Start(ctx context.Context, cfg *config.Config) error {
 
 	// if database is not initialized require init height
 	if _, err := blocks.LatestCadenceHeight(); errors.Is(err, storageErrs.ErrNotInitialized) {
-		if cfg.InitCadenceHeight == config.EmptyHeight {
-			return fmt.Errorf("must provide init cadence height on an empty database")
+		if err := blocks.InitHeights(); err != nil {
+			return fmt.Errorf("failed to init the database: %w", err)
 		}
-		logger.Info().
-			Uint64("cadence-height", cfg.InitCadenceHeight).
-			Msg("database cadence height init")
-
-		if err := blocks.InitCadenceHeight(cfg.InitCadenceHeight); err != nil {
-			return err
-		}
+		logger.Info().Msg("database initialized with 0 evm and cadence heights")
 	}
 
 	go func() {
