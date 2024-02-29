@@ -93,11 +93,6 @@ func startEventIngestionEngine(ctx context.Context, dbDir string) (
 		return nil, nil, nil, err
 	}
 
-	blk, err := client.GetLatestBlock(ctx, false)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("error opening pebble db: %w", err)
-	}
-
 	subscriber := ingestion.NewRPCSubscriber(client)
 
 	log := logger.With().Str("component", "database").Logger()
@@ -114,7 +109,7 @@ func startEventIngestionEngine(ctx context.Context, dbDir string) (
 	accounts := pebble.NewAccounts(db)
 	txs := pebble.NewTransactions(db)
 
-	err = blocks.InitCadenceHeight(blk.Height)
+	err = blocks.InitHeights()
 	if err != nil {
 		return nil, nil, nil, err
 	}

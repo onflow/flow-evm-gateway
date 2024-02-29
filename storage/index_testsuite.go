@@ -77,18 +77,6 @@ func (b *BlockTestSuite) TestStore() {
 }
 
 func (b *BlockTestSuite) TestHeights() {
-	b.Run("first EVM height", func() {
-		for i := 0; i < 5; i++ {
-			first, err := b.Blocks.FirstEVMHeight()
-			b.Require().NoError(err)
-			b.Require().Equal(uint64(1), first)
-
-			// shouldn't affect first height
-			lastHeight := uint64(100 + i)
-			err = b.Blocks.Store(lastHeight+10, mocks.NewBlock(lastHeight))
-			b.Require().NoError(err)
-		}
-	})
 
 	b.Run("last EVM height", func() {
 		for i := 0; i < 5; i++ {
@@ -316,6 +304,16 @@ func (a *AccountTestSuite) TestNonce() {
 		a.Require().NoError(err)
 		a.Require().Equal(uint64(0), nonce)
 
+		for i := 1; i < 5; i++ {
+			err = a.AccountIndexer.Update(tx, rcp)
+			a.Require().NoError(err)
+
+			nonce, err = a.AccountIndexer.GetNonce(&from)
+			a.Require().NoError(err)
+			a.Require().Equal(uint64(i), nonce)
+		}
+
+		// if run second time we should still see same nonce values, since they won't be incremented
 		for i := 1; i < 5; i++ {
 			err = a.AccountIndexer.Update(tx, rcp)
 			a.Require().NoError(err)
