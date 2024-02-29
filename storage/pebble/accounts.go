@@ -45,7 +45,8 @@ func (a *Accounts) Update(tx *gethTypes.Transaction, receipt *gethTypes.Receipt)
 
 	// make sure the transaction height is bigger than the height we already recorded for the nonce
 	// this makes the operation idempotent and safer.
-	if receipt.BlockNumber.Uint64() <= height {
+	txHeight := receipt.BlockNumber.Uint64()
+	if txHeight <= height {
 		return nil
 	}
 
@@ -57,7 +58,7 @@ func (a *Accounts) Update(tx *gethTypes.Transaction, receipt *gethTypes.Receipt)
 		return err
 	}
 
-	a.nonceCache[from] = []uint64{nonce, height}
+	a.nonceCache[from] = []uint64{nonce, txHeight}
 	return nil
 }
 
