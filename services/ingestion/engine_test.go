@@ -178,8 +178,12 @@ func TestTransactionIngestion(t *testing.T) {
 		}).
 		Once() // make sure this isn't called multiple times
 
-	blocks.On("SetLatestCadenceHeight").
-		Return(func() error { return nil })
+	blocks.
+		On("SetLatestCadenceHeight", mock.AnythingOfType("uint64")).
+		Return(func(h uint64) error {
+			assert.Equal(t, latestHeight+1, h)
+			return nil
+		})
 
 	accounts := &storageMock.AccountIndexer{}
 	accounts.
