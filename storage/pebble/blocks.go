@@ -12,6 +12,10 @@ import (
 	"github.com/onflow/flow-go/fvm/evm/types"
 )
 
+// default initCadenceHeight for initializing the database, we don't use 0 as it has
+// a special meaning to represent latest block in the AN API context.
+const initCadenceHeight = uint64(1)
+
 var _ storage.BlockIndexer = &Blocks{}
 
 type Blocks struct {
@@ -132,11 +136,20 @@ func (b *Blocks) LatestCadenceHeight() (uint64, error) {
 	return binary.BigEndian.Uint64(val), nil
 }
 
-// InitCadenceHeight sets the latest Cadence height
-func (b *Blocks) InitCadenceHeight(height uint64) error {
-	err := b.store.set(latestCadenceHeightKey, nil, uint64Bytes(height))
-	if err != nil {
-		return fmt.Errorf("failed to set latest Cadence height: %w", err)
+// InitHeights sets the Cadence height to zero as well as EVM heights. Used for empty database init.
+func (b *Blocks) InitHeights() error {
+	// sanity check, make sure we don't have any heights stored, disable overwriting the database
+	_, err := b.getHeight(latestCadenceHeightKey)
+	if !errors.Is(err, errs.ErrNotInitialized) {
+		return fmt.Errorf("can not init the database that already has data stored")
+	}
+
+	if err := b.store.set(latestCadenceHeightKey, nil, uint64Bytes(initCadenceHeight)); err != nil {
+		return fmt.Errorf("failed to set init Cadence height: %w", err)
+	}
+
+	if err := b.store.set(latestEVMHeightKey, nil, uint64Bytes(0)); err != nil {
+		return fmt.Errorf("failed to set init EVM height: %w", err)
 	}
 
 	return nil
