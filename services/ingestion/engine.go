@@ -124,11 +124,13 @@ func (e *Engine) processEvents(events flow.BlockEvents) error {
 		Int("cadence-event-length", len(events.Events)).
 		Msg("received new cadence evm events")
 
+	blockEvent := false
 	for _, event := range events.Events {
 		var err error
 		switch {
 		case models.IsBlockExecutedEvent(event.Value):
 			err = e.processBlockEvent(events.Height, event.Value)
+			blockEvent = true
 		case models.IsTransactionExecutedEvent(event.Value):
 			err = e.processTransactionEvent(event.Value)
 		default:
@@ -137,6 +139,14 @@ func (e *Engine) processEvents(events flow.BlockEvents) error {
 
 		if err != nil {
 			return fmt.Errorf("failed to process event: %w", err)
+		}
+	}
+
+	// this is an optimization, because if there is a block event in batch, it will internally update latest height
+	// otherwise we still want to update it explicitly, so we don't have to reindex in case of a restart
+	if !blockEvent {
+		if err := e.blocks.SetLatestCadenceHeight(events.Height); err != nil {
+			return fmt.Errorf("failed to update to latest cadence height during events ingestion: %w", err)
 		}
 	}
 
