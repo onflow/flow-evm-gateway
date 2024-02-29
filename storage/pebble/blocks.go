@@ -73,18 +73,13 @@ func (b *Blocks) GetByHeight(height uint64) (*types.Block, error) {
 	b.mux.RLock()
 	defer b.mux.RUnlock()
 
-	first, err := b.FirstEVMHeight()
-	if err != nil {
-		return nil, err
-	}
-
 	last, err := b.LatestEVMHeight()
 	if err != nil {
 		return nil, err
 	}
 
 	// check if the requested height is within the known range
-	if height < first || height > last {
+	if height > last {
 		return nil, errs.ErrNotFound
 	}
 
@@ -115,10 +110,6 @@ func (b *Blocks) GetByID(ID common.Hash) (*types.Block, error) {
 
 func (b *Blocks) LatestEVMHeight() (uint64, error) {
 	return b.getHeight(latestEVMHeightKey)
-}
-
-func (b *Blocks) FirstEVMHeight() (uint64, error) {
-	return b.getHeight(firstEVMHeightKey)
 }
 
 func (b *Blocks) LatestCadenceHeight() (uint64, error) {
