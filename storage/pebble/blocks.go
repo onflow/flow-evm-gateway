@@ -19,17 +19,16 @@ const initCadenceHeight = uint64(1)
 var _ storage.BlockIndexer = &Blocks{}
 
 type Blocks struct {
-	store *Storage
-	mux   sync.RWMutex
-	// todo LRU caching with size limit
-	heightCache map[byte]uint64
+	store           *Storage
+	mux             sync.RWMutex
+	latestEVMHeight uint64
 }
 
 func NewBlocks(store *Storage) *Blocks {
 	return &Blocks{
-		store:       store,
-		mux:         sync.RWMutex{},
-		heightCache: make(map[byte]uint64),
+		store:           store,
+		mux:             sync.RWMutex{},
+		latestEVMHeight: 0,
 	}
 }
 
@@ -58,15 +57,7 @@ func (b *Blocks) Store(cadenceHeight uint64, block *types.Block) error {
 		return fmt.Errorf("failed to store block: %w", err)
 	}
 
-	if err := b.store.set(evmHeightToCadenceHeightKey, evmHeight, uint64Bytes(cadenceHeight)); err != nil {
-		return fmt.Errorf("failed to store block: %w", err)
-	}
-
-	if err := b.store.set(latestCadenceHeightKey, nil, uint64Bytes(cadenceHeight)); err != nil {
-		return fmt.Errorf("failed to store block: %w", err)
-	}
-
-	return b.setLastHeight(block.Height)
+	return b.setLastHeight(cadenceHeight, block.Height)
 }
 
 func (b *Blocks) GetByHeight(height uint64) (*types.Block, error) {
@@ -109,7 +100,24 @@ func (b *Blocks) GetByID(ID common.Hash) (*types.Block, error) {
 }
 
 func (b *Blocks) LatestEVMHeight() (uint64, error) {
-	return b.getHeight(latestEVMHeightKey)
+	b.mux.RLock()
+	defer b.mux.RUnlock()
+
+	if b.latestEVMHeight != 0 {
+		return b.latestEVMHeight, nil
+	}
+
+	val, err := b.store.get(latestEVMHeightKey)
+	if err != nil {
+		if errors.Is(err, errs.ErrNotFound) {
+			return 0, errs.ErrNotInitialized
+		}
+		return 0, fmt.Errorf("failed to get height: %w", err)
+	}
+
+	h := binary.BigEndian.Uint64(val)
+	b.latestEVMHeight = h
+	return h, nil
 }
 
 func (b *Blocks) LatestCadenceHeight() (uint64, error) {
@@ -127,10 +135,21 @@ func (b *Blocks) LatestCadenceHeight() (uint64, error) {
 	return binary.BigEndian.Uint64(val), nil
 }
 
+func (b *Blocks) SetLatestCadenceHeight(height uint64) error {
+	b.mux.Lock()
+	defer b.mux.Unlock()
+
+	if err := b.store.set(latestCadenceHeightKey, nil, uint64Bytes(height)); err != nil {
+		return fmt.Errorf("failed to store latest cadence height: %w", err)
+	}
+
+	return nil
+}
+
 // InitHeights sets the Cadence height to zero as well as EVM heights. Used for empty database init.
 func (b *Blocks) InitHeights() error {
 	// sanity check, make sure we don't have any heights stored, disable overwriting the database
-	_, err := b.getHeight(latestCadenceHeightKey)
+	_, err := b.LatestEVMHeight()
 	if !errors.Is(err, errs.ErrNotInitialized) {
 		return fmt.Errorf("can not init the database that already has data stored")
 	}
@@ -167,42 +186,19 @@ func (b *Blocks) getBlock(keyCode byte, key []byte) (*types.Block, error) {
 	return types.NewBlockFromBytes(data)
 }
 
-func (b *Blocks) setLastHeight(height uint64) error {
-	// if first height was not yet set and cached
-	if _, ok := b.heightCache[firstEVMHeightKey]; !ok {
-		err := b.store.set(firstEVMHeightKey, nil, uint64Bytes(height))
-		if err != nil {
-			return fmt.Errorf("failed to set latest block height: %w", err)
-		}
-		b.heightCache[firstEVMHeightKey] = height
+func (b *Blocks) setLastHeight(cadenceHeight, evmHeight uint64) error {
+	if err := b.store.set(evmHeightToCadenceHeightKey, uint64Bytes(evmHeight), uint64Bytes(cadenceHeight)); err != nil {
+		return fmt.Errorf("failed to store evm to cadence height: %w", err)
 	}
 
-	err := b.store.set(latestEVMHeightKey, nil, uint64Bytes(height))
-	if err != nil {
-		return fmt.Errorf("failed to set latest block height: %w", err)
+	if err := b.store.set(latestCadenceHeightKey, nil, uint64Bytes(cadenceHeight)); err != nil {
+		return fmt.Errorf("failed to store latest cadence height: %w", err)
 	}
-	// update cache
-	b.heightCache[latestEVMHeightKey] = height
+
+	if err := b.store.set(latestEVMHeightKey, nil, uint64Bytes(evmHeight)); err != nil {
+		return fmt.Errorf("failed to set latest evm height: %w", err)
+	}
+
+	b.latestEVMHeight = evmHeight
 	return nil
-}
-
-func (b *Blocks) getHeight(keyCode byte) (uint64, error) {
-	b.mux.RLock()
-	defer b.mux.RUnlock()
-
-	if b.heightCache[keyCode] != 0 {
-		return b.heightCache[keyCode], nil
-	}
-
-	val, err := b.store.get(keyCode)
-	if err != nil {
-		if errors.Is(err, errs.ErrNotFound) {
-			return 0, errs.ErrNotInitialized
-		}
-		return 0, fmt.Errorf("failed to get height: %w", err)
-	}
-
-	h := binary.BigEndian.Uint64(val)
-	b.heightCache[keyCode] = h
-	return h, nil
 }
