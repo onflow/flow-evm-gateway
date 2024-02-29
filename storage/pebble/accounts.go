@@ -43,13 +43,13 @@ func (a *Accounts) Update(tx *gethTypes.Transaction, receipt *gethTypes.Receipt)
 		return err
 	}
 
-	// update nonce only if the transaction is new, this makes update idempotent,
-	// so we can update multiple times with same receipt but nonce won't get increased
-	if receipt.BlockNumber.Uint64() > height {
-		nonce += 1
-	} else {
+	// make sure the transaction height is bigger than the height we already recorded for the nonce
+	// this makes the operation idempotent and safer.
+	if receipt.BlockNumber.Uint64() <= height {
 		return nil
 	}
+
+	nonce += 1
 
 	data := encodeNonce(nonce, receipt.BlockNumber.Uint64())
 	err = a.store.set(accountNonceKey, from.Bytes(), data)
