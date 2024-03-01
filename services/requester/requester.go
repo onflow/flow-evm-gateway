@@ -237,9 +237,7 @@ func (e *EVM) signAndSend(ctx context.Context, script []byte, args ...cadence.Va
 
 		e.logger.Debug().
 			Str("flow-id", flowTx.ID().String()).
-			Uint64("cadence-height", res.BlockHeight).
 			Str("events", fmt.Sprintf("%v", res.Events)).
-			Str("script", string(flowTx.Script)).
 			Msg("flow transaction executed successfully")
 	}(flowTx)
 
