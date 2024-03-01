@@ -5,23 +5,22 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
-	"github.com/onflow/flow-go/fvm/systemcontracts"
 	"math/big"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/onflow/flow-go-sdk"
-	"github.com/onflow/flow-go-sdk/crypto"
-	"github.com/rs/zerolog"
-
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/onflow/cadence"
-	"github.com/onflow/flow-go-sdk/access"
-
 	gethCore "github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
 	gethVM "github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/onflow/cadence"
+	"github.com/onflow/flow-go-sdk"
+	"github.com/onflow/flow-go-sdk/access"
+	"github.com/onflow/flow-go-sdk/crypto"
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
+	"github.com/onflow/flow-go/fvm/systemcontracts"
+	flowGo "github.com/onflow/flow-go/model/flow"
+	"github.com/rs/zerolog"
 )
 
 var (
@@ -84,14 +83,14 @@ type EVM struct {
 	client  access.Client
 	address flow.Address
 	signer  crypto.Signer
-	chainID flow.ChainID
+	chainID flowGo.ChainID
 }
 
 func NewEVM(
 	client access.Client,
 	address flow.Address,
 	signer crypto.Signer,
-	chainID flow.ChainID,
+	chainID flowGo.ChainID,
 	createCOA bool,
 	logger zerolog.Logger,
 ) (*EVM, error) {
@@ -363,27 +362,16 @@ func (e *EVM) getSignerNetworkInfo(ctx context.Context) (int, uint64, error) {
 
 // replaceAddresses replace the addresses based on the network
 func (e *EVM) replaceAddresses(script []byte) []byte {
-	// todo use the FVM configured addresses once the previewnet is added, this should all be replaced once flow-go is updated
-	systemcontracts.SystemContractsForChain()
-	addresses := map[string]map[string]string{
-		"previewnet": {
-			"EVM":           "0xb6763b4399a888c8",
-			"FungibleToken": "0xa0225e7000ac82a9",
-			"FlowToken":     "0x4445e7ad11568276",
-		},
-		"emulator": {
-			"EVM":           "0xf8d6e0586b0a20c7",
-			"FungibleToken": "0xee82856bf20e2aa6",
-			"FlowToken":     "0x0ae53cb6e3f42a79",
-		},
-	}
+	// make the list of all contracts we should replace address for
+	sc := systemcontracts.SystemContractsForChain(e.chainID)
+	contracts := []systemcontracts.SystemContract{sc.EVMContract, sc.FungibleToken, sc.FlowToken}
 
 	s := string(script)
 	// iterate over all the import name and address pairs and replace them in script
-	for imp, addr := range addresses[e.chainID] {
+	for _, contract := range contracts {
 		s = strings.ReplaceAll(s,
-			fmt.Sprintf("import %s", imp),
-			fmt.Sprintf("import %s from %s", imp, addr),
+			fmt.Sprintf("import %s", contract.Name),
+			fmt.Sprintf("import %s from %s", contract.Name, contract.Address.Hex()),
 		)
 	}
 
