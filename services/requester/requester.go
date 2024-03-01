@@ -5,6 +5,7 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"github.com/onflow/flow-go/fvm/systemcontracts"
 	"math/big"
 	"strings"
 
@@ -83,14 +84,14 @@ type EVM struct {
 	client  access.Client
 	address flow.Address
 	signer  crypto.Signer
-	network string // todo change the type to FVM type once the "previewnet" is added
+	chainID flow.ChainID
 }
 
 func NewEVM(
 	client access.Client,
 	address flow.Address,
 	signer crypto.Signer,
-	network string,
+	chainID flow.ChainID,
 	createCOA bool,
 	logger zerolog.Logger,
 ) (*EVM, error) {
@@ -120,7 +121,7 @@ func NewEVM(
 		address: address,
 		signer:  signer,
 		logger:  logger,
-		network: network,
+		chainID: chainID,
 	}
 
 	// create COA on the account
@@ -363,6 +364,7 @@ func (e *EVM) getSignerNetworkInfo(ctx context.Context) (int, uint64, error) {
 // replaceAddresses replace the addresses based on the network
 func (e *EVM) replaceAddresses(script []byte) []byte {
 	// todo use the FVM configured addresses once the previewnet is added, this should all be replaced once flow-go is updated
+	systemcontracts.SystemContractsForChain()
 	addresses := map[string]map[string]string{
 		"previewnet": {
 			"EVM":           "0xb6763b4399a888c8",
@@ -378,7 +380,7 @@ func (e *EVM) replaceAddresses(script []byte) []byte {
 
 	s := string(script)
 	// iterate over all the import name and address pairs and replace them in script
-	for imp, addr := range addresses[e.network] {
+	for imp, addr := range addresses[e.chainID] {
 		s = strings.ReplaceAll(s,
 			fmt.Sprintf("import %s", imp),
 			fmt.Sprintf("import %s from %s", imp, addr),
