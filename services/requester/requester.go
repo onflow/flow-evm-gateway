@@ -132,7 +132,7 @@ func NewEVM(
 			evm.replaceAddresses(createCOAScript),
 			cadence.UFix64(coaFundingBalance),
 		)
-		logger.Warn().Str("error", err.Error()).Str("id", id.String()).Msg("COA resource auto-creation status")
+		logger.Warn().Err(err).Str("id", id.String()).Msg("COA resource auto-creation status")
 	}
 
 	return evm, nil
@@ -381,7 +381,7 @@ func (e *EVM) replaceAddresses(script []byte) []byte {
 	for _, contract := range contracts {
 		s = strings.ReplaceAll(s,
 			fmt.Sprintf("import %s", contract.Name),
-			fmt.Sprintf("import %s from %s", contract.Name, contract.Address.Hex()),
+			fmt.Sprintf("import %s from %s", contract.Name, contract.Address.HexWithPrefix()),
 		)
 	}
 
