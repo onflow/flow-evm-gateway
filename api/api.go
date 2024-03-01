@@ -564,7 +564,6 @@ func handleError[T any](log zerolog.Logger, err error) (T, error) {
  NOT SUPPORTED SECTION
 
 ====================================================================================================================== */
-// todo check the design, maybe we don't need to even have the unsupported functions defined
 
 // GetUncleCountByBlockHash returns number of uncles in the block for the given block hash
 func (b *BlockChainAPI) GetUncleCountByBlockHash(

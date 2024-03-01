@@ -22,7 +22,6 @@ type Config struct {
 	// GRPCPort for the RPC API server
 	RPCPort int
 	// GRPCHost for the RPC API server
-	// todo maybe merge port into host as it's for AN
 	RPCHost string
 	// EVMNetworkID provides the EVM chain ID.
 	EVMNetworkID *big.Int
