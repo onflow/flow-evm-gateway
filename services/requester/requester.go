@@ -224,21 +224,21 @@ func (e *EVM) signAndSend(ctx context.Context, script []byte, args ...cadence.Va
 	}
 
 	// this is only used for debugging purposes
-	go func(tx *flow.Transaction) {
-		res, _ := e.client.GetTransactionResult(context.Background(), flowTx.ID())
+	go func(id flow.Identifier) {
+		res, _ := e.client.GetTransactionResult(context.Background(), id)
 		if res.Error != nil {
 			e.logger.Error().
-				Str("flow-id", flowTx.ID().String()).
+				Str("flow-id", id.String()).
 				Err(res.Error).
 				Msg("flow transaction failed to execute")
 			return
 		}
 
 		e.logger.Debug().
-			Str("flow-id", flowTx.ID().String()).
+			Str("flow-id", id.String()).
 			Str("events", fmt.Sprintf("%v", res.Events)).
 			Msg("flow transaction executed successfully")
-	}(flowTx)
+	}(flowTx.ID())
 
 	return flowTx.ID(), nil
 }
