@@ -3,14 +3,15 @@ package config
 import (
 	"flag"
 	"fmt"
-	"github.com/goccy/go-json"
-	"github.com/onflow/flow-go/utils/io"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/goccy/go-json"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/crypto"
 	"github.com/onflow/flow-go/fvm/evm/emulator"
+	flowGo "github.com/onflow/flow-go/model/flow"
+	"github.com/onflow/flow-go/utils/io"
 )
 
 type Config struct {
@@ -21,12 +22,11 @@ type Config struct {
 	// GRPCPort for the RPC API server
 	RPCPort int
 	// GRPCHost for the RPC API server
-	// todo maybe merge port into host as it's for AN
 	RPCHost string
 	// EVMNetworkID provides the EVM chain ID.
 	EVMNetworkID *big.Int
 	// FlowNetworkID is the Flow network ID that the EVM is hosted on (mainnet, testnet, emulator...)
-	FlowNetworkID string
+	FlowNetworkID flowGo.ChainID
 	// Coinbase is EVM address that collects the EVM operator fees collected
 	// when transactions are being submitted.
 	Coinbase common.Address
@@ -45,21 +45,21 @@ type Config struct {
 
 func FromFlags() (*Config, error) {
 	cfg := &Config{}
-	var evmNetwork, coinbase, gas, coa, key, keysPath string
+	var evmNetwork, coinbase, gas, coa, key, keysPath, flowChainID string
 
 	// parse from flags
-	flag.StringVar(&cfg.DatabaseDir, "database-dir", "./db", "path to the directory for the database")
-	flag.StringVar(&cfg.RPCHost, "rpc-host", "", "host for the RPC API server")
-	flag.IntVar(&cfg.RPCPort, "rpc-port", 8545, "port for the RPC API server")
-	flag.StringVar(&cfg.AccessNodeGRPCHost, "access-node-grpc-host", "localhost:3569", "host to the flow access node gRPC API")
+	flag.StringVar(&cfg.DatabaseDir, "database-dir", "./db", "Path to the directory for the database")
+	flag.StringVar(&cfg.RPCHost, "rpc-host", "", "Host for the RPC API server")
+	flag.IntVar(&cfg.RPCPort, "rpc-port", 8545, "Port for the RPC API server")
+	flag.StringVar(&cfg.AccessNodeGRPCHost, "access-node-grpc-host", "localhost:3569", "Host to the flow access node gRPC API")
 	flag.StringVar(&evmNetwork, "evm-network-id", "testnet", "EVM network ID (testnet, mainnet)")
-	flag.StringVar(&cfg.FlowNetworkID, "flow-network-id", "emulator", "EVM network ID (emulator, previewnet)")
-	flag.StringVar(&coinbase, "coinbase", "", "coinbase address to use for fee collection")
-	flag.StringVar(&gas, "gas-price", "1", "static gas price used for EVM transactions")
+	flag.StringVar(&flowChainID, "flow-network-id", "flow-emulator", "Flow network ID (flow-emulator, flow-previewnet)")
+	flag.StringVar(&coinbase, "coinbase", "", "Coinbase address to use for fee collection")
+	flag.StringVar(&gas, "gas-price", "1", "Static gas price used for EVM transactions")
 	flag.StringVar(&coa, "coa-address", "", "Flow address that holds COA account used for submitting transactions")
-	flag.StringVar(&key, "coa-key", "", "WARNING: do not use this flag in production! private key value for the COA address used for submitting transactions")
+	flag.StringVar(&key, "coa-key", "", "Private key value for the COA address used for submitting transactions")
 	flag.StringVar(&keysPath, "coa-key-file", "", "File path that contains JSON array of COA keys used in key-rotation mechanism, this is exclusive with coa-key flag.")
-	flag.BoolVar(&cfg.CreateCOAResource, "coa-resource-create", false, "auto-create the COA resource in the Flow COA account provided if one doesn't exist")
+	flag.BoolVar(&cfg.CreateCOAResource, "coa-resource-create", false, "Auto-create the COA resource in the Flow COA account provided if one doesn't exist")
 	flag.Parse()
 
 	if coinbase == "" {
@@ -110,6 +110,15 @@ func FromFlags() (*Config, error) {
 		cfg.EVMNetworkID = emulator.FlowEVMMainnetChainID
 	default:
 		return nil, fmt.Errorf("EVM network ID not supported")
+	}
+
+	switch flowChainID {
+	case "flow-previewnet":
+		cfg.FlowNetworkID = flowGo.Previewnet
+	case "flow-emulator":
+		cfg.FlowNetworkID = flowGo.Emulator
+	default:
+		return nil, fmt.Errorf("flow network ID not supported, only possible to specify 'flow-previewnet' or 'flow-emulator'")
 	}
 
 	if cfg.FlowNetworkID != "previewnet" && cfg.FlowNetworkID != "emulator" {

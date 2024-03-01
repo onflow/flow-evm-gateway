@@ -5,22 +5,22 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common"
+	gethCore "github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/types"
+	gethVM "github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/onflow/cadence"
+	"github.com/onflow/flow-go-sdk"
+	"github.com/onflow/flow-go-sdk/access"
+	"github.com/onflow/flow-go-sdk/crypto"
+	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
+	"github.com/onflow/flow-go/fvm/systemcontracts"
+	flowGo "github.com/onflow/flow-go/model/flow"
+	"github.com/rs/zerolog"
+	"golang.org/x/sync/errgroup"
 	"math/big"
 	"strings"
-
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/rlp"
-	"github.com/onflow/flow-go-sdk"
-	"github.com/onflow/flow-go-sdk/crypto"
-	"github.com/rs/zerolog"
-
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/onflow/cadence"
-	"github.com/onflow/flow-go-sdk/access"
-
-	gethCore "github.com/ethereum/go-ethereum/core"
-	gethVM "github.com/ethereum/go-ethereum/core/vm"
-	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 )
 
 var (
@@ -83,14 +83,14 @@ type EVM struct {
 	client  access.Client
 	address flow.Address
 	signer  crypto.Signer
-	network string // todo change the type to FVM type once the "previewnet" is added
+	chainID flowGo.ChainID
 }
 
 func NewEVM(
 	client access.Client,
 	address flow.Address,
 	signer crypto.Signer,
-	network string,
+	chainID flowGo.ChainID,
 	createCOA bool,
 	logger zerolog.Logger,
 ) (*EVM, error) {
@@ -120,7 +120,7 @@ func NewEVM(
 		address: address,
 		signer:  signer,
 		logger:  logger,
-		network: network,
+		chainID: chainID,
 	}
 
 	// create COA on the account
@@ -132,7 +132,7 @@ func NewEVM(
 			evm.replaceAddresses(createCOAScript),
 			cadence.UFix64(coaFundingBalance),
 		)
-		logger.Info().Err(err).Str("id", id.String()).Msg("COA resource auto-created")
+		logger.Warn().Err(err).Str("id", id.String()).Msg("COA resource auto-creation status")
 	}
 
 	return evm, nil
@@ -170,11 +170,10 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 		to = tx.To().String()
 	}
 	e.logger.Info().
-		Str("evm ID", tx.Hash().Hex()).
-		Str("flow ID", flowID.Hex()).
+		Str("evm-id", tx.Hash().Hex()).
+		Str("flow-id", flowID.Hex()).
 		Str("to", to).
 		Str("value", tx.Value().String()).
-		Str("data", fmt.Sprintf("%x", tx.Data())).
 		Msg("raw transaction sent")
 
 	return tx.Hash(), nil
@@ -183,14 +182,24 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 // signAndSend creates a flow transaction from the provided script with the arguments and signs it with the
 // configured COA account and then submits it to the network.
 func (e *EVM) signAndSend(ctx context.Context, script []byte, args ...cadence.Value) (flow.Identifier, error) {
-	latestBlock, err := e.client.GetLatestBlock(ctx, true)
-	if err != nil {
-		return flow.EmptyID, fmt.Errorf("failed to get latest flow block: %w", err)
-	}
-
-	index, seqNum, err := e.getSignerNetworkInfo(ctx)
-	if err != nil {
-		return flow.EmptyID, fmt.Errorf("failed to get signer info: %w", err)
+	var (
+		g           = errgroup.Group{}
+		err1, err2  error
+		latestBlock *flow.Block
+		index       int
+		seqNum      uint64
+	)
+	// execute concurrently so we can speed up all the information we need for tx
+	g.Go(func() error {
+		latestBlock, err1 = e.client.GetLatestBlock(ctx, true)
+		return err1
+	})
+	g.Go(func() error {
+		index, seqNum, err2 = e.getSignerNetworkInfo(ctx)
+		return err2
+	})
+	if err := g.Wait(); err != nil {
+		return flow.EmptyID, err
 	}
 
 	flowTx := flow.NewTransaction().
@@ -201,43 +210,35 @@ func (e *EVM) signAndSend(ctx context.Context, script []byte, args ...cadence.Va
 		AddAuthorizer(e.address)
 
 	for _, arg := range args {
-		if err = flowTx.AddArgument(arg); err != nil {
+		if err := flowTx.AddArgument(arg); err != nil {
 			return flow.EmptyID, fmt.Errorf("failed to add argument: %w", err)
 		}
 	}
 
-	if err = flowTx.SignEnvelope(e.address, index, e.signer); err != nil {
+	if err := flowTx.SignEnvelope(e.address, index, e.signer); err != nil {
 		return flow.EmptyID, fmt.Errorf("failed to sign envelope: %w", err)
 	}
 
-	err = e.client.SendTransaction(ctx, *flowTx)
-	if err != nil {
+	if err := e.client.SendTransaction(ctx, *flowTx); err != nil {
 		return flow.EmptyID, fmt.Errorf("failed to send transaction: %w", err)
 	}
 
-	// todo should we wait for the transaction result?
-	// we should handle a case where flow transaction is failed but we will get a result back, it would only be failed,
-	// but there is no evm transaction. So if we submit an evm tx and get back an ID and then we wait for receipt
-	// we would never get it, but this failure of sending flow transaction could somehow help with this case
-
 	// this is only used for debugging purposes
-	go func(tx *flow.Transaction) {
-		res, _ := e.client.GetTransactionResult(context.Background(), flowTx.ID())
+	go func(id flow.Identifier) {
+		res, _ := e.client.GetTransactionResult(context.Background(), id)
 		if res.Error != nil {
 			e.logger.Error().
-				Str("flow-id", flowTx.ID().String()).
+				Str("flow-id", id.String()).
 				Err(res.Error).
 				Msg("flow transaction failed to execute")
 			return
 		}
 
 		e.logger.Debug().
-			Str("flow-id", flowTx.ID().String()).
-			Uint64("cadence-height", res.BlockHeight).
+			Str("flow-id", id.String()).
 			Str("events", fmt.Sprintf("%v", res.Events)).
-			Str("script", string(flowTx.Script)).
 			Msg("flow transaction executed successfully")
-	}(flowTx)
+	}(flowTx.ID())
 
 	return flowTx.ID(), nil
 }
@@ -353,7 +354,7 @@ func (e *EVM) EstimateGas(ctx context.Context, data []byte) (uint64, error) {
 func (e *EVM) getSignerNetworkInfo(ctx context.Context) (int, uint64, error) {
 	account, err := e.client.GetAccount(ctx, e.address)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, fmt.Errorf("failed to get signer info account: %w", err)
 	}
 
 	signerPub := e.signer.PublicKey()
@@ -368,26 +369,16 @@ func (e *EVM) getSignerNetworkInfo(ctx context.Context) (int, uint64, error) {
 
 // replaceAddresses replace the addresses based on the network
 func (e *EVM) replaceAddresses(script []byte) []byte {
-	// todo use the FVM configured addresses once the previewnet is added, this should all be replaced once flow-go is updated
-	addresses := map[string]map[string]string{
-		"previewnet": {
-			"EVM":           "0xb6763b4399a888c8",
-			"FungibleToken": "0xa0225e7000ac82a9",
-			"FlowToken":     "0x4445e7ad11568276",
-		},
-		"emulator": {
-			"EVM":           "0xf8d6e0586b0a20c7",
-			"FungibleToken": "0xee82856bf20e2aa6",
-			"FlowToken":     "0x0ae53cb6e3f42a79",
-		},
-	}
+	// make the list of all contracts we should replace address for
+	sc := systemcontracts.SystemContractsForChain(e.chainID)
+	contracts := []systemcontracts.SystemContract{sc.EVMContract, sc.FungibleToken, sc.FlowToken}
 
 	s := string(script)
 	// iterate over all the import name and address pairs and replace them in script
-	for imp, addr := range addresses[e.network] {
+	for _, contract := range contracts {
 		s = strings.ReplaceAll(s,
-			fmt.Sprintf("import %s", imp),
-			fmt.Sprintf("import %s from %s", imp, addr),
+			fmt.Sprintf("import %s", contract.Name),
+			fmt.Sprintf("import %s from %s", contract.Name, contract.Address.HexWithPrefix()),
 		)
 	}
 

@@ -238,7 +238,6 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// If JSON-RPC over HTTP is enabled, try to serve the request
-	// todo wrap with CORS handler in main branch
 	rpc := recoverHandler(h.logger, h.httpHandler)
 	if rpc != nil {
 		if checkPath(r, "") {
