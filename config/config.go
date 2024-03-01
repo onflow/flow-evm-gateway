@@ -48,18 +48,18 @@ func FromFlags() (*Config, error) {
 	var evmNetwork, coinbase, gas, coa, key, keysPath, flowChainID string
 
 	// parse from flags
-	flag.StringVar(&cfg.DatabaseDir, "database-dir", "./db", "path to the directory for the database")
-	flag.StringVar(&cfg.RPCHost, "rpc-host", "", "host for the RPC API server")
-	flag.IntVar(&cfg.RPCPort, "rpc-port", 8545, "port for the RPC API server")
-	flag.StringVar(&cfg.AccessNodeGRPCHost, "access-node-grpc-host", "localhost:3569", "host to the flow access node gRPC API")
+	flag.StringVar(&cfg.DatabaseDir, "database-dir", "./db", "Path to the directory for the database")
+	flag.StringVar(&cfg.RPCHost, "rpc-host", "", "Host for the RPC API server")
+	flag.IntVar(&cfg.RPCPort, "rpc-port", 8545, "Port for the RPC API server")
+	flag.StringVar(&cfg.AccessNodeGRPCHost, "access-node-grpc-host", "localhost:3569", "Host to the flow access node gRPC API")
 	flag.StringVar(&evmNetwork, "evm-network-id", "testnet", "EVM network ID (testnet, mainnet)")
 	flag.StringVar(&flowChainID, "flow-network-id", "flow-emulator", "Flow network ID (flow-emulator, flow-previewnet)")
-	flag.StringVar(&coinbase, "coinbase", "", "coinbase address to use for fee collection")
-	flag.StringVar(&gas, "gas-price", "1", "static gas price used for EVM transactions")
+	flag.StringVar(&coinbase, "coinbase", "", "Coinbase address to use for fee collection")
+	flag.StringVar(&gas, "gas-price", "1", "Static gas price used for EVM transactions")
 	flag.StringVar(&coa, "coa-address", "", "Flow address that holds COA account used for submitting transactions")
-	flag.StringVar(&key, "coa-key", "", "WARNING: do not use this flag in production! private key value for the COA address used for submitting transactions")
+	flag.StringVar(&key, "coa-key", "", "Private key value for the COA address used for submitting transactions")
 	flag.StringVar(&keysPath, "coa-key-file", "", "File path that contains JSON array of COA keys used in key-rotation mechanism, this is exclusive with coa-key flag.")
-	flag.BoolVar(&cfg.CreateCOAResource, "coa-resource-create", false, "auto-create the COA resource in the Flow COA account provided if one doesn't exist")
+	flag.BoolVar(&cfg.CreateCOAResource, "coa-resource-create", false, "Auto-create the COA resource in the Flow COA account provided if one doesn't exist")
 	flag.Parse()
 
 	if coinbase == "" {
