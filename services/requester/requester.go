@@ -132,7 +132,7 @@ func NewEVM(
 			evm.replaceAddresses(createCOAScript),
 			cadence.UFix64(coaFundingBalance),
 		)
-		logger.Info().Err(err).Str("id", id.String()).Msg("COA resource auto-created")
+		logger.Warn().Str("error", err.Error()).Str("id", id.String()).Msg("COA resource auto-creation status")
 	}
 
 	return evm, nil
