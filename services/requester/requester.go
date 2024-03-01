@@ -174,7 +174,6 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 		Str("flow ID", flowID.Hex()).
 		Str("to", to).
 		Str("value", tx.Value().String()).
-		Str("data", fmt.Sprintf("%x", tx.Data())).
 		Msg("raw transaction sent")
 
 	return tx.Hash(), nil
