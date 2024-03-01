@@ -109,7 +109,7 @@ func TestIntegration_TransferValue(t *testing.T) {
 	tx, err := txs.Get(transferHash)
 	require.NoError(t, err)
 	assert.Equal(t, uint64(0), tx.Nonce())
-	assert.Equal(t, transferWei, tx.Value())
+	assert.Zero(t, tx.Value().Cmp(transferWei))
 	assert.Equal(t, &transferEOAAdress, tx.To())
 	assert.Equal(t, uint64(21_000), tx.Gas())
 
