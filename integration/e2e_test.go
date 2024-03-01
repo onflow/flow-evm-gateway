@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/onflow/flow-go-sdk/access/grpc"
+	"github.com/onflow/flow-go/fvm/evm/types"
 	"math/big"
 	"testing"
 	"time"
@@ -57,9 +58,8 @@ func TestIntegration_TransferValue(t *testing.T) {
 		cancelIngestion()
 	}()
 
-	fundAmount := int64(5)
 	flowAmount, _ := cadence.NewUFix64("5.0")
-	fundWei := flowToWei(fundAmount)
+	fundWei := types.NewBalanceFromUFix64(flowAmount)
 
 	// step 1, 2, and 3. - create COA and fund it
 	res, err := fundEOA(emu, flowAmount, fundEOAAddress)
@@ -67,7 +67,8 @@ func TestIntegration_TransferValue(t *testing.T) {
 	require.NoError(t, res.Error)
 	assert.Len(t, res.Events, 9) // 7 evm events + 2 cadence events
 
-	transferWei := flowToWei(1)
+	flowTransfer, _ := cadence.NewUFix64("1.0")
+	transferWei := types.NewBalanceFromUFix64(flowTransfer)
 	fundEOAKey, err := crypto.HexToECDSA(fundEOARawKey)
 	require.NoError(t, err)
 
@@ -84,21 +85,21 @@ func TestIntegration_TransferValue(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, uint64(2), blk.Height)
 
-	assert.Equal(t, fundWei.Cmp(blk.TotalSupply), 0)
+	assert.Zero(t, blk.TotalSupply.Cmp(fundWei))
 	require.Len(t, blk.TransactionHashes, 1)
 
 	// block 3 comes from calling evm.call to transfer to eoa 1
 	blk, err = blocks.GetByHeight(3)
 	require.NoError(t, err)
 	assert.Equal(t, uint64(3), blk.Height)
-	assert.Equal(t, fundWei.Cmp(blk.TotalSupply), 0)
+	assert.Zero(t, blk.TotalSupply.Cmp(fundWei))
 	require.Len(t, blk.TransactionHashes, 1)
 
 	// block 5 comes from calling evm.call to transfer from eoa 1 to eoa 2
 	blk, err = blocks.GetByHeight(5)
 	require.NoError(t, err)
 	assert.Equal(t, uint64(5), blk.Height)
-	assert.Equal(t, fundWei.Cmp(blk.TotalSupply), 0)
+	assert.Zero(t, blk.TotalSupply.Cmp(fundWei))
 	require.Len(t, blk.TransactionHashes, 1)
 
 	// transaction 1 comes from evm.call to transfer from eoa 1 to eoa 2
@@ -479,7 +480,8 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 	// check balance
 	balance, err := rpcTester.getBalance(fundEOAAddress)
 	require.NoError(t, err)
-	assert.Equal(t, new(big.Int).Mul(big.NewInt(4), toWei), balance.ToInt())
+	c, _ := cadence.NewUFix64("4.0")
+	assert.Equal(t, types.NewBalanceFromUFix64(c), balance.ToInt())
 
 	// Step 4. - deploy contract
 	nonce := uint64(0)

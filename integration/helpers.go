@@ -40,7 +40,6 @@ import (
 const testPrivateKey = "61ceacbdce419e25ee8e7c2beceee170a05c9cab1e725a955b15ba94dcd747d2"
 
 var (
-	toWei  = new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
 	logger = zerolog.New(os.Stdout)
 	sc     = systemcontracts.SystemContractsForChain(flow.Emulator)
 )
@@ -108,8 +107,6 @@ func startEmulator() (*server.EmulatorServer, error) {
 
 // startEventIngestionEngine will start up the sdkEvent engine with the grpc subscriber
 // listening for events.
-// todo for now we return index storage as a way to check the data if it was correctly
-// indexed this will be in future replaced with evm gateway API access
 func startEventIngestionEngine(ctx context.Context, dbDir string) (
 	storage.BlockIndexer,
 	storage.ReceiptIndexer,
@@ -349,11 +346,6 @@ func evmHexToCadenceBytes(address string) (cadence.Array, error) {
 		res = append(res, cadence.UInt8(d))
 	}
 	return cadence.NewArray(res), nil
-}
-
-// todo use types.NewBalanceFromUFix64(evmAmount) when flow-go updated
-func flowToWei(flow int64) *big.Int {
-	return new(big.Int).Mul(big.NewInt(flow), toWei)
 }
 
 type contract struct {
