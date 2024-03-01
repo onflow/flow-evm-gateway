@@ -5,9 +5,6 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
-	"math/big"
-	"strings"
-
 	"github.com/ethereum/go-ethereum/common"
 	gethCore "github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -21,6 +18,9 @@ import (
 	"github.com/onflow/flow-go/fvm/systemcontracts"
 	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/rs/zerolog"
+	"golang.org/x/sync/errgroup"
+	"math/big"
+	"strings"
 )
 
 var (
@@ -182,14 +182,24 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 // signAndSend creates a flow transaction from the provided script with the arguments and signs it with the
 // configured COA account and then submits it to the network.
 func (e *EVM) signAndSend(ctx context.Context, script []byte, args ...cadence.Value) (flow.Identifier, error) {
-	latestBlock, err := e.client.GetLatestBlock(ctx, true)
-	if err != nil {
-		return flow.EmptyID, fmt.Errorf("failed to get latest flow block: %w", err)
-	}
-
-	index, seqNum, err := e.getSignerNetworkInfo(ctx)
-	if err != nil {
-		return flow.EmptyID, fmt.Errorf("failed to get signer info: %w", err)
+	var (
+		g           = errgroup.Group{}
+		err1, err2  error
+		latestBlock *flow.Block
+		index       int
+		seqNum      uint64
+	)
+	// execute concurrently so we can speed up all the information we need for tx
+	g.Go(func() error {
+		latestBlock, err1 = e.client.GetLatestBlock(ctx, true)
+		return err1
+	})
+	g.Go(func() error {
+		index, seqNum, err2 = e.getSignerNetworkInfo(ctx)
+		return err2
+	})
+	if err := g.Wait(); err != nil {
+		return flow.EmptyID, err
 	}
 
 	flowTx := flow.NewTransaction().
@@ -200,16 +210,16 @@ func (e *EVM) signAndSend(ctx context.Context, script []byte, args ...cadence.Va
 		AddAuthorizer(e.address)
 
 	for _, arg := range args {
-		if err = flowTx.AddArgument(arg); err != nil {
+		if err := flowTx.AddArgument(arg); err != nil {
 			return flow.EmptyID, fmt.Errorf("failed to add argument: %w", err)
 		}
 	}
 
-	if err = flowTx.SignEnvelope(e.address, index, e.signer); err != nil {
+	if err := flowTx.SignEnvelope(e.address, index, e.signer); err != nil {
 		return flow.EmptyID, fmt.Errorf("failed to sign envelope: %w", err)
 	}
 
-	err = e.client.SendTransaction(ctx, *flowTx)
+	err := e.client.SendTransaction(ctx, *flowTx)
 	if err != nil {
 		return flow.EmptyID, fmt.Errorf("failed to send transaction: %w", err)
 	}
@@ -347,7 +357,7 @@ func (e *EVM) EstimateGas(ctx context.Context, data []byte) (uint64, error) {
 func (e *EVM) getSignerNetworkInfo(ctx context.Context) (int, uint64, error) {
 	account, err := e.client.GetAccount(ctx, e.address)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, fmt.Errorf("failed to get signer info account: %w", err)
 	}
 
 	signerPub := e.signer.PublicKey()
