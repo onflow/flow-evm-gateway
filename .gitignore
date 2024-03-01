@@ -1,4 +1,4 @@
-integration/db-test
+tests/db-test
 db
 flow.json
 .idea
