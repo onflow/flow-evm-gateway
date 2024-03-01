@@ -219,7 +219,6 @@ func (e *EVM) signAndSend(ctx context.Context, script []byte, args ...cadence.Va
 		return flow.EmptyID, fmt.Errorf("failed to sign envelope: %w", err)
 	}
 
-	err := e.client.SendTransaction(ctx, *flowTx)
 	if err := e.client.SendTransaction(ctx, *flowTx); err != nil {
 		return flow.EmptyID, fmt.Errorf("failed to send transaction: %w", err)
 	}
