@@ -1,6 +1,6 @@
 {
   "dependencies": {
-    "chai": "^5.1.0",
+    "chai": "^4.0.0",
     "mocha": "^10.3.0",
     "web3": "^4.3.0",
     "web3-utils": "^4.2.0"
