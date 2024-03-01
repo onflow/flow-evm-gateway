@@ -426,7 +426,7 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 		AccessNodeGRPCHost: "localhost:3569", // emulator
 		RPCPort:            3001,
 		RPCHost:            "127.0.0.1",
-		FlowNetworkID:      "emulator",
+		FlowNetworkID:      "flow-emulator",
 		EVMNetworkID:       emulator.FlowEVMTestnetChainID,
 		Coinbase:           fundEOAAddress,
 		COAAddress:         gwAddress,
