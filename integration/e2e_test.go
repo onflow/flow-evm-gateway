@@ -481,7 +481,7 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 	balance, err := rpcTester.getBalance(fundEOAAddress)
 	require.NoError(t, err)
 	c, _ := cadence.NewUFix64("4.0")
-	assert.Equal(t, types.NewBalanceFromUFix64(c), balance.ToInt())
+	assert.Zero(t, balance.ToInt().Cmp(types.NewBalanceFromUFix64(c)))
 
 	// Step 4. - deploy contract
 	nonce := uint64(0)
@@ -785,7 +785,7 @@ func TestE2E_ConcurrentTransactionSubmission(t *testing.T) {
 		RPCPort:            3001,
 		RPCHost:            "127.0.0.1",
 		EVMNetworkID:       emulator.FlowEVMTestnetChainID,
-		FlowNetworkID:      "emulator",
+		FlowNetworkID:      "flow-emulator",
 		Coinbase:           fundEOAAddress,
 		COAAddress:         *createdAddr,
 		COAKeys:            keys,
