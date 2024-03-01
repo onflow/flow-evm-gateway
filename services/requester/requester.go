@@ -214,11 +214,6 @@ func (e *EVM) signAndSend(ctx context.Context, script []byte, args ...cadence.Va
 		return flow.EmptyID, fmt.Errorf("failed to send transaction: %w", err)
 	}
 
-	// todo should we wait for the transaction result?
-	// we should handle a case where flow transaction is failed but we will get a result back, it would only be failed,
-	// but there is no evm transaction. So if we submit an evm tx and get back an ID and then we wait for receipt
-	// we would never get it, but this failure of sending flow transaction could somehow help with this case
-
 	// this is only used for debugging purposes
 	go func(tx *flow.Transaction) {
 		res, _ := e.client.GetTransactionResult(context.Background(), flowTx.ID())
