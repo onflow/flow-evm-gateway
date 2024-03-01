@@ -170,8 +170,8 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 		to = tx.To().String()
 	}
 	e.logger.Info().
-		Str("evm ID", tx.Hash().Hex()).
-		Str("flow ID", flowID.Hex()).
+		Str("evm-id", tx.Hash().Hex()).
+		Str("flow-id", flowID.Hex()).
 		Str("to", to).
 		Str("value", tx.Value().String()).
 		Msg("raw transaction sent")
