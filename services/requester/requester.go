@@ -1,7 +1,6 @@
 package requester
 
 import (
-	"bytes"
 	"context"
 	_ "embed"
 	"fmt"
@@ -9,7 +8,6 @@ import (
 	gethCore "github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	gethVM "github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access"
@@ -144,13 +142,7 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 		Msg("send raw transaction")
 
 	tx := &types.Transaction{}
-	err := tx.DecodeRLP(
-		rlp.NewStream(
-			bytes.NewReader(data),
-			uint64(len(data)),
-		),
-	)
-	if err != nil {
+	if err := tx.UnmarshalBinary(data); err != nil {
 		return common.Hash{}, err
 	}
 
