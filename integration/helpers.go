@@ -584,6 +584,27 @@ func (r *rpcTest) call(
 	return result, nil
 }
 
+func (r *rpcTest) getCode(from common.Address) ([]byte, error) {
+	rpcRes, err := r.request(
+		"eth_getCode",
+		fmt.Sprintf(
+			`["%s","latest"]`,
+			from.Hex(),
+		),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	var code hexutil.Bytes
+	err = json.Unmarshal(rpcRes, &code)
+	if err != nil {
+		return nil, err
+	}
+
+	return code, nil
+}
+
 func uintHex(x uint64) string {
 	return fmt.Sprintf("0x%x", x)
 }

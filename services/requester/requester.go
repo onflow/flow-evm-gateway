@@ -43,6 +43,9 @@ var (
 
 	//go:embed cadence/get_nonce.cdc
 	getNonceScript []byte
+
+	//go:embed cadence/get_code.cdc
+	getCodeScript []byte
 )
 
 const minFlowBalance = 2
@@ -70,6 +73,10 @@ type Requester interface {
 
 	// GetNonce gets nonce from the network.
 	GetNonce(ctx context.Context, address common.Address) (uint64, error)
+
+	// GetCode returns the code stored at the given address in
+	// the state for the given block number.
+	GetCode(ctx context.Context, address common.Address, height uint64) ([]byte, error)
 }
 
 var _ Requester = &EVM{}
@@ -378,6 +385,50 @@ func (e *EVM) EstimateGas(ctx context.Context, data []byte) (uint64, error) {
 
 	gasUsed := result.Values[1].ToGoValue().(uint64)
 	return gasUsed, nil
+}
+
+func (e *EVM) GetCode(
+	ctx context.Context,
+	address common.Address,
+	height uint64,
+) ([]byte, error) {
+	e.logger.Debug().
+		Str("addess", address.Hex()).
+		Str("height", fmt.Sprintf("%d", height)).
+		Msg("get code")
+
+	hexEncodedAddress, err := cadence.NewString(
+		strings.TrimPrefix(address.Hex(), "0x"),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	value, err := e.client.ExecuteScriptAtLatestBlock(
+		ctx,
+		e.replaceAddresses(getCodeScript),
+		[]cadence.Value{hexEncodedAddress},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute script for get code: %w", err)
+	}
+
+	if _, ok := value.(cadence.String); !ok {
+		e.logger.Panic().Msg(fmt.Sprintf("failed to convert value to hex-encoded string: %v", value))
+	}
+
+	hexEncodedCode := value.ToGoValue().(string)
+	code, err := hex.DecodeString(hexEncodedCode)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert string to byte code: %w", err)
+	}
+
+	e.logger.Info().
+		Str("address", address.Hex()).
+		Str("result", hex.EncodeToString(code)).
+		Msg("get code executed")
+
+	return code, nil
 }
 
 // getSignerNetworkInfo loads the signer account from network and returns key index and sequence number
