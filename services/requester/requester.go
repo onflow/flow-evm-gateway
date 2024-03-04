@@ -169,10 +169,17 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 	if tx.To() != nil {
 		to = tx.To().String()
 	}
+
+	from, err := types.Sender(types.LatestSignerForChainID(tx.ChainId()), tx)
+	if err != nil {
+		e.logger.Error().Err(err).Msg("failed to calculate sender")
+	}
+
 	e.logger.Info().
 		Str("evm-id", tx.Hash().Hex()).
 		Str("flow-id", flowID.Hex()).
 		Str("to", to).
+		Str("from", from.Hex()).
 		Str("value", tx.Value().String()).
 		Msg("raw transaction sent")
 
