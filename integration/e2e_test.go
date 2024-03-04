@@ -5,11 +5,12 @@ import (
 	_ "embed"
 	"encoding/hex"
 	"fmt"
-	"github.com/onflow/flow-go-sdk/access/grpc"
-	"github.com/onflow/flow-go/fvm/evm/types"
 	"math/big"
 	"testing"
 	"time"
+
+	"github.com/onflow/flow-go-sdk/access/grpc"
+	"github.com/onflow/flow-go/fvm/evm/types"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/params"
@@ -579,6 +580,15 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 	assert.Equal(t, signedHash.String(), hash.String())
 
 	time.Sleep(1 * time.Second)
+
+	// perform `eth_call` to read the stored value
+	storedValue, err := rpcTester.call(contractAddress, callRetrieve)
+	require.NoError(t, err)
+	assert.Equal(
+		t,
+		"0000000000000000000000000000000000000000000000000000000000000539", // 1337 in ABI encoding
+		hex.EncodeToString(storedValue),
+	)
 
 	// check if the sender account nonce has been indexed as increased
 	eoaNonce, err = rpcTester.getNonce(fundEOAAddress)

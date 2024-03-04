@@ -559,6 +559,31 @@ func (r *rpcTest) estimateGas(
 	return gasUsed, nil
 }
 
+func (r *rpcTest) call(
+	to common.Address,
+	data []byte,
+) ([]byte, error) {
+	rpcRes, err := r.request(
+		"eth_call",
+		fmt.Sprintf(
+			`[{"to":"%s","data":"0x%s"}]`,
+			to.Hex(),
+			hex.EncodeToString(data),
+		),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	var result hexutil.Bytes
+	err = json.Unmarshal(rpcRes, &result)
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
 func uintHex(x uint64) string {
 	return fmt.Sprintf("0x%x", x)
 }
