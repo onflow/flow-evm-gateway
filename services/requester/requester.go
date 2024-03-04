@@ -4,7 +4,11 @@ import (
 	"bytes"
 	"context"
 	_ "embed"
+	"encoding/hex"
 	"fmt"
+	"math/big"
+	"strings"
+
 	"github.com/ethereum/go-ethereum/common"
 	gethCore "github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -19,8 +23,6 @@ import (
 	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
-	"math/big"
-	"strings"
 )
 
 var (
@@ -42,8 +44,7 @@ var (
 	//go:embed cadence/get_nonce.cdc
 	getNonceScript []byte
 
-	byteArrayType = cadence.NewVariableSizedArrayType(cadence.UInt8Type)
-	addressType   = cadence.NewConstantSizedArrayType(
+	addressType = cadence.NewConstantSizedArrayType(
 		common.AddressLength,
 		cadence.UInt8Type,
 	)
@@ -154,13 +155,14 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 		return common.Hash{}, err
 	}
 
+	hexEncodedTx, err := cadence.NewString(hex.EncodeToString(data))
+	if err != nil {
+		return common.Hash{}, err
+	}
+
 	// todo make sure the gas price is not bellow the configured gas price
 	script := e.replaceAddresses(runTxScript)
-	flowID, err := e.signAndSend(
-		ctx,
-		script,
-		cadenceArrayFromBytes(data),
-	)
+	flowID, err := e.signAndSend(ctx, script, hexEncodedTx)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -289,8 +291,11 @@ func (e *EVM) GetNonce(ctx context.Context, address common.Address) (uint64, err
 }
 
 func (e *EVM) Call(ctx context.Context, address common.Address, data []byte) ([]byte, error) {
+	hexEncodedData, err := cadence.NewString(hex.EncodeToString(data))
+	if err != nil {
+		return nil, err
+	}
 	// todo make "to" address optional, this can be used for contract deployment simulations
-	txData := cadenceArrayFromBytes(data).WithType(byteArrayType)
 	toAddress := cadenceArrayFromBytes(address.Bytes()).WithType(addressType)
 
 	e.logger.Debug().
@@ -301,7 +306,7 @@ func (e *EVM) Call(ctx context.Context, address common.Address, data []byte) ([]
 	value, err := e.client.ExecuteScriptAtLatestBlock(
 		ctx,
 		e.replaceAddresses(callScript),
-		[]cadence.Value{txData, toAddress},
+		[]cadence.Value{hexEncodedData, toAddress},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute script: %w", err)
@@ -321,12 +326,15 @@ func (e *EVM) EstimateGas(ctx context.Context, data []byte) (uint64, error) {
 		Str("data", fmt.Sprintf("%x", data)).
 		Msg("estimate gas")
 
-	txData := cadenceArrayFromBytes(data).WithType(byteArrayType)
+	hexEncodedTx, err := cadence.NewString(hex.EncodeToString(data))
+	if err != nil {
+		return 0, err
+	}
 
 	value, err := e.client.ExecuteScriptAtLatestBlock(
 		ctx,
 		e.replaceAddresses(estimateGasScript),
-		[]cadence.Value{txData},
+		[]cadence.Value{hexEncodedTx},
 	)
 	if err != nil {
 		return 0, fmt.Errorf("failed to execute script: %w", err)
