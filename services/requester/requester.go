@@ -242,7 +242,9 @@ func (e *EVM) signAndSend(ctx context.Context, script []byte, args ...cadence.Va
 
 func (e *EVM) GetBalance(ctx context.Context, address common.Address, height uint64) (*big.Int, error) {
 	// todo make sure provided height is used
-	hexEncodedAddress, err := cadence.NewString(address.Hex()[2:])
+	hexEncodedAddress, err := cadence.NewString(
+		strings.TrimPrefix(address.Hex(), "0x"),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -267,7 +269,9 @@ func (e *EVM) GetBalance(ctx context.Context, address common.Address, height uin
 }
 
 func (e *EVM) GetNonce(ctx context.Context, address common.Address) (uint64, error) {
-	hexEncodedAddress, err := cadence.NewString(address.Hex()[2:])
+	hexEncodedAddress, err := cadence.NewString(
+		strings.TrimPrefix(address.Hex(), "0x"),
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -298,7 +302,9 @@ func (e *EVM) Call(ctx context.Context, address common.Address, data []byte) ([]
 	}
 
 	// todo make "to" address optional, this can be used for contract deployment simulations
-	hexEncodedAddress, err := cadence.NewString(address.Hex()[2:])
+	hexEncodedAddress, err := cadence.NewString(
+		strings.TrimPrefix(address.Hex(), "0x"),
+	)
 	if err != nil {
 		return nil, err
 	}
