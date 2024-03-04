@@ -586,7 +586,7 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(
 		t,
-		"0000000000000000000000000000000000000000000000000000000000000539",
+		"0000000000000000000000000000000000000000000000000000000000000539", // 1337 in ABI encoding
 		hex.EncodeToString(storedValue),
 	)
 

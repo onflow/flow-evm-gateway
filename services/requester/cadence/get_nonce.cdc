@@ -1,7 +1,8 @@
 import EVM
 
 access(all)
-fun main(addressBytes: [UInt8; 20]): UInt64 {
+fun main(hexEncodedAddress: String): UInt64 {
+    let addressBytes = hexEncodedAddress.decodeHex().toConstantSized<[UInt8; 20]>()!
     let address = EVM.EVMAddress(bytes: addressBytes)
 
     return address.nonce()
