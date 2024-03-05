@@ -22,7 +22,7 @@ type Engine interface {
 var _ Engine = &RestartableEngine{}
 
 func NewRestartableEngine(engine Engine, retries int, logger zerolog.Logger) *RestartableEngine {
-	// build a fibonachi sequence, we could support more strategies in future
+	// build a Fibonacci sequence, we could support more strategies in future
 	// we use 0 as first run shouldn't be delayed
 	backoff := []time.Duration{0, time.Second, time.Second}
 	for i := len(backoff); i < retries; i++ {
@@ -41,7 +41,7 @@ func NewRestartableEngine(engine Engine, retries int, logger zerolog.Logger) *Re
 // RestartableEngine is an engine wrapper that tries to restart
 // the engine in case of starting errors.
 //
-// The strategy of the restarts contains fibonachi backoff time and
+// The strategy of the restarts contains Fibonacci backoff time and
 // limited number of retries that can be configured.
 // Here are backoff values for different retries provided:
 // 1s 1s 2s 3s 5s 8s 13s 21s 34s 55s 1m29s 2m24s 3m53s 6m17s 10m10s 16m27s 26m37s 43m4s 1h9m41s
