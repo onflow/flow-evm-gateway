@@ -23,17 +23,17 @@ type Accounts struct {
 	nonceCache *lru.TwoQueueCache[common.Address, [2]uint64]
 }
 
-func NewAccounts(db *Storage) (*Accounts, error) {
+func NewAccounts(db *Storage) *Accounts {
 	nonceCache, err := lru.New2Q[common.Address, [2]uint64](128)
-	if err != nil {
-		return nil, err
+	if err != nil { // with the default factory it will never error out
+		panic(err)
 	}
 
 	return &Accounts{
 		store:      db,
 		mux:        sync.RWMutex{},
 		nonceCache: nonceCache,
-	}, nil
+	}
 }
 
 func (a *Accounts) Update(tx *gethTypes.Transaction, receipt *gethTypes.Receipt) error {
