@@ -64,8 +64,16 @@ func New(dir string, log zerolog.Logger) (*Storage, error) {
 	return &Storage{db: db, log: log}, nil
 }
 
-func (s *Storage) set(keyCode byte, key []byte, value []byte) error {
+// set key-value pair identified by key code (which act as an entity identifier).
+//
+// Optional batch argument makes the operation atomic, but it's up to the caller to
+// commit the batch or revert it.
+func (s *Storage) set(keyCode byte, key []byte, value []byte, batch *pebble.Batch) error {
 	prefixedKey := makePrefix(keyCode, key)
+
+	if batch != nil {
+		return batch.Set(prefixedKey, value, nil)
+	}
 	return s.db.Set(prefixedKey, value, nil)
 }
 
