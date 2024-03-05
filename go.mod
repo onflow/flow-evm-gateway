@@ -6,6 +6,7 @@ require (
 	github.com/cockroachdb/pebble v0.0.0-20230928194634-aa077af62593
 	github.com/ethereum/go-ethereum v1.13.5
 	github.com/goccy/go-json v0.10.2
+	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/onflow/cadence v1.0.0-M8
 	github.com/onflow/flow-go v0.34.0-crescendo-preview.5
 	github.com/onflow/flow-go-sdk v1.0.0-M6
@@ -65,7 +66,6 @@ require (
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/golang-lru v1.0.2 // indirect
-	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/holiman/bloomfilter/v2 v2.0.3 // indirect
 	github.com/holiman/uint256 v1.2.3 // indirect
