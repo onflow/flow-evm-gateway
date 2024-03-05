@@ -544,6 +544,28 @@ func (b *BlockChainAPI) EstimateGas(
 	return hexutil.Uint64(estimatedGas), nil
 }
 
+// GetCode returns the code stored at the given address in
+// the state for the given block number.
+func (b *BlockChainAPI) GetCode(
+	ctx context.Context,
+	address common.Address,
+	blockNumberOrHash *rpc.BlockNumberOrHash,
+) (hexutil.Bytes, error) {
+	// todo support previous block heights
+	if blockNumberOrHash != nil && *blockNumberOrHash.BlockNumber != rpc.LatestBlockNumber {
+		// but still return latest for now
+		b.logger.Warn().Msg("get code for special blocks not supported")
+	}
+
+	code, err := b.evm.GetCode(ctx, address, 0)
+	if err != nil {
+		b.logger.Error().Err(err).Msg("failed to retrieve account code")
+		return nil, err
+	}
+
+	return hexutil.Bytes(code), nil
+}
+
 // handleError takes in an error and in case the error is of type ErrNotFound
 // it returns nil instead of an error since that is according to the API spec,
 // if the error is not of type ErrNotFound it will return the error and the generic
@@ -694,15 +716,6 @@ func (b *BlockChainAPI) SendTransaction(
 	args TransactionArgs,
 ) (common.Hash, error) {
 	return common.Hash{}, errs.ErrNotSupported
-}
-
-// GetCode returns the code stored at the given address in the state for the given block number.
-func (b *BlockChainAPI) GetCode(
-	ctx context.Context,
-	address common.Address,
-	blockNumberOrHash *rpc.BlockNumberOrHash,
-) (hexutil.Bytes, error) {
-	return nil, errs.ErrNotSupported
 }
 
 // GetProof returns the Merkle-proof for a given account and optionally some storage keys.

@@ -43,6 +43,9 @@ var (
 
 	//go:embed cadence/get_nonce.cdc
 	getNonceScript []byte
+
+	//go:embed cadence/get_code.cdc
+	getCodeScript []byte
 )
 
 const minFlowBalance = 2
@@ -70,6 +73,10 @@ type Requester interface {
 
 	// GetNonce gets nonce from the network.
 	GetNonce(ctx context.Context, address common.Address) (uint64, error)
+
+	// GetCode returns the code stored at the given address in
+	// the state for the given block number.
+	GetCode(ctx context.Context, address common.Address, height uint64) ([]byte, error)
 }
 
 var _ Requester = &EVM{}
@@ -242,9 +249,7 @@ func (e *EVM) signAndSend(ctx context.Context, script []byte, args ...cadence.Va
 
 func (e *EVM) GetBalance(ctx context.Context, address common.Address, height uint64) (*big.Int, error) {
 	// todo make sure provided height is used
-	hexEncodedAddress, err := cadence.NewString(
-		strings.TrimPrefix(address.Hex(), "0x"),
-	)
+	hexEncodedAddress, err := addressToCadenceString(address)
 	if err != nil {
 		return nil, err
 	}
@@ -269,9 +274,7 @@ func (e *EVM) GetBalance(ctx context.Context, address common.Address, height uin
 }
 
 func (e *EVM) GetNonce(ctx context.Context, address common.Address) (uint64, error) {
-	hexEncodedAddress, err := cadence.NewString(
-		strings.TrimPrefix(address.Hex(), "0x"),
-	)
+	hexEncodedAddress, err := addressToCadenceString(address)
 	if err != nil {
 		return 0, err
 	}
@@ -302,9 +305,7 @@ func (e *EVM) Call(ctx context.Context, address common.Address, data []byte) ([]
 	}
 
 	// todo make "to" address optional, this can be used for contract deployment simulations
-	hexEncodedAddress, err := cadence.NewString(
-		strings.TrimPrefix(address.Hex(), "0x"),
-	)
+	hexEncodedAddress, err := addressToCadenceString(address)
 	if err != nil {
 		return nil, err
 	}
@@ -323,24 +324,18 @@ func (e *EVM) Call(ctx context.Context, address common.Address, data []byte) ([]
 		return nil, fmt.Errorf("failed to execute script: %w", err)
 	}
 
-	// sanity check, should never occur
-	if _, ok := scriptResult.(cadence.String); !ok {
-		e.logger.Panic().Msg(fmt.Sprintf("failed to convert script result %v to String", scriptResult))
-	}
-
-	output := scriptResult.(cadence.String).ToGoValue().(string)
-	byteOutput, err := hex.DecodeString(output)
+	output, err := cadenceStringToBytes(scriptResult)
 	if err != nil {
-		return nil, fmt.Errorf("failed to convert call output: %w", err)
+		return nil, err
 	}
 
 	e.logger.Info().
 		Str("address", address.Hex()).
 		Str("data", fmt.Sprintf("%x", data)).
-		Str("result", output).
+		Str("result", hex.EncodeToString(output)).
 		Msg("call executed")
 
-	return byteOutput, nil
+	return output, nil
 }
 
 func (e *EVM) EstimateGas(ctx context.Context, data []byte) (uint64, error) {
@@ -380,6 +375,43 @@ func (e *EVM) EstimateGas(ctx context.Context, data []byte) (uint64, error) {
 	return gasUsed, nil
 }
 
+func (e *EVM) GetCode(
+	ctx context.Context,
+	address common.Address,
+	height uint64,
+) ([]byte, error) {
+	e.logger.Debug().
+		Str("addess", address.Hex()).
+		Str("height", fmt.Sprintf("%d", height)).
+		Msg("get code")
+
+	hexEncodedAddress, err := addressToCadenceString(address)
+	if err != nil {
+		return nil, err
+	}
+
+	value, err := e.client.ExecuteScriptAtLatestBlock(
+		ctx,
+		e.replaceAddresses(getCodeScript),
+		[]cadence.Value{hexEncodedAddress},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute script for get code: %w", err)
+	}
+
+	code, err := cadenceStringToBytes(value)
+	if err != nil {
+		return nil, err
+	}
+
+	e.logger.Info().
+		Str("address", address.Hex()).
+		Str("code size", fmt.Sprintf("%d", len(code))).
+		Msg("get code executed")
+
+	return code, nil
+}
+
 // getSignerNetworkInfo loads the signer account from network and returns key index and sequence number
 func (e *EVM) getSignerNetworkInfo(ctx context.Context) (int, uint64, error) {
 	account, err := e.client.GetAccount(ctx, e.address)
@@ -416,6 +448,27 @@ func (e *EVM) replaceAddresses(script []byte) []byte {
 	s = strings.ReplaceAll(s, "0xCOA", e.address.HexWithPrefix())
 
 	return []byte(s)
+}
+
+func addressToCadenceString(address common.Address) (cadence.String, error) {
+	return cadence.NewString(
+		strings.TrimPrefix(address.Hex(), "0x"),
+	)
+}
+
+func cadenceStringToBytes(value cadence.Value) ([]byte, error) {
+	cdcString, ok := value.(cadence.String)
+	if !ok {
+		return nil, fmt.Errorf("failed to convert cadence value to string: %v", value)
+	}
+
+	hexEncodedCode := cdcString.ToGoValue().(string)
+	code, err := hex.DecodeString(hexEncodedCode)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode string to byte array: %w", err)
+	}
+
+	return code, nil
 }
 
 // TODO(m-Peter): Consider moving this to flow-go repository

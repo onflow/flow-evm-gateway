@@ -524,6 +524,13 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 
 	contractAddress := rcp.ContractAddress
 
+	// Check code retrieval
+	code, err := rpcTester.getCode(contractAddress)
+	require.NoError(t, err)
+	// The deployed byte code is a subset of the byte code provided in
+	// contract deployment tx.
+	assert.Contains(t, hex.EncodeToString(deployData), hex.EncodeToString(code))
+
 	callRetrieve, err := storeContract.call("retrieve")
 	require.NoError(t, err)
 
