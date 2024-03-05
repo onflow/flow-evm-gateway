@@ -14,7 +14,7 @@ import (
 type Storage struct {
 	db    *pebble.DB
 	log   zerolog.Logger
-	cache lru.TwoQueueCache[string, []byte]
+	cache *lru.TwoQueueCache[string, []byte]
 }
 
 // New creates a new storage instance using the provided dir location as the storage directory.
@@ -64,7 +64,16 @@ func New(dir string, log zerolog.Logger) (*Storage, error) {
 		return nil, fmt.Errorf("failed to open db: %w", err)
 	}
 
-	return &Storage{db: db, log: log}, nil
+	valueCache, err := lru.New2Q[string, []byte](128)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Storage{
+		db:    db,
+		log:   log,
+		cache: valueCache,
+	}, nil
 }
 
 func (s *Storage) set(keyCode byte, key []byte, value []byte) error {
