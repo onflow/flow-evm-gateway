@@ -30,7 +30,7 @@ func (t *Transactions) Store(tx *gethTypes.Transaction) error {
 		return err
 	}
 
-	return t.store.set(txIDKey, tx.Hash().Bytes(), val)
+	return t.store.set(txIDKey, tx.Hash().Bytes(), val, nil)
 }
 
 func (t *Transactions) Get(ID common.Hash) (*gethTypes.Transaction, error) {
