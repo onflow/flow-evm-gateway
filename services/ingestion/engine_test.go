@@ -52,7 +52,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 		done := make(chan struct{})
 		go func() {
 			err := engine.Run(context.Background())
-			assert.ErrorIs(t, err, ErrDisconnected) // we disconnect at the end
+			assert.ErrorIs(t, err, models.ErrDisconnected) // we disconnect at the end
 			close(done)
 		}()
 
@@ -203,7 +203,7 @@ func TestTransactionIngestion(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		err := engine.Run(context.Background())
-		assert.ErrorIs(t, err, ErrDisconnected) // we disconnect at the end
+		assert.ErrorIs(t, err, models.ErrDisconnected) // we disconnect at the end
 		close(done)
 	}()
 
