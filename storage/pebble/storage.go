@@ -97,3 +97,7 @@ func (s *Storage) get(keyCode byte, key ...[]byte) ([]byte, error) {
 
 	return data, nil
 }
+
+func (s *Storage) newBatch() *pebble.Batch {
+	return s.db.NewBatch()
+}
