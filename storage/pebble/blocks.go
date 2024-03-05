@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/cockroachdb/pebble"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -46,18 +47,40 @@ func (b *Blocks) Store(cadenceHeight uint64, block *types.Block) error {
 		return err
 	}
 
-	// todo batch operations
-	evmHeight := uint64Bytes(block.Height)
-	if err := b.store.set(blockHeightKey, evmHeight, val); err != nil {
+	batch := b.store.newBatch()
+	defer batch.Close()
+
+	cadenceHeightBytes := uint64Bytes(cadenceHeight)
+	evmHeightBytes := uint64Bytes(block.Height)
+
+	if err := b.store.set(blockHeightKey, evmHeightBytes, val, batch); err != nil {
 		return fmt.Errorf("failed to store block: %w", err)
 	}
 
 	// todo check if what is more often used block by id or block by height and fix accordingly if needed
-	if err := b.store.set(blockIDToHeightKey, id.Bytes(), evmHeight); err != nil {
+	if err := b.store.set(blockIDToHeightKey, id.Bytes(), evmHeightBytes, batch); err != nil {
 		return fmt.Errorf("failed to store block: %w", err)
 	}
 
-	return b.setLastHeight(cadenceHeight, block.Height)
+	// set latest height
+	if err := b.store.set(evmHeightToCadenceHeightKey, evmHeightBytes, cadenceHeightBytes, batch); err != nil {
+		return fmt.Errorf("failed to store evm to cadence height: %w", err)
+	}
+
+	if err := b.store.set(latestCadenceHeightKey, nil, cadenceHeightBytes, batch); err != nil {
+		return fmt.Errorf("failed to store latest cadence height: %w", err)
+	}
+
+	if err := b.store.set(latestEVMHeightKey, nil, evmHeightBytes, batch); err != nil {
+		return fmt.Errorf("failed to set latest evm height: %w", err)
+	}
+
+	if err := batch.Commit(pebble.Sync); err != nil {
+		return fmt.Errorf("failed to commit block: %w", err)
+	}
+
+	b.latestEVMHeight = block.Height
+	return nil
 }
 
 func (b *Blocks) GetByHeight(height uint64) (*types.Block, error) {
@@ -139,7 +162,7 @@ func (b *Blocks) SetLatestCadenceHeight(height uint64) error {
 	b.mux.Lock()
 	defer b.mux.Unlock()
 
-	if err := b.store.set(latestCadenceHeightKey, nil, uint64Bytes(height)); err != nil {
+	if err := b.store.set(latestCadenceHeightKey, nil, uint64Bytes(height), nil); err != nil {
 		return fmt.Errorf("failed to store latest cadence height: %w", err)
 	}
 
@@ -154,11 +177,11 @@ func (b *Blocks) InitHeights() error {
 		return fmt.Errorf("can not init the database that already has data stored")
 	}
 
-	if err := b.store.set(latestCadenceHeightKey, nil, uint64Bytes(initCadenceHeight)); err != nil {
+	if err := b.store.set(latestCadenceHeightKey, nil, uint64Bytes(initCadenceHeight), nil); err != nil {
 		return fmt.Errorf("failed to set init Cadence height: %w", err)
 	}
 
-	if err := b.store.set(latestEVMHeightKey, nil, uint64Bytes(0)); err != nil {
+	if err := b.store.set(latestEVMHeightKey, nil, uint64Bytes(0), nil); err != nil {
 		return fmt.Errorf("failed to set init EVM height: %w", err)
 	}
 
@@ -184,21 +207,4 @@ func (b *Blocks) getBlock(keyCode byte, key []byte) (*types.Block, error) {
 	}
 
 	return types.NewBlockFromBytes(data)
-}
-
-func (b *Blocks) setLastHeight(cadenceHeight, evmHeight uint64) error {
-	if err := b.store.set(evmHeightToCadenceHeightKey, uint64Bytes(evmHeight), uint64Bytes(cadenceHeight)); err != nil {
-		return fmt.Errorf("failed to store evm to cadence height: %w", err)
-	}
-
-	if err := b.store.set(latestCadenceHeightKey, nil, uint64Bytes(cadenceHeight)); err != nil {
-		return fmt.Errorf("failed to store latest cadence height: %w", err)
-	}
-
-	if err := b.store.set(latestEVMHeightKey, nil, uint64Bytes(evmHeight)); err != nil {
-		return fmt.Errorf("failed to set latest evm height: %w", err)
-	}
-
-	b.latestEVMHeight = evmHeight
-	return nil
 }
