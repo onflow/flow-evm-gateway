@@ -107,7 +107,7 @@ func startIngestion(
 	go func() {
 		err = engine.Run(ctx)
 		if err != nil {
-			logger.Error().Err(err).Msg("failed to start ingestion engine")
+			logger.Error().Err(err).Msg("ingestion engine failed to run")
 			panic(err)
 		}
 	}()
