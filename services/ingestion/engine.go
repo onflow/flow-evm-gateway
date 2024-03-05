@@ -12,8 +12,6 @@ import (
 	"github.com/rs/zerolog"
 )
 
-var ErrDisconnected = errors.New("disconnected")
-
 var _ models.Engine = &Engine{}
 
 type Engine struct {
@@ -94,7 +92,7 @@ func (e *Engine) Run(ctx context.Context) error {
 				if ctx.Err() != nil {
 					return ctx.Err()
 				}
-				return ErrDisconnected
+				return models.ErrDisconnected
 			}
 
 			err = e.processEvents(blockEvents)
@@ -109,10 +107,10 @@ func (e *Engine) Run(ctx context.Context) error {
 					return ctx.Err()
 				}
 
-				return ErrDisconnected
+				return models.ErrDisconnected
 			}
 
-			return errors.Join(err, ErrDisconnected)
+			return errors.Join(err, models.ErrDisconnected)
 		}
 	}
 }
