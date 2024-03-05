@@ -40,7 +40,7 @@ _Make sure flow.json has the emulator account configured to address and private 
 Then you need to start the gateway:
 ```
 go run cmd/main/main.go \
-  --init-cadence-height 0 \
+  --flow-network-id flow-emulator \
   --coinbase FACF71692421039876a5BB4F10EF7A439D8ef61E \
   --coa-address f8d6e0586b0a20c7 \
   --coa-key 2619878f0e2ff438d17835c2a4561cb87b4d24d72d12ec34569acd0dd4af7c21 \
