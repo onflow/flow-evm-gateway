@@ -1,17 +1,20 @@
 package pebble
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"github.com/cockroachdb/pebble"
+	lru "github.com/hashicorp/golang-lru/v2"
 	errs "github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/rs/zerolog"
 	"io"
 )
 
 type Storage struct {
-	db  *pebble.DB
-	log zerolog.Logger
+	db    *pebble.DB
+	log   zerolog.Logger
+	cache lru.TwoQueueCache[string, []byte]
 }
 
 // New creates a new storage instance using the provided dir location as the storage directory.
@@ -66,11 +69,17 @@ func New(dir string, log zerolog.Logger) (*Storage, error) {
 
 func (s *Storage) set(keyCode byte, key []byte, value []byte) error {
 	prefixedKey := makePrefix(keyCode, key)
+
+	s.cache.Add(hex.EncodeToString(prefixedKey), value)
 	return s.db.Set(prefixedKey, value, nil)
 }
 
 func (s *Storage) get(keyCode byte, key ...[]byte) ([]byte, error) {
 	prefixedKey := makePrefix(keyCode, key...)
+
+	if val, ok := s.cache.Get(hex.EncodeToString(prefixedKey)); ok {
+		return val, nil
+	}
 
 	data, closer, err := s.db.Get(prefixedKey)
 	if err != nil {
