@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/onflow/flow-evm-gateway/storage"
 	errs "github.com/onflow/flow-evm-gateway/storage/errors"
 	"math/big"
@@ -17,16 +18,22 @@ var _ storage.AccountIndexer = &Accounts{}
 type Accounts struct {
 	store *Storage
 	mux   sync.RWMutex
-	// todo LRU caching with size limit
-	nonceCache map[common.Address][]uint64
+	// two queue cache is used to separately track most common accounts as well as
+	// most recent accounts, they both serve performance optimization in usage
+	nonceCache *lru.TwoQueueCache[common.Address, [2]uint64]
 }
 
-func NewAccounts(db *Storage) *Accounts {
+func NewAccounts(db *Storage) (*Accounts, error) {
+	nonceCache, err := lru.New2Q[common.Address, [2]uint64](128)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Accounts{
 		store:      db,
 		mux:        sync.RWMutex{},
-		nonceCache: make(map[common.Address][]uint64),
-	}
+		nonceCache: nonceCache,
+	}, nil
 }
 
 func (a *Accounts) Update(tx *gethTypes.Transaction, receipt *gethTypes.Receipt) error {
@@ -58,12 +65,13 @@ func (a *Accounts) Update(tx *gethTypes.Transaction, receipt *gethTypes.Receipt)
 		return err
 	}
 
-	a.nonceCache[from] = []uint64{nonce, txHeight}
+	a.nonceCache.Add(from, [2]uint64{nonce, txHeight})
+
 	return nil
 }
 
 func (a *Accounts) getNonce(address common.Address) (uint64, uint64, error) {
-	data, ok := a.nonceCache[address]
+	data, ok := a.nonceCache.Get(address)
 	if ok { // if present in cache return it
 		return data[0], data[1], nil
 	}
@@ -83,7 +91,7 @@ func (a *Accounts) getNonce(address common.Address) (uint64, uint64, error) {
 		return 0, 0, err
 	}
 
-	a.nonceCache[address] = []uint64{nonce, height}
+	a.nonceCache.Add(address, [2]uint64{nonce, height})
 	return nonce, height, nil
 }
 
