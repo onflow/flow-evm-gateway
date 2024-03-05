@@ -306,7 +306,7 @@ curl -XPOST 'localhost:8545' --header 'Content-Type: application/json' --data-ra
 ```
 
 # Contributing
-We welcome contributions from the community! Please read our Contributing Guide for information on how to get involved.
+We welcome contributions from the community! Please read our [Contributing Guide](https://github.com/onflow/flow-go/blob/master/CONTRIBUTING.md) for information on how to get involved.
 
 # License
 FlowEVM Gateway is released under the Apache License 2.0 license. See the LICENSE file for more details.
