@@ -17,8 +17,11 @@ let userAccount = web3.eth.accounts.privateKeyToAccount("0xf6d5333177711e562cabf
 (async function () {
 
     // get the latest block
-    let block = await web3.eth.getBlockNumber()
-    console.log("🎉 Latest block is:", block)
+    let blockNumber = await web3.eth.getBlockNumber()
+    console.log("🎉 Latest block is:", blockNumber)
+
+    let block = await web3.eth.getBlock("latest")
+    console.log("🎉 Latest block hash is:", block.hash)
 
     // get the balance of the EOA account
     let balance = await getBalance()
