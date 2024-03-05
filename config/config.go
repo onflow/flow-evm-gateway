@@ -45,7 +45,7 @@ type Config struct {
 
 func FromFlags() (*Config, error) {
 	cfg := &Config{}
-	var evmNetwork, coinbase, gas, coa, key, keysPath, flowChainID string
+	var evmNetwork, coinbase, gas, coa, key, keysPath, flowNetwork string
 
 	// parse from flags
 	flag.StringVar(&cfg.DatabaseDir, "database-dir", "./db", "Path to the directory for the database")
@@ -53,7 +53,7 @@ func FromFlags() (*Config, error) {
 	flag.IntVar(&cfg.RPCPort, "rpc-port", 8545, "Port for the RPC API server")
 	flag.StringVar(&cfg.AccessNodeGRPCHost, "access-node-grpc-host", "localhost:3569", "Host to the flow access node gRPC API")
 	flag.StringVar(&evmNetwork, "evm-network-id", "testnet", "EVM network ID (testnet, mainnet)")
-	flag.StringVar(&flowChainID, "flow-network-id", "flow-emulator", "Flow network ID (flow-emulator, flow-previewnet)")
+	flag.StringVar(&flowNetwork, "flow-network-id", "flow-emulator", "Flow network ID (flow-emulator, flow-previewnet)")
 	flag.StringVar(&coinbase, "coinbase", "", "Coinbase address to use for fee collection")
 	flag.StringVar(&gas, "gas-price", "1", "Static gas price used for EVM transactions")
 	flag.StringVar(&coa, "coa-address", "", "Flow address that holds COA account used for submitting transactions")
@@ -112,17 +112,13 @@ func FromFlags() (*Config, error) {
 		return nil, fmt.Errorf("EVM network ID not supported")
 	}
 
-	switch flowChainID {
+	switch flowNetwork {
 	case "flow-previewnet":
 		cfg.FlowNetworkID = flowGo.Previewnet
 	case "flow-emulator":
 		cfg.FlowNetworkID = flowGo.Emulator
 	default:
 		return nil, fmt.Errorf("flow network ID not supported, only possible to specify 'flow-previewnet' or 'flow-emulator'")
-	}
-
-	if cfg.FlowNetworkID != "previewnet" && cfg.FlowNetworkID != "emulator" {
-		return nil, fmt.Errorf("flow network ID is invalid, only allowed to set 'emulator' and 'previewnet'")
 	}
 
 	// todo validate Config values
