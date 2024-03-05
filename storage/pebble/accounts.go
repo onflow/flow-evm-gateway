@@ -53,7 +53,7 @@ func (a *Accounts) Update(tx *gethTypes.Transaction, receipt *gethTypes.Receipt)
 	nonce += 1
 
 	data := encodeNonce(nonce, receipt.BlockNumber.Uint64())
-	err = a.store.set(accountNonceKey, from.Bytes(), data)
+	err = a.store.set(accountNonceKey, from.Bytes(), data, nil)
 	if err != nil {
 		return err
 	}
