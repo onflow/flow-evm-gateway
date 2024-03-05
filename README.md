@@ -130,6 +130,7 @@ Listed below are the JSON-RPC namespaces and methods currently supported by the 
     * eth_call
     * eth_sendRawTransaction
     * eth_getTransactionByHash
+    * eth_getCode
     * eth_gasPrice 
     * eth_getBalance
     * eth_estimateGas
@@ -146,7 +147,6 @@ Listed below are the JSON-RPC namespaces and methods currently supported by the 
     * eth_createAccessList
     * eth_feeHistory
     * eth_maxPriorityFeePerGas
-    * eth_getCode
     * eth_getProof
     * eth_getStorageAt
     * eth_newFilter
