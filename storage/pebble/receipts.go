@@ -39,18 +39,28 @@ func (r *Receipts) Store(receipt *gethTypes.Receipt) error {
 		return err
 	}
 
-	// todo batch the operations
+	batch := r.store.db.NewBatch()
+	defer batch.Close()
+
 	height := receipt.BlockNumber.Bytes()
-	if err := r.store.set(receiptTxIDToHeightKey, receipt.TxHash.Bytes(), height); err != nil {
-		return err
+	if err := r.store.set(receiptTxIDToHeightKey, receipt.TxHash.Bytes(), height, batch); err != nil {
+		return fmt.Errorf("failed to store receipt tx height: %w", err)
 	}
 
 	// todo if there are more transactions per block we need to update this
-	if err := r.store.set(receiptHeightKey, height, val); err != nil {
-		return err
+	if err := r.store.set(receiptHeightKey, height, val, batch); err != nil {
+		return fmt.Errorf("failed to store receipt height: %w", err)
 	}
 
-	return r.store.set(bloomHeightKey, height, receipt.Bloom.Bytes())
+	if err := r.store.set(bloomHeightKey, height, receipt.Bloom.Bytes(), batch); err != nil {
+		return fmt.Errorf("failed to store bloom height: %w", err)
+	}
+
+	if err := batch.Commit(pebble.Sync); err != nil {
+		return fmt.Errorf("failed to commit receipt batch: %w", err)
+	}
+
+	return nil
 }
 
 func (r *Receipts) GetByTransactionID(ID common.Hash) (*gethTypes.Receipt, error) {
