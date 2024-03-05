@@ -39,7 +39,7 @@ func (r *Receipts) Store(receipt *gethTypes.Receipt) error {
 		return err
 	}
 
-	batch := r.store.db.NewBatch()
+	batch := r.store.newBatch()
 	defer batch.Close()
 
 	height := receipt.BlockNumber.Bytes()
