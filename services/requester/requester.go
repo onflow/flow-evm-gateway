@@ -249,9 +249,7 @@ func (e *EVM) signAndSend(ctx context.Context, script []byte, args ...cadence.Va
 
 func (e *EVM) GetBalance(ctx context.Context, address common.Address, height uint64) (*big.Int, error) {
 	// todo make sure provided height is used
-	hexEncodedAddress, err := cadence.NewString(
-		strings.TrimPrefix(address.Hex(), "0x"),
-	)
+	hexEncodedAddress, err := addressToCadenceString(address)
 	if err != nil {
 		return nil, err
 	}
@@ -276,9 +274,7 @@ func (e *EVM) GetBalance(ctx context.Context, address common.Address, height uin
 }
 
 func (e *EVM) GetNonce(ctx context.Context, address common.Address) (uint64, error) {
-	hexEncodedAddress, err := cadence.NewString(
-		strings.TrimPrefix(address.Hex(), "0x"),
-	)
+	hexEncodedAddress, err := addressToCadenceString(address)
 	if err != nil {
 		return 0, err
 	}
@@ -309,9 +305,7 @@ func (e *EVM) Call(ctx context.Context, address common.Address, data []byte) ([]
 	}
 
 	// todo make "to" address optional, this can be used for contract deployment simulations
-	hexEncodedAddress, err := cadence.NewString(
-		strings.TrimPrefix(address.Hex(), "0x"),
-	)
+	hexEncodedAddress, err := addressToCadenceString(address)
 	if err != nil {
 		return nil, err
 	}
@@ -330,24 +324,18 @@ func (e *EVM) Call(ctx context.Context, address common.Address, data []byte) ([]
 		return nil, fmt.Errorf("failed to execute script: %w", err)
 	}
 
-	// sanity check, should never occur
-	if _, ok := scriptResult.(cadence.String); !ok {
-		e.logger.Panic().Msg(fmt.Sprintf("failed to convert script result %v to String", scriptResult))
-	}
-
-	output := scriptResult.(cadence.String).ToGoValue().(string)
-	byteOutput, err := hex.DecodeString(output)
+	output, err := cadenceStringToBytes(scriptResult)
 	if err != nil {
-		return nil, fmt.Errorf("failed to convert call output: %w", err)
+		return nil, err
 	}
 
 	e.logger.Info().
 		Str("address", address.Hex()).
 		Str("data", fmt.Sprintf("%x", data)).
-		Str("result", output).
+		Str("result", hex.EncodeToString(output)).
 		Msg("call executed")
 
-	return byteOutput, nil
+	return output, nil
 }
 
 func (e *EVM) EstimateGas(ctx context.Context, data []byte) (uint64, error) {
@@ -397,9 +385,7 @@ func (e *EVM) GetCode(
 		Str("height", fmt.Sprintf("%d", height)).
 		Msg("get code")
 
-	hexEncodedAddress, err := cadence.NewString(
-		strings.TrimPrefix(address.Hex(), "0x"),
-	)
+	hexEncodedAddress, err := addressToCadenceString(address)
 	if err != nil {
 		return nil, err
 	}
@@ -413,19 +399,14 @@ func (e *EVM) GetCode(
 		return nil, fmt.Errorf("failed to execute script for get code: %w", err)
 	}
 
-	if _, ok := value.(cadence.String); !ok {
-		e.logger.Panic().Msg(fmt.Sprintf("failed to convert value to hex-encoded string: %v", value))
-	}
-
-	hexEncodedCode := value.ToGoValue().(string)
-	code, err := hex.DecodeString(hexEncodedCode)
+	code, err := cadenceStringToBytes(value)
 	if err != nil {
-		return nil, fmt.Errorf("failed to convert string to byte code: %w", err)
+		return nil, err
 	}
 
 	e.logger.Info().
 		Str("address", address.Hex()).
-		Str("result", hex.EncodeToString(code)).
+		Str("code size", fmt.Sprintf("%d", len(code))).
 		Msg("get code executed")
 
 	return code, nil
@@ -467,6 +448,27 @@ func (e *EVM) replaceAddresses(script []byte) []byte {
 	s = strings.ReplaceAll(s, "0xCOA", e.address.HexWithPrefix())
 
 	return []byte(s)
+}
+
+func addressToCadenceString(address common.Address) (cadence.String, error) {
+	return cadence.NewString(
+		strings.TrimPrefix(address.Hex(), "0x"),
+	)
+}
+
+func cadenceStringToBytes(value cadence.Value) ([]byte, error) {
+	cdcString, ok := value.(cadence.String)
+	if !ok {
+		return nil, fmt.Errorf("failed to convert cadence value to string: %v", value)
+	}
+
+	hexEncodedCode := cdcString.ToGoValue().(string)
+	code, err := hex.DecodeString(hexEncodedCode)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode string to byte array: %w", err)
+	}
+
+	return code, nil
 }
 
 // TODO(m-Peter): Consider moving this to flow-go repository
