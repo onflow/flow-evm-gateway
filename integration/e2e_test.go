@@ -288,7 +288,7 @@ func TestIntegration_DeployCallContract(t *testing.T) {
 		heights = append(heights, blk.Height)
 
 		sumHash := blk.TransactionHashes[0]
-		tx, err = txs.Get(sumHash)
+		_, err = txs.Get(sumHash)
 		require.NoError(t, err)
 
 		rcp, err = receipts.GetByTransactionID(sumHash)
@@ -410,8 +410,6 @@ func TestIntegration_DeployCallContract(t *testing.T) {
 func TestE2E_API_DeployEvents(t *testing.T) {
 	srv, err := startEmulator()
 	require.NoError(t, err)
-	emu := srv.Emulator()
-	dbDir := t.TempDir()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer func() {
@@ -419,6 +417,8 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 		srv.Stop()
 	}()
 
+	emu := srv.Emulator()
+	dbDir := t.TempDir()
 	gwAcc := emu.ServiceKey()
 	gwKey := gwAcc.PrivateKey
 	gwAddress := gwAcc.Address
@@ -426,7 +426,7 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 	cfg := &config.Config{
 		DatabaseDir:        dbDir,
 		AccessNodeGRPCHost: "localhost:3569", // emulator
-		RPCPort:            3001,
+		RPCPort:            8545,
 		RPCHost:            "127.0.0.1",
 		FlowNetworkID:      "flow-emulator",
 		EVMNetworkID:       emulator.FlowEVMTestnetChainID,
@@ -449,10 +449,6 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 	time.Sleep(500 * time.Millisecond) // some time to startup
 
 	flowAmount, _ := cadence.NewUFix64("5.0")
-	gasLimit := uint64(4700000) // arbitrarily big
-
-	storeContract, err := newContract(testContractBinary, testContractABI)
-	require.NoError(t, err)
 
 	// Steps 1, 2 and 3. - create COA and fund it - setup phase
 	res, err := fundEOA(emu, flowAmount, fundEOAAddress)
@@ -460,15 +456,12 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 	require.NoError(t, res.Error)
 	assert.Len(t, res.Events, 9)
 
-	eoaKey, err := crypto.HexToECDSA(fundEOARawKey)
-	require.NoError(t, err)
-
 	deployData, err := hex.DecodeString(testContractBinary)
 	require.NoError(t, err)
 
 	time.Sleep(1 * time.Second)
 
-	// estimate gas
+	// estimate gas for contract deployment
 	gasUsed, err := rpcTester.estimateGas(fundEOAAddress, deployData, 200_000)
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "contract creation code storage out of gas")
@@ -478,7 +471,7 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, hexutil.Uint64(215_324), gasUsed)
 
-	// check balance
+	// check EOA balance
 	balance, err := rpcTester.getBalance(fundEOAAddress)
 	require.NoError(t, err)
 	c, _ := cadence.NewUFix64("4.0")
@@ -486,6 +479,10 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 
 	// Step 4. - deploy contract
 	nonce := uint64(0)
+	gasLimit := uint64(4700000) // arbitrarily big
+	eoaKey, err := crypto.HexToECDSA(fundEOARawKey)
+	require.NoError(t, err)
+
 	signed, _, err := evmSign(nil, gasLimit, eoaKey, nonce, nil, deployData)
 	nonce++
 	hash, err := rpcTester.sendRawTx(signed)
@@ -494,18 +491,19 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 
 	time.Sleep(1 * time.Second) // todo change
 
-	// todo improve tests to use get latest block request instead of manually tracking block heights
-	// block 6 comes from contract deployment, all blocks before are from creating COA funded account
-	blkRpc, err := rpcTester.getBlock(6)
+	latestBlockNumber, err := rpcTester.blockNumber()
 	require.NoError(t, err)
 
-	assert.Len(t, blkRpc.Transactions, 1)
+	blkRpc, err := rpcTester.getBlock(latestBlockNumber)
+	require.NoError(t, err)
+
+	require.Len(t, blkRpc.Transactions, 1)
 	assert.Equal(t, uintHex(6), blkRpc.Number)
 
 	// check the deployment transaction and receipt
 	deployHash := blkRpc.Transactions[0]
+	require.Equal(t, hash.String(), deployHash)
 
-	// todo require.Equal(t, hash.String(), deployHash)
 	txRpc, err := rpcTester.getTx(deployHash)
 	require.NoError(t, err)
 
@@ -531,6 +529,9 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 	// contract deployment tx.
 	assert.Contains(t, hex.EncodeToString(deployData), hex.EncodeToString(code))
 
+	storeContract, err := newContract(testContractBinary, testContractABI)
+	require.NoError(t, err)
+
 	callRetrieve, err := storeContract.call("retrieve")
 	require.NoError(t, err)
 
@@ -551,8 +552,11 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, nonce, eoaNonce)
 
-	// block 5 comes from contract interaction
-	blkRpc, err = rpcTester.getBlock(7)
+	// block 7 comes from contract interaction
+	latestBlockNumber, err = rpcTester.blockNumber()
+	require.NoError(t, err)
+
+	blkRpc, err = rpcTester.getBlock(latestBlockNumber)
 	require.NoError(t, err)
 	assert.Equal(t, uintHex(7), blkRpc.Number)
 	require.Len(t, blkRpc.Transactions, 1)
@@ -602,8 +606,11 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, nonce, eoaNonce)
 
-	// block comes from contract store interaction
-	blkRpc, err = rpcTester.getBlock(8)
+	// block 8 comes from contract store interaction
+	latestBlockNumber, err = rpcTester.blockNumber()
+	require.NoError(t, err)
+
+	blkRpc, err = rpcTester.getBlock(latestBlockNumber)
 	require.NoError(t, err)
 	assert.Equal(t, uintHex(8), blkRpc.Number)
 	require.Len(t, blkRpc.Transactions, 1)
@@ -624,9 +631,6 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 	assert.Equal(t, uint64(8), rcp.BlockNumber.Uint64())
 	assert.Len(t, rcp.Logs, 0)
 
-	callStore, err = storeContract.call("store", big.NewInt(1337))
-	require.NoError(t, err)
-
 	// step 6 - call sdkEvent emitting function with different values
 	for i := 0; i < 4; i++ {
 		sumA := big.NewInt(5)
@@ -646,14 +650,14 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 		time.Sleep(1 * time.Second)
 
 		// block is produced by above call to the sum that emits sdkEvent
-		blkRpc, err = rpcTester.getBlock(uint64(9 + i))
+		blkRpc, err = rpcTester.getBlock(latestBlockNumber + 1 + uint64(i))
 		require.NoError(t, err)
 		require.Len(t, blkRpc.Transactions, 1)
 
 		sumHash := blkRpc.Transactions[0]
 		assert.Equal(t, signedHash.String(), sumHash)
 
-		txRpc, err = rpcTester.getTx(sumHash)
+		_, err = rpcTester.getTx(sumHash)
 		require.NoError(t, err)
 
 		rcp, err = rpcTester.getReceipt(sumHash)
@@ -679,7 +683,7 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 
 	// successfully filter by block id with found single match for each block
 	for i := 0; i < 4; i++ {
-		blkRpc, err = rpcTester.getBlock(uint64(9 + i))
+		blkRpc, err = rpcTester.getBlock(latestBlockNumber + 1 + uint64(i))
 		require.NoError(t, err)
 
 		blkID := common.HexToHash(blkRpc.Hash)
@@ -704,7 +708,7 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 	}
 
 	// invalid filter by block id with wrong topic value
-	blkRpc, err = rpcTester.getBlock(9)
+	blkRpc, err = rpcTester.getBlock(latestBlockNumber + 1)
 	require.NoError(t, err)
 	blkID := common.HexToHash(blkRpc.Hash)
 	require.NoError(t, err)
@@ -799,7 +803,7 @@ func TestE2E_ConcurrentTransactionSubmission(t *testing.T) {
 	cfg := &config.Config{
 		DatabaseDir:        dbDir,
 		AccessNodeGRPCHost: host,
-		RPCPort:            3001,
+		RPCPort:            8545,
 		RPCHost:            "127.0.0.1",
 		EVMNetworkID:       emulator.FlowEVMTestnetChainID,
 		FlowNetworkID:      "flow-emulator",

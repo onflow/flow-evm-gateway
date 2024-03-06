@@ -14,6 +14,13 @@ import (
 	"github.com/onflow/flow-go/utils/io"
 )
 
+// Default InitCadenceHeight for initializing the database on a local emulator.
+const EmulatorInitCadenceHeight = uint64(0)
+
+// Default InitCadenceHeight for initializing the database on a live network.
+// We don't use 0 as it has a special meaning to represent latest block in the AN API context.
+const LiveNetworkInitCadenceHeght = uint64(1)
+
 type Config struct {
 	// DatabaseDir is where the database should be stored.
 	DatabaseDir string
@@ -41,6 +48,8 @@ type Config struct {
 	CreateCOAResource bool
 	// GasPrice is a fixed gas price that will be used when submitting transactions.
 	GasPrice *big.Int
+	// InitCadenceHeight is used for initializing the database on a local emulator or a live network.
+	InitCadenceHeight uint64
 }
 
 func FromFlags() (*Config, error) {
@@ -115,8 +124,10 @@ func FromFlags() (*Config, error) {
 	switch flowNetwork {
 	case "flow-previewnet":
 		cfg.FlowNetworkID = flowGo.Previewnet
+		cfg.InitCadenceHeight = LiveNetworkInitCadenceHeght
 	case "flow-emulator":
 		cfg.FlowNetworkID = flowGo.Emulator
+		cfg.InitCadenceHeight = EmulatorInitCadenceHeight
 	default:
 		return nil, fmt.Errorf("flow network ID not supported, only possible to specify 'flow-previewnet' or 'flow-emulator'")
 	}
