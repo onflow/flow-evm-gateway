@@ -2,3 +2,4 @@ integration/db-test
 db
 flow.json
 .idea
+/tests/web3js/node_modules
