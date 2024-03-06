@@ -13,7 +13,10 @@ import (
 )
 
 func Test_RestartableEngine(t *testing.T) {
+	t.Parallel()
+
 	t.Run("shouldn't restart if nil is returned", func(t *testing.T) {
+		t.Parallel()
 		mockEngine := mocks.NewEngine(t)
 		mockEngine.
 			On("Run", mock.Anything).
@@ -28,6 +31,7 @@ func Test_RestartableEngine(t *testing.T) {
 	})
 
 	t.Run("shouldn't restart if non-recoverable error is returned", func(t *testing.T) {
+		t.Parallel()
 		retErr := fmt.Errorf("non-receoverable error")
 		mockEngine := mocks.NewEngine(t)
 		mockEngine.
@@ -43,6 +47,7 @@ func Test_RestartableEngine(t *testing.T) {
 	})
 
 	t.Run("should restart when recoverable error is returned and then return the error after retries", func(t *testing.T) {
+		t.Parallel()
 		retries := uint(5)
 		prevTime := time.Now()
 		prevDiff := time.Duration(0)
@@ -65,6 +70,7 @@ func Test_RestartableEngine(t *testing.T) {
 	})
 
 	t.Run("should restart when recoverable error is returned but then return nil after error is no longer returned", func(t *testing.T) {
+		t.Parallel()
 		mockEngine := mocks.NewEngine(t)
 		mockEngine.
 			On("Run", mock.Anything).
