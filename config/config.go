@@ -15,6 +15,8 @@ import (
 )
 
 // Default InitCadenceHeight for initializing the database on a local emulator.
+// TODO: temporary fix until https://github.com/onflow/flow-go/issues/5481 is
+// fixed upstream and released.
 const EmulatorInitCadenceHeight = uint64(0)
 
 // Default InitCadenceHeight for initializing the database on a live network.
