@@ -43,7 +43,7 @@ func Test_RestartableEngine(t *testing.T) {
 	})
 
 	t.Run("should restart when recoverable error is returned and then return the error after retries", func(t *testing.T) {
-		retries := 5
+		retries := uint(5)
 		prevTime := time.Now()
 		prevDiff := time.Duration(0)
 
@@ -57,7 +57,7 @@ func Test_RestartableEngine(t *testing.T) {
 				prevDiff = curDiff
 				return ErrDisconnected
 			}).
-			Times(retries)
+			Times(int(retries))
 
 		r := NewRestartableEngine(mockEngine, retries, zerolog.New(zerolog.NewTestWriter(t)))
 		err := r.Run(context.Background())
