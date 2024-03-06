@@ -21,12 +21,15 @@ type Engine interface {
 
 var _ Engine = &RestartableEngine{}
 
-func NewRestartableEngine(engine Engine, retries int, logger zerolog.Logger) *RestartableEngine {
+func NewRestartableEngine(engine Engine, retries uint, logger zerolog.Logger) *RestartableEngine {
 	// build a Fibonacci sequence, we could support more strategies in future
 	// we use 0 as first run shouldn't be delayed
 	backoff := []time.Duration{0, time.Second, time.Second}
-	for i := len(backoff); i < retries; i++ {
+	for i := len(backoff); i < int(retries); i++ {
 		backoff = append(backoff, backoff[i-2]+backoff[i-1])
+	}
+	if int(retries) < len(backoff) {
+		backoff = backoff[0:retries]
 	}
 
 	logger = logger.With().Str("component", "restartable-engine").Logger()
