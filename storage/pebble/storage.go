@@ -1,17 +1,20 @@
 package pebble
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"github.com/cockroachdb/pebble"
+	lru "github.com/hashicorp/golang-lru/v2"
 	errs "github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/rs/zerolog"
 	"io"
 )
 
 type Storage struct {
-	db  *pebble.DB
-	log zerolog.Logger
+	db    *pebble.DB
+	log   zerolog.Logger
+	cache *lru.TwoQueueCache[string, []byte]
 }
 
 // New creates a new storage instance using the provided dir location as the storage directory.
@@ -61,16 +64,31 @@ func New(dir string, log zerolog.Logger) (*Storage, error) {
 		return nil, fmt.Errorf("failed to open db: %w", err)
 	}
 
-	return &Storage{db: db, log: log}, nil
+	valueCache, err := lru.New2Q[string, []byte](128)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Storage{
+		db:    db,
+		log:   log,
+		cache: valueCache,
+	}, nil
 }
 
 func (s *Storage) set(keyCode byte, key []byte, value []byte) error {
 	prefixedKey := makePrefix(keyCode, key)
+
+	s.cache.Add(hex.EncodeToString(prefixedKey), value)
 	return s.db.Set(prefixedKey, value, nil)
 }
 
 func (s *Storage) get(keyCode byte, key ...[]byte) ([]byte, error) {
 	prefixedKey := makePrefix(keyCode, key...)
+
+	if val, ok := s.cache.Get(hex.EncodeToString(prefixedKey)); ok {
+		return val, nil
+	}
 
 	data, closer, err := s.db.Get(prefixedKey)
 	if err != nil {
