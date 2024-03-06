@@ -69,9 +69,14 @@ func (r *RestartableEngine) Ready() <-chan struct{} {
 func (r *RestartableEngine) Run(ctx context.Context) error {
 	var err error
 	for i, b := range r.backoff {
-		<-time.After(b) // wait for it
-		if b > 0 {
-			r.logger.Warn().Msg("restarting the engine now")
+		select {
+		case <-time.After(b): // wait for the backoff duration
+			if b > 0 {
+				r.logger.Warn().Msg("restarting the engine now")
+			}
+		case <-ctx.Done():
+			r.logger.Warn().Msg("context cancelled, stopping the engine")
+			return ctx.Err()
 		}
 
 		err = r.engine.Run(ctx)
