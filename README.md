@@ -130,6 +130,7 @@ Listed below are the JSON-RPC namespaces and methods currently supported by the 
     * eth_call
     * eth_sendRawTransaction
     * eth_getTransactionByHash
+    * eth_getCode
     * eth_gasPrice 
     * eth_getBalance
     * eth_estimateGas
@@ -146,7 +147,6 @@ Listed below are the JSON-RPC namespaces and methods currently supported by the 
     * eth_createAccessList
     * eth_feeHistory
     * eth_maxPriorityFeePerGas
-    * eth_getCode
     * eth_getProof
     * eth_getStorageAt
     * eth_newFilter
@@ -306,7 +306,7 @@ curl -XPOST 'localhost:8545' --header 'Content-Type: application/json' --data-ra
 ```
 
 # Contributing
-We welcome contributions from the community! Please read our Contributing Guide for information on how to get involved.
+We welcome contributions from the community! Please read our [Contributing Guide](./CONTRIBUTING.md) for information on how to get involved.
 
 # License
 FlowEVM Gateway is released under the Apache License 2.0 license. See the LICENSE file for more details.

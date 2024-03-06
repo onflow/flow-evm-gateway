@@ -17,15 +17,12 @@ var _ storage.AccountIndexer = &Accounts{}
 type Accounts struct {
 	store *Storage
 	mux   sync.RWMutex
-	// todo LRU caching with size limit
-	nonceCache map[common.Address][]uint64
 }
 
 func NewAccounts(db *Storage) *Accounts {
 	return &Accounts{
-		store:      db,
-		mux:        sync.RWMutex{},
-		nonceCache: make(map[common.Address][]uint64),
+		store: db,
+		mux:   sync.RWMutex{},
 	}
 }
 
@@ -58,16 +55,10 @@ func (a *Accounts) Update(tx *gethTypes.Transaction, receipt *gethTypes.Receipt)
 		return err
 	}
 
-	a.nonceCache[from] = []uint64{nonce, txHeight}
 	return nil
 }
 
 func (a *Accounts) getNonce(address common.Address) (uint64, uint64, error) {
-	data, ok := a.nonceCache[address]
-	if ok { // if present in cache return it
-		return data[0], data[1], nil
-	}
-
 	val, err := a.store.get(accountNonceKey, address.Bytes())
 	if err != nil {
 		// if no nonce was yet saved for the account the nonce is 0
@@ -83,7 +74,6 @@ func (a *Accounts) getNonce(address common.Address) (uint64, uint64, error) {
 		return 0, 0, err
 	}
 
-	a.nonceCache[address] = []uint64{nonce, height}
 	return nonce, height, nil
 }
 

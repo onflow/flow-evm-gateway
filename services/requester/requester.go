@@ -1,7 +1,6 @@
 package requester
 
 import (
-	"bytes"
 	"context"
 	_ "embed"
 	"encoding/hex"
@@ -13,7 +12,6 @@ import (
 	gethCore "github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	gethVM "github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access"
@@ -147,13 +145,7 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 		Msg("send raw transaction")
 
 	tx := &types.Transaction{}
-	err := tx.DecodeRLP(
-		rlp.NewStream(
-			bytes.NewReader(data),
-			uint64(len(data)),
-		),
-	)
-	if err != nil {
+	if err := tx.UnmarshalBinary(data); err != nil {
 		return common.Hash{}, err
 	}
 
@@ -173,10 +165,17 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 	if tx.To() != nil {
 		to = tx.To().String()
 	}
+
+	from, err := types.Sender(types.LatestSignerForChainID(tx.ChainId()), tx)
+	if err != nil {
+		e.logger.Error().Err(err).Msg("failed to calculate sender")
+	}
+
 	e.logger.Info().
 		Str("evm-id", tx.Hash().Hex()).
 		Str("flow-id", flowID.Hex()).
 		Str("to", to).
+		Str("from", from.Hex()).
 		Str("value", tx.Value().String()).
 		Msg("raw transaction sent")
 
