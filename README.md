@@ -2,11 +2,11 @@
 
 # EVM Gateway
 
-**EVM Gateway enables seamless interaction with the Flow EVM, mirroring the experience of engaging with any other EVM blockchain.**
+**EVM Gateway enables seamless interaction with EVM on Flow, mirroring the experience of engaging with any other EVM blockchain.**
 
-FlowEVM Gateway implements the Ethereum JSON-RPC API for the [FlowEVM](https://developers.flow.com/evm/about) which conforms to the Ethereum [JSON-RPC specification](https://ethereum.github.io/execution-apis/api-documentation/). FlowEVM Gateway is specifically designed to integrate with the FlowEVM environment on the Flow blockchain. Rather than implementing the full `geth` stack, the JSON-RPC API available in FlowEVM Gateway is a lightweight implementation which uses Flow's underlying consensus and smart contract language, [Cadence](https://cadence-lang.org/docs/), to handle calls received by the FlowEVM Gateway. For those interested in the underlying implementation details please refer to the [FLIP #243](https://github.com/onflow/flips/issues/243) (FlowEVM Gateway) and [FLIP #223](https://github.com/onflow/flips/issues/223) (FlowEVM Core) improvement proposals. 
+EVM Gateway implements the Ethereum JSON-RPC API for [EVM on Flow](https://developers.flow.com/evm/about) which conforms to the Ethereum [JSON-RPC specification](https://ethereum.github.io/execution-apis/api-documentation/). FlowEVM Gateway is specifically designed to integrate with the EVM environment on the Flow blockchain. Rather than implementing the full `geth` stack, the JSON-RPC API available in EVM Gateway is a lightweight implementation which uses Flow's underlying consensus and smart contract language, [Cadence](https://cadence-lang.org/docs/), to handle calls received by the EVM Gateway. For those interested in the underlying implementation details please refer to the [FLIP #243](https://github.com/onflow/flips/issues/243) (EVM Gateway) and [FLIP #223](https://github.com/onflow/flips/issues/223) (EVM on Flow Core) improvement proposals. 
 
-FlowEVM Gateway is compatible with the majority of standard Ethereum JSON-RPC APIs allowing seamless integration with existing Ethereum-compatible web3 tools via HTTP. FlowEVM Gateway honors Ethereum's JSON-RPC namespace system, grouping RPC methods into categories based on their specific purpose. Each method name is constructed using the namespace, an underscore, and the specific method name in that namespace. For example, the `eth_call` method is located within the `eth` namespace. See below for details on methods currently supported or planned.
+EVM Gateway is compatible with the majority of standard Ethereum JSON-RPC APIs allowing seamless integration with existing Ethereum-compatible web3 tools via HTTP. EVM Gateway honors Ethereum's JSON-RPC namespace system, grouping RPC methods into categories based on their specific purpose. Each method name is constructed using the namespace, an underscore, and the specific method name in that namespace. For example, the `eth_call` method is located within the `eth` namespace. See below for details on methods currently supported or planned.
 
 ### Design
 
@@ -21,7 +21,7 @@ The basic design of the EVM Gateway consists of a couple of components:
 
 ## Event subscription and filters
 
-FlowEVM Gateway also supports the standard Ethereum JSON-RPC event subscription and filters, enabling callers to subscribe to state logs, blocks or pending transactions changes.
+EVM Gateway also supports the standard Ethereum JSON-RPC event subscription and filters, enabling callers to subscribe to state logs, blocks or pending transactions changes.
 
 * TODO more coming
 
@@ -116,7 +116,7 @@ FlowEVM has public RPC endpoints available for the following environments:
 
 # Supported namespaces and methods
 
-Listed below are the JSON-RPC namespaces and methods currently supported by the FlowEVM Gateway:
+Listed below are the JSON-RPC namespaces and methods currently supported by the EVM Gateway:
 
 * `eth`
   * Supported 
@@ -309,4 +309,4 @@ curl -XPOST 'localhost:8545' --header 'Content-Type: application/json' --data-ra
 We welcome contributions from the community! Please read our [Contributing Guide](./CONTRIBUTING.md) for information on how to get involved.
 
 # License
-FlowEVM Gateway is released under the Apache License 2.0 license. See the LICENSE file for more details.
+EVM Gateway is released under the Apache License 2.0 license. See the LICENSE file for more details.
