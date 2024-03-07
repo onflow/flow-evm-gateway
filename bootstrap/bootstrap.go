@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/onflow/flow-evm-gateway/api"
 	"github.com/onflow/flow-evm-gateway/config"
+	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/services/ingestion"
 	"github.com/onflow/flow-evm-gateway/services/requester"
 	"github.com/onflow/flow-evm-gateway/storage"
@@ -103,16 +104,18 @@ func startIngestion(
 		accounts,
 		logger,
 	)
+	const retries = 15
+	restartable := models.NewRestartableEngine(engine, retries, logger)
 
 	go func() {
-		err = engine.Run(ctx)
+		err = restartable.Run(ctx)
 		if err != nil {
-			logger.Error().Err(err).Msg("failed to start ingestion engine")
+			logger.Error().Err(err).Msg("ingestion engine failed to run")
 			panic(err)
 		}
 	}()
 
-	<-engine.Ready() // wait for engine to be ready
+	<-restartable.Ready() // wait for engine to be ready
 
 	logger.Info().Msg("ingestion start up successful")
 	return nil
