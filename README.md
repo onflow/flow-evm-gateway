@@ -48,6 +48,9 @@ go run cmd/main/main.go \
   --gas-price 0
 ```
 
+Note that the gateway will be starting from the latest emulator block, so if emulator is run before and transactions happen in the meantime, the gateway will not fetch those historical blocks & transactions.
+This will be improved soon.
+
 _In this example we use `coa-address` value set to service account of the emulator, same as `coa-key`. 
 This account will by default be funded with Flow which is a requirement. For `coinbase` we can 
 use whichever valid EVM address. It's not really useful for local running beside collecting fees. We provide also the 
