@@ -4,12 +4,14 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/common"
-	gethTypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/onflow/flow-evm-gateway/storage"
-	errs "github.com/onflow/flow-evm-gateway/storage/errors"
 	"math/big"
 	"sync"
+
+	"github.com/ethereum/go-ethereum/common"
+	gethTypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/onflow/flow-evm-gateway/models"
+	"github.com/onflow/flow-evm-gateway/storage"
+	errs "github.com/onflow/flow-evm-gateway/storage/errors"
 )
 
 var _ storage.AccountIndexer = &Accounts{}
@@ -26,15 +28,14 @@ func NewAccounts(db *Storage) *Accounts {
 	}
 }
 
-func (a *Accounts) Update(tx *gethTypes.Transaction, receipt *gethTypes.Receipt) error {
+func (a *Accounts) Update(
+	evmTxData models.FlowEVMTxData,
+	receipt *gethTypes.Receipt,
+) error {
 	a.mux.Lock()
 	defer a.mux.Unlock()
 
-	from, err := gethTypes.Sender(gethTypes.LatestSignerForChainID(tx.ChainId()), tx)
-	if err != nil {
-		return err
-	}
-
+	from := evmTxData.From()
 	nonce, height, err := a.getNonce(from)
 	if err != nil {
 		return err
@@ -50,6 +51,7 @@ func (a *Accounts) Update(tx *gethTypes.Transaction, receipt *gethTypes.Receipt)
 	nonce += 1
 
 	data := encodeNonce(nonce, receipt.BlockNumber.Uint64())
+
 	err = a.store.set(accountNonceKey, from.Bytes(), data, nil)
 	if err != nil {
 		return err

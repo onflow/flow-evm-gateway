@@ -2,7 +2,7 @@ package models
 
 import (
 	"bytes"
-	"math/big"
+	"encoding/hex"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -29,15 +29,9 @@ func createTestEvent(t *testing.T) (cadence.Event, *gethTypes.Transaction, *type
 		}},
 	}
 
-	tx := gethTypes.NewTx(&gethTypes.AccessListTx{
-		ChainID:  big.NewInt(1),
-		Nonce:    1,
-		GasPrice: big.NewInt(24),
-		Gas:      1337,
-		To:       &common.Address{0x01},
-		Value:    big.NewInt(5),
-		Data:     []byte{0x2, 0x3},
-	})
+	tx := &gethTypes.Transaction{}
+	txData, _ := hex.DecodeString("f9015880808301e8488080b901086060604052341561000f57600080fd5b60eb8061001d6000396000f300606060405260043610603f576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff168063c6888fa1146044575b600080fd5b3415604e57600080fd5b606260048080359060200190919050506078565b6040518082815260200191505060405180910390f35b60007f24abdb5865df5079dcc5ac590ff6f01d5c16edbc5fab4e195d9febd1114503da600783026040518082815260200191505060405180910390a16007820290509190505600a165627a7a7230582040383f19d9f65246752244189b02f56e8d0980ed44e7a56c0b200458caad20bb002982052fa09c05a7389284dc02b356ec7dee8a023c5efd3a9d844fa3c481882684b0640866a057e96d0a71a857ed509bb2b7333e78b2408574b8cc7f51238f25c58812662653")
+	tx.UnmarshalBinary(txData)
 
 	var txEnc bytes.Buffer
 	err := tx.EncodeRLP(&txEnc)

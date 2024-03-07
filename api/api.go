@@ -151,12 +151,6 @@ func (b *BlockChainAPI) GetTransactionByHash(
 		return handleError[*RPCTransaction](b.logger, err)
 	}
 
-	from, err := types.Sender(types.LatestSignerForChainID(tx.ChainId()), tx)
-	if err != nil {
-		b.logger.Error().Err(err).Msg("failed to calculate sender")
-		return nil, errs.ErrInternal
-	}
-
 	v, r, s := tx.RawSignatureValues()
 	index := uint64(rcp.TransactionIndex)
 
@@ -164,7 +158,7 @@ func (b *BlockChainAPI) GetTransactionByHash(
 		Hash:             tx.Hash(),
 		BlockHash:        &rcp.BlockHash,
 		BlockNumber:      (*hexutil.Big)(rcp.BlockNumber),
-		From:             from,
+		From:             tx.From(),
 		To:               tx.To(),
 		Gas:              hexutil.Uint64(rcp.GasUsed),
 		GasPrice:         (*hexutil.Big)(rcp.EffectiveGasPrice),

@@ -1,10 +1,14 @@
 package pebble
 
 import (
+	"fmt"
+	"sync"
+
 	"github.com/ethereum/go-ethereum/common"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/storage"
-	"sync"
+	"github.com/onflow/flow-go/fvm/evm/types"
 )
 
 var _ storage.TransactionIndexer = &Transactions{}
@@ -21,19 +25,19 @@ func NewTransactions(store *Storage) *Transactions {
 	}
 }
 
-func (t *Transactions) Store(tx *gethTypes.Transaction) error {
+func (t *Transactions) Store(evmTxData models.FlowEVMTxData) error {
 	t.mux.Lock()
 	defer t.mux.Unlock()
 
-	val, err := tx.MarshalBinary()
+	val, err := evmTxData.MarshalBinary()
 	if err != nil {
 		return err
 	}
 
-	return t.store.set(txIDKey, tx.Hash().Bytes(), val, nil)
+	return t.store.set(txIDKey, evmTxData.Hash().Bytes(), val, nil)
 }
 
-func (t *Transactions) Get(ID common.Hash) (*gethTypes.Transaction, error) {
+func (t *Transactions) Get(ID common.Hash) (models.FlowEVMTxData, error) {
 	t.mux.RLock()
 	defer t.mux.RUnlock()
 
@@ -42,9 +46,23 @@ func (t *Transactions) Get(ID common.Hash) (*gethTypes.Transaction, error) {
 		return nil, err
 	}
 
-	tx := &gethTypes.Transaction{}
-	if err := tx.UnmarshalBinary(val); err != nil {
-		return nil, err
+	var evmTxData models.FlowEVMTxData
+
+	if val[0] == types.DirectCallTxType {
+		directCall, err := types.DirectCallFromEncoded(val)
+		if err != nil {
+			return nil, fmt.Errorf("failed to rlp decode direct call: %w", err)
+		}
+
+		evmTxData = models.DirectCallTx{Call: directCall}
+	} else {
+		tx := &gethTypes.Transaction{}
+		if err := tx.UnmarshalBinary(val[1:]); err != nil {
+			return nil, fmt.Errorf("failed to rlp decode transaction: %w", err)
+		}
+
+		evmTxData = models.GethTx{Tx: tx}
 	}
-	return tx, nil
+
+	return evmTxData, nil
 }

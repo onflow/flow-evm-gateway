@@ -2,14 +2,16 @@ package storage
 
 import (
 	"fmt"
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/onflow/flow-evm-gateway/storage/mocks"
 	evmEmulator "github.com/onflow/flow-go/fvm/evm/emulator"
 	"github.com/stretchr/testify/suite"
-	"math/big"
 )
 
 type BlockTestSuite struct {
@@ -32,6 +34,7 @@ func (b *BlockTestSuite) TestGet() {
 		b.Require().Equal(block, retBlock)
 
 		retBlock, err = b.Blocks.GetByHeight(height)
+		b.Require().NoError(err)
 		b.Require().Equal(block, retBlock)
 	})
 
@@ -72,6 +75,7 @@ func (b *BlockTestSuite) TestStore() {
 		id, err := bl.Hash()
 		b.Require().NoError(err)
 		blId, err := b.Blocks.GetByID(id)
+		b.Require().NoError(err)
 		b.Require().Equal(bl, blId)
 	})
 }
@@ -262,7 +266,7 @@ func (s *TransactionTestSuite) TestGetTransaction() {
 	})
 
 	s.Run("store multiple transactions and get single", func() {
-		var tx *types.Transaction
+		var tx models.FlowEVMTxData
 		for i := 0; i < 10; i++ {
 			tx = mocks.NewTransaction(uint64(10 + i))
 			err := s.TransactionIndexer.Store(tx)
@@ -294,18 +298,22 @@ func (a *AccountTestSuite) TestNonce() {
 		from := common.HexToAddress("FACF71692421039876a5BB4F10EF7A439D8ef61E")
 		rawKey := "f6d5333177711e562cabf1f311916196ee6ffc2a07966d9d4628094073bd5442"
 		key, err := crypto.HexToECDSA(rawKey)
+		a.Require().NoError(err)
 
 		nonce, err := a.AccountIndexer.GetNonce(&from)
 		a.Require().NoError(err)
 		a.Require().Equal(uint64(0), nonce)
 
 		for i := 1; i < 5; i++ {
-			tx := mocks.NewTransaction(0)
-			rcp := mocks.NewReceipt(uint64(i+5), tx.Hash())
-			tx, err = types.SignTx(tx, evmEmulator.GetDefaultSigner(), key)
+			evmTxData := mocks.NewTransaction(0)
+			gethTx, ok := evmTxData.(models.GethTx)
+			a.Require().True(ok)
+			rcp := mocks.NewReceipt(uint64(i+5), evmTxData.Hash())
+			tx, err := types.SignTx(gethTx.Tx, evmEmulator.GetDefaultSigner(), key)
+			evmTxData = models.GethTx{Tx: tx}
 			a.Require().NoError(err)
 
-			err = a.AccountIndexer.Update(tx, rcp)
+			err = a.AccountIndexer.Update(evmTxData, rcp)
 			a.Require().NoError(err)
 
 			nonce, err = a.AccountIndexer.GetNonce(&from)
@@ -316,12 +324,15 @@ func (a *AccountTestSuite) TestNonce() {
 		// if run second time we should still see same nonce values, since they won't be incremented
 		// because we track nonce with evm height, and if same height is used twice we don't update
 		for i := 1; i < 5; i++ {
-			tx := mocks.NewTransaction(0)
-			rcp := mocks.NewReceipt(uint64(i+5), tx.Hash())
-			tx, err = types.SignTx(tx, evmEmulator.GetDefaultSigner(), key)
+			evmTxData := mocks.NewTransaction(0)
+			gethTx, ok := evmTxData.(models.GethTx)
+			a.Require().True(ok)
+			rcp := mocks.NewReceipt(uint64(i+5), evmTxData.Hash())
+			tx, err := types.SignTx(gethTx.Tx, evmEmulator.GetDefaultSigner(), key)
+			evmTxData = models.GethTx{Tx: tx}
 			a.Require().NoError(err)
 
-			err = a.AccountIndexer.Update(tx, rcp)
+			err = a.AccountIndexer.Update(evmTxData, rcp)
 			a.Require().NoError(err)
 
 			nonce, err = a.AccountIndexer.GetNonce(&from)

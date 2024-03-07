@@ -179,16 +179,9 @@ func (e *Engine) processBlockEvent(cadenceHeight uint64, event cadence.Event) er
 }
 
 func (e *Engine) processTransactionEvent(event cadence.Event) error {
-	tx, err := models.DecodeTransaction(event)
+	evmTxData, err := models.DecodeTransaction(event)
 	if err != nil {
 		return fmt.Errorf("could not decode transaction event: %w", err)
-	}
-
-	// in case we have a direct call transaction we ignore it for now
-	// todo support indexing of direct calls
-	if tx == nil {
-		e.log.Debug().Str("event", event.String()).Msg("skipping direct call")
-		return nil
 	}
 
 	receipt, err := models.DecodeReceipt(event)
@@ -200,15 +193,15 @@ func (e *Engine) processTransactionEvent(event cadence.Event) error {
 		Str("contract-address", receipt.ContractAddress.String()).
 		Int("log-count", len(receipt.Logs)).
 		Str("receipt-tx-hash", receipt.TxHash.String()).
-		Str("tx-hash", tx.Hash().String()).
+		Str("tx-hash", evmTxData.Hash().String()).
 		Msg("ingesting new transaction executed event")
 
 	// todo think if we could introduce batching
-	if err := e.transactions.Store(tx); err != nil {
+	if err := e.transactions.Store(evmTxData); err != nil {
 		return fmt.Errorf("failed to store tx: %w", err)
 	}
 
-	if err := e.accounts.Update(tx, receipt); err != nil {
+	if err := e.accounts.Update(evmTxData, receipt); err != nil {
 		return fmt.Errorf("failed to update accounts: %w", err)
 	}
 

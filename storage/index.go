@@ -1,10 +1,12 @@
 package storage
 
 import (
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-go/fvm/evm/types"
-	"math/big"
 )
 
 type BlockIndexer interface {
@@ -72,17 +74,17 @@ type TransactionIndexer interface {
 	// Store provided transaction.
 	// Expected errors:
 	// - errors.Duplicate if the transaction with the ID already exists.
-	Store(tx *gethTypes.Transaction) error
+	Store(evmTxData models.FlowEVMTxData) error
 
 	// Get transaction by the ID.
 	// Expected errors:
 	// - errors.NotFound if the transaction with the ID is not found.
-	Get(ID common.Hash) (*gethTypes.Transaction, error)
+	Get(ID common.Hash) (models.FlowEVMTxData, error)
 }
 
 type AccountIndexer interface {
 	// Update account with executed transactions.
-	Update(tx *gethTypes.Transaction, receipt *gethTypes.Receipt) error
+	Update(evmTxData models.FlowEVMTxData, receipt *gethTypes.Receipt) error
 
 	// GetNonce gets an account nonce. If no nonce was indexed it returns 0.
 	// todo add getting nonce at provided block height / hash
