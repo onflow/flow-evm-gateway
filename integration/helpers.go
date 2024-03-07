@@ -23,6 +23,7 @@ import (
 	"github.com/onflow/flow-emulator/emulator"
 	"github.com/onflow/flow-emulator/server"
 	"github.com/onflow/flow-evm-gateway/api"
+	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/services/ingestion"
 	"github.com/onflow/flow-evm-gateway/services/logs"
 	"github.com/onflow/flow-evm-gateway/storage"
@@ -106,7 +107,7 @@ func startEventIngestionEngine(ctx context.Context, dbDir string) (
 	accounts := pebble.NewAccounts(db)
 	txs := pebble.NewTransactions(db)
 
-	err = blocks.InitHeights()
+	err = blocks.InitHeights(config.EmulatorInitCadenceHeight)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -457,6 +458,21 @@ func (r *rpcTest) getBlock(height uint64) (*rpcBlock, error) {
 	return &blkRpc, nil
 }
 
+func (r *rpcTest) blockNumber() (uint64, error) {
+	rpcRes, err := r.request("eth_blockNumber", "[]")
+	if err != nil {
+		return 0, err
+	}
+
+	var blockNumber hexutil.Uint64
+	err = json.Unmarshal(rpcRes, &blockNumber)
+	if err != nil {
+		return 0, err
+	}
+
+	return uint64(blockNumber), nil
+}
+
 func (r *rpcTest) getTx(hash string) (*api.RPCTransaction, error) {
 	rpcRes, err := r.request("eth_getTransactionByHash", fmt.Sprintf(`["%s"]`, hash))
 	if err != nil {
@@ -614,16 +630,4 @@ type rpcBlock struct {
 	Number       string
 	ParentHash   string
 	Transactions []string
-}
-
-type rpcTx struct {
-	BlockHash   string
-	BlockNumber string
-	Gas         string
-	GasPrice    string
-	From        string
-	Hash        string
-	Input       hexutil.Bytes
-	Nonce       string
-	Type        string
 }

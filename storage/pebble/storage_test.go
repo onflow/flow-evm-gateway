@@ -1,7 +1,10 @@
 package pebble
 
 import (
+	"testing"
+
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/onflow/flow-evm-gateway/storage/mocks"
@@ -9,14 +12,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"testing"
 )
 
 // tests that make sure the implementation conform to the interface expected behaviour
 func TestBlocks(t *testing.T) {
 	runDB("blocks", t, func(t *testing.T, db *Storage) {
 		bl := NewBlocks(db)
-		err := bl.InitHeights()
+		err := bl.InitHeights(config.EmulatorInitCadenceHeight)
 		require.NoError(t, err)
 		suite.Run(t, &storage.BlockTestSuite{Blocks: bl})
 	})
@@ -26,9 +28,10 @@ func TestReceipts(t *testing.T) {
 	runDB("receipts", t, func(t *testing.T, db *Storage) {
 		// prepare the blocks database since they track heights which are used in receipts as well
 		bl := NewBlocks(db)
-		err := bl.InitHeights()
+		err := bl.InitHeights(config.EmulatorInitCadenceHeight)
 		require.NoError(t, err)
 		err = bl.Store(30, mocks.NewBlock(10)) // update first and latest height
+		require.NoError(t, err)
 		err = bl.Store(30, mocks.NewBlock(20)) // update latest
 		require.NoError(t, err)
 
@@ -53,7 +56,7 @@ func TestBlock(t *testing.T) {
 	runDB("store block", t, func(t *testing.T, db *Storage) {
 		bl := mocks.NewBlock(10)
 		blocks := NewBlocks(db)
-		err := blocks.InitHeights()
+		err := blocks.InitHeights(config.EmulatorInitCadenceHeight)
 		require.NoError(t, err)
 
 		err = blocks.Store(20, bl)
@@ -65,7 +68,7 @@ func TestBlock(t *testing.T) {
 		bl := mocks.NewBlock(height)
 
 		blocks := NewBlocks(db)
-		err := blocks.InitHeights()
+		err := blocks.InitHeights(config.EmulatorInitCadenceHeight)
 		require.NoError(t, err)
 
 		err = blocks.Store(30, bl)
@@ -85,7 +88,7 @@ func TestBlock(t *testing.T) {
 
 	runDB("get not found block error", t, func(t *testing.T, db *Storage) {
 		blocks := NewBlocks(db)
-		err := blocks.InitHeights()
+		err := blocks.InitHeights(config.EmulatorInitCadenceHeight)
 		require.NoError(t, err)
 		_ = blocks.Store(2, mocks.NewBlock(1)) // init
 

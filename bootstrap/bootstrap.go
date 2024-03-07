@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/onflow/flow-evm-gateway/api"
 	"github.com/onflow/flow-evm-gateway/config"
@@ -35,7 +36,7 @@ func Start(ctx context.Context, cfg *config.Config) error {
 
 	// if database is not initialized require init height
 	if _, err := blocks.LatestCadenceHeight(); errors.Is(err, storageErrs.ErrNotInitialized) {
-		if err := blocks.InitHeights(); err != nil {
+		if err := blocks.InitHeights(cfg.InitCadenceHeight); err != nil {
 			return fmt.Errorf("failed to init the database: %w", err)
 		}
 		logger.Info().Msg("database initialized with 0 evm and cadence heights")
@@ -155,7 +156,14 @@ func startServer(
 		return fmt.Errorf("failed to create a COA signer: %w", err)
 	}
 
-	evm, err := requester.NewEVM(client, cfg.COAAddress, signer, cfg.FlowNetworkID, true, logger)
+	evm, err := requester.NewEVM(
+		client,
+		cfg.COAAddress,
+		signer,
+		cfg.FlowNetworkID,
+		cfg.CreateCOAResource,
+		logger,
+	)
 	if err != nil {
 		return fmt.Errorf("failed to create EVM requester: %w", err)
 	}

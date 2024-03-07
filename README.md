@@ -40,13 +40,16 @@ _Make sure flow.json has the emulator account configured to address and private 
 Then you need to start the gateway:
 ```
 go run cmd/main/main.go \
-  --init-cadence-height 0 \
+  --flow-network-id flow-emulator \
   --coinbase FACF71692421039876a5BB4F10EF7A439D8ef61E \
   --coa-address f8d6e0586b0a20c7 \
   --coa-key 2619878f0e2ff438d17835c2a4561cb87b4d24d72d12ec34569acd0dd4af7c21 \
   --coa-resource-create \
   --gas-price 0
 ```
+
+Note that the gateway will be starting from the latest emulator block, so if emulator is run before and transactions happen in the meantime, the gateway will not fetch those historical blocks & transactions.
+This will be improved soon.
 
 _In this example we use `coa-address` value set to service account of the emulator, same as `coa-key`. 
 This account will by default be funded with Flow which is a requirement. For `coinbase` we can 

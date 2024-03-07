@@ -14,6 +14,15 @@ import (
 	"github.com/onflow/flow-go/utils/io"
 )
 
+// Default InitCadenceHeight for initializing the database on a local emulator.
+// TODO: temporary fix until https://github.com/onflow/flow-go/issues/5481 is
+// fixed upstream and released.
+const EmulatorInitCadenceHeight = uint64(0)
+
+// Default InitCadenceHeight for initializing the database on a live network.
+// We don't use 0 as it has a special meaning to represent latest block in the AN API context.
+const LiveNetworkInitCadenceHeght = uint64(1)
+
 type Config struct {
 	// DatabaseDir is where the database should be stored.
 	DatabaseDir string
@@ -41,11 +50,13 @@ type Config struct {
 	CreateCOAResource bool
 	// GasPrice is a fixed gas price that will be used when submitting transactions.
 	GasPrice *big.Int
+	// InitCadenceHeight is used for initializing the database on a local emulator or a live network.
+	InitCadenceHeight uint64
 }
 
 func FromFlags() (*Config, error) {
 	cfg := &Config{}
-	var evmNetwork, coinbase, gas, coa, key, keysPath, flowChainID string
+	var evmNetwork, coinbase, gas, coa, key, keysPath, flowNetwork string
 
 	// parse from flags
 	flag.StringVar(&cfg.DatabaseDir, "database-dir", "./db", "Path to the directory for the database")
@@ -53,7 +64,7 @@ func FromFlags() (*Config, error) {
 	flag.IntVar(&cfg.RPCPort, "rpc-port", 8545, "Port for the RPC API server")
 	flag.StringVar(&cfg.AccessNodeGRPCHost, "access-node-grpc-host", "localhost:3569", "Host to the flow access node gRPC API")
 	flag.StringVar(&evmNetwork, "evm-network-id", "testnet", "EVM network ID (testnet, mainnet)")
-	flag.StringVar(&flowChainID, "flow-network-id", "flow-emulator", "Flow network ID (flow-emulator, flow-previewnet)")
+	flag.StringVar(&flowNetwork, "flow-network-id", "flow-emulator", "Flow network ID (flow-emulator, flow-previewnet)")
 	flag.StringVar(&coinbase, "coinbase", "", "Coinbase address to use for fee collection")
 	flag.StringVar(&gas, "gas-price", "1", "Static gas price used for EVM transactions")
 	flag.StringVar(&coa, "coa-address", "", "Flow address that holds COA account used for submitting transactions")
@@ -112,17 +123,15 @@ func FromFlags() (*Config, error) {
 		return nil, fmt.Errorf("EVM network ID not supported")
 	}
 
-	switch flowChainID {
+	switch flowNetwork {
 	case "flow-previewnet":
 		cfg.FlowNetworkID = flowGo.Previewnet
+		cfg.InitCadenceHeight = LiveNetworkInitCadenceHeght
 	case "flow-emulator":
 		cfg.FlowNetworkID = flowGo.Emulator
+		cfg.InitCadenceHeight = EmulatorInitCadenceHeight
 	default:
 		return nil, fmt.Errorf("flow network ID not supported, only possible to specify 'flow-previewnet' or 'flow-emulator'")
-	}
-
-	if cfg.FlowNetworkID != "previewnet" && cfg.FlowNetworkID != "emulator" {
-		return nil, fmt.Errorf("flow network ID is invalid, only allowed to set 'emulator' and 'previewnet'")
 	}
 
 	// todo validate Config values
