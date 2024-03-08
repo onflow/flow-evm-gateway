@@ -29,7 +29,7 @@ func NewAccounts(db *Storage) *Accounts {
 }
 
 func (a *Accounts) Update(
-	evmTxData models.FlowEVMTxData,
+	evmTxData models.Transaction,
 	receipt *gethTypes.Receipt,
 ) error {
 	a.mux.Lock()

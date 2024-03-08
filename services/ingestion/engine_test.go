@@ -188,8 +188,8 @@ func TestTransactionIngestion(t *testing.T) {
 
 	accounts := &storageMock.AccountIndexer{}
 	accounts.
-		On("Update", mock.AnythingOfType("models.GethTx"), mock.AnythingOfType("*types.Receipt")).
-		Return(func(tx models.FlowEVMTxData, receipt *gethTypes.Receipt) error { return nil })
+		On("Update", mock.AnythingOfType("models.TransactionCall"), mock.AnythingOfType("*types.Receipt")).
+		Return(func(tx models.Transaction, receipt *gethTypes.Receipt) error { return nil })
 
 	eventsChan := make(chan flow.BlockEvents)
 	subscriber := &mocks.Subscriber{}
@@ -212,8 +212,8 @@ func TestTransactionIngestion(t *testing.T) {
 	require.NoError(t, err)
 
 	transactions.
-		On("Store", mock.AnythingOfType("models.GethTx")).
-		Return(func(tx models.FlowEVMTxData) error {
+		On("Store", mock.AnythingOfType("models.TransactionCall")).
+		Return(func(tx models.Transaction) error {
 			transactionHash, err := transaction.Hash()
 			require.NoError(t, err)
 			txHash, err := tx.Hash()
@@ -262,7 +262,7 @@ func newBlock(height uint64) (cadence.Event, *types.Block, *types.Event, error) 
 	return blockCdc, block, blockEvent, err
 }
 
-func newTransaction() (cadence.Event, *types.Event, models.FlowEVMTxData, *types.Result, error) {
+func newTransaction() (cadence.Event, *types.Event, models.Transaction, *types.Result, error) {
 	res := &types.Result{
 		VMError:                 nil,
 		TxType:                  1,
@@ -297,7 +297,7 @@ func newTransaction() (cadence.Event, *types.Event, models.FlowEVMTxData, *types
 	)
 
 	cdcEv, err := ev.Payload.CadenceEvent()
-	var evmTxData models.FlowEVMTxData = models.GethTx{Transaction: tx}
+	var evmTxData models.Transaction = models.TransactionCall{Transaction: tx}
 
 	return cdcEv, ev, evmTxData, res, err
 }

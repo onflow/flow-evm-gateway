@@ -15,19 +15,19 @@ type TransactionIndexer struct {
 }
 
 // Get provides a mock function with given fields: ID
-func (_m *TransactionIndexer) Get(ID common.Hash) (models.FlowEVMTxData, error) {
+func (_m *TransactionIndexer) Get(ID common.Hash) (models.Transaction, error) {
 	ret := _m.Called(ID)
 
-	var r0 models.FlowEVMTxData
+	var r0 models.Transaction
 	var r1 error
-	if rf, ok := ret.Get(0).(func(common.Hash) (models.FlowEVMTxData, error)); ok {
+	if rf, ok := ret.Get(0).(func(common.Hash) (models.Transaction, error)); ok {
 		return rf(ID)
 	}
-	if rf, ok := ret.Get(0).(func(common.Hash) models.FlowEVMTxData); ok {
+	if rf, ok := ret.Get(0).(func(common.Hash) models.Transaction); ok {
 		r0 = rf(ID)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(models.FlowEVMTxData)
+			r0 = ret.Get(0).(models.Transaction)
 		}
 	}
 
@@ -41,11 +41,11 @@ func (_m *TransactionIndexer) Get(ID common.Hash) (models.FlowEVMTxData, error) 
 }
 
 // Store provides a mock function with given fields: evmTxData
-func (_m *TransactionIndexer) Store(evmTxData models.FlowEVMTxData) error {
+func (_m *TransactionIndexer) Store(evmTxData models.Transaction) error {
 	ret := _m.Called(evmTxData)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(models.FlowEVMTxData) error); ok {
+	if rf, ok := ret.Get(0).(func(models.Transaction) error); ok {
 		r0 = rf(evmTxData)
 	} else {
 		r0 = ret.Error(0)

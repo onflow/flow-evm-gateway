@@ -69,11 +69,11 @@ func (_m *AccountIndexer) GetNonce(address *common.Address) (uint64, error) {
 }
 
 // Update provides a mock function with given fields: evmTxData, receipt
-func (_m *AccountIndexer) Update(evmTxData models.FlowEVMTxData, receipt *types.Receipt) error {
+func (_m *AccountIndexer) Update(evmTxData models.Transaction, receipt *types.Receipt) error {
 	ret := _m.Called(evmTxData, receipt)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(models.FlowEVMTxData, *types.Receipt) error); ok {
+	if rf, ok := ret.Get(0).(func(models.Transaction, *types.Receipt) error); ok {
 		r0 = rf(evmTxData, receipt)
 	} else {
 		r0 = ret.Error(0)

@@ -270,7 +270,7 @@ func (s *TransactionTestSuite) TestGetTransaction() {
 	})
 
 	s.Run("store multiple transactions and get single", func() {
-		var tx models.FlowEVMTxData
+		var tx models.Transaction
 		for i := 0; i < 10; i++ {
 			tx = mocks.NewTransaction(uint64(10 + i))
 			err := s.TransactionIndexer.Store(tx)
@@ -315,13 +315,13 @@ func (a *AccountTestSuite) TestNonce() {
 
 		for i := 1; i < 5; i++ {
 			evmTxData := mocks.NewTransaction(0)
-			gethTx, ok := evmTxData.(models.GethTx)
+			gethTx, ok := evmTxData.(models.TransactionCall)
 			a.Require().True(ok)
 			evmTxHash, err := evmTxData.Hash()
 			a.Require().NoError(err)
 			rcp := mocks.NewReceipt(uint64(i+5), evmTxHash)
 			tx, err := types.SignTx(gethTx.Transaction, evmEmulator.GetDefaultSigner(), key)
-			evmTxData = models.GethTx{Transaction: tx}
+			evmTxData = models.TransactionCall{Transaction: tx}
 			a.Require().NoError(err)
 
 			err = a.AccountIndexer.Update(evmTxData, rcp)
@@ -336,13 +336,13 @@ func (a *AccountTestSuite) TestNonce() {
 		// because we track nonce with evm height, and if same height is used twice we don't update
 		for i := 1; i < 5; i++ {
 			evmTxData := mocks.NewTransaction(0)
-			gethTx, ok := evmTxData.(models.GethTx)
+			gethTx, ok := evmTxData.(models.TransactionCall)
 			a.Require().True(ok)
 			evmTxHash, err := evmTxData.Hash()
 			a.Require().NoError(err)
 			rcp := mocks.NewReceipt(uint64(i+5), evmTxHash)
 			tx, err := types.SignTx(gethTx.Transaction, evmEmulator.GetDefaultSigner(), key)
-			evmTxData = models.GethTx{Transaction: tx}
+			evmTxData = models.TransactionCall{Transaction: tx}
 			a.Require().NoError(err)
 
 			err = a.AccountIndexer.Update(evmTxData, rcp)

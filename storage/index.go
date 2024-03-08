@@ -74,17 +74,17 @@ type TransactionIndexer interface {
 	// Store provided transaction.
 	// Expected errors:
 	// - errors.Duplicate if the transaction with the ID already exists.
-	Store(evmTxData models.FlowEVMTxData) error
+	Store(evmTxData models.Transaction) error
 
 	// Get transaction by the ID.
 	// Expected errors:
 	// - errors.NotFound if the transaction with the ID is not found.
-	Get(ID common.Hash) (models.FlowEVMTxData, error)
+	Get(ID common.Hash) (models.Transaction, error)
 }
 
 type AccountIndexer interface {
 	// Update account with executed transactions.
-	Update(evmTxData models.FlowEVMTxData, receipt *gethTypes.Receipt) error
+	Update(evmTxData models.Transaction, receipt *gethTypes.Receipt) error
 
 	// GetNonce gets an account nonce. If no nonce was indexed it returns 0.
 	// todo add getting nonce at provided block height / hash
