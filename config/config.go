@@ -152,11 +152,7 @@ func FromFlags() (*Config, error) {
 		cfg.LogLevel = zerolog.ErrorLevel
 	}
 
-	if logWriter == "stderr" {
-		cfg.LogWriter = os.Stderr
-	} else {
-		cfg.LogWriter = zerolog.NewConsoleWriter()
-	}
+	cfg.LogWriter = zerolog.NewConsoleWriter()
 
 	// todo validate Config values
 	return cfg, nil
