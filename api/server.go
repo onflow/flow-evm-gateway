@@ -221,7 +221,7 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			Str("url", r.URL.String()).
 			Uint64("id", body["id"].(uint64)).
 			Fields(body["method"]).
-			Fields(body["params"]).
+			Interface("list", body["params"]).
 			Bool("is-ws", isWebSocket(r)).
 			Msg("API request")
 
