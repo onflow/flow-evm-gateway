@@ -146,7 +146,17 @@ func (b *BlockChainAPI) GetTransactionByHash(
 		return handleError[*RPCTransaction](b.logger, err)
 	}
 
-	rcp, err := b.receipts.GetByTransactionID(tx.Hash())
+	txHash, err := tx.Hash()
+	if err != nil {
+		return handleError[*RPCTransaction](b.logger, err)
+	}
+
+	rcp, err := b.receipts.GetByTransactionID(txHash)
+	if err != nil {
+		return handleError[*RPCTransaction](b.logger, err)
+	}
+
+	fromAddress, err := tx.From()
 	if err != nil {
 		return handleError[*RPCTransaction](b.logger, err)
 	}
@@ -155,10 +165,10 @@ func (b *BlockChainAPI) GetTransactionByHash(
 	index := uint64(rcp.TransactionIndex)
 
 	txResult := &RPCTransaction{
-		Hash:             tx.Hash(),
+		Hash:             txHash,
 		BlockHash:        &rcp.BlockHash,
 		BlockNumber:      (*hexutil.Big)(rcp.BlockNumber),
-		From:             tx.From(),
+		From:             fromAddress,
 		To:               tx.To(),
 		Gas:              hexutil.Uint64(rcp.GasUsed),
 		GasPrice:         (*hexutil.Big)(rcp.EffectiveGasPrice),

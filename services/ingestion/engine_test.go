@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
-	"fmt"
 	"math/big"
 	"testing"
 
@@ -215,8 +214,11 @@ func TestTransactionIngestion(t *testing.T) {
 	transactions.
 		On("Store", mock.AnythingOfType("models.GethTx")).
 		Return(func(tx models.FlowEVMTxData) error {
-			fmt.Println("GOT HERE: ")
-			assert.Equal(t, transaction.Hash(), tx.Hash()) // if hashes are equal tx is equal
+			transactionHash, err := transaction.Hash()
+			require.NoError(t, err)
+			txHash, err := tx.Hash()
+			require.NoError(t, err)
+			assert.Equal(t, transactionHash, txHash) // if hashes are equal tx is equal
 			return nil
 		}).
 		Once()
@@ -295,7 +297,7 @@ func newTransaction() (cadence.Event, *types.Event, models.FlowEVMTxData, *types
 	)
 
 	cdcEv, err := ev.Payload.CadenceEvent()
-	var evmTxData models.FlowEVMTxData = models.GethTx{Tx: tx}
+	var evmTxData models.FlowEVMTxData = models.GethTx{Transaction: tx}
 
 	return cdcEv, ev, evmTxData, res, err
 }

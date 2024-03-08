@@ -72,5 +72,5 @@ func NewTransaction(nonce uint64) models.FlowEVMTxData {
 		Data:      []byte{},
 	})
 
-	return models.GethTx{Tx: tx}
+	return models.GethTx{Transaction: tx}
 }

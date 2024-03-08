@@ -7,9 +7,9 @@ import (
 )
 
 type FlowEVMTxData interface {
-	Hash() common.Hash
+	Hash() (common.Hash, error)
 	RawSignatureValues() (v *big.Int, r *big.Int, s *big.Int)
-	From() common.Address
+	From() (common.Address, error)
 	To() *common.Address
 	Data() []byte
 	Nonce() uint64

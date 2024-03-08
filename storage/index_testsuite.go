@@ -257,9 +257,13 @@ func (s *TransactionTestSuite) TestGetTransaction() {
 		err := s.TransactionIndexer.Store(tx)
 		s.Require().NoError(err)
 
-		retTx, err := s.TransactionIndexer.Get(tx.Hash())
+		txHash, err := tx.Hash()
 		s.Require().NoError(err)
-		s.Require().Equal(tx.Hash(), retTx.Hash()) // if hashes are equal the data must be equal
+		retTx, err := s.TransactionIndexer.Get(txHash)
+		s.Require().NoError(err)
+		retTxHash, err := retTx.Hash()
+		s.Require().NoError(err)
+		s.Require().Equal(txHash, retTxHash) // if hashes are equal the data must be equal
 
 		// allow same transaction overwrites
 		s.Require().NoError(s.TransactionIndexer.Store(retTx))
@@ -273,8 +277,13 @@ func (s *TransactionTestSuite) TestGetTransaction() {
 			s.Require().NoError(err)
 		}
 
-		t, err := s.TransactionIndexer.Get(tx.Hash())
-		s.Require().Equal(tx.Hash(), t.Hash())
+		txHash, err := tx.Hash()
+		s.Require().NoError(err)
+		t, err := s.TransactionIndexer.Get(txHash)
+		s.Require().NoError(err)
+		tHash, err := t.Hash()
+		s.Require().NoError(err)
+		s.Require().Equal(txHash, tHash)
 		s.Require().NoError(err)
 	})
 
@@ -308,9 +317,11 @@ func (a *AccountTestSuite) TestNonce() {
 			evmTxData := mocks.NewTransaction(0)
 			gethTx, ok := evmTxData.(models.GethTx)
 			a.Require().True(ok)
-			rcp := mocks.NewReceipt(uint64(i+5), evmTxData.Hash())
-			tx, err := types.SignTx(gethTx.Tx, evmEmulator.GetDefaultSigner(), key)
-			evmTxData = models.GethTx{Tx: tx}
+			evmTxHash, err := evmTxData.Hash()
+			a.Require().NoError(err)
+			rcp := mocks.NewReceipt(uint64(i+5), evmTxHash)
+			tx, err := types.SignTx(gethTx.Transaction, evmEmulator.GetDefaultSigner(), key)
+			evmTxData = models.GethTx{Transaction: tx}
 			a.Require().NoError(err)
 
 			err = a.AccountIndexer.Update(evmTxData, rcp)
@@ -327,9 +338,11 @@ func (a *AccountTestSuite) TestNonce() {
 			evmTxData := mocks.NewTransaction(0)
 			gethTx, ok := evmTxData.(models.GethTx)
 			a.Require().True(ok)
-			rcp := mocks.NewReceipt(uint64(i+5), evmTxData.Hash())
-			tx, err := types.SignTx(gethTx.Tx, evmEmulator.GetDefaultSigner(), key)
-			evmTxData = models.GethTx{Tx: tx}
+			evmTxHash, err := evmTxData.Hash()
+			a.Require().NoError(err)
+			rcp := mocks.NewReceipt(uint64(i+5), evmTxHash)
+			tx, err := types.SignTx(gethTx.Transaction, evmEmulator.GetDefaultSigner(), key)
+			evmTxData = models.GethTx{Transaction: tx}
 			a.Require().NoError(err)
 
 			err = a.AccountIndexer.Update(evmTxData, rcp)

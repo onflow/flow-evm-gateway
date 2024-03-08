@@ -1,25 +1,28 @@
 package models
 
 import (
-	"math/big"
-
 	"github.com/ethereum/go-ethereum/common"
-	gethTypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/types"
 )
-
 
 var _ FlowEVMTxData = &GethTx{}
 
 type GethTx struct {
-	*gethTypes.Transaction
+	*types.Transaction
 }
 
-func (gt *GethTx) From() (common.Address, error) {
-    return gethTypes.Sender(gethTypes.LatestSignerForChainID(gt.ChainId()), gt.Transaction)
+func (gt GethTx) Hash() (common.Hash, error) {
+	return gt.Transaction.Hash(), nil
 }
 
-func (gt *GethTx) MarshalBinary() ([]byte, error) {
-	encoded, err := gt.MarshalBinary()
+func (gt GethTx) From() (common.Address, error) {
+	return types.Sender(
+		types.LatestSignerForChainID(gt.ChainId()),
+		gt.Transaction,
+	)
+}
+
+func (gt GethTx) MarshalBinary() ([]byte, error) {
+	encoded, err := gt.Transaction.MarshalBinary()
 	return append([]byte{gt.Type()}, encoded...), err
 }
-

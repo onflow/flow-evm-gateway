@@ -125,7 +125,7 @@ func DecodeTransaction(event cadence.Event) (
 			return nil, fmt.Errorf("failed to rlp decode direct call: %w", err)
 		}
 
-		evmTxData = DirectCallTx{Call: directCall}
+		evmTxData = DirectCallTx{DirectCall: directCall}
 
 		return evmTxData, nil
 	} else {
@@ -133,7 +133,7 @@ func DecodeTransaction(event cadence.Event) (
 		if err := tx.UnmarshalBinary(encodedTx); err != nil {
 			return nil, fmt.Errorf("failed to rlp decode transaction: %w", err)
 		}
-		evmTxData = GethTx{Tx: tx}
+		evmTxData = GethTx{Transaction: tx}
 
 		return evmTxData, nil
 	}

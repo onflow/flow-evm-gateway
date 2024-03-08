@@ -222,7 +222,9 @@ func TestIntegration_DeployCallContract(t *testing.T) {
 	interactHash := blk.TransactionHashes[0]
 	tx, err = txs.Get(interactHash)
 	require.NoError(t, err)
-	assert.Equal(t, interactHash, tx.Hash())
+	txHash, err := tx.Hash()
+	require.NoError(t, err)
+	assert.Equal(t, interactHash, txHash)
 	assert.Equal(t, callRetrieve, tx.Data())
 	assert.Equal(t, contractAddress.Hex(), tx.To().Hex())
 
@@ -254,7 +256,9 @@ func TestIntegration_DeployCallContract(t *testing.T) {
 	interactHash = blk.TransactionHashes[0]
 	tx, err = txs.Get(interactHash)
 	require.NoError(t, err)
-	assert.Equal(t, interactHash, tx.Hash())
+	txHash, err = tx.Hash()
+	require.NoError(t, err)
+	assert.Equal(t, interactHash, txHash)
 	assert.Equal(t, callStore, tx.Data())
 	assert.Equal(t, contractAddress.Hex(), tx.To().Hex())
 

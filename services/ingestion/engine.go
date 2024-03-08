@@ -189,11 +189,16 @@ func (e *Engine) processTransactionEvent(event cadence.Event) error {
 		return fmt.Errorf("failed to decode receipt: %w", err)
 	}
 
+	txHash, err := evmTxData.Hash()
+	if err != nil {
+		return fmt.Errorf("failed to compute TX hash: %w", err)
+	}
+
 	e.log.Info().
 		Str("contract-address", receipt.ContractAddress.String()).
 		Int("log-count", len(receipt.Logs)).
 		Str("receipt-tx-hash", receipt.TxHash.String()).
-		Str("tx-hash", evmTxData.Hash().String()).
+		Str("tx-hash", txHash.String()).
 		Msg("ingesting new transaction executed event")
 
 	// todo think if we could introduce batching

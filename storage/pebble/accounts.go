@@ -35,7 +35,11 @@ func (a *Accounts) Update(
 	a.mux.Lock()
 	defer a.mux.Unlock()
 
-	from := evmTxData.From()
+	from, err := evmTxData.From()
+	if err != nil {
+		return err
+	}
+
 	nonce, height, err := a.getNonce(from)
 	if err != nil {
 		return err

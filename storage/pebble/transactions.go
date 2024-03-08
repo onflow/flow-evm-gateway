@@ -34,7 +34,12 @@ func (t *Transactions) Store(evmTxData models.FlowEVMTxData) error {
 		return err
 	}
 
-	return t.store.set(txIDKey, evmTxData.Hash().Bytes(), val, nil)
+	evmTxHash, err := evmTxData.Hash()
+	if err != nil {
+		return err
+	}
+
+	return t.store.set(txIDKey, evmTxHash.Bytes(), val, nil)
 }
 
 func (t *Transactions) Get(ID common.Hash) (models.FlowEVMTxData, error) {
@@ -54,14 +59,14 @@ func (t *Transactions) Get(ID common.Hash) (models.FlowEVMTxData, error) {
 			return nil, fmt.Errorf("failed to rlp decode direct call: %w", err)
 		}
 
-		evmTxData = models.DirectCallTx{Call: directCall}
+		evmTxData = models.DirectCallTx{DirectCall: directCall}
 	} else {
 		tx := &gethTypes.Transaction{}
 		if err := tx.UnmarshalBinary(val[1:]); err != nil {
 			return nil, fmt.Errorf("failed to rlp decode transaction: %w", err)
 		}
 
-		evmTxData = models.GethTx{Tx: tx}
+		evmTxData = models.GethTx{Transaction: tx}
 	}
 
 	return evmTxData, nil

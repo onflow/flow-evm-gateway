@@ -56,7 +56,9 @@ func Test_DecodeTransaction(t *testing.T) {
 
 	decTx, err := DecodeTransaction(cdcEv)
 	require.NoError(t, err)
-	assert.Equal(t, tx.Hash(), decTx.Hash())
+	decTxHash, err := decTx.Hash()
+	require.NoError(t, err)
+	assert.Equal(t, tx.Hash(), decTxHash)
 	assert.Equal(t, tx.Type(), decTx.Type())
 	assert.Equal(t, tx.To(), decTx.To())
 	assert.Equal(t, tx.Value(), decTx.Value())
