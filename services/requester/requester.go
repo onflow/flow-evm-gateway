@@ -141,7 +141,7 @@ func NewEVM(
 
 func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash, error) {
 	e.logger.Debug().
-		Str("data", fmt.Sprintf("%x", data)).
+		Bytes("byteData", data).
 		Msg("send raw transaction")
 
 	tx := &types.Transaction{}
@@ -240,7 +240,7 @@ func (e *EVM) signAndSend(ctx context.Context, script []byte, args ...cadence.Va
 
 			e.logger.Debug().
 				Str("flow-id", id.String()).
-				Str("events", fmt.Sprintf("%v", res.Events)).
+				Interface("events", res.Events).
 				Msg("flow transaction executed successfully")
 		}(flowTx.ID())
 	}
@@ -313,7 +313,7 @@ func (e *EVM) Call(ctx context.Context, address common.Address, data []byte) ([]
 
 	e.logger.Debug().
 		Str("address", address.Hex()).
-		Str("data", fmt.Sprintf("%x", data)).
+		Interface("data", data).
 		Msg("call")
 
 	scriptResult, err := e.client.ExecuteScriptAtLatestBlock(
@@ -332,7 +332,7 @@ func (e *EVM) Call(ctx context.Context, address common.Address, data []byte) ([]
 
 	e.logger.Info().
 		Str("address", address.Hex()).
-		Str("data", fmt.Sprintf("%x", data)).
+		Interface("data", data).
 		Str("result", hex.EncodeToString(output)).
 		Msg("call executed")
 
@@ -341,7 +341,7 @@ func (e *EVM) Call(ctx context.Context, address common.Address, data []byte) ([]
 
 func (e *EVM) EstimateGas(ctx context.Context, data []byte) (uint64, error) {
 	e.logger.Debug().
-		Str("data", fmt.Sprintf("%x", data)).
+		Interface("data", data).
 		Msg("estimate gas")
 
 	hexEncodedTx, err := cadence.NewString(hex.EncodeToString(data))
@@ -382,8 +382,8 @@ func (e *EVM) GetCode(
 	height uint64,
 ) ([]byte, error) {
 	e.logger.Debug().
-		Str("addess", address.Hex()).
-		Str("height", fmt.Sprintf("%d", height)).
+		Str("address", address.Hex()).
+		Uint64("height", height).
 		Msg("get code")
 
 	hexEncodedAddress, err := addressToCadenceString(address)
