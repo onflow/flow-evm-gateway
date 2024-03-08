@@ -220,7 +220,7 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		h.logger.Debug().
 			Str("url", r.URL.String()).
-			Str("id", fmt.Sprintf("%s", body["id"])).
+			Str("id", fmt.Sprintf("%v", body["id"])).
 			Str("method", fmt.Sprintf("%s", body["method"])).
 			Str("params", fmt.Sprintf("%v", body["params"])).
 			Bool("is-ws", isWebSocket(r)).
@@ -412,7 +412,7 @@ func (w *loggingResponseWriter) Write(data []byte) (int, error) {
 
 	w.logger.
 		Debug().
-		Str("id", fmt.Sprintf("%s", body["id"])).
+		Str("id", fmt.Sprintf("%v", body["id"])).
 		Str("result", fmt.Sprintf("%v", body["result"])).
 		Msg("API response")
 
