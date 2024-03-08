@@ -187,6 +187,24 @@ func DecodeTransaction(event cadence.Event) (
 	}
 }
 
+func UnmarshalTransaction(value []byte) (Transaction, error) {
+	if value[0] == types.DirectCallTxType {
+		directCall, err := types.DirectCallFromEncoded(value)
+		if err != nil {
+			return nil, fmt.Errorf("failed to rlp decode direct call: %w", err)
+		}
+
+		return DirectCall{DirectCall: directCall}, nil
+	}
+
+	tx := &gethTypes.Transaction{}
+	if err := tx.UnmarshalBinary(value[1:]); err != nil {
+		return nil, fmt.Errorf("failed to rlp decode transaction: %w", err)
+	}
+
+	return TransactionCall{Transaction: tx}, nil
+}
+
 var TransactionExecutedEventType = (flow.EVMLocation{}).TypeID(nil, string(types.EventTypeTransactionExecuted))
 
 func IsTransactionExecutedEvent(event cadence.Event) bool {
