@@ -29,13 +29,13 @@ func NewAccounts(db *Storage) *Accounts {
 }
 
 func (a *Accounts) Update(
-	evmTxData models.Transaction,
+	tx models.Transaction,
 	receipt *gethTypes.Receipt,
 ) error {
 	a.mux.Lock()
 	defer a.mux.Unlock()
 
-	from, err := evmTxData.From()
+	from, err := tx.From()
 	if err != nil {
 		return err
 	}

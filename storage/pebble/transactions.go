@@ -25,21 +25,21 @@ func NewTransactions(store *Storage) *Transactions {
 	}
 }
 
-func (t *Transactions) Store(evmTxData models.Transaction) error {
+func (t *Transactions) Store(tx models.Transaction) error {
 	t.mux.Lock()
 	defer t.mux.Unlock()
 
-	val, err := evmTxData.MarshalBinary()
+	val, err := tx.MarshalBinary()
 	if err != nil {
 		return err
 	}
 
-	evmTxHash, err := evmTxData.Hash()
+	txHash, err := tx.Hash()
 	if err != nil {
 		return err
 	}
 
-	return t.store.set(txIDKey, evmTxHash.Bytes(), val, nil)
+	return t.store.set(txIDKey, txHash.Bytes(), val, nil)
 }
 
 func (t *Transactions) Get(ID common.Hash) (models.Transaction, error) {
@@ -51,23 +51,19 @@ func (t *Transactions) Get(ID common.Hash) (models.Transaction, error) {
 		return nil, err
 	}
 
-	var evmTxData models.Transaction
-
 	if val[0] == types.DirectCallTxType {
 		directCall, err := types.DirectCallFromEncoded(val)
 		if err != nil {
 			return nil, fmt.Errorf("failed to rlp decode direct call: %w", err)
 		}
 
-		evmTxData = models.DirectCall{DirectCall: directCall}
-	} else {
-		tx := &gethTypes.Transaction{}
-		if err := tx.UnmarshalBinary(val[1:]); err != nil {
-			return nil, fmt.Errorf("failed to rlp decode transaction: %w", err)
-		}
-
-		evmTxData = models.TransactionCall{Transaction: tx}
+		return models.DirectCall{DirectCall: directCall}, nil
 	}
 
-	return evmTxData, nil
+	tx := &gethTypes.Transaction{}
+	if err := tx.UnmarshalBinary(val[1:]); err != nil {
+		return nil, fmt.Errorf("failed to rlp decode transaction: %w", err)
+	}
+
+	return models.TransactionCall{Transaction: tx}, nil
 }

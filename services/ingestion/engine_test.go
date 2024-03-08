@@ -297,7 +297,6 @@ func newTransaction() (cadence.Event, *types.Event, models.Transaction, *types.R
 	)
 
 	cdcEv, err := ev.Payload.CadenceEvent()
-	var evmTxData models.Transaction = models.TransactionCall{Transaction: tx}
 
-	return cdcEv, ev, evmTxData, res, err
+	return cdcEv, ev, models.TransactionCall{Transaction: tx}, res, err
 }

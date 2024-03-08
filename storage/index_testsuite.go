@@ -314,17 +314,17 @@ func (a *AccountTestSuite) TestNonce() {
 		a.Require().Equal(uint64(0), nonce)
 
 		for i := 1; i < 5; i++ {
-			evmTxData := mocks.NewTransaction(0)
-			gethTx, ok := evmTxData.(models.TransactionCall)
+			tx := mocks.NewTransaction(0)
+			txCall, ok := tx.(models.TransactionCall)
 			a.Require().True(ok)
-			evmTxHash, err := evmTxData.Hash()
+			txHash, err := tx.Hash()
 			a.Require().NoError(err)
-			rcp := mocks.NewReceipt(uint64(i+5), evmTxHash)
-			tx, err := types.SignTx(gethTx.Transaction, evmEmulator.GetDefaultSigner(), key)
-			evmTxData = models.TransactionCall{Transaction: tx}
+			rcp := mocks.NewReceipt(uint64(i+5), txHash)
+			gethTx, err := types.SignTx(txCall.Transaction, evmEmulator.GetDefaultSigner(), key)
+			tx = models.TransactionCall{Transaction: gethTx}
 			a.Require().NoError(err)
 
-			err = a.AccountIndexer.Update(evmTxData, rcp)
+			err = a.AccountIndexer.Update(tx, rcp)
 			a.Require().NoError(err)
 
 			nonce, err = a.AccountIndexer.GetNonce(&from)
@@ -335,17 +335,17 @@ func (a *AccountTestSuite) TestNonce() {
 		// if run second time we should still see same nonce values, since they won't be incremented
 		// because we track nonce with evm height, and if same height is used twice we don't update
 		for i := 1; i < 5; i++ {
-			evmTxData := mocks.NewTransaction(0)
-			gethTx, ok := evmTxData.(models.TransactionCall)
+			tx := mocks.NewTransaction(0)
+			txCall, ok := tx.(models.TransactionCall)
 			a.Require().True(ok)
-			evmTxHash, err := evmTxData.Hash()
+			txHash, err := tx.Hash()
 			a.Require().NoError(err)
-			rcp := mocks.NewReceipt(uint64(i+5), evmTxHash)
-			tx, err := types.SignTx(gethTx.Transaction, evmEmulator.GetDefaultSigner(), key)
-			evmTxData = models.TransactionCall{Transaction: tx}
+			rcp := mocks.NewReceipt(uint64(i+5), txHash)
+			gethTx, err := types.SignTx(txCall.Transaction, evmEmulator.GetDefaultSigner(), key)
+			tx = models.TransactionCall{Transaction: gethTx}
 			a.Require().NoError(err)
 
-			err = a.AccountIndexer.Update(evmTxData, rcp)
+			err = a.AccountIndexer.Update(tx, rcp)
 			a.Require().NoError(err)
 
 			nonce, err = a.AccountIndexer.GetNonce(&from)

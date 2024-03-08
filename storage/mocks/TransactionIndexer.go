@@ -40,13 +40,13 @@ func (_m *TransactionIndexer) Get(ID common.Hash) (models.Transaction, error) {
 	return r0, r1
 }
 
-// Store provides a mock function with given fields: evmTxData
-func (_m *TransactionIndexer) Store(evmTxData models.Transaction) error {
-	ret := _m.Called(evmTxData)
+// Store provides a mock function with given fields: tx
+func (_m *TransactionIndexer) Store(tx models.Transaction) error {
+	ret := _m.Called(tx)
 
 	var r0 error
 	if rf, ok := ret.Get(0).(func(models.Transaction) error); ok {
-		r0 = rf(evmTxData)
+		r0 = rf(tx)
 	} else {
 		r0 = ret.Error(0)
 	}

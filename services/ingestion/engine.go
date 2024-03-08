@@ -179,7 +179,7 @@ func (e *Engine) processBlockEvent(cadenceHeight uint64, event cadence.Event) er
 }
 
 func (e *Engine) processTransactionEvent(event cadence.Event) error {
-	evmTxData, err := models.DecodeTransaction(event)
+	tx, err := models.DecodeTransaction(event)
 	if err != nil {
 		return fmt.Errorf("could not decode transaction event: %w", err)
 	}
@@ -189,7 +189,7 @@ func (e *Engine) processTransactionEvent(event cadence.Event) error {
 		return fmt.Errorf("failed to decode receipt: %w", err)
 	}
 
-	txHash, err := evmTxData.Hash()
+	txHash, err := tx.Hash()
 	if err != nil {
 		return fmt.Errorf("failed to compute TX hash: %w", err)
 	}
@@ -202,11 +202,11 @@ func (e *Engine) processTransactionEvent(event cadence.Event) error {
 		Msg("ingesting new transaction executed event")
 
 	// todo think if we could introduce batching
-	if err := e.transactions.Store(evmTxData); err != nil {
+	if err := e.transactions.Store(tx); err != nil {
 		return fmt.Errorf("failed to store tx: %w", err)
 	}
 
-	if err := e.accounts.Update(evmTxData, receipt); err != nil {
+	if err := e.accounts.Update(tx, receipt); err != nil {
 		return fmt.Errorf("failed to update accounts: %w", err)
 	}
 
