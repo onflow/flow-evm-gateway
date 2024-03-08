@@ -215,7 +215,6 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Check if WebSocket request and serve if JSON-RPC over WebSocket is enabled
 	if b, err := io.ReadAll(r.Body); err == nil {
 		body := make(map[string]any)
-		fmt.Println("----->", string(b))
 		_ = json.Unmarshal(b, &body)
 
 		h.logger.Debug().
