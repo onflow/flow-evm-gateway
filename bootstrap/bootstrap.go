@@ -20,8 +20,8 @@ import (
 )
 
 func Start(ctx context.Context, cfg *config.Config) error {
-	logger := zerolog.New(zerolog.NewConsoleWriter()).With().Timestamp().Logger()
-	logger.Level(zerolog.DebugLevel) // todo use cfg flag
+	logger := zerolog.New(cfg.LogWriter).With().Timestamp().Logger()
+	logger.Level(cfg.LogLevel)
 	logger.Info().Msg("starting up the EVM gateway")
 
 	pebbleDB, err := pebble.New(cfg.DatabaseDir, logger)

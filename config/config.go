@@ -3,7 +3,9 @@ package config
 import (
 	"flag"
 	"fmt"
+	"io"
 	"math/big"
+	"os"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/goccy/go-json"
@@ -11,7 +13,7 @@ import (
 	"github.com/onflow/flow-go-sdk/crypto"
 	"github.com/onflow/flow-go/fvm/evm/emulator"
 	flowGo "github.com/onflow/flow-go/model/flow"
-	"github.com/onflow/flow-go/utils/io"
+	"github.com/rs/zerolog"
 )
 
 // Default InitCadenceHeight for initializing the database on a local emulator.
@@ -52,11 +54,15 @@ type Config struct {
 	GasPrice *big.Int
 	// InitCadenceHeight is used for initializing the database on a local emulator or a live network.
 	InitCadenceHeight uint64
+	// LogLevel defines how verbose the output log is
+	LogLevel zerolog.Level
+	// LogWriter defines the writer used for logging
+	LogWriter io.Writer
 }
 
 func FromFlags() (*Config, error) {
 	cfg := &Config{}
-	var evmNetwork, coinbase, gas, coa, key, keysPath, flowNetwork string
+	var evmNetwork, coinbase, gas, coa, key, keysPath, flowNetwork, logLevel, logWriter string
 
 	// parse from flags
 	flag.StringVar(&cfg.DatabaseDir, "database-dir", "./db", "Path to the directory for the database")
@@ -71,6 +77,8 @@ func FromFlags() (*Config, error) {
 	flag.StringVar(&key, "coa-key", "", "Private key value for the COA address used for submitting transactions")
 	flag.StringVar(&keysPath, "coa-key-file", "", "File path that contains JSON array of COA keys used in key-rotation mechanism, this is exclusive with coa-key flag.")
 	flag.BoolVar(&cfg.CreateCOAResource, "coa-resource-create", false, "Auto-create the COA resource in the Flow COA account provided if one doesn't exist")
+	flag.StringVar(&logLevel, "log-level", "debug", "Define verbosity of the log output ('debug', 'info', 'error')")
+	flag.StringVar(&logWriter, "log-writer", "stderr", "Log writer used for output ('stderr', 'console')")
 	flag.Parse()
 
 	if coinbase == "" {
@@ -93,7 +101,7 @@ func FromFlags() (*Config, error) {
 		}
 		cfg.COAKey = pkey
 	} else if keysPath != "" {
-		raw, err := io.ReadFile(keysPath)
+		raw, err := os.ReadFile(keysPath)
 		if err != nil {
 			return nil, fmt.Errorf("could not read the file containing list of keys for key-rotation mechanism, check if coa-key-file specifies valid path: %w", err)
 		}
@@ -132,6 +140,22 @@ func FromFlags() (*Config, error) {
 		cfg.InitCadenceHeight = EmulatorInitCadenceHeight
 	default:
 		return nil, fmt.Errorf("flow network ID not supported, only possible to specify 'flow-previewnet' or 'flow-emulator'")
+	}
+
+	// configure logging
+	switch logLevel {
+	case "debug":
+		cfg.LogLevel = zerolog.DebugLevel
+	case "info":
+		cfg.LogLevel = zerolog.InfoLevel
+	case "error":
+		cfg.LogLevel = zerolog.ErrorLevel
+	}
+
+	if logWriter == "stderr" {
+		cfg.LogWriter = os.Stderr
+	} else {
+		cfg.LogWriter = zerolog.NewConsoleWriter()
 	}
 
 	// todo validate Config values
