@@ -406,7 +406,6 @@ type loggingResponseWriter struct {
 }
 
 func (w *loggingResponseWriter) Write(data []byte) (int, error) {
-	fmt.Println("<-----", string(data))
 	body := make(map[string]any)
 	_ = json.Unmarshal(data, &body)
 
