@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/goccy/go-json"
 	"io"
 	"net"
 	"net/http"
@@ -213,9 +214,14 @@ func (h *httpServer) disableRPC() bool {
 func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Check if WebSocket request and serve if JSON-RPC over WebSocket is enabled
 	if b, err := io.ReadAll(r.Body); err == nil {
+		body := make(map[string]string)
+		_ = json.Unmarshal(b, &body)
+
 		h.logger.Debug().
-			RawJSON("body", b).
 			Str("url", r.URL.String()).
+			Str("id", body["id"]).
+			Str("method", body["method"]).
+			Str("params", body["params"]).
 			Bool("is-ws", isWebSocket(r)).
 			Msg("API request")
 
@@ -399,9 +405,13 @@ type loggingResponseWriter struct {
 }
 
 func (w *loggingResponseWriter) Write(data []byte) (int, error) {
+	body := make(map[string]string)
+	_ = json.Unmarshal(data, &body)
+
 	w.logger.
 		Debug().
-		RawJSON("data", data).
+		Str("id", body["id"]).
+		Str("result", body["result"]).
 		Msg("API response")
 
 	return w.ResponseWriter.Write(data)
