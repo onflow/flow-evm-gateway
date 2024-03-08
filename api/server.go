@@ -214,14 +214,15 @@ func (h *httpServer) disableRPC() bool {
 func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Check if WebSocket request and serve if JSON-RPC over WebSocket is enabled
 	if b, err := io.ReadAll(r.Body); err == nil {
-		body := make(map[string]string)
+		body := make(map[string]any)
+		fmt.Println("----->", string(b))
 		_ = json.Unmarshal(b, &body)
 
 		h.logger.Debug().
 			Str("url", r.URL.String()).
-			Str("id", body["id"]).
-			Str("method", body["method"]).
-			Str("params", body["params"]).
+			Str("id", fmt.Sprintf("%s", body["id"])).
+			Str("method", fmt.Sprintf("%s", body["method"])).
+			Str("params", fmt.Sprintf("%v", body["params"])).
 			Bool("is-ws", isWebSocket(r)).
 			Msg("API request")
 
@@ -405,13 +406,14 @@ type loggingResponseWriter struct {
 }
 
 func (w *loggingResponseWriter) Write(data []byte) (int, error) {
-	body := make(map[string]string)
+	fmt.Println("<-----", string(data))
+	body := make(map[string]any)
 	_ = json.Unmarshal(data, &body)
 
 	w.logger.
 		Debug().
-		Str("id", body["id"]).
-		Str("result", body["result"]).
+		Str("id", fmt.Sprintf("%s", body["id"])).
+		Str("result", fmt.Sprintf("%v", body["result"])).
 		Msg("API response")
 
 	return w.ResponseWriter.Write(data)
