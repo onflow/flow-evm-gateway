@@ -119,7 +119,7 @@ func (e *Engine) Run(ctx context.Context) error {
 func (e *Engine) processEvents(events flow.BlockEvents) error {
 	e.log.Debug().
 		Uint64("cadence-height", events.Height).
-		Interface("cadence-events", events.Events).
+		Int("cadence-event-length", len(events.Events)).
 		Msg("received new cadence evm events")
 
 	blockEvent := false
