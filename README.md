@@ -77,7 +77,6 @@ The application can be configured using the following flags at runtime:
 | `--coa-key`               | (required)       | *WARNING*: Do not use this flag in production! Private key value for the COA address used for submitting transactions. |
 | `--coa-resource-create`   | `false`          | Auto-create the COA resource in the Flow COA account provided if one doesn't exist.                                    |
 | `--log-level`             | `debug`          | Define verbosity of the log output ('debug', 'info', 'error')                                                          |
-| `--log-writer`            | `stdout`         | Log writer used for output ('stdout', 'console')                                                                       |
 
 ## Getting Started
 
