@@ -382,8 +382,8 @@ func (e *EVM) GetCode(
 	height uint64,
 ) ([]byte, error) {
 	e.logger.Debug().
-		Str("addess", address.Hex()).
-		Str("height", fmt.Sprintf("%d", height)).
+		Str("address", address.Hex()).
+		Uint64("height", height).
 		Msg("get code")
 
 	hexEncodedAddress, err := addressToCadenceString(address)

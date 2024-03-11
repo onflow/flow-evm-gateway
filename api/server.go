@@ -10,12 +10,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/goccy/go-json"
 	"io"
 	"net"
 	"net/http"
 	"strings"
 	"time"
+
+	"encoding/json"
 
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/rs/cors"
@@ -215,14 +216,13 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Check if WebSocket request and serve if JSON-RPC over WebSocket is enabled
 	if b, err := io.ReadAll(r.Body); err == nil {
 		body := make(map[string]any)
-		fmt.Println("----->", string(b))
 		_ = json.Unmarshal(b, &body)
 
 		h.logger.Debug().
 			Str("url", r.URL.String()).
-			Str("id", fmt.Sprintf("%v", body["id"])).
-			Str("method", fmt.Sprintf("%s", body["method"])).
-			Str("params", fmt.Sprintf("%v", body["params"])).
+			Float64("id", body["id"].(float64)).
+			Str("method", body["method"].(string)).
+			Interface("params", body["params"]).
 			Bool("is-ws", isWebSocket(r)).
 			Msg("API request")
 
@@ -406,14 +406,13 @@ type loggingResponseWriter struct {
 }
 
 func (w *loggingResponseWriter) Write(data []byte) (int, error) {
-	fmt.Println("<-----", string(data))
 	body := make(map[string]any)
 	_ = json.Unmarshal(data, &body)
+	delete(body, "jsonrpc")
 
 	w.logger.
 		Debug().
-		Str("id", fmt.Sprintf("%v", body["id"])).
-		Str("result", fmt.Sprintf("%v", body["result"])).
+		Fields(body).
 		Msg("API response")
 
 	return w.ResponseWriter.Write(data)

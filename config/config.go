@@ -62,7 +62,7 @@ type Config struct {
 
 func FromFlags() (*Config, error) {
 	cfg := &Config{}
-	var evmNetwork, coinbase, gas, coa, key, keysPath, flowNetwork, logLevel, logWriter string
+	var evmNetwork, coinbase, gas, coa, key, keysPath, flowNetwork, logLevel string
 
 	// parse from flags
 	flag.StringVar(&cfg.DatabaseDir, "database-dir", "./db", "Path to the directory for the database")
@@ -78,7 +78,6 @@ func FromFlags() (*Config, error) {
 	flag.StringVar(&keysPath, "coa-key-file", "", "File path that contains JSON array of COA keys used in key-rotation mechanism, this is exclusive with coa-key flag.")
 	flag.BoolVar(&cfg.CreateCOAResource, "coa-resource-create", false, "Auto-create the COA resource in the Flow COA account provided if one doesn't exist")
 	flag.StringVar(&logLevel, "log-level", "debug", "Define verbosity of the log output ('debug', 'info', 'error')")
-	flag.StringVar(&logWriter, "log-writer", "stderr", "Log writer used for output ('stderr', 'console')")
 	flag.Parse()
 
 	if coinbase == "" {
@@ -152,11 +151,7 @@ func FromFlags() (*Config, error) {
 		cfg.LogLevel = zerolog.ErrorLevel
 	}
 
-	if logWriter == "stderr" {
-		cfg.LogWriter = os.Stderr
-	} else {
-		cfg.LogWriter = zerolog.NewConsoleWriter()
-	}
+	cfg.LogWriter = os.Stdout
 
 	// todo validate Config values
 	return cfg, nil
