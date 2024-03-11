@@ -45,8 +45,8 @@ func (a *Accounts) Update(
 		return err
 	}
 
-	// make sure the transaction height is bigger than the height we already recorded for the nonce
-	// this makes the operation idempotent and safer.
+	// make sure the transaction height is bigger than the height we already
+	// recorded for the nonce. this makes the operation idempotent and safer.
 	txHeight := receipt.BlockNumber.Uint64()
 	if txHeight <= height {
 		return nil
@@ -55,7 +55,6 @@ func (a *Accounts) Update(
 	nonce += 1
 
 	data := encodeNonce(nonce, receipt.BlockNumber.Uint64())
-
 	err = a.store.set(accountNonceKey, from.Bytes(), data, nil)
 	if err != nil {
 		return err
