@@ -5,12 +5,9 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/onflow/flow-go-sdk"
-
 	"github.com/ethereum/go-ethereum/common"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/onflow/cadence"
-	cdcCommon "github.com/onflow/cadence/runtime/common"
 	"github.com/onflow/flow-go/fvm/evm/types"
 )
 
@@ -36,16 +33,16 @@ type DirectCall struct {
 	*types.DirectCall
 }
 
+func (dc DirectCall) Hash() (common.Hash, error) {
+	return dc.DirectCall.Hash()
+}
+
 func (dc DirectCall) RawSignatureValues() (
 	v *big.Int,
 	r *big.Int,
 	s *big.Int,
 ) {
 	return big.NewInt(0), big.NewInt(0), big.NewInt(0)
-}
-
-func (dc DirectCall) Hash() (common.Hash, error) {
-	return dc.DirectCall.Hash()
 }
 
 func (dc DirectCall) From() (common.Address, error) {
@@ -203,10 +200,4 @@ func UnmarshalTransaction(value []byte) (Transaction, error) {
 	}
 
 	return TransactionCall{Transaction: tx}, nil
-}
-
-var TransactionExecutedEventType = (flow.EVMLocation{}).TypeID(nil, string(types.EventTypeTransactionExecuted))
-
-func IsTransactionExecutedEvent(event cadence.Event) bool {
-	return cdcCommon.TypeID(event.EventType.ID()) == TransactionExecutedEventType
 }
