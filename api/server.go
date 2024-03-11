@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/goccy/go-json"
+	"encoding/json"
 
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/rs/cors"
