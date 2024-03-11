@@ -313,7 +313,7 @@ func (e *EVM) Call(ctx context.Context, address common.Address, data []byte) ([]
 
 	e.logger.Debug().
 		Str("address", address.Hex()).
-		Interface("data", data).
+		Str("data", fmt.Sprintf("%x", data)).
 		Msg("call")
 
 	scriptResult, err := e.client.ExecuteScriptAtLatestBlock(
@@ -341,7 +341,7 @@ func (e *EVM) Call(ctx context.Context, address common.Address, data []byte) ([]
 
 func (e *EVM) EstimateGas(ctx context.Context, data []byte) (uint64, error) {
 	e.logger.Debug().
-		Interface("data", data).
+		Str("data", fmt.Sprintf("%x", data)).
 		Msg("estimate gas")
 
 	hexEncodedTx, err := cadence.NewString(hex.EncodeToString(data))
