@@ -65,10 +65,9 @@ The application can be configured using the following flags at runtime:
 | Flag                      | Default Value    | Description                                                                                                            |
 |---------------------------|------------------|------------------------------------------------------------------------------------------------------------------------|
 | `--database-dir`          | `./db`           | Path to the directory for the database.                                                                                |
-| `--rpc-host`              | (empty)          | Host for the JSON RPC API server.                                                                                      |
+| `--rpc-host`              | `localhost`      | Host for the JSON RPC API server.                                                                                      |
 | `--rpc-port`              | `8545`           | Port for the JSON RPC API server.                                                                                      |
 | `--access-node-grpc-host` | `localhost:3569` | Host to the Flow access node (AN) gRPC API.                                                                            |
-| `--init-cadence-height`   | `EmptyHeight`    | Init cadence block height from where the event ingestion will start. *WARNING*: Used only if no existing DB values.    |
 | `--evm-network-id`        | `testnet`        | EVM network ID (options: `testnet`, `mainnet`).                                                                        |
 | `--flow-network-id`       | `emulator`       | Flow network ID (options: `emulator`, `previewnet`).                                                                   |
 | `--coinbase`              | (required)       | Coinbase address to use for fee collection.                                                                            |
