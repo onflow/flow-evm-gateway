@@ -158,7 +158,8 @@ func (b *BlockChainAPI) GetTransactionByHash(
 
 	from, err := tx.From()
 	if err != nil {
-		return handleError[*RPCTransaction](b.logger, err)
+		b.logger.Error().Err(err).Msg("failed to calculate sender")
+		return nil, errs.ErrInternal
 	}
 
 	v, r, s := tx.RawSignatureValues()
