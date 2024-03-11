@@ -62,15 +62,15 @@ func NewReceipt(height uint64, ID common.Hash) *gethTypes.Receipt {
 }
 
 func NewTransaction(nonce uint64) models.Transaction {
-	tx := gethTypes.NewTx(&gethTypes.DynamicFeeTx{
-		ChainID:   types.FlowEVMTestnetChainID,
-		Nonce:     nonce,
-		To:        &common.Address{0x01, 0x02},
-		Gas:       123457,
-		GasFeeCap: big.NewInt(13),
-		GasTipCap: big.NewInt(0),
-		Data:      []byte{},
-	})
-
-	return models.TransactionCall{Transaction: tx}
+	return models.TransactionCall{
+		Transaction: gethTypes.NewTx(&gethTypes.DynamicFeeTx{
+			ChainID:   types.FlowEVMTestnetChainID,
+			Nonce:     nonce,
+			To:        &common.Address{0x01, 0x02},
+			Gas:       123457,
+			GasFeeCap: big.NewInt(13),
+			GasTipCap: big.NewInt(0),
+			Data:      []byte{},
+		}),
+	}
 }
