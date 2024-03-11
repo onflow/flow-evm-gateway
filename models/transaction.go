@@ -160,8 +160,6 @@ func DecodeTransaction(event cadence.Event) (
 		return nil, fmt.Errorf("failed to decode transaction hex: %w", err)
 	}
 
-	var tx Transaction
-
 	// check if the transaction data is actually from a direct call,
 	// which is a special state transition in Flow EVM.
 	if t.IsDirectCall() {
@@ -170,18 +168,15 @@ func DecodeTransaction(event cadence.Event) (
 			return nil, fmt.Errorf("failed to rlp decode direct call: %w", err)
 		}
 
-		tx = DirectCall{DirectCall: directCall}
-
-		return tx, nil
-	} else {
-		gethTx := &gethTypes.Transaction{}
-		if err := gethTx.UnmarshalBinary(encodedTx); err != nil {
-			return nil, fmt.Errorf("failed to rlp decode transaction: %w", err)
-		}
-		tx = TransactionCall{Transaction: gethTx}
-
-		return tx, nil
+		return DirectCall{DirectCall: directCall}, nil
 	}
+
+	gethTx := &gethTypes.Transaction{}
+	if err := gethTx.UnmarshalBinary(encodedTx); err != nil {
+		return nil, fmt.Errorf("failed to rlp decode transaction: %w", err)
+	}
+
+	return TransactionCall{Transaction: gethTx}, nil
 }
 
 func UnmarshalTransaction(value []byte) (Transaction, error) {
