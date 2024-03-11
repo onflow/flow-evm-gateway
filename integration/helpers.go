@@ -247,16 +247,9 @@ func evmSign(
 	data []byte) ([]byte, common.Hash, error) {
 	gasPrice := big.NewInt(0)
 
-	tx := types.NewTx(&types.LegacyTx{
-		Nonce:    nonce,
-		To:       to,
-		Value:    weiValue,
-		Gas:      gasLimit,
-		GasPrice: gasPrice,
-		Data:     data,
-	})
+	evmTx := types.NewTx(&types.LegacyTx{Nonce: nonce, To: to, Value: weiValue, Gas: gasLimit, GasPrice: gasPrice, Data: data})
 
-	signed, err := types.SignTx(tx, evmEmulator.GetDefaultSigner(), signer)
+	signed, err := types.SignTx(evmTx, evmEmulator.GetDefaultSigner(), signer)
 	if err != nil {
 		return nil, common.Hash{}, fmt.Errorf("error signing EVM transaction: %w", err)
 	}
