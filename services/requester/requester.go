@@ -332,7 +332,7 @@ func (e *EVM) Call(ctx context.Context, address common.Address, data []byte) ([]
 
 	e.logger.Info().
 		Str("address", address.Hex()).
-		Interface("data", data).
+		Str("data", fmt.Sprintf("%x", data)).
 		Str("result", hex.EncodeToString(output)).
 		Msg("call executed")
 
