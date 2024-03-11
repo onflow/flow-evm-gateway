@@ -141,7 +141,7 @@ func NewEVM(
 
 func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash, error) {
 	e.logger.Debug().
-		Bytes("byteData", data).
+		Str("data", fmt.Sprintf("%x", data)).
 		Msg("send raw transaction")
 
 	tx := &types.Transaction{}
