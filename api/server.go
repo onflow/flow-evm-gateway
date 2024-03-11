@@ -10,12 +10,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/goccy/go-json"
 	"io"
 	"net"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/goccy/go-json"
 
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/rs/cors"
@@ -407,11 +408,11 @@ type loggingResponseWriter struct {
 func (w *loggingResponseWriter) Write(data []byte) (int, error) {
 	body := make(map[string]any)
 	_ = json.Unmarshal(data, &body)
+	delete(body, "jsonrpc")
 
 	w.logger.
 		Debug().
-		Float64("id", body["id"].(float64)).
-		Fields(body["result"]).
+		Fields(body).
 		Msg("API response")
 
 	return w.ResponseWriter.Write(data)
