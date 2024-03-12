@@ -220,7 +220,7 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		h.logger.Debug().
 			Str("url", r.URL.String()).
-			Float64("id", body["id"].(float64)).
+			Uint64("id", body["id"].(uint64)).
 			Str("method", body["method"].(string)).
 			Interface("params", body["params"]).
 			Bool("is-ws", isWebSocket(r)).
