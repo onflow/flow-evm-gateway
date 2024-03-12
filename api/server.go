@@ -220,7 +220,6 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		h.logger.Debug().
 			Str("url", r.URL.String()).
-			Str("method", body["method"].(string)).
 			Fields(body).
 			Bool("is-ws", isWebSocket(r)).
 			Msg("API request")
