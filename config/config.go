@@ -11,7 +11,7 @@ import (
 	"github.com/goccy/go-json"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/crypto"
-	"github.com/onflow/flow-go/fvm/evm/emulator"
+	"github.com/onflow/flow-go/fvm/evm/types"
 	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/rs/zerolog"
 )
@@ -123,9 +123,9 @@ func FromFlags() (*Config, error) {
 
 	switch evmNetwork {
 	case "testnet":
-		cfg.EVMNetworkID = emulator.FlowEVMTestnetChainID
+		cfg.EVMNetworkID = types.FlowEVMTestnetChainID
 	case "mainnet":
-		cfg.EVMNetworkID = emulator.FlowEVMMainnetChainID
+		cfg.EVMNetworkID = types.FlowEVMMainnetChainID
 	default:
 		return nil, fmt.Errorf("EVM network ID not supported")
 	}

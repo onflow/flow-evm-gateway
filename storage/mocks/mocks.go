@@ -6,7 +6,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/onflow/flow-go/fvm/evm/emulator"
 	"github.com/onflow/flow-go/fvm/evm/types"
 )
 
@@ -63,7 +62,7 @@ func NewReceipt(height uint64, ID common.Hash) *gethTypes.Receipt {
 
 func NewTransaction(nonce uint64) *gethTypes.Transaction {
 	return gethTypes.NewTx(&gethTypes.DynamicFeeTx{
-		ChainID:   emulator.FlowEVMTestnetChainID,
+		ChainID:   types.FlowEVMTestnetChainID,
 		Nonce:     nonce,
 		To:        &common.Address{0x01, 0x02},
 		Gas:       123457,

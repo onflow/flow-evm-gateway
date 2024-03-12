@@ -17,7 +17,6 @@ import (
 	"github.com/onflow/flow-evm-gateway/bootstrap"
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/services/logs"
-	"github.com/onflow/flow-go/fvm/evm/emulator"
 
 	"github.com/ethereum/go-ethereum/common"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
@@ -66,7 +65,7 @@ func TestIntegration_TransferValue(t *testing.T) {
 	res, err := fundEOA(emu, flowAmount, fundEOAAddress)
 	require.NoError(t, err)
 	require.NoError(t, res.Error)
-	assert.Len(t, res.Events, 9) // 7 evm events + 2 cadence events
+	assert.Len(t, res.Events, 8) // 6 evm events + 2 cadence events
 
 	flowTransfer, _ := cadence.NewUFix64("1.0")
 	transferWei := types.NewBalanceFromUFix64(flowTransfer)
@@ -161,7 +160,7 @@ func TestIntegration_DeployCallContract(t *testing.T) {
 	res, err := fundEOA(emu, flowAmount, fundEOAAddress)
 	require.NoError(t, err)
 	require.NoError(t, res.Error)
-	assert.Len(t, res.Events, 9)
+	assert.Len(t, res.Events, 8)
 
 	eoaKey, err := crypto.HexToECDSA(fundEOARawKey)
 	require.NoError(t, err)
@@ -429,7 +428,7 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 		RPCPort:            8545,
 		RPCHost:            "127.0.0.1",
 		FlowNetworkID:      "flow-emulator",
-		EVMNetworkID:       emulator.FlowEVMTestnetChainID,
+		EVMNetworkID:       types.FlowEVMTestnetChainID,
 		Coinbase:           fundEOAAddress,
 		COAAddress:         gwAddress,
 		COAKey:             gwKey,
@@ -454,7 +453,7 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 	res, err := fundEOA(emu, flowAmount, fundEOAAddress)
 	require.NoError(t, err)
 	require.NoError(t, res.Error)
-	assert.Len(t, res.Events, 9)
+	assert.Len(t, res.Events, 8)
 
 	deployData, err := hex.DecodeString(testContractBinary)
 	require.NoError(t, err)
@@ -805,7 +804,7 @@ func TestE2E_ConcurrentTransactionSubmission(t *testing.T) {
 		AccessNodeGRPCHost: host,
 		RPCPort:            8545,
 		RPCHost:            "127.0.0.1",
-		EVMNetworkID:       emulator.FlowEVMTestnetChainID,
+		EVMNetworkID:       types.FlowEVMTestnetChainID,
 		FlowNetworkID:      "flow-emulator",
 		Coinbase:           fundEOAAddress,
 		COAAddress:         *createdAddr,
@@ -828,7 +827,7 @@ func TestE2E_ConcurrentTransactionSubmission(t *testing.T) {
 	res, err := fundEOA(emu, flowAmount, fundEOAAddress)
 	require.NoError(t, err)
 	require.NoError(t, res.Error)
-	assert.Len(t, res.Events, 9)
+	assert.Len(t, res.Events, 8)
 
 	eoaKey, err := crypto.HexToECDSA(fundEOARawKey)
 	require.NoError(t, err)
