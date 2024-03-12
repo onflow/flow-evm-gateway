@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/onflow/flow-go/fvm/evm/emulator"
+	"github.com/onflow/flow-go/fvm/evm/types"
 )
 
 // NetAPI offers network related RPC methods
@@ -23,5 +23,5 @@ func (s *NetAPI) PeerCount() hexutil.Uint {
 
 // Version returns the current ethereum protocol version.
 func (s *NetAPI) Version() string {
-	return fmt.Sprintf("%d", emulator.FlowEVMTestnetChainID)
+	return fmt.Sprintf("%d", types.FlowEVMTestnetChainID)
 }
