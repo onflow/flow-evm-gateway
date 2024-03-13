@@ -62,7 +62,6 @@ func startEmulator() (*server.EmulatorServer, error) {
 		ServiceKeySigAlgo:      crypto.ECDSA_P256,
 		ServiceKeyHashAlgo:     crypto.SHA3_256,
 		GenesisTokenSupply:     genesisToken,
-		EVMEnabled:             true,
 		WithContracts:          true,
 		Host:                   "localhost",
 		TransactionExpiry:      10,
