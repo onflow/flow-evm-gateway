@@ -22,12 +22,6 @@ import (
 	"github.com/onflow/flow-emulator/adapters"
 	"github.com/onflow/flow-emulator/emulator"
 	"github.com/onflow/flow-emulator/server"
-	"github.com/onflow/flow-evm-gateway/api"
-	"github.com/onflow/flow-evm-gateway/config"
-	"github.com/onflow/flow-evm-gateway/services/ingestion"
-	"github.com/onflow/flow-evm-gateway/services/logs"
-	"github.com/onflow/flow-evm-gateway/storage"
-	"github.com/onflow/flow-evm-gateway/storage/pebble"
 	sdk "github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/onflow/flow-go-sdk/crypto"
@@ -36,6 +30,13 @@ import (
 	"github.com/onflow/flow-go/fvm/systemcontracts"
 	"github.com/onflow/flow-go/model/flow"
 	"github.com/rs/zerolog"
+
+	"github.com/onflow/flow-evm-gateway/api"
+	"github.com/onflow/flow-evm-gateway/config"
+	"github.com/onflow/flow-evm-gateway/services/ingestion"
+	"github.com/onflow/flow-evm-gateway/services/logs"
+	"github.com/onflow/flow-evm-gateway/storage"
+	"github.com/onflow/flow-evm-gateway/storage/pebble"
 )
 
 const testPrivateKey = "61ceacbdce419e25ee8e7c2beceee170a05c9cab1e725a955b15ba94dcd747d2"
@@ -62,7 +63,6 @@ func startEmulator() (*server.EmulatorServer, error) {
 		ServiceKeySigAlgo:      crypto.ECDSA_P256,
 		ServiceKeyHashAlgo:     crypto.SHA3_256,
 		GenesisTokenSupply:     genesisToken,
-		EVMEnabled:             true,
 		WithContracts:          true,
 		Host:                   "localhost",
 		TransactionExpiry:      10,
