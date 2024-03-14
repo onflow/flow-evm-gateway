@@ -113,12 +113,12 @@ func TestIntegration_TransferValue(t *testing.T) {
 	require.NoError(t, err)
 	from, err = tx.From()
 	require.NoError(t, err)
-	assert.Equal(t, common.HexToAddress("0x0000000000000000000000000000000000000000"), from)
+	assert.Equal(t, common.HexToAddress("0x0000000000000000000000010000000000000000"), from)
 	assert.Equal(t, uint8(255), tx.Type())
 	assert.Equal(t, uint64(0), tx.Nonce())
 	assert.Equal(t, big.NewInt(5000000000000000000), tx.Value())
 	assert.Equal(t, coaAddress, tx.To())
-	assert.Equal(t, uint64(21_000), tx.Gas())
+	assert.Equal(t, uint64(23_300), tx.Gas())
 
 	// block 3 comes from calling coa.call to transfer to eoa 1
 	blk, err = blocks.GetByHeight(3)
