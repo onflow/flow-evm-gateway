@@ -79,15 +79,19 @@ func (dc DirectCall) Gas() uint64 {
 }
 
 func (dc DirectCall) GasPrice() *big.Int {
-	return dc.DirectCall.Transaction().GasPrice()
+	return big.NewInt(0)
 }
 
 func (dc DirectCall) BlobGas() uint64 {
-	return dc.DirectCall.Transaction().BlobGas()
+	return 0
 }
 
 func (dc DirectCall) Size() uint64 {
-	return dc.DirectCall.Transaction().Size()
+	encoded, err := dc.MarshalBinary()
+	if err != nil {
+		return 0
+	}
+	return uint64(len(encoded))
 }
 
 func (dc DirectCall) MarshalBinary() ([]byte, error) {

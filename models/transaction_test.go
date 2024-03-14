@@ -1,7 +1,9 @@
 package models
 
 import (
+	_ "embed"
 	"encoding/hex"
+	"math/big"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -12,10 +14,36 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func createTestEvent(t *testing.T) (cadence.Event, *gethTypes.Transaction, *types.Result) {
+//go:embed fixtures/evm_tx.bin
+var evmTxBinary string
+
+//go:embed fixtures/direct_call.bin
+var directCallBinary string
+
+func createTestEvent(t *testing.T, txBinary string) (cadence.Event, *types.Result) {
+	txEncoded, err := hex.DecodeString(txBinary)
+	require.NoError(t, err)
+
+	var txHash common.Hash
+	var txType uint8
+	if txEncoded[0] == types.DirectCallTxType {
+		directCall, err := types.DirectCallFromEncoded(txEncoded)
+		require.NoError(t, err)
+
+		txHash, err = directCall.Hash()
+		require.NoError(t, err)
+
+		txType = types.DirectCallTxType
+	} else {
+		gethTx := &gethTypes.Transaction{}
+		gethTx.UnmarshalBinary(txEncoded)
+		txHash = gethTx.Hash()
+		txType = gethTx.Type()
+	}
+
 	res := &types.Result{
 		VMError:                 nil,
-		TxType:                  1,
+		TxType:                  txType,
 		GasConsumed:             1337,
 		DeployedContractAddress: types.Address{0x5, 0x6, 0x7},
 		ReturnedValue:           []byte{0x55},
@@ -28,54 +56,208 @@ func createTestEvent(t *testing.T) (cadence.Event, *gethTypes.Transaction, *type
 		}},
 	}
 
-	txEncoded, err := hex.DecodeString("f9015880808301e8488080b901086060604052341561000f57600080fd5b60eb8061001d6000396000f300606060405260043610603f576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff168063c6888fa1146044575b600080fd5b3415604e57600080fd5b606260048080359060200190919050506078565b6040518082815260200191505060405180910390f35b60007f24abdb5865df5079dcc5ac590ff6f01d5c16edbc5fab4e195d9febd1114503da600783026040518082815260200191505060405180910390a16007820290509190505600a165627a7a7230582040383f19d9f65246752244189b02f56e8d0980ed44e7a56c0b200458caad20bb002982052fa09c05a7389284dc02b356ec7dee8a023c5efd3a9d844fa3c481882684b0640866a057e96d0a71a857ed509bb2b7333e78b2408574b8cc7f51238f25c58812662653")
-	require.NoError(t, err)
-
-	tx := &gethTypes.Transaction{}
-	tx.UnmarshalBinary(txEncoded)
-
 	ev := types.NewTransactionExecutedEvent(
 		1,
 		txEncoded,
 		common.HexToHash("0x1"),
-		tx.Hash(),
+		txHash,
 		res,
 	)
 
 	cdcEv, err := ev.Payload.CadenceEvent()
 	require.NoError(t, err)
 
-	return cdcEv, tx, res
+	return cdcEv, res
 }
 
-func Test_DecodeTransaction(t *testing.T) {
-	cdcEv, tx, _ := createTestEvent(t)
+func Test_DecodeEVMTransaction(t *testing.T) {
+	cdcEv, _ := createTestEvent(t, evmTxBinary)
 
 	decTx, err := DecodeTransaction(cdcEv)
 	require.NoError(t, err)
-	decTxHash, err := decTx.Hash()
+	require.IsType(t, TransactionCall{}, decTx)
+
+	txHash, err := decTx.Hash()
 	require.NoError(t, err)
-	assert.Equal(t, tx.Hash(), decTxHash)
-	assert.Equal(t, tx.Type(), decTx.Type())
-	assert.Equal(t, tx.To(), decTx.To())
-	assert.Equal(t, tx.Value(), decTx.Value())
-	assert.Equal(t, tx.Nonce(), decTx.Nonce())
-	assert.Equal(t, tx.Data(), decTx.Data())
-	assert.Equal(t, tx.GasPrice(), decTx.GasPrice())
-	assert.Equal(t, tx.BlobGas(), decTx.BlobGas())
-	assert.Equal(t, tx.Size(), decTx.Size())
+	v, r, s := decTx.RawSignatureValues()
+	from, err := decTx.From()
+	require.NoError(t, err)
+
+	assert.Equal(
+		t,
+		common.HexToHash("0xe414f90fea2aebd75e8c0b3b6a4a0c9928e86c16ea724343d884f40bfe2c4c6b"),
+		txHash,
+	)
+	assert.Equal(t, big.NewInt(1327), v)
+	assert.Equal(
+		t,
+		"70570792731140625669797097963380383355394381124817754245181559778290488838246",
+		r.String(),
+	)
+	assert.Equal(
+		t,
+		"39763645764758347623445260367025516531172546351546206339075417954057005180499",
+		s.String(),
+	)
+	assert.Equal(
+		t,
+		common.HexToAddress("0x658Bdf435d810C91414eC09147DAA6DB62406379"),
+		from,
+	)
+	assert.Nil(t, decTx.To())
+	assert.Len(t, decTx.Data(), 264)
+	assert.Equal(t, uint64(0), decTx.Nonce())
+	assert.Equal(t, big.NewInt(0), decTx.Value())
+	assert.Equal(t, uint8(0), decTx.Type())
+	assert.Equal(t, uint64(125_000), decTx.Gas())
+	assert.Equal(t, big.NewInt(0), decTx.GasPrice())
+	assert.Equal(t, uint64(0), decTx.BlobGas())
+	assert.Equal(t, uint64(347), decTx.Size())
 }
 
-func Test_DecodeReceipts(t *testing.T) {
-	cdcEv, _, rec := createTestEvent(t)
+func Test_DecodeDirectCall(t *testing.T) {
+	cdcEv, _ := createTestEvent(t, directCallBinary)
 
-	receipt, err := DecodeReceipt(cdcEv)
+	decTx, err := DecodeTransaction(cdcEv)
+	require.NoError(t, err)
+	require.IsType(t, DirectCall{}, decTx)
+
+	txHash, err := decTx.Hash()
+	require.NoError(t, err)
+	v, r, s := decTx.RawSignatureValues()
+	from, err := decTx.From()
 	require.NoError(t, err)
 
-	for i, l := range rec.Logs {
-		assert.ObjectsAreEqualValues(l, receipt.Logs[i])
-		for j, tt := range l.Topics {
-			assert.EqualValues(t, tt, receipt.Logs[i].Topics[j])
-		}
-	}
+	assert.Equal(
+		t,
+		common.HexToHash("0xe090f3a66f269d436e4185551d790d923f53a2caabf475c18d60bf1f091813d9"),
+		txHash,
+	)
+	assert.Equal(t, big.NewInt(0), v)
+	assert.Equal(t, big.NewInt(0), r)
+	assert.Equal(t, big.NewInt(0), s)
+	assert.Equal(
+		t,
+		common.HexToAddress("0x0000000000000000000000010000000000000000"),
+		from,
+	)
+	assert.Equal(
+		t,
+		common.HexToAddress("0x000000000000000000000002ef6737ccBbAa9977"),
+		*decTx.To(),
+	)
+	assert.Empty(t, decTx.Data())
+	assert.Equal(t, uint64(0), decTx.Nonce())
+	assert.Equal(t, big.NewInt(10000000000), decTx.Value())
+	assert.Equal(t, types.DirectCallTxType, decTx.Type())
+	assert.Equal(t, uint64(23_300), decTx.Gas())
+	assert.Equal(t, big.NewInt(0), decTx.GasPrice())
+	assert.Equal(t, uint64(0), decTx.BlobGas())
+	assert.Equal(t, uint64(59), decTx.Size())
+}
+
+func Test_UnmarshalTransaction(t *testing.T) {
+	t.Parallel()
+
+	t.Run("with TransactionCall value", func(t *testing.T) {
+		t.Parallel()
+
+		cdcEv, _ := createTestEvent(t, evmTxBinary)
+
+		tx, err := DecodeTransaction(cdcEv)
+		require.NoError(t, err)
+
+		encodedTx, err := tx.MarshalBinary()
+		require.NoError(t, err)
+
+		decTx, err := UnmarshalTransaction(encodedTx)
+		require.NoError(t, err)
+		require.IsType(t, TransactionCall{}, decTx)
+
+		txHash, err := decTx.Hash()
+		require.NoError(t, err)
+		v, r, s := decTx.RawSignatureValues()
+		from, err := decTx.From()
+		require.NoError(t, err)
+
+		assert.Equal(
+			t,
+			common.HexToHash("0xe414f90fea2aebd75e8c0b3b6a4a0c9928e86c16ea724343d884f40bfe2c4c6b"),
+			txHash,
+		)
+		assert.Equal(t, big.NewInt(1327), v)
+		assert.Equal(
+			t,
+			"70570792731140625669797097963380383355394381124817754245181559778290488838246",
+			r.String(),
+		)
+		assert.Equal(
+			t,
+			"39763645764758347623445260367025516531172546351546206339075417954057005180499",
+			s.String(),
+		)
+		assert.Equal(
+			t,
+			common.HexToAddress("0x658Bdf435d810C91414eC09147DAA6DB62406379"),
+			from,
+		)
+		assert.Nil(t, decTx.To())
+		assert.Len(t, decTx.Data(), 264)
+		assert.Equal(t, uint64(0), decTx.Nonce())
+		assert.Equal(t, big.NewInt(0), decTx.Value())
+		assert.Equal(t, uint8(0), decTx.Type())
+		assert.Equal(t, uint64(125_000), decTx.Gas())
+		assert.Equal(t, big.NewInt(0), decTx.GasPrice())
+		assert.Equal(t, uint64(0), decTx.BlobGas())
+		assert.Equal(t, uint64(347), decTx.Size())
+	})
+
+	t.Run("with DirectCall value", func(t *testing.T) {
+		t.Parallel()
+
+		cdcEv, _ := createTestEvent(t, directCallBinary)
+
+		tx, err := DecodeTransaction(cdcEv)
+		require.NoError(t, err)
+
+		encodedTx, err := tx.MarshalBinary()
+		require.NoError(t, err)
+
+		decTx, err := UnmarshalTransaction(encodedTx)
+		require.NoError(t, err)
+		require.IsType(t, DirectCall{}, decTx)
+
+		txHash, err := decTx.Hash()
+		require.NoError(t, err)
+		v, r, s := decTx.RawSignatureValues()
+		from, err := decTx.From()
+		require.NoError(t, err)
+
+		assert.Equal(
+			t,
+			common.HexToHash("0xe090f3a66f269d436e4185551d790d923f53a2caabf475c18d60bf1f091813d9"),
+			txHash,
+		)
+		assert.Equal(t, big.NewInt(0), v)
+		assert.Equal(t, big.NewInt(0), r)
+		assert.Equal(t, big.NewInt(0), s)
+		assert.Equal(
+			t,
+			common.HexToAddress("0x0000000000000000000000010000000000000000"),
+			from,
+		)
+		assert.Equal(
+			t,
+			common.HexToAddress("0x000000000000000000000002ef6737ccBbAa9977"),
+			*decTx.To(),
+		)
+		assert.Empty(t, decTx.Data())
+		assert.Equal(t, uint64(0), decTx.Nonce())
+		assert.Equal(t, big.NewInt(10000000000), decTx.Value())
+		assert.Equal(t, types.DirectCallTxType, decTx.Type())
+		assert.Equal(t, uint64(23_300), decTx.Gas())
+		assert.Equal(t, big.NewInt(0), decTx.GasPrice())
+		assert.Equal(t, uint64(0), decTx.BlobGas())
+		assert.Equal(t, uint64(59), decTx.Size())
+	})
 }
