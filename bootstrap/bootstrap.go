@@ -16,6 +16,7 @@ import (
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
 	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/onflow/flow-go-sdk/crypto"
+	broadcast "github.com/onflow/flow-go/engine"
 	"github.com/rs/zerolog"
 )
 
@@ -34,6 +35,8 @@ func Start(ctx context.Context, cfg *config.Config) error {
 	receipts := pebble.NewReceipts(pebbleDB)
 	accounts := pebble.NewAccounts(pebbleDB)
 
+	blocksBroadcaster := broadcast.NewBroadcaster()
+
 	// if database is not initialized require init height
 	if _, err := blocks.LatestCadenceHeight(); errors.Is(err, storageErrs.ErrNotInitialized) {
 		if err := blocks.InitHeights(cfg.InitCadenceHeight); err != nil {
@@ -43,14 +46,32 @@ func Start(ctx context.Context, cfg *config.Config) error {
 	}
 
 	go func() {
-		err := startServer(ctx, cfg, blocks, transactions, receipts, accounts, logger)
+		err := startServer(
+			ctx,
+			cfg,
+			blocks,
+			transactions,
+			receipts,
+			accounts,
+			blocksBroadcaster,
+			logger,
+		)
 		if err != nil {
 			logger.Error().Err(err).Msg("failed to start the API server")
 			panic(err)
 		}
 	}()
 
-	err = startIngestion(ctx, cfg, blocks, transactions, receipts, accounts, logger)
+	err = startIngestion(
+		ctx,
+		cfg,
+		blocks,
+		transactions,
+		receipts,
+		accounts,
+		blocksBroadcaster,
+		logger,
+	)
 	if err != nil {
 		return fmt.Errorf("failed to start event ingestion: %w", err)
 	}
@@ -65,6 +86,7 @@ func startIngestion(
 	transactions storage.TransactionIndexer,
 	receipts storage.ReceiptIndexer,
 	accounts storage.AccountIndexer,
+	blocksBroadcaster *broadcast.Broadcaster,
 	logger zerolog.Logger,
 ) error {
 	logger.Info().Msg("starting up event ingestion")
@@ -103,6 +125,7 @@ func startIngestion(
 		receipts,
 		transactions,
 		accounts,
+		blocksBroadcaster,
 		logger,
 	)
 	const retries = 15
@@ -129,6 +152,7 @@ func startServer(
 	transactions storage.TransactionIndexer,
 	receipts storage.ReceiptIndexer,
 	accounts storage.AccountIndexer,
+	blocksBroadcaster *broadcast.Broadcaster,
 	logger zerolog.Logger,
 ) error {
 	l := logger.With().Str("component", "API").Logger()
@@ -176,6 +200,7 @@ func startServer(
 		transactions,
 		receipts,
 		accounts,
+		blocksBroadcaster,
 	)
 	supportedAPIs := api.SupportedAPIs(blockchainAPI)
 
