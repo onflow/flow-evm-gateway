@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/onflow/flow-go/engine"
 
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-evm-gateway/models"
@@ -15,14 +16,15 @@ import (
 var _ models.Engine = &Engine{}
 
 type Engine struct {
-	subscriber    EventSubscriber
-	blocks        storage.BlockIndexer
-	receipts      storage.ReceiptIndexer
-	transactions  storage.TransactionIndexer
-	accounts      storage.AccountIndexer
-	log           zerolog.Logger
-	evmLastHeight *models.SequentialHeight
-	status        *models.EngineStatus
+	subscriber        EventSubscriber
+	blocks            storage.BlockIndexer
+	receipts          storage.ReceiptIndexer
+	transactions      storage.TransactionIndexer
+	accounts          storage.AccountIndexer
+	log               zerolog.Logger
+	evmLastHeight     *models.SequentialHeight
+	status            *models.EngineStatus
+	blocksBroadcaster *engine.Broadcaster
 }
 
 func NewEventIngestionEngine(
@@ -31,18 +33,20 @@ func NewEventIngestionEngine(
 	receipts storage.ReceiptIndexer,
 	transactions storage.TransactionIndexer,
 	accounts storage.AccountIndexer,
+	blocksBroadcaster *engine.Broadcaster,
 	log zerolog.Logger,
 ) *Engine {
 	log = log.With().Str("component", "ingestion").Logger()
 
 	return &Engine{
-		subscriber:   subscriber,
-		blocks:       blocks,
-		receipts:     receipts,
-		transactions: transactions,
-		accounts:     accounts,
-		log:          log,
-		status:       models.NewEngineStatus(),
+		subscriber:        subscriber,
+		blocks:            blocks,
+		receipts:          receipts,
+		transactions:      transactions,
+		accounts:          accounts,
+		log:               log,
+		status:            models.NewEngineStatus(),
+		blocksBroadcaster: blocksBroadcaster,
 	}
 }
 
@@ -175,7 +179,12 @@ func (e *Engine) processBlockEvent(cadenceHeight uint64, event cadence.Event) er
 		Str("tx-hash", block.TransactionHashes[0].Hex()). // now we only have 1 tx per block
 		Msg("new evm block executed event")
 
-	return e.blocks.Store(cadenceHeight, block)
+	if err := e.blocks.Store(cadenceHeight, block); err != nil {
+		return err
+	}
+
+	e.blocksBroadcaster.Publish()
+	return nil
 }
 
 func (e *Engine) processTransactionEvent(event cadence.Event) error {
