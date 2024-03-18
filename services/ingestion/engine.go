@@ -189,6 +189,7 @@ func (e *Engine) processTransactionEvent(event cadence.Event) error {
 		return fmt.Errorf("failed to decode receipt: %w", err)
 	}
 
+	// TODO(m-Peter): Remove the error return value once flow-go is updated
 	txHash, err := tx.Hash()
 	if err != nil {
 		return fmt.Errorf("failed to compute TX hash: %w", err)

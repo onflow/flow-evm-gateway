@@ -12,6 +12,7 @@ import (
 )
 
 type Transaction interface {
+	// TODO(m-Peter): Remove the error return value once flow-go is updated
 	Hash() (common.Hash, error)
 	RawSignatureValues() (v *big.Int, r *big.Int, s *big.Int)
 	From() (common.Address, error)
