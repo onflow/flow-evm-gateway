@@ -5,6 +5,8 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"github.com/onflow/flow-go/engine"
+	"github.com/onflow/flow-go/engine/access/state_stream/backend"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -37,13 +39,14 @@ func SupportedAPIs(blockChainAPI *BlockChainAPI) []rpc.API {
 }
 
 type BlockChainAPI struct {
-	logger       zerolog.Logger
-	config       *config.Config
-	evm          requester.Requester
-	blocks       storage.BlockIndexer
-	transactions storage.TransactionIndexer
-	receipts     storage.ReceiptIndexer
-	accounts     storage.AccountIndexer
+	logger            zerolog.Logger
+	config            *config.Config
+	evm               requester.Requester
+	blocks            storage.BlockIndexer
+	transactions      storage.TransactionIndexer
+	receipts          storage.ReceiptIndexer
+	accounts          storage.AccountIndexer
+	blocksBroadcaster *engine.Broadcaster
 }
 
 func NewBlockChainAPI(
@@ -54,15 +57,17 @@ func NewBlockChainAPI(
 	transactions storage.TransactionIndexer,
 	receipts storage.ReceiptIndexer,
 	accounts storage.AccountIndexer,
+	blocksBroadcaster *engine.Broadcaster,
 ) *BlockChainAPI {
 	return &BlockChainAPI{
-		logger:       logger,
-		config:       config,
-		evm:          evm,
-		blocks:       blocks,
-		transactions: transactions,
-		receipts:     receipts,
-		accounts:     accounts,
+		logger:            logger,
+		config:            config,
+		evm:               evm,
+		blocks:            blocks,
+		transactions:      transactions,
+		receipts:          receipts,
+		accounts:          accounts,
+		blocksBroadcaster: blocksBroadcaster,
 	}
 }
 
@@ -564,6 +569,27 @@ func (b *BlockChainAPI) GetCode(
 	}
 
 	return hexutil.Bytes(code), nil
+}
+
+func (b *BlockChainAPI) Subscribe(ctx context.Context, filter string) (string, error) {
+	height, err := b.blocks.LatestEVMHeight()
+	if err != nil {
+		return "", err
+	}
+
+	sub := backend.NewHeightBasedSubscription(1, height, func(ctx context.Context, height uint64) (interface{}, error) {
+		return b.blocks.GetByHeight(height)
+	})
+
+	go backend.NewStreamer(zerolog.Logger{}, b.blocksBroadcaster, 1, 1, sub).Stream(context.Background())
+
+	for {
+		select {
+		case data := <-sub.Channel():
+			fmt.Println(data)
+		default:
+		}
+	}
 }
 
 // handleError takes in an error and in case the error is of type ErrNotFound
