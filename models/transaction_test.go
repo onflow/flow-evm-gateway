@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-//go:embed fixtures/evm_tx.bin
+//go:embed fixtures/transaction_call.bin
 var evmTxBinary string
 
 //go:embed fixtures/direct_call.bin
