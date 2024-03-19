@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "embed"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"github.com/rs/zerolog"
 	"math/big"
@@ -927,17 +928,26 @@ func TestE2E_Streaming(t *testing.T) {
 		require.NoError(t, err)
 	}
 
+	currentHeight := 2 // first two blocks are used for evm setup events
 	go func() {
 		for {
 			select {
 			case ev, open := <-stream:
 				if !open {
-					logger.Warn().Msg("ws client closed connection")
 					return
 				}
-				// todo make sure the heights are increased and received in correct order
+
+				var msg streamMsg
+				err := json.Unmarshal(ev, &msg)
+				require.NoError(t, err)
+				if msg.Params.Result.Height == 0 {
+					continue // skip the first event that only returns the id
+				}
+
+				// this makes sure we receive the events in correct order
+				assert.Equal(t, currentHeight, msg.Params.Result.Height)
+				currentHeight++
 				wg.Done()
-				logger.Debug().Str("event", string(ev)).Msg("stream received")
 			}
 		}
 	}()
