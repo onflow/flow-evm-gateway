@@ -13,6 +13,7 @@ import (
 	"github.com/onflow/flow-evm-gateway/services/ingestion/mocks"
 	storageMock "github.com/onflow/flow-evm-gateway/storage/mocks"
 	"github.com/onflow/flow-go-sdk"
+	broadcast "github.com/onflow/flow-go/engine"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -47,7 +48,15 @@ func TestSerialBlockIngestion(t *testing.T) {
 				return eventsChan, make(<-chan error), nil
 			})
 
-		engine := NewEventIngestionEngine(subscriber, blocks, receipts, transactions, accounts, zerolog.Nop())
+		engine := NewEventIngestionEngine(
+			subscriber,
+			blocks,
+			receipts,
+			transactions,
+			accounts,
+			broadcast.NewBroadcaster(),
+			zerolog.Nop(),
+		)
 
 		done := make(chan struct{})
 		go func() {
@@ -114,7 +123,15 @@ func TestSerialBlockIngestion(t *testing.T) {
 				return eventsChan, make(<-chan error), nil
 			})
 
-		engine := NewEventIngestionEngine(subscriber, blocks, receipts, transactions, accounts, zerolog.Nop())
+		engine := NewEventIngestionEngine(
+			subscriber,
+			blocks,
+			receipts,
+			transactions,
+			accounts,
+			broadcast.NewBroadcaster(),
+			zerolog.Nop(),
+		)
 
 		waitErr := make(chan struct{})
 		// catch eventual error due to out of sequence block height
@@ -198,7 +215,15 @@ func TestTransactionIngestion(t *testing.T) {
 			return eventsChan, make(<-chan error), nil
 		})
 
-	engine := NewEventIngestionEngine(subscriber, blocks, receipts, transactions, accounts, zerolog.Nop())
+	engine := NewEventIngestionEngine(
+		subscriber,
+		blocks,
+		receipts,
+		transactions,
+		accounts,
+		broadcast.NewBroadcaster(),
+		zerolog.Nop(),
+	)
 
 	done := make(chan struct{})
 	go func() {
