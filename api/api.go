@@ -8,6 +8,7 @@ import (
 	"github.com/onflow/flow-go/engine"
 	"github.com/onflow/flow-go/engine/access/state_stream/backend"
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -571,25 +572,46 @@ func (b *BlockChainAPI) GetCode(
 	return hexutil.Bytes(code), nil
 }
 
-func (b *BlockChainAPI) Subscribe(ctx context.Context, filter string) (string, error) {
+func (b *BlockChainAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+
 	height, err := b.blocks.LatestEVMHeight()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	sub := backend.NewHeightBasedSubscription(1, height, func(ctx context.Context, height uint64) (interface{}, error) {
 		return b.blocks.GetByHeight(height)
 	})
 
-	go backend.NewStreamer(zerolog.Logger{}, b.blocksBroadcaster, 1, 1, sub).Stream(context.Background())
+	rpcSub := notifier.CreateSubscription()
+	rpcSub.ID = rpc.ID(sub.ID()) // make sure ids are unified
 
-	for {
-		select {
-		case data := <-sub.Channel():
-			fmt.Println(data)
-		default:
+	// todo config the timeout and limit and buffer size
+	go backend.NewStreamer(zerolog.Logger{}, b.blocksBroadcaster, 5*time.Second, 1, sub).Stream(context.Background())
+
+	go func() {
+		for {
+			select {
+			case block := <-sub.Channel():
+				err = notifier.Notify(rpcSub.ID, block)
+				if err != nil {
+					b.logger.Err(err).Msg("failed to notify")
+				}
+			case <-rpcSub.Err():
+				sub.Close()
+				return
+			case <-notifier.Closed():
+				sub.Close()
+				return
+			}
 		}
-	}
+	}()
+
+	return rpcSub, nil
 }
 
 // handleError takes in an error and in case the error is of type ErrNotFound
