@@ -62,7 +62,7 @@ type Requester interface {
 	// Call executes the given signed transaction data on the state for the given block number.
 	// Note, this function doesn't make and changes in the state/blockchain and is
 	// useful to execute and retrieve values.
-	Call(ctx context.Context, address common.Address, data []byte) ([]byte, error)
+	Call(ctx context.Context, data []byte) ([]byte, error)
 
 	// EstimateGas executes the given signed transaction data on the state.
 	// Note, this function doesn't make any changes in the state/blockchain and is
@@ -299,27 +299,20 @@ func (e *EVM) GetNonce(ctx context.Context, address common.Address) (uint64, err
 	return val.(cadence.UInt64).ToGoValue().(uint64), nil
 }
 
-func (e *EVM) Call(ctx context.Context, address common.Address, data []byte) ([]byte, error) {
-	hexEncodedData, err := cadence.NewString(hex.EncodeToString(data))
-	if err != nil {
-		return nil, err
-	}
-
-	// todo make "to" address optional, this can be used for contract deployment simulations
-	hexEncodedAddress, err := addressToCadenceString(address)
+func (e *EVM) Call(ctx context.Context, data []byte) ([]byte, error) {
+	hexEncodedTx, err := cadence.NewString(hex.EncodeToString(data))
 	if err != nil {
 		return nil, err
 	}
 
 	e.logger.Debug().
-		Str("address", address.Hex()).
 		Str("data", fmt.Sprintf("%x", data)).
 		Msg("call")
 
 	scriptResult, err := e.client.ExecuteScriptAtLatestBlock(
 		ctx,
 		e.replaceAddresses(callScript),
-		[]cadence.Value{hexEncodedData, hexEncodedAddress},
+		[]cadence.Value{hexEncodedTx},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute script: %w", err)
@@ -331,7 +324,6 @@ func (e *EVM) Call(ctx context.Context, address common.Address, data []byte) ([]
 	}
 
 	e.logger.Info().
-		Str("address", address.Hex()).
 		Str("data", fmt.Sprintf("%x", data)).
 		Str("result", hex.EncodeToString(output)).
 		Msg("call executed")
