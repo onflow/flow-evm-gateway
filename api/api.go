@@ -591,17 +591,31 @@ func (b *BlockChainAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error)
 	rpcSub.ID = rpc.ID(sub.ID()) // make sure ids are unified
 
 	// todo config the timeout and limit and buffer size
-	go backend.NewStreamer(zerolog.Logger{}, b.blocksBroadcaster, 5*time.Second, 1, sub).Stream(context.Background())
+	go backend.NewStreamer(
+		b.logger.With().Str("component", "streamer").Logger(),
+		b.blocksBroadcaster,
+		1*time.Second,
+		1,
+		sub,
+	).Stream(context.Background())
 
 	go func() {
 		for {
 			select {
-			case block := <-sub.Channel():
+			case block, open := <-sub.Channel():
+				if !open {
+					b.logger.Debug().Msg("subscription channel closed")
+					return
+				}
+
+				b.logger.Debug().Interface("block", block).Msg("new block event")
+
 				err = notifier.Notify(rpcSub.ID, block)
 				if err != nil {
 					b.logger.Err(err).Msg("failed to notify")
 				}
-			case <-rpcSub.Err():
+			case err := <-rpcSub.Err():
+				b.logger.Error().Err(err).Msg("error from rpc subscriber")
 				sub.Close()
 				return
 			case <-notifier.Closed():
