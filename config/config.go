@@ -60,7 +60,7 @@ type Config struct {
 	// LogWriter defines the writer used for logging
 	LogWriter io.Writer
 	// StreamLimit rate-limits the events sent to the client within 1 second time interval.
-	StreamLimit int
+	StreamLimit float64
 	// StreamTimeout defines the timeout the server waits for the event to be sent to the client.
 	StreamTimeout time.Duration
 }
@@ -84,7 +84,7 @@ func FromFlags() (*Config, error) {
 	flag.StringVar(&keysPath, "coa-key-file", "", "File path that contains JSON array of COA keys used in key-rotation mechanism, this is exclusive with coa-key flag.")
 	flag.BoolVar(&cfg.CreateCOAResource, "coa-resource-create", false, "Auto-create the COA resource in the Flow COA account provided if one doesn't exist")
 	flag.StringVar(&logLevel, "log-level", "debug", "Define verbosity of the log output ('debug', 'info', 'error')")
-	flag.IntVar(&cfg.StreamLimit, "stream-limit", 10, "Rate-limits the events sent to the client within one second")
+	flag.Float64Var(&cfg.StreamLimit, "stream-limit", 10, "Rate-limits the events sent to the client within one second")
 	flag.IntVar(&streamTimeout, "stream-timeout", 3, "Defines the timeout in seconds the server waits for the event to be sent to the client")
 	flag.Parse()
 

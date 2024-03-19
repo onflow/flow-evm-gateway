@@ -5,11 +5,6 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
-	"github.com/onflow/flow-go/engine"
-	"github.com/onflow/flow-go/engine/access/state_stream/backend"
-	"math/big"
-	"time"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -22,8 +17,11 @@ import (
 	"github.com/onflow/flow-evm-gateway/services/requester"
 	"github.com/onflow/flow-evm-gateway/storage"
 	storageErrs "github.com/onflow/flow-evm-gateway/storage/errors"
+	"github.com/onflow/flow-go/engine"
+	"github.com/onflow/flow-go/engine/access/state_stream/backend"
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/rs/zerolog"
+	"math/big"
 )
 
 func SupportedAPIs(blockChainAPI *BlockChainAPI) []rpc.API {
@@ -596,12 +594,11 @@ func (b *BlockChainAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error)
 	l := b.logger.With().Str("subscription-id", string(rpcSub.ID)).Logger()
 	l.Info().Msg("new subscription created")
 
-	// todo config the timeout and limit and buffer size
 	go backend.NewStreamer(
 		b.logger.With().Str("component", "streamer").Logger(),
 		b.blocksBroadcaster,
-		1*time.Second,
-		10,
+		b.config.StreamTimeout,
+		b.config.StreamLimit,
 		sub,
 	).Stream(context.Background())
 
