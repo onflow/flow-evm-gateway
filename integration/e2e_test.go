@@ -866,6 +866,50 @@ func TestE2E_ConcurrentTransactionSubmission(t *testing.T) {
 	}
 }
 
+// TestE2E_Streaming is a function used to test end-to-end streaming of data.
+func TestE2E_Streaming(t *testing.T) {
+	srv, err := startEmulator()
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer func() {
+		cancel()
+		srv.Stop()
+	}()
+
+	emu := srv.Emulator()
+	dbDir := t.TempDir()
+	gwAcc := emu.ServiceKey()
+	gwKey := gwAcc.PrivateKey
+	gwAddress := gwAcc.Address
+
+	cfg := &config.Config{
+		DatabaseDir:        dbDir,
+		AccessNodeGRPCHost: "localhost:3569", // emulator
+		RPCPort:            8545,
+		RPCHost:            "127.0.0.1",
+		FlowNetworkID:      "flow-emulator",
+		EVMNetworkID:       types.FlowEVMTestnetChainID,
+		Coinbase:           fundEOAAddress,
+		COAAddress:         gwAddress,
+		COAKey:             gwKey,
+		CreateCOAResource:  true,
+		GasPrice:           new(big.Int).SetUint64(1),
+	}
+
+	rpcTester := &rpcTest{
+		url: fmt.Sprintf("http://%s:%d", cfg.RPCHost, cfg.RPCPort),
+	}
+
+	go func() {
+		err = bootstrap.Start(ctx, cfg)
+		require.NoError(t, err)
+	}()
+
+	time.Sleep(500 * time.Millisecond) // some time to startup
+
+}
+
 // checkSumLogValue makes sure the match is correct by checking sum value
 func checkSumLogValue(c *contract, a *big.Int, b *big.Int, data []byte) error {
 	event, err := c.value("Calculated", data)
