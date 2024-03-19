@@ -578,6 +578,9 @@ func (b *BlockChainAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error)
 		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
 	}
 
+	// todo make sure the returned data is in fact correct: https://docs.chainstack.com/reference/ethereum-native-subscribe-newheads
+	// maybe extract the stuff we can reuse in other subscriptions
+
 	height, err := b.blocks.LatestEVMHeight()
 	if err != nil {
 		return nil, err
@@ -589,6 +592,9 @@ func (b *BlockChainAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error)
 
 	rpcSub := notifier.CreateSubscription()
 	rpcSub.ID = rpc.ID(sub.ID()) // make sure ids are unified
+
+	l := b.logger.With().Str("subscription-id", string(rpcSub.ID)).Logger()
+	l.Info().Msg("new subscription created")
 
 	// todo config the timeout and limit and buffer size
 	go backend.NewStreamer(
@@ -604,18 +610,17 @@ func (b *BlockChainAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error)
 			select {
 			case block, open := <-sub.Channel():
 				if !open {
-					b.logger.Debug().Msg("subscription channel closed")
+					l.Debug().Msg("subscription channel closed")
 					return
 				}
 
-				b.logger.Debug().Interface("block", block).Msg("new block event")
-
+				l.Debug().Msg("notifying new head event")
 				err = notifier.Notify(rpcSub.ID, block)
 				if err != nil {
-					b.logger.Err(err).Msg("failed to notify")
+					l.Err(err).Msg("failed to notify")
 				}
 			case err := <-rpcSub.Err():
-				b.logger.Error().Err(err).Msg("error from rpc subscriber")
+				l.Error().Err(err).Msg("error from rpc subscriber")
 				sub.Close()
 				return
 			case <-notifier.Closed():
