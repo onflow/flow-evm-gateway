@@ -955,7 +955,7 @@ func TestE2E_Streaming(t *testing.T) {
 	require.Eventually(t, func() bool {
 		wg.Wait()
 		return true
-	}, 5*time.Second, 100*time.Millisecond)
+	}, 2*time.Second, 100*time.Millisecond)
 }
 
 // checkSumLogValue makes sure the match is correct by checking sum value

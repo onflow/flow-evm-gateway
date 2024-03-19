@@ -595,7 +595,7 @@ func (b *BlockChainAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error)
 		b.logger.With().Str("component", "streamer").Logger(),
 		b.blocksBroadcaster,
 		1*time.Second,
-		1,
+		10,
 		sub,
 	).Stream(context.Background())
 
