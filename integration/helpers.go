@@ -653,6 +653,7 @@ func (r *rpcTest) subscribe(ctx context.Context, params string) (<-chan []byte, 
 		for {
 			select {
 			case <-ctx.Done():
+				log.Println("closing client ws")
 				c.Close()
 				return
 			default:
@@ -661,7 +662,7 @@ func (r *rpcTest) subscribe(ctx context.Context, params string) (<-chan []byte, 
 					log.Println("read:", err)
 					return
 				}
-				fmt.Println("<-- ws: ", string(message))
+				log.Println("<-- ws: ", string(message))
 				res <- message
 			}
 		}
