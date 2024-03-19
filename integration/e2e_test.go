@@ -898,7 +898,7 @@ func TestE2E_Streaming(t *testing.T) {
 	}
 
 	rpcTester := &rpcTest{
-		url: fmt.Sprintf("http://%s:%d", cfg.RPCHost, cfg.RPCPort),
+		url: fmt.Sprintf("%s:%d", cfg.RPCHost, cfg.RPCPort),
 	}
 
 	go func() {
@@ -908,6 +908,18 @@ func TestE2E_Streaming(t *testing.T) {
 
 	time.Sleep(500 * time.Millisecond) // some time to startup
 
+	stream, err := rpcTester.subscribe(ctx, `"newHeads"`)
+	require.NoError(t, err)
+
+	timeout := time.After(2 * time.Second)
+	for {
+		select {
+		case ev := <-stream:
+			fmt.Println("event", string(ev))
+		case <-timeout:
+			cancel()
+		}
+	}
 }
 
 // checkSumLogValue makes sure the match is correct by checking sum value
