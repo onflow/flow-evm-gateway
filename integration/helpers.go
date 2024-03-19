@@ -28,6 +28,7 @@ import (
 	sdk "github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/onflow/flow-go-sdk/crypto"
+	broadcast "github.com/onflow/flow-go/engine"
 	evmEmulator "github.com/onflow/flow-go/fvm/evm/emulator"
 	"github.com/onflow/flow-go/fvm/evm/stdlib"
 	"github.com/onflow/flow-go/fvm/systemcontracts"
@@ -114,6 +115,7 @@ func startEventIngestionEngine(ctx context.Context, dbDir string) (
 	receipts := pebble.NewReceipts(db)
 	accounts := pebble.NewAccounts(db)
 	txs := pebble.NewTransactions(db)
+	blocksBroadcaster := broadcast.NewBroadcaster()
 
 	err = blocks.InitHeights(config.EmulatorInitCadenceHeight)
 	if err != nil {
@@ -121,7 +123,7 @@ func startEventIngestionEngine(ctx context.Context, dbDir string) (
 	}
 
 	log = logger.With().Str("component", "ingestion").Logger()
-	engine := ingestion.NewEventIngestionEngine(subscriber, blocks, receipts, txs, accounts, log)
+	engine := ingestion.NewEventIngestionEngine(subscriber, blocks, receipts, txs, accounts, blocksBroadcaster, log)
 
 	go func() {
 		err = engine.Run(ctx)
