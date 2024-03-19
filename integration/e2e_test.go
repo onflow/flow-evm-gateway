@@ -901,6 +901,8 @@ func TestE2E_Streaming(t *testing.T) {
 		GasPrice:           new(big.Int).SetUint64(1),
 		LogWriter:          os.Stdout,
 		LogLevel:           zerolog.DebugLevel,
+		StreamLimit:        5,
+		StreamTimeout:      5,
 	}
 
 	rpcTester := &rpcTest{
