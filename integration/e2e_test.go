@@ -5,7 +5,10 @@ import (
 	_ "embed"
 	"encoding/hex"
 	"fmt"
+	"github.com/rs/zerolog"
 	"math/big"
+	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -895,6 +898,8 @@ func TestE2E_Streaming(t *testing.T) {
 		COAKey:             gwKey,
 		CreateCOAResource:  true,
 		GasPrice:           new(big.Int).SetUint64(1),
+		LogWriter:          os.Stdout,
+		LogLevel:           zerolog.DebugLevel,
 	}
 
 	rpcTester := &rpcTest{
@@ -911,15 +916,36 @@ func TestE2E_Streaming(t *testing.T) {
 	stream, err := rpcTester.subscribe(ctx, `"newHeads"`)
 	require.NoError(t, err)
 
-	timeout := time.After(2 * time.Second)
-	for {
-		select {
-		case ev := <-stream:
-			fmt.Println("event", string(ev))
-		case <-timeout:
-			cancel()
-		}
+	wg := sync.WaitGroup{}
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		flowTransfer, _ := cadence.NewUFix64("1.0")
+		transferWei := types.NewBalanceFromUFix64(flowTransfer)
+		fundEOAKey, err := crypto.HexToECDSA(fundEOARawKey)
+		require.NoError(t, err)
+		_, _, err = evmSignAndRun(emu, transferWei, params.TxGas, fundEOAKey, uint64(i), &transferEOAAdress, nil)
+		require.NoError(t, err)
 	}
+
+	go func() {
+		for {
+			select {
+			case ev, open := <-stream:
+				if !open {
+					logger.Warn().Msg("ws client closed connection")
+					return
+				}
+				// todo make sure the heights are increased and received in correct order
+				wg.Done()
+				logger.Debug().Str("event", string(ev)).Msg("stream received")
+			}
+		}
+	}()
+
+	require.Eventually(t, func() bool {
+		wg.Wait()
+		return true
+	}, 5*time.Second, 100*time.Millisecond)
 }
 
 // checkSumLogValue makes sure the match is correct by checking sum value
