@@ -6,9 +6,12 @@ import (
 	"crypto/ecdsa"
 	"encoding/hex"
 	"fmt"
+	"github.com/gorilla/websocket"
 	"io"
+	"log"
 	"math/big"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -46,8 +49,13 @@ var (
 	sc     = systemcontracts.SystemContractsForChain(flow.Emulator)
 )
 
+const (
+	sigAlgo  = crypto.SignatureAlgorithm(crypto.ECDSA_P256)
+	hashAlgo = crypto.HashAlgorithm(crypto.SHA3_256)
+)
+
 func startEmulator() (*server.EmulatorServer, error) {
-	pkey, err := crypto.DecodePrivateKeyHex(crypto.ECDSA_P256, testPrivateKey)
+	pkey, err := crypto.DecodePrivateKeyHex(sigAlgo, testPrivateKey)
 	if err != nil {
 		return nil, err
 	}
@@ -60,8 +68,8 @@ func startEmulator() (*server.EmulatorServer, error) {
 	log := logger.With().Str("component", "emulator").Logger().Level(zerolog.DebugLevel)
 	srv := server.NewEmulatorServer(&log, &server.Config{
 		ServicePrivateKey:      pkey,
-		ServiceKeySigAlgo:      crypto.ECDSA_P256,
-		ServiceKeyHashAlgo:     crypto.SHA3_256,
+		ServiceKeySigAlgo:      sigAlgo,
+		ServiceKeyHashAlgo:     hashAlgo,
 		GenesisTokenSupply:     genesisToken,
 		WithContracts:          true,
 		Host:                   "localhost",
@@ -353,6 +361,9 @@ func (c *contract) value(name string, data []byte) ([]any, error) {
 	return c.a.Unpack(name, data)
 }
 
+// todo refactor rpcTest to use the eth client instead:
+// https://github.com/ethereum/go-ethereum/blob/e91cdb49beb4b2a3872b5f2548bf2d6559e4f561/ethclient/ethclient.go#L35
+// this will remove the custom code for communication
 type rpcTest struct {
 	url string
 }
@@ -619,6 +630,41 @@ func (r *rpcTest) getCode(from common.Address) ([]byte, error) {
 	}
 
 	return code, nil
+}
+
+func (r *rpcTest) subscribe(ctx context.Context, params string) (<-chan []byte, error) {
+	u := url.URL{Scheme: "ws", Host: r.url, Path: "/"}
+	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+	if err != nil {
+		log.Fatal("dial:", err)
+	}
+
+	request := fmt.Sprintf(`{"jsonrpc":"2.0","id":0,"method":"eth_subscribe","params":[%s]}`, params)
+	err = c.WriteMessage(websocket.TextMessage, []byte(request))
+	if err != nil {
+		log.Println("write:", err)
+		return nil, err
+	}
+
+	res := make(chan []byte)
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				c.Close()
+				return
+			default:
+				_, message, err := c.ReadMessage()
+				if err != nil {
+					log.Println("read:", err)
+					return
+				}
+				res <- message
+			}
+		}
+	}()
+
+	return res, nil
 }
 
 func uintHex(x uint64) string {
