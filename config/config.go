@@ -6,6 +6,7 @@ import (
 	"io"
 	"math/big"
 	"os"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/goccy/go-json"
@@ -58,11 +59,16 @@ type Config struct {
 	LogLevel zerolog.Level
 	// LogWriter defines the writer used for logging
 	LogWriter io.Writer
+	// StreamLimit rate-limits the events sent to the client within 1 second time interval.
+	StreamLimit int
+	// StreamTimeout defines the timeout the server waits for the event to be sent to the client.
+	StreamTimeout time.Duration
 }
 
 func FromFlags() (*Config, error) {
 	cfg := &Config{}
 	var evmNetwork, coinbase, gas, coa, key, keysPath, flowNetwork, logLevel string
+	var streamTimeout int
 
 	// parse from flags
 	flag.StringVar(&cfg.DatabaseDir, "database-dir", "./db", "Path to the directory for the database")
@@ -78,6 +84,8 @@ func FromFlags() (*Config, error) {
 	flag.StringVar(&keysPath, "coa-key-file", "", "File path that contains JSON array of COA keys used in key-rotation mechanism, this is exclusive with coa-key flag.")
 	flag.BoolVar(&cfg.CreateCOAResource, "coa-resource-create", false, "Auto-create the COA resource in the Flow COA account provided if one doesn't exist")
 	flag.StringVar(&logLevel, "log-level", "debug", "Define verbosity of the log output ('debug', 'info', 'error')")
+	flag.IntVar(&cfg.StreamLimit, "stream-limit", 10, "Rate-limits the events sent to the client within one second")
+	flag.IntVar(&streamTimeout, "stream-timeout", 3, "Defines the timeout in seconds the server waits for the event to be sent to the client")
 	flag.Parse()
 
 	if coinbase == "" {
@@ -152,6 +160,8 @@ func FromFlags() (*Config, error) {
 	}
 
 	cfg.LogWriter = os.Stdout
+
+	cfg.StreamTimeout = time.Second * time.Duration(streamTimeout)
 
 	// todo validate Config values
 	return cfg, nil
