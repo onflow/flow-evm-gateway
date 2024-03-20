@@ -40,7 +40,11 @@ func NewStreamAPI(
 	}
 }
 
-func (s *StreamAPI) newSubscription(ctx context.Context, broadcaster *engine.Broadcaster) (*rpc.Subscription, error) {
+func (s *StreamAPI) newSubscription(
+	ctx context.Context,
+	broadcaster *engine.Broadcaster,
+	dataAdapter func(any) any,
+) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
 		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
@@ -72,14 +76,15 @@ func (s *StreamAPI) newSubscription(ctx context.Context, broadcaster *engine.Bro
 	go func() {
 		for {
 			select {
-			case block, open := <-sub.Channel():
+			case data, open := <-sub.Channel():
 				if !open {
 					l.Debug().Msg("subscription channel closed")
 					return
 				}
 
-				l.Debug().Msg("notifying new head event")
-				err = notifier.Notify(rpcSub.ID, block)
+				adapted := dataAdapter(data)
+				l.Debug().Msg("notifying new event")
+				err = notifier.Notify(rpcSub.ID, adapted)
 				if err != nil {
 					l.Err(err).Msg("failed to notify")
 				}
@@ -98,6 +103,8 @@ func (s *StreamAPI) newSubscription(ctx context.Context, broadcaster *engine.Bro
 }
 
 func (s *StreamAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
-	// todo make sure the returned data is in fact correct: https://docs.chainstack.com/reference/ethereum-native-subscribe-newheads
-	return s.newSubscription(ctx, s.blocksBroadcaster)
+	return s.newSubscription(ctx, s.blocksBroadcaster, func(blockData any) any {
+		// todo make sure the returned data is in fact correct: https://docs.chainstack.com/reference/ethereum-native-subscribe-newheads
+		return blockData
+	})
 }
