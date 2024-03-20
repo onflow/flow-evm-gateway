@@ -902,7 +902,7 @@ func TestE2E_Streaming(t *testing.T) {
 		LogWriter:          os.Stdout,
 		LogLevel:           zerolog.DebugLevel,
 		StreamLimit:        5,
-		StreamTimeout:      5,
+		StreamTimeout:      5 * time.Second,
 	}
 
 	rpcTester := &rpcTest{
@@ -957,7 +957,7 @@ func TestE2E_Streaming(t *testing.T) {
 	require.Eventually(t, func() bool {
 		wg.Wait()
 		return true
-	}, 2*time.Second, 100*time.Millisecond)
+	}, 5*time.Second, 300*time.Millisecond)
 }
 
 // checkSumLogValue makes sure the match is correct by checking sum value
