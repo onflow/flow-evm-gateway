@@ -634,41 +634,36 @@ func (r *rpcTest) getCode(from common.Address) ([]byte, error) {
 	return code, nil
 }
 
-func (r *rpcTest) subscribe(ctx context.Context, params string) (<-chan []byte, error) {
+// wsConnection returns singleton ws connection
+func (r *rpcTest) wsConnect() (func(string) error, func() ([]byte, error), error) {
 	u := url.URL{Scheme: "ws", Host: r.url, Path: "/"}
 	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
 	if err != nil {
-		log.Fatal("dial:", err)
+		return nil, nil, err
 	}
 
-	request := fmt.Sprintf(`{"jsonrpc":"2.0","id":0,"method":"eth_subscribe","params":[%s]}`, params)
-	err = c.WriteMessage(websocket.TextMessage, []byte(request))
-	if err != nil {
-		log.Println("write:", err)
-		return nil, err
+	write := func(req string) error {
+		return c.WriteMessage(websocket.TextMessage, []byte(req))
 	}
 
-	res := make(chan []byte)
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				log.Println("closing client ws")
-				c.Close()
-				return
-			default:
-				_, message, err := c.ReadMessage()
-				if err != nil {
-					log.Println("read:", err)
-					return
-				}
-				log.Println("<-- ws: ", string(message))
-				res <- message
-			}
+	read := func() ([]byte, error) {
+		_, message, err := c.ReadMessage()
+		if err != nil {
+			return nil, err
 		}
-	}()
+		log.Println("<-- ws: ", string(message))
+		return message, nil
+	}
 
-	return res, nil
+	return write, read, nil
+}
+
+func newHeadsRequest() string {
+	return `{"jsonrpc":"2.0","id":0,"method":"eth_subscribe","params":["newHeads"]}`
+}
+
+func unsubscribeRequest(id string) string {
+	return fmt.Sprintf(`{"jsonrpc":"2.0","id":0,"method":"eth_unsubscribe","params":["%s"]}`, id)
 }
 
 func uintHex(x uint64) string {

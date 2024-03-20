@@ -9,7 +9,6 @@ import (
 	"github.com/rs/zerolog"
 	"math/big"
 	"os"
-	"sync"
 	"testing"
 	"time"
 
@@ -916,12 +915,12 @@ func TestE2E_Streaming(t *testing.T) {
 
 	time.Sleep(500 * time.Millisecond) // some time to startup
 
-	stream, err := rpcTester.subscribe(ctx, `"newHeads"`)
+	wsWrite, wsRead, err := rpcTester.wsConnect()
+	require.NoError(t, err)
+	err = wsWrite(newHeadsRequest())
 	require.NoError(t, err)
 
-	wg := sync.WaitGroup{}
 	for i := 0; i < 5; i++ {
-		wg.Add(1)
 		flowTransfer, _ := cadence.NewUFix64("1.0")
 		transferWei := types.NewBalanceFromUFix64(flowTransfer)
 		fundEOAKey, err := crypto.HexToECDSA(fundEOARawKey)
@@ -931,33 +930,34 @@ func TestE2E_Streaming(t *testing.T) {
 	}
 
 	currentHeight := 2 // first two blocks are used for evm setup events
-	go func() {
-		for {
-			select {
-			case ev, open := <-stream:
-				if !open {
-					return
-				}
+	var subscriptionID string
+	for i := 0; i < 5; i++ {
+		event, err := wsRead()
+		require.NoError(t, err)
 
-				var msg streamMsg
-				err := json.Unmarshal(ev, &msg)
-				require.NoError(t, err)
-				if msg.Params.Result.Height == 0 {
-					continue // skip the first event that only returns the id
-				}
-
-				// this makes sure we receive the events in correct order
-				assert.Equal(t, currentHeight, msg.Params.Result.Height)
-				currentHeight++
-				wg.Done()
-			}
+		var msg streamMsg
+		require.NoError(t, json.Unmarshal(event, &msg))
+		if msg.Params.Result.Height == 0 {
+			continue // skip the first event that only returns the id
 		}
-	}()
 
-	require.Eventually(t, func() bool {
-		wg.Wait()
-		return true
-	}, 5*time.Second, 300*time.Millisecond)
+		// this makes sure we receive the events in correct order
+		assert.Equal(t, currentHeight, msg.Params.Result.Height)
+		currentHeight++
+		subscriptionID = msg.Params.Subscription
+	}
+
+	require.NotEmpty(t, subscriptionID)
+	err = wsWrite(unsubscribeRequest(subscriptionID))
+	require.NoError(t, err)
+
+	// successfully unsubscribed
+	res, err := wsRead()
+	require.NoError(t, err)
+	var u map[string]any
+	err = json.Unmarshal(res, &u)
+	require.NoError(t, err)
+	require.True(t, u["result"].(bool))
 }
 
 // checkSumLogValue makes sure the match is correct by checking sum value
