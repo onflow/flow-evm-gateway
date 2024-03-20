@@ -113,6 +113,7 @@ func (s *StreamAPI) newSubscription(
 	return rpcSub, nil
 }
 
+// NewHeads send a notification each time a new block is appended to the chain.
 func (s *StreamAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
 	return s.newSubscription(ctx, s.blocksBroadcaster, func(blockData any) (any, error) {
 		block, ok := blockData.(*types.Block)
