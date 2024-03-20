@@ -2,11 +2,17 @@ package api
 
 import (
 	"context"
+	"fmt"
+	"github.com/status-im/keycard-go/hexutils"
+	"math/big"
+
+	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-go/engine"
 	"github.com/onflow/flow-go/engine/access/state_stream/backend"
+	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/rs/zerolog"
 )
 
@@ -43,7 +49,7 @@ func NewStreamAPI(
 func (s *StreamAPI) newSubscription(
 	ctx context.Context,
 	broadcaster *engine.Broadcaster,
-	dataAdapter func(any) any,
+	dataAdapter func(any) (any, error),
 ) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
@@ -82,7 +88,12 @@ func (s *StreamAPI) newSubscription(
 					return
 				}
 
-				adapted := dataAdapter(data)
+				adapted, err := dataAdapter(data)
+				if err != nil {
+					l.Err(err).Msg("failed to adapt data")
+					continue
+				}
+
 				l.Debug().Msg("notifying new event")
 				err = notifier.Notify(rpcSub.ID, adapted)
 				if err != nil {
@@ -103,8 +114,18 @@ func (s *StreamAPI) newSubscription(
 }
 
 func (s *StreamAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
-	return s.newSubscription(ctx, s.blocksBroadcaster, func(blockData any) any {
-		// todo make sure the returned data is in fact correct: https://docs.chainstack.com/reference/ethereum-native-subscribe-newheads
-		return blockData
+	return s.newSubscription(ctx, s.blocksBroadcaster, func(blockData any) (any, error) {
+		block, ok := blockData.(*types.Block)
+		if !ok {
+			return nil, fmt.Errorf("received data of incorrect type, it should be of type *types.Block")
+		}
+
+		// todo there is a lot of missing required data: https://docs.chainstack.com/reference/ethereum-native-subscribe-newheads
+		return gethTypes.Header{
+			Number:      big.NewInt(int64(block.Height)),
+			ParentHash:  block.ParentBlockHash,
+			ReceiptHash: block.ReceiptRoot,
+			Nonce:       gethTypes.BlockNonce(hexutils.HexToBytes("0x0000000000000000")), // proof of stake constant
+		}, nil
 	})
 }
