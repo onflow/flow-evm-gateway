@@ -543,11 +543,35 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 	latestBlockNumber, err := rpcTester.blockNumber()
 	require.NoError(t, err)
 
-	blkRpc, err := rpcTester.getBlock(latestBlockNumber, false)
+	// check the eth_getBlockByNumber JSON-RPC endpoint,
+	// with `fullTx` option.
+	blkRpc, err := rpcTester.getBlock(latestBlockNumber, true)
 	require.NoError(t, err)
 
 	require.Len(t, blkRpc.Transactions, 1)
 	assert.Equal(t, uintHex(4), blkRpc.Number)
+
+	require.Len(t, blkRpc.FullTransactions(), 1)
+	fullTx := blkRpc.FullTransactions()[0]
+
+	assert.Equal(t, blkRpc.Hash, fullTx["blockHash"])
+	assert.Equal(t, blkRpc.Number, fullTx["blockNumber"])
+	assert.Nil(t, fullTx["to"])
+
+	// check the eth_getBlockByHash JSON-RPC endpoint,
+	// with `fullTx` option.
+	blkRpc, err = rpcTester.getBlockByHash(blkRpc.Hash, true)
+	require.NoError(t, err)
+
+	require.Len(t, blkRpc.Transactions, 1)
+	assert.Equal(t, uintHex(4), blkRpc.Number)
+
+	require.Len(t, blkRpc.FullTransactions(), 1)
+	fullTx = blkRpc.FullTransactions()[0]
+
+	assert.Equal(t, blkRpc.Hash, fullTx["blockHash"])
+	assert.Equal(t, blkRpc.Number, fullTx["blockNumber"])
+	assert.Nil(t, fullTx["to"])
 
 	// check the deployment transaction and receipt
 	deployHash := blkRpc.TransactionHashes()[0]
@@ -914,126 +938,6 @@ func TestE2E_ConcurrentTransactionSubmission(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, uint64(1), rcp.Status)
 	}
-}
-
-func TestE2E_API_GetBlocksWithFullTransactions(t *testing.T) {
-	srv, err := startEmulator()
-	require.NoError(t, err)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer func() {
-		cancel()
-		srv.Stop()
-	}()
-
-	emu := srv.Emulator()
-	dbDir := t.TempDir()
-	gwAcc := emu.ServiceKey()
-	gwKey := gwAcc.PrivateKey
-	gwAddress := gwAcc.Address
-
-	cfg := &config.Config{
-		DatabaseDir:        dbDir,
-		AccessNodeGRPCHost: "localhost:3569", // emulator
-		RPCPort:            8545,
-		RPCHost:            "127.0.0.1",
-		FlowNetworkID:      "flow-emulator",
-		EVMNetworkID:       types.FlowEVMTestnetChainID,
-		Coinbase:           fundEOAAddress,
-		COAAddress:         gwAddress,
-		COAKey:             gwKey,
-		CreateCOAResource:  true,
-		GasPrice:           new(big.Int).SetUint64(1),
-	}
-
-	rpcTester := &rpcTest{
-		url: fmt.Sprintf("http://%s:%d", cfg.RPCHost, cfg.RPCPort),
-	}
-
-	go func() {
-		err = bootstrap.Start(ctx, cfg)
-		require.NoError(t, err)
-	}()
-
-	time.Sleep(500 * time.Millisecond) // some time to startup
-
-	flowAmount, _ := cadence.NewUFix64("5.0")
-
-	// Steps 1, 2 and 3. - create COA and fund it - setup phase
-	res, err := fundEOA(emu, flowAmount, fundEOAAddress)
-	require.NoError(t, err)
-	require.NoError(t, res.Error)
-	assert.Len(t, res.Events, 8)
-
-	// Step 4. - deploy contract
-	deployData, err := hex.DecodeString(testContractBinary)
-	require.NoError(t, err)
-	nonce := uint64(0)
-	gasLimit := uint64(4700000) // arbitrarily big
-	eoaKey, err := crypto.HexToECDSA(fundEOARawKey)
-	require.NoError(t, err)
-
-	signed, _, err := evmSign(nil, gasLimit, eoaKey, nonce, nil, deployData)
-	nonce++
-	hash, err := rpcTester.sendRawTx(signed)
-	require.NoError(t, err)
-	require.NotNil(t, hash)
-
-	time.Sleep(1 * time.Second)
-
-	latestBlockNumber, err := rpcTester.blockNumber()
-	require.NoError(t, err)
-
-	t.Run("eth_getBlockByNumber", func(t *testing.T) {
-		blkRpc, err := rpcTester.getBlock(latestBlockNumber, true)
-		require.NoError(t, err)
-		require.Len(t, blkRpc.FullTransactions(), 1)
-
-		fullTx := blkRpc.FullTransactions()[0]
-
-		assert.Equal(t, blkRpc.Hash, fullTx["blockHash"])
-		assert.Equal(t, blkRpc.Number, fullTx["blockNumber"])
-		assert.Equal(t, "0xfacf71692421039876a5bb4f10ef7a439d8ef61e", fullTx["from"])
-		assert.Equal(t, "0x3491c", fullTx["gas"])
-		assert.Equal(t, "0x0", fullTx["gasPrice"])
-		assert.Equal(t, "0x4ffb5f4e10812d9a2580e284056b9104804818f324382a41884c73fc12993369", fullTx["hash"])
-		assert.Equal(t, fmt.Sprintf("0x%s", testContractBinary), fullTx["input"])
-		assert.Equal(t, "0x0", fullTx["nonce"])
-		assert.Equal(t, "0x18022960774dfbac5ebbfdbec9a96cc130c13cde7bea0c42fc76525ca7570e57", fullTx["r"])
-		assert.Equal(t, "0x36326758c61a14daf2d4d106bcd540755b31937c0f4f3ba24a8d7361c085993", fullTx["s"])
-		assert.Nil(t, fullTx["to"])
-		assert.Equal(t, "0x0", fullTx["transactionIndex"])
-		assert.Equal(t, "0x0", fullTx["type"])
-		assert.Equal(t, "0x530", fullTx["v"])
-		assert.Equal(t, "0x0", fullTx["value"])
-	})
-
-	t.Run("eth_getBlockByHash", func(t *testing.T) {
-		blkRpc, err := rpcTester.getBlock(latestBlockNumber, false)
-		require.NoError(t, err)
-
-		blkRpc, err = rpcTester.getBlockByHash(blkRpc.Hash, true)
-		require.NoError(t, err)
-		require.Len(t, blkRpc.FullTransactions(), 1)
-
-		fullTx := blkRpc.FullTransactions()[0]
-
-		assert.Equal(t, blkRpc.Hash, fullTx["blockHash"])
-		assert.Equal(t, blkRpc.Number, fullTx["blockNumber"])
-		assert.Equal(t, "0xfacf71692421039876a5bb4f10ef7a439d8ef61e", fullTx["from"])
-		assert.Equal(t, "0x3491c", fullTx["gas"])
-		assert.Equal(t, "0x0", fullTx["gasPrice"])
-		assert.Equal(t, "0x4ffb5f4e10812d9a2580e284056b9104804818f324382a41884c73fc12993369", fullTx["hash"])
-		assert.Equal(t, fmt.Sprintf("0x%s", testContractBinary), fullTx["input"])
-		assert.Equal(t, "0x0", fullTx["nonce"])
-		assert.Equal(t, "0x18022960774dfbac5ebbfdbec9a96cc130c13cde7bea0c42fc76525ca7570e57", fullTx["r"])
-		assert.Equal(t, "0x36326758c61a14daf2d4d106bcd540755b31937c0f4f3ba24a8d7361c085993", fullTx["s"])
-		assert.Nil(t, fullTx["to"])
-		assert.Equal(t, "0x0", fullTx["transactionIndex"])
-		assert.Equal(t, "0x0", fullTx["type"])
-		assert.Equal(t, "0x530", fullTx["v"])
-		assert.Equal(t, "0x0", fullTx["value"])
-	})
 }
 
 // checkSumLogValue makes sure the match is correct by checking sum value

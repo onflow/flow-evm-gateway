@@ -671,8 +671,8 @@ func (b *rpcBlock) TransactionHashes() []string {
 			switch element := val.(type) {
 			case string:
 				txHashes = append(txHashes, element)
-			case map[string]string:
-				txHashes = append(txHashes, element["hash"])
+			case map[string]interface{}:
+				txHashes = append(txHashes, element["hash"].(string))
 			}
 		}
 	}
