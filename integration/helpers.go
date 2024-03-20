@@ -453,8 +453,29 @@ func (r *rpcTest) getLogs(
 	return lg, nil
 }
 
-func (r *rpcTest) getBlock(height uint64) (*rpcBlock, error) {
-	rpcRes, err := r.request("eth_getBlockByNumber", fmt.Sprintf(`["%s",false]`, uintHex(height)))
+func (r *rpcTest) getBlock(height uint64, fullTx bool) (*rpcBlock, error) {
+	rpcRes, err := r.request(
+		"eth_getBlockByNumber",
+		fmt.Sprintf(`["%s",%t]`, uintHex(height), fullTx),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	var blkRpc rpcBlock
+	err = json.Unmarshal(rpcRes, &blkRpc)
+	if err != nil {
+		return nil, err
+	}
+
+	return &blkRpc, nil
+}
+
+func (r *rpcTest) getBlockByHash(hash string, fullTx bool) (*rpcBlock, error) {
+	rpcRes, err := r.request(
+		"eth_getBlockByHash",
+		fmt.Sprintf(`["%s",%t]`, hash, fullTx),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -639,5 +660,36 @@ type rpcBlock struct {
 	Hash         string
 	Number       string
 	ParentHash   string
-	Transactions []string
+	Transactions interface{}
+}
+
+func (b *rpcBlock) TransactionHashes() []string {
+	txHashes := make([]string, 0)
+	switch value := b.Transactions.(type) {
+	case []interface{}:
+		for _, val := range value {
+			switch element := val.(type) {
+			case string:
+				txHashes = append(txHashes, element)
+			case map[string]string:
+				txHashes = append(txHashes, element["hash"])
+			}
+		}
+	}
+	return txHashes
+}
+
+func (b *rpcBlock) FullTransactions() []map[string]interface{} {
+	transactions := make([]map[string]interface{}, 0)
+	switch value := b.Transactions.(type) {
+	case []interface{}:
+		for _, val := range value {
+			switch element := val.(type) {
+			case map[string]interface{}:
+				transactions = append(transactions, element)
+
+			}
+		}
+	}
+	return transactions
 }
