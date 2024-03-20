@@ -679,7 +679,7 @@ type rpcBlock struct {
 
 type streamBlockResult struct {
 	ParentBlockHash   string   `json:"ParentBlockHash"`
-	Height            int      `json:"Height"`
+	Number            int      `json:"Number"`
 	TotalSupply       int64    `json:"TotalSupply"`
 	ReceiptRoot       string   `json:"ReceiptRoot"`
 	TransactionHashes []string `json:"TransactionHashes"`
