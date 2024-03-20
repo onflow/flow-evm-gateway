@@ -200,9 +200,19 @@ func startServer(
 		transactions,
 		receipts,
 		accounts,
+	)
+
+	streamAPI := api.NewStreamAPI(
+		logger,
+		cfg,
+		blocks,
+		transactions,
+		receipts,
+		accounts,
 		blocksBroadcaster,
 	)
-	supportedAPIs := api.SupportedAPIs(blockchainAPI)
+
+	supportedAPIs := api.SupportedAPIs(blockchainAPI, streamAPI)
 
 	if err := srv.EnableRPC(supportedAPIs); err != nil {
 		return err
