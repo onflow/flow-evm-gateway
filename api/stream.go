@@ -165,7 +165,7 @@ func (s *StreamAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) (*
 				return nil, errs.ErrInternal
 			}
 
-			v, r, s := tx.RawSignatureValues()
+			v, r, ss := tx.RawSignatureValues()
 
 			return &RPCTransaction{
 				Hash:        tx.Hash(),
@@ -181,7 +181,7 @@ func (s *StreamAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) (*
 				Type:        hexutil.Uint64(tx.Type()),
 				V:           (*hexutil.Big)(v),
 				R:           (*hexutil.Big)(r),
-				S:           (*hexutil.Big)(s),
+				S:           (*hexutil.Big)(ss),
 			}, nil
 		},
 	)
