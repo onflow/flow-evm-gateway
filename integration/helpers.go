@@ -139,12 +139,15 @@ func fundEOA(
 	code := `
 	transaction(weiAmount: UInt, flowAmount: UFix64, eoaAddress: [UInt8; 20]) {
 		let fundVault: @FlowToken.Vault
+		let auth: auth(Storage) &Account
 	
 		prepare(signer: auth(Storage) &Account) {
-			let vaultRef = signer.storage.borrow<auth(FungibleToken.Withdraw) &FlowToken.Vault>(from: /storage/flowTokenVault)
-				?? panic("Could not borrow reference to the owner's Vault!")
+			let vaultRef = signer.storage.borrow<auth(FungibleToken.Withdraw) &FlowToken.Vault>(
+				from: /storage/flowTokenVault
+			) ?? panic("Could not borrow reference to the owner's Vault!")
 	
 			self.fundVault <- vaultRef.withdraw(amount: flowAmount) as! @FlowToken.Vault
+			self.auth = signer
 		}
 	
 		execute {
@@ -157,9 +160,12 @@ func fundEOA(
 				gasLimit: 300000, 
 				value: EVM.Balance(attoflow: weiAmount)
 			)
-			
+
 			log(result)
-			destroy acc
+			self.auth.storage.save<@EVM.CadenceOwnedAccount>(
+				<-acc,
+				to: StoragePath(identifier: "evm")!
+			)
 		}
 	}`
 
@@ -295,12 +301,16 @@ func evmRunTransaction(emu emulator.Emulator, signedTx []byte) (*sdk.Transaction
 
 	code := `
 	transaction(encodedTx: [UInt8]) {
-		prepare(signer: auth(Storage) &Account) {}
+		let coa: &EVM.CadenceOwnedAccount
+
+		prepare(signer: auth(Storage) &Account) {
+			self.coa = signer.storage.borrow<&EVM.CadenceOwnedAccount>(
+				from: /storage/evm
+			) ?? panic("Could not borrow reference to the COA!")
+		}
 
 		execute {
-			let feeAcc <- EVM.createCadenceOwnedAccount()
-			EVM.run(tx: encodedTx, coinbase: feeAcc.address())
-			destroy feeAcc
+			EVM.run(tx: encodedTx, coinbase: self.coa.address())
 		}
 	}`
 

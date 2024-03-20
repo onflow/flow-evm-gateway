@@ -184,23 +184,22 @@ func (e *Engine) processTransactionEvent(event cadence.Event) error {
 		return fmt.Errorf("could not decode transaction event: %w", err)
 	}
 
-	// in case we have a direct call transaction we ignore it for now
-	// todo support indexing of direct calls
-	if tx == nil {
-		e.log.Debug().Str("event", event.String()).Msg("skipping direct call")
-		return nil
-	}
-
 	receipt, err := models.DecodeReceipt(event)
 	if err != nil {
 		return fmt.Errorf("failed to decode receipt: %w", err)
+	}
+
+	// TODO(m-Peter): Remove the error return value once flow-go is updated
+	txHash, err := tx.Hash()
+	if err != nil {
+		return fmt.Errorf("failed to compute TX hash: %w", err)
 	}
 
 	e.log.Info().
 		Str("contract-address", receipt.ContractAddress.String()).
 		Int("log-count", len(receipt.Logs)).
 		Str("receipt-tx-hash", receipt.TxHash.String()).
-		Str("tx-hash", tx.Hash().String()).
+		Str("tx-hash", txHash.String()).
 		Msg("ingesting new transaction executed event")
 
 	// todo think if we could introduce batching

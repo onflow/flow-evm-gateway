@@ -4,12 +4,14 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/common"
-	gethTypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/onflow/flow-evm-gateway/storage"
-	errs "github.com/onflow/flow-evm-gateway/storage/errors"
 	"math/big"
 	"sync"
+
+	"github.com/ethereum/go-ethereum/common"
+	gethTypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/onflow/flow-evm-gateway/models"
+	"github.com/onflow/flow-evm-gateway/storage"
+	errs "github.com/onflow/flow-evm-gateway/storage/errors"
 )
 
 var _ storage.AccountIndexer = &Accounts{}
@@ -26,11 +28,14 @@ func NewAccounts(db *Storage) *Accounts {
 	}
 }
 
-func (a *Accounts) Update(tx *gethTypes.Transaction, receipt *gethTypes.Receipt) error {
+func (a *Accounts) Update(
+	tx models.Transaction,
+	receipt *gethTypes.Receipt,
+) error {
 	a.mux.Lock()
 	defer a.mux.Unlock()
 
-	from, err := gethTypes.Sender(gethTypes.LatestSignerForChainID(tx.ChainId()), tx)
+	from, err := tx.From()
 	if err != nil {
 		return err
 	}
@@ -40,8 +45,8 @@ func (a *Accounts) Update(tx *gethTypes.Transaction, receipt *gethTypes.Receipt)
 		return err
 	}
 
-	// make sure the transaction height is bigger than the height we already recorded for the nonce
-	// this makes the operation idempotent and safer.
+	// make sure the transaction height is bigger than the height we already
+	// recorded for the nonce. this makes the operation idempotent and safer.
 	txHeight := receipt.BlockNumber.Uint64()
 	if txHeight <= height {
 		return nil

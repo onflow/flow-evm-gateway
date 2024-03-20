@@ -1,9 +1,16 @@
 package models
 
 import (
+	"bytes"
+	"encoding/hex"
+	"fmt"
+	"math/big"
+
 	"github.com/ethereum/go-ethereum/common"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
-	"math/big"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/onflow/cadence"
+	"github.com/onflow/flow-go/fvm/evm/types"
 )
 
 // StorageReceipt is a receipt representation for storage.
@@ -29,4 +36,59 @@ type StorageReceipt struct {
 	BlockHash         common.Hash
 	BlockNumber       *big.Int
 	TransactionIndex  uint
+}
+
+// DecodeReceipt takes a cadence event for transaction executed and decodes it into the receipt.
+func DecodeReceipt(event cadence.Event) (*gethTypes.Receipt, error) {
+	if !IsTransactionExecutedEvent(event) {
+		return nil, fmt.Errorf(
+			"invalid event type for decoding into receipt, received %s expected %s",
+			event.Type().ID(),
+			types.EventTypeTransactionExecuted,
+		)
+	}
+
+	var tx txEventPayload
+	err := cadence.DecodeFields(event, &tx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to cadence decode receipt: %w", err)
+	}
+
+	encLogs, err := hex.DecodeString(tx.Logs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to hex decode receipt: %w", err)
+	}
+
+	var logs []*gethTypes.Log
+	if len(encLogs) > 0 {
+		err = rlp.Decode(bytes.NewReader(encLogs), &logs)
+		if err != nil {
+			return nil, fmt.Errorf("failed to rlp decode receipt: %w", err)
+		}
+	}
+
+	receipt := &gethTypes.Receipt{
+		BlockNumber:       big.NewInt(int64(tx.BlockHeight)),
+		Type:              uint8(tx.TransactionType),
+		Logs:              logs,
+		TxHash:            common.HexToHash(tx.TransactionHash),
+		ContractAddress:   common.HexToAddress(tx.DeployedContractAddress),
+		GasUsed:           tx.GasConsumed,
+		CumulativeGasUsed: tx.GasConsumed, // todo check
+		EffectiveGasPrice: nil,            // todo check
+		BlobGasUsed:       0,              // todo check
+		BlobGasPrice:      nil,            // todo check
+		TransactionIndex:  0,              // todo add tx index in evm core event
+		BlockHash:         common.HexToHash(tx.BlockHash),
+	}
+
+	if tx.Failed {
+		receipt.Status = gethTypes.ReceiptStatusFailed
+	} else {
+		receipt.Status = gethTypes.ReceiptStatusSuccessful
+	}
+
+	receipt.Bloom = gethTypes.CreateBloom([]*gethTypes.Receipt{receipt})
+
+	return receipt, nil
 }
