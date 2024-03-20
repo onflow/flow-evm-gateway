@@ -43,6 +43,9 @@ func NewStreamAPI(
 	}
 }
 
+// newSubscription creates a new subscription for receiving events from the broadcaster.
+// The data adapter function is used to transform the raw data received from the broadcaster
+// to comply with requested RPC API response schema.
 func (s *StreamAPI) newSubscription(
 	ctx context.Context,
 	broadcaster *engine.Broadcaster,
