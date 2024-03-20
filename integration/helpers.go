@@ -634,7 +634,8 @@ func (r *rpcTest) getCode(from common.Address) ([]byte, error) {
 	return code, nil
 }
 
-// wsConnection returns singleton ws connection
+// wsConnect creates a new websocket connection and returns a write and read function
+// that can be used to easily write to the stream as well as read the next data.
 func (r *rpcTest) wsConnect() (func(string) error, func() ([]byte, error), error) {
 	u := url.URL{Scheme: "ws", Host: r.url, Path: "/"}
 	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
