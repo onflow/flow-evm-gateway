@@ -673,6 +673,10 @@ func newHeadsRequest() string {
 	return `{"jsonrpc":"2.0","id":0,"method":"eth_subscribe","params":["newHeads"]}`
 }
 
+func newTransactionsRequest() string {
+	return `{"jsonrpc":"2.0","id":0,"method":"eth_subscribe","params":["newPendingTransactions"]}`
+}
+
 func unsubscribeRequest(id string) string {
 	return fmt.Sprintf(`{"jsonrpc":"2.0","id":0,"method":"eth_unsubscribe","params":["%s"]}`, id)
 }

@@ -915,12 +915,29 @@ func TestE2E_Streaming(t *testing.T) {
 
 	time.Sleep(500 * time.Millisecond) // some time to startup
 
-	wsWrite, wsRead, err := rpcTester.wsConnect()
+	// connect and subscribe to new blocks
+	blkWrite, blkRead, err := rpcTester.wsConnect()
 	require.NoError(t, err)
-	err = wsWrite(newHeadsRequest())
+	err = blkWrite(newHeadsRequest())
 	require.NoError(t, err)
 
-	for i := 0; i < 5; i++ {
+	// first block stream response is for successful subscription
+	_, err = blkRead()
+	require.NoError(t, err)
+
+	// connect and subscribe to new transactions
+	txWrite, txRead, err := rpcTester.wsConnect()
+	require.NoError(t, err)
+	err = txWrite(newTransactionsRequest())
+	require.NoError(t, err)
+
+	// first block stream response is for successful subscription
+	_, err = txRead()
+	require.NoError(t, err)
+
+	// send some evm transfers that will produce transactions and blocks
+	txCount := 5
+	for i := 0; i < txCount; i++ {
 		flowTransfer, _ := cadence.NewUFix64("1.0")
 		transferWei := types.NewBalanceFromUFix64(flowTransfer)
 		fundEOAKey, err := crypto.HexToECDSA(fundEOARawKey)
@@ -929,37 +946,62 @@ func TestE2E_Streaming(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	currentHeight := 2 // first two blocks are used for evm setup events
-	var subscriptionID string
-	for i := 0; i < 5; i++ {
-		event, err := wsRead()
+	const startHeight = 2 // first two blocks are used for evm setup events
+	currentHeight := startHeight
+	var blkSubID string
+	// iterate over all block data streams and make sure all were received
+	for i := 0; i < txCount; i++ {
+		event, err := blkRead()
 		require.NoError(t, err)
 
 		var msg streamMsg
 		require.NoError(t, json.Unmarshal(event, &msg))
-		if msg.Params.Result["number"] == nil {
-			continue // skip the first event that only returns the id
-		}
 
 		// this makes sure we receive the events in correct order
 		h, err := hexutil.DecodeUint64(msg.Params.Result["number"].(string))
 		require.NoError(t, err)
 		assert.Equal(t, currentHeight, int(h))
 		currentHeight++
-		subscriptionID = msg.Params.Subscription
+		blkSubID = msg.Params.Subscription
 	}
 
-	require.NotEmpty(t, subscriptionID)
-	err = wsWrite(unsubscribeRequest(subscriptionID))
-	require.NoError(t, err)
+	// iterate over all transactions and make sure all were received
+	var txSubID string
+	currentHeight = startHeight // reset
+	for i := 0; i < txCount; i++ {
+		event, err := txRead()
+		require.NoError(t, err)
 
-	// successfully unsubscribed
-	res, err := wsRead()
-	require.NoError(t, err)
+		var msg streamMsg
+		require.NoError(t, json.Unmarshal(event, &msg))
 
+		// this makes sure we received txs in correct order
+		h, err := hexutil.DecodeUint64(msg.Params.Result["number"].(string))
+		require.NoError(t, err)
+		assert.Equal(t, currentHeight, int(h))
+		currentHeight++
+		txSubID = msg.Params.Subscription
+	}
+
+	// unsubscribe from blocks
+	require.NotEmpty(t, blkSubID)
+	err = blkWrite(unsubscribeRequest(blkSubID))
+	require.NoError(t, err)
+	res, err := blkRead()
+	require.NoError(t, err)
 	var u map[string]any
 	require.NoError(t, json.Unmarshal(res, &u))
-	require.True(t, u["result"].(bool))
+	require.True(t, u["result"].(bool)) // successfully unsubscribed
+
+	// unsubscribe from txs
+	require.NotEmpty(t, txSubID)
+	err = blkWrite(unsubscribeRequest(txSubID))
+	require.NoError(t, err)
+	res, err = blkRead()
+	require.NoError(t, err)
+	var b map[string]any
+	require.NoError(t, json.Unmarshal(res, &b))
+	require.True(t, b["result"].(bool)) // successfully unsubscribed
 }
 
 // checkSumLogValue makes sure the match is correct by checking sum value
