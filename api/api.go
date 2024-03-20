@@ -17,17 +17,18 @@ import (
 	"github.com/onflow/flow-evm-gateway/services/requester"
 	"github.com/onflow/flow-evm-gateway/storage"
 	storageErrs "github.com/onflow/flow-evm-gateway/storage/errors"
-	"github.com/onflow/flow-go/engine"
-	"github.com/onflow/flow-go/engine/access/state_stream/backend"
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/rs/zerolog"
 	"math/big"
 )
 
-func SupportedAPIs(blockChainAPI *BlockChainAPI) []rpc.API {
+func SupportedAPIs(blockChainAPI *BlockChainAPI, streamAPI *StreamAPI) []rpc.API {
 	return []rpc.API{{
 		Namespace: "eth",
 		Service:   blockChainAPI,
+	}, {
+		Namespace: "eth",
+		Service:   streamAPI,
 	}, {
 		Namespace: "web3",
 		Service:   &Web3API{},
@@ -38,14 +39,13 @@ func SupportedAPIs(blockChainAPI *BlockChainAPI) []rpc.API {
 }
 
 type BlockChainAPI struct {
-	logger            zerolog.Logger
-	config            *config.Config
-	evm               requester.Requester
-	blocks            storage.BlockIndexer
-	transactions      storage.TransactionIndexer
-	receipts          storage.ReceiptIndexer
-	accounts          storage.AccountIndexer
-	blocksBroadcaster *engine.Broadcaster
+	logger       zerolog.Logger
+	config       *config.Config
+	evm          requester.Requester
+	blocks       storage.BlockIndexer
+	transactions storage.TransactionIndexer
+	receipts     storage.ReceiptIndexer
+	accounts     storage.AccountIndexer
 }
 
 func NewBlockChainAPI(
@@ -56,17 +56,15 @@ func NewBlockChainAPI(
 	transactions storage.TransactionIndexer,
 	receipts storage.ReceiptIndexer,
 	accounts storage.AccountIndexer,
-	blocksBroadcaster *engine.Broadcaster,
 ) *BlockChainAPI {
 	return &BlockChainAPI{
-		logger:            logger,
-		config:            config,
-		evm:               evm,
-		blocks:            blocks,
-		transactions:      transactions,
-		receipts:          receipts,
-		accounts:          accounts,
-		blocksBroadcaster: blocksBroadcaster,
+		logger:       logger,
+		config:       config,
+		evm:          evm,
+		blocks:       blocks,
+		transactions: transactions,
+		receipts:     receipts,
+		accounts:     accounts,
 	}
 }
 
@@ -568,66 +566,6 @@ func (b *BlockChainAPI) GetCode(
 	}
 
 	return hexutil.Bytes(code), nil
-}
-
-func (b *BlockChainAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
-	notifier, supported := rpc.NotifierFromContext(ctx)
-	if !supported {
-		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
-	}
-
-	// todo make sure the returned data is in fact correct: https://docs.chainstack.com/reference/ethereum-native-subscribe-newheads
-	// maybe extract the stuff we can reuse in other subscriptions
-
-	height, err := b.blocks.LatestEVMHeight()
-	if err != nil {
-		return nil, err
-	}
-
-	sub := backend.NewHeightBasedSubscription(1, height, func(ctx context.Context, height uint64) (interface{}, error) {
-		return b.blocks.GetByHeight(height)
-	})
-
-	rpcSub := notifier.CreateSubscription()
-	rpcSub.ID = rpc.ID(sub.ID()) // make sure ids are unified
-
-	l := b.logger.With().Str("subscription-id", string(rpcSub.ID)).Logger()
-	l.Info().Msg("new subscription created")
-
-	go backend.NewStreamer(
-		b.logger.With().Str("component", "streamer").Logger(),
-		b.blocksBroadcaster,
-		b.config.StreamTimeout,
-		b.config.StreamLimit,
-		sub,
-	).Stream(context.Background())
-
-	go func() {
-		for {
-			select {
-			case block, open := <-sub.Channel():
-				if !open {
-					l.Debug().Msg("subscription channel closed")
-					return
-				}
-
-				l.Debug().Msg("notifying new head event")
-				err = notifier.Notify(rpcSub.ID, block)
-				if err != nil {
-					l.Err(err).Msg("failed to notify")
-				}
-			case err := <-rpcSub.Err():
-				l.Error().Err(err).Msg("error from rpc subscriber")
-				sub.Close()
-				return
-			case <-notifier.Closed():
-				sub.Close()
-				return
-			}
-		}
-	}()
-
-	return rpcSub, nil
 }
 
 // handleError takes in an error and in case the error is of type ErrNotFound
