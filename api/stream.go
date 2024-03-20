@@ -15,13 +15,14 @@ import (
 )
 
 type StreamAPI struct {
-	logger            zerolog.Logger
-	config            *config.Config
-	blocks            storage.BlockIndexer
-	transactions      storage.TransactionIndexer
-	receipts          storage.ReceiptIndexer
-	accounts          storage.AccountIndexer
-	blocksBroadcaster *engine.Broadcaster
+	logger                  zerolog.Logger
+	config                  *config.Config
+	blocks                  storage.BlockIndexer
+	transactions            storage.TransactionIndexer
+	receipts                storage.ReceiptIndexer
+	accounts                storage.AccountIndexer
+	blocksBroadcaster       *engine.Broadcaster
+	transactionsBroadcaster *engine.Broadcaster
 }
 
 func NewStreamAPI(
@@ -32,15 +33,17 @@ func NewStreamAPI(
 	receipts storage.ReceiptIndexer,
 	accounts storage.AccountIndexer,
 	blocksBroadcaster *engine.Broadcaster,
+	transactionsBroadcaster *engine.Broadcaster,
 ) *StreamAPI {
 	return &StreamAPI{
-		logger:            logger,
-		config:            config,
-		blocks:            blocks,
-		transactions:      transactions,
-		receipts:          receipts,
-		accounts:          accounts,
-		blocksBroadcaster: blocksBroadcaster,
+		logger:                  logger,
+		config:                  config,
+		blocks:                  blocks,
+		transactions:            transactions,
+		receipts:                receipts,
+		accounts:                accounts,
+		blocksBroadcaster:       blocksBroadcaster,
+		transactionsBroadcaster: transactionsBroadcaster,
 	}
 }
 
@@ -144,6 +147,7 @@ func (s *StreamAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
 // transaction enters the transaction pool. If fullTx is true the full tx is
 // sent to the client, otherwise the hash is sent.
 func (s *StreamAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) (*rpc.Subscription, error) {
-
-	return nil, nil
+	return s.newSubscription(ctx, s.transactionsBroadcaster, func(txData any) (any, error) {
+		return txData, nil
+	})
 }
