@@ -2,15 +2,14 @@ package api
 
 import (
 	"context"
-	"fmt"
-
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rpc"
+	errs "github.com/onflow/flow-evm-gateway/api/errors"
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-go/engine"
 	"github.com/onflow/flow-go/engine/access/state_stream/backend"
-	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/rs/zerolog"
 )
 
@@ -53,7 +52,7 @@ func NewStreamAPI(
 func (s *StreamAPI) newSubscription(
 	ctx context.Context,
 	broadcaster *engine.Broadcaster,
-	dataAdapter func(any) (any, error),
+	getData backend.GetDataByHeightFunc,
 ) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
@@ -65,13 +64,7 @@ func (s *StreamAPI) newSubscription(
 		return nil, err
 	}
 
-	sub := backend.NewHeightBasedSubscription(
-		1,
-		height,
-		func(ctx context.Context, height uint64) (interface{}, error) {
-			return s.blocks.GetByHeight(height)
-		},
-	)
+	sub := backend.NewHeightBasedSubscription(1, height, getData)
 
 	rpcSub := notifier.CreateSubscription()
 	rpcSub.ID = rpc.ID(sub.ID()) // make sure ids are unified
@@ -96,14 +89,8 @@ func (s *StreamAPI) newSubscription(
 					return
 				}
 
-				adapted, err := dataAdapter(data)
-				if err != nil {
-					l.Err(err).Msg("failed to adapt data")
-					continue
-				}
-
 				l.Debug().Msg("notifying new event")
-				err = notifier.Notify(rpcSub.ID, adapted)
+				err = notifier.Notify(rpcSub.ID, data)
 				if err != nil {
 					l.Err(err).Msg("failed to notify")
 				}
@@ -123,31 +110,79 @@ func (s *StreamAPI) newSubscription(
 
 // NewHeads send a notification each time a new block is appended to the chain.
 func (s *StreamAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
-	return s.newSubscription(ctx, s.blocksBroadcaster, func(blockData any) (any, error) {
-		block, ok := blockData.(*types.Block)
-		if !ok {
-			return nil, fmt.Errorf("received data of incorrect type, it should be of type *types.Block")
-		}
+	return s.newSubscription(
+		ctx,
+		s.blocksBroadcaster,
+		func(ctx context.Context, height uint64) (interface{}, error) {
+			block, err := s.blocks.GetByHeight(height)
+			if err != nil {
+				return nil, err
+			}
 
-		h, err := block.Hash()
-		if err != nil {
-			return nil, err
-		}
-		// todo there is a lot of missing data: https://docs.chainstack.com/reference/ethereum-native-subscribe-newheads
-		return Block{
-			Hash:         h,
-			Number:       hexutil.Uint64(block.Height),
-			ParentHash:   block.ParentBlockHash,
-			ReceiptsRoot: block.ReceiptRoot,
-		}, nil
-	})
+			h, err := block.Hash()
+			if err != nil {
+				return nil, err
+			}
+			// todo there is a lot of missing data: https://docs.chainstack.com/reference/ethereum-native-subscribe-newheads
+			return Block{
+				Hash:         h,
+				Number:       hexutil.Uint64(block.Height),
+				ParentHash:   block.ParentBlockHash,
+				ReceiptsRoot: block.ReceiptRoot,
+			}, nil
+		},
+	)
 }
 
 // NewPendingTransactions creates a subscription that is triggered each time a
 // transaction enters the transaction pool. If fullTx is true the full tx is
 // sent to the client, otherwise the hash is sent.
 func (s *StreamAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) (*rpc.Subscription, error) {
-	return s.newSubscription(ctx, s.transactionsBroadcaster, func(txData any) (any, error) {
-		return txData, nil
-	})
+	return s.newSubscription(
+		ctx,
+		s.transactionsBroadcaster,
+		func(ctx context.Context, height uint64) (interface{}, error) {
+			block, err := s.blocks.GetByHeight(height)
+			if err != nil {
+				return nil, err
+			}
+
+			// todo once a block can contain multiple transactions this needs to be refactored
+			hash := block.TransactionHashes[0]
+
+			tx, err := s.transactions.Get(hash)
+			if err != nil {
+				return nil, err
+			}
+
+			rcp, err := s.receipts.GetByTransactionID(hash)
+			if err != nil {
+				return nil, err
+			}
+
+			from, err := types.Sender(types.LatestSignerForChainID(tx.ChainId()), tx)
+			if err != nil {
+				return nil, errs.ErrInternal
+			}
+
+			v, r, s := tx.RawSignatureValues()
+
+			return &RPCTransaction{
+				Hash:        tx.Hash(),
+				BlockHash:   &rcp.BlockHash,
+				BlockNumber: (*hexutil.Big)(rcp.BlockNumber),
+				From:        from,
+				To:          tx.To(),
+				Gas:         hexutil.Uint64(rcp.GasUsed),
+				GasPrice:    (*hexutil.Big)(rcp.EffectiveGasPrice),
+				Input:       tx.Data(),
+				Nonce:       hexutil.Uint64(tx.Nonce()),
+				Value:       (*hexutil.Big)(tx.Value()),
+				Type:        hexutil.Uint64(tx.Type()),
+				V:           (*hexutil.Big)(v),
+				R:           (*hexutil.Big)(r),
+				S:           (*hexutil.Big)(s),
+			}, nil
+		},
+	)
 }
