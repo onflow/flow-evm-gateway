@@ -976,10 +976,13 @@ func TestE2E_Streaming(t *testing.T) {
 		require.NoError(t, json.Unmarshal(event, &msg))
 
 		// this makes sure we received txs in correct order
-		h, err := hexutil.DecodeUint64(msg.Params.Result["number"].(string))
+		h, err := hexutil.DecodeUint64(msg.Params.Result["blockNumber"].(string))
 		require.NoError(t, err)
 		assert.Equal(t, currentHeight, int(h))
 		currentHeight++
+
+		require.Equal(t, transferEOAAdress.Hex(), msg.Params.Result["to"].(string))
+
 		txSubID = msg.Params.Subscription
 	}
 
