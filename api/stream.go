@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
+
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/onflow/flow-evm-gateway/config"
@@ -61,9 +62,13 @@ func (s *StreamAPI) newSubscription(
 		return nil, err
 	}
 
-	sub := backend.NewHeightBasedSubscription(1, height, func(ctx context.Context, height uint64) (interface{}, error) {
-		return s.blocks.GetByHeight(height)
-	})
+	sub := backend.NewHeightBasedSubscription(
+		1,
+		height,
+		func(ctx context.Context, height uint64) (interface{}, error) {
+			return s.blocks.GetByHeight(height)
+		},
+	)
 
 	rpcSub := notifier.CreateSubscription()
 	rpcSub.ID = rpc.ID(sub.ID()) // make sure ids are unified
