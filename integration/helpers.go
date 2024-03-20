@@ -116,6 +116,7 @@ func startEventIngestionEngine(ctx context.Context, dbDir string) (
 	accounts := pebble.NewAccounts(db)
 	txs := pebble.NewTransactions(db)
 	blocksBroadcaster := broadcast.NewBroadcaster()
+	txBroadcaster := broadcast.NewBroadcaster()
 
 	err = blocks.InitHeights(config.EmulatorInitCadenceHeight)
 	if err != nil {
@@ -123,7 +124,16 @@ func startEventIngestionEngine(ctx context.Context, dbDir string) (
 	}
 
 	log = logger.With().Str("component", "ingestion").Logger()
-	engine := ingestion.NewEventIngestionEngine(subscriber, blocks, receipts, txs, accounts, blocksBroadcaster, log)
+	engine := ingestion.NewEventIngestionEngine(
+		subscriber,
+		blocks,
+		receipts,
+		txs,
+		accounts,
+		blocksBroadcaster,
+		txBroadcaster,
+		log,
+	)
 
 	go func() {
 		err = engine.Run(ctx)
