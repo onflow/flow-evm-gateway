@@ -139,3 +139,11 @@ func (s *StreamAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
 		}, nil
 	})
 }
+
+// NewPendingTransactions creates a subscription that is triggered each time a
+// transaction enters the transaction pool. If fullTx is true the full tx is
+// sent to the client, otherwise the hash is sent.
+func (s *StreamAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) (*rpc.Subscription, error) {
+
+	return nil, nil
+}
