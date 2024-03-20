@@ -937,12 +937,14 @@ func TestE2E_Streaming(t *testing.T) {
 
 		var msg streamMsg
 		require.NoError(t, json.Unmarshal(event, &msg))
-		if msg.Params.Result.Height == 0 {
+		if msg.Params.Result["number"] == nil {
 			continue // skip the first event that only returns the id
 		}
 
 		// this makes sure we receive the events in correct order
-		assert.Equal(t, currentHeight, msg.Params.Result.Height)
+		h, err := hexutil.DecodeUint64(msg.Params.Result["number"].(string))
+		require.NoError(t, err)
+		assert.Equal(t, currentHeight, int(h))
 		currentHeight++
 		subscriptionID = msg.Params.Subscription
 	}
@@ -954,9 +956,9 @@ func TestE2E_Streaming(t *testing.T) {
 	// successfully unsubscribed
 	res, err := wsRead()
 	require.NoError(t, err)
+
 	var u map[string]any
-	err = json.Unmarshal(res, &u)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(res, &u))
 	require.True(t, u["result"].(bool))
 }
 

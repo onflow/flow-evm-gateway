@@ -677,17 +677,9 @@ type rpcBlock struct {
 	Transactions []string
 }
 
-type streamBlockResult struct {
-	ParentBlockHash   string   `json:"ParentBlockHash"`
-	Number            int      `json:"Number"`
-	TotalSupply       int64    `json:"TotalSupply"`
-	ReceiptRoot       string   `json:"ReceiptRoot"`
-	TransactionHashes []string `json:"TransactionHashes"`
-}
-
 type streamParams struct {
-	Subscription string            `json:"subscription"`
-	Result       streamBlockResult `json:"result"`
+	Subscription string         `json:"subscription"`
+	Result       map[string]any `json:"result"`
 }
 
 type streamMsg struct {
