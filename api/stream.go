@@ -2,15 +2,19 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
+
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rpc"
 	errs "github.com/onflow/flow-evm-gateway/api/errors"
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/storage"
+	storageErrs "github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/onflow/flow-go/engine"
 	"github.com/onflow/flow-go/engine/access/state_stream/backend"
+	flowgoStorage "github.com/onflow/flow-go/storage"
 	"github.com/rs/zerolog"
 )
 
@@ -117,6 +121,9 @@ func (s *StreamAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
 		func(ctx context.Context, height uint64) (interface{}, error) {
 			block, err := s.blocks.GetByHeight(height)
 			if err != nil {
+				if errors.Is(err, storageErrs.ErrNotFound) { // make sure to wrap in not found error as the streamer expects it
+					return nil, errors.Join(flowgoStorage.ErrNotFound, err)
+				}
 				return nil, fmt.Errorf("failed to get block at height: %d: %w", height, err)
 			}
 
@@ -150,6 +157,9 @@ func (s *StreamAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) (*
 			}
 
 			// todo once a block can contain multiple transactions this needs to be refactored
+			if len(block.TransactionHashes) != 1 {
+				return nil, fmt.Errorf("block contains more than a single transaction")
+			}
 			hash := block.TransactionHashes[0]
 
 			tx, err := s.transactions.Get(hash)
