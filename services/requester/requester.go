@@ -13,12 +13,13 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	gethVM "github.com/ethereum/go-ethereum/core/vm"
 	"github.com/onflow/cadence"
+	"github.com/onflow/flow-evm-gateway/api/errors"
+	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access"
 	"github.com/onflow/flow-go-sdk/crypto"
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/flow-go/fvm/systemcontracts"
-	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
 )
@@ -80,25 +81,23 @@ type Requester interface {
 var _ Requester = &EVM{}
 
 type EVM struct {
-	logger  zerolog.Logger
-	client  access.Client
-	address flow.Address
-	signer  crypto.Signer
-	chainID flowGo.ChainID
+	client access.Client
+	config *config.Config
+	signer crypto.Signer
+	logger zerolog.Logger
 }
 
 func NewEVM(
 	client access.Client,
-	address flow.Address,
+	config *config.Config,
 	signer crypto.Signer,
-	chainID flowGo.ChainID,
-	createCOA bool,
 	logger zerolog.Logger,
 ) (*EVM, error) {
 	logger = logger.With().Str("component", "requester").Logger()
 	// check that the address stores already created COA resource in the "evm" storage path.
 	// if it doesn't check if the auto-creation boolean is true and if so create it
 	// otherwise fail. COA resource is required by the EVM requester to be able to submit transactions.
+	address := config.COAAddress
 	acc, err := client.GetAccount(context.Background(), address)
 	if err != nil {
 		return nil, fmt.Errorf(
@@ -117,16 +116,15 @@ func NewEVM(
 	}
 
 	evm := &EVM{
-		client:  client,
-		address: address,
-		signer:  signer,
-		logger:  logger,
-		chainID: chainID,
+		client: client,
+		config: config,
+		signer: signer,
+		logger: logger,
 	}
 
 	// create COA on the account
 	// todo improve this to first check if coa exists and only if it doesn't create it, if it doesn't and the flag is false return an error
-	if createCOA {
+	if config.CreateCOAResource {
 		// we ignore errors for now since creation of already existing COA resource will fail, which is fine for now
 		id, err := evm.signAndSend(
 			context.Background(),
@@ -147,6 +145,10 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 	tx := &types.Transaction{}
 	if err := tx.UnmarshalBinary(data); err != nil {
 		return common.Hash{}, err
+	}
+
+	if tx.GasPrice().Cmp(e.config.GasPrice) < 0 {
+		return common.Hash{}, errors.NewErrGasPriceTooLow(e.config.GasPrice)
 	}
 
 	hexEncodedTx, err := cadence.NewString(hex.EncodeToString(data))
@@ -205,12 +207,13 @@ func (e *EVM) signAndSend(ctx context.Context, script []byte, args ...cadence.Va
 		return flow.EmptyID, err
 	}
 
+	address := e.config.COAAddress
 	flowTx := flow.NewTransaction().
 		SetScript(script).
-		SetProposalKey(e.address, index, seqNum).
+		SetProposalKey(address, index, seqNum).
 		SetReferenceBlockID(latestBlock.ID).
-		SetPayer(e.address).
-		AddAuthorizer(e.address)
+		SetPayer(address).
+		AddAuthorizer(address)
 
 	for _, arg := range args {
 		if err := flowTx.AddArgument(arg); err != nil {
@@ -218,7 +221,7 @@ func (e *EVM) signAndSend(ctx context.Context, script []byte, args ...cadence.Va
 		}
 	}
 
-	if err := flowTx.SignEnvelope(e.address, index, e.signer); err != nil {
+	if err := flowTx.SignEnvelope(address, index, e.signer); err != nil {
 		return flow.EmptyID, fmt.Errorf("failed to sign envelope: %w", err)
 	}
 
@@ -407,7 +410,7 @@ func (e *EVM) GetCode(
 
 // getSignerNetworkInfo loads the signer account from network and returns key index and sequence number
 func (e *EVM) getSignerNetworkInfo(ctx context.Context) (int, uint64, error) {
-	account, err := e.client.GetAccount(ctx, e.address)
+	account, err := e.client.GetAccount(ctx, e.config.COAAddress)
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to get signer info account: %w", err)
 	}
@@ -425,7 +428,7 @@ func (e *EVM) getSignerNetworkInfo(ctx context.Context) (int, uint64, error) {
 // replaceAddresses replace the addresses based on the network
 func (e *EVM) replaceAddresses(script []byte) []byte {
 	// make the list of all contracts we should replace address for
-	sc := systemcontracts.SystemContractsForChain(e.chainID)
+	sc := systemcontracts.SystemContractsForChain(e.config.FlowNetworkID)
 	contracts := []systemcontracts.SystemContract{sc.EVMContract, sc.FungibleToken, sc.FlowToken}
 
 	s := string(script)
@@ -438,7 +441,7 @@ func (e *EVM) replaceAddresses(script []byte) []byte {
 	}
 
 	// also replace COA address if used (in scripts)
-	s = strings.ReplaceAll(s, "0xCOA", e.address.HexWithPrefix())
+	s = strings.ReplaceAll(s, "0xCOA", e.config.COAAddress.HexWithPrefix())
 
 	return []byte(s)
 }
