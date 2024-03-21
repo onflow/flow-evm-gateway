@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -116,12 +117,12 @@ func (s *StreamAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
 		func(ctx context.Context, height uint64) (interface{}, error) {
 			block, err := s.blocks.GetByHeight(height)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("failed to get block at height: %d: %w", height, err)
 			}
 
 			h, err := block.Hash()
 			if err != nil {
-				return nil, err
+				return nil, errs.ErrInternal
 			}
 			// todo there is a lot of missing data: https://docs.chainstack.com/reference/ethereum-native-subscribe-newheads
 			return Block{
@@ -142,9 +143,10 @@ func (s *StreamAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) (*
 		ctx,
 		s.transactionsBroadcaster,
 		func(ctx context.Context, height uint64) (interface{}, error) {
+			fmt.Println("## getting transaction", height)
 			block, err := s.blocks.GetByHeight(height)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("failed to get block at height: %d: %w", height, err)
 			}
 
 			// todo once a block can contain multiple transactions this needs to be refactored
@@ -152,12 +154,12 @@ func (s *StreamAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) (*
 
 			tx, err := s.transactions.Get(hash)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("failed to get tx with hash: %s at height: %d: %w", hash, height, err)
 			}
 
 			rcp, err := s.receipts.GetByTransactionID(hash)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("failed to get receipt with hash: %s at height: %d: %w", hash, height, err)
 			}
 
 			from, err := types.Sender(types.LatestSignerForChainID(tx.ChainId()), tx)
