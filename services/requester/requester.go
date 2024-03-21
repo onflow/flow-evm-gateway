@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	gethVM "github.com/ethereum/go-ethereum/core/vm"
 	"github.com/onflow/cadence"
+	"github.com/onflow/flow-evm-gateway/api/errors"
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access"
@@ -147,10 +148,7 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 	}
 
 	if tx.GasPrice().Cmp(e.config.GasPrice) < 0 {
-		return common.Hash{}, fmt.Errorf(
-			"the minimum accepted gas price for transactions is: %d",
-			e.config.GasPrice,
-		)
+		return common.Hash{}, errors.NewErrGasPriceTooLow(e.config.GasPrice)
 	}
 
 	hexEncodedTx, err := cadence.NewString(hex.EncodeToString(data))
