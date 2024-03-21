@@ -107,7 +107,7 @@ func (b *BlockChainAPI) SendRawTransaction(
 	id, err := b.evm.SendRawTransaction(ctx, input)
 	if err != nil {
 		b.logger.Error().Err(err).Msg("failed to send raw transaction")
-		return common.Hash{}, errs.ErrInternal
+		return common.Hash{}, err
 	}
 
 	return id, nil

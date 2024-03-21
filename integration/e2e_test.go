@@ -483,7 +483,7 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 		COAAddress:         gwAddress,
 		COAKey:             gwKey,
 		CreateCOAResource:  false,
-		GasPrice:           new(big.Int).SetUint64(1),
+		GasPrice:           new(big.Int).SetUint64(0),
 	}
 
 	rpcTester := &rpcTest{
