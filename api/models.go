@@ -138,6 +138,6 @@ type Block struct {
 	Number       hexutil.Uint64 `json:"number"`
 	ParentHash   common.Hash    `json:"parentHash"`
 	ReceiptsRoot common.Hash    `json:"receiptsRoot"`
-	Transactions []common.Hash  `json:"transactions"`
+	Transactions interface{}    `json:"transactions"`
 	// todo add more fields needed
 }

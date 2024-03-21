@@ -543,14 +543,38 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 	latestBlockNumber, err := rpcTester.blockNumber()
 	require.NoError(t, err)
 
-	blkRpc, err := rpcTester.getBlock(latestBlockNumber)
+	// check the eth_getBlockByNumber JSON-RPC endpoint,
+	// with `fullTx` option.
+	blkRpc, err := rpcTester.getBlock(latestBlockNumber, true)
 	require.NoError(t, err)
 
 	require.Len(t, blkRpc.Transactions, 1)
 	assert.Equal(t, uintHex(4), blkRpc.Number)
 
+	require.Len(t, blkRpc.FullTransactions(), 1)
+	fullTx := blkRpc.FullTransactions()[0]
+
+	assert.Equal(t, blkRpc.Hash, fullTx["blockHash"])
+	assert.Equal(t, blkRpc.Number, fullTx["blockNumber"])
+	assert.Nil(t, fullTx["to"])
+
+	// check the eth_getBlockByHash JSON-RPC endpoint,
+	// with `fullTx` option.
+	blkRpc, err = rpcTester.getBlockByHash(blkRpc.Hash, true)
+	require.NoError(t, err)
+
+	require.Len(t, blkRpc.Transactions, 1)
+	assert.Equal(t, uintHex(4), blkRpc.Number)
+
+	require.Len(t, blkRpc.FullTransactions(), 1)
+	fullTx = blkRpc.FullTransactions()[0]
+
+	assert.Equal(t, blkRpc.Hash, fullTx["blockHash"])
+	assert.Equal(t, blkRpc.Number, fullTx["blockNumber"])
+	assert.Nil(t, fullTx["to"])
+
 	// check the deployment transaction and receipt
-	deployHash := blkRpc.Transactions[0]
+	deployHash := blkRpc.TransactionHashes()[0]
 	require.Equal(t, hash.String(), deployHash)
 
 	txRpc, err := rpcTester.getTx(deployHash)
@@ -605,12 +629,12 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 	latestBlockNumber, err = rpcTester.blockNumber()
 	require.NoError(t, err)
 
-	blkRpc, err = rpcTester.getBlock(latestBlockNumber)
+	blkRpc, err = rpcTester.getBlock(latestBlockNumber, false)
 	require.NoError(t, err)
 	assert.Equal(t, uintHex(5), blkRpc.Number)
 	require.Len(t, blkRpc.Transactions, 1)
 
-	interactHash := blkRpc.Transactions[0]
+	interactHash := blkRpc.TransactionHashes()[0]
 	assert.Equal(t, signedHash.String(), interactHash)
 
 	txRpc, err = rpcTester.getTx(interactHash)
@@ -659,12 +683,12 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 	latestBlockNumber, err = rpcTester.blockNumber()
 	require.NoError(t, err)
 
-	blkRpc, err = rpcTester.getBlock(latestBlockNumber)
+	blkRpc, err = rpcTester.getBlock(latestBlockNumber, false)
 	require.NoError(t, err)
 	assert.Equal(t, uintHex(6), blkRpc.Number)
 	require.Len(t, blkRpc.Transactions, 1)
 
-	interactHash = blkRpc.Transactions[0]
+	interactHash = blkRpc.TransactionHashes()[0]
 	assert.Equal(t, signedHash.String(), interactHash)
 
 	txRpc, err = rpcTester.getTx(interactHash)
@@ -699,11 +723,11 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 		time.Sleep(1 * time.Second)
 
 		// block is produced by above call to the sum that emits sdkEvent
-		blkRpc, err = rpcTester.getBlock(latestBlockNumber + 1 + uint64(i))
+		blkRpc, err = rpcTester.getBlock(latestBlockNumber+1+uint64(i), false)
 		require.NoError(t, err)
 		require.Len(t, blkRpc.Transactions, 1)
 
-		sumHash := blkRpc.Transactions[0]
+		sumHash := blkRpc.TransactionHashes()[0]
 		assert.Equal(t, signedHash.String(), sumHash)
 
 		_, err = rpcTester.getTx(sumHash)
@@ -732,7 +756,7 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 
 	// successfully filter by block id with found single match for each block
 	for i := 0; i < 4; i++ {
-		blkRpc, err = rpcTester.getBlock(latestBlockNumber + 1 + uint64(i))
+		blkRpc, err = rpcTester.getBlock(latestBlockNumber+1+uint64(i), false)
 		require.NoError(t, err)
 
 		blkID := common.HexToHash(blkRpc.Hash)
@@ -757,7 +781,7 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 	}
 
 	// invalid filter by block id with wrong topic value
-	blkRpc, err = rpcTester.getBlock(latestBlockNumber + 1)
+	blkRpc, err = rpcTester.getBlock(latestBlockNumber+1, false)
 	require.NoError(t, err)
 	blkID := common.HexToHash(blkRpc.Hash)
 	require.NoError(t, err)

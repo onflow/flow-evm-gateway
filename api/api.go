@@ -276,13 +276,23 @@ func (b *BlockChainAPI) GetBlockByHash(
 		return nil, errs.ErrInternal
 	}
 
-	return &Block{
+	block := &Block{
 		Hash:         h,
 		Number:       hexutil.Uint64(bl.Height),
 		ParentHash:   bl.ParentBlockHash,
 		ReceiptsRoot: bl.ReceiptRoot,
 		Transactions: bl.TransactionHashes,
-	}, nil
+	}
+
+	if fullTx {
+		transactions, err := b.fetchBlockTransactions(ctx, bl)
+		if err != nil {
+			return nil, err
+		}
+		block.Transactions = transactions
+	}
+
+	return block, nil
 }
 
 // GetBlockByNumber returns the requested canonical block.
@@ -297,10 +307,6 @@ func (b *BlockChainAPI) GetBlockByNumber(
 	blockNumber rpc.BlockNumber,
 	fullTx bool,
 ) (*Block, error) {
-	if fullTx { // todo support full tx
-		b.logger.Warn().Msg("not supported getting full txs")
-	}
-
 	height := uint64(blockNumber)
 	var err error
 	// todo for now we treat all special blocks as latest, think which special statuses we can even support on Flow
@@ -322,13 +328,23 @@ func (b *BlockChainAPI) GetBlockByNumber(
 		return nil, errs.ErrInternal
 	}
 
-	return &Block{
+	block := &Block{
 		Hash:         h,
 		Number:       hexutil.Uint64(bl.Height),
 		ParentHash:   bl.ParentBlockHash,
 		ReceiptsRoot: bl.ReceiptRoot,
 		Transactions: bl.TransactionHashes,
-	}, nil
+	}
+
+	if fullTx {
+		transactions, err := b.fetchBlockTransactions(ctx, bl)
+		if err != nil {
+			return nil, err
+		}
+		block.Transactions = transactions
+	}
+
+	return block, nil
 }
 
 // GetBlockReceipts returns the block receipts for the given block hash or number or tag.
@@ -765,4 +781,20 @@ func (b *BlockChainAPI) FeeHistory(
 // MaxPriorityFeePerGas returns a suggestion for a gas tip cap for dynamic fee transactions.
 func (b *BlockChainAPI) MaxPriorityFeePerGas(ctx context.Context) (*hexutil.Big, error) {
 	return nil, errs.ErrNotSupported
+}
+
+func (b *BlockChainAPI) fetchBlockTransactions(
+	ctx context.Context,
+	block *evmTypes.Block,
+) ([]*RPCTransaction, error) {
+	transactions := make([]*RPCTransaction, 0)
+	for _, txHash := range block.TransactionHashes {
+		transaction, err := b.GetTransactionByHash(ctx, txHash)
+		if err != nil {
+			return nil, err
+		}
+		transactions = append(transactions, transaction)
+	}
+
+	return transactions, nil
 }
