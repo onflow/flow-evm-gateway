@@ -915,6 +915,16 @@ func TestE2E_Streaming(t *testing.T) {
 
 	time.Sleep(500 * time.Millisecond) // some time to startup
 
+	flowAmount, _ := cadence.NewUFix64("10.0")
+
+	// Steps 1, 2 and 3. - create COA and fund it - setup phase
+	r, err := fundEOA(emu, flowAmount, fundEOAAddress)
+	require.NoError(t, err)
+	require.NoError(t, r.Error)
+	assert.Len(t, r.Events, 8)
+
+	time.Sleep(500 * time.Millisecond)
+
 	// connect and subscribe to new blocks
 	blkWrite, blkRead, err := rpcTester.wsConnect()
 	require.NoError(t, err)
@@ -932,21 +942,22 @@ func TestE2E_Streaming(t *testing.T) {
 	require.NoError(t, err)
 
 	// first block stream response is for successful subscription
-	_, err = txRead()
+	res, err := txRead()
+	fmt.Println("#t0", string(res))
 	require.NoError(t, err)
 
 	// send some evm transfers that will produce transactions and blocks
 	txCount := 5
+	flowTransfer, _ := cadence.NewUFix64("1.0")
+	transferWei := types.NewBalanceFromUFix64(flowTransfer)
+	fundEOAKey, err := crypto.HexToECDSA(fundEOARawKey)
+	require.NoError(t, err)
 	for i := 0; i < txCount; i++ {
-		flowTransfer, _ := cadence.NewUFix64("1.0")
-		transferWei := types.NewBalanceFromUFix64(flowTransfer)
-		fundEOAKey, err := crypto.HexToECDSA(fundEOARawKey)
-		require.NoError(t, err)
 		_, _, err = evmSignAndRun(emu, transferWei, params.TxGas, fundEOAKey, uint64(i), &transferEOAAdress, nil)
 		require.NoError(t, err)
 	}
 
-	const startHeight = 2 // first two blocks are used for evm setup events
+	const startHeight = 5 // first two blocks are used for evm setup events
 	currentHeight := startHeight
 	var blkSubID string
 	// iterate over all block data streams and make sure all were received
@@ -969,6 +980,7 @@ func TestE2E_Streaming(t *testing.T) {
 	var txSubID string
 	currentHeight = startHeight // reset
 	for i := 0; i < txCount; i++ {
+		fmt.Println("#t1", i)
 		event, err := txRead()
 		require.NoError(t, err)
 
@@ -990,7 +1002,7 @@ func TestE2E_Streaming(t *testing.T) {
 	require.NotEmpty(t, blkSubID)
 	err = blkWrite(unsubscribeRequest(blkSubID))
 	require.NoError(t, err)
-	res, err := blkRead()
+	res, err = blkRead()
 	require.NoError(t, err)
 	var u map[string]any
 	require.NoError(t, json.Unmarshal(res, &u))
