@@ -116,6 +116,7 @@ func startEventIngestionEngine(ctx context.Context, dbDir string) (
 	accounts := pebble.NewAccounts(db)
 	txs := pebble.NewTransactions(db)
 	blocksBroadcaster := broadcast.NewBroadcaster()
+	txBroadcaster := broadcast.NewBroadcaster()
 
 	err = blocks.InitHeights(config.EmulatorInitCadenceHeight)
 	if err != nil {
@@ -123,7 +124,16 @@ func startEventIngestionEngine(ctx context.Context, dbDir string) (
 	}
 
 	log = logger.With().Str("component", "ingestion").Logger()
-	engine := ingestion.NewEventIngestionEngine(subscriber, blocks, receipts, txs, accounts, blocksBroadcaster, log)
+	engine := ingestion.NewEventIngestionEngine(
+		subscriber,
+		blocks,
+		receipts,
+		txs,
+		accounts,
+		blocksBroadcaster,
+		txBroadcaster,
+		log,
+	)
 
 	go func() {
 		err = engine.Run(ctx)
@@ -172,10 +182,7 @@ func fundEOA(
 			)
 
 			log(result)
-			self.auth.storage.save<@EVM.CadenceOwnedAccount>(
-				<-acc,
-				to: StoragePath(identifier: "evm")!
-			)
+			destroy acc
 		}
 	}`
 
@@ -385,7 +392,7 @@ func (r *rpcTest) request(method string, params string) (json.RawMessage, error)
 	reqURL := fmt.Sprintf(`{"jsonrpc":"2.0","id":0,"method":"%s","params":%s}`, method, params)
 	fmt.Println("-> request: ", reqURL)
 	body := bytes.NewReader([]byte(reqURL))
-	req, err := http.NewRequest(http.MethodPost, r.url, body)
+	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://%s", r.url), body)
 	if err != nil {
 		return nil, err
 	}
@@ -675,6 +682,7 @@ func (r *rpcTest) wsConnect() (func(string) error, func() ([]byte, error), error
 	}
 
 	write := func(req string) error {
+		fmt.Println("--> ws:", req)
 		return c.WriteMessage(websocket.TextMessage, []byte(req))
 	}
 
@@ -692,6 +700,10 @@ func (r *rpcTest) wsConnect() (func(string) error, func() ([]byte, error), error
 
 func newHeadsRequest() string {
 	return `{"jsonrpc":"2.0","id":0,"method":"eth_subscribe","params":["newHeads"]}`
+}
+
+func newTransactionsRequest() string {
+	return `{"jsonrpc":"2.0","id":0,"method":"eth_subscribe","params":["newPendingTransactions"]}`
 }
 
 func unsubscribeRequest(id string) string {

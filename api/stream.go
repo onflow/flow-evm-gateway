@@ -2,15 +2,18 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/rpc"
+	errs "github.com/onflow/flow-evm-gateway/api/errors"
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/storage"
+	storageErrs "github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/onflow/flow-go/engine"
 	"github.com/onflow/flow-go/engine/access/state_stream/backend"
-	"github.com/onflow/flow-go/fvm/evm/types"
+	flowgoStorage "github.com/onflow/flow-go/storage"
 	"github.com/rs/zerolog"
 )
 
@@ -19,13 +22,14 @@ import (
 const subscriptionBufferLimit = 1
 
 type StreamAPI struct {
-	logger            zerolog.Logger
-	config            *config.Config
-	blocks            storage.BlockIndexer
-	transactions      storage.TransactionIndexer
-	receipts          storage.ReceiptIndexer
-	accounts          storage.AccountIndexer
-	blocksBroadcaster *engine.Broadcaster
+	logger                  zerolog.Logger
+	config                  *config.Config
+	blocks                  storage.BlockIndexer
+	transactions            storage.TransactionIndexer
+	receipts                storage.ReceiptIndexer
+	accounts                storage.AccountIndexer
+	blocksBroadcaster       *engine.Broadcaster
+	transactionsBroadcaster *engine.Broadcaster
 }
 
 func NewStreamAPI(
@@ -36,15 +40,17 @@ func NewStreamAPI(
 	receipts storage.ReceiptIndexer,
 	accounts storage.AccountIndexer,
 	blocksBroadcaster *engine.Broadcaster,
+	transactionsBroadcaster *engine.Broadcaster,
 ) *StreamAPI {
 	return &StreamAPI{
-		logger:            logger,
-		config:            config,
-		blocks:            blocks,
-		transactions:      transactions,
-		receipts:          receipts,
-		accounts:          accounts,
-		blocksBroadcaster: blocksBroadcaster,
+		logger:                  logger,
+		config:                  config,
+		blocks:                  blocks,
+		transactions:            transactions,
+		receipts:                receipts,
+		accounts:                accounts,
+		blocksBroadcaster:       blocksBroadcaster,
+		transactionsBroadcaster: transactionsBroadcaster,
 	}
 }
 
@@ -54,7 +60,7 @@ func NewStreamAPI(
 func (s *StreamAPI) newSubscription(
 	ctx context.Context,
 	broadcaster *engine.Broadcaster,
-	dataAdapter func(any) (any, error),
+	getData backend.GetDataByHeightFunc,
 ) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
@@ -66,13 +72,7 @@ func (s *StreamAPI) newSubscription(
 		return nil, err
 	}
 
-	sub := backend.NewHeightBasedSubscription(
-		subscriptionBufferLimit,
-		height,
-		func(ctx context.Context, height uint64) (interface{}, error) {
-			return s.blocks.GetByHeight(height)
-		},
-	)
+	sub := backend.NewHeightBasedSubscription(subscriptionBufferLimit, height, getData)
 
 	rpcSub := notifier.CreateSubscription()
 	rpcSub.ID = rpc.ID(sub.ID()) // make sure ids are unified
@@ -86,7 +86,7 @@ func (s *StreamAPI) newSubscription(
 		s.config.StreamTimeout,
 		s.config.StreamLimit,
 		sub,
-	).Stream(ctx)
+	).Stream(context.Background())
 
 	go func() {
 		for {
@@ -97,14 +97,8 @@ func (s *StreamAPI) newSubscription(
 					return
 				}
 
-				adapted, err := dataAdapter(data)
-				if err != nil {
-					l.Err(err).Msg("failed to adapt data")
-					continue
-				}
-
 				l.Debug().Msg("notifying new event")
-				err = notifier.Notify(rpcSub.ID, adapted)
+				err = notifier.Notify(rpcSub.ID, data)
 				if err != nil {
 					l.Err(err).Msg("failed to notify")
 				}
@@ -124,23 +118,90 @@ func (s *StreamAPI) newSubscription(
 
 // NewHeads send a notification each time a new block is appended to the chain.
 func (s *StreamAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
-	return s.newSubscription(ctx, s.blocksBroadcaster, func(blockData any) (any, error) {
-		block, ok := blockData.(*types.Block)
-		if !ok {
-			return nil, fmt.Errorf("received data of incorrect type, it should be of type *types.Block")
-		}
+	return s.newSubscription(
+		ctx,
+		s.blocksBroadcaster,
+		func(ctx context.Context, height uint64) (interface{}, error) {
+			block, err := s.blocks.GetByHeight(height)
+			if err != nil {
+				if errors.Is(err, storageErrs.ErrNotFound) { // make sure to wrap in not found error as the streamer expects it
+					return nil, errors.Join(flowgoStorage.ErrNotFound, err)
+				}
+				return nil, fmt.Errorf("failed to get block at height: %d: %w", height, err)
+			}
 
-		h, err := block.Hash()
-		if err != nil {
-			return nil, err
-		}
-		// todo there is a lot of missing data: https://docs.chainstack.com/reference/ethereum-native-subscribe-newheads
-		return Block{
-			Hash:         h,
-			Number:       hexutil.Uint64(block.Height),
-			ParentHash:   block.ParentBlockHash,
-			ReceiptsRoot: block.ReceiptRoot,
-			Transactions: block.TransactionHashes,
-		}, nil
-	})
+			h, err := block.Hash()
+			if err != nil {
+				return nil, errs.ErrInternal
+			}
+			// todo there is a lot of missing data: https://docs.chainstack.com/reference/ethereum-native-subscribe-newheads
+			return Block{
+				Hash:         h,
+				Number:       hexutil.Uint64(block.Height),
+				ParentHash:   block.ParentBlockHash,
+				ReceiptsRoot: block.ReceiptRoot,
+				Transactions: block.TransactionHashes}, nil
+		},
+	)
+}
+
+// NewPendingTransactions creates a subscription that is triggered each time a
+// transaction enters the transaction pool. If fullTx is true the full tx is
+// sent to the client, otherwise the hash is sent.
+func (s *StreamAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) (*rpc.Subscription, error) {
+	return s.newSubscription(
+		ctx,
+		s.transactionsBroadcaster,
+		func(ctx context.Context, height uint64) (interface{}, error) {
+			block, err := s.blocks.GetByHeight(height)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get block at height: %d: %w", height, err)
+			}
+
+			// todo once a block can contain multiple transactions this needs to be refactored
+			if len(block.TransactionHashes) != 1 {
+				return nil, fmt.Errorf("block contains more than a single transaction")
+			}
+			hash := block.TransactionHashes[0]
+
+			tx, err := s.transactions.Get(hash)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get tx with hash: %s at height: %d: %w", hash, height, err)
+			}
+
+			rcp, err := s.receipts.GetByTransactionID(hash)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get receipt with hash: %s at height: %d: %w", hash, height, err)
+			}
+
+			from, err := tx.From()
+			if err != nil {
+				return nil, errs.ErrInternal
+			}
+
+			h, err := tx.Hash()
+			if err != nil {
+				return nil, err
+			}
+
+			v, r, ss := tx.RawSignatureValues()
+
+			return &RPCTransaction{
+				Hash:        h,
+				BlockHash:   &rcp.BlockHash,
+				BlockNumber: (*hexutil.Big)(rcp.BlockNumber),
+				From:        from.Hex(),
+				To:          tx.To().Hex(),
+				Gas:         hexutil.Uint64(rcp.GasUsed),
+				GasPrice:    (*hexutil.Big)(rcp.EffectiveGasPrice),
+				Input:       tx.Data(),
+				Nonce:       hexutil.Uint64(tx.Nonce()),
+				Value:       (*hexutil.Big)(tx.Value()),
+				Type:        hexutil.Uint64(tx.Type()),
+				V:           (*hexutil.Big)(v),
+				R:           (*hexutil.Big)(r),
+				S:           (*hexutil.Big)(ss),
+			}, nil
+		},
+	)
 }
