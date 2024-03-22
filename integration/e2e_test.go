@@ -973,7 +973,7 @@ func TestE2E_Streaming(t *testing.T) {
 		COAAddress:         gwAddress,
 		COAKey:             gwKey,
 		CreateCOAResource:  true,
-		GasPrice:           new(big.Int).SetUint64(1),
+		GasPrice:           new(big.Int).SetUint64(0),
 		LogWriter:          os.Stdout,
 		LogLevel:           zerolog.DebugLevel,
 		StreamLimit:        5,
@@ -1044,11 +1044,11 @@ func TestE2E_Streaming(t *testing.T) {
 		event, err := blkRead()
 		require.NoError(t, err)
 
-		var res map[string]string
+		var res map[string]any
 		require.NoError(t, json.Unmarshal(event.Params.Result, &res))
 
 		// this makes sure we receive the events in correct order
-		h, err := hexutil.DecodeUint64(res["number"])
+		h, err := hexutil.DecodeUint64(res["number"].(string))
 		require.NoError(t, err)
 		assert.Equal(t, currentHeight, int(h))
 		currentHeight++
@@ -1077,7 +1077,9 @@ func TestE2E_Streaming(t *testing.T) {
 	unsubscribe(t, txWrite, txRead, txSubID)
 
 	// deploy contract for logs/events stream filtering
-	nonce := uint64(0)
+	nonce, err := rpcTester.getNonce(fundEOAAddress)
+	require.NoError(t, err)
+
 	gasLimit := uint64(4700000) // arbitrarily big
 	eoaKey, err := crypto.HexToECDSA(fundEOARawKey)
 	require.NoError(t, err)
@@ -1089,6 +1091,8 @@ func TestE2E_Streaming(t *testing.T) {
 	hash, err := rpcTester.sendRawTx(signed)
 	require.NoError(t, err)
 	require.NotNil(t, hash)
+
+	time.Sleep(300 * time.Millisecond)
 
 	rcp, err := rpcTester.getReceipt(hash.Hex())
 	require.NoError(t, err)
@@ -1137,10 +1141,7 @@ func unsubscribe(t *testing.T, write func(string) error, read func() (*streamMsg
 	require.NoError(t, write(unsubscribeRequest(id)))
 	event, err := read()
 	require.NoError(t, err)
-
-	var u map[string]bool
-	require.NoError(t, json.Unmarshal(event.Params.Result, &u))
-	require.True(t, u["result"]) // successfully unsubscribed
+	require.True(t, event.Result.(bool)) // successfully unsubscribed
 }
 
 // checkSumLogValue makes sure the match is correct by checking sum value
