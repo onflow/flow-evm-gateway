@@ -1003,7 +1003,7 @@ func TestE2E_Streaming(t *testing.T) {
 	// connect and subscribe to new blocks
 	blkWrite, blkRead, err := rpcTester.wsConnect()
 	require.NoError(t, err)
-	err = blkWrite(newHeadsRequest())
+	err = blkWrite(newHeadsSubscription())
 	require.NoError(t, err)
 
 	// first block stream response is for successful subscription
@@ -1013,7 +1013,7 @@ func TestE2E_Streaming(t *testing.T) {
 	// connect and subscribe to new transactions
 	txWrite, txRead, err := rpcTester.wsConnect()
 	require.NoError(t, err)
-	err = txWrite(newTransactionsRequest())
+	err = txWrite(newTransactionsSubscription())
 	require.NoError(t, err)
 
 	// first block stream response is for successful subscription
@@ -1044,15 +1044,15 @@ func TestE2E_Streaming(t *testing.T) {
 		event, err := blkRead()
 		require.NoError(t, err)
 
-		var msg streamMsg
-		require.NoError(t, json.Unmarshal(event, &msg))
+		var res map[string]string
+		require.NoError(t, json.Unmarshal(event.Params.Result, &res))
 
 		// this makes sure we receive the events in correct order
-		h, err := hexutil.DecodeUint64(msg.Params.Result["number"].(string))
+		h, err := hexutil.DecodeUint64(res["number"])
 		require.NoError(t, err)
 		assert.Equal(t, currentHeight, int(h))
 		currentHeight++
-		blkSubID = msg.Params.Subscription
+		blkSubID = event.Params.Subscription
 	}
 
 	// iterate over all transactions and make sure all were received
@@ -1062,30 +1062,86 @@ func TestE2E_Streaming(t *testing.T) {
 		event, err := txRead()
 		require.NoError(t, err)
 
-		var msg streamMsg
-		require.NoError(t, json.Unmarshal(event, &msg))
-
+		var res map[string]string
+		require.NoError(t, json.Unmarshal(event.Params.Result, &res))
 		// this makes sure we received txs in correct order
-		h, err := hexutil.DecodeUint64(msg.Params.Result["blockNumber"].(string))
+		h, err := hexutil.DecodeUint64(res["blockNumber"])
 		require.NoError(t, err)
 		assert.Equal(t, currentHeight, int(h))
-		require.Equal(t, transferEOAAdress.Hex(), msg.Params.Result["to"].(string))
+		require.Equal(t, transferEOAAdress.Hex(), res["to"])
 		currentHeight++
-		txSubID = msg.Params.Subscription
+		txSubID = event.Params.Subscription
 	}
 
 	unsubscribe(t, blkWrite, blkRead, blkSubID)
 	unsubscribe(t, txWrite, txRead, txSubID)
+
+	// deploy contract for logs/events stream filtering
+	nonce := uint64(0)
+	gasLimit := uint64(4700000) // arbitrarily big
+	eoaKey, err := crypto.HexToECDSA(fundEOARawKey)
+	require.NoError(t, err)
+
+	deployData, err := hex.DecodeString(testContractBinary)
+	require.NoError(t, err)
+
+	signed, _, err := evmSign(nil, gasLimit, eoaKey, nonce, nil, deployData)
+	hash, err := rpcTester.sendRawTx(signed)
+	require.NoError(t, err)
+	require.NotNil(t, hash)
+
+	rcp, err := rpcTester.getReceipt(hash.Hex())
+	require.NoError(t, err)
+	contractAddress := rcp.ContractAddress
+
+	storeContract, err := newContract(testContractBinary, testContractABI)
+	require.NoError(t, err)
+
+	// different subscription to logs with different filters
+	allLogsWrite, allLogsRead, err := rpcTester.wsConnect()
+	require.NoError(t, err)
+	err = allLogsWrite(newLogsSubscription(contractAddress.String(), []string{}))
+	require.NoError(t, err)
+
+	_, _ = allLogsRead() // ignore current block todo - we need to skip transmissions if no data, there is a PR merged in master that updates subscriber we need to update to
+
+	// submit transactions that emit logs
+	logCount := 5
+	for i := 0; i < logCount; i++ {
+		sumA := big.NewInt(5)
+		sumB := big.NewInt(int64(i))
+		callSum, err := storeContract.call("sum", sumA, sumB)
+		require.NoError(t, err)
+
+		nonce++
+		res, _, err := evmSignAndRun(emu, nil, gasLimit, eoaKey, nonce, &contractAddress, callSum)
+		require.NoError(t, err)
+		require.NoError(t, res.Error)
+		time.Sleep(300 * time.Millisecond)
+	}
+
+	for i := 0; i < logCount; i++ {
+		event, err := allLogsRead()
+		require.NoError(t, err)
+
+		var res map[string]string
+		require.NoError(t, json.Unmarshal(event.Params.Result, &res))
+		h, err := hexutil.DecodeUint64(res["blockNumber"])
+		require.NoError(t, err)
+		assert.Equal(t, currentHeight, int(h))
+		require.Equal(t, contractAddress.String(), res["address"])
+	}
 }
 
-func unsubscribe(t *testing.T, write func(string) error, read func() ([]byte, error), id string) {
+func unsubscribe(t *testing.T, write func(string) error, read func() (streamMsg, error), id string) {
 	require.NotEmpty(t, id)
 	require.NoError(t, write(unsubscribeRequest(id)))
-	res, err := read()
+	event, err := read()
 	require.NoError(t, err)
-	var u map[string]any
-	require.NoError(t, json.Unmarshal(res, &u))
-	require.True(t, u["result"].(bool)) // successfully unsubscribed
+
+	var u map[string]bool
+	require.NoError(t, json.Unmarshal(event.Params.Result, &u))
+	require.True(t, u["result"]) // successfully unsubscribed
 }
 
 // checkSumLogValue makes sure the match is correct by checking sum value
