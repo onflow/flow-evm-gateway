@@ -190,12 +190,17 @@ func (s *StreamAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) (*
 
 			v, r, ss := tx.RawSignatureValues()
 
+			var to string
+			if tx.To() != nil {
+				to = tx.To().Hex()
+			}
+
 			return &RPCTransaction{
 				Hash:        h,
 				BlockHash:   &rcp.BlockHash,
 				BlockNumber: (*hexutil.Big)(rcp.BlockNumber),
 				From:        from.Hex(),
-				To:          tx.To().Hex(),
+				To:          to,
 				Gas:         hexutil.Uint64(rcp.GasUsed),
 				GasPrice:    (*hexutil.Big)(rcp.EffectiveGasPrice),
 				Input:       tx.Data(),

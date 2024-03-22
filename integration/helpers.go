@@ -547,6 +547,7 @@ func (r *rpcTest) getReceipt(hash string) (*types.Receipt, error) {
 		return nil, err
 	}
 
+	fmt.Println("RCP", string(rpcRes))
 	var rcp types.Receipt
 	err = json.Unmarshal(rpcRes, &rcp)
 	if err != nil {
@@ -780,4 +781,6 @@ type streamMsg struct {
 	Jsonrpc string       `json:"jsonrpc"`
 	Method  string       `json:"method"`
 	Params  streamParams `json:"params"`
+	Result  any          `json:"result"`
+	ID      any          `json:"id"`
 }

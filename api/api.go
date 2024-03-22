@@ -171,12 +171,17 @@ func (b *BlockChainAPI) GetTransactionByHash(
 	v, r, s := tx.RawSignatureValues()
 	index := uint64(rcp.TransactionIndex)
 
+	var to string
+	if tx.To() != nil {
+		to = tx.To().Hex()
+	}
+
 	txResult := &RPCTransaction{
 		Hash:             txHash,
 		BlockHash:        &rcp.BlockHash,
 		BlockNumber:      (*hexutil.Big)(rcp.BlockNumber),
 		From:             from.Hex(),
-		To:               tx.To().Hex(),
+		To:               to,
 		Gas:              hexutil.Uint64(rcp.GasUsed),
 		GasPrice:         (*hexutil.Big)(rcp.EffectiveGasPrice),
 		Input:            tx.Data(),
