@@ -182,10 +182,7 @@ func fundEOA(
 			)
 
 			log(result)
-			self.auth.storage.save<@EVM.CadenceOwnedAccount>(
-				<-acc,
-				to: StoragePath(identifier: "evm")!
-			)
+			destroy acc
 		}
 	}`
 
@@ -395,7 +392,7 @@ func (r *rpcTest) request(method string, params string) (json.RawMessage, error)
 	reqURL := fmt.Sprintf(`{"jsonrpc":"2.0","id":0,"method":"%s","params":%s}`, method, params)
 	fmt.Println("-> request: ", reqURL)
 	body := bytes.NewReader([]byte(reqURL))
-	req, err := http.NewRequest(http.MethodPost, r.url, body)
+	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://%s", r.url), body)
 	if err != nil {
 		return nil, err
 	}
@@ -492,6 +489,24 @@ func (r *rpcTest) getBlock(height uint64, fullTx bool) (*rpcBlock, error) {
 	}
 
 	return &blkRpc, nil
+}
+
+func (r *rpcTest) getLatestHeight() (uint64, error) {
+	rpcRes, err := r.request(
+		"eth_getBlockByNumber",
+		fmt.Sprintf(`["%x", "false"]`, -1),
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	var blkRpc rpcBlock
+	err = json.Unmarshal(rpcRes, &blkRpc)
+	if err != nil {
+		return 0, err
+	}
+
+	return hexutil.DecodeUint64(blkRpc.Number)
 }
 
 func (r *rpcTest) getBlockByHash(hash string, fullTx bool) (*rpcBlock, error) {
@@ -685,6 +700,7 @@ func (r *rpcTest) wsConnect() (func(string) error, func() ([]byte, error), error
 	}
 
 	write := func(req string) error {
+		fmt.Println("--> ws:", req)
 		return c.WriteMessage(websocket.TextMessage, []byte(req))
 	}
 
