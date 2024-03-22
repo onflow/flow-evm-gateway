@@ -3,13 +3,14 @@ package models
 import (
 	"context"
 	"fmt"
+	"testing"
+	"time"
+
 	"github.com/onflow/flow-evm-gateway/models/mocks"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"testing"
-	"time"
 )
 
 func Test_RestartableEngine(t *testing.T) {
@@ -56,7 +57,7 @@ func Test_RestartableEngine(t *testing.T) {
 		mockEngine.
 			On("Run", mock.Anything).
 			Return(func(ctx context.Context) error {
-				curDiff := time.Now().Sub(prevTime)
+				curDiff := time.Since(prevTime)
 				// make sure time diff increases with each retry
 				assert.True(t, prevDiff < curDiff)
 				prevDiff = curDiff

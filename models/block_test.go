@@ -1,12 +1,13 @@
 package models
 
 import (
+	"math/big"
+	"testing"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"math/big"
-	"testing"
 )
 
 func Test_DecodeBlockExecutedEvent(t *testing.T) {

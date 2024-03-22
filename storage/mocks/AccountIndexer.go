@@ -8,6 +8,8 @@ import (
 	common "github.com/ethereum/go-ethereum/common"
 	mock "github.com/stretchr/testify/mock"
 
+	models "github.com/onflow/flow-evm-gateway/models"
+
 	types "github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -67,11 +69,11 @@ func (_m *AccountIndexer) GetNonce(address *common.Address) (uint64, error) {
 }
 
 // Update provides a mock function with given fields: tx, receipt
-func (_m *AccountIndexer) Update(tx *types.Transaction, receipt *types.Receipt) error {
+func (_m *AccountIndexer) Update(tx models.Transaction, receipt *types.Receipt) error {
 	ret := _m.Called(tx, receipt)
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(*types.Transaction, *types.Receipt) error); ok {
+	if rf, ok := ret.Get(0).(func(models.Transaction, *types.Receipt) error); ok {
 		r0 = rf(tx, receipt)
 	} else {
 		r0 = ret.Error(0)

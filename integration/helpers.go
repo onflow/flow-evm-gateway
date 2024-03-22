@@ -159,12 +159,15 @@ func fundEOA(
 	code := `
 	transaction(weiAmount: UInt, flowAmount: UFix64, eoaAddress: [UInt8; 20]) {
 		let fundVault: @FlowToken.Vault
+		let auth: auth(Storage) &Account
 	
 		prepare(signer: auth(Storage) &Account) {
-			let vaultRef = signer.storage.borrow<auth(FungibleToken.Withdraw) &FlowToken.Vault>(from: /storage/flowTokenVault)
-				?? panic("Could not borrow reference to the owner's Vault!")
+			let vaultRef = signer.storage.borrow<auth(FungibleToken.Withdraw) &FlowToken.Vault>(
+				from: /storage/flowTokenVault
+			) ?? panic("Could not borrow reference to the owner's Vault!")
 	
 			self.fundVault <- vaultRef.withdraw(amount: flowAmount) as! @FlowToken.Vault
+			self.auth = signer
 		}
 	
 		execute {
@@ -177,9 +180,12 @@ func fundEOA(
 				gasLimit: 300000, 
 				value: EVM.Balance(attoflow: weiAmount)
 			)
-			
+
 			log(result)
-			destroy acc
+			self.auth.storage.save<@EVM.CadenceOwnedAccount>(
+				<-acc,
+				to: StoragePath(identifier: "evm")!
+			)
 		}
 	}`
 
@@ -315,12 +321,16 @@ func evmRunTransaction(emu emulator.Emulator, signedTx []byte) (*sdk.Transaction
 
 	code := `
 	transaction(encodedTx: [UInt8]) {
-		prepare(signer: auth(Storage) &Account) {}
+		let coa: &EVM.CadenceOwnedAccount
+
+		prepare(signer: auth(Storage) &Account) {
+			self.coa = signer.storage.borrow<&EVM.CadenceOwnedAccount>(
+				from: /storage/evm
+			) ?? panic("Could not borrow reference to the COA!")
+		}
 
 		execute {
-			let feeAcc <- EVM.createCadenceOwnedAccount()
-			EVM.run(tx: encodedTx, coinbase: feeAcc.address())
-			destroy feeAcc
+			EVM.run(tx: encodedTx, coinbase: self.coa.address())
 		}
 	}`
 
@@ -466,8 +476,29 @@ func (r *rpcTest) getLogs(
 	return lg, nil
 }
 
-func (r *rpcTest) getBlock(height uint64) (*rpcBlock, error) {
-	rpcRes, err := r.request("eth_getBlockByNumber", fmt.Sprintf(`["%s",false]`, uintHex(height)))
+func (r *rpcTest) getBlock(height uint64, fullTx bool) (*rpcBlock, error) {
+	rpcRes, err := r.request(
+		"eth_getBlockByNumber",
+		fmt.Sprintf(`["%s",%t]`, uintHex(height), fullTx),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	var blkRpc rpcBlock
+	err = json.Unmarshal(rpcRes, &blkRpc)
+	if err != nil {
+		return nil, err
+	}
+
+	return &blkRpc, nil
+}
+
+func (r *rpcTest) getBlockByHash(hash string, fullTx bool) (*rpcBlock, error) {
+	rpcRes, err := r.request(
+		"eth_getBlockByHash",
+		fmt.Sprintf(`["%s",%t]`, hash, fullTx),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -689,7 +720,38 @@ type rpcBlock struct {
 	Hash         string
 	Number       string
 	ParentHash   string
-	Transactions []string
+	Transactions interface{}
+}
+
+func (b *rpcBlock) TransactionHashes() []string {
+	txHashes := make([]string, 0)
+	switch value := b.Transactions.(type) {
+	case []interface{}:
+		for _, val := range value {
+			switch element := val.(type) {
+			case string:
+				txHashes = append(txHashes, element)
+			case map[string]interface{}:
+				txHashes = append(txHashes, element["hash"].(string))
+			}
+		}
+	}
+	return txHashes
+}
+
+func (b *rpcBlock) FullTransactions() []map[string]interface{} {
+	transactions := make([]map[string]interface{}, 0)
+	switch value := b.Transactions.(type) {
+	case []interface{}:
+		for _, val := range value {
+			switch element := val.(type) {
+			case map[string]interface{}:
+				transactions = append(transactions, element)
+
+			}
+		}
+	}
+	return transactions
 }
 
 type streamParams struct {

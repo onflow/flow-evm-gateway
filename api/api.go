@@ -109,6 +109,10 @@ func (b *BlockChainAPI) SendRawTransaction(
 	id, err := b.evm.SendRawTransaction(ctx, input)
 	if err != nil {
 		b.logger.Error().Err(err).Msg("failed to send raw transaction")
+		var errGasPriceTooLow *errs.ErrGasPriceTooLow
+		if errors.As(err, &errGasPriceTooLow) {
+			return common.Hash{}, errGasPriceTooLow
+		}
 		return common.Hash{}, errs.ErrInternal
 	}
 
@@ -148,12 +152,17 @@ func (b *BlockChainAPI) GetTransactionByHash(
 		return handleError[*RPCTransaction](b.logger, err)
 	}
 
-	rcp, err := b.receipts.GetByTransactionID(tx.Hash())
+	txHash, err := tx.Hash()
 	if err != nil {
 		return handleError[*RPCTransaction](b.logger, err)
 	}
 
-	from, err := types.Sender(types.LatestSignerForChainID(tx.ChainId()), tx)
+	rcp, err := b.receipts.GetByTransactionID(txHash)
+	if err != nil {
+		return handleError[*RPCTransaction](b.logger, err)
+	}
+
+	from, err := tx.From()
 	if err != nil {
 		b.logger.Error().Err(err).Msg("failed to calculate sender")
 		return nil, errs.ErrInternal
@@ -163,7 +172,7 @@ func (b *BlockChainAPI) GetTransactionByHash(
 	index := uint64(rcp.TransactionIndex)
 
 	txResult := &RPCTransaction{
-		Hash:             tx.Hash(),
+		Hash:             txHash,
 		BlockHash:        &rcp.BlockHash,
 		BlockNumber:      (*hexutil.Big)(rcp.BlockNumber),
 		From:             from,
@@ -273,13 +282,23 @@ func (b *BlockChainAPI) GetBlockByHash(
 		return nil, errs.ErrInternal
 	}
 
-	return &Block{
+	block := &Block{
 		Hash:         h,
 		Number:       hexutil.Uint64(bl.Height),
 		ParentHash:   bl.ParentBlockHash,
 		ReceiptsRoot: bl.ReceiptRoot,
 		Transactions: bl.TransactionHashes,
-	}, nil
+	}
+
+	if fullTx {
+		transactions, err := b.fetchBlockTransactions(ctx, bl)
+		if err != nil {
+			return nil, err
+		}
+		block.Transactions = transactions
+	}
+
+	return block, nil
 }
 
 // GetBlockByNumber returns the requested canonical block.
@@ -294,10 +313,6 @@ func (b *BlockChainAPI) GetBlockByNumber(
 	blockNumber rpc.BlockNumber,
 	fullTx bool,
 ) (*Block, error) {
-	if fullTx { // todo support full tx
-		b.logger.Warn().Msg("not supported getting full txs")
-	}
-
 	height := uint64(blockNumber)
 	var err error
 	// todo for now we treat all special blocks as latest, think which special statuses we can even support on Flow
@@ -319,13 +334,23 @@ func (b *BlockChainAPI) GetBlockByNumber(
 		return nil, errs.ErrInternal
 	}
 
-	return &Block{
+	block := &Block{
 		Hash:         h,
 		Number:       hexutil.Uint64(bl.Height),
 		ParentHash:   bl.ParentBlockHash,
 		ReceiptsRoot: bl.ReceiptRoot,
 		Transactions: bl.TransactionHashes,
-	}, nil
+	}
+
+	if fullTx {
+		transactions, err := b.fetchBlockTransactions(ctx, bl)
+		if err != nil {
+			return nil, err
+		}
+		block.Transactions = transactions
+	}
+
+	return block, nil
 }
 
 // GetBlockReceipts returns the block receipts for the given block hash or number or tag.
@@ -409,24 +434,13 @@ func (b *BlockChainAPI) Call(
 	overrides *StateOverride,
 	blockOverrides *BlockOverrides,
 ) (hexutil.Bytes, error) {
-	if args.To == nil {
-		// todo temporary fix, support empty to address
-		return nil, nil
+	txData, err := signTxFromArgs(args)
+	if err != nil {
+		b.logger.Error().Err(err).Msg("failed to sign transaction for call")
+		return nil, errs.ErrInternal
 	}
 
-	var data []byte
-	if args.Data != nil {
-		data = *args.Data
-	} else if args.Input != nil {
-		data = *args.Input
-	} else {
-		return nil, errors.Join(
-			errs.ErrInvalid,
-			fmt.Errorf("must provide either data or input values: %w", errs.ErrInvalid),
-		)
-	}
-
-	res, err := b.evm.Call(ctx, *args.To, data)
+	res, err := b.evm.Call(ctx, txData)
 	if err != nil {
 		b.logger.Error().Err(err).Msg("failed to execute call")
 		return nil, errs.ErrInternal
@@ -773,4 +787,20 @@ func (b *BlockChainAPI) FeeHistory(
 // MaxPriorityFeePerGas returns a suggestion for a gas tip cap for dynamic fee transactions.
 func (b *BlockChainAPI) MaxPriorityFeePerGas(ctx context.Context) (*hexutil.Big, error) {
 	return nil, errs.ErrNotSupported
+}
+
+func (b *BlockChainAPI) fetchBlockTransactions(
+	ctx context.Context,
+	block *evmTypes.Block,
+) ([]*RPCTransaction, error) {
+	transactions := make([]*RPCTransaction, 0)
+	for _, txHash := range block.TransactionHashes {
+		transaction, err := b.GetTransactionByHash(ctx, txHash)
+		if err != nil {
+			return nil, err
+		}
+		transactions = append(transactions, transaction)
+	}
+
+	return transactions, nil
 }
