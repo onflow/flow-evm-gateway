@@ -117,6 +117,7 @@ func startEventIngestionEngine(ctx context.Context, dbDir string) (
 	txs := pebble.NewTransactions(db)
 	blocksBroadcaster := broadcast.NewBroadcaster()
 	txBroadcaster := broadcast.NewBroadcaster()
+	logsBroadcaster := broadcast.NewBroadcaster()
 
 	err = blocks.InitHeights(config.EmulatorInitCadenceHeight)
 	if err != nil {
@@ -132,6 +133,7 @@ func startEventIngestionEngine(ctx context.Context, dbDir string) (
 		accounts,
 		blocksBroadcaster,
 		txBroadcaster,
+		logsBroadcaster,
 		log,
 	)
 
