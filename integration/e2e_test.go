@@ -1133,7 +1133,7 @@ func TestE2E_Streaming(t *testing.T) {
 	}
 }
 
-func unsubscribe(t *testing.T, write func(string) error, read func() (streamMsg, error), id string) {
+func unsubscribe(t *testing.T, write func(string) error, read func() (*streamMsg, error), id string) {
 	require.NotEmpty(t, id)
 	require.NoError(t, write(unsubscribeRequest(id)))
 	event, err := read()
