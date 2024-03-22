@@ -90,7 +90,7 @@ func (s *StreamAPI) newSubscription(
 		s.config.StreamTimeout,
 		s.config.StreamLimit,
 		sub,
-	).Stream(ctx)
+	).Stream(context.Background()) // todo investigate why the passed in context is canceled so quickly
 
 	go func() {
 		for {
