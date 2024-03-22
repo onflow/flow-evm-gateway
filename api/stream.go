@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/onflow/flow-evm-gateway/services/stream"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -77,7 +76,7 @@ func (s *StreamAPI) newSubscription(
 	l := s.logger.With().Str("subscription-id", string(rpcSub.ID)).Logger()
 	l.Info().Msg("new subscription created")
 
-	go stream.NewStreamer(
+	go backend.NewStreamer(
 		s.logger.With().Str("component", "streamer").Logger(),
 		broadcaster,
 		s.config.StreamTimeout,
