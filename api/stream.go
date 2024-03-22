@@ -150,7 +150,6 @@ func (s *StreamAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) (*
 		ctx,
 		s.transactionsBroadcaster,
 		func(ctx context.Context, height uint64) (interface{}, error) {
-			fmt.Println("## getting transaction", height)
 			block, err := s.blocks.GetByHeight(height)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get block at height: %d: %w", height, err)
