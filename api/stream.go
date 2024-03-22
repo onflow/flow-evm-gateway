@@ -86,7 +86,7 @@ func (s *StreamAPI) newSubscription(
 		s.config.StreamTimeout,
 		s.config.StreamLimit,
 		sub,
-	).Stream(ctx)
+	).Stream(context.Background())
 
 	go func() {
 		for {
@@ -140,7 +140,7 @@ func (s *StreamAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
 				Number:       hexutil.Uint64(block.Height),
 				ParentHash:   block.ParentBlockHash,
 				ReceiptsRoot: block.ReceiptRoot,
-			Transactions: block.TransactionHashes,}, nil
+				Transactions: block.TransactionHashes}, nil
 		},
 	)
 }
