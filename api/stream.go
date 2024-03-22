@@ -17,6 +17,10 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// subscriptionBufferLimit is a constant that represents the buffer limit for subscriptions.
+// It defines the maximum number of events that can be buffered in a subscription channel
+const subscriptionBufferLimit = 1
+
 type StreamAPI struct {
 	logger                  zerolog.Logger
 	config                  *config.Config
@@ -68,7 +72,7 @@ func (s *StreamAPI) newSubscription(
 		return nil, err
 	}
 
-	sub := backend.NewHeightBasedSubscription(1, height, getData)
+	sub := backend.NewHeightBasedSubscription(subscriptionBufferLimit, height, getData)
 
 	rpcSub := notifier.CreateSubscription()
 	rpcSub.ID = rpc.ID(sub.ID()) // make sure ids are unified
@@ -82,7 +86,7 @@ func (s *StreamAPI) newSubscription(
 		s.config.StreamTimeout,
 		s.config.StreamLimit,
 		sub,
-	).Stream(context.Background())
+	).Stream(ctx)
 
 	go func() {
 		for {
@@ -136,7 +140,7 @@ func (s *StreamAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
 				Number:       hexutil.Uint64(block.Height),
 				ParentHash:   block.ParentBlockHash,
 				ReceiptsRoot: block.ReceiptRoot,
-			}, nil
+			Transactions: block.TransactionHashes,}, nil
 		},
 	)
 }
