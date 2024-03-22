@@ -491,24 +491,6 @@ func (r *rpcTest) getBlock(height uint64, fullTx bool) (*rpcBlock, error) {
 	return &blkRpc, nil
 }
 
-func (r *rpcTest) getLatestHeight() (uint64, error) {
-	rpcRes, err := r.request(
-		"eth_getBlockByNumber",
-		fmt.Sprintf(`["%x", "false"]`, -1),
-	)
-	if err != nil {
-		return 0, err
-	}
-
-	var blkRpc rpcBlock
-	err = json.Unmarshal(rpcRes, &blkRpc)
-	if err != nil {
-		return 0, err
-	}
-
-	return hexutil.DecodeUint64(blkRpc.Number)
-}
-
 func (r *rpcTest) getBlockByHash(hash string, fullTx bool) (*rpcBlock, error) {
 	rpcRes, err := r.request(
 		"eth_getBlockByHash",
