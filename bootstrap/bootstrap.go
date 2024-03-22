@@ -182,10 +182,8 @@ func startServer(
 
 	evm, err := requester.NewEVM(
 		client,
-		cfg.COAAddress,
+		cfg,
 		signer,
-		cfg.FlowNetworkID,
-		cfg.CreateCOAResource,
 		logger,
 	)
 	if err != nil {

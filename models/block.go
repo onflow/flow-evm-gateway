@@ -2,10 +2,9 @@ package models
 
 import (
 	"fmt"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/onflow/cadence"
-	cdcCommon "github.com/onflow/cadence/runtime/common"
-	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go/fvm/evm/types"
 )
 
@@ -47,11 +46,4 @@ func DecodeBlock(event cadence.Event) (*types.Block, error) {
 		ReceiptRoot:       common.HexToHash(b.ReceiptRoot),
 		TransactionHashes: hashes,
 	}, nil
-}
-
-var BlockExecutedEventType = (flow.EVMLocation{}).TypeID(nil, string(types.EventTypeBlockExecuted))
-
-// IsBlockExecutedEvent checks whether event contains block executed data.
-func IsBlockExecutedEvent(event cadence.Event) bool {
-	return cdcCommon.TypeID(event.EventType.ID()) == BlockExecutedEventType
 }

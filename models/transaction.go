@@ -1,19 +1,125 @@
 package models
 
 import (
-	"bytes"
 	"encoding/hex"
 	"fmt"
-	"github.com/onflow/flow-go-sdk"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/onflow/cadence"
-	cdcCommon "github.com/onflow/cadence/runtime/common"
 	"github.com/onflow/flow-go/fvm/evm/types"
 )
+
+type Transaction interface {
+	// TODO(m-Peter): Remove the error return value once flow-go is updated
+	Hash() (common.Hash, error)
+	RawSignatureValues() (v *big.Int, r *big.Int, s *big.Int)
+	From() (common.Address, error)
+	To() *common.Address
+	Data() []byte
+	Nonce() uint64
+	Value() *big.Int
+	Type() uint8
+	Gas() uint64
+	GasPrice() *big.Int
+	BlobGas() uint64
+	Size() uint64
+	MarshalBinary() ([]byte, error)
+}
+
+var _ Transaction = &DirectCall{}
+
+type DirectCall struct {
+	*types.DirectCall
+}
+
+func (dc DirectCall) Hash() (common.Hash, error) {
+	return dc.DirectCall.Hash()
+}
+
+func (dc DirectCall) RawSignatureValues() (
+	v *big.Int,
+	r *big.Int,
+	s *big.Int,
+) {
+	return big.NewInt(0), big.NewInt(0), big.NewInt(0)
+}
+
+func (dc DirectCall) From() (common.Address, error) {
+	return dc.DirectCall.From.ToCommon(), nil
+}
+
+func (dc DirectCall) To() *common.Address {
+	var to *common.Address
+	if !dc.DirectCall.EmptyToField() {
+		ct := dc.DirectCall.To.ToCommon()
+		to = &ct
+	}
+	return to
+}
+
+func (dc DirectCall) Data() []byte {
+	return dc.DirectCall.Data
+}
+
+func (dc DirectCall) Nonce() uint64 {
+	return dc.DirectCall.Nonce
+}
+
+func (dc DirectCall) Value() *big.Int {
+	return dc.DirectCall.Value
+}
+
+func (dc DirectCall) Type() uint8 {
+	return dc.DirectCall.Type
+}
+
+func (dc DirectCall) Gas() uint64 {
+	return dc.DirectCall.GasLimit
+}
+
+func (dc DirectCall) GasPrice() *big.Int {
+	return big.NewInt(0)
+}
+
+func (dc DirectCall) BlobGas() uint64 {
+	return 0
+}
+
+func (dc DirectCall) Size() uint64 {
+	encoded, err := dc.MarshalBinary()
+	if err != nil {
+		return 0
+	}
+	return uint64(len(encoded))
+}
+
+func (dc DirectCall) MarshalBinary() ([]byte, error) {
+	return dc.DirectCall.Encode()
+}
+
+var _ Transaction = &TransactionCall{}
+
+type TransactionCall struct {
+	*gethTypes.Transaction
+}
+
+func (tc TransactionCall) Hash() (common.Hash, error) {
+	return tc.Transaction.Hash(), nil
+}
+
+func (tc TransactionCall) From() (common.Address, error) {
+	return gethTypes.Sender(
+		gethTypes.LatestSignerForChainID(tc.ChainId()),
+		tc.Transaction,
+	)
+}
+
+func (tc TransactionCall) MarshalBinary() ([]byte, error) {
+	encoded, err := tc.Transaction.MarshalBinary()
+	return append([]byte{tc.Type()}, encoded...), err
+}
 
 type txEventPayload struct {
 	BlockHeight             uint64 `cadence:"blockHeight"`
@@ -29,63 +135,17 @@ type txEventPayload struct {
 	Logs                    string `cadence:"logs"`
 }
 
-// DecodeReceipt takes a cadence event for transaction executed and decodes it into the receipt.
-func DecodeReceipt(event cadence.Event) (*gethTypes.Receipt, error) {
-	if !IsTransactionExecutedEvent(event) {
-		return nil, fmt.Errorf(
-			"invalid event type for decoding into receipt, received %s expected %s",
-			event.Type().ID(),
-			types.EventTypeTransactionExecuted,
-		)
-	}
-
-	var tx txEventPayload
-	err := cadence.DecodeFields(event, &tx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to cadence decode receipt: %w", err)
-	}
-
-	encLogs, err := hex.DecodeString(tx.Logs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to hex decode receipt: %w", err)
-	}
-
-	var logs []*gethTypes.Log
-	if len(encLogs) > 0 {
-		err = rlp.Decode(bytes.NewReader(encLogs), &logs)
-		if err != nil {
-			return nil, fmt.Errorf("failed to rlp decode receipt: %w", err)
-		}
-	}
-
-	receipt := &gethTypes.Receipt{
-		BlockNumber:       big.NewInt(int64(tx.BlockHeight)),
-		Type:              uint8(tx.TransactionType),
-		Logs:              logs,
-		TxHash:            common.HexToHash(tx.TransactionHash),
-		ContractAddress:   common.HexToAddress(tx.DeployedContractAddress),
-		GasUsed:           tx.GasConsumed,
-		CumulativeGasUsed: tx.GasConsumed, // todo check
-		EffectiveGasPrice: nil,            // todo check
-		BlobGasUsed:       0,              // todo check
-		BlobGasPrice:      nil,            // todo check
-		TransactionIndex:  0,              // todo add tx index in evm core event
-		BlockHash:         common.HexToHash(tx.BlockHash),
-	}
-
-	if tx.Failed {
-		receipt.Status = gethTypes.ReceiptStatusFailed
-	} else {
-		receipt.Status = gethTypes.ReceiptStatusSuccessful
-	}
-
-	receipt.Bloom = gethTypes.CreateBloom([]*gethTypes.Receipt{receipt})
-
-	return receipt, nil
+func (tx *txEventPayload) IsDirectCall() bool {
+	return tx.TransactionType == types.DirectCallTxType
 }
 
-// DecodeTransaction takes a cadence event for transaction executed and decodes it into the transaction.
-func DecodeTransaction(event cadence.Event) (*gethTypes.Transaction, error) {
+// DecodeTransaction takes a cadence event for transaction executed
+// and decodes it into a Transaction interface. The concrete type
+// will be either a TransactionCall or a DirectCall.
+func DecodeTransaction(event cadence.Event) (
+	Transaction,
+	error,
+) {
 	if !IsTransactionExecutedEvent(event) {
 		return nil, fmt.Errorf(
 			"invalid event type for decoding into receipt, received %s expected %s",
@@ -94,43 +154,50 @@ func DecodeTransaction(event cadence.Event) (*gethTypes.Transaction, error) {
 		)
 	}
 
-	var t txEventPayload
-	err := cadence.DecodeFields(event, &t)
+	t := &txEventPayload{}
+	err := cadence.DecodeFields(event, t)
 	if err != nil {
 		return nil, fmt.Errorf("failed to cadence decode transaction: %w", err)
 	}
 
-	encTx, err := hex.DecodeString(t.Transaction)
+	encodedTx, err := hex.DecodeString(t.Transaction)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode transaction hex: %w", err)
 	}
 
-	// check if the transaction data is actually from a direct call, which is a special flow/evm state transition
-	if encTx[0] == types.DirectCallTxType {
-		// todo(sideninja) support indexing of direct calls in the future
-		// but for now just return nil nil indicating we don't support this
-		// the problem we can't index direct calls as other transactions is that the geth.Transaction
-		// uses geth.TxData for internal representation of a transaction, and although we could
-		// convert direct call to a geth.transaction we would calculate wrong geth.Trasnaction.Hash() of a transaction
-		// compared to evm.DirectCall.Hash(), but further more I don't think evm devs will want to
-		// fetch these state changes made by direct calls since they can not trigger them in the first place.
-		// I believe this direct calls should be indexed solely for purpose of the gateway monitoring of
-		// the state changes (such as balance movements etc), not for the purpose of providing this data
-		// to the APIs.
-		return nil, nil
+	// check if the transaction data is actually from a direct call,
+	// which is a special state transition in Flow EVM.
+	if t.IsDirectCall() {
+		directCall, err := types.DirectCallFromEncoded(encodedTx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to rlp decode direct call: %w", err)
+		}
+
+		return DirectCall{DirectCall: directCall}, nil
 	}
 
-	tx := gethTypes.Transaction{}
-	err = tx.DecodeRLP(rlp.NewStream(bytes.NewReader(encTx), uint64(len(encTx))))
-	if err != nil {
+	gethTx := &gethTypes.Transaction{}
+	if err := gethTx.UnmarshalBinary(encodedTx); err != nil {
 		return nil, fmt.Errorf("failed to rlp decode transaction: %w", err)
 	}
 
-	return &tx, nil
+	return TransactionCall{Transaction: gethTx}, nil
 }
 
-var TransactionExecutedEventType = (flow.EVMLocation{}).TypeID(nil, string(types.EventTypeTransactionExecuted))
+func UnmarshalTransaction(value []byte) (Transaction, error) {
+	if value[0] == types.DirectCallTxType {
+		directCall, err := types.DirectCallFromEncoded(value)
+		if err != nil {
+			return nil, fmt.Errorf("failed to rlp decode direct call: %w", err)
+		}
 
-func IsTransactionExecutedEvent(event cadence.Event) bool {
-	return cdcCommon.TypeID(event.EventType.ID()) == TransactionExecutedEventType
+		return DirectCall{DirectCall: directCall}, nil
+	}
+
+	tx := &gethTypes.Transaction{}
+	if err := tx.UnmarshalBinary(value[1:]); err != nil {
+		return nil, fmt.Errorf("failed to rlp decode transaction: %w", err)
+	}
+
+	return TransactionCall{Transaction: tx}, nil
 }

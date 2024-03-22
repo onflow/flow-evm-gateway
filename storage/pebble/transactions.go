@@ -1,10 +1,11 @@
 package pebble
 
 import (
-	"github.com/ethereum/go-ethereum/common"
-	gethTypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/onflow/flow-evm-gateway/storage"
 	"sync"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/onflow/flow-evm-gateway/models"
+	"github.com/onflow/flow-evm-gateway/storage"
 )
 
 var _ storage.TransactionIndexer = &Transactions{}
@@ -21,7 +22,7 @@ func NewTransactions(store *Storage) *Transactions {
 	}
 }
 
-func (t *Transactions) Store(tx *gethTypes.Transaction) error {
+func (t *Transactions) Store(tx models.Transaction) error {
 	t.mux.Lock()
 	defer t.mux.Unlock()
 
@@ -30,10 +31,15 @@ func (t *Transactions) Store(tx *gethTypes.Transaction) error {
 		return err
 	}
 
-	return t.store.set(txIDKey, tx.Hash().Bytes(), val, nil)
+	txHash, err := tx.Hash()
+	if err != nil {
+		return err
+	}
+
+	return t.store.set(txIDKey, txHash.Bytes(), val, nil)
 }
 
-func (t *Transactions) Get(ID common.Hash) (*gethTypes.Transaction, error) {
+func (t *Transactions) Get(ID common.Hash) (models.Transaction, error) {
 	t.mux.RLock()
 	defer t.mux.RUnlock()
 
@@ -42,9 +48,5 @@ func (t *Transactions) Get(ID common.Hash) (*gethTypes.Transaction, error) {
 		return nil, err
 	}
 
-	tx := &gethTypes.Transaction{}
-	if err := tx.UnmarshalBinary(val); err != nil {
-		return nil, err
-	}
-	return tx, nil
+	return models.UnmarshalTransaction(val)
 }
