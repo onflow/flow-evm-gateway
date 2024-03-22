@@ -82,7 +82,7 @@ func (s *StreamAPI) newSubscription(
 		s.config.StreamTimeout,
 		s.config.StreamLimit,
 		sub,
-	).Stream(context.Background())
+	).Stream(ctx)
 
 	go func() {
 		for {
