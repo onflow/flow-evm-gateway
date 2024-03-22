@@ -7,7 +7,6 @@ import (
 	"github.com/onflow/flow-evm-gateway/services/stream"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rpc"
 	errs "github.com/onflow/flow-evm-gateway/api/errors"
 	"github.com/onflow/flow-evm-gateway/config"
@@ -173,15 +172,20 @@ func (s *StreamAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) (*
 				return nil, fmt.Errorf("failed to get receipt with hash: %s at height: %d: %w", hash, height, err)
 			}
 
-			from, err := types.Sender(types.LatestSignerForChainID(tx.ChainId()), tx)
+			from, err := tx.From()
 			if err != nil {
 				return nil, errs.ErrInternal
+			}
+
+			h, err := tx.Hash()
+			if err != nil {
+				return nil, err
 			}
 
 			v, r, ss := tx.RawSignatureValues()
 
 			return &RPCTransaction{
-				Hash:        tx.Hash(),
+				Hash:        h,
 				BlockHash:   &rcp.BlockHash,
 				BlockNumber: (*hexutil.Big)(rcp.BlockNumber),
 				From:        from,
