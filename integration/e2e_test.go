@@ -644,7 +644,7 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, interactHash, txRpc.Hash.String())
 	assert.Equal(t, callRetrieve, []byte(txRpc.Input))
-	assert.Equal(t, contractAddress.Hex(), txRpc.To.Hex())
+	assert.Equal(t, contractAddress.Hex(), txRpc.To)
 
 	rcp, err = rpcTester.getReceipt(interactHash)
 	require.NoError(t, err)
@@ -698,7 +698,7 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, interactHash, txRpc.Hash.String())
 	assert.Equal(t, callStore, []byte(txRpc.Input))
-	assert.Equal(t, contractAddress.Hex(), txRpc.To.Hex())
+	assert.Equal(t, contractAddress.Hex(), txRpc.To)
 
 	rcp, err = rpcTester.getReceipt(interactHash)
 	require.NoError(t, err)
@@ -1018,9 +1018,7 @@ func TestE2E_Streaming(t *testing.T) {
 	_, err = txRead()
 	require.NoError(t, err)
 
-	startHeight, err := rpcTester.getLatestHeight()
-	require.NoError(t, err)
-
+	const startHeight = 6
 	// send some evm transfers that will produce transactions and blocks
 	txCount := 5
 	flowTransfer, _ := cadence.NewUFix64("1.0")
@@ -1033,9 +1031,13 @@ func TestE2E_Streaming(t *testing.T) {
 		require.NoError(t, r.Error)
 	}
 
-	currentHeight := startHeight
-	var blkSubID string
+	// consume first event since it's from before transactions above were submitted
+	_, _ = blkRead()
+	_, _ = txRead()
+
 	// iterate over all block data streams and make sure all were received
+	var blkSubID string
+	currentHeight := startHeight
 	for i := 0; i < txCount; i++ {
 		event, err := blkRead()
 		require.NoError(t, err)
@@ -1054,7 +1056,7 @@ func TestE2E_Streaming(t *testing.T) {
 	// iterate over all transactions and make sure all were received
 	var txSubID string
 	currentHeight = startHeight // reset
-	for i := 0; i <= txCount; i++ {
+	for i := 0; i < txCount; i++ {
 		event, err := txRead()
 		require.NoError(t, err)
 
@@ -1065,15 +1067,13 @@ func TestE2E_Streaming(t *testing.T) {
 		h, err := hexutil.DecodeUint64(msg.Params.Result["blockNumber"].(string))
 		require.NoError(t, err)
 		assert.Equal(t, currentHeight, int(h))
+		require.Equal(t, transferEOAAdress.Hex(), msg.Params.Result["to"].(string))
 		currentHeight++
-
-		//require.Equal(t, transferEOAAdress.Hex(), msg.Params.Result["to"].(string))
-
 		txSubID = msg.Params.Subscription
 	}
 
-	unsubscribe(t, txWrite, txRead, txSubID)
 	unsubscribe(t, blkWrite, blkRead, blkSubID)
+	unsubscribe(t, txWrite, txRead, txSubID)
 }
 
 func unsubscribe(t *testing.T, write func(string) error, read func() ([]byte, error), id string) {
