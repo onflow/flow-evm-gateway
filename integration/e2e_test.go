@@ -4,8 +4,11 @@ import (
 	"context"
 	_ "embed"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"github.com/rs/zerolog"
 	"math/big"
+	"os"
 	"testing"
 	"time"
 
@@ -487,7 +490,7 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 	}
 
 	rpcTester := &rpcTest{
-		url: fmt.Sprintf("http://%s:%d", cfg.RPCHost, cfg.RPCPort),
+		url: fmt.Sprintf("%s:%d", cfg.RPCHost, cfg.RPCPort),
 	}
 
 	go func() {
@@ -641,7 +644,7 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, interactHash, txRpc.Hash.String())
 	assert.Equal(t, callRetrieve, []byte(txRpc.Input))
-	assert.Equal(t, contractAddress.Hex(), txRpc.To.Hex())
+	assert.Equal(t, contractAddress.Hex(), txRpc.To)
 
 	rcp, err = rpcTester.getReceipt(interactHash)
 	require.NoError(t, err)
@@ -695,7 +698,7 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, interactHash, txRpc.Hash.String())
 	assert.Equal(t, callStore, []byte(txRpc.Input))
-	assert.Equal(t, contractAddress.Hex(), txRpc.To.Hex())
+	assert.Equal(t, contractAddress.Hex(), txRpc.To)
 
 	rcp, err = rpcTester.getReceipt(interactHash)
 	require.NoError(t, err)
@@ -888,7 +891,7 @@ func TestE2E_ConcurrentTransactionSubmission(t *testing.T) {
 	}
 
 	rpcTester := &rpcTest{
-		url: fmt.Sprintf("http://%s:%d", cfg.RPCHost, cfg.RPCPort),
+		url: fmt.Sprintf("%s:%d", cfg.RPCHost, cfg.RPCPort),
 	}
 
 	go func() {
@@ -938,6 +941,207 @@ func TestE2E_ConcurrentTransactionSubmission(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, uint64(1), rcp.Status)
 	}
+}
+
+// TestE2E_Streaming is a function used to test end-to-end streaming of data.
+// The test subscribers for new heads and new transactions events and makes
+// sure they are broadcast in correct order.
+func TestE2E_Streaming(t *testing.T) {
+	srv, err := startEmulator()
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer func() {
+		cancel()
+		srv.Stop()
+	}()
+
+	emu := srv.Emulator()
+	dbDir := t.TempDir()
+	gwAcc := emu.ServiceKey()
+	gwKey := gwAcc.PrivateKey
+	gwAddress := gwAcc.Address
+
+	cfg := &config.Config{
+		DatabaseDir:        dbDir,
+		AccessNodeGRPCHost: "localhost:3569", // emulator
+		RPCPort:            8545,
+		RPCHost:            "127.0.0.1",
+		FlowNetworkID:      "flow-emulator",
+		EVMNetworkID:       types.FlowEVMTestnetChainID,
+		Coinbase:           fundEOAAddress,
+		COAAddress:         gwAddress,
+		COAKey:             gwKey,
+		CreateCOAResource:  true,
+		GasPrice:           new(big.Int).SetUint64(0),
+		LogWriter:          os.Stdout,
+		LogLevel:           zerolog.DebugLevel,
+		StreamLimit:        5,
+		StreamTimeout:      5 * time.Second,
+	}
+
+	rpcTester := &rpcTest{
+		url: fmt.Sprintf("%s:%d", cfg.RPCHost, cfg.RPCPort),
+	}
+
+	go func() {
+		err = bootstrap.Start(ctx, cfg)
+		require.NoError(t, err)
+	}()
+
+	time.Sleep(500 * time.Millisecond) // some time to startup
+
+	flowAmount, _ := cadence.NewUFix64("10.0")
+
+	// Steps 1, 2 and 3. - create COA and fund it - setup phase
+	r, err := fundEOA(emu, flowAmount, fundEOAAddress)
+	require.NoError(t, err)
+	require.NoError(t, r.Error)
+
+	time.Sleep(500 * time.Millisecond)
+
+	// connect and subscribe to new blocks
+	blkWrite, blkRead, err := rpcTester.wsConnect()
+	require.NoError(t, err)
+	err = blkWrite(newHeadsSubscription())
+	require.NoError(t, err)
+
+	// first block stream response is for successful subscription
+	_, err = blkRead()
+	require.NoError(t, err)
+
+	// connect and subscribe to new transactions
+	txWrite, txRead, err := rpcTester.wsConnect()
+	require.NoError(t, err)
+	err = txWrite(newTransactionsSubscription())
+	require.NoError(t, err)
+
+	// first block stream response is for successful subscription
+	_, err = txRead()
+	require.NoError(t, err)
+
+	const startHeight = 6
+	// send some evm transfers that will produce transactions and blocks
+	txCount := 5
+	flowTransfer, _ := cadence.NewUFix64("1.0")
+	transferWei := types.NewBalanceFromUFix64(flowTransfer)
+	fundEOAKey, err := crypto.HexToECDSA(fundEOARawKey)
+	require.NoError(t, err)
+	for i := 0; i < txCount; i++ {
+		r, _, err := evmSignAndRun(emu, transferWei, params.TxGas, fundEOAKey, uint64(i), &transferEOAAdress, nil)
+		require.NoError(t, err)
+		require.NoError(t, r.Error)
+	}
+
+	// consume first event since it's from before transactions above were submitted
+	_, _ = blkRead()
+	_, _ = txRead()
+
+	// iterate over all block data streams and make sure all were received
+	var blkSubID string
+	currentHeight := startHeight
+	for i := 0; i < txCount; i++ {
+		event, err := blkRead()
+		require.NoError(t, err)
+
+		var res map[string]any
+		require.NoError(t, json.Unmarshal(event.Params.Result, &res))
+
+		// this makes sure we receive the events in correct order
+		h, err := hexutil.DecodeUint64(res["number"].(string))
+		require.NoError(t, err)
+		assert.Equal(t, currentHeight, int(h))
+		currentHeight++
+		blkSubID = event.Params.Subscription
+	}
+
+	// iterate over all transactions and make sure all were received
+	var txSubID string
+	currentHeight = startHeight // reset
+	for i := 0; i < txCount; i++ {
+		event, err := txRead()
+		require.NoError(t, err)
+
+		var res map[string]string
+		require.NoError(t, json.Unmarshal(event.Params.Result, &res))
+		// this makes sure we received txs in correct order
+		h, err := hexutil.DecodeUint64(res["blockNumber"])
+		require.NoError(t, err)
+		assert.Equal(t, currentHeight, int(h))
+		require.Equal(t, transferEOAAdress.Hex(), res["to"])
+		currentHeight++
+		txSubID = event.Params.Subscription
+	}
+
+	unsubscribe(t, blkWrite, blkRead, blkSubID)
+	unsubscribe(t, txWrite, txRead, txSubID)
+
+	// deploy contract for logs/events stream filtering
+	nonce, err := rpcTester.getNonce(fundEOAAddress)
+	require.NoError(t, err)
+
+	gasLimit := uint64(4700000) // arbitrarily big
+	eoaKey, err := crypto.HexToECDSA(fundEOARawKey)
+	require.NoError(t, err)
+
+	deployData, err := hex.DecodeString(testContractBinary)
+	require.NoError(t, err)
+
+	signed, _, err := evmSign(nil, gasLimit, eoaKey, nonce, nil, deployData)
+	hash, err := rpcTester.sendRawTx(signed)
+	require.NoError(t, err)
+	require.NotNil(t, hash)
+
+	time.Sleep(300 * time.Millisecond)
+
+	rcp, err := rpcTester.getReceipt(hash.Hex())
+	require.NoError(t, err)
+	contractAddress := rcp.ContractAddress
+
+	storeContract, err := newContract(testContractBinary, testContractABI)
+	require.NoError(t, err)
+
+	// different subscription to logs with different filters
+	allLogsWrite, allLogsRead, err := rpcTester.wsConnect()
+	require.NoError(t, err)
+	err = allLogsWrite(newLogsSubscription(contractAddress.String(), []string{}))
+	require.NoError(t, err)
+
+	_, _ = allLogsRead() // ignore current block todo - we need to skip transmissions if no data, there is a PR merged in master that updates subscriber we need to update to
+
+	// submit transactions that emit logs
+	logCount := 5
+	for i := 0; i < logCount; i++ {
+		sumA := big.NewInt(5)
+		sumB := big.NewInt(int64(i))
+		callSum, err := storeContract.call("sum", sumA, sumB)
+		require.NoError(t, err)
+
+		nonce++
+		res, _, err := evmSignAndRun(emu, nil, gasLimit, eoaKey, nonce, &contractAddress, callSum)
+		require.NoError(t, err)
+		require.NoError(t, res.Error)
+		time.Sleep(300 * time.Millisecond)
+	}
+
+	for i := 0; i < logCount; i++ {
+		fmt.Println("getting event", i)
+		event, err := allLogsRead()
+		require.NoError(t, err)
+
+		var res []map[string]string
+		require.NoError(t, json.Unmarshal(event.Params.Result, &res))
+
+		fmt.Println("events", res)
+	}
+}
+
+func unsubscribe(t *testing.T, write func(string) error, read func() (*streamMsg, error), id string) {
+	require.NotEmpty(t, id)
+	require.NoError(t, write(unsubscribeRequest(id)))
+	event, err := read()
+	require.NoError(t, err)
+	require.True(t, event.Result.(bool)) // successfully unsubscribed
 }
 
 // checkSumLogValue makes sure the match is correct by checking sum value

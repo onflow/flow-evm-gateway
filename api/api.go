@@ -5,8 +5,6 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
-	"math/big"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -21,12 +19,16 @@ import (
 	storageErrs "github.com/onflow/flow-evm-gateway/storage/errors"
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/rs/zerolog"
+	"math/big"
 )
 
-func SupportedAPIs(blockChainAPI *BlockChainAPI) []rpc.API {
+func SupportedAPIs(blockChainAPI *BlockChainAPI, streamAPI *StreamAPI) []rpc.API {
 	return []rpc.API{{
 		Namespace: "eth",
 		Service:   blockChainAPI,
+	}, {
+		Namespace: "eth",
+		Service:   streamAPI,
 	}, {
 		Namespace: "web3",
 		Service:   &Web3API{},
@@ -169,12 +171,17 @@ func (b *BlockChainAPI) GetTransactionByHash(
 	v, r, s := tx.RawSignatureValues()
 	index := uint64(rcp.TransactionIndex)
 
+	var to string
+	if tx.To() != nil {
+		to = tx.To().Hex()
+	}
+
 	txResult := &RPCTransaction{
 		Hash:             txHash,
 		BlockHash:        &rcp.BlockHash,
 		BlockNumber:      (*hexutil.Big)(rcp.BlockNumber),
-		From:             from,
-		To:               tx.To(),
+		From:             from.Hex(),
+		To:               to,
 		Gas:              hexutil.Uint64(rcp.GasUsed),
 		GasPrice:         (*hexutil.Big)(rcp.EffectiveGasPrice),
 		Input:            tx.Data(),
