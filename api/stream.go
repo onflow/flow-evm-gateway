@@ -14,6 +14,10 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// subscriptionBufferLimit is a constant that represents the buffer limit for subscriptions.
+// It defines the maximum number of events that can be buffered in a subscription channel
+const subscriptionBufferLimit = 1
+
 type StreamAPI struct {
 	logger            zerolog.Logger
 	config            *config.Config
@@ -63,7 +67,7 @@ func (s *StreamAPI) newSubscription(
 	}
 
 	sub := backend.NewHeightBasedSubscription(
-		1,
+		subscriptionBufferLimit,
 		height,
 		func(ctx context.Context, height uint64) (interface{}, error) {
 			return s.blocks.GetByHeight(height)
