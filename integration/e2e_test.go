@@ -4,8 +4,11 @@ import (
 	"context"
 	_ "embed"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"github.com/rs/zerolog"
 	"math/big"
+	"os"
 	"testing"
 	"time"
 
@@ -938,6 +941,99 @@ func TestE2E_ConcurrentTransactionSubmission(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, uint64(1), rcp.Status)
 	}
+}
+
+// TestE2E_Streaming is a function used to test end-to-end streaming of data.
+func TestE2E_Streaming(t *testing.T) {
+	srv, err := startEmulator()
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer func() {
+		cancel()
+		srv.Stop()
+	}()
+
+	emu := srv.Emulator()
+	dbDir := t.TempDir()
+	gwAcc := emu.ServiceKey()
+	gwKey := gwAcc.PrivateKey
+	gwAddress := gwAcc.Address
+
+	cfg := &config.Config{
+		DatabaseDir:        dbDir,
+		AccessNodeGRPCHost: "localhost:3569", // emulator
+		RPCPort:            8545,
+		RPCHost:            "127.0.0.1",
+		FlowNetworkID:      "flow-emulator",
+		EVMNetworkID:       types.FlowEVMTestnetChainID,
+		Coinbase:           fundEOAAddress,
+		COAAddress:         gwAddress,
+		COAKey:             gwKey,
+		CreateCOAResource:  true,
+		GasPrice:           new(big.Int).SetUint64(1),
+		LogWriter:          os.Stdout,
+		LogLevel:           zerolog.DebugLevel,
+		StreamLimit:        5,
+		StreamTimeout:      5 * time.Second,
+	}
+
+	rpcTester := &rpcTest{
+		url: fmt.Sprintf("%s:%d", cfg.RPCHost, cfg.RPCPort),
+	}
+
+	go func() {
+		err = bootstrap.Start(ctx, cfg)
+		require.NoError(t, err)
+	}()
+
+	time.Sleep(500 * time.Millisecond) // some time to startup
+
+	wsWrite, wsRead, err := rpcTester.wsConnect()
+	require.NoError(t, err)
+	err = wsWrite(newHeadsRequest())
+	require.NoError(t, err)
+
+	for i := 0; i < 5; i++ {
+		flowTransfer, _ := cadence.NewUFix64("1.0")
+		transferWei := types.NewBalanceFromUFix64(flowTransfer)
+		fundEOAKey, err := crypto.HexToECDSA(fundEOARawKey)
+		require.NoError(t, err)
+		_, _, err = evmSignAndRun(emu, transferWei, params.TxGas, fundEOAKey, uint64(i), &transferEOAAdress, nil)
+		require.NoError(t, err)
+	}
+
+	currentHeight := 2 // first two blocks are used for evm setup events
+	var subscriptionID string
+	for i := 0; i < 5; i++ {
+		event, err := wsRead()
+		require.NoError(t, err)
+
+		var msg streamMsg
+		require.NoError(t, json.Unmarshal(event, &msg))
+		if msg.Params.Result["number"] == nil {
+			continue // skip the first event that only returns the id
+		}
+
+		// this makes sure we receive the events in correct order
+		h, err := hexutil.DecodeUint64(msg.Params.Result["number"].(string))
+		require.NoError(t, err)
+		assert.Equal(t, currentHeight, int(h))
+		currentHeight++
+		subscriptionID = msg.Params.Subscription
+	}
+
+	require.NotEmpty(t, subscriptionID)
+	err = wsWrite(unsubscribeRequest(subscriptionID))
+	require.NoError(t, err)
+
+	// successfully unsubscribed
+	res, err := wsRead()
+	require.NoError(t, err)
+
+	var u map[string]any
+	require.NoError(t, json.Unmarshal(res, &u))
+	require.True(t, u["result"].(bool))
 }
 
 // checkSumLogValue makes sure the match is correct by checking sum value

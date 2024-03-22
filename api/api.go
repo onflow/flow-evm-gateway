@@ -5,8 +5,6 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
-	"math/big"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -21,12 +19,16 @@ import (
 	storageErrs "github.com/onflow/flow-evm-gateway/storage/errors"
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/rs/zerolog"
+	"math/big"
 )
 
-func SupportedAPIs(blockChainAPI *BlockChainAPI) []rpc.API {
+func SupportedAPIs(blockChainAPI *BlockChainAPI, streamAPI *StreamAPI) []rpc.API {
 	return []rpc.API{{
 		Namespace: "eth",
 		Service:   blockChainAPI,
+	}, {
+		Namespace: "eth",
+		Service:   streamAPI,
 	}, {
 		Namespace: "web3",
 		Service:   &Web3API{},
