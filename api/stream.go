@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/onflow/flow-evm-gateway/services/logs"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -30,6 +31,7 @@ type StreamAPI struct {
 	accounts                storage.AccountIndexer
 	blocksBroadcaster       *engine.Broadcaster
 	transactionsBroadcaster *engine.Broadcaster
+	logsBroadcaster         *engine.Broadcaster
 }
 
 func NewStreamAPI(
@@ -41,6 +43,7 @@ func NewStreamAPI(
 	accounts storage.AccountIndexer,
 	blocksBroadcaster *engine.Broadcaster,
 	transactionsBroadcaster *engine.Broadcaster,
+	logsBroadcaster *engine.Broadcaster,
 ) *StreamAPI {
 	return &StreamAPI{
 		logger:                  logger,
@@ -51,6 +54,7 @@ func NewStreamAPI(
 		accounts:                accounts,
 		blocksBroadcaster:       blocksBroadcaster,
 		transactionsBroadcaster: transactionsBroadcaster,
+		logsBroadcaster:         logsBroadcaster,
 	}
 }
 
@@ -140,7 +144,7 @@ func (s *StreamAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
 				Number:       hexutil.Uint64(block.Height),
 				ParentHash:   block.ParentBlockHash,
 				ReceiptsRoot: block.ReceiptRoot,
-			Transactions: block.TransactionHashes,}, nil
+				Transactions: block.TransactionHashes}, nil
 		},
 	)
 }
@@ -202,6 +206,28 @@ func (s *StreamAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) (*
 				R:           (*hexutil.Big)(r),
 				S:           (*hexutil.Big)(ss),
 			}, nil
+		},
+	)
+}
+
+// Logs creates a subscription that fires for all new log that match the given filter criteria.
+func (s *StreamAPI) Logs(ctx context.Context, criteria logs.FilterCriteria) (*rpc.Subscription, error) {
+
+	return s.newSubscription(
+		ctx,
+		s.logsBroadcaster,
+		func(ctx context.Context, height uint64) (interface{}, error) {
+			block, err := s.blocks.GetByHeight(height)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get block at height: %d: %w", height, err)
+			}
+
+			id, err := block.Hash()
+			if err != nil {
+				return nil, err
+			}
+
+			return logs.NewIDFilter(id, criteria, s.blocks, s.receipts).Match()
 		},
 	)
 }
