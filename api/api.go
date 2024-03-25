@@ -15,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	errs "github.com/onflow/flow-evm-gateway/api/errors"
 	"github.com/onflow/flow-evm-gateway/config"
+	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/services/logs"
 	"github.com/onflow/flow-evm-gateway/services/requester"
 	"github.com/onflow/flow-evm-gateway/storage"
@@ -243,18 +244,23 @@ func (b *BlockChainAPI) GetTransactionByBlockNumberAndIndex(
 func (b *BlockChainAPI) GetTransactionReceipt(
 	ctx context.Context,
 	hash common.Hash,
-) (*types.Receipt, error) {
-	_, err := b.transactions.Get(hash)
+) (map[string]interface{}, error) {
+	tx, err := b.transactions.Get(hash)
 	if err != nil {
-		return handleError[*types.Receipt](b.logger, err)
+		return handleError[map[string]interface{}](b.logger, err)
 	}
 
-	rcp, err := b.receipts.GetByTransactionID(hash)
+	receipt, err := b.receipts.GetByTransactionID(hash)
 	if err != nil {
-		return handleError[*types.Receipt](b.logger, err)
+		return handleError[map[string]interface{}](b.logger, err)
 	}
 
-	return rcp, nil
+	txReceipt, err := models.MarshalReceipt(receipt, tx)
+	if err != nil {
+		return handleError[map[string]interface{}](b.logger, err)
+	}
+
+	return txReceipt, nil
 }
 
 // Coinbase is the address that mining rewards will be sent to (alias for Etherbase).
