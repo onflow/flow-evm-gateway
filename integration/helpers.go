@@ -720,9 +720,9 @@ func newLogsSubscription(address string, topics string) string {
 			"jsonrpc": "2.0",
 			"id": 0,
 			"method": "eth_subscribe",
-			"params": ["logs", {"address":"%s"}]
+			"params": ["logs", {"address":"%s", "topics": [%s]}]
 		}
-	`, address)
+	`, address, topics)
 }
 
 func unsubscribeRequest(id string) string {
