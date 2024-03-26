@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/onflow/flow-evm-gateway/services/logs"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -216,7 +217,7 @@ func (s *StreamAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) (*
 }
 
 // Logs creates a subscription that fires for all new log that match the given filter criteria.
-func (s *StreamAPI) Logs(ctx context.Context, criteria logs.FilterCriteria) (*rpc.Subscription, error) {
+func (s *StreamAPI) Logs(ctx context.Context, criteria filters.FilterCriteria) (*rpc.Subscription, error) {
 
 	return s.newSubscription(
 		ctx,
@@ -232,7 +233,12 @@ func (s *StreamAPI) Logs(ctx context.Context, criteria logs.FilterCriteria) (*rp
 				return nil, err
 			}
 
-			return logs.NewIDFilter(id, criteria, s.blocks, s.receipts).Match()
+			// convert from the API type
+			f := logs.FilterCriteria{
+				Addresses: criteria.Addresses,
+				Topics:    criteria.Topics,
+			}
+			return logs.NewIDFilter(id, f, s.blocks, s.receipts).Match()
 		},
 	)
 }
