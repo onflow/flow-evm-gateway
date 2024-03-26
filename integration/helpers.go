@@ -714,15 +714,15 @@ func newTransactionsSubscription() string {
 	return `{"jsonrpc":"2.0","id":0,"method":"eth_subscribe","params":["newPendingTransactions"]}`
 }
 
-func newLogsSubscription(address string, topics []string) string {
+func newLogsSubscription(address string, topics string) string {
 	return fmt.Sprintf(`
 		{
 			"jsonrpc": "2.0",
 			"id": 0,
 			"method": "eth_subscribe",
-			"params": ["logs", {"address":"%s","topics": [%s]}]
+			"params": ["logs", {"address":"%s"}]
 		}
-	`, address, strings.Join(topics, ","))
+	`, address)
 }
 
 func unsubscribeRequest(id string) string {
