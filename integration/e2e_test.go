@@ -1107,7 +1107,8 @@ func TestE2E_Streaming(t *testing.T) {
 	err = allLogsWrite(newLogsSubscription(contractAddress.String(), ``))
 	require.NoError(t, err)
 
-	_, _ = allLogsRead() // ignore current block todo - we need to skip transmissions if no data, there is a PR merged in master that updates subscriber we need to update to
+	_, _ = allLogsRead() // ignore successful subscription result
+	_, _ = allLogsRead() // ignore current block
 
 	// [{"address":"0x35c2cd9bee2ca40f8b91c924188c5018df2984e2","topics":["0x76efea95e5da1fa661f235b2921ae1d89b99e457ec73fb88e34a1d150f95c64b","0x000000000000000000000000facf71692421039876a5bb4f10ef7a439d8ef61e","0x0000000000000000000000000000000000000000000000000000000000000005","0x0000000000000000000000000000000000000000000000000000000000000001"]
 
@@ -1126,20 +1127,14 @@ func TestE2E_Streaming(t *testing.T) {
 	}
 
 	time.Sleep(500 * time.Millisecond)
-	currentHeight = startHeight + logCount + 1 // todo why one extra block - fix maybe use latest block request
+
+	currentHeight = startHeight + logCount + 1 // + 1 height for deploy of contract
 	for i := 0; i < logCount; i++ {
 		event, err := allLogsRead()
 		require.NoError(t, err)
 
 		var l []gethTypes.Log
 		assert.NoError(t, json.Unmarshal(event.Params.Result, &l))
-
-		if len(l) == 0 {
-			fmt.Println("---------")
-			fmt.Println(event) // todo figure out why
-			fmt.Println("---------")
-			continue
-		}
 
 		require.Len(t, l, 1)
 		log := l[0]
