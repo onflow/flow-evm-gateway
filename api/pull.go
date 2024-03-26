@@ -9,10 +9,12 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/models"
+	"github.com/onflow/flow-evm-gateway/services/logs"
 	"github.com/onflow/flow-evm-gateway/storage"
 	errs "github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/rs/zerolog"
+	"math/big"
 	"sync"
 )
 
@@ -225,9 +227,9 @@ func (api *PullAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 	case *blocksFilter:
 		return api.getBlocks(f.(*blocksFilter))
 	case *transactionsFilter:
-		return nil, nil
+		return api.getTransactions(f.(*transactionsFilter))
 	case *logsFilter:
-		return nil, nil
+		return api.getLogs(f.(*logsFilter))
 	}
 
 	return nil, nil
@@ -289,4 +291,29 @@ func (api *PullAPI) getTransactions(filter *transactionsFilter) ([]models.Transa
 	}
 
 	return txs, nil
+}
+
+func (api *PullAPI) getLogs(filter *logsFilter) (any, error) {
+	current, err := api.blocks.LatestEVMHeight()
+	if err != nil {
+		return nil, err
+	}
+
+	length := current - filter.last
+	if length > idleHeightLimit { // should never happen, extra safety check
+		return nil, fmt.Errorf("too many blocks since last request")
+	}
+
+	last := big.NewInt(int64(filter.last))
+	curr := big.NewInt(int64(current))
+	criteria := logs.FilterCriteria{
+		Addresses: filter.criteria.Addresses,
+		Topics:    filter.criteria.Topics,
+	}
+	f, err := logs.NewRangeFilter(*last, *curr, criteria, api.receipts)
+	if err != nil {
+		return nil, err
+	}
+
+	return f.Match()
 }
