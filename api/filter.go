@@ -84,6 +84,16 @@ type logsFilter struct {
 	criteria *filters.FilterCriteria
 }
 
+func newLogsFilter(lastHeight uint64, criteria *filters.FilterCriteria) *logsFilter {
+	return &logsFilter{
+		&heightBaseFilter{
+			last:  lastHeight,
+			rpcID: rpc.NewID(),
+		},
+		criteria,
+	}
+}
+
 type FilterAPI struct {
 	logger       zerolog.Logger
 	config       *config.Config
@@ -92,6 +102,7 @@ type FilterAPI struct {
 	receipts     storage.ReceiptIndexer
 	accounts     storage.AccountIndexer
 
+	// todo add timeout to clear filters and cap filter length to prevent OOM
 	filters map[rpc.ID]filter
 }
 
@@ -162,13 +173,19 @@ func (api *FilterAPI) NewBlockFilter() (rpc.ID, error) {
 //
 // In case "fromBlock" > "toBlock" an error is returned.
 func (api *FilterAPI) NewFilter(criteria filters.FilterCriteria) (rpc.ID, error) {
+	last, err := api.blocks.LatestEVMHeight()
+	if err != nil {
+		return "", err
+	}
 
+	return api.addFilter(newLogsFilter(last, &criteria)), nil
 }
 
 // GetFilterLogs returns the logs for the filter with the given id.
 // If the filter could not be found an empty array of logs is returned.
 func (api *FilterAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]*types.Log, error) {
-
+	// todo this should call the normal get logs api
+	panic("implement")
 }
 
 // GetFilterChanges returns the logs for the filter with the given id since
@@ -177,5 +194,5 @@ func (api *FilterAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]*types.Lo
 // For pending transaction and block filters the result is []common.Hash.
 // (pending)Log filters return []Log.
 func (api *FilterAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
-
+	panic("implement")
 }
