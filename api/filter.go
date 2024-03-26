@@ -17,7 +17,8 @@ type filter interface {
 }
 
 type heightBaseFilter struct {
-	last uint64
+	last  uint64
+	rpcID rpc.ID
 }
 
 func (h *heightBaseFilter) lastHeight() uint64 {
@@ -29,7 +30,7 @@ func (h *heightBaseFilter) updateHeight(u uint64) {
 }
 
 func (h *heightBaseFilter) id() rpc.ID {
-	return h.id()
+	return h.rpcID
 }
 
 var _ filter = &blocksFilter{}
@@ -38,6 +39,15 @@ var _ filter = &transactionsFilter{}
 // blocksFilter is used to get all new blocks since the last request
 type blocksFilter struct {
 	*heightBaseFilter
+}
+
+func newBlocksFilter(lastHeight uint64) *blocksFilter {
+	return &blocksFilter{
+		&heightBaseFilter{
+			last:  lastHeight,
+			rpcID: rpc.NewID(),
+		},
+	}
 }
 
 // transactionFilter is used to get all new transactions since last request.
@@ -65,7 +75,7 @@ type FilterAPI struct {
 	receipts     storage.ReceiptIndexer
 	accounts     storage.AccountIndexer
 
-	filters map[any]any
+	filters map[rpc.ID]filter
 }
 
 func NewFilterAPI(
@@ -83,8 +93,13 @@ func NewFilterAPI(
 		transactions: transactions,
 		receipts:     receipts,
 		accounts:     accounts,
-		filters:      make(map[any]any),
+		filters:      make(map[rpc.ID]filter),
 	}
+}
+
+func (api *FilterAPI) addFilter(f filter) rpc.ID {
+	api.filters[f.id()] = f
+	return f.id()
 }
 
 // NewPendingTransactionFilter creates a filter that fetches pending transactions
@@ -98,8 +113,14 @@ func (api *FilterAPI) NewPendingTransactionFilter(fullTx *bool) rpc.ID {
 
 // NewBlockFilter creates a filter that fetches blocks that are imported into the chain.
 // It is part of the filter package since polling goes with eth_getFilterChanges.
-func (api *FilterAPI) NewBlockFilter() rpc.ID {
+func (api *FilterAPI) NewBlockFilter() (rpc.ID, error) {
+	// todo maybe we can optimize
+	last, err := api.blocks.LatestEVMHeight()
+	if err != nil {
+		return "", err
+	}
 
+	return api.addFilter(newBlocksFilter(last)), nil
 }
 
 // NewFilter creates a new filter and returns the filter id. It can be
