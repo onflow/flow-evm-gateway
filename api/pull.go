@@ -2,11 +2,14 @@ package api
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/storage"
+	errs "github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/rs/zerolog"
 	"sync"
 )
@@ -95,7 +98,7 @@ func newLogsFilter(lastHeight uint64, criteria *filters.FilterCriteria) *logsFil
 	}
 }
 
-type FilterAPI struct {
+type PullAPI struct {
 	logger       zerolog.Logger
 	config       *config.Config
 	blocks       storage.BlockIndexer
@@ -115,8 +118,8 @@ func NewFilterAPI(
 	transactions storage.TransactionIndexer,
 	receipts storage.ReceiptIndexer,
 	accounts storage.AccountIndexer,
-) *FilterAPI {
-	return &FilterAPI{
+) *PullAPI {
+	return &PullAPI{
 		logger:       logger,
 		config:       config,
 		blocks:       blocks,
@@ -127,7 +130,7 @@ func NewFilterAPI(
 	}
 }
 
-func (api *FilterAPI) addFilter(f filter) rpc.ID {
+func (api *PullAPI) addFilter(f filter) rpc.ID {
 	api.mux.Lock()
 	defer api.mux.Unlock()
 
@@ -140,7 +143,7 @@ func (api *FilterAPI) addFilter(f filter) rpc.ID {
 //
 // It is part of the filter package because this filter can be used through the
 // `eth_getFilterChanges` polling method that is also used for log filters.
-func (api *FilterAPI) NewPendingTransactionFilter(fullTx *bool) (rpc.ID, error) {
+func (api *PullAPI) NewPendingTransactionFilter(fullTx *bool) (rpc.ID, error) {
 	last, err := api.blocks.LatestEVMHeight()
 	if err != nil {
 		return "", err
@@ -156,8 +159,7 @@ func (api *FilterAPI) NewPendingTransactionFilter(fullTx *bool) (rpc.ID, error) 
 
 // NewBlockFilter creates a filter that fetches blocks that are imported into the chain.
 // It is part of the filter package since polling goes with eth_getFilterChanges.
-func (api *FilterAPI) NewBlockFilter() (rpc.ID, error) {
-	// todo maybe we can optimize
+func (api *PullAPI) NewBlockFilter() (rpc.ID, error) {
 	last, err := api.blocks.LatestEVMHeight()
 	if err != nil {
 		return "", err
@@ -166,7 +168,7 @@ func (api *FilterAPI) NewBlockFilter() (rpc.ID, error) {
 	return api.addFilter(newBlocksFilter(last)), nil
 }
 
-func (api *FilterAPI) UninstallFilter(id rpc.ID) bool {
+func (api *PullAPI) UninstallFilter(id rpc.ID) bool {
 	api.mux.Lock()
 	defer api.mux.Unlock()
 
@@ -186,7 +188,7 @@ func (api *FilterAPI) UninstallFilter(id rpc.ID) bool {
 // again but with the removed property set to true.
 //
 // In case "fromBlock" > "toBlock" an error is returned.
-func (api *FilterAPI) NewFilter(criteria filters.FilterCriteria) (rpc.ID, error) {
+func (api *PullAPI) NewFilter(criteria filters.FilterCriteria) (rpc.ID, error) {
 	last, err := api.blocks.LatestEVMHeight()
 	if err != nil {
 		return "", err
@@ -197,7 +199,7 @@ func (api *FilterAPI) NewFilter(criteria filters.FilterCriteria) (rpc.ID, error)
 
 // GetFilterLogs returns the logs for the filter with the given id.
 // If the filter could not be found an empty array of logs is returned.
-func (api *FilterAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]*types.Log, error) {
+func (api *PullAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]*types.Log, error) {
 	// todo this should call the normal get logs api
 	panic("implement")
 }
@@ -207,6 +209,10 @@ func (api *FilterAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]*types.Lo
 //
 // For pending transaction and block filters the result is []common.Hash.
 // (pending)Log filters return []Log.
-func (api *FilterAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
-	panic("implement")
+func (api *PullAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
+	filter, ok := api.filters[id]
+	if !ok {
+		return nil, errors.Join(errs.ErrNotFound, fmt.Errorf("filted by id %s does not exist", id))
+	}
+
 }
