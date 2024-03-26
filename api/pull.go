@@ -113,7 +113,6 @@ type PullAPI struct {
 	blocks            storage.BlockIndexer
 	transactions      storage.TransactionIndexer
 	receipts          storage.ReceiptIndexer
-	accounts          storage.AccountIndexer
 	blocksBroadcaster *engine.Broadcaster
 
 	// todo add timeout to clear filters and cap filter length to prevent OOM
@@ -121,13 +120,12 @@ type PullAPI struct {
 	mux     sync.RWMutex
 }
 
-func NewFilterAPI(
+func NewPullAPI(
 	logger zerolog.Logger,
 	config *config.Config,
 	blocks storage.BlockIndexer,
 	transactions storage.TransactionIndexer,
 	receipts storage.ReceiptIndexer,
-	accounts storage.AccountIndexer,
 	blocksBroadcaster *engine.Broadcaster,
 ) *PullAPI {
 	api := &PullAPI{
@@ -136,7 +134,6 @@ func NewFilterAPI(
 		blocks:            blocks,
 		transactions:      transactions,
 		receipts:          receipts,
-		accounts:          accounts,
 		blocksBroadcaster: blocksBroadcaster,
 		filters:           make(map[rpc.ID]filter),
 	}
