@@ -10,12 +10,19 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// filter defines a general resource filter that is used when pulling new data.
+//
+// Filters work by remembering the last height at which the data was pulled
+// and allow on next request to fetch all data that is missing.
+// Each filter is identified by a unique ID.
 type filter interface {
 	id() rpc.ID
 	lastHeight() uint64
 	updateHeight(uint64)
 }
 
+// heightBaseFilter is a base implementation that keeps track of
+// last height and filter unique ID.
 type heightBaseFilter struct {
 	last  uint64
 	rpcID rpc.ID
