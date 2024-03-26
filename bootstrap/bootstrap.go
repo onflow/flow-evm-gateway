@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/onflow/flow-go/engine"
 
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/onflow/flow-evm-gateway/api"
@@ -175,7 +176,17 @@ func startServer(
 		receipts,
 		accounts,
 	)
-	supportedAPIs := api.SupportedAPIs(blockchainAPI)
+
+	pullAPI := api.NewPullAPI(
+		logger,
+		cfg,
+		blocks,
+		transactions,
+		receipts,
+		engine.NewBroadcaster(), // todo update after stream PR is in
+	)
+
+	supportedAPIs := api.SupportedAPIs(blockchainAPI, pullAPI)
 
 	if err := srv.EnableRPC(supportedAPIs); err != nil {
 		return err
