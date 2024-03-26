@@ -141,6 +141,8 @@ func NewFilterAPI(
 		filters:           make(map[rpc.ID]filter),
 	}
 
+	go api.idleFilterChecker()
+
 	return api
 }
 
@@ -226,9 +228,8 @@ func (api *PullAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 		return nil, err
 	}
 
-	length := current - f.lastRequestHeight()
 	// should never happen, extra safety check
-	if length > idleHeightLimit {
+	if current-f.lastRequestHeight() > idleHeightLimit {
 		api.UninstallFilter(id)
 		return nil, errors.Join(errs.ErrNotFound, fmt.Errorf("filted by id %s does not exist", id))
 	}
@@ -246,11 +247,30 @@ func (api *PullAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 	return nil, nil
 }
 
+func (api *PullAPI) Notify() {
+	current, err := api.blocks.LatestEVMHeight()
+	if err != nil {
+		api.logger.Error().Err(err).Msg("failed to clear idle filters")
+	}
+
+	// we don't have to check every new block
+	const skip = 10
+	if current%skip != 0 {
+		return
+	}
+
+	for id, f := range api.filters {
+		if current-f.lastRequestHeight() > idleHeightLimit {
+			api.UninstallFilter(id)
+		}
+	}
+}
+
 // idleFilterChecker continuously monitors all the registered filters and
 // if any of them has been idle for too long i.e. no requests have been made
 // using the filter ID it will be removed.
 func (api *PullAPI) idleFilterChecker() {
-
+	api.blocksBroadcaster.Subscribe(api)
 }
 
 func (api *PullAPI) addFilter(f filter) rpc.ID {
