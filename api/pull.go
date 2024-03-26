@@ -4,15 +4,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/core/types"
+	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/storage"
 	errs "github.com/onflow/flow-evm-gateway/storage/errors"
+	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/rs/zerolog"
 	"sync"
 )
+
+// idleHeightLimit defines the max number of block heights a filter
+// can be idle for before being removed from existing filters.
+const idleHeightLimit = 1000
 
 // filter defines a general resource filter that is used when pulling new data.
 //
@@ -199,7 +204,7 @@ func (api *PullAPI) NewFilter(criteria filters.FilterCriteria) (rpc.ID, error) {
 
 // GetFilterLogs returns the logs for the filter with the given id.
 // If the filter could not be found an empty array of logs is returned.
-func (api *PullAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]*types.Log, error) {
+func (api *PullAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]*gethTypes.Log, error) {
 	// todo this should call the normal get logs api
 	panic("implement")
 }
@@ -210,9 +215,44 @@ func (api *PullAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]*types.Log,
 // For pending transaction and block filters the result is []common.Hash.
 // (pending)Log filters return []Log.
 func (api *PullAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
-	filter, ok := api.filters[id]
+	f, ok := api.filters[id]
 	if !ok {
 		return nil, errors.Join(errs.ErrNotFound, fmt.Errorf("filted by id %s does not exist", id))
 	}
 
+	switch f.(type) {
+	case *blocksFilter:
+		return api.getBlocks(f.(*blocksFilter))
+	case *transactionsFilter:
+		return nil, nil
+	case *logsFilter:
+		return nil, nil
+	}
+
+	return nil, nil
+}
+
+func (api *PullAPI) getBlocks(filter *blocksFilter) (any, error) {
+	current, err := api.blocks.LatestEVMHeight()
+	if err != nil {
+		return nil, err
+	}
+
+	length := current - filter.last
+	if length > idleHeightLimit { // should never happen, extra safety check
+		return nil, fmt.Errorf("too many blocks since last request")
+	}
+
+	blocks := make([]*types.Block, length)
+
+	// todo we can optimize by adding a getter method for range of blocks
+	for i := filter.last; i <= current; i++ {
+		b, err := api.blocks.GetByHeight(i)
+		if err != nil {
+			return nil, err
+		}
+		blocks[i] = b
+	}
+
+	return blocks, nil
 }
