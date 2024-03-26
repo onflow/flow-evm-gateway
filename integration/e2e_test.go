@@ -1148,6 +1148,8 @@ func TestE2E_Streaming(t *testing.T) {
 		assert.Equal(t, contractAddress.Hex(), log.Address.Hex())
 		assert.Len(t, log.Topics, 4)
 		assert.Equal(t, common.BigToHash(sumA), log.Topics[2])
+		sumB := big.NewInt(int64(i))
+		assert.Equal(t, common.BigToHash(sumB), log.Topics[3])
 
 		currentHeight++
 	}
