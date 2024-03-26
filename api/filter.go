@@ -8,6 +8,7 @@ import (
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/rs/zerolog"
+	"sync"
 )
 
 // filter defines a general resource filter that is used when pulling new data.
@@ -104,6 +105,7 @@ type FilterAPI struct {
 
 	// todo add timeout to clear filters and cap filter length to prevent OOM
 	filters map[rpc.ID]filter
+	mux     sync.RWMutex
 }
 
 func NewFilterAPI(
@@ -126,6 +128,9 @@ func NewFilterAPI(
 }
 
 func (api *FilterAPI) addFilter(f filter) rpc.ID {
+	api.mux.Lock()
+	defer api.mux.Unlock()
+
 	api.filters[f.id()] = f
 	return f.id()
 }
@@ -159,6 +164,15 @@ func (api *FilterAPI) NewBlockFilter() (rpc.ID, error) {
 	}
 
 	return api.addFilter(newBlocksFilter(last)), nil
+}
+
+func (api *FilterAPI) UninstallFilter(id rpc.ID) bool {
+	api.mux.Lock()
+	defer api.mux.Unlock()
+
+	_, ok := api.filters[id]
+	delete(api.filters, id)
+	return ok
 }
 
 // NewFilter creates a new filter and returns the filter id. It can be
