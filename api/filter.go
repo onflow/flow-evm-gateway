@@ -59,6 +59,16 @@ type transactionsFilter struct {
 	fullTx bool
 }
 
+func newTransactionFilter(lastHeight uint64, fullTx bool) *transactionsFilter {
+	return &transactionsFilter{
+		&heightBaseFilter{
+			last:  lastHeight,
+			rpcID: rpc.NewID(),
+		},
+		fullTx,
+	}
+}
+
 // logsFilter is used to get all new logs since the last request.
 //
 // Criteria parameter filters the logs according to the criteria values.
@@ -107,8 +117,18 @@ func (api *FilterAPI) addFilter(f filter) rpc.ID {
 //
 // It is part of the filter package because this filter can be used through the
 // `eth_getFilterChanges` polling method that is also used for log filters.
-func (api *FilterAPI) NewPendingTransactionFilter(fullTx *bool) rpc.ID {
+func (api *FilterAPI) NewPendingTransactionFilter(fullTx *bool) (rpc.ID, error) {
+	last, err := api.blocks.LatestEVMHeight()
+	if err != nil {
+		return "", err
+	}
 
+	full := false
+	if fullTx != nil && *fullTx {
+		full = true
+	}
+
+	return api.addFilter(newTransactionFilter(last, full)), nil
 }
 
 // NewBlockFilter creates a filter that fetches blocks that are imported into the chain.
