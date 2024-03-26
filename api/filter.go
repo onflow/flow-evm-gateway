@@ -10,6 +10,34 @@ import (
 	"github.com/rs/zerolog"
 )
 
+type filter interface {
+	id() rpc.ID
+	lastHeight() uint64
+	updateHeight(uint64)
+}
+
+type heightBaseFilter struct {
+	last uint64
+}
+
+func (h *heightBaseFilter) lastHeight() uint64 {
+	return h.last
+}
+
+func (h *heightBaseFilter) updateHeight(u uint64) {
+	h.last = u
+}
+
+func (h *heightBaseFilter) id() rpc.ID {
+	return h.id()
+}
+
+var _ filter = &blocksFilter{}
+
+type blocksFilter struct {
+	*heightBaseFilter
+}
+
 type FilterAPI struct {
 	logger       zerolog.Logger
 	config       *config.Config
@@ -66,7 +94,7 @@ func (api *FilterAPI) NewBlockFilter() rpc.ID {
 // again but with the removed property set to true.
 //
 // In case "fromBlock" > "toBlock" an error is returned.
-func (api *FilterAPI) NewFilter(crit filters.FilterCriteria) (rpc.ID, error) {
+func (api *FilterAPI) NewFilter(criteria filters.FilterCriteria) (rpc.ID, error) {
 
 }
 
