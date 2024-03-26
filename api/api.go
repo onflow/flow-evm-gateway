@@ -92,16 +92,33 @@ func (b *BlockChainAPI) BlockNumber() (hexutil.Uint64, error) {
 	return hexutil.Uint64(latestBlockHeight), nil
 }
 
-// Syncing returns false in case the node is currently not syncing with the network. It can be up-to-date or has not
-// yet received the latest block headers from its pears. In case it is synchronizing:
+// Syncing returns false in case the node is currently not syncing with the network.
+// It can be up-to-date or has not yet received the latest block headers from its peers.
+// In case it is synchronizing:
 // - startingBlock: block number this node started to synchronize from
 // - currentBlock:  block number this node is currently importing
 // - highestBlock:  block number of the highest block header this node has received from peers
-// - pulledStates:  number of state entries processed until now
-// - knownStates:   number of known state entries that still need to be pulled
 func (b *BlockChainAPI) Syncing() (interface{}, error) {
-	// todo maybe we should check if the node is caught up with the latest flow block
-	return false, nil
+	currentBlock, err := b.blocks.LatestCadenceHeight()
+	if err != nil {
+		return nil, err
+	}
+
+	highestBlock, err := b.evm.GetLatestBlockHeight(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
+	if currentBlock == highestBlock {
+		return false, nil
+	}
+
+	syncingStatus := make(map[string]hexutil.Uint64)
+	syncingStatus["startingBlock"] = hexutil.Uint64(b.config.StartingCadenceHeight)
+	syncingStatus["currentBlock"] = hexutil.Uint64(currentBlock)
+	syncingStatus["highestBlock"] = hexutil.Uint64(highestBlock)
+
+	return syncingStatus, nil
 }
 
 // SendRawTransaction will add the signed transaction to the transaction pool.

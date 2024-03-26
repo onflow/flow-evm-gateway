@@ -75,6 +75,9 @@ type Requester interface {
 	// GetCode returns the code stored at the given address in
 	// the state for the given block number.
 	GetCode(ctx context.Context, address common.Address, height uint64) ([]byte, error)
+
+	// GetCode returns the latest block height of the Flow network.
+	GetLatestBlockHeight(ctx context.Context) (uint64, error)
 }
 
 var _ Requester = &EVM{}
@@ -404,6 +407,15 @@ func (e *EVM) GetCode(
 		Msg("get code executed")
 
 	return code, nil
+}
+
+func (e *EVM) GetLatestBlockHeight(ctx context.Context) (uint64, error) {
+	blockHeader, err := e.client.GetLatestBlockHeader(ctx, true)
+	if err != nil {
+		return 0, err
+	}
+
+	return blockHeader.Height, nil
 }
 
 // getSignerNetworkInfo loads the signer account from network and returns key index and sequence number
