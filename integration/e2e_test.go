@@ -1104,15 +1104,17 @@ func TestE2E_Streaming(t *testing.T) {
 	// different subscription to logs with different filters
 	allLogsWrite, allLogsRead, err := rpcTester.wsConnect()
 	require.NoError(t, err)
-	err = allLogsWrite(newLogsSubscription(contractAddress.String(), []string{}))
+	err = allLogsWrite(newLogsSubscription(contractAddress.String(), ``))
 	require.NoError(t, err)
 
 	_, _ = allLogsRead() // ignore current block todo - we need to skip transmissions if no data, there is a PR merged in master that updates subscriber we need to update to
 
+	// [{"address":"0x35c2cd9bee2ca40f8b91c924188c5018df2984e2","topics":["0x76efea95e5da1fa661f235b2921ae1d89b99e457ec73fb88e34a1d150f95c64b","0x000000000000000000000000facf71692421039876a5bb4f10ef7a439d8ef61e","0x0000000000000000000000000000000000000000000000000000000000000005","0x0000000000000000000000000000000000000000000000000000000000000001"]
+
 	// submit transactions that emit logs
 	logCount := 5
+	sumA := big.NewInt(5)
 	for i := 0; i < logCount; i++ {
-		sumA := big.NewInt(5)
 		sumB := big.NewInt(int64(i))
 		callSum, err := storeContract.call("sum", sumA, sumB)
 		require.NoError(t, err)
@@ -1121,18 +1123,33 @@ func TestE2E_Streaming(t *testing.T) {
 		res, _, err := evmSignAndRun(emu, nil, gasLimit, eoaKey, nonce, &contractAddress, callSum)
 		require.NoError(t, err)
 		require.NoError(t, res.Error)
-		time.Sleep(300 * time.Millisecond)
 	}
 
+	time.Sleep(500 * time.Millisecond)
+	currentHeight = startHeight + logCount + 1 // todo why one extra block - fix maybe use latest block request
 	for i := 0; i < logCount; i++ {
-		fmt.Println("getting event", i)
 		event, err := allLogsRead()
 		require.NoError(t, err)
 
-		var res []map[string]string
-		require.NoError(t, json.Unmarshal(event.Params.Result, &res))
+		var l []gethTypes.Log
+		assert.NoError(t, json.Unmarshal(event.Params.Result, &l))
 
-		fmt.Println("events", res)
+		if len(l) == 0 {
+			fmt.Println("---------")
+			fmt.Println(event) // todo figure out why
+			fmt.Println("---------")
+			continue
+		}
+
+		require.Len(t, l, 1)
+		log := l[0]
+		// this makes sure we received logs in correct order
+		assert.Equal(t, uint64(currentHeight), log.BlockNumber)
+		assert.Equal(t, contractAddress.Hex(), log.Address.Hex())
+		assert.Len(t, log.Topics, 4)
+		assert.Equal(t, common.BigToHash(sumA), log.Topics[2])
+
+		currentHeight++
 	}
 }
 
