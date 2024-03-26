@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/onflow/flow-evm-gateway/config"
+	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/storage"
 	errs "github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/onflow/flow-go/fvm/evm/types"
@@ -232,7 +233,7 @@ func (api *PullAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 	return nil, nil
 }
 
-func (api *PullAPI) getBlocks(filter *blocksFilter) (any, error) {
+func (api *PullAPI) getBlocks(filter *blocksFilter) ([]*types.Block, error) {
 	current, err := api.blocks.LatestEVMHeight()
 	if err != nil {
 		return nil, err
@@ -245,7 +246,7 @@ func (api *PullAPI) getBlocks(filter *blocksFilter) (any, error) {
 
 	blocks := make([]*types.Block, length)
 
-	// todo we can optimize by adding a getter method for range of blocks
+	// todo we can optimize if needed by adding a getter method for range of blocks
 	for i := filter.last; i <= current; i++ {
 		b, err := api.blocks.GetByHeight(i)
 		if err != nil {
@@ -255,4 +256,37 @@ func (api *PullAPI) getBlocks(filter *blocksFilter) (any, error) {
 	}
 
 	return blocks, nil
+}
+
+func (api *PullAPI) getTransactions(filter *transactionsFilter) ([]models.Transaction, error) {
+	current, err := api.blocks.LatestEVMHeight()
+	if err != nil {
+		return nil, err
+	}
+
+	length := current - filter.last
+	if length > idleHeightLimit { // should never happen, extra safety check
+		return nil, fmt.Errorf("too many blocks since last request")
+	}
+
+	txs := make([]models.Transaction, 0)
+
+	// todo we can optimize if needed by adding a getter method for range of txs by heights
+	for i := filter.last; i <= current; i++ {
+		b, err := api.blocks.GetByHeight(i)
+		if err != nil {
+			return nil, err
+		}
+
+		// for now there will only be one tx per block
+		for _, h := range b.TransactionHashes {
+			tx, err := api.transactions.Get(h)
+			if err != nil {
+				return nil, err
+			}
+			txs = append(txs, tx)
+		}
+	}
+
+	return txs, nil
 }
