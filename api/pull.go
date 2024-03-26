@@ -12,6 +12,7 @@ import (
 	"github.com/onflow/flow-evm-gateway/services/logs"
 	"github.com/onflow/flow-evm-gateway/storage"
 	errs "github.com/onflow/flow-evm-gateway/storage/errors"
+	"github.com/onflow/flow-go/engine"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/rs/zerolog"
 	"math/big"
@@ -29,8 +30,8 @@ const idleHeightLimit = 1000
 // Each filter is identified by a unique ID.
 type filter interface {
 	id() rpc.ID
-	lastHeight() uint64
-	updateHeight(uint64)
+	lastRequestHeight() uint64
+	updateLastRequestHeight(uint64)
 }
 
 // heightBaseFilter is a base implementation that keeps track of
@@ -40,11 +41,11 @@ type heightBaseFilter struct {
 	rpcID rpc.ID
 }
 
-func (h *heightBaseFilter) lastHeight() uint64 {
+func (h *heightBaseFilter) lastRequestHeight() uint64 {
 	return h.last
 }
 
-func (h *heightBaseFilter) updateHeight(u uint64) {
+func (h *heightBaseFilter) updateLastRequestHeight(u uint64) {
 	h.last = u
 }
 
@@ -107,12 +108,13 @@ func newLogsFilter(lastHeight uint64, criteria *filters.FilterCriteria) *logsFil
 }
 
 type PullAPI struct {
-	logger       zerolog.Logger
-	config       *config.Config
-	blocks       storage.BlockIndexer
-	transactions storage.TransactionIndexer
-	receipts     storage.ReceiptIndexer
-	accounts     storage.AccountIndexer
+	logger            zerolog.Logger
+	config            *config.Config
+	blocks            storage.BlockIndexer
+	transactions      storage.TransactionIndexer
+	receipts          storage.ReceiptIndexer
+	accounts          storage.AccountIndexer
+	blocksBroadcaster *engine.Broadcaster
 
 	// todo add timeout to clear filters and cap filter length to prevent OOM
 	filters map[rpc.ID]filter
@@ -126,24 +128,20 @@ func NewFilterAPI(
 	transactions storage.TransactionIndexer,
 	receipts storage.ReceiptIndexer,
 	accounts storage.AccountIndexer,
+	blocksBroadcaster *engine.Broadcaster,
 ) *PullAPI {
-	return &PullAPI{
-		logger:       logger,
-		config:       config,
-		blocks:       blocks,
-		transactions: transactions,
-		receipts:     receipts,
-		accounts:     accounts,
-		filters:      make(map[rpc.ID]filter),
+	api := &PullAPI{
+		logger:            logger,
+		config:            config,
+		blocks:            blocks,
+		transactions:      transactions,
+		receipts:          receipts,
+		accounts:          accounts,
+		blocksBroadcaster: blocksBroadcaster,
+		filters:           make(map[rpc.ID]filter),
 	}
-}
 
-func (api *PullAPI) addFilter(f filter) rpc.ID {
-	api.mux.Lock()
-	defer api.mux.Unlock()
-
-	api.filters[f.id()] = f
-	return f.id()
+	return api
 }
 
 // NewPendingTransactionFilter creates a filter that fetches pending transactions
@@ -223,30 +221,48 @@ func (api *PullAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 		return nil, errors.Join(errs.ErrNotFound, fmt.Errorf("filted by id %s does not exist", id))
 	}
 
-	switch f.(type) {
-	case *blocksFilter:
-		return api.getBlocks(f.(*blocksFilter))
-	case *transactionsFilter:
-		return api.getTransactions(f.(*transactionsFilter))
-	case *logsFilter:
-		return api.getLogs(f.(*logsFilter))
-	}
-
-	return nil, nil
-}
-
-func (api *PullAPI) getBlocks(filter *blocksFilter) ([]*types.Block, error) {
 	current, err := api.blocks.LatestEVMHeight()
 	if err != nil {
 		return nil, err
 	}
 
-	length := current - filter.last
-	if length > idleHeightLimit { // should never happen, extra safety check
-		return nil, fmt.Errorf("too many blocks since last request")
+	length := current - f.lastRequestHeight()
+	// should never happen, extra safety check
+	if length > idleHeightLimit {
+		api.UninstallFilter(id)
+		return nil, errors.Join(errs.ErrNotFound, fmt.Errorf("filted by id %s does not exist", id))
+	}
+	defer f.updateLastRequestHeight(current)
+
+	switch f.(type) {
+	case *blocksFilter:
+		return api.getBlocks(current, f.(*blocksFilter))
+	case *transactionsFilter:
+		return api.getTransactions(current, f.(*transactionsFilter))
+	case *logsFilter:
+		return api.getLogs(current, f.(*logsFilter))
 	}
 
-	blocks := make([]*types.Block, length)
+	return nil, nil
+}
+
+// idleFilterChecker continuously monitors all the registered filters and
+// if any of them has been idle for too long i.e. no requests have been made
+// using the filter ID it will be removed.
+func (api *PullAPI) idleFilterChecker() {
+
+}
+
+func (api *PullAPI) addFilter(f filter) rpc.ID {
+	api.mux.Lock()
+	defer api.mux.Unlock()
+
+	api.filters[f.id()] = f
+	return f.id()
+}
+
+func (api *PullAPI) getBlocks(current uint64, filter *blocksFilter) ([]*types.Block, error) {
+	blocks := make([]*types.Block, current-filter.lastRequestHeight())
 
 	// todo we can optimize if needed by adding a getter method for range of blocks
 	for i := filter.last; i <= current; i++ {
@@ -260,17 +276,7 @@ func (api *PullAPI) getBlocks(filter *blocksFilter) ([]*types.Block, error) {
 	return blocks, nil
 }
 
-func (api *PullAPI) getTransactions(filter *transactionsFilter) ([]models.Transaction, error) {
-	current, err := api.blocks.LatestEVMHeight()
-	if err != nil {
-		return nil, err
-	}
-
-	length := current - filter.last
-	if length > idleHeightLimit { // should never happen, extra safety check
-		return nil, fmt.Errorf("too many blocks since last request")
-	}
-
+func (api *PullAPI) getTransactions(current uint64, filter *transactionsFilter) ([]models.Transaction, error) {
 	txs := make([]models.Transaction, 0)
 
 	// todo we can optimize if needed by adding a getter method for range of txs by heights
@@ -293,17 +299,7 @@ func (api *PullAPI) getTransactions(filter *transactionsFilter) ([]models.Transa
 	return txs, nil
 }
 
-func (api *PullAPI) getLogs(filter *logsFilter) (any, error) {
-	current, err := api.blocks.LatestEVMHeight()
-	if err != nil {
-		return nil, err
-	}
-
-	length := current - filter.last
-	if length > idleHeightLimit { // should never happen, extra safety check
-		return nil, fmt.Errorf("too many blocks since last request")
-	}
-
+func (api *PullAPI) getLogs(current uint64, filter *logsFilter) (any, error) {
 	last := big.NewInt(int64(filter.last))
 	curr := big.NewInt(int64(current))
 	criteria := logs.FilterCriteria{
