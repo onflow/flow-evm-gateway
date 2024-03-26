@@ -33,9 +33,28 @@ func (h *heightBaseFilter) id() rpc.ID {
 }
 
 var _ filter = &blocksFilter{}
+var _ filter = &transactionsFilter{}
 
+// blocksFilter is used to get all new blocks since the last request
 type blocksFilter struct {
 	*heightBaseFilter
+}
+
+// transactionFilter is used to get all new transactions since last request.
+//
+// FullTx parameters determines if the result will include only
+// hashes or full transaction body.
+type transactionsFilter struct {
+	*heightBaseFilter
+	fullTx bool
+}
+
+// logsFilter is used to get all new logs since the last request.
+//
+// Criteria parameter filters the logs according to the criteria values.
+type logsFilter struct {
+	*heightBaseFilter
+	criteria *filters.FilterCriteria
 }
 
 type FilterAPI struct {
