@@ -337,8 +337,8 @@ func (api *PullAPI) getLogs(latestHeight uint64, filter *logsFilter) (any, error
 		Topics:    filter.criteria.Topics,
 	}
 
-	// if filter criteria to block is lower height than current height there can not be any new
-	// logs available, so we return nil, if to is negative it means latest, so we always return new data
+	// if filter criteria "to" block is lower height than current height there can not be any new
+	// logs available, so we return nil, if "to" is negative it means latest, so we always return new data
 	to := filter.criteria.ToBlock
 	if to != nil && latest.Cmp(to) > 0 && to.Cmp(big.NewInt(0)) >= 0 {
 		return nil, nil
