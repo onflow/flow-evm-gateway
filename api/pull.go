@@ -125,7 +125,6 @@ type PullAPI struct {
 	receipts          storage.ReceiptIndexer
 	blocksBroadcaster *engine.Broadcaster
 
-	// todo add timeout to clear filters and cap filter length to prevent OOM
 	filters map[rpc.ID]filter
 	mux     sync.RWMutex
 }
