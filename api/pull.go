@@ -142,7 +142,7 @@ func NewPullAPI(
 		filters:      make(map[rpc.ID]filter),
 	}
 
-	go api.idleFilterChecker()
+	go api.filterExpiryChecker()
 
 	return api
 }
@@ -259,10 +259,10 @@ func (api *PullAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 	return nil, nil
 }
 
-// idleFilterChecker continuously monitors all the registered filters and
+// filterExpiryChecker continuously monitors all the registered filters and
 // if any of them has been idle for too long i.e. no requests have been made
 // for a period defined as filterExpiry using the filter ID it will be removed.
-func (api *PullAPI) idleFilterChecker() {
+func (api *PullAPI) filterExpiryChecker() {
 	for _ = range time.Tick(time.Minute) {
 		for id, f := range api.filters {
 			if f.expired() {
