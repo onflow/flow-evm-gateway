@@ -20,14 +20,31 @@ type Blocks struct {
 	store           *Storage
 	mux             sync.RWMutex
 	latestEVMHeight uint64
+	// The Cadence height at which the last import started.
+	// Keeps track at which Cadence height we start importing
+	// after restarts/deployments.
+	startingCadenceHeight uint64
 }
 
 func NewBlocks(store *Storage) *Blocks {
 	return &Blocks{
-		store:           store,
-		mux:             sync.RWMutex{},
-		latestEVMHeight: 0,
+		store:                 store,
+		mux:                   sync.RWMutex{},
+		latestEVMHeight:       0,
+		startingCadenceHeight: 0,
 	}
+}
+
+// SetStartingCadenceHeight sets the Cadence height at which
+// the last import started.
+func (b *Blocks) SetStartingCadenceHeight(cadenceHeight uint64) {
+	b.startingCadenceHeight = cadenceHeight
+}
+
+// GetStartingCadenceHeight returns the Cadence height at which
+// the import started.
+func (b *Blocks) GetStartingCadenceHeight() uint64 {
+	return b.startingCadenceHeight
 }
 
 func (b *Blocks) Store(cadenceHeight uint64, block *types.Block) error {

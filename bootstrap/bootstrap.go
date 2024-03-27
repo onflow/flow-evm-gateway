@@ -49,10 +49,8 @@ func Start(ctx context.Context, cfg *config.Config) error {
 			return fmt.Errorf("failed to init the database: %w", err)
 		}
 		logger.Info().Msg("database initialized with 0 evm and cadence heights")
-		cfg.StartingCadenceHeight = cfg.InitCadenceHeight
-	} else {
-		cfg.StartingCadenceHeight = latestCadenceHeight
 	}
+	blocks.SetStartingCadenceHeight(latestCadenceHeight)
 
 	go func() {
 		err := startServer(

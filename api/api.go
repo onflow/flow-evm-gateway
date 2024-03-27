@@ -114,7 +114,7 @@ func (b *BlockChainAPI) Syncing() (interface{}, error) {
 	}
 
 	return SyncStatus{
-		StartingBlock: hexutil.Uint64(b.config.StartingCadenceHeight),
+		StartingBlock: hexutil.Uint64(b.blocks.GetStartingCadenceHeight()),
 		CurrentBlock:  hexutil.Uint64(currentBlock),
 		HighestBlock:  hexutil.Uint64(highestBlock),
 	}, nil

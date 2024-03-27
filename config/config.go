@@ -55,8 +55,6 @@ type Config struct {
 	GasPrice *big.Int
 	// InitCadenceHeight is used for initializing the database on a local emulator or a live network.
 	InitCadenceHeight uint64
-	// StartingCadenceHeight keeps track the Cadence height we start to import after restarts/deployments.
-	StartingCadenceHeight uint64
 	// LogLevel defines how verbose the output log is
 	LogLevel zerolog.Level
 	// LogWriter defines the writer used for logging
