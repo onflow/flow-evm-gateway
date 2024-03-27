@@ -13,7 +13,6 @@ import (
 	"github.com/onflow/flow-evm-gateway/services/logs"
 	"github.com/onflow/flow-evm-gateway/storage"
 	errs "github.com/onflow/flow-evm-gateway/storage/errors"
-	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/rs/zerolog"
 	"math/big"
 	"sync"
@@ -295,8 +294,8 @@ func (api *PullAPI) addFilter(f filter) rpc.ID {
 	return f.id()
 }
 
-func (api *PullAPI) getBlocks(latestHeight uint64, filter *blocksFilter) ([]*types.Block, error) {
-	blocks := make([]*types.Block, latestHeight-filter.lastUsedHeight())
+func (api *PullAPI) getBlocks(latestHeight uint64, filter *blocksFilter) ([]common.Hash, error) {
+	hashes := make([]common.Hash, latestHeight-filter.lastUsedHeight())
 
 	// todo we can optimize if needed by adding a getter method for range of blocks
 	for i := filter.last; i <= latestHeight; i++ {
@@ -304,10 +303,14 @@ func (api *PullAPI) getBlocks(latestHeight uint64, filter *blocksFilter) ([]*typ
 		if err != nil {
 			return nil, err
 		}
-		blocks[i] = b
+		h, err := b.Hash()
+		if err != nil {
+			continue
+		}
+		hashes[i] = h
 	}
 
-	return blocks, nil
+	return hashes, nil
 }
 
 func (api *PullAPI) getTransactions(latestHeight uint64, filter *transactionsFilter) (any, error) {
