@@ -26,7 +26,7 @@ import (
 // Each filter is identified by a unique ID.
 type filter interface {
 	id() rpc.ID
-	lastUsedHeight() uint64
+	nextHeight() uint64
 	updateUsed(height uint64)
 	expired() bool
 }
@@ -57,8 +57,12 @@ func (h *baseFilter) id() rpc.ID {
 	return h.rpcID
 }
 
-func (h *baseFilter) lastUsedHeight() uint64 {
-	return h.last
+// nextHeight returns the next height to fetch since the last fetch
+//
+// The value of nextHeight is calculated by checking what was the last
+// height we fetched and then adding 1, since that height was already fetched.
+func (h *baseFilter) nextHeight() uint64 {
+	return h.last + 1
 }
 
 // updateUsed updates the latest height the filter was used with as well as
@@ -246,9 +250,6 @@ func (api *PullAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 
 	current, err := api.blocks.LatestEVMHeight()
 	if err != nil {
-		if errors.Is(err, errs.ErrNotFound) {
-			return nil, nil // no data available
-		}
 		return nil, err
 	}
 
@@ -298,10 +299,11 @@ func (api *PullAPI) addFilter(f filter) rpc.ID {
 }
 
 func (api *PullAPI) getBlocks(latestHeight uint64, filter *blocksFilter) ([]common.Hash, error) {
-	hashes := make([]common.Hash, latestHeight-filter.lastUsedHeight())
+	nextHeight := filter.nextHeight()
+	hashes := make([]common.Hash, latestHeight-nextHeight)
 
 	// todo we can optimize if needed by adding a getter method for range of blocks
-	for i := filter.last; i <= latestHeight; i++ {
+	for i := nextHeight; i <= latestHeight; i++ {
 		b, err := api.blocks.GetByHeight(i)
 		if err != nil {
 			return nil, err
@@ -321,9 +323,13 @@ func (api *PullAPI) getTransactions(latestHeight uint64, filter *transactionsFil
 	hashes := make([]common.Hash, 0)
 
 	// todo we can optimize if needed by adding a getter method for range of txs by heights
-	for i := filter.last; i <= latestHeight; i++ {
+	for i := filter.nextHeight(); i <= latestHeight; i++ {
 		b, err := api.blocks.GetByHeight(i)
 		if err != nil {
+			if errors.Is(err, errs.ErrNotFound) { // block not found
+				fmt.Println("BLOCK NOT FOUND ", i)
+				return nil, nil
+			}
 			return nil, err
 		}
 
@@ -351,7 +357,7 @@ func (api *PullAPI) getTransactions(latestHeight uint64, filter *transactionsFil
 }
 
 func (api *PullAPI) getLogs(latestHeight uint64, filter *logsFilter) (any, error) {
-	last := big.NewInt(int64(filter.last))
+	last := big.NewInt(int64(filter.nextHeight()))
 	latest := big.NewInt(int64(latestHeight))
 	criteria := logs.FilterCriteria{
 		Addresses: filter.criteria.Addresses,
