@@ -12,7 +12,6 @@ import (
 	"github.com/onflow/flow-evm-gateway/services/logs"
 	"github.com/onflow/flow-evm-gateway/storage"
 	errs "github.com/onflow/flow-evm-gateway/storage/errors"
-	"github.com/onflow/flow-go/engine"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/rs/zerolog"
 	"math/big"
@@ -118,15 +117,13 @@ func newLogsFilter(lastHeight uint64, criteria *filters.FilterCriteria) *logsFil
 }
 
 type PullAPI struct {
-	logger            zerolog.Logger
-	config            *config.Config
-	blocks            storage.BlockIndexer
-	transactions      storage.TransactionIndexer
-	receipts          storage.ReceiptIndexer
-	blocksBroadcaster *engine.Broadcaster
-
-	filters map[rpc.ID]filter
-	mux     sync.RWMutex
+	logger       zerolog.Logger
+	config       *config.Config
+	blocks       storage.BlockIndexer
+	transactions storage.TransactionIndexer
+	receipts     storage.ReceiptIndexer
+	filters      map[rpc.ID]filter
+	mux          sync.RWMutex
 }
 
 func NewPullAPI(
@@ -135,16 +132,14 @@ func NewPullAPI(
 	blocks storage.BlockIndexer,
 	transactions storage.TransactionIndexer,
 	receipts storage.ReceiptIndexer,
-	blocksBroadcaster *engine.Broadcaster,
 ) *PullAPI {
 	api := &PullAPI{
-		logger:            logger,
-		config:            config,
-		blocks:            blocks,
-		transactions:      transactions,
-		receipts:          receipts,
-		blocksBroadcaster: blocksBroadcaster,
-		filters:           make(map[rpc.ID]filter),
+		logger:       logger,
+		config:       config,
+		blocks:       blocks,
+		transactions: transactions,
+		receipts:     receipts,
+		filters:      make(map[rpc.ID]filter),
 	}
 
 	go api.idleFilterChecker()
