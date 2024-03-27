@@ -21,16 +21,13 @@ func (mf *MockFilter) expired() bool {
 	return mf.expiredStatus
 }
 
-func (mf *MockFilter) prepare() {
-	// preparation activities if needed
-}
+func (mf *MockFilter) prepare() {}
 
 func (mf *MockFilter) updateUsed(last uint64) {
 	// update activities if needed
 }
 
-func (mf *MockFilter) lastUsedHeight() uint64 {
-	// last used height activities if needed
+func (mf *MockFilter) nextHeight() uint64 {
 	return 0
 }
 
