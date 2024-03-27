@@ -234,6 +234,9 @@ func (api *PullAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]*gethTypes.
 // For pending transaction and block filters the result is []common.Hash.
 // (pending)Log filters return []Log.
 func (api *PullAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
+	api.mux.RLock()
+	defer api.mux.RUnlock()
+
 	f, ok := api.filters[id]
 	if !ok {
 		return nil, errors.Join(errs.ErrNotFound, fmt.Errorf("filted by id %s does not exist", id))
