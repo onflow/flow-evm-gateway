@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -309,8 +310,9 @@ func (api *PullAPI) getBlocks(latestHeight uint64, filter *blocksFilter) ([]*typ
 	return blocks, nil
 }
 
-func (api *PullAPI) getTransactions(latestHeight uint64, filter *transactionsFilter) ([]models.Transaction, error) {
+func (api *PullAPI) getTransactions(latestHeight uint64, filter *transactionsFilter) (any, error) {
 	txs := make([]models.Transaction, 0)
+	hashes := make([]common.Hash, 0)
 
 	// todo we can optimize if needed by adding a getter method for range of txs by heights
 	for i := filter.last; i <= latestHeight; i++ {
@@ -325,11 +327,21 @@ func (api *PullAPI) getTransactions(latestHeight uint64, filter *transactionsFil
 			if err != nil {
 				return nil, err
 			}
+
+			h, err := tx.Hash()
+			if err != nil {
+				continue
+			}
 			txs = append(txs, tx)
+			hashes = append(hashes, h)
 		}
 	}
 
-	return txs, nil
+	if filter.fullTx {
+		return txs, nil
+	}
+
+	return hashes, nil
 }
 
 func (api *PullAPI) getLogs(latestHeight uint64, filter *logsFilter) (any, error) {
