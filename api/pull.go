@@ -19,10 +19,6 @@ import (
 	"time"
 )
 
-// filterExpiry defines the max number of block heights a filter
-// can be idle for before being removed from existing filters.
-const filterExpiry = time.Minute * 5
-
 // filter defines a general resource filter that is used when pulling new data.
 //
 // Filters work by remembering the last height at which the data was pulled
@@ -38,9 +34,23 @@ type filter interface {
 // baseFilter is a base implementation that keeps track of
 // last height and filter unique ID.
 type baseFilter struct {
-	last  uint64
-	rpcID rpc.ID
-	used  time.Time
+	last   uint64
+	rpcID  rpc.ID
+	used   time.Time
+	expiry time.Duration
+}
+
+func newBaseFilter(expiry time.Duration, lastHeight uint64) *baseFilter {
+	if expiry == 0 {
+		expiry = time.Minute * 5 // overwrite default expiry
+	}
+
+	return &baseFilter{
+		last:   lastHeight,
+		rpcID:  rpc.NewID(),
+		used:   time.Now(),
+		expiry: expiry,
+	}
 }
 
 func (h *baseFilter) id() rpc.ID {
@@ -59,7 +69,7 @@ func (h *baseFilter) updateUsed(height uint64) {
 }
 
 func (h *baseFilter) expired() bool {
-	return time.Since(h.used) > filterExpiry
+	return time.Since(h.used) > h.expiry
 }
 
 var _ filter = &blocksFilter{}
@@ -70,12 +80,9 @@ type blocksFilter struct {
 	*baseFilter
 }
 
-func newBlocksFilter(lastHeight uint64) *blocksFilter {
+func newBlocksFilter(expiry time.Duration, lastHeight uint64) *blocksFilter {
 	return &blocksFilter{
-		&baseFilter{
-			last:  lastHeight,
-			rpcID: rpc.NewID(),
-		},
+		newBaseFilter(expiry, lastHeight),
 	}
 }
 
@@ -88,12 +95,9 @@ type transactionsFilter struct {
 	fullTx bool
 }
 
-func newTransactionFilter(lastHeight uint64, fullTx bool) *transactionsFilter {
+func newTransactionFilter(expiry time.Duration, lastHeight uint64, fullTx bool) *transactionsFilter {
 	return &transactionsFilter{
-		&baseFilter{
-			last:  lastHeight,
-			rpcID: rpc.NewID(),
-		},
+		newBaseFilter(expiry, lastHeight),
 		fullTx,
 	}
 }
@@ -106,12 +110,13 @@ type logsFilter struct {
 	criteria *filters.FilterCriteria
 }
 
-func newLogsFilter(lastHeight uint64, criteria *filters.FilterCriteria) *logsFilter {
+func newLogsFilter(
+	expiry time.Duration,
+	lastHeight uint64,
+	criteria *filters.FilterCriteria,
+) *logsFilter {
 	return &logsFilter{
-		&baseFilter{
-			last:  lastHeight,
-			rpcID: rpc.NewID(),
-		},
+		newBaseFilter(expiry, lastHeight),
 		criteria,
 	}
 }
@@ -163,7 +168,8 @@ func (api *PullAPI) NewPendingTransactionFilter(fullTx *bool) (rpc.ID, error) {
 		full = true
 	}
 
-	return api.addFilter(newTransactionFilter(last, full)), nil
+	f := newTransactionFilter(api.config.FilterExpiry, last, full)
+	return api.addFilter(f), nil
 }
 
 // NewBlockFilter creates a filter that fetches blocks that are imported into the chain.
@@ -174,7 +180,8 @@ func (api *PullAPI) NewBlockFilter() (rpc.ID, error) {
 		return "", err
 	}
 
-	return api.addFilter(newBlocksFilter(last)), nil
+	f := newBlocksFilter(api.config.FilterExpiry, last)
+	return api.addFilter(f), nil
 }
 
 func (api *PullAPI) UninstallFilter(id rpc.ID) bool {
@@ -213,7 +220,8 @@ func (api *PullAPI) NewFilter(criteria filters.FilterCriteria) (rpc.ID, error) {
 		// todo we should check for max range of from-to heights
 	}
 
-	return api.addFilter(newLogsFilter(from, &criteria)), nil
+	f := newLogsFilter(api.config.FilterExpiry, from, &criteria)
+	return api.addFilter(f), nil
 }
 
 // GetFilterLogs returns the logs for the filter with the given id.
@@ -263,7 +271,7 @@ func (api *PullAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 // if any of them has been idle for too long i.e. no requests have been made
 // for a period defined as filterExpiry using the filter ID it will be removed.
 func (api *PullAPI) filterExpiryChecker() {
-	for _ = range time.Tick(time.Minute) {
+	for _ = range time.Tick(api.config.FilterExpiry) {
 		for id, f := range api.filters {
 			if f.expired() {
 				api.UninstallFilter(id)
