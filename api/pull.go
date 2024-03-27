@@ -281,6 +281,12 @@ func (api *PullAPI) addFilter(f filter) rpc.ID {
 	api.mux.Lock()
 	defer api.mux.Unlock()
 
+	// we limit max active filters at any time to prevent abuse and OOM
+	const maxFilters = 10_000
+	if len(api.filters) > maxFilters {
+		return ""
+	}
+
 	api.filters[f.id()] = f
 	return f.id()
 }
