@@ -668,19 +668,19 @@ func (r *rpcTest) newTxFilter() (rpc.ID, error) {
 	return id, nil
 }
 
-func (r *rpcTest) getFilterChanges(id rpc.ID) {
-	rpcRes, err := r.request("eth_getFilterChanges", fmt.Sprintf(`["%s""]`, id))
+func (r *rpcTest) getFilterChangesHashes(id rpc.ID) ([]common.Hash, error) {
+	rpcRes, err := r.request("eth_getFilterChanges", fmt.Sprintf(`["%s"]`, id))
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	var r rpc.ID
-	err = json.Unmarshal(rpcRes, &r)
+	var h []common.Hash
+	err = json.Unmarshal(rpcRes, &h)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	return id, nil
+	return h, nil
 }
 
 func (r *rpcTest) newBlockFilter() (rpc.ID, error) {
