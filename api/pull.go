@@ -246,6 +246,9 @@ func (api *PullAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 
 	current, err := api.blocks.LatestEVMHeight()
 	if err != nil {
+		if errors.Is(err, errs.ErrNotFound) {
+			return nil, nil // no data available
+		}
 		return nil, err
 	}
 
