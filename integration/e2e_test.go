@@ -9,19 +9,20 @@ import (
 	"testing"
 	"time"
 
-	"github.com/onflow/flow-go-sdk/access/grpc"
-	"github.com/onflow/flow-go/fvm/evm/types"
-
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/onflow/flow-evm-gateway/bootstrap"
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/services/logs"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/onflow/cadence"
+	"github.com/onflow/flow-go-sdk"
+	"github.com/onflow/flow-go-sdk/access/grpc"
+	sdkCrypto "github.com/onflow/flow-go-sdk/crypto"
+	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -37,6 +38,22 @@ var (
 	fundEOARawKey     = "f6d5333177711e562cabf1f311916196ee6ffc2a07966d9d4628094073bd5442"
 	transferEOAAdress = common.HexToAddress("Dac891801DfE8b842E88D0060e1F776256384cB8")
 )
+
+func defaultConfig(dbDir string, coaAddress flow.Address, coaKey sdkCrypto.PrivateKey) *config.Config {
+	return &config.Config{
+		DatabaseDir:        dbDir,
+		AccessNodeGRPCHost: "localhost:3569", // emulator
+		RPCPort:            8545,
+		RPCHost:            "127.0.0.1",
+		FlowNetworkID:      "flow-emulator",
+		EVMNetworkID:       types.FlowEVMTestnetChainID,
+		Coinbase:           fundEOAAddress,
+		COAAddress:         coaAddress,
+		COAKey:             coaKey,
+		CreateCOAResource:  false,
+		GasPrice:           new(big.Int).SetUint64(0),
+	}
+}
 
 // TestIntegration_TransferValue executes interactions in the EVM in the following order
 // 1. Create a COA using EVM.createCadenceOwnedAccount()
@@ -467,24 +484,8 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 	}()
 
 	emu := srv.Emulator()
-	dbDir := t.TempDir()
-	gwAcc := emu.ServiceKey()
-	gwKey := gwAcc.PrivateKey
-	gwAddress := gwAcc.Address
-
-	cfg := &config.Config{
-		DatabaseDir:        dbDir,
-		AccessNodeGRPCHost: "localhost:3569", // emulator
-		RPCPort:            8545,
-		RPCHost:            "127.0.0.1",
-		FlowNetworkID:      "flow-emulator",
-		EVMNetworkID:       types.FlowEVMTestnetChainID,
-		Coinbase:           fundEOAAddress,
-		COAAddress:         gwAddress,
-		COAKey:             gwKey,
-		CreateCOAResource:  false,
-		GasPrice:           new(big.Int).SetUint64(0),
-	}
+	service := emu.ServiceKey()
+	cfg := defaultConfig(t.TempDir(), service.Address, service.PrivateKey)
 
 	rpcTester := &rpcTest{
 		url: fmt.Sprintf("http://%s:%d", cfg.RPCHost, cfg.RPCPort),
@@ -843,8 +844,6 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 func TestE2E_ConcurrentTransactionSubmission(t *testing.T) {
 	srv, err := startEmulator()
 	require.NoError(t, err)
-	emu := srv.Emulator()
-	dbDir := t.TempDir()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer func() {
@@ -852,11 +851,11 @@ func TestE2E_ConcurrentTransactionSubmission(t *testing.T) {
 		srv.Stop()
 	}()
 
-	gwAcc := emu.ServiceKey()
-	gwAddress := gwAcc.Address
-	host := "localhost:3569" // emulator
+	emu := srv.Emulator()
+	service := emu.ServiceKey()
+	cfg := defaultConfig(t.TempDir(), service.Address, service.PrivateKey)
 
-	client, err := grpc.NewClient(host)
+	client, err := grpc.NewClient(cfg.AccessNodeGRPCHost)
 	require.NoError(t, err)
 
 	time.Sleep(500 * time.Millisecond) // some time to startup
@@ -866,26 +865,16 @@ func TestE2E_ConcurrentTransactionSubmission(t *testing.T) {
 	createdAddr, keys, err := bootstrap.CreateMultiKeyAccount(
 		client,
 		keyCount,
-		gwAddress,
+		service.Address,
 		"0xee82856bf20e2aa6",
 		"0x0ae53cb6e3f42a79",
-		gwAcc.PrivateKey,
+		service.PrivateKey,
 	)
 	require.NoError(t, err)
 
-	cfg := &config.Config{
-		DatabaseDir:        dbDir,
-		AccessNodeGRPCHost: host,
-		RPCPort:            8545,
-		RPCHost:            "127.0.0.1",
-		EVMNetworkID:       types.FlowEVMTestnetChainID,
-		FlowNetworkID:      "flow-emulator",
-		Coinbase:           fundEOAAddress,
-		COAAddress:         *createdAddr,
-		COAKeys:            keys,
-		CreateCOAResource:  true,
-		GasPrice:           new(big.Int).SetUint64(0),
-	}
+	cfg.COAKey = nil // disable single key
+	cfg.COAAddress = *createdAddr
+	cfg.COAKeys = keys
 
 	rpcTester := &rpcTest{
 		url: fmt.Sprintf("http://%s:%d", cfg.RPCHost, cfg.RPCPort),
@@ -938,6 +927,34 @@ func TestE2E_ConcurrentTransactionSubmission(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, uint64(1), rcp.Status)
 	}
+}
+
+func TestE2E_Pull(t *testing.T) {
+	srv, err := startEmulator()
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer func() {
+		cancel()
+		srv.Stop()
+	}()
+
+	emu := srv.Emulator()
+	service := emu.ServiceKey()
+	cfg := defaultConfig(t.TempDir(), service.Address, service.PrivateKey)
+
+	rpcTester := &rpcTest{
+		url: fmt.Sprintf("http://%s:%d", cfg.RPCHost, cfg.RPCPort),
+	}
+
+	go func() {
+		err = bootstrap.Start(ctx, cfg)
+		require.NoError(t, err)
+	}()
+
+	time.Sleep(500 * time.Millisecond) // some time to startup
+
+	flowAmount, _ := cadence.NewUFix64("5.0")
 }
 
 // checkSumLogValue makes sure the match is correct by checking sum value
