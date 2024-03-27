@@ -17,11 +17,12 @@ import (
 	"github.com/rs/zerolog"
 	"math/big"
 	"sync"
+	"time"
 )
 
-// idleHeightLimit defines the max number of block heights a filter
+// filterExpiry defines the max number of block heights a filter
 // can be idle for before being removed from existing filters.
-const idleHeightLimit = 1000
+const filterExpiry = time.Minute * 5
 
 // filter defines a general resource filter that is used when pulling new data.
 //
@@ -30,27 +31,36 @@ const idleHeightLimit = 1000
 // Each filter is identified by a unique ID.
 type filter interface {
 	id() rpc.ID
-	lastRequestHeight() uint64
-	updateLastRequestHeight(uint64)
+	lastUsedHeight() uint64
+	updateUsed(height uint64)
+	expired() bool
 }
 
-// heightBaseFilter is a base implementation that keeps track of
+// baseFilter is a base implementation that keeps track of
 // last height and filter unique ID.
-type heightBaseFilter struct {
+type baseFilter struct {
 	last  uint64
 	rpcID rpc.ID
+	used  time.Time
 }
 
-func (h *heightBaseFilter) lastRequestHeight() uint64 {
+func (h *baseFilter) id() rpc.ID {
+	return h.rpcID
+}
+
+func (h *baseFilter) lastUsedHeight() uint64 {
 	return h.last
 }
 
-func (h *heightBaseFilter) updateLastRequestHeight(u uint64) {
-	h.last = u
+// updateUsed updates the latest height the filter was used with as well as
+// resets the time expiry for the filter.
+func (h *baseFilter) updateUsed(height uint64) {
+	h.last = height
+	h.used = time.Now()
 }
 
-func (h *heightBaseFilter) id() rpc.ID {
-	return h.rpcID
+func (h *baseFilter) expired() bool {
+	return time.Since(h.used) > filterExpiry
 }
 
 var _ filter = &blocksFilter{}
@@ -58,12 +68,12 @@ var _ filter = &transactionsFilter{}
 
 // blocksFilter is used to get all new blocks since the last request
 type blocksFilter struct {
-	*heightBaseFilter
+	*baseFilter
 }
 
 func newBlocksFilter(lastHeight uint64) *blocksFilter {
 	return &blocksFilter{
-		&heightBaseFilter{
+		&baseFilter{
 			last:  lastHeight,
 			rpcID: rpc.NewID(),
 		},
@@ -75,13 +85,13 @@ func newBlocksFilter(lastHeight uint64) *blocksFilter {
 // FullTx parameters determines if the result will include only
 // hashes or full transaction body.
 type transactionsFilter struct {
-	*heightBaseFilter
+	*baseFilter
 	fullTx bool
 }
 
 func newTransactionFilter(lastHeight uint64, fullTx bool) *transactionsFilter {
 	return &transactionsFilter{
-		&heightBaseFilter{
+		&baseFilter{
 			last:  lastHeight,
 			rpcID: rpc.NewID(),
 		},
@@ -93,13 +103,13 @@ func newTransactionFilter(lastHeight uint64, fullTx bool) *transactionsFilter {
 //
 // Criteria parameter filters the logs according to the criteria values.
 type logsFilter struct {
-	*heightBaseFilter
+	*baseFilter
 	criteria *filters.FilterCriteria
 }
 
 func newLogsFilter(lastHeight uint64, criteria *filters.FilterCriteria) *logsFilter {
 	return &logsFilter{
-		&heightBaseFilter{
+		&baseFilter{
 			last:  lastHeight,
 			rpcID: rpc.NewID(),
 		},
@@ -194,19 +204,28 @@ func (api *PullAPI) UninstallFilter(id rpc.ID) bool {
 //
 // In case "fromBlock" > "toBlock" an error is returned.
 func (api *PullAPI) NewFilter(criteria filters.FilterCriteria) (rpc.ID, error) {
-	last, err := api.blocks.LatestEVMHeight()
+	from, err := api.blocks.LatestEVMHeight()
 	if err != nil {
 		return "", err
 	}
 
-	return api.addFilter(newLogsFilter(last, &criteria)), nil
+	// if from block is actually set we use it as from value otherwise use latest
+	if criteria.FromBlock != nil && criteria.FromBlock.Int64() >= 0 {
+		from = criteria.FromBlock.Uint64()
+		// if to block is set make sure it's not less than from block
+		if criteria.ToBlock != nil && criteria.FromBlock.Cmp(criteria.ToBlock) > 0 {
+			return "", fmt.Errorf("from block must be lower than to block")
+		}
+		// todo we should check for max range of from-to heights
+	}
+
+	return api.addFilter(newLogsFilter(from, &criteria)), nil
 }
 
 // GetFilterLogs returns the logs for the filter with the given id.
 // If the filter could not be found an empty array of logs is returned.
 func (api *PullAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]*gethTypes.Log, error) {
-	// todo this should call the normal get logs api
-	panic("implement")
+	panic("not implemented")
 }
 
 // GetFilterChanges returns the logs for the filter with the given id since
@@ -225,12 +244,11 @@ func (api *PullAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 		return nil, err
 	}
 
-	// should never happen, extra safety check
-	if current-f.lastRequestHeight() > idleHeightLimit {
+	if f.expired() {
 		api.UninstallFilter(id)
-		return nil, errors.Join(errs.ErrNotFound, fmt.Errorf("filted by id %s does not exist", id))
+		return nil, errors.Join(errs.ErrNotFound, fmt.Errorf("filted by id %s expired", id))
 	}
-	defer f.updateLastRequestHeight(current)
+	defer f.updateUsed(current)
 
 	switch f.(type) {
 	case *blocksFilter:
@@ -244,30 +262,17 @@ func (api *PullAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 	return nil, nil
 }
 
-func (api *PullAPI) Notify() {
-	current, err := api.blocks.LatestEVMHeight()
-	if err != nil {
-		api.logger.Error().Err(err).Msg("failed to clear idle filters")
-	}
-
-	// we don't have to check every new block
-	const skip = 10
-	if current%skip != 0 {
-		return
-	}
-
-	for id, f := range api.filters {
-		if current-f.lastRequestHeight() > idleHeightLimit {
-			api.UninstallFilter(id)
-		}
-	}
-}
-
 // idleFilterChecker continuously monitors all the registered filters and
 // if any of them has been idle for too long i.e. no requests have been made
-// using the filter ID it will be removed.
+// for a period defined as filterExpiry using the filter ID it will be removed.
 func (api *PullAPI) idleFilterChecker() {
-	api.blocksBroadcaster.Subscribe(api)
+	for _ = range time.Tick(time.Minute) {
+		for id, f := range api.filters {
+			if f.expired() {
+				api.UninstallFilter(id)
+			}
+		}
+	}
 }
 
 func (api *PullAPI) addFilter(f filter) rpc.ID {
@@ -278,11 +283,11 @@ func (api *PullAPI) addFilter(f filter) rpc.ID {
 	return f.id()
 }
 
-func (api *PullAPI) getBlocks(current uint64, filter *blocksFilter) ([]*types.Block, error) {
-	blocks := make([]*types.Block, current-filter.lastRequestHeight())
+func (api *PullAPI) getBlocks(latestHeight uint64, filter *blocksFilter) ([]*types.Block, error) {
+	blocks := make([]*types.Block, latestHeight-filter.lastUsedHeight())
 
 	// todo we can optimize if needed by adding a getter method for range of blocks
-	for i := filter.last; i <= current; i++ {
+	for i := filter.last; i <= latestHeight; i++ {
 		b, err := api.blocks.GetByHeight(i)
 		if err != nil {
 			return nil, err
@@ -293,11 +298,11 @@ func (api *PullAPI) getBlocks(current uint64, filter *blocksFilter) ([]*types.Bl
 	return blocks, nil
 }
 
-func (api *PullAPI) getTransactions(current uint64, filter *transactionsFilter) ([]models.Transaction, error) {
+func (api *PullAPI) getTransactions(latestHeight uint64, filter *transactionsFilter) ([]models.Transaction, error) {
 	txs := make([]models.Transaction, 0)
 
 	// todo we can optimize if needed by adding a getter method for range of txs by heights
-	for i := filter.last; i <= current; i++ {
+	for i := filter.last; i <= latestHeight; i++ {
 		b, err := api.blocks.GetByHeight(i)
 		if err != nil {
 			return nil, err
@@ -316,14 +321,22 @@ func (api *PullAPI) getTransactions(current uint64, filter *transactionsFilter) 
 	return txs, nil
 }
 
-func (api *PullAPI) getLogs(current uint64, filter *logsFilter) (any, error) {
+func (api *PullAPI) getLogs(latestHeight uint64, filter *logsFilter) (any, error) {
 	last := big.NewInt(int64(filter.last))
-	curr := big.NewInt(int64(current))
+	latest := big.NewInt(int64(latestHeight))
 	criteria := logs.FilterCriteria{
 		Addresses: filter.criteria.Addresses,
 		Topics:    filter.criteria.Topics,
 	}
-	f, err := logs.NewRangeFilter(*last, *curr, criteria, api.receipts)
+
+	// if filter criteria to block is lower height than current height there can not be any new
+	// logs available, so we return nil, if to is negative it means latest, so we always return new data
+	to := filter.criteria.ToBlock
+	if to != nil && latest.Cmp(to) > 0 && to.Cmp(big.NewInt(0)) >= 0 {
+		return nil, nil
+	}
+
+	f, err := logs.NewRangeFilter(*last, *latest, criteria, api.receipts)
 	if err != nil {
 		return nil, err
 	}
