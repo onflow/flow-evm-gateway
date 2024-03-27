@@ -6,6 +6,7 @@ import (
 	"crypto/ecdsa"
 	"encoding/hex"
 	"fmt"
+	"github.com/ethereum/go-ethereum/rpc"
 	"io"
 	"math/big"
 	"net/http"
@@ -650,6 +651,51 @@ func (r *rpcTest) getCode(from common.Address) ([]byte, error) {
 	}
 
 	return code, nil
+}
+
+func (r *rpcTest) newTxFilter() (rpc.ID, error) {
+	rpcRes, err := r.request("eth_newPendingTransactionFilter", `[]`)
+	if err != nil {
+		return "", err
+	}
+
+	var id rpc.ID
+	err = json.Unmarshal(rpcRes, &id)
+	if err != nil {
+		return "", err
+	}
+
+	return id, nil
+}
+
+func (r *rpcTest) getFilterChanges(id rpc.ID) {
+	rpcRes, err := r.request("eth_getFilterChanges", fmt.Sprintf(`["%s""]`, id))
+	if err != nil {
+		return "", err
+	}
+
+	var r rpc.ID
+	err = json.Unmarshal(rpcRes, &r)
+	if err != nil {
+		return "", err
+	}
+
+	return id, nil
+}
+
+func (r *rpcTest) newBlockFilter() (rpc.ID, error) {
+	rpcRes, err := r.request("eth_newBlockFilter", `[]`)
+	if err != nil {
+		return "", err
+	}
+
+	var id rpc.ID
+	err = json.Unmarshal(rpcRes, &id)
+	if err != nil {
+		return "", err
+	}
+
+	return id, nil
 }
 
 func uintHex(x uint64) string {
