@@ -39,22 +39,6 @@ var (
 	transferEOAAdress = common.HexToAddress("Dac891801DfE8b842E88D0060e1F776256384cB8")
 )
 
-func defaultConfig(dbDir string, coaAddress flow.Address, coaKey sdkCrypto.PrivateKey) *config.Config {
-	return &config.Config{
-		DatabaseDir:        dbDir,
-		AccessNodeGRPCHost: "localhost:3569", // emulator
-		RPCPort:            8545,
-		RPCHost:            "127.0.0.1",
-		FlowNetworkID:      "flow-emulator",
-		EVMNetworkID:       types.FlowEVMTestnetChainID,
-		Coinbase:           fundEOAAddress,
-		COAAddress:         coaAddress,
-		COAKey:             coaKey,
-		CreateCOAResource:  false,
-		GasPrice:           new(big.Int).SetUint64(0),
-	}
-}
-
 // TestIntegration_TransferValue executes interactions in the EVM in the following order
 // 1. Create a COA using EVM.createCadenceOwnedAccount()
 // 2. Fund that COA - produces direct call EVM transaction events with deposit subtype
@@ -954,7 +938,39 @@ func TestE2E_Pull(t *testing.T) {
 
 	time.Sleep(500 * time.Millisecond) // some time to startup
 
-	flowAmount, _ := cadence.NewUFix64("5.0")
+	flowAmount, err := cadence.NewUFix64("5.0")
+	// create COA and fund it
+	res, err := fundEOA(emu, flowAmount, fundEOAAddress)
+	require.NoError(t, err)
+	require.NoError(t, res.Error)
+	assert.Len(t, res.Events, 8) // 6 evm events + 2 cadence events
+
+	flowTransfer, _ := cadence.NewUFix64("0.1")
+	transferWei := types.NewBalanceFromUFix64(flowTransfer)
+	fundEOAKey, err := crypto.HexToECDSA(fundEOARawKey)
+	require.NoError(t, err)
+
+	allTxFilter, err := rpcTester.newTxFilter()
+	require.NoError(t, err)
+	require.NotEmpty(t, allTxFilter)
+
+	allBlockFilter, err := rpcTester.newTxFilter()
+	require.NoError(t, err)
+	require.NotEmpty(t, allBlockFilter)
+
+	// create some new blocks and transactions
+	for i := 0; i < 5; i++ {
+		res, _, err := evmSignAndRun(emu, transferWei, params.TxGas, fundEOAKey, 0, &transferEOAAdress, nil)
+		require.NoError(t, err)
+		require.NoError(t, res.Error)
+	}
+
+	for i := 0; i < 5; i++ {
+		res, _, err := evmSignAndRun(emu, transferWei, params.TxGas, fundEOAKey, 0, &transferEOAAdress, nil)
+		require.NoError(t, err)
+		require.NoError(t, res.Error)
+	}
+
 }
 
 // checkSumLogValue makes sure the match is correct by checking sum value
@@ -972,4 +988,20 @@ func checkSumLogValue(c *contract, a *big.Int, b *big.Int, data []byte) error {
 	}
 
 	return nil
+}
+
+func defaultConfig(dbDir string, coaAddress flow.Address, coaKey sdkCrypto.PrivateKey) *config.Config {
+	return &config.Config{
+		DatabaseDir:        dbDir,
+		AccessNodeGRPCHost: "localhost:3569", // emulator
+		RPCPort:            8545,
+		RPCHost:            "127.0.0.1",
+		FlowNetworkID:      "flow-emulator",
+		EVMNetworkID:       types.FlowEVMTestnetChainID,
+		Coinbase:           fundEOAAddress,
+		COAAddress:         coaAddress,
+		COAKey:             coaKey,
+		CreateCOAResource:  false,
+		GasPrice:           new(big.Int).SetUint64(0),
+	}
 }
