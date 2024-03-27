@@ -76,8 +76,8 @@ type Requester interface {
 	// the state for the given block number.
 	GetCode(ctx context.Context, address common.Address, height uint64) ([]byte, error)
 
-	// GetCode returns the latest block height of the Flow network.
-	GetLatestBlockHeight(ctx context.Context) (uint64, error)
+	// GetLatestCadenceHeight returns the latest Cadence height of the Flow network.
+	GetLatestCadenceHeight(ctx context.Context) (uint64, error)
 }
 
 var _ Requester = &EVM{}
@@ -409,7 +409,7 @@ func (e *EVM) GetCode(
 	return code, nil
 }
 
-func (e *EVM) GetLatestBlockHeight(ctx context.Context) (uint64, error) {
+func (e *EVM) GetLatestCadenceHeight(ctx context.Context) (uint64, error) {
 	blockHeader, err := e.client.GetLatestBlockHeader(ctx, true)
 	if err != nil {
 		return 0, err

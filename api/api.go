@@ -104,7 +104,7 @@ func (b *BlockChainAPI) Syncing() (interface{}, error) {
 		return nil, err
 	}
 
-	highestBlock, err := b.evm.GetLatestBlockHeight(context.Background())
+	highestBlock, err := b.evm.GetLatestCadenceHeight(context.Background())
 	if err != nil {
 		return nil, err
 	}
