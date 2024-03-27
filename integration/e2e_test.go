@@ -950,26 +950,58 @@ func TestE2E_Pull(t *testing.T) {
 	fundEOAKey, err := crypto.HexToECDSA(fundEOARawKey)
 	require.NoError(t, err)
 
-	allTxFilter, err := rpcTester.newTxFilter()
-	require.NoError(t, err)
-	require.NotEmpty(t, allTxFilter)
+	time.Sleep(500 * time.Millisecond) // wait for funding to process
 
-	allBlockFilter, err := rpcTester.newTxFilter()
+	allTxFilterID, err := rpcTester.newTxFilter()
 	require.NoError(t, err)
-	require.NotEmpty(t, allBlockFilter)
+	require.NotEmpty(t, allTxFilterID)
+
+	allBlockFilterID, err := rpcTester.newTxFilter()
+	require.NoError(t, err)
+	require.NotEmpty(t, allBlockFilterID)
+
+	// no data yet
+	h, err := rpcTester.getFilterChangesHashes(allBlockFilterID)
+	require.NoError(t, err)
+	assert.Len(t, h, 0)
+
+	h, err = rpcTester.getFilterChangesHashes(allTxFilterID)
+	require.NoError(t, err)
+	assert.Len(t, h, 0)
 
 	// create some new blocks and transactions
-	for i := 0; i < 5; i++ {
-		res, _, err := evmSignAndRun(emu, transferWei, params.TxGas, fundEOAKey, 0, &transferEOAAdress, nil)
+	txCount := 5
+	nonce := uint64(0)
+	for i := 0; i < txCount; i++ {
+		res, _, err := evmSignAndRun(emu, transferWei, params.TxGas, fundEOAKey, nonce, &transferEOAAdress, nil)
+		nonce++
 		require.NoError(t, err)
 		require.NoError(t, res.Error)
 	}
 
-	for i := 0; i < 5; i++ {
-		res, _, err := evmSignAndRun(emu, transferWei, params.TxGas, fundEOAKey, 0, &transferEOAAdress, nil)
+	time.Sleep(500 * time.Millisecond)
+
+	h, err = rpcTester.getFilterChangesHashes(allBlockFilterID)
+	require.NoError(t, err)
+	assert.Len(t, h, txCount)
+
+	for i := 0; i < txCount; i++ {
+		res, _, err := evmSignAndRun(emu, transferWei, params.TxGas, fundEOAKey, nonce, &transferEOAAdress, nil)
+		nonce++
 		require.NoError(t, err)
 		require.NoError(t, res.Error)
 	}
+
+	time.Sleep(500 * time.Millisecond)
+
+	// only 5 new data since it was fetched above
+	h, err = rpcTester.getFilterChangesHashes(allBlockFilterID)
+	require.NoError(t, err)
+	assert.Len(t, h, txCount)
+
+	h, err = rpcTester.getFilterChangesHashes(allTxFilterID)
+	require.NoError(t, err)
+	assert.Len(t, h, txCount+txCount)
 
 }
 
