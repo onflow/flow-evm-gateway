@@ -113,12 +113,11 @@ func (b *BlockChainAPI) Syncing() (interface{}, error) {
 		return false, nil
 	}
 
-	syncingStatus := make(map[string]hexutil.Uint64)
-	syncingStatus["startingBlock"] = hexutil.Uint64(b.config.StartingCadenceHeight)
-	syncingStatus["currentBlock"] = hexutil.Uint64(currentBlock)
-	syncingStatus["highestBlock"] = hexutil.Uint64(highestBlock)
-
-	return syncingStatus, nil
+	return SyncStatus{
+		StartingBlock: hexutil.Uint64(b.config.StartingCadenceHeight),
+		CurrentBlock:  hexutil.Uint64(currentBlock),
+		HighestBlock:  hexutil.Uint64(highestBlock),
+	}, nil
 }
 
 // SendRawTransaction will add the signed transaction to the transaction pool.

@@ -201,3 +201,9 @@ type Block struct {
 	Uncles           []common.Hash    `json:"uncles"`
 	MixHash          common.Hash      `json:"mixHash"`
 }
+
+type SyncStatus struct {
+	StartingBlock hexutil.Uint64 `json:"startingBlock"`
+	CurrentBlock  hexutil.Uint64 `json:"currentBlock"`
+	HighestBlock  hexutil.Uint64 `json:"highestBlock"`
+}
