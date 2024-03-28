@@ -46,7 +46,7 @@ func newBaseFilter(expiry time.Duration, currentHeight uint64) *baseFilter {
 	}
 
 	return &baseFilter{
-		nextHeight: currentHeight,
+		nextHeight: currentHeight + 1, // we are only interested in next heights not current
 		rpcID:      rpc.NewID(),
 		used:       time.Now(),
 		expiry:     expiry,
