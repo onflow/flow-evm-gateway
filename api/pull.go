@@ -284,13 +284,13 @@ func (api *PullAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 	}
 	defer f.updateUsed(current)
 
-	switch f.(type) {
+	switch filterType := f.(type) {
 	case *blocksFilter:
-		return api.getBlocks(current, f.(*blocksFilter))
+		return api.getBlocks(current, filterType)
 	case *transactionsFilter:
-		return api.getTransactions(current, f.(*transactionsFilter))
+		return api.getTransactions(current, filterType)
 	case *logsFilter:
-		return api.getLogs(current, f.(*logsFilter))
+		return api.getLogs(current, filterType)
 	}
 
 	return nil, nil
