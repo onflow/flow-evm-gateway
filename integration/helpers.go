@@ -668,6 +668,57 @@ func (r *rpcTest) newTxFilter() (rpc.ID, error) {
 	return id, nil
 }
 
+func (r *rpcTest) newLogsFilter(from string, to string, filter *logs.FilterCriteria) (rpc.ID, error) {
+	var topics string
+	if len(filter.Topics) > 0 {
+		for _, t := range filter.Topics[0] {
+			if t == common.HexToHash("0x0") { // if empty replace with null
+				topics += "null,"
+			} else {
+				topics += fmt.Sprintf(`"%s",`, t.String())
+			}
+		}
+		topics = topics[:len(topics)-1] // remove last ,
+	}
+
+	params := fmt.Sprintf(`[{
+		"fromBlock": "%s",
+		"toBlock": "%s",
+		"address": "%s",	
+		"topics": [
+			%s
+		]
+	}]`, from, to, filter.Addresses[0].Hex(), topics)
+
+	rpcRes, err := r.request("eth_newFilter", params)
+	if err != nil {
+		return "", err
+	}
+
+	var id rpc.ID
+	err = json.Unmarshal(rpcRes, &id)
+	if err != nil {
+		return "", err
+	}
+
+	return id, nil
+}
+
+func (r *rpcTest) getFilterChangesLogs(id rpc.ID) ([]*types.Log, error) {
+	rpcRes, err := r.request("eth_getFilterChanges", fmt.Sprintf(`["%s"]`, id))
+	if err != nil {
+		return nil, err
+	}
+
+	var lg []*types.Log
+	err = json.Unmarshal(rpcRes, &lg)
+	if err != nil {
+		return nil, err
+	}
+
+	return lg, nil
+}
+
 func (r *rpcTest) getFilterChangesHashes(id rpc.ID) ([]common.Hash, error) {
 	rpcRes, err := r.request("eth_getFilterChanges", fmt.Sprintf(`["%s"]`, id))
 	if err != nil {
