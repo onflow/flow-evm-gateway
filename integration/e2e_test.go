@@ -860,6 +860,7 @@ func TestE2E_ConcurrentTransactionSubmission(t *testing.T) {
 	cfg.COAKey = nil // disable single key
 	cfg.COAAddress = *createdAddr
 	cfg.COAKeys = keys
+	cfg.CreateCOAResource = true
 
 	rpcTester := &rpcTest{
 		url: fmt.Sprintf("http://%s:%d", cfg.RPCHost, cfg.RPCPort),
