@@ -33,13 +33,18 @@ func Start(ctx context.Context, cfg *config.Config) error {
 	receipts := pebble.NewReceipts(pebbleDB)
 	accounts := pebble.NewAccounts(pebbleDB)
 
-	// if database is not initialized require init height
-	if _, err := blocks.LatestCadenceHeight(); errors.Is(err, storageErrs.ErrNotInitialized) {
+	latestCadenceHeight, err := blocks.LatestCadenceHeight()
+	// if database is not initialized require init height.
+	// in any case, record the starting Cadence height, for usage
+	// in eth_syncing. Useful to keep track after restarts or
+	// deployments.
+	if errors.Is(err, storageErrs.ErrNotInitialized) {
 		if err := blocks.InitHeights(cfg.InitCadenceHeight); err != nil {
 			return fmt.Errorf("failed to init the database: %w", err)
 		}
 		logger.Info().Msg("database initialized with 0 evm and cadence heights")
 	}
+	blocks.SetStartingCadenceHeight(latestCadenceHeight)
 
 	go func() {
 		err := startServer(ctx, cfg, blocks, transactions, receipts, accounts, logger)

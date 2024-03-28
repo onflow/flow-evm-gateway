@@ -141,3 +141,9 @@ type Block struct {
 	Transactions interface{}    `json:"transactions"`
 	// todo add more fields needed
 }
+
+type SyncStatus struct {
+	StartingBlock hexutil.Uint64 `json:"startingBlock"`
+	CurrentBlock  hexutil.Uint64 `json:"currentBlock"`
+	HighestBlock  hexutil.Uint64 `json:"highestBlock"`
+}
