@@ -26,30 +26,30 @@ import (
 // Each filter is identified by a unique ID.
 type filter interface {
 	id() rpc.ID
-	nextHeight() uint64
-	updateUsed(height uint64)
+	updateUsed(currentHeight uint64)
+	next() uint64
 	expired() bool
 }
 
 // baseFilter is a base implementation that keeps track of
 // last height and filter unique ID.
 type baseFilter struct {
-	last   uint64
-	rpcID  rpc.ID
-	used   time.Time
-	expiry time.Duration
+	nextHeight uint64
+	rpcID      rpc.ID
+	used       time.Time
+	expiry     time.Duration
 }
 
-func newBaseFilter(expiry time.Duration, lastHeight uint64) *baseFilter {
+func newBaseFilter(expiry time.Duration, currentHeight uint64) *baseFilter {
 	if expiry == 0 {
 		expiry = time.Minute * 5 // overwrite default expiry
 	}
 
 	return &baseFilter{
-		last:   lastHeight,
-		rpcID:  rpc.NewID(),
-		used:   time.Now(),
-		expiry: expiry,
+		nextHeight: currentHeight,
+		rpcID:      rpc.NewID(),
+		used:       time.Now(),
+		expiry:     expiry,
 	}
 }
 
@@ -57,19 +57,15 @@ func (h *baseFilter) id() rpc.ID {
 	return h.rpcID
 }
 
-// nextHeight returns the next height to fetch since the last fetch
-//
-// The value of nextHeight is calculated by checking what was the last
-// height we fetched and then adding 1, since that height was already fetched.
-func (h *baseFilter) nextHeight() uint64 {
-	return h.last + 1
-}
-
 // updateUsed updates the latest height the filter was used with as well as
 // resets the time expiry for the filter.
-func (h *baseFilter) updateUsed(height uint64) {
-	h.last = height
+func (h *baseFilter) updateUsed(currentHeight uint64) {
+	h.nextHeight = currentHeight + 1
 	h.used = time.Now()
+}
+
+func (h *baseFilter) next() uint64 {
+	return h.nextHeight
 }
 
 func (h *baseFilter) expired() bool {
@@ -84,9 +80,9 @@ type blocksFilter struct {
 	*baseFilter
 }
 
-func newBlocksFilter(expiry time.Duration, lastHeight uint64) *blocksFilter {
+func newBlocksFilter(expiry time.Duration, latestHeight uint64) *blocksFilter {
 	return &blocksFilter{
-		newBaseFilter(expiry, lastHeight),
+		newBaseFilter(expiry, latestHeight),
 	}
 }
 
@@ -99,9 +95,9 @@ type transactionsFilter struct {
 	fullTx bool
 }
 
-func newTransactionFilter(expiry time.Duration, lastHeight uint64, fullTx bool) *transactionsFilter {
+func newTransactionFilter(expiry time.Duration, latestHeight uint64, fullTx bool) *transactionsFilter {
 	return &transactionsFilter{
-		newBaseFilter(expiry, lastHeight),
+		newBaseFilter(expiry, latestHeight),
 		fullTx,
 	}
 }
@@ -116,11 +112,11 @@ type logsFilter struct {
 
 func newLogsFilter(
 	expiry time.Duration,
-	lastHeight uint64,
+	latestHeight uint64,
 	criteria *filters.FilterCriteria,
 ) *logsFilter {
 	return &logsFilter{
-		newBaseFilter(expiry, lastHeight),
+		newBaseFilter(expiry, latestHeight),
 		criteria,
 	}
 }
@@ -209,22 +205,25 @@ func (api *PullAPI) UninstallFilter(id rpc.ID) bool {
 //
 // In case "fromBlock" > "toBlock" an error is returned.
 func (api *PullAPI) NewFilter(criteria filters.FilterCriteria) (rpc.ID, error) {
-	from, err := api.blocks.LatestEVMHeight()
+	latest, err := api.blocks.LatestEVMHeight()
 	if err != nil {
 		return "", err
 	}
 
 	// if from block is actually set we use it as from value otherwise use latest
 	if criteria.FromBlock != nil && criteria.FromBlock.Int64() >= 0 {
-		from = criteria.FromBlock.Uint64()
-		// if to block is set make sure it's not less than from block
-		if criteria.ToBlock != nil && criteria.FromBlock.Cmp(criteria.ToBlock) > 0 {
+		latest = criteria.FromBlock.Uint64()
+		// if to block is set and doesn't have a special value
+		// (e.g. latest which is less than 0) make sure it's not less than from block
+		if criteria.ToBlock != nil &&
+			criteria.FromBlock.Cmp(criteria.ToBlock) > 0 &&
+			criteria.ToBlock.Int64() > 0 {
 			return "", fmt.Errorf("from block must be lower than to block")
 		}
 		// todo we should check for max range of from-to heights
 	}
 
-	f := newLogsFilter(api.config.FilterExpiry, from, &criteria)
+	f := newLogsFilter(api.config.FilterExpiry, latest, &criteria)
 	return api.addFilter(f), nil
 }
 
@@ -299,8 +298,8 @@ func (api *PullAPI) addFilter(f filter) rpc.ID {
 }
 
 func (api *PullAPI) getBlocks(latestHeight uint64, filter *blocksFilter) ([]common.Hash, error) {
-	nextHeight := filter.nextHeight()
-	hashes := make([]common.Hash, latestHeight-nextHeight)
+	nextHeight := filter.next()
+	hashes := make([]common.Hash, 0)
 
 	// todo we can optimize if needed by adding a getter method for range of blocks
 	for i := nextHeight; i <= latestHeight; i++ {
@@ -312,7 +311,7 @@ func (api *PullAPI) getBlocks(latestHeight uint64, filter *blocksFilter) ([]comm
 		if err != nil {
 			continue
 		}
-		hashes[i] = h
+		hashes = append(hashes, h)
 	}
 
 	return hashes, nil
@@ -323,11 +322,10 @@ func (api *PullAPI) getTransactions(latestHeight uint64, filter *transactionsFil
 	hashes := make([]common.Hash, 0)
 
 	// todo we can optimize if needed by adding a getter method for range of txs by heights
-	for i := filter.nextHeight(); i <= latestHeight; i++ {
+	for i := filter.next(); i <= latestHeight; i++ {
 		b, err := api.blocks.GetByHeight(i)
 		if err != nil {
-			if errors.Is(err, errs.ErrNotFound) { // block not found
-				fmt.Println("BLOCK NOT FOUND ", i)
+			if errors.Is(err, errs.ErrNotFound) {
 				return nil, nil
 			}
 			return nil, err
@@ -357,21 +355,31 @@ func (api *PullAPI) getTransactions(latestHeight uint64, filter *transactionsFil
 }
 
 func (api *PullAPI) getLogs(latestHeight uint64, filter *logsFilter) (any, error) {
-	last := big.NewInt(int64(filter.nextHeight()))
-	latest := big.NewInt(int64(latestHeight))
+	nextHeight := filter.next()
 	criteria := logs.FilterCriteria{
 		Addresses: filter.criteria.Addresses,
 		Topics:    filter.criteria.Topics,
 	}
 
-	// if filter criteria "to" block is lower height than current height there can not be any new
-	// logs available, so we return nil, if "to" is negative it means latest, so we always return new data
 	to := filter.criteria.ToBlock
-	if to != nil && latest.Cmp(to) > 0 && to.Cmp(big.NewInt(0)) >= 0 {
+	// we use latest as default for end range
+	end := big.NewInt(int64(latestHeight))
+	// unless "to" is defined in the criteria
+	if to != nil && to.Int64() >= 0 {
+		end = to
+		// if latest height is bigger than range "to" then we don't return anything
+		if latestHeight > to.Uint64() {
+			return nil, nil
+		}
+	}
+
+	start := big.NewInt(int64(nextHeight))
+	// we fetched all available data since start is now bigger than end value
+	if start.Cmp(end) > 0 {
 		return nil, nil
 	}
 
-	f, err := logs.NewRangeFilter(*last, *latest, criteria, api.receipts)
+	f, err := logs.NewRangeFilter(*start, *end, criteria, api.receipts)
 	if err != nil {
 		return nil, err
 	}
