@@ -23,10 +23,13 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func SupportedAPIs(blockChainAPI *BlockChainAPI) []rpc.API {
+func SupportedAPIs(blockChainAPI *BlockChainAPI, pullAPI *PullAPI) []rpc.API {
 	return []rpc.API{{
 		Namespace: "eth",
 		Service:   blockChainAPI,
+	}, {
+		Namespace: "eth",
+		Service:   pullAPI,
 	}, {
 		Namespace: "web3",
 		Service:   &Web3API{},
