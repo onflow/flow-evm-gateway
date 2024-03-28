@@ -5,7 +5,6 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
-	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -533,26 +532,7 @@ func (b *BlockChainAPI) EstimateGas(
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 	overrides *StateOverride,
 ) (hexutil.Uint64, error) {
-	var data []byte
-	if args.Data != nil {
-		data = *args.Data
-	} else if args.Input != nil {
-		data = *args.Input
-	}
-
-	// provide a high enough gas for the tx to be able to execute
-	defaultGasLimit := uint64(15_000_000)
-	if args.Gas != nil {
-		defaultGasLimit = uint64(*args.Gas)
-	}
-
-	txData, err := signGasEstimationTx(
-		args.To,
-		data,
-		(*big.Int)(args.Value),
-		defaultGasLimit,
-		(*big.Int)(args.GasPrice),
-	)
+	txData, err := signTxFromArgs(args)
 	if err != nil {
 		b.logger.Error().Err(err).Msg("failed to sign transaction for gas estimate")
 		return hexutil.Uint64(defaultGasLimit), nil // return default gas limit
