@@ -99,7 +99,7 @@ type transactionsFilter struct {
 	fullTx bool
 }
 
-func newTransactionFilter(expiry time.Duration, latestHeight uint64, fullTx bool) *transactionsFilter {
+func newTransactionsFilter(expiry time.Duration, latestHeight uint64, fullTx bool) *transactionsFilter {
 	return &transactionsFilter{
 		newBaseFilter(expiry, latestHeight),
 		fullTx,
@@ -172,7 +172,7 @@ func (api *PullAPI) NewPendingTransactionFilter(fullTx *bool) (rpc.ID, error) {
 		full = true
 	}
 
-	f := newTransactionFilter(api.config.FilterExpiry, last, full)
+	f := newTransactionsFilter(api.config.FilterExpiry, last, full)
 
 	api.logger.Debug().
 		Str("id", string(f.id())).
