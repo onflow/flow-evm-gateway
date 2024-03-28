@@ -291,7 +291,6 @@ func TestIntegration_DeployCallContract(t *testing.T) {
 	res, _, err = evmSignAndRun(emu, nil, gasLimit, eoaKey, 2, &contractAddress, callStore)
 	require.NoError(t, err)
 	require.NoError(t, res.Error)
-	fmt.Println(res.Events)
 
 	time.Sleep(1 * time.Second)
 
