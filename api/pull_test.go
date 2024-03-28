@@ -27,7 +27,7 @@ func (mf *MockFilter) updateUsed(last uint64) {
 	// update activities if needed
 }
 
-func (mf *MockFilter) nextHeight() uint64 {
+func (mf *MockFilter) next() uint64 {
 	return 0
 }
 
