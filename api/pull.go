@@ -268,7 +268,7 @@ func (api *PullAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]*gethTypes.
 //
 // For pending transaction and block filters the result is []common.Hash.
 // (pending)Log filters return []Log.
-func (api *PullAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
+func (api *PullAPI) GetFilterChanges(id rpc.ID) (any, error) {
 	api.mux.RLock()
 	defer api.mux.RUnlock()
 
@@ -286,18 +286,24 @@ func (api *PullAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 		api.UninstallFilter(id)
 		return nil, errors.Join(errs.ErrNotFound, fmt.Errorf("filted by id %s expired", id))
 	}
-	defer f.updateUsed(current)
 
+	var result any
 	switch filterType := f.(type) {
 	case *blocksFilter:
-		return api.getBlocks(current, filterType)
+		result, err = api.getBlocks(current, filterType)
 	case *transactionsFilter:
-		return api.getTransactions(current, filterType)
+		result, err = api.getTransactions(current, filterType)
 	case *logsFilter:
-		return api.getLogs(current, filterType)
+		result, err = api.getLogs(current, filterType)
 	default:
 		return nil, fmt.Errorf("invalid filter type")
 	}
+	if err != nil {
+		return nil, err
+	}
+
+	f.updateUsed(current)
+	return result, nil
 }
 
 // filterExpiryChecker continuously monitors all the registered filters and
