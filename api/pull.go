@@ -417,14 +417,14 @@ func (api *PullAPI) getLogs(latestHeight uint64, filter *logsFilter) (any, error
 		end = to
 		// if latest height is bigger than range "to" then we don't return anything
 		if latestHeight > to.Uint64() {
-			return nil, nil
+			return []*gethTypes.Log{}, nil
 		}
 	}
 
 	start := big.NewInt(int64(nextHeight))
 	// we fetched all available data since start is now bigger than end value
 	if start.Cmp(end) > 0 {
-		return nil, nil
+		return []*gethTypes.Log{}, nil
 	}
 
 	f, err := logs.NewRangeFilter(*start, *end, criteria, api.receipts)
