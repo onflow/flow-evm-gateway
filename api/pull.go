@@ -300,7 +300,7 @@ func (api *PullAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 // if any of them has been idle for too long i.e. no requests have been made
 // for a period defined as filterExpiry using the filter ID it will be removed.
 func (api *PullAPI) filterExpiryChecker() {
-	for _ = range time.Tick(api.config.FilterExpiry) {
+	for range time.Tick(api.config.FilterExpiry) {
 		for id, f := range api.filters {
 			if f.expired() {
 				api.logger.Debug().Str("id", string(id)).Msg("filter expired")
