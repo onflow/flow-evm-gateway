@@ -169,6 +169,13 @@ func (api *PullAPI) NewPendingTransactionFilter(fullTx *bool) (rpc.ID, error) {
 	}
 
 	f := newTransactionFilter(api.config.FilterExpiry, last, full)
+
+	api.logger.Debug().
+		Str("id", string(f.id())).
+		Uint64("height", last).
+		Bool("full-tx", full).
+		Msg("new pending transaction filter")
+
 	return api.addFilter(f), nil
 }
 
@@ -181,6 +188,12 @@ func (api *PullAPI) NewBlockFilter() (rpc.ID, error) {
 	}
 
 	f := newBlocksFilter(api.config.FilterExpiry, last)
+
+	api.logger.Debug().
+		Str("id", string(f.id())).
+		Uint64("height", last).
+		Msg("new blocks filter")
+
 	return api.addFilter(f), nil
 }
 
@@ -188,9 +201,14 @@ func (api *PullAPI) UninstallFilter(id rpc.ID) bool {
 	api.mux.Lock()
 	defer api.mux.Unlock()
 
-	_, ok := api.filters[id]
+	if _, ok := api.filters[id]; !ok { // not found
+		return false
+	}
+
 	delete(api.filters, id)
-	return ok
+
+	api.logger.Debug().Str("id", string(id)).Msg("uninstalling filter")
+	return true
 }
 
 // NewFilter creates a new filter and returns the filter id. It can be
@@ -224,6 +242,14 @@ func (api *PullAPI) NewFilter(criteria filters.FilterCriteria) (rpc.ID, error) {
 	}
 
 	f := newLogsFilter(api.config.FilterExpiry, latest, &criteria)
+
+	api.logger.Debug().
+		Str("id", string(f.id())).
+		Uint64("height", latest).
+		Any("from", criteria.FromBlock).
+		Any("to", criteria.ToBlock).
+		Msg("new logs filter")
+
 	return api.addFilter(f), nil
 }
 
@@ -277,6 +303,7 @@ func (api *PullAPI) filterExpiryChecker() {
 	for _ = range time.Tick(api.config.FilterExpiry) {
 		for id, f := range api.filters {
 			if f.expired() {
+				api.logger.Debug().Str("id", string(id)).Msg("filter expired")
 				api.UninstallFilter(id)
 			}
 		}
@@ -301,6 +328,12 @@ func (api *PullAPI) getBlocks(latestHeight uint64, filter *blocksFilter) ([]comm
 	nextHeight := filter.next()
 	hashes := make([]common.Hash, 0)
 
+	api.logger.Debug().
+		Uint64("latest", latestHeight).
+		Uint64("from", nextHeight).
+		Uint64("to", latestHeight).
+		Msg("get filter blocks")
+
 	// todo we can optimize if needed by adding a getter method for range of blocks
 	for i := nextHeight; i <= latestHeight; i++ {
 		b, err := api.blocks.GetByHeight(i)
@@ -320,9 +353,16 @@ func (api *PullAPI) getBlocks(latestHeight uint64, filter *blocksFilter) ([]comm
 func (api *PullAPI) getTransactions(latestHeight uint64, filter *transactionsFilter) (any, error) {
 	txs := make([]models.Transaction, 0)
 	hashes := make([]common.Hash, 0)
+	nextHeight := filter.next()
+
+	api.logger.Debug().
+		Uint64("latest", latestHeight).
+		Uint64("from", nextHeight).
+		Uint64("to", latestHeight).
+		Msg("get filter transactions")
 
 	// todo we can optimize if needed by adding a getter method for range of txs by heights
-	for i := filter.next(); i <= latestHeight; i++ {
+	for i := nextHeight; i <= latestHeight; i++ {
 		b, err := api.blocks.GetByHeight(i)
 		if err != nil {
 			if errors.Is(err, errs.ErrNotFound) {
@@ -381,8 +421,19 @@ func (api *PullAPI) getLogs(latestHeight uint64, filter *logsFilter) (any, error
 
 	f, err := logs.NewRangeFilter(*start, *end, criteria, api.receipts)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf(
+			"could not create range filter from %d to %d: %w",
+			start.Int64(),
+			end.Int64(),
+			err,
+		)
 	}
+
+	api.logger.Debug().
+		Uint64("latest", latestHeight).
+		Int64("from", start.Int64()).
+		Int64("to", end.Int64()).
+		Msg("get filter logs")
 
 	return f.Match()
 }
