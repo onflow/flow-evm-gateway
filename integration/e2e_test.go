@@ -5,7 +5,9 @@ import (
 	_ "embed"
 	"encoding/hex"
 	"fmt"
+	"github.com/rs/zerolog"
 	"math/big"
+	"os"
 	"testing"
 	"time"
 
@@ -981,6 +983,7 @@ func TestE2E_Pull(t *testing.T) {
 
 	time.Sleep(500 * time.Millisecond)
 
+	// get blocks since the last fetch, should be blocks from above loop
 	h, err = rpcTester.getFilterChangesHashes(allBlockFilterID)
 	require.NoError(t, err)
 	assert.Len(t, h, txCount)
@@ -999,10 +1002,89 @@ func TestE2E_Pull(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, h, txCount)
 
+	// this should get all the tx hashes from both above loops
 	h, err = rpcTester.getFilterChangesHashes(allTxFilterID)
 	require.NoError(t, err)
 	assert.Len(t, h, txCount+txCount)
 
+	// getting it again should return 0 hashes since there are no new changes
+	h, err = rpcTester.getFilterChangesHashes(allTxFilterID)
+	require.NoError(t, err)
+	assert.Len(t, h, 0)
+
+	// deploy a log emitting contract
+	deployData, err := hex.DecodeString(testContractBinary)
+	require.NoError(t, err)
+
+	gasLimit := uint64(4700000)
+	signed, _, err := evmSign(nil, gasLimit, fundEOAKey, nonce, nil, deployData)
+	hash, err := rpcTester.sendRawTx(signed)
+	require.NoError(t, err)
+	require.NotNil(t, hash)
+
+	time.Sleep(200 * time.Millisecond)
+
+	rcp, err := rpcTester.getReceipt(hash.String())
+	require.NoError(t, err)
+	contractAddress := rcp.ContractAddress
+
+	storeContract, err := newContract(testContractBinary, testContractABI)
+	require.NoError(t, err)
+
+	// create filter for all logs for contract with any topic
+	allLogsID, err := rpcTester.newLogsFilter("0x0", "latest", &logs.FilterCriteria{
+		Addresses: []common.Address{contractAddress},
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, allLogsID)
+
+	l, err := rpcTester.getFilterChangesLogs(allLogsID)
+	require.NoError(t, err)
+	assert.Len(t, l, 0) // no logs yet
+
+	// emit logs
+	logCount := 4
+	for i := 0; i < logCount; i++ {
+		sumA := big.NewInt(5)
+		sumB := big.NewInt(int64(3 + i))
+		callSum, err := storeContract.call("sum", sumA, sumB)
+		require.NoError(t, err)
+
+		nonce++
+		signed, _, err = evmSign(nil, gasLimit, fundEOAKey, nonce, &contractAddress, callSum)
+		require.NoError(t, err)
+
+		_, err = rpcTester.sendRawTx(signed)
+		require.NoError(t, err)
+
+		time.Sleep(300 * time.Millisecond)
+	}
+
+	l, err = rpcTester.getFilterChangesLogs(allLogsID)
+	require.NoError(t, err)
+	assert.Len(t, l, logCount)
+
+	// specific log filter should get missed log and return it
+	topicValue := big.NewInt(4)
+	specificLogID, err := rpcTester.newLogsFilter("0x0", "latest", &logs.FilterCriteria{
+		Addresses: []common.Address{contractAddress},
+		Topics: [][]common.Hash{{ // any value, any value, any value, 4
+			common.Hash{}, common.Hash{}, common.Hash{}, common.BigToHash(topicValue),
+		}},
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, specificLogID)
+
+	// should get the specific log (3rd one) that matches the topic value to 4
+	l, err = rpcTester.getFilterChangesLogs(specificLogID)
+	require.NoError(t, err)
+	require.Len(t, l, 1)
+	assert.Equal(t, topicValue, l[0].Topics[3].Big())
+
+	// should not get anything since there are no new changes
+	l, err = rpcTester.getFilterChangesLogs(allLogsID)
+	require.NoError(t, err)
+	assert.Len(t, l, 0)
 }
 
 // checkSumLogValue makes sure the match is correct by checking sum value
@@ -1035,5 +1117,7 @@ func defaultConfig(dbDir string, coaAddress flow.Address, coaKey sdkCrypto.Priva
 		COAKey:             coaKey,
 		CreateCOAResource:  false,
 		GasPrice:           new(big.Int).SetUint64(0),
+		LogLevel:           zerolog.DebugLevel,
+		LogWriter:          os.Stdout,
 	}
 }
