@@ -269,8 +269,8 @@ func (api *PullAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]*gethTypes.
 // For pending transaction and block filters the result is []common.Hash.
 // (pending)Log filters return []Log.
 func (api *PullAPI) GetFilterChanges(id rpc.ID) (any, error) {
-	api.mux.RLock()
-	defer api.mux.RUnlock()
+	api.mux.Lock()
+	defer api.mux.Unlock()
 
 	f, ok := api.filters[id]
 	if !ok {
