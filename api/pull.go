@@ -291,9 +291,9 @@ func (api *PullAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
 		return api.getTransactions(current, filterType)
 	case *logsFilter:
 		return api.getLogs(current, filterType)
+	default:
+		return nil, fmt.Errorf("invalid filter type")
 	}
-
-	return nil, nil
 }
 
 // filterExpiryChecker continuously monitors all the registered filters and
