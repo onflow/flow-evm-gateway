@@ -132,7 +132,7 @@ type PullAPI struct {
 	transactions storage.TransactionIndexer
 	receipts     storage.ReceiptIndexer
 	filters      map[rpc.ID]filter
-	mux          sync.RWMutex
+	mux          sync.Mutex
 }
 
 func NewPullAPI(
