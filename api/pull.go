@@ -77,6 +77,7 @@ func (h *baseFilter) expired() bool {
 
 var _ filter = &blocksFilter{}
 var _ filter = &transactionsFilter{}
+var _ filter = &logsFilter{}
 
 // blocksFilter is used to get all new blocks since the last request
 type blocksFilter struct {
