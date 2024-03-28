@@ -19,6 +19,9 @@ import (
 	"time"
 )
 
+// maxFilters limits the max active filters at any time to prevent abuse and OOM
+const maxFilters = 10_000
+
 // filter defines a general resource filter that is used when pulling new data.
 //
 // Filters work by remembering the last height at which the data was pulled
@@ -314,8 +317,6 @@ func (api *PullAPI) addFilter(f filter) rpc.ID {
 	api.mux.Lock()
 	defer api.mux.Unlock()
 
-	// we limit max active filters at any time to prevent abuse and OOM
-	const maxFilters = 10_000
 	if len(api.filters) > maxFilters {
 		return ""
 	}
