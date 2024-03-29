@@ -10,10 +10,12 @@ transaction(hexEncodedTx: String) {
     }
 
     execute {
-        let txResult = EVM.run(tx: hexEncodedTx.decodeHex(), coinbase: self.coa.address())
-        // todo only temporary until we correctly handle failure events
+        let txResult = EVM.run(
+            tx: hexEncodedTx.decodeHex(),
+            coinbase: self.coa.address()
+        )
         assert(
-            txResult.status == EVM.Status.successful,
+            txResult.status == EVM.Status.failed || txResult.status == EVM.Status.successful,
             message: "failed to execute evm transaction: ".concat(txResult.errorCode.toString())
         )
     }

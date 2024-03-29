@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -13,22 +14,25 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	errs "github.com/onflow/flow-evm-gateway/api/errors"
 	"github.com/onflow/flow-evm-gateway/config"
+	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/services/logs"
 	"github.com/onflow/flow-evm-gateway/services/requester"
 	"github.com/onflow/flow-evm-gateway/storage"
 	storageErrs "github.com/onflow/flow-evm-gateway/storage/errors"
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/rs/zerolog"
-	"math/big"
 )
 
-func SupportedAPIs(blockChainAPI *BlockChainAPI, streamAPI *StreamAPI) []rpc.API {
+func SupportedAPIs(blockChainAPI *BlockChainAPI, streamAPI *StreamAPI, pullAPI *PullAPI) []rpc.API {
 	return []rpc.API{{
 		Namespace: "eth",
 		Service:   blockChainAPI,
 	}, {
 		Namespace: "eth",
 		Service:   streamAPI,
+	}, {
+		Namespace: "eth",
+		Service:   pullAPI,
 	}, {
 		Namespace: "web3",
 		Service:   &Web3API{},
@@ -245,18 +249,23 @@ func (b *BlockChainAPI) GetTransactionByBlockNumberAndIndex(
 func (b *BlockChainAPI) GetTransactionReceipt(
 	ctx context.Context,
 	hash common.Hash,
-) (*types.Receipt, error) {
-	_, err := b.transactions.Get(hash)
+) (map[string]interface{}, error) {
+	tx, err := b.transactions.Get(hash)
 	if err != nil {
-		return handleError[*types.Receipt](b.logger, err)
+		return handleError[map[string]interface{}](b.logger, err)
 	}
 
-	rcp, err := b.receipts.GetByTransactionID(hash)
+	receipt, err := b.receipts.GetByTransactionID(hash)
 	if err != nil {
-		return handleError[*types.Receipt](b.logger, err)
+		return handleError[map[string]interface{}](b.logger, err)
 	}
 
-	return rcp, nil
+	txReceipt, err := models.MarshalReceipt(receipt, tx)
+	if err != nil {
+		return handleError[map[string]interface{}](b.logger, err)
+	}
+
+	return txReceipt, nil
 }
 
 // Coinbase is the address that mining rewards will be sent to (alias for Etherbase).
@@ -526,26 +535,7 @@ func (b *BlockChainAPI) EstimateGas(
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 	overrides *StateOverride,
 ) (hexutil.Uint64, error) {
-	var data []byte
-	if args.Data != nil {
-		data = *args.Data
-	} else if args.Input != nil {
-		data = *args.Input
-	}
-
-	// provide a high enough gas for the tx to be able to execute
-	defaultGasLimit := uint64(15_000_000)
-	if args.Gas != nil {
-		defaultGasLimit = uint64(*args.Gas)
-	}
-
-	txData, err := signGasEstimationTx(
-		args.To,
-		data,
-		(*big.Int)(args.Value),
-		defaultGasLimit,
-		(*big.Int)(args.GasPrice),
-	)
+	txData, err := signTxFromArgs(args)
 	if err != nil {
 		b.logger.Error().Err(err).Msg("failed to sign transaction for gas estimate")
 		return hexutil.Uint64(defaultGasLimit), nil // return default gas limit
