@@ -524,13 +524,13 @@ func (r *rpcTest) blockNumber() (uint64, error) {
 	return uint64(blockNumber), nil
 }
 
-func (r *rpcTest) getTx(hash string) (*api.RPCTransaction, error) {
+func (r *rpcTest) getTx(hash string) (*api.Transaction, error) {
 	rpcRes, err := r.request("eth_getTransactionByHash", fmt.Sprintf(`["%s"]`, hash))
 	if err != nil {
 		return nil, err
 	}
 
-	var txRpc api.RPCTransaction
+	var txRpc api.Transaction
 	err = json.Unmarshal(rpcRes, &txRpc)
 	if err != nil {
 		return nil, err

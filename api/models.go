@@ -2,6 +2,8 @@ package api
 
 import (
 	"errors"
+	errs "github.com/onflow/flow-evm-gateway/api/errors"
+	"github.com/onflow/flow-evm-gateway/models"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -72,30 +74,69 @@ type StorageResult struct {
 	Proof []string     `json:"proof"`
 }
 
-// RPCTransaction represents a transaction that will serialize to the RPC representation of a transaction
-type RPCTransaction struct {
-	BlockHash           *common.Hash      `json:"blockHash"`
-	BlockNumber         *hexutil.Big      `json:"blockNumber"`
-	From                string            `json:"from"`
-	Gas                 hexutil.Uint64    `json:"gas"`
-	GasPrice            *hexutil.Big      `json:"gasPrice"`
-	GasFeeCap           *hexutil.Big      `json:"maxFeePerGas,omitempty"`
-	GasTipCap           *hexutil.Big      `json:"maxPriorityFeePerGas,omitempty"`
-	MaxFeePerBlobGas    *hexutil.Big      `json:"maxFeePerBlobGas,omitempty"`
-	Hash                common.Hash       `json:"hash"`
-	Input               hexutil.Bytes     `json:"input"`
-	Nonce               hexutil.Uint64    `json:"nonce"`
-	To                  string            `json:"to"`
-	TransactionIndex    *hexutil.Uint64   `json:"transactionIndex"`
-	Value               *hexutil.Big      `json:"value"`
-	Type                hexutil.Uint64    `json:"type"`
-	Accesses            *types.AccessList `json:"accessList,omitempty"`
-	ChainID             *hexutil.Big      `json:"chainId,omitempty"`
-	BlobVersionedHashes []common.Hash     `json:"blobVersionedHashes,omitempty"`
-	V                   *hexutil.Big      `json:"v"`
-	R                   *hexutil.Big      `json:"r"`
-	S                   *hexutil.Big      `json:"s"`
-	YParity             *hexutil.Uint64   `json:"yParity,omitempty"`
+// Transaction represents a transaction that will serialize to the RPC representation of a transaction
+type Transaction struct {
+	BlockHash           *common.Hash             `json:"blockHash"`
+	BlockNumber         *hexutil.Big             `json:"blockNumber"`
+	From                *common.MixedcaseAddress `json:"from"`
+	Gas                 hexutil.Uint64           `json:"gas"`
+	GasPrice            *hexutil.Big             `json:"gasPrice"`
+	GasFeeCap           *hexutil.Big             `json:"maxFeePerGas,omitempty"`
+	GasTipCap           *hexutil.Big             `json:"maxPriorityFeePerGas,omitempty"`
+	MaxFeePerBlobGas    *hexutil.Big             `json:"maxFeePerBlobGas,omitempty"`
+	Hash                common.Hash              `json:"hash"`
+	Input               hexutil.Bytes            `json:"input"`
+	Nonce               hexutil.Uint64           `json:"nonce"`
+	To                  *common.MixedcaseAddress `json:"to"`
+	TransactionIndex    *hexutil.Uint64          `json:"transactionIndex"`
+	Value               *hexutil.Big             `json:"value"`
+	Type                hexutil.Uint64           `json:"type"`
+	Accesses            *types.AccessList        `json:"accessList,omitempty"`
+	ChainID             *hexutil.Big             `json:"chainId,omitempty"`
+	BlobVersionedHashes []common.Hash            `json:"blobVersionedHashes,omitempty"`
+	V                   *hexutil.Big             `json:"v"`
+	R                   *hexutil.Big             `json:"r"`
+	S                   *hexutil.Big             `json:"s"`
+	YParity             *hexutil.Uint64          `json:"yParity,omitempty"`
+}
+
+func NewTransaction(tx models.Transaction, receipt types.Receipt) (*Transaction, error) {
+	txHash, err := tx.Hash()
+	if err != nil {
+		return nil, err
+	}
+
+	f, err := tx.From()
+	if err != nil {
+		return nil, errs.ErrInternal
+	}
+	from := common.NewMixedcaseAddress(f)
+
+	var to common.MixedcaseAddress
+	if t := tx.To(); t != nil {
+		to = common.NewMixedcaseAddress(*t)
+	}
+
+	v, r, s := tx.RawSignatureValues()
+	index := uint64(receipt.TransactionIndex)
+
+	return &Transaction{
+		Hash:             txHash,
+		BlockHash:        &receipt.BlockHash,
+		BlockNumber:      (*hexutil.Big)(receipt.BlockNumber),
+		From:             &from,
+		To:               &to,
+		Gas:              hexutil.Uint64(receipt.GasUsed),
+		GasPrice:         (*hexutil.Big)(receipt.EffectiveGasPrice),
+		Input:            tx.Data(),
+		Nonce:            hexutil.Uint64(tx.Nonce()),
+		TransactionIndex: (*hexutil.Uint64)(&index),
+		Value:            (*hexutil.Big)(tx.Value()),
+		Type:             hexutil.Uint64(tx.Type()),
+		V:                (*hexutil.Big)(v),
+		R:                (*hexutil.Big)(r),
+		S:                (*hexutil.Big)(s),
+	}, nil
 }
 
 // SignTransactionResult represents a RLP encoded signed transaction.
