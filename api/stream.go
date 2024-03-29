@@ -40,7 +40,6 @@ func NewStreamAPI(
 	blocks storage.BlockIndexer,
 	transactions storage.TransactionIndexer,
 	receipts storage.ReceiptIndexer,
-	accounts storage.AccountIndexer,
 	blocksBroadcaster *engine.Broadcaster,
 	transactionsBroadcaster *engine.Broadcaster,
 	logsBroadcaster *engine.Broadcaster,
@@ -51,7 +50,6 @@ func NewStreamAPI(
 		blocks:                  blocks,
 		transactions:            transactions,
 		receipts:                receipts,
-		accounts:                accounts,
 		blocksBroadcaster:       blocksBroadcaster,
 		transactionsBroadcaster: transactionsBroadcaster,
 		logsBroadcaster:         logsBroadcaster,
@@ -90,7 +88,7 @@ func (s *StreamAPI) newSubscription(
 		s.config.StreamTimeout,
 		s.config.StreamLimit,
 		sub,
-	).Stream(context.Background())  // todo investigate why the passed in context is canceled so quickly
+	).Stream(context.Background()) // todo investigate why the passed in context is canceled so quickly
 
 	go func() {
 		for {
