@@ -182,6 +182,11 @@ func (b *Blocks) InitHeights(cadenceHeight uint64) error {
 		return fmt.Errorf("failed to set init EVM height: %w", err)
 	}
 
+	// we store genesis block because it isn't emitted over the network
+	if err := b.Store(cadenceHeight, types.GenesisBlock); err != nil {
+		return fmt.Errorf("faield to set init genesis block: %w", err)
+	}
+
 	return nil
 }
 

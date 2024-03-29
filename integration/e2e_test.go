@@ -12,19 +12,20 @@ import (
 	"testing"
 	"time"
 
-	"github.com/onflow/flow-go-sdk/access/grpc"
-	"github.com/onflow/flow-go/fvm/evm/types"
-
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/onflow/flow-evm-gateway/bootstrap"
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/services/logs"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/onflow/cadence"
+	"github.com/onflow/flow-go-sdk"
+	"github.com/onflow/flow-go-sdk/access/grpc"
+	sdkCrypto "github.com/onflow/flow-go-sdk/crypto"
+	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -291,7 +292,6 @@ func TestIntegration_DeployCallContract(t *testing.T) {
 	res, _, err = evmSignAndRun(emu, nil, gasLimit, eoaKey, 2, &contractAddress, callStore)
 	require.NoError(t, err)
 	require.NoError(t, res.Error)
-	fmt.Println(res.Events)
 
 	time.Sleep(1 * time.Second)
 
@@ -470,24 +470,8 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 	}()
 
 	emu := srv.Emulator()
-	dbDir := t.TempDir()
-	gwAcc := emu.ServiceKey()
-	gwKey := gwAcc.PrivateKey
-	gwAddress := gwAcc.Address
-
-	cfg := &config.Config{
-		DatabaseDir:        dbDir,
-		AccessNodeGRPCHost: "localhost:3569", // emulator
-		RPCPort:            8545,
-		RPCHost:            "127.0.0.1",
-		FlowNetworkID:      "flow-emulator",
-		EVMNetworkID:       types.FlowEVMTestnetChainID,
-		Coinbase:           fundEOAAddress,
-		COAAddress:         gwAddress,
-		COAKey:             gwKey,
-		CreateCOAResource:  false,
-		GasPrice:           new(big.Int).SetUint64(0),
-	}
+	service := emu.ServiceKey()
+	cfg := defaultConfig(t.TempDir(), service.Address, service.PrivateKey)
 
 	rpcTester := &rpcTest{
 		url: fmt.Sprintf("%s:%d", cfg.RPCHost, cfg.RPCPort),
@@ -846,8 +830,6 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 func TestE2E_ConcurrentTransactionSubmission(t *testing.T) {
 	srv, err := startEmulator()
 	require.NoError(t, err)
-	emu := srv.Emulator()
-	dbDir := t.TempDir()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer func() {
@@ -855,11 +837,11 @@ func TestE2E_ConcurrentTransactionSubmission(t *testing.T) {
 		srv.Stop()
 	}()
 
-	gwAcc := emu.ServiceKey()
-	gwAddress := gwAcc.Address
-	host := "localhost:3569" // emulator
+	emu := srv.Emulator()
+	service := emu.ServiceKey()
+	cfg := defaultConfig(t.TempDir(), service.Address, service.PrivateKey)
 
-	client, err := grpc.NewClient(host)
+	client, err := grpc.NewClient(cfg.AccessNodeGRPCHost)
 	require.NoError(t, err)
 
 	time.Sleep(500 * time.Millisecond) // some time to startup
@@ -869,26 +851,17 @@ func TestE2E_ConcurrentTransactionSubmission(t *testing.T) {
 	createdAddr, keys, err := bootstrap.CreateMultiKeyAccount(
 		client,
 		keyCount,
-		gwAddress,
+		service.Address,
 		"0xee82856bf20e2aa6",
 		"0x0ae53cb6e3f42a79",
-		gwAcc.PrivateKey,
+		service.PrivateKey,
 	)
 	require.NoError(t, err)
 
-	cfg := &config.Config{
-		DatabaseDir:        dbDir,
-		AccessNodeGRPCHost: host,
-		RPCPort:            8545,
-		RPCHost:            "127.0.0.1",
-		EVMNetworkID:       types.FlowEVMTestnetChainID,
-		FlowNetworkID:      "flow-emulator",
-		Coinbase:           fundEOAAddress,
-		COAAddress:         *createdAddr,
-		COAKeys:            keys,
-		CreateCOAResource:  true,
-		GasPrice:           new(big.Int).SetUint64(0),
-	}
+	cfg.COAKey = nil // disable single key
+	cfg.COAAddress = *createdAddr
+	cfg.COAKeys = keys
+	cfg.CreateCOAResource = true
 
 	rpcTester := &rpcTest{
 		url: fmt.Sprintf("%s:%d", cfg.RPCHost, cfg.RPCPort),
@@ -944,7 +917,7 @@ func TestE2E_ConcurrentTransactionSubmission(t *testing.T) {
 }
 
 // TestE2E_Streaming is a function used to test end-to-end streaming of data.
-// The test subscribers for new heads and new transactions events and makes
+// The test subscribes for new heads and new transactions events and makes
 // sure they are broadcast in correct order.
 func TestE2E_Streaming(t *testing.T) {
 	srv, err := startEmulator()
@@ -1196,6 +1169,178 @@ func unsubscribe(t *testing.T, write func(string) error, read func() (*streamMsg
 	require.True(t, event.Result.(bool)) // successfully unsubscribed
 }
 
+func TestE2E_Pull(t *testing.T) {
+	srv, err := startEmulator()
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer func() {
+		cancel()
+		srv.Stop()
+	}()
+
+	emu := srv.Emulator()
+	service := emu.ServiceKey()
+	cfg := defaultConfig(t.TempDir(), service.Address, service.PrivateKey)
+
+	rpcTester := &rpcTest{
+		url: fmt.Sprintf("http://%s:%d", cfg.RPCHost, cfg.RPCPort),
+	}
+
+	go func() {
+		err = bootstrap.Start(ctx, cfg)
+		require.NoError(t, err)
+	}()
+
+	time.Sleep(500 * time.Millisecond) // some time to startup
+
+	flowAmount, err := cadence.NewUFix64("5.0")
+	// create COA and fund it
+	res, err := fundEOA(emu, flowAmount, fundEOAAddress)
+	require.NoError(t, err)
+	require.NoError(t, res.Error)
+	assert.Len(t, res.Events, 8) // 6 evm events + 2 cadence events
+
+	flowTransfer, _ := cadence.NewUFix64("0.1")
+	transferWei := types.NewBalanceFromUFix64(flowTransfer)
+	fundEOAKey, err := crypto.HexToECDSA(fundEOARawKey)
+	require.NoError(t, err)
+
+	time.Sleep(500 * time.Millisecond) // wait for funding to process
+
+	allTxFilterID, err := rpcTester.newTxFilter()
+	require.NoError(t, err)
+	require.NotEmpty(t, allTxFilterID)
+
+	allBlockFilterID, err := rpcTester.newTxFilter()
+	require.NoError(t, err)
+	require.NotEmpty(t, allBlockFilterID)
+
+	// no data yet
+	h, err := rpcTester.getFilterChangesHashes(allBlockFilterID)
+	require.NoError(t, err)
+	assert.Len(t, h, 0)
+
+	h, err = rpcTester.getFilterChangesHashes(allTxFilterID)
+	require.NoError(t, err)
+	assert.Len(t, h, 0)
+
+	// create some new blocks and transactions
+	txCount := 5
+	nonce := uint64(0)
+	for i := 0; i < txCount; i++ {
+		res, _, err := evmSignAndRun(emu, transferWei, params.TxGas, fundEOAKey, nonce, &transferEOAAdress, nil)
+		nonce++
+		require.NoError(t, err)
+		require.NoError(t, res.Error)
+	}
+
+	time.Sleep(500 * time.Millisecond)
+
+	// get blocks since the last fetch, should be blocks from above loop
+	h, err = rpcTester.getFilterChangesHashes(allBlockFilterID)
+	require.NoError(t, err)
+	assert.Len(t, h, txCount)
+
+	for i := 0; i < txCount; i++ {
+		res, _, err := evmSignAndRun(emu, transferWei, params.TxGas, fundEOAKey, nonce, &transferEOAAdress, nil)
+		nonce++
+		require.NoError(t, err)
+		require.NoError(t, res.Error)
+	}
+
+	time.Sleep(500 * time.Millisecond)
+
+	// only 5 new data since it was fetched above
+	h, err = rpcTester.getFilterChangesHashes(allBlockFilterID)
+	require.NoError(t, err)
+	assert.Len(t, h, txCount)
+
+	// this should get all the tx hashes from both above loops
+	h, err = rpcTester.getFilterChangesHashes(allTxFilterID)
+	require.NoError(t, err)
+	assert.Len(t, h, txCount+txCount)
+
+	// getting it again should return 0 hashes since there are no new changes
+	h, err = rpcTester.getFilterChangesHashes(allTxFilterID)
+	require.NoError(t, err)
+	assert.Len(t, h, 0)
+
+	// deploy a log emitting contract
+	deployData, err := hex.DecodeString(testContractBinary)
+	require.NoError(t, err)
+
+	gasLimit := uint64(4700000)
+	signed, _, err := evmSign(nil, gasLimit, fundEOAKey, nonce, nil, deployData)
+	hash, err := rpcTester.sendRawTx(signed)
+	require.NoError(t, err)
+	require.NotNil(t, hash)
+
+	time.Sleep(200 * time.Millisecond)
+
+	rcp, err := rpcTester.getReceipt(hash.String())
+	require.NoError(t, err)
+	contractAddress := rcp.ContractAddress
+
+	storeContract, err := newContract(testContractBinary, testContractABI)
+	require.NoError(t, err)
+
+	// create filter for all logs for contract with any topic
+	allLogsID, err := rpcTester.newLogsFilter("0x0", "latest", &logs.FilterCriteria{
+		Addresses: []common.Address{contractAddress},
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, allLogsID)
+
+	l, err := rpcTester.getFilterChangesLogs(allLogsID)
+	require.NoError(t, err)
+	assert.Len(t, l, 0) // no logs yet
+
+	// emit logs
+	logCount := 4
+	for i := 0; i < logCount; i++ {
+		sumA := big.NewInt(5)
+		sumB := big.NewInt(int64(3 + i))
+		callSum, err := storeContract.call("sum", sumA, sumB)
+		require.NoError(t, err)
+
+		nonce++
+		signed, _, err = evmSign(nil, gasLimit, fundEOAKey, nonce, &contractAddress, callSum)
+		require.NoError(t, err)
+
+		_, err = rpcTester.sendRawTx(signed)
+		require.NoError(t, err)
+
+		time.Sleep(300 * time.Millisecond)
+	}
+
+	l, err = rpcTester.getFilterChangesLogs(allLogsID)
+	require.NoError(t, err)
+	assert.Len(t, l, logCount)
+
+	// specific log filter should get missed log and return it
+	topicValue := big.NewInt(4)
+	specificLogID, err := rpcTester.newLogsFilter("0x0", "latest", &logs.FilterCriteria{
+		Addresses: []common.Address{contractAddress},
+		Topics: [][]common.Hash{{ // any value, any value, any value, 4
+			common.Hash{}, common.Hash{}, common.Hash{}, common.BigToHash(topicValue),
+		}},
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, specificLogID)
+
+	// should get the specific log (3rd one) that matches the topic value to 4
+	l, err = rpcTester.getFilterChangesLogs(specificLogID)
+	require.NoError(t, err)
+	require.Len(t, l, 1)
+	assert.Equal(t, topicValue, l[0].Topics[3].Big())
+
+	// should not get anything since there are no new changes
+	l, err = rpcTester.getFilterChangesLogs(allLogsID)
+	require.NoError(t, err)
+	assert.Len(t, l, 0)
+}
+
 // checkSumLogValue makes sure the match is correct by checking sum value
 func checkSumLogValue(c *contract, a *big.Int, b *big.Int, data []byte) error {
 	event, err := c.value("Calculated", data)
@@ -1211,4 +1356,22 @@ func checkSumLogValue(c *contract, a *big.Int, b *big.Int, data []byte) error {
 	}
 
 	return nil
+}
+
+func defaultConfig(dbDir string, coaAddress flow.Address, coaKey sdkCrypto.PrivateKey) *config.Config {
+	return &config.Config{
+		DatabaseDir:        dbDir,
+		AccessNodeGRPCHost: "localhost:3569", // emulator
+		RPCPort:            8545,
+		RPCHost:            "127.0.0.1",
+		FlowNetworkID:      "flow-emulator",
+		EVMNetworkID:       types.FlowEVMTestnetChainID,
+		Coinbase:           fundEOAAddress,
+		COAAddress:         coaAddress,
+		COAKey:             coaKey,
+		CreateCOAResource:  false,
+		GasPrice:           new(big.Int).SetUint64(0),
+		LogLevel:           zerolog.DebugLevel,
+		LogWriter:          os.Stdout,
+	}
 }

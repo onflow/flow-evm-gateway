@@ -75,6 +75,7 @@ func (r *RestartableEngine) Run(ctx context.Context) error {
 				r.logger.Warn().Msg("restarting the engine now")
 			}
 		case <-ctx.Done():
+			// todo should we return the error if context is canceled?
 			r.logger.Warn().Msg("context cancelled, stopping the engine")
 			return ctx.Err()
 		}
