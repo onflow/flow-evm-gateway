@@ -27,7 +27,6 @@ type StreamAPI struct {
 	blocks                  storage.BlockIndexer
 	transactions            storage.TransactionIndexer
 	receipts                storage.ReceiptIndexer
-	accounts                storage.AccountIndexer
 	blocksBroadcaster       *engine.Broadcaster
 	transactionsBroadcaster *engine.Broadcaster
 }
