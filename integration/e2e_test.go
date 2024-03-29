@@ -976,6 +976,8 @@ func TestE2E_Streaming(t *testing.T) {
 		require.NoError(t, err)
 	}
 
+	time.Sleep(300 * time.Millisecond)
+
 	currentHeight := 2 // first two blocks are used for evm setup events
 	var subscriptionID string
 	for i := 0; i < 5; i++ {

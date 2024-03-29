@@ -233,7 +233,7 @@ func (e *EVM) signAndSend(ctx context.Context, script []byte, args ...cadence.Va
 	if d := e.logger.Debug(); d.Enabled() {
 		go func(id flow.Identifier) {
 			res, _ := e.client.GetTransactionResult(context.Background(), id)
-			if res.Error != nil {
+			if res != nil && res.Error != nil {
 				e.logger.Error().
 					Str("flow-id", id.String()).
 					Err(res.Error).
