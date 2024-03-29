@@ -174,34 +174,7 @@ func (s *StreamAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) (*
 				return nil, fmt.Errorf("failed to get receipt with hash: %s at height: %d: %w", hash, height, err)
 			}
 
-			from, err := tx.From()
-			if err != nil {
-				return nil, errs.ErrInternal
-			}
-
-			h, err := tx.Hash()
-			if err != nil {
-				return nil, err
-			}
-
-			v, r, ss := tx.RawSignatureValues()
-
-			return &RPCTransaction{
-				Hash:        h,
-				BlockHash:   &rcp.BlockHash,
-				BlockNumber: (*hexutil.Big)(rcp.BlockNumber),
-				From:        from.Hex(),
-				To:          tx.To().Hex(),
-				Gas:         hexutil.Uint64(rcp.GasUsed),
-				GasPrice:    (*hexutil.Big)(rcp.EffectiveGasPrice),
-				Input:       tx.Data(),
-				Nonce:       hexutil.Uint64(tx.Nonce()),
-				Value:       (*hexutil.Big)(tx.Value()),
-				Type:        hexutil.Uint64(tx.Type()),
-				V:           (*hexutil.Big)(v),
-				R:           (*hexutil.Big)(r),
-				S:           (*hexutil.Big)(ss),
-			}, nil
+			return NewTransaction(tx, *rcp)
 		},
 	)
 }
