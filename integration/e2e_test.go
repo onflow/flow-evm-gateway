@@ -944,7 +944,7 @@ func TestE2E_ConcurrentTransactionSubmission(t *testing.T) {
 }
 
 // TestE2E_Streaming is a function used to test end-to-end streaming of data.
-// The test subscribers for new heads and new transactions events and makes
+// The test subscribes for new heads and new transactions events and makes
 // sure they are broadcast in correct order.
 func TestE2E_Streaming(t *testing.T) {
 	srv, err := startEmulator()
