@@ -7,6 +7,7 @@ import (
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/onflow/cadence"
@@ -91,4 +92,56 @@ func DecodeReceipt(event cadence.Event) (*gethTypes.Receipt, error) {
 	receipt.Bloom = gethTypes.CreateBloom([]*gethTypes.Receipt{receipt})
 
 	return receipt, nil
+}
+
+// MarshalReceipt takes a receipt and its associated transaction,
+// and marshals the receipt to the proper structure needed by
+// eth_getTransactionReceipt.
+func MarshalReceipt(
+	receipt *gethTypes.Receipt,
+	tx Transaction,
+) (map[string]interface{}, error) {
+	from, err := tx.From()
+	if err != nil {
+		return map[string]interface{}{}, err
+	}
+
+	txHash, err := tx.Hash()
+	if err != nil {
+		return map[string]interface{}{}, err
+	}
+
+	fields := map[string]interface{}{
+		"blockHash":         receipt.BlockHash,
+		"blockNumber":       hexutil.Uint64(receipt.BlockNumber.Uint64()),
+		"transactionHash":   txHash,
+		"transactionIndex":  hexutil.Uint64(receipt.TransactionIndex),
+		"from":              from,
+		"to":                tx.To(),
+		"gasUsed":           hexutil.Uint64(receipt.GasUsed),
+		"cumulativeGasUsed": hexutil.Uint64(receipt.CumulativeGasUsed),
+		"contractAddress":   nil,
+		"logs":              receipt.Logs,
+		"logsBloom":         receipt.Bloom,
+		"type":              hexutil.Uint(tx.Type()),
+		"effectiveGasPrice": (*hexutil.Big)(receipt.EffectiveGasPrice),
+	}
+
+	fields["status"] = hexutil.Uint(receipt.Status)
+
+	if receipt.Logs == nil {
+		fields["logs"] = []*gethTypes.Log{}
+	}
+
+	if tx.Type() == gethTypes.BlobTxType {
+		fields["blobGasUsed"] = hexutil.Uint64(receipt.BlobGasUsed)
+		fields["blobGasPrice"] = (*hexutil.Big)(receipt.BlobGasPrice)
+	}
+
+	// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
+	if receipt.ContractAddress != (common.Address{}) {
+		fields["contractAddress"] = receipt.ContractAddress
+	}
+
+	return fields, nil
 }

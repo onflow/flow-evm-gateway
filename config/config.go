@@ -63,11 +63,13 @@ type Config struct {
 	StreamLimit float64
 	// StreamTimeout defines the timeout the server waits for the event to be sent to the client.
 	StreamTimeout time.Duration
+	// FilterExpiry defines the time it takes for an idle filter to expire
+	FilterExpiry time.Duration
 }
 
 func FromFlags() (*Config, error) {
 	cfg := &Config{}
-	var evmNetwork, coinbase, gas, coa, key, keysPath, flowNetwork, logLevel string
+	var evmNetwork, coinbase, gas, coa, key, keysPath, flowNetwork, logLevel, filterExpiry string
 	var streamTimeout int
 
 	// parse from flags
@@ -86,6 +88,7 @@ func FromFlags() (*Config, error) {
 	flag.StringVar(&logLevel, "log-level", "debug", "Define verbosity of the log output ('debug', 'info', 'error')")
 	flag.Float64Var(&cfg.StreamLimit, "stream-limit", 10, "Rate-limits the events sent to the client within one second")
 	flag.IntVar(&streamTimeout, "stream-timeout", 3, "Defines the timeout in seconds the server waits for the event to be sent to the client")
+	flag.StringVar(&filterExpiry, "filter-expiry", "5min", "Filter defines the time it takes for an idle filter to expire")
 	flag.Parse()
 
 	if coinbase == "" {
@@ -162,6 +165,12 @@ func FromFlags() (*Config, error) {
 	cfg.LogWriter = os.Stdout
 
 	cfg.StreamTimeout = time.Second * time.Duration(streamTimeout)
+
+	exp, err := time.ParseDuration(filterExpiry)
+	if err != nil {
+		return nil, fmt.Errorf("filter expiry not valid unit: %w", err)
+	}
+	cfg.FilterExpiry = exp
 
 	// todo validate Config values
 	return cfg, nil
