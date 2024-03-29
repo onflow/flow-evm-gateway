@@ -146,49 +146,24 @@ func (b *BlockChainAPI) GetBalance(
 func (b *BlockChainAPI) GetTransactionByHash(
 	ctx context.Context,
 	hash common.Hash,
-) (*RPCTransaction, error) {
+) (*Transaction, error) {
 	tx, err := b.transactions.Get(hash)
 	if err != nil {
-		return handleError[*RPCTransaction](b.logger, err)
+		return handleError[*Transaction](b.logger, err)
 	}
 
 	txHash, err := tx.Hash()
 	if err != nil {
-		return handleError[*RPCTransaction](b.logger, err)
+		b.logger.Error().Err(err).Any("tx", tx).Msg("failed to calculate tx hash")
+		return nil, errs.ErrInternal
 	}
 
 	rcp, err := b.receipts.GetByTransactionID(txHash)
 	if err != nil {
-		return handleError[*RPCTransaction](b.logger, err)
+		return handleError[*Transaction](b.logger, err)
 	}
 
-	from, err := tx.From()
-	if err != nil {
-		b.logger.Error().Err(err).Msg("failed to calculate sender")
-		return nil, errs.ErrInternal
-	}
-
-	v, r, s := tx.RawSignatureValues()
-	index := uint64(rcp.TransactionIndex)
-
-	txResult := &RPCTransaction{
-		Hash:             txHash,
-		BlockHash:        &rcp.BlockHash,
-		BlockNumber:      (*hexutil.Big)(rcp.BlockNumber),
-		From:             from.Hex(),
-		To:               tx.To().Hex(),
-		Gas:              hexutil.Uint64(rcp.GasUsed),
-		GasPrice:         (*hexutil.Big)(rcp.EffectiveGasPrice),
-		Input:            tx.Data(),
-		Nonce:            hexutil.Uint64(tx.Nonce()),
-		TransactionIndex: (*hexutil.Uint64)(&index),
-		Value:            (*hexutil.Big)(tx.Value()),
-		Type:             hexutil.Uint64(tx.Type()),
-		V:                (*hexutil.Big)(v),
-		R:                (*hexutil.Big)(r),
-		S:                (*hexutil.Big)(s),
-	}
-	return txResult, nil
+	return NewTransaction(tx, *rcp)
 }
 
 // GetTransactionByBlockHashAndIndex returns the transaction for the given block hash and index.
@@ -196,10 +171,10 @@ func (b *BlockChainAPI) GetTransactionByBlockHashAndIndex(
 	ctx context.Context,
 	blockHash common.Hash,
 	index hexutil.Uint,
-) (*RPCTransaction, error) {
+) (*Transaction, error) {
 	block, err := b.blocks.GetByID(blockHash)
 	if err != nil {
-		return handleError[*RPCTransaction](b.logger, err)
+		return handleError[*Transaction](b.logger, err)
 	}
 
 	highestIndex := len(block.TransactionHashes) - 1
@@ -210,7 +185,7 @@ func (b *BlockChainAPI) GetTransactionByBlockHashAndIndex(
 	txHash := block.TransactionHashes[index]
 	tx, err := b.GetTransactionByHash(ctx, txHash)
 	if err != nil {
-		return handleError[*RPCTransaction](b.logger, err)
+		return handleError[*Transaction](b.logger, err)
 	}
 
 	return tx, nil
@@ -221,10 +196,10 @@ func (b *BlockChainAPI) GetTransactionByBlockNumberAndIndex(
 	ctx context.Context,
 	blockNumber rpc.BlockNumber,
 	index hexutil.Uint,
-) (*RPCTransaction, error) {
+) (*Transaction, error) {
 	block, err := b.blocks.GetByHeight(uint64(blockNumber))
 	if err != nil {
-		return handleError[*RPCTransaction](b.logger, err)
+		return handleError[*Transaction](b.logger, err)
 	}
 
 	highestIndex := len(block.TransactionHashes) - 1
@@ -235,7 +210,7 @@ func (b *BlockChainAPI) GetTransactionByBlockNumberAndIndex(
 	txHash := block.TransactionHashes[index]
 	tx, err := b.GetTransactionByHash(ctx, txHash)
 	if err != nil {
-		return handleError[*RPCTransaction](b.logger, err)
+		return handleError[*Transaction](b.logger, err)
 	}
 
 	return tx, nil
@@ -792,8 +767,8 @@ func (b *BlockChainAPI) MaxPriorityFeePerGas(ctx context.Context) (*hexutil.Big,
 func (b *BlockChainAPI) fetchBlockTransactions(
 	ctx context.Context,
 	block *evmTypes.Block,
-) ([]*RPCTransaction, error) {
-	transactions := make([]*RPCTransaction, 0)
+) ([]*Transaction, error) {
+	transactions := make([]*Transaction, 0)
 	for _, txHash := range block.TransactionHashes {
 		transaction, err := b.GetTransactionByHash(ctx, txHash)
 		if err != nil {
