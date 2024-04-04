@@ -88,7 +88,7 @@ func FromFlags() (*Config, error) {
 	flag.StringVar(&logLevel, "log-level", "debug", "Define verbosity of the log output ('debug', 'info', 'error')")
 	flag.Float64Var(&cfg.StreamLimit, "stream-limit", 10, "Rate-limits the events sent to the client within one second")
 	flag.IntVar(&streamTimeout, "stream-timeout", 3, "Defines the timeout in seconds the server waits for the event to be sent to the client")
-	flag.StringVar(&filterExpiry, "filter-expiry", "5min", "Filter defines the time it takes for an idle filter to expire")
+	flag.StringVar(&filterExpiry, "filter-expiry", "5m", "Filter defines the time it takes for an idle filter to expire")
 	flag.Parse()
 
 	if coinbase == "" {
