@@ -134,10 +134,24 @@ type BlockOverrides struct {
 }
 
 type Block struct {
-	Hash         common.Hash    `json:"hash"`
-	Number       hexutil.Uint64 `json:"number"`
-	ParentHash   common.Hash    `json:"parentHash"`
-	ReceiptsRoot common.Hash    `json:"receiptsRoot"`
-	Transactions interface{}    `json:"transactions"`
-	// todo add more fields needed
+	Number           hexutil.Uint64   `json:"number"`
+	Hash             common.Hash      `json:"hash"`
+	ParentHash       common.Hash      `json:"parentHash"`
+	Nonce            types.BlockNonce `json:"nonce"`
+	Sha3Uncles       common.Hash      `json:"sha3Uncles"`
+	LogsBloom        hexutil.Bytes    `json:"logsBloom"`
+	TransactionsRoot common.Hash      `json:"transactionsRoot"`
+	StateRoot        common.Hash      `json:"stateRoot"`
+	ReceiptsRoot     common.Hash      `json:"receiptsRoot"`
+	Miner            common.Address   `json:"miner"`
+	Difficulty       hexutil.Uint64   `json:"difficulty"`
+	TotalDifficulty  hexutil.Uint64   `json:"totalDifficulty"`
+	ExtraData        hexutil.Bytes    `json:"extraData"`
+	Size             hexutil.Uint64   `json:"size"`
+	GasLimit         hexutil.Uint64   `json:"gasLimit"`
+	GasUsed          hexutil.Uint64   `json:"gasUsed"`
+	Timestamp        hexutil.Uint64   `json:"timestamp"`
+	Transactions     interface{}      `json:"transactions"`
+	Uncles           []common.Hash    `json:"uncles"`
+	MixHash          common.Hash      `json:"mixHash"`
 }
