@@ -774,8 +774,12 @@ func (b *BlockChainAPI) prepareBlockResponse(
 	if err != nil {
 		return nil, err
 	}
-	for _, tx := range transactions {
-		blockResponse.GasUsed += tx.Gas
+	if len(transactions) > 0 {
+		totalGasUsed := hexutil.Uint64(0)
+		for _, tx := range transactions {
+			totalGasUsed += tx.Gas
+		}
+		blockResponse.GasUsed = totalGasUsed
 	}
 
 	if fullTx {
