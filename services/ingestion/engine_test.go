@@ -55,6 +55,8 @@ func TestSerialBlockIngestion(t *testing.T) {
 			transactions,
 			accounts,
 			broadcast.NewBroadcaster(),
+			broadcast.NewBroadcaster(),
+			broadcast.NewBroadcaster(),
 			zerolog.Nop(),
 		)
 
@@ -129,6 +131,8 @@ func TestSerialBlockIngestion(t *testing.T) {
 			receipts,
 			transactions,
 			accounts,
+			broadcast.NewBroadcaster(),
+			broadcast.NewBroadcaster(),
 			broadcast.NewBroadcaster(),
 			zerolog.Nop(),
 		)
@@ -221,6 +225,8 @@ func TestTransactionIngestion(t *testing.T) {
 		receipts,
 		transactions,
 		accounts,
+		broadcast.NewBroadcaster(),
+		broadcast.NewBroadcaster(),
 		broadcast.NewBroadcaster(),
 		zerolog.Nop(),
 	)

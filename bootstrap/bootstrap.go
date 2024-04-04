@@ -217,7 +217,6 @@ func startServer(
 		blocks,
 		transactions,
 		receipts,
-		accounts,
 		blocksBroadcaster,
 		transactionsBroadcaster,
 		logsBroadcaster,
