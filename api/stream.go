@@ -183,6 +183,12 @@ func (s *StreamAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) (*
 
 // Logs creates a subscription that fires for all new log that match the given filter criteria.
 func (s *StreamAPI) Logs(ctx context.Context, criteria filters.FilterCriteria) (*rpc.Subscription, error) {
+	if len(criteria.Topics) > maxTopics {
+		return nil, errExceedMaxTopics
+	}
+	if len(criteria.Addresses) > maxAddresses {
+		return nil, errExceedMaxAddresses
+	}
 
 	return s.newSubscription(
 		ctx,

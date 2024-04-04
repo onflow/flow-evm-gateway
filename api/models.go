@@ -11,12 +11,16 @@ import (
 )
 
 var (
-	errFilterNotFound  = errors.New("filter not found")
-	errExceedMaxTopics = errors.New("exceed max topics")
+	errFilterNotFound     = errors.New("filter not found")
+	errExceedMaxTopics    = errors.New("exceed max topics")
+	errExceedMaxAddresses = errors.New("exceed max addresses")
 )
 
 // The maximum number of topic criteria allowed, vm.LOG4 - vm.LOG0
 const maxTopics = 4
+
+// The maximum number of addresses allowed
+const maxAddresses = 6
 
 // TransactionArgs represents the arguments to construct a new transaction
 // or a message call.
