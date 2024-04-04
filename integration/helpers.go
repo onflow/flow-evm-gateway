@@ -110,9 +110,6 @@ func startEventIngestionEngine(ctx context.Context, dbDir string) (
 	}
 
 	blocks := pebble.NewBlocks(db)
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("error creating blocks storage: %w", err)
-	}
 	receipts := pebble.NewReceipts(db)
 	accounts := pebble.NewAccounts(db)
 	txs := pebble.NewTransactions(db)
@@ -152,6 +149,53 @@ func startEventIngestionEngine(ctx context.Context, dbDir string) (
 
 // fundEOA funds an evm account provided with the amount.
 func fundEOA(
+	emu emulator.Emulator,
+	flowAmount cadence.UFix64,
+	eoaAddress common.Address,
+) (*sdk.TransactionResult, error) {
+	wei := (uint)(flowAmount.ToGoValue().(uint64)*10000000000) - 1000000000000000000 // convert ufix to wei and subtract 1 flow
+	weiAmount := cadence.NewUInt(wei)
+	// create a new funded COA and fund an EOA to be used for in tests
+	code := `
+	transaction(weiAmount: UInt, flowAmount: UFix64, eoaAddress: [UInt8; 20]) {
+		let fundVault: @FlowToken.Vault
+		let auth: auth(Storage) &Account
+	
+		prepare(signer: auth(Storage) &Account) {
+			let vaultRef = signer.storage.borrow<auth(FungibleToken.Withdraw) &FlowToken.Vault>(
+				from: /storage/flowTokenVault
+			) ?? panic("Could not borrow reference to the owner's Vault!")
+	
+			self.fundVault <- vaultRef.withdraw(amount: flowAmount) as! @FlowToken.Vault
+			self.auth = signer
+		}
+	
+		execute {
+			let acc <- EVM.createCadenceOwnedAccount()
+			acc.deposit(from: <-self.fundVault)
+
+			let result = acc.call(
+				to: EVM.EVMAddress(bytes: eoaAddress), 
+				data: [], 
+				gasLimit: 300000, 
+				value: EVM.Balance(attoflow: weiAmount)
+			)
+
+			log(result)
+			destroy acc
+		}
+	}`
+
+	eoaBytes, err := evmHexToCadenceBytes(strings.ReplaceAll(eoaAddress.String(), "0x", ""))
+	if err != nil {
+		return nil, err
+	}
+
+	return flowSendTransaction(emu, code, weiAmount, flowAmount, eoaBytes)
+}
+
+// createCOA creates cadence owned account and stores it in the storage
+func createCOA(
 	emu emulator.Emulator,
 	flowAmount cadence.UFix64,
 	eoaAddress common.Address,
