@@ -277,34 +277,12 @@ func (b *BlockChainAPI) GetBlockByHash(
 	hash common.Hash,
 	fullTx bool,
 ) (*Block, error) {
-	bl, err := b.blocks.GetByID(hash)
+	block, err := b.blocks.GetByID(hash)
 	if err != nil {
 		return handleError[*Block](b.logger, err)
 	}
 
-	h, err := bl.Hash()
-	if err != nil {
-		b.logger.Error().Err(err).Msg("failed to calculate hash for block by hash")
-		return nil, errs.ErrInternal
-	}
-
-	block := &Block{
-		Hash:         h,
-		Number:       hexutil.Uint64(bl.Height),
-		ParentHash:   bl.ParentBlockHash,
-		ReceiptsRoot: bl.ReceiptRoot,
-		Transactions: bl.TransactionHashes,
-	}
-
-	if fullTx {
-		transactions, err := b.fetchBlockTransactions(ctx, bl)
-		if err != nil {
-			return nil, err
-		}
-		block.Transactions = transactions
-	}
-
-	return block, nil
+	return b.prepareBlockResponse(ctx, block, fullTx)
 }
 
 // GetBlockByNumber returns the requested canonical block.
@@ -329,34 +307,12 @@ func (b *BlockChainAPI) GetBlockByNumber(
 		}
 	}
 
-	bl, err := b.blocks.GetByHeight(height)
+	block, err := b.blocks.GetByHeight(height)
 	if err != nil {
 		return handleError[*Block](b.logger, err)
 	}
 
-	h, err := bl.Hash()
-	if err != nil {
-		b.logger.Error().Err(err).Msg("failed to calculate hash for block by number")
-		return nil, errs.ErrInternal
-	}
-
-	block := &Block{
-		Hash:         h,
-		Number:       hexutil.Uint64(bl.Height),
-		ParentHash:   bl.ParentBlockHash,
-		ReceiptsRoot: bl.ReceiptRoot,
-		Transactions: bl.TransactionHashes,
-	}
-
-	if fullTx {
-		transactions, err := b.fetchBlockTransactions(ctx, bl)
-		if err != nil {
-			return nil, err
-		}
-		block.Transactions = transactions
-	}
-
-	return block, nil
+	return b.prepareBlockResponse(ctx, block, fullTx)
 }
 
 // GetBlockReceipts returns the block receipts for the given block hash or number or tag.
@@ -790,4 +746,41 @@ func (b *BlockChainAPI) fetchBlockTransactions(
 	}
 
 	return transactions, nil
+}
+
+func (b *BlockChainAPI) prepareBlockResponse(
+	ctx context.Context,
+	block *evmTypes.Block,
+	fullTx bool,
+) (*Block, error) {
+	h, err := block.Hash()
+	if err != nil {
+		b.logger.Error().Err(err).Msg("failed to calculate hash for block by number")
+		return nil, errs.ErrInternal
+	}
+
+	blockResponse := &Block{
+		Hash:         h,
+		Number:       hexutil.Uint64(block.Height),
+		ParentHash:   block.ParentBlockHash,
+		ReceiptsRoot: block.ReceiptRoot,
+		Transactions: block.TransactionHashes,
+		Uncles:       []common.Hash{},
+		GasLimit:     hexutil.Uint64(15_000_000),
+		Nonce:        types.BlockNonce{0x1},
+	}
+
+	transactions, err := b.fetchBlockTransactions(ctx, block)
+	if err != nil {
+		return nil, err
+	}
+	for _, tx := range transactions {
+		blockResponse.GasUsed += tx.Gas
+	}
+
+	if fullTx {
+		blockResponse.Transactions = transactions
+	}
+
+	return blockResponse, nil
 }
