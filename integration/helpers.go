@@ -117,6 +117,8 @@ func startEventIngestionEngine(ctx context.Context, dbDir string) (
 	accounts := pebble.NewAccounts(db)
 	txs := pebble.NewTransactions(db)
 	blocksBroadcaster := broadcast.NewBroadcaster()
+	txBroadcaster := broadcast.NewBroadcaster()
+	logsBroadcaster := broadcast.NewBroadcaster()
 
 	err = blocks.InitHeights(config.EmulatorInitCadenceHeight)
 	if err != nil {
@@ -124,7 +126,17 @@ func startEventIngestionEngine(ctx context.Context, dbDir string) (
 	}
 
 	log = logger.With().Str("component", "ingestion").Logger()
-	engine := ingestion.NewEventIngestionEngine(subscriber, blocks, receipts, txs, accounts, blocksBroadcaster, log)
+	engine := ingestion.NewEventIngestionEngine(
+		subscriber,
+		blocks,
+		receipts,
+		txs,
+		accounts,
+		blocksBroadcaster,
+		txBroadcaster,
+		logsBroadcaster,
+		log,
+	)
 
 	go func() {
 		err = engine.Run(ctx)
@@ -173,10 +185,7 @@ func fundEOA(
 			)
 
 			log(result)
-			self.auth.storage.save<@EVM.CadenceOwnedAccount>(
-				<-acc,
-				to: StoragePath(identifier: "evm")!
-			)
+			destroy acc
 		}
 	}`
 
@@ -386,7 +395,7 @@ func (r *rpcTest) request(method string, params string) (json.RawMessage, error)
 	reqURL := fmt.Sprintf(`{"jsonrpc":"2.0","id":0,"method":"%s","params":%s}`, method, params)
 	fmt.Println("-> request: ", reqURL)
 	body := bytes.NewReader([]byte(reqURL))
-	req, err := http.NewRequest(http.MethodPost, r.url, body)
+	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://%s", r.url), body)
 	if err != nil {
 		return nil, err
 	}
@@ -518,13 +527,13 @@ func (r *rpcTest) blockNumber() (uint64, error) {
 	return uint64(blockNumber), nil
 }
 
-func (r *rpcTest) getTx(hash string) (*api.RPCTransaction, error) {
+func (r *rpcTest) getTx(hash string) (*api.Transaction, error) {
 	rpcRes, err := r.request("eth_getTransactionByHash", fmt.Sprintf(`["%s"]`, hash))
 	if err != nil {
 		return nil, err
 	}
 
-	var txRpc api.RPCTransaction
+	var txRpc api.Transaction
 	err = json.Unmarshal(rpcRes, &txRpc)
 	if err != nil {
 		return nil, err
@@ -764,7 +773,7 @@ func (r *rpcTest) newBlockFilter() (rpc.ID, error) {
 
 // wsConnect creates a new websocket connection and returns a write and read function
 // that can be used to easily write to the stream as well as read the next data.
-func (r *rpcTest) wsConnect() (func(string) error, func() ([]byte, error), error) {
+func (r *rpcTest) wsConnect() (func(string) error, func() (*streamMsg, error), error) {
 	u := url.URL{Scheme: "ws", Host: r.url, Path: "/"}
 	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
 	if err != nil {
@@ -772,23 +781,45 @@ func (r *rpcTest) wsConnect() (func(string) error, func() ([]byte, error), error
 	}
 
 	write := func(req string) error {
+		fmt.Println("--> ws:", req)
 		return c.WriteMessage(websocket.TextMessage, []byte(req))
 	}
 
-	read := func() ([]byte, error) {
+	read := func() (*streamMsg, error) {
 		_, message, err := c.ReadMessage()
 		if err != nil {
 			return nil, err
 		}
 		log.Println("<-- ws: ", string(message))
-		return message, nil
+
+		var msg streamMsg
+		err = json.Unmarshal(message, &msg)
+		if err != nil {
+			return nil, err
+		}
+		return &msg, nil
 	}
 
 	return write, read, nil
 }
 
-func newHeadsRequest() string {
+func newHeadsSubscription() string {
 	return `{"jsonrpc":"2.0","id":0,"method":"eth_subscribe","params":["newHeads"]}`
+}
+
+func newTransactionsSubscription() string {
+	return `{"jsonrpc":"2.0","id":0,"method":"eth_subscribe","params":["newPendingTransactions"]}`
+}
+
+func newLogsSubscription(address string, topics string) string {
+	return fmt.Sprintf(`
+		{
+			"jsonrpc": "2.0",
+			"id": 0,
+			"method": "eth_subscribe",
+			"params": ["logs", {"address":"%s", "topics": [%s]}]
+		}
+	`, address, topics)
 }
 
 func unsubscribeRequest(id string) string {
@@ -838,12 +869,14 @@ func (b *rpcBlock) FullTransactions() []map[string]interface{} {
 }
 
 type streamParams struct {
-	Subscription string         `json:"subscription"`
-	Result       map[string]any `json:"result"`
+	Subscription string          `json:"subscription"`
+	Result       json.RawMessage `json:"result"`
 }
 
 type streamMsg struct {
 	Jsonrpc string       `json:"jsonrpc"`
 	Method  string       `json:"method"`
 	Params  streamParams `json:"params"`
+	Result  any          `json:"result"`
+	ID      any          `json:"id"`
 }

@@ -35,6 +35,8 @@ func Start(ctx context.Context, cfg *config.Config) error {
 	accounts := pebble.NewAccounts(pebbleDB)
 
 	blocksBroadcaster := broadcast.NewBroadcaster()
+	transactionsBroadcaster := broadcast.NewBroadcaster()
+	logsBroadcaster := broadcast.NewBroadcaster()
 
 	// if database is not initialized require init height
 	if _, err := blocks.LatestCadenceHeight(); errors.Is(err, storageErrs.ErrNotInitialized) {
@@ -53,6 +55,8 @@ func Start(ctx context.Context, cfg *config.Config) error {
 			receipts,
 			accounts,
 			blocksBroadcaster,
+			transactionsBroadcaster,
+			logsBroadcaster,
 			logger,
 		)
 		if err != nil {
@@ -69,6 +73,8 @@ func Start(ctx context.Context, cfg *config.Config) error {
 		receipts,
 		accounts,
 		blocksBroadcaster,
+		transactionsBroadcaster,
+		logsBroadcaster,
 		logger,
 	)
 	if err != nil {
@@ -86,6 +92,8 @@ func startIngestion(
 	receipts storage.ReceiptIndexer,
 	accounts storage.AccountIndexer,
 	blocksBroadcaster *broadcast.Broadcaster,
+	transactionsBroadcaster *broadcast.Broadcaster,
+	logsBroadcaster *broadcast.Broadcaster,
 	logger zerolog.Logger,
 ) error {
 	logger.Info().Msg("starting up event ingestion")
@@ -125,6 +133,8 @@ func startIngestion(
 		transactions,
 		accounts,
 		blocksBroadcaster,
+		transactionsBroadcaster,
+		logsBroadcaster,
 		logger,
 	)
 	const retries = 15
@@ -152,6 +162,8 @@ func startServer(
 	receipts storage.ReceiptIndexer,
 	accounts storage.AccountIndexer,
 	blocksBroadcaster *broadcast.Broadcaster,
+	transactionsBroadcaster *broadcast.Broadcaster,
+	logsBroadcaster *broadcast.Broadcaster,
 	logger zerolog.Logger,
 ) error {
 	l := logger.With().Str("component", "API").Logger()
@@ -207,6 +219,8 @@ func startServer(
 		receipts,
 		accounts,
 		blocksBroadcaster,
+		transactionsBroadcaster,
+		logsBroadcaster,
 	)
 
 	pullAPI := api.NewPullAPI(

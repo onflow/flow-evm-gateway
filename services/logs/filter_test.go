@@ -148,6 +148,14 @@ func TestIDFilter(t *testing.T) {
 		expectLogs []*gethTypes.Log
 		criteria   FilterCriteria
 	}{{
+		desc: "wildcard all logs",
+		id:   mustHash(blocks[0]),
+		criteria: FilterCriteria{
+			Addresses: []common.Address{lgs[0].Address},
+			Topics:    [][]common.Hash{},
+		},
+		expectLogs: lgs[:2], // first two are all logs from the address
+	}, {
 		desc: "single topic, single address match single log",
 		id:   mustHash(blocks[0]),
 		criteria: FilterCriteria{

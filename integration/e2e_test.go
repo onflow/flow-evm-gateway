@@ -474,7 +474,7 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 	cfg := defaultConfig(t.TempDir(), service.Address, service.PrivateKey)
 
 	rpcTester := &rpcTest{
-		url: fmt.Sprintf("http://%s:%d", cfg.RPCHost, cfg.RPCPort),
+		url: fmt.Sprintf("%s:%d", cfg.RPCHost, cfg.RPCPort),
 	}
 
 	go func() {
@@ -628,7 +628,7 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, interactHash, txRpc.Hash.String())
 	assert.Equal(t, callRetrieve, []byte(txRpc.Input))
-	assert.Equal(t, contractAddress.Hex(), txRpc.To.Hex())
+	assert.Equal(t, contractAddress.Hex(), txRpc.To)
 
 	rcp, err = rpcTester.getReceipt(interactHash)
 	require.NoError(t, err)
@@ -682,7 +682,7 @@ func TestE2E_API_DeployEvents(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, interactHash, txRpc.Hash.String())
 	assert.Equal(t, callStore, []byte(txRpc.Input))
-	assert.Equal(t, contractAddress.Hex(), txRpc.To.Hex())
+	assert.Equal(t, contractAddress.Hex(), txRpc.To)
 
 	rcp, err = rpcTester.getReceipt(interactHash)
 	require.NoError(t, err)
@@ -864,7 +864,7 @@ func TestE2E_ConcurrentTransactionSubmission(t *testing.T) {
 	cfg.CreateCOAResource = true
 
 	rpcTester := &rpcTest{
-		url: fmt.Sprintf("http://%s:%d", cfg.RPCHost, cfg.RPCPort),
+		url: fmt.Sprintf("%s:%d", cfg.RPCHost, cfg.RPCPort),
 	}
 
 	go func() {
@@ -917,6 +917,8 @@ func TestE2E_ConcurrentTransactionSubmission(t *testing.T) {
 }
 
 // TestE2E_Streaming is a function used to test end-to-end streaming of data.
+// The test subscribes for new heads and new transactions events and makes
+// sure they are broadcast in correct order.
 func TestE2E_Streaming(t *testing.T) {
 	srv, err := startEmulator()
 	require.NoError(t, err)
@@ -944,7 +946,7 @@ func TestE2E_Streaming(t *testing.T) {
 		COAAddress:         gwAddress,
 		COAKey:             gwKey,
 		CreateCOAResource:  true,
-		GasPrice:           new(big.Int).SetUint64(1),
+		GasPrice:           new(big.Int).SetUint64(0),
 		LogWriter:          os.Stdout,
 		LogLevel:           zerolog.DebugLevel,
 		StreamLimit:        5,
@@ -962,53 +964,209 @@ func TestE2E_Streaming(t *testing.T) {
 
 	time.Sleep(500 * time.Millisecond) // some time to startup
 
-	wsWrite, wsRead, err := rpcTester.wsConnect()
+	flowAmount, _ := cadence.NewUFix64("10.0")
+
+	// Steps 1, 2 and 3. - create COA and fund it - setup phase
+	r, err := fundEOA(emu, flowAmount, fundEOAAddress)
 	require.NoError(t, err)
-	err = wsWrite(newHeadsRequest())
+	require.NoError(t, r.Error)
+
+	time.Sleep(500 * time.Millisecond)
+
+	// connect and subscribe to new blocks
+	blkWrite, blkRead, err := rpcTester.wsConnect()
+	require.NoError(t, err)
+	err = blkWrite(newHeadsSubscription())
 	require.NoError(t, err)
 
-	for i := 0; i < 5; i++ {
-		flowTransfer, _ := cadence.NewUFix64("1.0")
-		transferWei := types.NewBalanceFromUFix64(flowTransfer)
-		fundEOAKey, err := crypto.HexToECDSA(fundEOARawKey)
+	// first block stream response is for successful subscription
+	_, err = blkRead()
+	require.NoError(t, err)
+
+	// connect and subscribe to new transactions
+	txWrite, txRead, err := rpcTester.wsConnect()
+	require.NoError(t, err)
+	err = txWrite(newTransactionsSubscription())
+	require.NoError(t, err)
+
+	// first block stream response is for successful subscription
+	_, err = txRead()
+	require.NoError(t, err)
+
+	const startHeight = 6
+	// send some evm transfers that will produce transactions and blocks
+	txCount := 5
+	flowTransfer, _ := cadence.NewUFix64("1.0")
+	transferWei := types.NewBalanceFromUFix64(flowTransfer)
+	fundEOAKey, err := crypto.HexToECDSA(fundEOARawKey)
+	require.NoError(t, err)
+	for i := 0; i < txCount; i++ {
+		r, _, err := evmSignAndRun(emu, transferWei, params.TxGas, fundEOAKey, uint64(i), &transferEOAAdress, nil)
 		require.NoError(t, err)
-		_, _, err = evmSignAndRun(emu, transferWei, params.TxGas, fundEOAKey, uint64(i), &transferEOAAdress, nil)
-		require.NoError(t, err)
+		require.NoError(t, r.Error)
 	}
 
-	time.Sleep(300 * time.Millisecond)
+	// consume first event since it's from before transactions above were submitted
+	_, _ = blkRead()
+	_, _ = txRead()
 
-	currentHeight := 2 // first two blocks are used for evm setup events
-	var subscriptionID string
-	for i := 0; i < 5; i++ {
-		event, err := wsRead()
+	// iterate over all block data streams and make sure all were received
+	var blkSubID string
+	currentHeight := startHeight
+	for i := 0; i < txCount; i++ {
+		event, err := blkRead()
 		require.NoError(t, err)
 
-		var msg streamMsg
-		require.NoError(t, json.Unmarshal(event, &msg))
-		if msg.Params.Result["number"] == nil {
-			continue // skip the first event that only returns the id
-		}
+		var res map[string]any
+		require.NoError(t, json.Unmarshal(event.Params.Result, &res))
 
 		// this makes sure we receive the events in correct order
-		h, err := hexutil.DecodeUint64(msg.Params.Result["number"].(string))
+		h, err := hexutil.DecodeUint64(res["number"].(string))
 		require.NoError(t, err)
 		assert.Equal(t, currentHeight, int(h))
 		currentHeight++
-		subscriptionID = msg.Params.Subscription
+		blkSubID = event.Params.Subscription
 	}
 
-	require.NotEmpty(t, subscriptionID)
-	err = wsWrite(unsubscribeRequest(subscriptionID))
+	// iterate over all transactions and make sure all were received
+	var txSubID string
+	currentHeight = startHeight // reset
+	for i := 0; i < txCount; i++ {
+		event, err := txRead()
+		require.NoError(t, err)
+
+		var res map[string]string
+		require.NoError(t, json.Unmarshal(event.Params.Result, &res))
+		// this makes sure we received txs in correct order
+		h, err := hexutil.DecodeUint64(res["blockNumber"])
+		require.NoError(t, err)
+		assert.Equal(t, currentHeight, int(h))
+		require.Equal(t, transferEOAAdress.Hex(), res["to"])
+		currentHeight++
+		txSubID = event.Params.Subscription
+	}
+
+	unsubscribe(t, blkWrite, blkRead, blkSubID)
+	unsubscribe(t, txWrite, txRead, txSubID)
+
+	// deploy contract for logs/events stream filtering
+	nonce, err := rpcTester.getNonce(fundEOAAddress)
 	require.NoError(t, err)
 
-	// successfully unsubscribed
-	res, err := wsRead()
+	gasLimit := uint64(4700000) // arbitrarily big
+	eoaKey, err := crypto.HexToECDSA(fundEOARawKey)
 	require.NoError(t, err)
 
-	var u map[string]any
-	require.NoError(t, json.Unmarshal(res, &u))
-	require.True(t, u["result"].(bool))
+	deployData, err := hex.DecodeString(testContractBinary)
+	require.NoError(t, err)
+
+	signed, _, err := evmSign(nil, gasLimit, eoaKey, nonce, nil, deployData)
+	hash, err := rpcTester.sendRawTx(signed)
+	require.NoError(t, err)
+	require.NotNil(t, hash)
+
+	time.Sleep(300 * time.Millisecond) // todo replace all sleeps with checking for receipt
+
+	rcp, err := rpcTester.getReceipt(hash.Hex())
+	require.NoError(t, err)
+	contractAddress := rcp.ContractAddress
+
+	storeContract, err := newContract(testContractBinary, testContractABI)
+	require.NoError(t, err)
+
+	// different subscription to logs with different filters
+	allLogsWrite, allLogsRead, err := rpcTester.wsConnect()
+	require.NoError(t, err)
+	err = allLogsWrite(newLogsSubscription(contractAddress.String(), ``))
+	require.NoError(t, err)
+
+	singleLogWrite, singleLogRead, err := rpcTester.wsConnect()
+	require.NoError(t, err)
+	topic4 := common.HexToHash("0x3")
+	err = singleLogWrite(newLogsSubscription(
+		contractAddress.String(),
+		fmt.Sprintf(`null, null, null, "%s"`, topic4),
+	))
+	require.NoError(t, err)
+
+	// ignore successful subscription result
+	_, err = allLogsRead()
+	require.NoError(t, err)
+	_, err = singleLogRead()
+	require.NoError(t, err)
+	// ignore current block
+	_, err = allLogsRead()
+	require.NoError(t, err)
+	_, err = singleLogRead()
+	require.NoError(t, err)
+
+	// example event
+	// [{"address":"0x35c2cd9bee2ca40f8b91c924188c5018df2984e2","topics":["0x76efea95e5da1fa661f235b2921ae1d89b99e457ec73fb88e34a1d150f95c64b","0x000000000000000000000000facf71692421039876a5bb4f10ef7a439d8ef61e","0x0000000000000000000000000000000000000000000000000000000000000005","0x0000000000000000000000000000000000000000000000000000000000000001"]
+
+	// submit transactions that emit logs
+	logCount := 5
+	sumA := big.NewInt(5)
+	for i := 0; i < logCount; i++ {
+		sumB := big.NewInt(int64(i))
+		callSum, err := storeContract.call("sum", sumA, sumB)
+		require.NoError(t, err)
+
+		nonce++
+		res, _, err := evmSignAndRun(emu, nil, gasLimit, eoaKey, nonce, &contractAddress, callSum)
+		require.NoError(t, err)
+		require.NoError(t, res.Error)
+	}
+
+	time.Sleep(500 * time.Millisecond)
+
+	currentHeight = startHeight + logCount + 1 // + 1 height for deploy of contract
+	for i := 0; i < logCount; i++ {
+		event, err := allLogsRead()
+		require.NoError(t, err)
+
+		var l []gethTypes.Log
+		assert.NoError(t, json.Unmarshal(event.Params.Result, &l))
+
+		require.Len(t, l, 1)
+		log := l[0]
+		// this makes sure we received logs in correct order
+		assert.Equal(t, uint64(currentHeight), log.BlockNumber)
+		assert.Equal(t, contractAddress.Hex(), log.Address.Hex())
+		assert.Len(t, log.Topics, 4)
+		assert.Equal(t, common.BigToHash(sumA), log.Topics[2])
+		sumB := big.NewInt(int64(i))
+		assert.Equal(t, common.BigToHash(sumB), log.Topics[3])
+
+		currentHeight++
+	}
+
+	// todo remove this once the change in broadcaster is made to ignore null results
+	singleLogRead()
+	singleLogRead()
+	singleLogRead()
+
+	event, err := singleLogRead()
+	require.NoError(t, err)
+
+	var l []gethTypes.Log
+	assert.NoError(t, json.Unmarshal(event.Params.Result, &l))
+	require.Len(t, l, 1)
+	log := l[0]
+	fmt.Println(log)
+
+	assert.Equal(t, uint64(startHeight+logCount+1+3), log.BlockNumber)
+	assert.Equal(t, contractAddress.Hex(), log.Address.Hex())
+	assert.Len(t, log.Topics, 4)
+	assert.Equal(t, common.BigToHash(sumA), log.Topics[2])
+	assert.Equal(t, topic4, log.Topics[3])
+}
+
+func unsubscribe(t *testing.T, write func(string) error, read func() (*streamMsg, error), id string) {
+	require.NotEmpty(t, id)
+	require.NoError(t, write(unsubscribeRequest(id)))
+	event, err := read()
+	require.NoError(t, err)
+	require.True(t, event.Result.(bool)) // successfully unsubscribed
 }
 
 func TestE2E_Pull(t *testing.T) {

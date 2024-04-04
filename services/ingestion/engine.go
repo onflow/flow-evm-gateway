@@ -16,15 +16,17 @@ import (
 var _ models.Engine = &Engine{}
 
 type Engine struct {
-	subscriber        EventSubscriber
-	blocks            storage.BlockIndexer
-	receipts          storage.ReceiptIndexer
-	transactions      storage.TransactionIndexer
-	accounts          storage.AccountIndexer
-	log               zerolog.Logger
-	evmLastHeight     *models.SequentialHeight
-	status            *models.EngineStatus
-	blocksBroadcaster *engine.Broadcaster
+	subscriber              EventSubscriber
+	blocks                  storage.BlockIndexer
+	receipts                storage.ReceiptIndexer
+	transactions            storage.TransactionIndexer
+	accounts                storage.AccountIndexer
+	log                     zerolog.Logger
+	evmLastHeight           *models.SequentialHeight
+	status                  *models.EngineStatus
+	blocksBroadcaster       *engine.Broadcaster
+	transactionsBroadcaster *engine.Broadcaster
+	logsBroadcaster         *engine.Broadcaster
 }
 
 func NewEventIngestionEngine(
@@ -34,19 +36,23 @@ func NewEventIngestionEngine(
 	transactions storage.TransactionIndexer,
 	accounts storage.AccountIndexer,
 	blocksBroadcaster *engine.Broadcaster,
+	transactionsBroadcaster *engine.Broadcaster,
+	logsBroadcaster *engine.Broadcaster,
 	log zerolog.Logger,
 ) *Engine {
 	log = log.With().Str("component", "ingestion").Logger()
 
 	return &Engine{
-		subscriber:        subscriber,
-		blocks:            blocks,
-		receipts:          receipts,
-		transactions:      transactions,
-		accounts:          accounts,
-		log:               log,
-		status:            models.NewEngineStatus(),
-		blocksBroadcaster: blocksBroadcaster,
+		subscriber:              subscriber,
+		blocks:                  blocks,
+		receipts:                receipts,
+		transactions:            transactions,
+		accounts:                accounts,
+		log:                     log,
+		status:                  models.NewEngineStatus(),
+		blocksBroadcaster:       blocksBroadcaster,
+		transactionsBroadcaster: transactionsBroadcaster,
+		logsBroadcaster:         logsBroadcaster,
 	}
 }
 
@@ -222,6 +228,13 @@ func (e *Engine) processTransactionEvent(event cadence.Event) error {
 
 	if err := e.receipts.Store(receipt); err != nil {
 		return fmt.Errorf("failed to store receipt: %w", err)
+	}
+
+	e.transactionsBroadcaster.Publish()
+
+	// only notify if we have new logs
+	if len(receipt.Logs) > 0 {
+		e.logsBroadcaster.Publish()
 	}
 
 	return nil
