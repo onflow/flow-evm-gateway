@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/eth/filters"
+	"github.com/onflow/flow-evm-gateway/services/logs"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -29,6 +31,7 @@ type StreamAPI struct {
 	receipts                storage.ReceiptIndexer
 	blocksBroadcaster       *engine.Broadcaster
 	transactionsBroadcaster *engine.Broadcaster
+	logsBroadcaster         *engine.Broadcaster
 }
 
 func NewStreamAPI(
@@ -37,9 +40,9 @@ func NewStreamAPI(
 	blocks storage.BlockIndexer,
 	transactions storage.TransactionIndexer,
 	receipts storage.ReceiptIndexer,
-	accounts storage.AccountIndexer,
 	blocksBroadcaster *engine.Broadcaster,
 	transactionsBroadcaster *engine.Broadcaster,
+	logsBroadcaster *engine.Broadcaster,
 ) *StreamAPI {
 	return &StreamAPI{
 		logger:                  logger,
@@ -47,9 +50,9 @@ func NewStreamAPI(
 		blocks:                  blocks,
 		transactions:            transactions,
 		receipts:                receipts,
-		accounts:                accounts,
 		blocksBroadcaster:       blocksBroadcaster,
 		transactionsBroadcaster: transactionsBroadcaster,
+		logsBroadcaster:         logsBroadcaster,
 	}
 }
 
@@ -85,7 +88,7 @@ func (s *StreamAPI) newSubscription(
 		s.config.StreamTimeout,
 		s.config.StreamLimit,
 		sub,
-	).Stream(context.Background())
+	).Stream(context.Background()) // todo investigate why the passed in context is canceled so quickly
 
 	go func() {
 		for {
@@ -174,6 +177,39 @@ func (s *StreamAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) (*
 			}
 
 			return NewTransaction(tx, *rcp)
+		},
+	)
+}
+
+// Logs creates a subscription that fires for all new log that match the given filter criteria.
+func (s *StreamAPI) Logs(ctx context.Context, criteria filters.FilterCriteria) (*rpc.Subscription, error) {
+	if len(criteria.Topics) > maxTopics {
+		return nil, errExceedMaxTopics
+	}
+	if len(criteria.Addresses) > maxAddresses {
+		return nil, errExceedMaxAddresses
+	}
+
+	return s.newSubscription(
+		ctx,
+		s.logsBroadcaster,
+		func(ctx context.Context, height uint64) (interface{}, error) {
+			block, err := s.blocks.GetByHeight(height)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get block at height: %d: %w", height, err)
+			}
+
+			id, err := block.Hash()
+			if err != nil {
+				return nil, err
+			}
+
+			// convert from the API type
+			f := logs.FilterCriteria{
+				Addresses: criteria.Addresses,
+				Topics:    criteria.Topics,
+			}
+			return logs.NewIDFilter(id, f, s.blocks, s.receipts).Match()
 		},
 	)
 }
