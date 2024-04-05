@@ -46,8 +46,9 @@ import (
 )
 
 var (
-	logger = zerolog.New(os.Stdout)
-	sc     = systemcontracts.SystemContractsForChain(flow.Emulator)
+	logger    = zerolog.New(os.Stdout)
+	sc        = systemcontracts.SystemContractsForChain(flow.Emulator)
+	logOutput = false
 )
 
 const (
@@ -73,6 +74,10 @@ func startEmulator(createTestAccounts bool) (*server.EmulatorServer, error) {
 	}
 
 	log := logger.With().Str("component", "emulator").Logger().Level(zerolog.DebugLevel)
+	// todo remove
+	if !logOutput {
+		log = zerolog.Nop()
+	}
 	srv := server.NewEmulatorServer(&log, &server.Config{
 		ServicePrivateKey:      pkey,
 		ServiceKeySigAlgo:      sigAlgo,
@@ -130,8 +135,12 @@ func servicesSetup(t *testing.T) func() {
 		COAKey:             service.PrivateKey,
 		CreateCOAResource:  false,
 		GasPrice:           new(big.Int).SetUint64(0),
-		LogLevel:           zerolog.DebugLevel,
+		LogLevel:           zerolog.ErrorLevel, // todo change
 		LogWriter:          os.Stdout,
+	}
+
+	if !logOutput {
+		cfg.LogWriter = zerolog.Nop()
 	}
 
 	go func() {
