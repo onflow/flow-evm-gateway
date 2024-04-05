@@ -16,4 +16,8 @@ func TestWeb3_E2E(t *testing.T) {
 	t.Run("transfer Flow between EOA accounts", func(t *testing.T) {
 		runWeb3Test(t, "eth_transfer_between_eoa_accounts_test")
 	})
+
+	t.Run("emit logs from the contract and retrieve them using different filters", func(t *testing.T) {
+		runWeb3Test(t, "eth_logs_filtering_test")
+	})
 }
