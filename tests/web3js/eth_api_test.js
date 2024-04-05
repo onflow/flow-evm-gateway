@@ -20,6 +20,24 @@ it('get block', async () => {
 
     let blockHash = await web3.eth.getBlock(block.hash)
     assert.deepEqual(block, blockHash)
+
+    // get block count and uncle count
+    let txCount = await web3.eth.getBlockTransactionCount(startBlockHeight)
+    let uncleCount = await web3.eth.getBlockUncleCount(startBlockHeight)
+
+    assert.equal(txCount, 1)
+    assert.equal(uncleCount, 0)
+
+    // get block transaction
+    let tx = await web3.eth.getTransactionFromBlock(startBlockHeight, 0)
+    assert.isNotNull(tx)
+    assert.equal(tx.blockNumber, block.number)
+    assert.equal(tx.blockHash, block.hash)
+    assert.isString(tx.hash)
+
+    // not existing transaction
+    let no = await web3.eth.getTransactionFromBlock(startBlockHeight, 1)
+    assert.isNull(no)
 })
 
 it('get balance', async() => {
