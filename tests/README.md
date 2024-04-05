@@ -14,8 +14,15 @@ go test ./e2e_web3js_test.go
 Adding a new test is done simply by adding a new JS test file to the web3js folder and then 
 adding execution of that test in the e2e_web3js_test.go. 
 
+**EOA Test Account**
+
+Tests can use a predefined test account that is funded with 5 Flow:
+- Address: `0xFACF71692421039876a5BB4F10EF7A439D8ef61E`
+- Private Key: `0xf6d5333177711e562cabf1f311916196ee6ffc2a07966d9d4628094073bd5442`
+
+
 ❗️ Keep in mind that if you want to have 
-an isolated and new instance of the gateway you need to separate tests in a new file. Each test 
+An isolated and new instance of the gateway you need to separate tests in a new file. Each test 
 file will be run with a fresh instance of evm gateway, but tests that are written in the same file 
 will share the evm gateway instance and any state established by the test.
 
@@ -26,7 +33,7 @@ Inside that file we define any assertions we want to make, then we add this test
 to the `e2e_web3js_test.go` like so:
 ```go
 func Test_Web3Acceptance(t *testing.T) {
-	runTest(t, "getBlock")
+    runWeb3Test(t, "getBlock")
 }
 ```
 
