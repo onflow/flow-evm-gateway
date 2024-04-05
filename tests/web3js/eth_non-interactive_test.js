@@ -43,18 +43,18 @@ it('get block', async () => {
 })
 
 it('get balance', async() => {
-    let wei = await web3.eth.getBalance(conf.eoaAccount.address)
+    let wei = await web3.eth.getBalance(conf.eoa.address)
     assert.isNotNull(wei)
 
     let flow = web3Utils.fromWei(wei, 'ether')
     assert.equal(parseFloat(flow), conf.fundedAmount)
 
-    let weiAtBlock = await web3.eth.getBalance(conf.eoaAccount.address, conf.startBlockHeight)
+    let weiAtBlock = await web3.eth.getBalance(conf.eoa.address, conf.startBlockHeight)
     assert.equal(wei, weiAtBlock)
 })
 
 it('get code', async() => {
-    let code = await web3.eth.getCode(conf.eoaAccount.address)
+    let code = await web3.eth.getCode(conf.eoa.address)
     assert.equal(code, "0x") // empty
 })
 
