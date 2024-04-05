@@ -5,14 +5,20 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"github.com/onflow/flow-evm-gateway/bootstrap"
+	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
+	"github.com/stretchr/testify/require"
 	"io"
 	"log"
 	"math/big"
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -44,20 +50,24 @@ import (
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
 )
 
-const testPrivateKey = "61ceacbdce419e25ee8e7c2beceee170a05c9cab1e725a955b15ba94dcd747d2"
-
 var (
 	logger = zerolog.New(os.Stdout)
 	sc     = systemcontracts.SystemContractsForChain(flow.Emulator)
 )
 
 const (
-	sigAlgo  = crypto.SignatureAlgorithm(crypto.ECDSA_P256)
-	hashAlgo = crypto.HashAlgorithm(crypto.SHA3_256)
+	sigAlgo           = crypto.SignatureAlgorithm(crypto.ECDSA_P256)
+	hashAlgo          = crypto.HashAlgorithm(crypto.SHA3_256)
+	servicePrivateKey = "61ceacbdce419e25ee8e7c2beceee170a05c9cab1e725a955b15ba94dcd747d2"
+	// this is a test eoa account created on account setup
+	eoaTestAddress    = "0xFACF71692421039876a5BB4F10EF7A439D8ef61E"
+	eoaTestPrivateKey = "0xf6d5333177711e562cabf1f311916196ee6ffc2a07966d9d4628094073bd5442"
+	eoaFundAmount     = 5.0
+	coaFundAmount     = 10.0
 )
 
-func startEmulator() (*server.EmulatorServer, error) {
-	pkey, err := crypto.DecodePrivateKeyHex(sigAlgo, testPrivateKey)
+func startEmulator(createTestAccounts bool) (*server.EmulatorServer, error) {
+	pkey, err := crypto.DecodePrivateKeyHex(sigAlgo, servicePrivateKey)
 	if err != nil {
 		return nil, err
 	}
@@ -84,6 +94,12 @@ func startEmulator() (*server.EmulatorServer, error) {
 	}()
 
 	time.Sleep(1000 * time.Millisecond) // give it some time to start, dummy but ok for test
+
+	if createTestAccounts {
+		if err := setupTestAccounts(srv.Emulator()); err != nil {
+			return nil, err
+		}
+	}
 
 	return srv, nil
 }
@@ -147,64 +163,87 @@ func startEventIngestionEngine(ctx context.Context, dbDir string) (
 	return blocks, receipts, txs, err
 }
 
-// fundEOA funds an evm account provided with the amount.
-func fundEOA(
-	emu emulator.Emulator,
-	flowAmount cadence.UFix64,
-	eoaAddress common.Address,
-) (*sdk.TransactionResult, error) {
-	wei := (uint)(flowAmount.ToGoValue().(uint64)*10000000000) - 1000000000000000000 // convert ufix to wei and subtract 1 flow
-	weiAmount := cadence.NewUInt(wei)
-	// create a new funded COA and fund an EOA to be used for in tests
-	code := `
-	transaction(weiAmount: UInt, flowAmount: UFix64, eoaAddress: [UInt8; 20]) {
-		let fundVault: @FlowToken.Vault
-		let auth: auth(Storage) &Account
-	
-		prepare(signer: auth(Storage) &Account) {
-			let vaultRef = signer.storage.borrow<auth(FungibleToken.Withdraw) &FlowToken.Vault>(
-				from: /storage/flowTokenVault
-			) ?? panic("Could not borrow reference to the owner's Vault!")
-	
-			self.fundVault <- vaultRef.withdraw(amount: flowAmount) as! @FlowToken.Vault
-			self.auth = signer
-		}
-	
-		execute {
-			let acc <- EVM.createCadenceOwnedAccount()
-			acc.deposit(from: <-self.fundVault)
-
-			let result = acc.call(
-				to: EVM.EVMAddress(bytes: eoaAddress), 
-				data: [], 
-				gasLimit: 300000, 
-				value: EVM.Balance(attoflow: weiAmount)
-			)
-
-			log(result)
-			destroy acc
-		}
-	}`
-
-	eoaBytes, err := evmHexToCadenceBytes(strings.ReplaceAll(eoaAddress.String(), "0x", ""))
-	if err != nil {
-		return nil, err
+func defaultConfig(dbDir string, coaAddress sdk.Address, coaKey crypto.PrivateKey) *config.Config {
+	return &config.Config{
+		DatabaseDir:        dbDir,
+		AccessNodeGRPCHost: "localhost:3569", // emulator
+		RPCPort:            8545,
+		RPCHost:            "127.0.0.1",
+		FlowNetworkID:      "flow-emulator",
+		EVMNetworkID:       evmTypes.FlowEVMTestnetChainID,
+		Coinbase:           common.HexToAddress(eoaTestAddress),
+		COAAddress:         coaAddress,
+		COAKey:             coaKey,
+		CreateCOAResource:  false,
+		GasPrice:           new(big.Int).SetUint64(0),
+		LogLevel:           zerolog.DebugLevel,
+		LogWriter:          os.Stdout,
 	}
-
-	return flowSendTransaction(emu, code, weiAmount, flowAmount, eoaBytes)
 }
 
-// createCOA creates cadence owned account and stores it in the storage
-func createCOA(
-	emu emulator.Emulator,
-	flowAmount cadence.UFix64,
-	eoaAddress common.Address,
-) (*sdk.TransactionResult, error) {
-	wei := (uint)(flowAmount.ToGoValue().(uint64)*10000000000) - 1000000000000000000 // convert ufix to wei and subtract 1 flow
-	weiAmount := cadence.NewUInt(wei)
-	// create a new funded COA and fund an EOA to be used for in tests
+// runWeb3Test will run the test by name, the name
+// must match an existing js test file (without the extension)
+func runWeb3Test(t *testing.T, name string) {
+	stop := servicesSetup(t)
+	executeTest(t, name)
+	stop()
+}
+
+// servicesSetup starts up an emulator and the gateway
+// engines required for operation of the evm gateway.
+func servicesSetup(t *testing.T) func() {
+	srv, err := startEmulator(true)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	emu := srv.Emulator()
+	service := emu.ServiceKey()
+	cfg := defaultConfig(t.TempDir(), service.Address, service.PrivateKey)
+
+	go func() {
+		err = bootstrap.Start(ctx, cfg)
+		require.NoError(t, err)
+	}()
+
+	time.Sleep(1 * time.Second) // some time to startup
+	return func() {
+		cancel()
+		srv.Stop()
+	}
+}
+
+// executeTest will run the provided JS test file using mocha
+// and will report failure or success of the test.
+func executeTest(t *testing.T, testFile string) {
+	command := fmt.Sprintf("./web3js/node_modules/.bin/mocha ./web3js/%s.js", testFile)
+	parts := strings.Fields(command)
+
+	t.Run(testFile, func(t *testing.T) {
+		cmd := exec.Command(parts[0], parts[1:]...)
+		if cmd.Err != nil {
+			panic(cmd.Err)
+		}
+
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			var exitError *exec.ExitError
+			if errors.As(err, &exitError) {
+				if exitError.ExitCode() == 1 {
+					require.Fail(t, string(out))
+				}
+				t.Fatalf("unknown test issue: %s", err.Error())
+			}
+		}
+
+		t.Log(string(out))
+	})
+}
+
+// setupTestAccounts creates a service COA and stores it in storage as well as fund it,
+// it also funds an EOA test account.
+func setupTestAccounts(emu emulator.Emulator) error {
 	code := `
-	transaction(weiAmount: UInt, flowAmount: UFix64, eoaAddress: [UInt8; 20]) {
+	transaction(eoaAddress: [UInt8; 20]) {
 		let fundVault: @FlowToken.Vault
 		let auth: auth(Storage) &Account
 	
@@ -213,32 +252,39 @@ func createCOA(
 				from: /storage/flowTokenVault
 			) ?? panic("Could not borrow reference to the owner's Vault!")
 	
-			self.fundVault <- vaultRef.withdraw(amount: flowAmount) as! @FlowToken.Vault
+			self.fundVault <- vaultRef.withdraw(amount: 10.0) as! @FlowToken.Vault
 			self.auth = signer
 		}
 	
 		execute {
-			let acc <- EVM.createCadenceOwnedAccount()
-			acc.deposit(from: <-self.fundVault)
-
-			let result = acc.call(
+			let account <- EVM.createCadenceOwnedAccount()
+			account.deposit(from: <-self.fundVault)
+			
+			let weiAmount: UInt = 5000000000000000000 // 5 Flow
+			let result = account.call(
 				to: EVM.EVMAddress(bytes: eoaAddress), 
 				data: [], 
 				gasLimit: 300000, 
 				value: EVM.Balance(attoflow: weiAmount)
 			)
 
-			log(result)
-			destroy acc
+			self.auth.storage.save<@EVM.CadenceOwnedAccount>(<-account, to: StoragePath(identifier: "evm")!)
 		}
 	}`
 
-	eoaBytes, err := evmHexToCadenceBytes(strings.ReplaceAll(eoaAddress.String(), "0x", ""))
+	eoaBytes, err := evmHexToCadenceBytes(eoaTestAddress)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return flowSendTransaction(emu, code, weiAmount, flowAmount, eoaBytes)
+	res, err := flowSendTransaction(emu, code, eoaBytes)
+	if err != nil {
+		return err
+	}
+	if res.Error != nil {
+		return res.Error
+	}
+	return nil
 }
 
 // flowSendTransaction sends an evm transaction to the emulator, the code provided doesn't
@@ -383,6 +429,7 @@ func evmRunTransaction(emu emulator.Emulator, signedTx []byte) (*sdk.Transaction
 
 // evmHexToString takes an evm address as string and convert it to cadence byte array
 func evmHexToCadenceBytes(address string) (cadence.Array, error) {
+	address = strings.ReplaceAll(address, "0x", "")
 	data, err := hex.DecodeString(address)
 	if err != nil {
 		return cadence.NewArray(nil), err
