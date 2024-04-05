@@ -8,6 +8,12 @@ let eoaAccount = web3.eth.accounts.privateKeyToAccount("0xf6d5333177711e562cabf1
 let fundedAmount = 5.0
 let startBlockHeight = 3 // start block height after setup accounts
 
+it('get chain ID', async() => {
+    let chainID = await web3.eth.getChainId()
+    assert.isDefined(chainID)
+    assert.equal(chainID, 646n)
+})
+
 it('get block', async () => {
     let height = await web3.eth.getBlockNumber()
     assert.equal(height, startBlockHeight)
@@ -25,8 +31,8 @@ it('get block', async () => {
     let txCount = await web3.eth.getBlockTransactionCount(startBlockHeight)
     let uncleCount = await web3.eth.getBlockUncleCount(startBlockHeight)
 
-    assert.equal(txCount, 1)
-    assert.equal(uncleCount, 0)
+    assert.equal(txCount, 1n)
+    assert.equal(uncleCount, 0n)
 
     // get block transaction
     let tx = await web3.eth.getTransactionFromBlock(startBlockHeight, 0)
