@@ -8,7 +8,7 @@ const serviceEOA = "0xfacf71692421039876a5bb4f10ef7a439d8ef61e" // configured ac
 const successStatus = 1n
 
 exports.web3 = web3
-exports.eoaAccount = eoaAccount
+exports.eoa = eoaAccount
 exports.fundedAmount = fundedAmount
 exports.startBlockHeight = startBlockHeight
 exports.serviceEOA = serviceEOA
