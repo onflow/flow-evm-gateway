@@ -1,4 +1,3 @@
-const { Web3 } = require('web3')
 const web3Utils = require('web3-utils')
 const { assert } = require('chai')
 const conf = require('./config')

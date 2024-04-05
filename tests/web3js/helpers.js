@@ -1,5 +1,5 @@
 const fs = require("fs")
-const conf = require("config")
+const conf = require("./config")
 const web3 = conf.web3
 
 // deployContract deploys a contract by name, the contract files must be saved in
@@ -7,13 +7,13 @@ const web3 = conf.web3
 // the ABI file must be named {name}ABI.json and contain ABI definition for the contract
 // and bytecode file must be named {name}.byte and must contain compiled byte code of the contract.
 //
-// Returns the contract object as well as the hash of the transaction deploying the contract.
+// Returns the contract object as well as the receipt deploying the contract.
 async function deployContract(name) {
     const abi = require(`../fixtures/${name}ABI.json`)
-    const code = await fs.promises.readFile(`../fixtures/${name}.byte`, 'utf8')
-    const contract = new web3.eth.Contract(abi)
+    const code = await fs.promises.readFile(`${__dirname}/../fixtures/${name}.byte`, 'utf8')
+    const contractABI = new web3.eth.Contract(abi)
 
-    let data = contract
+    let data = contractABI
         .deploy({ data: `0x${code}` })
         .encodeABI()
 
@@ -24,10 +24,11 @@ async function deployContract(name) {
         gasPrice: '0',
     })
 
-    let hash = await web3.eth.sendSignedTransaction(signed.rawTransaction)
+    let receipt = await web3.eth.sendSignedTransaction(signed.rawTransaction)
 
     return {
-        contract, hash
+        contract: new web3.eth.Contract(abi, receipt.contractAddress),
+        receipt: receipt
     }
 }
 
