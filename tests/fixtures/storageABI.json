@@ -15,12 +15,24 @@
       },
       {
         "indexed": true,
-        "internalType": "uint256",
-        "name": "value",
-        "type": "uint256"
+        "internalType": "int256",
+        "name": "numA",
+        "type": "int256"
+      },
+      {
+        "indexed": true,
+        "internalType": "int256",
+        "name": "numB",
+        "type": "int256"
+      },
+      {
+        "indexed": false,
+        "internalType": "int256",
+        "name": "sum",
+        "type": "int256"
       }
     ],
-    "name": "NewStore",
+    "name": "Calculated",
     "type": "event"
   },
   {
@@ -46,6 +58,30 @@
     ],
     "name": "store",
     "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "int256",
+        "name": "A",
+        "type": "int256"
+      },
+      {
+        "internalType": "int256",
+        "name": "B",
+        "type": "int256"
+      }
+    ],
+    "name": "sum",
+    "outputs": [
+      {
+        "internalType": "int256",
+        "name": "",
+        "type": "int256"
+      }
+    ],
     "stateMutability": "nonpayable",
     "type": "function"
   }
