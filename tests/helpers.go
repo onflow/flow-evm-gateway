@@ -33,9 +33,7 @@ import (
 	"github.com/onflow/flow-emulator/emulator"
 	"github.com/onflow/flow-emulator/server"
 	sdk "github.com/onflow/flow-go-sdk"
-	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/onflow/flow-go-sdk/crypto"
-	broadcast "github.com/onflow/flow-go/engine"
 	evmEmulator "github.com/onflow/flow-go/fvm/evm/emulator"
 	"github.com/onflow/flow-go/fvm/evm/stdlib"
 	"github.com/onflow/flow-go/fvm/systemcontracts"
@@ -44,10 +42,7 @@ import (
 
 	"github.com/onflow/flow-evm-gateway/api"
 	"github.com/onflow/flow-evm-gateway/config"
-	"github.com/onflow/flow-evm-gateway/services/ingestion"
 	"github.com/onflow/flow-evm-gateway/services/logs"
-	"github.com/onflow/flow-evm-gateway/storage"
-	"github.com/onflow/flow-evm-gateway/storage/pebble"
 )
 
 var (
@@ -104,83 +99,6 @@ func startEmulator(createTestAccounts bool) (*server.EmulatorServer, error) {
 	return srv, nil
 }
 
-// startEventIngestionEngine will start up the sdkEvent engine with the grpc subscriber
-// listening for events.
-func startEventIngestionEngine(ctx context.Context, dbDir string) (
-	storage.BlockIndexer,
-	storage.ReceiptIndexer,
-	storage.TransactionIndexer,
-	error,
-) {
-	client, err := grpc.NewClient("localhost:3569")
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	subscriber := ingestion.NewRPCSubscriber(client)
-
-	log := logger.With().Str("component", "database").Logger()
-	db, err := pebble.New(dbDir, log)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	blocks := pebble.NewBlocks(db)
-	receipts := pebble.NewReceipts(db)
-	accounts := pebble.NewAccounts(db)
-	txs := pebble.NewTransactions(db)
-	blocksBroadcaster := broadcast.NewBroadcaster()
-	txBroadcaster := broadcast.NewBroadcaster()
-	logsBroadcaster := broadcast.NewBroadcaster()
-
-	err = blocks.InitHeights(config.EmulatorInitCadenceHeight)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	log = logger.With().Str("component", "ingestion").Logger()
-	engine := ingestion.NewEventIngestionEngine(
-		subscriber,
-		blocks,
-		receipts,
-		txs,
-		accounts,
-		blocksBroadcaster,
-		txBroadcaster,
-		logsBroadcaster,
-		log,
-	)
-
-	go func() {
-		err = engine.Run(ctx)
-		if err != nil {
-			logger.Error().Err(err).Msg("failed to start ingestion engine")
-			panic(err)
-		}
-	}()
-
-	<-engine.Ready() // wait for engine to be ready
-	return blocks, receipts, txs, err
-}
-
-func defaultConfig(dbDir string, coaAddress sdk.Address, coaKey crypto.PrivateKey) *config.Config {
-	return &config.Config{
-		DatabaseDir:        dbDir,
-		AccessNodeGRPCHost: "localhost:3569", // emulator
-		RPCPort:            8545,
-		RPCHost:            "127.0.0.1",
-		FlowNetworkID:      "flow-emulator",
-		EVMNetworkID:       evmTypes.FlowEVMTestnetChainID,
-		Coinbase:           common.HexToAddress(eoaTestAddress),
-		COAAddress:         coaAddress,
-		COAKey:             coaKey,
-		CreateCOAResource:  false,
-		GasPrice:           new(big.Int).SetUint64(0),
-		LogLevel:           zerolog.DebugLevel,
-		LogWriter:          os.Stdout,
-	}
-}
-
 // runWeb3Test will run the test by name, the name
 // must match an existing js test file (without the extension)
 func runWeb3Test(t *testing.T, name string) {
@@ -198,7 +116,23 @@ func servicesSetup(t *testing.T) func() {
 	ctx, cancel := context.WithCancel(context.Background())
 	emu := srv.Emulator()
 	service := emu.ServiceKey()
-	cfg := defaultConfig(t.TempDir(), service.Address, service.PrivateKey)
+
+	// default config
+	cfg := &config.Config{
+		DatabaseDir:        t.TempDir(),
+		AccessNodeGRPCHost: "localhost:3569", // emulator
+		RPCPort:            8545,
+		RPCHost:            "127.0.0.1",
+		FlowNetworkID:      "flow-emulator",
+		EVMNetworkID:       evmTypes.FlowEVMTestnetChainID,
+		Coinbase:           common.HexToAddress(eoaTestAddress),
+		COAAddress:         service.Address,
+		COAKey:             service.PrivateKey,
+		CreateCOAResource:  false,
+		GasPrice:           new(big.Int).SetUint64(0),
+		LogLevel:           zerolog.DebugLevel,
+		LogWriter:          os.Stdout,
+	}
 
 	go func() {
 		err = bootstrap.Start(ctx, cfg)
@@ -231,7 +165,7 @@ func executeTest(t *testing.T, testFile string) {
 				if exitError.ExitCode() == 1 {
 					require.Fail(t, string(out))
 				}
-				t.Fatalf("unknown test issue: %s", err.Error())
+				t.Fatalf("unknown test issue: %s, output: %s", err.Error(), string(out))
 			}
 		}
 
