@@ -1,14 +1,8 @@
 const { Web3 } = require('web3')
 const web3Utils = require('web3-utils')
 const { assert } = require('chai')
-
-const web3 = new Web3("http://localhost:8545")
-
-const eoaAccount = web3.eth.accounts.privateKeyToAccount("0xf6d5333177711e562cabf1f311916196ee6ffc2a07966d9d4628094073bd5442")
-const fundedAmount = 5.0
-const startBlockHeight = 3 // start block height after setup accounts
-const serviceEOA = "0xfacf71692421039876a5bb4f10ef7a439d8ef61e" // configured account as gw service
-const successStatus = 1n
+const conf = require('./config')
+const web3 = conf.web3
 
 it('get chain ID', async() => {
     let chainID = await web3.eth.getChainId()
@@ -18,7 +12,7 @@ it('get chain ID', async() => {
 
 it('get block', async () => {
     let height = await web3.eth.getBlockNumber()
-    assert.equal(height, startBlockHeight)
+    assert.equal(height, conf.startBlockHeight)
 
     let block = await web3.eth.getBlock(height)
     assert.notDeepEqual(block, {})
@@ -30,43 +24,43 @@ it('get block', async () => {
     assert.deepEqual(block, blockHash)
 
     // get block count and uncle count
-    let txCount = await web3.eth.getBlockTransactionCount(startBlockHeight)
-    let uncleCount = await web3.eth.getBlockUncleCount(startBlockHeight)
+    let txCount = await web3.eth.getBlockTransactionCount(conf.startBlockHeight)
+    let uncleCount = await web3.eth.getBlockUncleCount(conf.startBlockHeight)
 
     assert.equal(txCount, 1n)
     assert.equal(uncleCount, 0n)
 
     // get block transaction
-    let tx = await web3.eth.getTransactionFromBlock(startBlockHeight, 0)
+    let tx = await web3.eth.getTransactionFromBlock(conf.startBlockHeight, 0)
     assert.isNotNull(tx)
     assert.equal(tx.blockNumber, block.number)
     assert.equal(tx.blockHash, block.hash)
     assert.isString(tx.hash)
 
     // not existing transaction
-    let no = await web3.eth.getTransactionFromBlock(startBlockHeight, 1)
+    let no = await web3.eth.getTransactionFromBlock(conf.startBlockHeight, 1)
     assert.isNull(no)
 })
 
 it('get balance', async() => {
-    let wei = await web3.eth.getBalance(eoaAccount.address)
+    let wei = await web3.eth.getBalance(conf.eoaAccount.address)
     assert.isNotNull(wei)
 
     let flow = web3Utils.fromWei(wei, 'ether')
-    assert.equal(parseFloat(flow), fundedAmount)
+    assert.equal(parseFloat(flow), conf.fundedAmount)
 
-    let weiAtBlock = await web3.eth.getBalance(eoaAccount.address, startBlockHeight)
+    let weiAtBlock = await web3.eth.getBalance(conf.eoaAccount.address, conf.startBlockHeight)
     assert.equal(wei, weiAtBlock)
 })
 
 it('get code', async() => {
-    let code = await web3.eth.getCode(eoaAccount.address)
+    let code = await web3.eth.getCode(conf.eoaAccount.address)
     assert.equal(code, "0x") // empty
 })
 
 it('get coinbase', async() => {
     let coinbase = await web3.eth.getCoinbase()
-    assert.equal(coinbase, serviceEOA) // e2e configured account
+    assert.equal(coinbase, conf.serviceEOA) // e2e configured account
 })
 
 it('get gas price', async() => {
@@ -75,13 +69,13 @@ it('get gas price', async() => {
 })
 
 it('get transaction', async() => {
-    let blockTx = await web3.eth.getTransactionFromBlock(startBlockHeight, 0)
+    let blockTx = await web3.eth.getTransactionFromBlock(conf.startBlockHeight, 0)
     assert.isNotNull(blockTx)
 
     let tx = await web3.eth.getTransaction(blockTx.hash)
     assert.deepEqual(blockTx, tx)
     assert.isString(tx.hash)
-    assert.equal(tx.blockNumber, startBlockHeight)
+    assert.equal(tx.blockNumber, conf.startBlockHeight)
     assert.isAbove(parseInt(tx.gas), 1)
     assert.isNotEmpty(tx.from)
     assert.isNotEmpty(tx.r)
@@ -91,12 +85,12 @@ it('get transaction', async() => {
     let rcp = await web3.eth.getTransactionReceipt(tx.hash)
     assert.isNotEmpty(rcp)
     assert.equal(rcp.blockHash, blockTx.blockHash)
-    assert.equal(rcp.blockNumber, startBlockHeight)
+    assert.equal(rcp.blockNumber, conf.startBlockHeight)
     assert.equal(rcp.from, tx.from.toLowerCase()) // todo checksum format
     assert.equal(rcp.to, tx.to.toLowerCase()) // todo checksum format
     assert.equal(rcp.cumulativeGasUsed, tx.gas) // todo check
     assert.equal(rcp.transactionHash, tx.hash)
-    assert.equal(rcp.status, successStatus)
+    assert.equal(rcp.status, conf.successStatus)
     assert.equal(rcp.gasUsed, tx.gas)
 })
 
