@@ -5,12 +5,20 @@ Web3.js client is used to ensure 100% compliance with the JSON-RPC API specifica
 and it allows us to detect any mistakes in how the data is returned from the API.
 
 ### Running Tests
+**Locally**
+
 Running the test is done simply by running the test file:
 ```
 go test ./e2e_web3js_test.go
 ```
 
-#### Adding new E2E tests
+**Running against deployed EVM gateway**
+
+A nice feature of e2e web3.js tests is that they can also be run against a deployed 
+evm gateway. You just need to change the host used in the JS tests.
+
+
+### Adding new E2E tests
 Adding a new test is done simply by adding a new JS test file to the web3js folder and then 
 adding execution of that test in the e2e_web3js_test.go. 
 
