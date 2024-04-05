@@ -99,3 +99,10 @@ it('get transaction', async() => {
     assert.equal(rcp.status, successStatus)
     assert.equal(rcp.gasUsed, tx.gas)
 })
+
+it('get status', async() => {
+    //let mining = await web3.eth.isMining() todo
+    let sync = await web3.eth.isSyncing()
+    //assert.isFalse(mining)
+    assert.isFalse(sync)
+})
