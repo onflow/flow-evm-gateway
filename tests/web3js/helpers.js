@@ -1,36 +1,28 @@
-const { Web3 } = require('web3')
-const web3Utils = require('web3-utils')
-const { assert } = require('chai')
 const fs = require("fs")
-
-const web3 = new Web3("http://localhost:8545")
-
-const eoaAccount = web3.eth.accounts.privateKeyToAccount("0xf6d5333177711e562cabf1f311916196ee6ffc2a07966d9d4628094073bd5442")
-const fundedAmount = 5.0
-const startBlockHeight = 3 // start block height after setup accounts
-const serviceEOA = "0xfacf71692421039876a5bb4f10ef7a439d8ef61e" // configured account as gw service
-const successStatus = 1n
+const conf = require("config")
+const web3 = conf.web3
 
 // deployContract deploys a contract by name, the contract files must be saved in
 // fixtures folder, each contract must have two files: ABI and bytecode,
 // the ABI file must be named {name}ABI.json and contain ABI definition for the contract
 // and bytecode file must be named {name}.byte and must contain compiled byte code of the contract.
 async function deployContract(name) {
-    const storageABI = require(`../fixtures/${name}ABI.json`)
-    let storageCode = await fs.promises.readFile(`../fixtures/${name}.byte`, 'utf8')
+    const abi = require(`../fixtures/${name}ABI.json`)
+    const code = await fs.promises.readFile(`../fixtures/${name}.byte`, 'utf8')
+    const contract = new web3.eth.Contract(abi)
 
-    let counter = new web3.eth.Contract(storageABI)
-
-    let data = counter
-        .deploy({ data: `0x${storageCode}` })
+    let data = contract
+        .deploy({ data: `0x${code}` })
         .encodeABI()
 
-    let signed = await userAccount.signTransaction({
-        from: userAccount.address,
+    let signed = await conf.eoa.signTransaction({
+        from: conf.eoa.address,
         data: data,
         value: '0',
         gasPrice: '0',
     })
 
-    return web3.eth.sendSignedTransaction(signed.rawTransaction)
+    await web3.eth.sendSignedTransaction(signed.rawTransaction)
+
+    return contract
 }
