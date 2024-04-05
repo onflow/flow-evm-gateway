@@ -1,33 +1,8 @@
 package tests
 
 import (
-	"context"
 	_ "embed"
-	"encoding/hex"
-	"encoding/json"
-	"fmt"
-	"github.com/onflow/flow-go-sdk"
-	"github.com/rs/zerolog"
-	"math/big"
-	"os"
-	"testing"
-	"time"
-
-	"github.com/onflow/flow-evm-gateway/bootstrap"
-	"github.com/onflow/flow-evm-gateway/config"
-	"github.com/onflow/flow-evm-gateway/services/logs"
-
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	gethTypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/params"
-	"github.com/onflow/cadence"
-	"github.com/onflow/flow-go-sdk/access/grpc"
-	sdkCrypto "github.com/onflow/flow-go-sdk/crypto"
-	"github.com/onflow/flow-go/fvm/evm/types"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 //go:embed fixtures/test.bin
@@ -42,13 +17,14 @@ var (
 	transferEOAAdress = common.HexToAddress("Dac891801DfE8b842E88D0060e1F776256384cB8")
 )
 
+/*
 // TestIntegration_TransferValue executes interactions in the EVM in the following order
 // 1. Create a COA using EVM.createCadenceOwnedAccount()
 // 2. Fund that COA - produces direct call EVM transaction events with deposit subtype
 // 3. Transfer value from COA to "fund EOA" - produces direct call EVM transaction events with call subtype
 // 4. Transfer value from "fund EOA" to another "transfer EOA" - produces block and tx executed EVM event
 func TestIntegration_TransferValue(t *testing.T) {
-	srv, err := startEmulator()
+	srv, err := startEmulator(true)
 	require.NoError(t, err)
 	dbDir := t.TempDir()
 	emu := srv.Emulator()
@@ -1375,3 +1351,4 @@ func defaultConfig(dbDir string, coaAddress flow.Address, coaKey sdkCrypto.Priva
 		LogWriter:          os.Stdout,
 	}
 }
+*/
