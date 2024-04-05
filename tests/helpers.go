@@ -48,7 +48,7 @@ import (
 var (
 	logger    = zerolog.New(os.Stdout)
 	sc        = systemcontracts.SystemContractsForChain(flow.Emulator)
-	logOutput = false
+	logOutput = true
 )
 
 const (
@@ -135,7 +135,7 @@ func servicesSetup(t *testing.T) func() {
 		COAKey:             service.PrivateKey,
 		CreateCOAResource:  false,
 		GasPrice:           new(big.Int).SetUint64(0),
-		LogLevel:           zerolog.ErrorLevel, // todo change
+		LogLevel:           zerolog.DebugLevel,
 		LogWriter:          os.Stdout,
 	}
 

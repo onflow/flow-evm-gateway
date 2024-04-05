@@ -17,7 +17,11 @@ func TestWeb3_E2E(t *testing.T) {
 		runWeb3Test(t, "eth_transfer_between_eoa_accounts_test")
 	})
 
-	t.Run("emit logs from the contract and retrieve them using different filters", func(t *testing.T) {
+	t.Run("logs emitting and filtering", func(t *testing.T) {
 		runWeb3Test(t, "eth_logs_filtering_test")
+	})
+
+	t.Run("logs streaming and subscription", func(t *testing.T) {
+		runWeb3Test(t, "eth_logs_streaming_test")
 	})
 }
