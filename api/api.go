@@ -732,6 +732,13 @@ func (b *BlockChainAPI) MaxPriorityFeePerGas(ctx context.Context) (*hexutil.Big,
 	return nil, errs.ErrNotSupported
 }
 
+// Mining returns true if client is actively mining new blocks.
+// This can only return true for proof-of-work networks and may
+// not be available in some clients since The Merge.
+func (b *BlockChainAPI) Mining() bool {
+	return false
+}
+
 func (b *BlockChainAPI) fetchBlockTransactions(
 	ctx context.Context,
 	block *evmTypes.Block,
