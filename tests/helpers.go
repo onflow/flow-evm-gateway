@@ -137,6 +137,8 @@ func servicesSetup(t *testing.T) func() {
 		GasPrice:           new(big.Int).SetUint64(0),
 		LogLevel:           zerolog.DebugLevel,
 		LogWriter:          os.Stdout,
+		StreamTimeout:      time.Second * 30,
+		StreamLimit:        10,
 	}
 
 	if !logOutput {
@@ -166,7 +168,6 @@ func executeTest(t *testing.T, testFile string) {
 		if cmd.Err != nil {
 			panic(cmd.Err)
 		}
-
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			var exitError *exec.ExitError
@@ -177,7 +178,6 @@ func executeTest(t *testing.T, testFile string) {
 				t.Fatalf("unknown test issue: %s, output: %s", err.Error(), string(out))
 			}
 		}
-
 		t.Log(string(out))
 	})
 }
