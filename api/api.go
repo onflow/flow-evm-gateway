@@ -621,7 +621,7 @@ func (b *BlockChainAPI) NewPendingTransactionFilter(fullTx *bool) rpc.ID {
 
 // Accounts returns the collection of accounts this node manages.
 func (b *BlockChainAPI) Accounts() []common.Address {
-	return nil
+	return []common.Address{}
 }
 
 // GetUncleByBlockHashAndIndex returns the uncle block for the given block hash and index.
