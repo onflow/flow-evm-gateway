@@ -120,7 +120,7 @@ func (s *StreamAPI) newSubscription(
 
 // NewHeads send a notification each time a new block is appended to the chain.
 func (s *StreamAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
-	return s.newSubscription(
+	sub, err := s.newSubscription(
 		ctx,
 		s.blocksBroadcaster,
 		func(ctx context.Context, height uint64) (interface{}, error) {
@@ -145,13 +145,21 @@ func (s *StreamAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
 				Transactions: block.TransactionHashes}, nil
 		},
 	)
+	l := s.logger.With().Str("subscription-id", string(sub.ID)).Logger()
+	if err != nil {
+		l.Error().Err(err).Msg("error creating a new heads subscription")
+		return nil, err
+	}
+
+	l.Info().Msg("new heads subscription created")
+	return sub, nil
 }
 
 // NewPendingTransactions creates a subscription that is triggered each time a
 // transaction enters the transaction pool. If fullTx is true the full tx is
 // sent to the client, otherwise the hash is sent.
 func (s *StreamAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) (*rpc.Subscription, error) {
-	return s.newSubscription(
+	sub, err := s.newSubscription(
 		ctx,
 		s.transactionsBroadcaster,
 		func(ctx context.Context, height uint64) (interface{}, error) {
@@ -179,6 +187,14 @@ func (s *StreamAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) (*
 			return NewTransaction(tx, *rcp)
 		},
 	)
+	l := s.logger.With().Str("subscription-id", string(sub.ID)).Logger()
+	if err != nil {
+		l.Error().Err(err).Msg("error creating a new pending transactions subscription")
+		return nil, err
+	}
+
+	l.Info().Msg("new pending transactions subscription created")
+	return sub, nil
 }
 
 // Logs creates a subscription that fires for all new log that match the given filter criteria.
@@ -190,7 +206,7 @@ func (s *StreamAPI) Logs(ctx context.Context, criteria filters.FilterCriteria) (
 		return nil, errExceedMaxAddresses
 	}
 
-	return s.newSubscription(
+	sub, err := s.newSubscription(
 		ctx,
 		s.logsBroadcaster,
 		func(ctx context.Context, height uint64) (interface{}, error) {
@@ -212,4 +228,12 @@ func (s *StreamAPI) Logs(ctx context.Context, criteria filters.FilterCriteria) (
 			return logs.NewIDFilter(id, f, s.blocks, s.receipts).Match()
 		},
 	)
+	l := s.logger.With().Str("subscription-id", string(sub.ID)).Logger()
+	if err != nil {
+		l.Error().Err(err).Msg("failed creating logs subscription")
+		return nil, err
+	}
+
+	l.Error().Err(err).Msg("new logs subscription created")
+	return sub, nil
 }
