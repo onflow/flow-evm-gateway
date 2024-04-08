@@ -739,6 +739,14 @@ func (b *BlockChainAPI) Mining() bool {
 	return false
 }
 
+// Hashrate returns the number of hashes per second that the
+// node is mining with.
+// This can only return true for proof-of-work networks and
+// may not be available in some clients since The Merge.
+func (b *BlockChainAPI) Hashrate() hexutil.Uint64 {
+	return hexutil.Uint64(0)
+}
+
 func (b *BlockChainAPI) fetchBlockTransactions(
 	ctx context.Context,
 	block *evmTypes.Block,
