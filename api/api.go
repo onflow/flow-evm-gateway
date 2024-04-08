@@ -621,7 +621,7 @@ func (b *BlockChainAPI) NewPendingTransactionFilter(fullTx *bool) rpc.ID {
 
 // Accounts returns the collection of accounts this node manages.
 func (b *BlockChainAPI) Accounts() []common.Address {
-	return nil
+	return []common.Address{}
 }
 
 // GetUncleByBlockHashAndIndex returns the uncle block for the given block hash and index.
@@ -730,6 +730,21 @@ func (b *BlockChainAPI) FeeHistory(
 // MaxPriorityFeePerGas returns a suggestion for a gas tip cap for dynamic fee transactions.
 func (b *BlockChainAPI) MaxPriorityFeePerGas(ctx context.Context) (*hexutil.Big, error) {
 	return nil, errs.ErrNotSupported
+}
+
+// Mining returns true if client is actively mining new blocks.
+// This can only return true for proof-of-work networks and may
+// not be available in some clients since The Merge.
+func (b *BlockChainAPI) Mining() bool {
+	return false
+}
+
+// Hashrate returns the number of hashes per second that the
+// node is mining with.
+// This can only return true for proof-of-work networks and
+// may not be available in some clients since The Merge.
+func (b *BlockChainAPI) Hashrate() hexutil.Uint64 {
+	return hexutil.Uint64(0)
 }
 
 func (b *BlockChainAPI) fetchBlockTransactions(
