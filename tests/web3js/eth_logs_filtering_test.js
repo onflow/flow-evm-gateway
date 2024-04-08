@@ -17,18 +17,14 @@ it('emit logs and retrieve them using different filters', async() => {
     ];
 
     for (const { A, B } of testValues) {
-        const txObject = {
+        let res = await helpers.signAndSend({
             from: conf.eoa.address,
             to: contractAddress,
             data: deployed.contract.methods.sum(A, B).encodeABI(),
             gas: 1000000,
             gasPrice: 0
-        }
-
-        const signedTx = await conf.eoa.signTransaction(txObject)
-        // send transaction and make sure interaction was success
-        const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction)
-        assert.equal(receipt.status, conf.successStatus)
+        })
+        assert.equal(res.receipt.status, conf.successStatus)
 
         let latest = await web3.eth.getBlockNumber()
 

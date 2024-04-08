@@ -47,7 +47,7 @@ it('streaming of logs using filters', async(done) => {
 
     // produce events
     for (const { A, B } of testValues) {
-        let res = helpers.signAndSend({
+        let res = await helpers.signAndSend({
             from: conf.eoa.address,
             to: contractAddress,
             data: deployed.contract.methods.sum(A, B).encodeABI(),

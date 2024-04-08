@@ -16,19 +16,16 @@ it('transfer flow between two EOA accounts', async() => {
     assert.equal(senderBalance, utils.toWei(conf.fundedAmount, "ether"))
 
     let transferValue = utils.toWei("0.5", "ether")
-    let transfer = await conf.eoa.signTransaction({
+    let transfer = await helpers.signAndSend({
         from: conf.eoa.address,
         to: receiver.address,
         value: transferValue,
         gasPrice: '0',
         gasLimit: 55000,
     })
-
-    // make sure receipt is correct
-    let receipt = await web3.eth.sendSignedTransaction(transfer.rawTransaction)
-    assert.equal(receipt.status, conf.successStatus)
-    assert.equal(receipt.from, conf.eoa.address.toLowerCase()) // todo checksum
-    assert.equal(receipt.to, receiver.address.toLowerCase()) // todo checksum
+    assert.equal(transfer.receipt.status, conf.successStatus)
+    assert.equal(transfer.receipt.from, conf.eoa.address.toLowerCase()) // todo checksum
+    assert.equal(transfer.receipt.to, receiver.address.toLowerCase()) // todo checksum
 
     // check balance was moved
     receiverWei = await web3.eth.getBalance(receiver.address)

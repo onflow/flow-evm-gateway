@@ -40,16 +40,14 @@ it('deploy contract and interact', async() => {
     let newValue = 100
     let updateData = deployed.contract.methods.store(newValue).encodeABI()
     // store a value in the contract
-    let signed = await conf.eoa.signTransaction({
+    let res = await helpers.signAndSend({
         from: conf.eoa.address,
         to: contractAddress,
         data: updateData,
         value: '0',
         gasPrice: '0',
     })
-
-    let updateReceipt = await web3.eth.sendSignedTransaction(signed.rawTransaction)
-    assert.equal(updateReceipt.status, conf.successStatus)
+    assert.equal(res.receipt.status, conf.successStatus)
 
     // check the new value on contract
     result = await deployed.contract.methods.retrieve().call()
