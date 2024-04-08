@@ -1,5 +1,6 @@
 const fs = require("fs")
 const conf = require("./config")
+const {assert} = require("chai");
 const web3 = conf.web3
 
 // deployContract deploys a contract by name, the contract files must be saved in
@@ -32,4 +33,18 @@ async function deployContract(name) {
     }
 }
 
+// signAndSend signs a transactions and submits it to the network,
+// returning a transaction hash and receipt
+async function signAndSend(tx) {
+    const signedTx = await conf.eoa.signTransaction(txObject)
+    // send transaction and make sure interaction was success
+    const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction)
+
+    return {
+        hash: signedTx.transactionHash,
+        receipt: receipt,
+    }
+}
+
+exports.signAndSend = signAndSend
 exports.deployContract = deployContract
