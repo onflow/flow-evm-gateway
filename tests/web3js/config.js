@@ -2,7 +2,7 @@ const { Web3 } = require('web3')
 
 const web3 = new Web3("http://localhost:8545")
 
-exports = {
+module.exports = {
     web3: web3,
     web3WS: new Web3("ws://localhost:8545"),
     eoa: web3.eth.accounts.privateKeyToAccount("0xf6d5333177711e562cabf1f311916196ee6ffc2a07966d9d4628094073bd5442"),
