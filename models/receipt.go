@@ -111,13 +111,19 @@ func MarshalReceipt(
 		return map[string]interface{}{}, err
 	}
 
+	var to *string
+	if tx.To() != nil {
+		hexAddr := tx.To().Hex()
+		to = &hexAddr
+	}
+
 	fields := map[string]interface{}{
 		"blockHash":         receipt.BlockHash,
 		"blockNumber":       hexutil.Uint64(receipt.BlockNumber.Uint64()),
 		"transactionHash":   txHash,
 		"transactionIndex":  hexutil.Uint64(receipt.TransactionIndex),
-		"from":              from,
-		"to":                tx.To(),
+		"from":              from.Hex(),
+		"to":                to,
 		"gasUsed":           hexutil.Uint64(receipt.GasUsed),
 		"cumulativeGasUsed": hexutil.Uint64(receipt.CumulativeGasUsed),
 		"contractAddress":   nil,
@@ -140,7 +146,7 @@ func MarshalReceipt(
 
 	// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
 	if receipt.ContractAddress != (common.Address{}) {
-		fields["contractAddress"] = receipt.ContractAddress
+		fields["contractAddress"] = receipt.ContractAddress.Hex()
 	}
 
 	return fields, nil
