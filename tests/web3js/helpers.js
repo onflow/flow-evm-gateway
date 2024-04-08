@@ -36,7 +36,7 @@ async function deployContract(name) {
 // signAndSend signs a transactions and submits it to the network,
 // returning a transaction hash and receipt
 async function signAndSend(tx) {
-    const signedTx = await conf.eoa.signTransaction(txObject)
+    const signedTx = await conf.eoa.signTransaction(tx)
     // send transaction and make sure interaction was success
     const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction)
 
