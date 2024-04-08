@@ -2,9 +2,12 @@ const utils = require('web3-utils')
 const { assert } = require('chai')
 const conf = require('./config')
 const helpers = require('./helpers')
+const {Web3} = require("web3");
+const {startBlockHeight} = require("./config");
+const {waitWithTimeout, rejectIfConditionAtInterval} = require("web3-utils");
 const web3 = conf.web3
 
-it('streaming of logs using filters', async(done) => {
+it('streaming of logs using filters', async() => {
     let deployed = await helpers.deployContract("storage")
     let contractAddress = deployed.receipt.contractAddress
 
@@ -43,7 +46,35 @@ it('streaming of logs using filters', async(done) => {
     })
      */
 
+    let ws = new Web3("ws://localhost:8545")
 
+    // get all the new blocks
+    let doneBlocks = new Promise(async (res, rej) => {
+        let eventCount = 0
+        let sub = await ws.eth.subscribe('newBlockHeaders')
+        sub.on('data', async block => {
+            // todo assert
+
+            if (++eventCount === testValues.length) {
+                await sub.unsubscribe()
+                res()
+            }
+        })
+    })
+
+    // get all pending transactions
+    let doneTxs = new Promise(async (res, rej) => {
+        let eventCount = 0
+        let sub = await ws.eth.subscribe('pendingTransactions')
+        sub.on('data', async tx => {
+            console.log("TX", tx)
+
+            if (++eventCount === testValues.length) {
+                await sub.unsubscribe()
+                res()
+            }
+        })
+    })
 
     // produce events
     for (const { A, B } of testValues) {
@@ -57,4 +88,10 @@ it('streaming of logs using filters', async(done) => {
         assert.equal(res.receipt.status, conf.successStatus)
     }
 
-}).timeout(10*1000)
+    // todo the problem is transactions can be ingested before blocks events, which mean the tx event can be broadcasted and when block is fetched at that height it doesn't yet exists in db
+
+    // wait for all events to be received
+    await doneTxs
+    await doneBlocks
+
+}).timeout(15*1000)
