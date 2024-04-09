@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go/fvm/evm/types"
 
 	"github.com/onflow/flow-evm-gateway/models"
@@ -106,7 +107,7 @@ func (e *Engine) Run(ctx context.Context) error {
 				return models.ErrDisconnected
 			}
 
-			err = e.processEvents(models.NewCadenceEvents(blockEvents))
+			err = e.processEvents(blockEvents)
 			if err != nil {
 				e.log.Error().Err(err).Msg("failed to process EVM events")
 				return err
@@ -127,11 +128,24 @@ func (e *Engine) Run(ctx context.Context) error {
 }
 
 // processEvents converts the events to block and transactions and indexes them.
-func (e *Engine) processEvents(events *models.CadenceEvents) error {
+//
+// BlockEvents are received by the access node API and contain Cadence height (always a single Flow block),
+// and a slice of events. In our case events are EVM events that can contain 0 or multiple EVM blocks and
+// 0 or multiple EVM transactions. The case where we have 0 blocks and transactions is a special heartbeat
+// event that is emitted if there are no new EVM events for a longer period of time
+// (configurable on AN normally a couple of seconds).
+//
+// The values for events payloads are defined in flow-go:
+// https://github.com/onflow/flow-go/blob/master/fvm/evm/types/events.go
+//
+// Any error is unexpected and fatal.
+func (e *Engine) processEvents(blockEvents flow.BlockEvents) error {
 	e.log.Debug().
-		Uint64("cadence-height", events.CadenceHeight()).
-		Int("cadence-event-length", events.Length()).
+		Uint64("cadence-height", blockEvents.Height).
+		Int("cadence-event-length", len(blockEvents.Events)).
 		Msg("received new cadence evm events")
+
+	events := models.NewCadenceEvents(blockEvents)
 
 	// this is an optimization, because if there is a block event in batch, it will internally update latest height
 	// otherwise we still want to update it explicitly, so we don't have to reindex in case of a restart
