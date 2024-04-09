@@ -5,12 +5,12 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/onflow/flow-go/engine"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/onflow/flow-go-sdk"
-	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/storage"
+	"github.com/onflow/flow-go-sdk"
+	"github.com/onflow/flow-go/engine"
+	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/rs/zerolog"
 )
 

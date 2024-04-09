@@ -227,16 +227,16 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		require.NoError(t, err)
 
 		engine := NewEventIngestionEngine(
-		subscriber,
-		blocks,
-		receipts,
-		transactions,
-		accounts,
-		broadcast.NewBroadcaster(),
-		broadcast.NewBroadcaster(),
-		broadcast.NewBroadcaster(),
-		zerolog.Nop(),
-	)
+			subscriber,
+			blocks,
+			receipts,
+			transactions,
+			accounts,
+			broadcast.NewBroadcaster(),
+			broadcast.NewBroadcaster(),
+			broadcast.NewBroadcaster(),
+			zerolog.Nop(),
+		)
 
 		done := make(chan struct{})
 		go func() {
@@ -323,7 +323,17 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		blockCdc, _, blockEvent, err := newBlock(nextHeight)
 		require.NoError(t, err)
 
-		engine := NewEventIngestionEngine(subscriber, blocks, receipts, transactions, accounts, zerolog.Nop())
+		engine := NewEventIngestionEngine(
+			subscriber,
+			blocks,
+			receipts,
+			transactions,
+			accounts,
+			broadcast.NewBroadcaster(),
+			broadcast.NewBroadcaster(),
+			broadcast.NewBroadcaster(),
+			zerolog.Nop(),
+		)
 
 		done := make(chan struct{})
 		go func() {
@@ -404,7 +414,17 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			}).
 			Once()
 
-		engine := NewEventIngestionEngine(subscriber, blocks, receipts, transactions, accounts, zerolog.Nop())
+		engine := NewEventIngestionEngine(
+			subscriber,
+			blocks,
+			receipts,
+			transactions,
+			accounts,
+			broadcast.NewBroadcaster(),
+			broadcast.NewBroadcaster(),
+			broadcast.NewBroadcaster(),
+			zerolog.Nop(),
+		)
 
 		done := make(chan struct{})
 		go func() {
