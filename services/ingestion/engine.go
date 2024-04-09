@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	gethTypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/onflow/flow-go/fvm/evm/types"
 
-	"github.com/onflow/cadence"
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/storage"
-	"github.com/onflow/flow-go-sdk"
 	"github.com/rs/zerolog"
 )
 
@@ -95,7 +95,7 @@ func (e *Engine) Run(ctx context.Context) error {
 				return models.ErrDisconnected
 			}
 
-			err = e.processEvents(blockEvents)
+			err = e.processEvents(models.NewCadenceEvents(blockEvents))
 			if err != nil {
 				e.log.Error().Err(err).Msg("failed to process EVM events")
 				return err
@@ -115,55 +115,54 @@ func (e *Engine) Run(ctx context.Context) error {
 	}
 }
 
-// processEvents iterates all the events and decides based on the type how to process them.
-func (e *Engine) processEvents(events flow.BlockEvents) error {
+// processEvents converts the events to block and transactions and indexes them.
+func (e *Engine) processEvents(events *models.CadenceEvents) error {
 	e.log.Debug().
-		Uint64("cadence-height", events.Height).
-		Int("cadence-event-length", len(events.Events)).
+		Uint64("cadence-height", events.CadenceHeight()).
+		Int("cadence-event-length", events.Length()).
 		Msg("received new cadence evm events")
-
-	blockEvent := false
-	for _, event := range events.Events {
-		var err error
-		switch {
-		case models.IsBlockExecutedEvent(event.Value):
-			err = e.processBlockEvent(events.Height, event.Value)
-			blockEvent = true
-		case models.IsTransactionExecutedEvent(event.Value):
-			err = e.processTransactionEvent(event.Value)
-		default:
-			return fmt.Errorf("invalid event type") // should never happen
-		}
-
-		if err != nil {
-			return fmt.Errorf("failed to process event: %w", err)
-		}
-	}
 
 	// this is an optimization, because if there is a block event in batch, it will internally update latest height
 	// otherwise we still want to update it explicitly, so we don't have to reindex in case of a restart
-	if !blockEvent {
-		if err := e.blocks.SetLatestCadenceHeight(events.Height); err != nil {
+	if events.Empty() {
+		if err := e.blocks.SetLatestCadenceHeight(events.CadenceHeight()); err != nil {
 			return fmt.Errorf("failed to update to latest cadence height during events ingestion: %w", err)
+		}
+	}
+
+	// first we index the evm block
+	block, err := events.Block()
+	if err != nil {
+		return err
+	}
+	if err := e.indexBlock(events.CadenceHeight(), block); err != nil {
+		return err
+	}
+
+	txs, receipts, err := events.Transactions()
+	if err != nil {
+		return err
+	}
+	for i, tx := range txs {
+		if err := e.indexTransaction(tx, receipts[i]); err != nil {
+			return err
 		}
 	}
 
 	return nil
 }
 
-func (e *Engine) processBlockEvent(cadenceHeight uint64, event cadence.Event) error {
-	block, err := models.DecodeBlock(event)
-	if err != nil {
-		return fmt.Errorf("could not decode block event: %w", err)
+func (e *Engine) indexBlock(cadenceHeight uint64, block *types.Block) error {
+	if block == nil { // safety check shouldn't happen
+		return fmt.Errorf("can't process empty block")
 	}
-
 	// only init latest height if not set
 	if e.evmLastHeight == nil {
 		e.evmLastHeight = models.NewSequentialHeight(block.Height)
 	}
 
 	// make sure the latest height is increasing sequentially or is same as latest
-	if err = e.evmLastHeight.Increment(block.Height); err != nil {
+	if err := e.evmLastHeight.Increment(block.Height); err != nil {
 		return fmt.Errorf("invalid block height, expected %d, got %d: %w", e.evmLastHeight.Load(), block.Height, err)
 	}
 
@@ -178,17 +177,10 @@ func (e *Engine) processBlockEvent(cadenceHeight uint64, event cadence.Event) er
 	return e.blocks.Store(cadenceHeight, block)
 }
 
-func (e *Engine) processTransactionEvent(event cadence.Event) error {
-	tx, err := models.DecodeTransaction(event)
-	if err != nil {
-		return fmt.Errorf("could not decode transaction event: %w", err)
+func (e *Engine) indexTransaction(tx models.Transaction, receipt *gethTypes.Receipt) error {
+	if tx == nil || receipt == nil { // safety check shouldn't happen
+		return fmt.Errorf("can't process empty tx or receipt")
 	}
-
-	receipt, err := models.DecodeReceipt(event)
-	if err != nil {
-		return fmt.Errorf("failed to decode receipt: %w", err)
-	}
-
 	// TODO(m-Peter): Remove the error return value once flow-go is updated
 	txHash, err := tx.Hash()
 	if err != nil {
@@ -198,6 +190,7 @@ func (e *Engine) processTransactionEvent(event cadence.Event) error {
 	e.log.Info().
 		Str("contract-address", receipt.ContractAddress.String()).
 		Int("log-count", len(receipt.Logs)).
+		Uint64("evm-height", receipt.BlockNumber.Uint64()).
 		Str("receipt-tx-hash", receipt.TxHash.String()).
 		Str("tx-hash", txHash.String()).
 		Msg("ingesting new transaction executed event")
