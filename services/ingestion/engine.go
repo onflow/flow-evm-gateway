@@ -185,6 +185,7 @@ func (e *Engine) processBlockEvent(cadenceHeight uint64, event cadence.Event) er
 		Str("tx-hash", block.TransactionHashes[0].Hex()). // now we only have 1 tx per block
 		Msg("new evm block executed event")
 
+	// todo should probably be batch in the same as bellow tx
 	if err := e.blocks.Store(cadenceHeight, block); err != nil {
 		return err
 	}
@@ -213,6 +214,7 @@ func (e *Engine) processTransactionEvent(event cadence.Event) error {
 	e.log.Info().
 		Str("contract-address", receipt.ContractAddress.String()).
 		Int("log-count", len(receipt.Logs)).
+		Uint64("evm-height", receipt.BlockNumber.Uint64()).
 		Str("receipt-tx-hash", receipt.TxHash.String()).
 		Str("tx-hash", txHash.String()).
 		Msg("ingesting new transaction executed event")
