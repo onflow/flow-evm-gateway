@@ -107,8 +107,8 @@ func MarshalReceipt(
 		"blockNumber":       hexutil.Uint64(receipt.BlockNumber.Uint64()),
 		"transactionHash":   txHash,
 		"transactionIndex":  hexutil.Uint64(receipt.TransactionIndex),
-		"from":              from,
-		"to":                tx.To(),
+		"from":              from.Hex(),
+		"to":                nil,
 		"gasUsed":           hexutil.Uint64(receipt.GasUsed),
 		"cumulativeGasUsed": hexutil.Uint64(receipt.CumulativeGasUsed),
 		"contractAddress":   nil,
@@ -116,6 +116,10 @@ func MarshalReceipt(
 		"logsBloom":         receipt.Bloom,
 		"type":              hexutil.Uint(tx.Type()),
 		"effectiveGasPrice": (*hexutil.Big)(receipt.EffectiveGasPrice),
+	}
+
+	if tx.To() != nil {
+		fields["to"] = tx.To().Hex()
 	}
 
 	fields["status"] = hexutil.Uint(receipt.Status)
@@ -131,7 +135,7 @@ func MarshalReceipt(
 
 	// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
 	if receipt.ContractAddress != (common.Address{}) {
-		fields["contractAddress"] = receipt.ContractAddress
+		fields["contractAddress"] = receipt.ContractAddress.Hex()
 	}
 
 	return fields, nil
