@@ -147,21 +147,23 @@ func (e *Engine) processEvents(blockEvents flow.BlockEvents) error {
 
 	events := models.NewCadenceEvents(blockEvents)
 
-	// this is an optimization, because if there is a block event in batch, it will internally update latest height
-	// otherwise we still want to update it explicitly, so we don't have to reindex in case of a restart
+	// if heartbeat interval with no data still update the cadence height
 	if events.Empty() {
 		if err := e.blocks.SetLatestCadenceHeight(events.CadenceHeight()); err != nil {
 			return fmt.Errorf("failed to update to latest cadence height during events ingestion: %w", err)
 		}
+		return nil // nothing else to do this was heartbeat event with not event payloads
 	}
 
-	// first we index the evm block
-	block, err := events.Block()
+	// we first index evm blocks only then transactions if any present
+	blocks, err := events.Blocks()
 	if err != nil {
 		return err
 	}
-	if err := e.indexBlock(events.CadenceHeight(), block); err != nil {
-		return err
+	for _, block := range blocks {
+		if err := e.indexBlock(events.CadenceHeight(), block); err != nil {
+			return err
+		}
 	}
 
 	txs, receipts, err := events.Transactions()
