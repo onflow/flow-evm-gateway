@@ -348,13 +348,13 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 	t.Run("ingest multiple blocks and transactions in same block event, even if out-of-order", func(t *testing.T) {
 		receipts := &storageMock.ReceiptIndexer{}
 		transactions := &storageMock.TransactionIndexer{}
-		latestHeight := uint64(0)
+		latestCadenceHeight := uint64(0)
 
 		blocks := &storageMock.BlockIndexer{}
 		blocks.
 			On("LatestCadenceHeight").
 			Return(func() (uint64, error) {
-				return latestHeight, nil
+				return latestCadenceHeight, nil
 			}).
 			Once() // make sure this isn't called multiple times
 
@@ -368,7 +368,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		subscriber.
 			On("Subscribe", mock.Anything, mock.AnythingOfType("uint64")).
 			Return(func(ctx context.Context, latest uint64) (<-chan flow.BlockEvents, <-chan error, error) {
-				assert.Equal(t, latestHeight, latest)
+				assert.Equal(t, latestCadenceHeight, latest)
 				return eventsChan, make(<-chan error), nil
 			}).
 			Once()
@@ -385,6 +385,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		blocksStored := 0
 		txsStored := 0
 		eventCount := 5
+		blockIndexedFirst := false
 		events := make([]flow.Event, 0)
 		for i := 0; i < eventCount; i++ {
 			evmHeight := uint64(i)
@@ -396,7 +397,9 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 				On("Store", mock.AnythingOfType("uint64"), mock.AnythingOfType("*types.Block")).
 				Return(func(h uint64, storeBlock *types.Block) error {
 					assert.Equal(t, block, storeBlock)
-					// assert.Equal(t, evmHeight, h) todo
+					assert.Equal(t, evmHeight, block.Height)
+					assert.Equal(t, latestCadenceHeight+1, h)
+					blockIndexedFirst = true
 					blocksStored++
 					return nil
 				}).
@@ -419,6 +422,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 					txHash, err := tx.Hash()
 					require.NoError(t, err)
 					assert.Equal(t, transactionHash, txHash) // if hashes are equal tx is equal
+					require.True(t, blockIndexedFirst)
 					txsStored++
 					return nil
 				}).
@@ -443,7 +447,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 
 		eventsChan <- flow.BlockEvents{
 			Events: events,
-			Height: latestHeight + 1,
+			Height: latestCadenceHeight + 1,
 		}
 
 		close(eventsChan)
