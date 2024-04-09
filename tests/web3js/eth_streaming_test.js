@@ -46,6 +46,8 @@ it('streaming of logs using filters', async() => {
     })
      */
 
+    let currentHeight = await web3.eth.getBlockNumber()
+
     let ws = new Web3("ws://localhost:8545")
 
     // get all the new blocks
@@ -53,7 +55,8 @@ it('streaming of logs using filters', async() => {
         let eventCount = 0
         let sub = await ws.eth.subscribe('newBlockHeaders')
         sub.on('data', async block => {
-            // todo assert
+            ++currentHeight
+            assert.equal(block.number, currentHeight) // make sure in order and increasing
 
             if (++eventCount === testValues.length) {
                 await sub.unsubscribe()
@@ -67,7 +70,7 @@ it('streaming of logs using filters', async() => {
         let eventCount = 0
         let sub = await ws.eth.subscribe('pendingTransactions')
         sub.on('data', async tx => {
-            console.log("TX", tx)
+            assert.isString(tx) // tx hash
 
             if (++eventCount === testValues.length) {
                 await sub.unsubscribe()
@@ -87,8 +90,6 @@ it('streaming of logs using filters', async() => {
         })
         assert.equal(res.receipt.status, conf.successStatus)
     }
-
-    // todo the problem is transactions can be ingested before blocks events, which mean the tx event can be broadcasted and when block is fetched at that height it doesn't yet exists in db
 
     // wait for all events to be received
     await doneTxs
