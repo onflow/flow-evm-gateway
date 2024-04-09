@@ -17,17 +17,9 @@ type blockEventPayload struct {
 	TransactionHashes []cadence.String `cadence:"transactionHashes"`
 }
 
-// DecodeBlock takes a cadence event that contains executed block payload and
+// decodeBlock takes a cadence event that contains executed block payload and
 // decodes it into the Block type.
-func DecodeBlock(event cadence.Event) (*types.Block, error) {
-	if !IsBlockExecutedEvent(event) {
-		return nil, fmt.Errorf(
-			"invalid event type for decoding into block, received %s expected %s",
-			event.Type().ID(),
-			types.EventTypeBlockExecuted,
-		)
-	}
-
+func decodeBlock(event cadence.Event) (*types.Block, error) {
 	var b blockEventPayload
 	err := cadence.DecodeFields(event, &b)
 	if err != nil {

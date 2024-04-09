@@ -139,21 +139,10 @@ func (tx *txEventPayload) IsDirectCall() bool {
 	return tx.TransactionType == types.DirectCallTxType
 }
 
-// DecodeTransaction takes a cadence event for transaction executed
+// decodeTransaction takes a cadence event for transaction executed
 // and decodes it into a Transaction interface. The concrete type
 // will be either a TransactionCall or a DirectCall.
-func DecodeTransaction(event cadence.Event) (
-	Transaction,
-	error,
-) {
-	if !IsTransactionExecutedEvent(event) {
-		return nil, fmt.Errorf(
-			"invalid event type for decoding into receipt, received %s expected %s",
-			event.Type().ID(),
-			types.EventTypeTransactionExecuted,
-		)
-	}
-
+func decodeTransaction(event cadence.Event) (Transaction, error) {
 	t := &txEventPayload{}
 	err := cadence.DecodeFields(event, t)
 	if err != nil {

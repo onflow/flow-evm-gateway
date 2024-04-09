@@ -11,7 +11,6 @@ import (
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/onflow/cadence"
-	"github.com/onflow/flow-go/fvm/evm/types"
 )
 
 // StorageReceipt is a receipt representation for storage.
@@ -39,16 +38,8 @@ type StorageReceipt struct {
 	TransactionIndex  uint
 }
 
-// DecodeReceipt takes a cadence event for transaction executed and decodes it into the receipt.
-func DecodeReceipt(event cadence.Event) (*gethTypes.Receipt, error) {
-	if !IsTransactionExecutedEvent(event) {
-		return nil, fmt.Errorf(
-			"invalid event type for decoding into receipt, received %s expected %s",
-			event.Type().ID(),
-			types.EventTypeTransactionExecuted,
-		)
-	}
-
+// decodeReceipt takes a cadence event for transaction executed and decodes it into the receipt.
+func decodeReceipt(event cadence.Event) (*gethTypes.Receipt, error) {
 	var tx txEventPayload
 	err := cadence.DecodeFields(event, &tx)
 	if err != nil {
