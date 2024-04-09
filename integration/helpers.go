@@ -94,8 +94,7 @@ func startEventIngestionEngine(ctx context.Context, dbDir string) (
 
 	subscriber := ingestion.NewRPCSubscriber(client)
 
-	log := logger.With().Str("component", "database").Logger()
-	db, err := pebble.New(dbDir, log)
+	db, err := pebble.New(dbDir, logger)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -113,8 +112,7 @@ func startEventIngestionEngine(ctx context.Context, dbDir string) (
 		return nil, nil, nil, err
 	}
 
-	log = logger.With().Str("component", "ingestion").Logger()
-	engine := ingestion.NewEventIngestionEngine(subscriber, blocks, receipts, txs, accounts, log)
+	engine := ingestion.NewEventIngestionEngine(subscriber, blocks, receipts, txs, accounts, logger)
 
 	go func() {
 		err = engine.Run(ctx)
