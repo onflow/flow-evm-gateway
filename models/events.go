@@ -22,11 +22,17 @@ var TransactionExecutedEventType = evmLocation.TypeID(
 
 // isBlockExecutedEvent checks whether the given event contains block executed data.
 func isBlockExecutedEvent(event cadence.Event) bool {
+	if event.EventType == nil {
+		return false
+	}
 	return common.TypeID(event.EventType.ID()) == BlockExecutedEventType
 }
 
 // isTransactionExecutedEvent checks whether the given event contains transaction executed data.
 func isTransactionExecutedEvent(event cadence.Event) bool {
+	if event.EventType == nil {
+		return false
+	}
 	return common.TypeID(event.EventType.ID()) == TransactionExecutedEventType
 }
 
