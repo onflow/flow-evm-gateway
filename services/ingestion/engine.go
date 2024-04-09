@@ -62,10 +62,21 @@ func (e *Engine) Stop() {
 	// todo
 }
 
-// Run the event ingestion engine. Load the latest height that was stored and provide it
-// to the event subscribers as a starting point.
-// Consume the events provided by the event subscriber.
-// Each event is then processed by the event processing methods.
+// Run the Cadence event ingestion engine.
+//
+// Cadence event ingestion engine subscribes to all new EVM related events on Flow network,
+// currently there are two types of events:
+// - evm.BlockExecuted: this event is emitted when a new EVM block is created (usually with any new transactions)
+// - evm.TransactionExecuted: this event is emitted when a new EVM transaction is executed (even if failed)
+// Each event that is received should contain at least block event, but usually also transaction events.
+// There can be multiple transaction events for a single Cadence height, but only a single block event.
+// Events are after indexed in-order, first block event and then all transaction events.
+//
+// Expected errors:
+// there is a disconnected error which is a recoverable error that can be expected and should be
+// handled by restarting the engine. This can happen if the client connection to the event subscription
+// drops.
+// All other errors are unexpected.
 func (e *Engine) Run(ctx context.Context) error {
 	latestCadence, err := e.blocks.LatestCadenceHeight()
 	if err != nil {
