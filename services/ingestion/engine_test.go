@@ -121,7 +121,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 		go func() {
 			err := engine.Run(context.Background())
 			assert.ErrorIs(t, err, models.ErrInvalidHeight)
-			assert.EqualError(t, err, "failed to process event: invalid block height, expected 11, got 20: invalid height")
+			assert.EqualError(t, err, "invalid block height, expected 11, got 20: invalid height")
 			close(waitErr)
 		}()
 
@@ -166,6 +166,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 }
 
 func TestTransactionIngestion(t *testing.T) {
+
 	receipts := &storageMock.ReceiptIndexer{}
 	transactions := &storageMock.TransactionIndexer{}
 	latestHeight := uint64(10)
@@ -242,6 +243,188 @@ func TestTransactionIngestion(t *testing.T) {
 	close(eventsChan)
 	<-done
 	// todo <-engine.Done()
+}
+
+func TestBlockAndTransactionIngestion(t *testing.T) {
+	t.Run("successfully ingest transaction and block", func(t *testing.T) {
+		receipts := &storageMock.ReceiptIndexer{}
+		transactions := &storageMock.TransactionIndexer{}
+		latestHeight := uint64(10)
+		nextHeight := latestHeight + 1
+
+		blocks := &storageMock.BlockIndexer{}
+		blocks.
+			On("LatestCadenceHeight").
+			Return(func() (uint64, error) {
+				return latestHeight, nil
+			}).
+			Once() // make sure this isn't called multiple times
+
+		blocks.
+			On("SetLatestCadenceHeight", mock.AnythingOfType("uint64")).
+			Return(func(h uint64) error {
+				assert.Equal(t, nextHeight, h)
+				return nil
+			})
+
+		accounts := &storageMock.AccountIndexer{}
+		accounts.
+			On("Update", mock.AnythingOfType("models.TransactionCall"), mock.AnythingOfType("*types.Receipt")).
+			Return(func(tx models.Transaction, receipt *gethTypes.Receipt) error { return nil })
+
+		eventsChan := make(chan flow.BlockEvents)
+		subscriber := &mocks.Subscriber{}
+		subscriber.
+			On("Subscribe", mock.Anything, mock.AnythingOfType("uint64")).
+			Return(func(ctx context.Context, latest uint64) (<-chan flow.BlockEvents, <-chan error, error) {
+				return eventsChan, make(<-chan error), nil
+			})
+
+		txCdc, txEvent, transaction, result, err := newTransaction()
+		require.NoError(t, err)
+		blockCdc, block, blockEvent, err := newBlock(nextHeight)
+		require.NoError(t, err)
+
+		engine := NewEventIngestionEngine(subscriber, blocks, receipts, transactions, accounts, zerolog.Nop())
+
+		done := make(chan struct{})
+		go func() {
+			err := engine.Run(context.Background())
+			assert.ErrorIs(t, err, models.ErrDisconnected) // we disconnect at the end
+			close(done)
+		}()
+
+		blocks.
+			On("Store", mock.AnythingOfType("uint64"), mock.AnythingOfType("*types.Block")).
+			Return(func(h uint64, storeBlock *types.Block) error {
+				assert.Equal(t, block, storeBlock)
+				assert.Equal(t, nextHeight, h)
+				return nil
+			}).
+			Once()
+
+		transactions.
+			On("Store", mock.AnythingOfType("models.TransactionCall")).
+			Return(func(tx models.Transaction) error {
+				transactionHash, err := transaction.Hash()
+				require.NoError(t, err)
+				txHash, err := tx.Hash()
+				require.NoError(t, err)
+				assert.Equal(t, transactionHash, txHash) // if hashes are equal tx is equal
+				return nil
+			}).
+			Once()
+
+		receipts.
+			On("Store", mock.AnythingOfType("*types.Receipt")).
+			Return(func(rcp *gethTypes.Receipt) error {
+				assert.Len(t, rcp.Logs, len(result.Logs))
+				assert.Equal(t, result.DeployedContractAddress.ToCommon().String(), rcp.ContractAddress.String())
+				return nil
+			}).
+			Once()
+
+		eventsChan <- flow.BlockEvents{
+			Events: []flow.Event{{
+				Type:  string(blockEvent.Etype),
+				Value: blockCdc,
+			}, {
+				Type:  string(txEvent.Etype),
+				Value: txCdc,
+			}},
+			Height: nextHeight,
+		}
+
+		close(eventsChan)
+		<-done
+	})
+
+	t.Run("ingest block first and then transaction even if received out-of-order", func(t *testing.T) {
+		receipts := &storageMock.ReceiptIndexer{}
+		transactions := &storageMock.TransactionIndexer{}
+		latestHeight := uint64(10)
+		nextHeight := latestHeight + 1
+
+		blocks := &storageMock.BlockIndexer{}
+		blocks.
+			On("LatestCadenceHeight").
+			Return(func() (uint64, error) {
+				return latestHeight, nil
+			}).
+			On("SetLatestCadenceHeight", mock.AnythingOfType("uint64")).
+			Return(func(h uint64) error { return nil })
+
+		accounts := &storageMock.AccountIndexer{}
+		accounts.
+			On("Update", mock.AnythingOfType("models.TransactionCall"), mock.AnythingOfType("*types.Receipt")).
+			Return(func(tx models.Transaction, receipt *gethTypes.Receipt) error { return nil })
+
+		eventsChan := make(chan flow.BlockEvents)
+		subscriber := &mocks.Subscriber{}
+		subscriber.
+			On("Subscribe", mock.Anything, mock.AnythingOfType("uint64")).
+			Return(func(ctx context.Context, latest uint64) (<-chan flow.BlockEvents, <-chan error, error) {
+				return eventsChan, make(<-chan error), nil
+			})
+
+		txCdc, txEvent, _, _, err := newTransaction()
+		require.NoError(t, err)
+		blockCdc, _, blockEvent, err := newBlock(nextHeight)
+		require.NoError(t, err)
+
+		engine := NewEventIngestionEngine(subscriber, blocks, receipts, transactions, accounts, zerolog.Nop())
+
+		done := make(chan struct{})
+		go func() {
+			err := engine.Run(context.Background())
+			assert.ErrorIs(t, err, models.ErrDisconnected) // we disconnect at the end
+			close(done)
+		}()
+
+		blocksFirst := false // flag indicating we stored block first
+		blocks.
+			On("Store", mock.AnythingOfType("uint64"), mock.AnythingOfType("*types.Block")).
+			Return(func(h uint64, storeBlock *types.Block) error {
+				blocksFirst = true
+				return nil
+			}).
+			Once()
+
+		transactions.
+			On("Store", mock.AnythingOfType("models.TransactionCall")).
+			Return(func(tx models.Transaction) error {
+				require.True(t, blocksFirst)
+				return nil
+			}).
+			Once()
+
+		receipts.
+			On("Store", mock.AnythingOfType("*types.Receipt")).
+			Return(func(rcp *gethTypes.Receipt) error {
+				require.True(t, blocksFirst)
+				return nil
+			}).
+			Once()
+
+		eventsChan <- flow.BlockEvents{
+			Events: []flow.Event{
+				// first transaction
+				{
+					Type:  string(txEvent.Etype),
+					Value: txCdc,
+				},
+				// and then block (out-of-order)
+				{
+					Type:  string(blockEvent.Etype),
+					Value: blockCdc,
+				}},
+			Height: nextHeight,
+		}
+
+		close(eventsChan)
+		<-done
+	})
+
 }
 
 func newBlock(height uint64) (cadence.Event, *types.Block, *types.Event, error) {
