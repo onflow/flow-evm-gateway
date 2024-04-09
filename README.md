@@ -58,6 +58,34 @@ use whichever valid EVM address. It's not really useful for local running beside
 `gas-price` is set at 0 so we don't have to fund EOA accounts. We can set it higher but keep in mind you will then 
 need funded accounts for interacting with EVM._
 
+**With Docker**
+
+Run the following commands:
+
+```bash
+cd dev
+
+docker build -t onflow/flow-evm-gateway .
+
+docker run -d -p 127.0.0.1:8545:8545 onflow/flow-evm-gateway
+```
+
+To verify the service is up and running:
+
+```bash
+curl -XPOST 'localhost:8545'  --header 'Content-Type: application/json' --data-raw '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
+```
+
+it should return:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": "0x2"
+}
+```
+
 ## Configuration Flags
 
 The application can be configured using the following flags at runtime:
