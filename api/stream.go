@@ -165,6 +165,9 @@ func (s *StreamAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) (*
 		func(ctx context.Context, height uint64) (interface{}, error) {
 			block, err := s.blocks.GetByHeight(height)
 			if err != nil {
+				if errors.Is(err, storageErrs.ErrNotFound) { // make sure to wrap in not found error as the streamer expects it
+					return nil, errors.Join(flowgoStorage.ErrNotFound, err)
+				}
 				return nil, fmt.Errorf("failed to get block at height: %d: %w", height, err)
 			}
 
@@ -184,6 +187,10 @@ func (s *StreamAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) (*
 				return nil, fmt.Errorf("failed to get receipt with hash: %s at height: %d: %w", hash, height, err)
 			}
 
+			h, err := tx.Hash()
+			if fullTx != nil && *fullTx == false || fullTx == nil { // make sure not nil
+				return h, nil
+			}
 			return NewTransaction(tx, *rcp)
 		},
 	)
