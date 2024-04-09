@@ -10,7 +10,7 @@ import (
 func Test_DecodeReceipts(t *testing.T) {
 	cdcEv, rec := createTestEvent(t, evmTxBinary)
 
-	receipt, err := DecodeReceipt(cdcEv)
+	receipt, err := decodeReceipt(cdcEv)
 	require.NoError(t, err)
 
 	for i, l := range rec.Logs {
