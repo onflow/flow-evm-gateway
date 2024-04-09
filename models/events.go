@@ -6,6 +6,7 @@ import (
 	"github.com/onflow/cadence/runtime/common"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go/fvm/evm/types"
+	"golang.org/x/exp/slices"
 )
 
 var evmLocation common.Location = flow.EVMLocation{}
@@ -44,20 +45,31 @@ func NewCadenceEvents(events flow.BlockEvents) *CadenceEvents {
 	return &CadenceEvents{events: events}
 }
 
-// Block finds the block evm event and decodes it into the block type,
-// if no block event is found nil is returned.
+// Blocks finds the block evm events and decodes it into the blocks slice,
+// if no block events are found nil slice is returned.
 //
 // Return values:
-// block, nil - if block is found
-// nil, nil - if no block is found
+// blocks, nil - if blocks are found
+// nil, nil - if no block are found
 // nil, err - unexpected error
-func (c *CadenceEvents) Block() (*types.Block, error) {
+func (c *CadenceEvents) Blocks() ([]*types.Block, error) {
+	blocks := make([]*types.Block, 0)
 	for _, e := range c.events.Events {
 		if isBlockExecutedEvent(e.Value) {
-			return decodeBlock(e.Value)
+			block, err := decodeBlock(e.Value)
+			if err != nil {
+				return nil, err
+			}
+			blocks = append(blocks, block)
 		}
 	}
-	return nil, nil
+
+	// make sure order of heights is ordered, this is safety check
+	slices.SortFunc(blocks, func(a, b *types.Block) int {
+		return int(a.Height - b.Height)
+	})
+
+	return blocks, nil
 }
 
 // Transactions finds all the transactions evm events and decodes them into transaction slice,
@@ -93,8 +105,8 @@ func (c *CadenceEvents) Transactions() ([]Transaction, []*gethTypes.Receipt, err
 // If there are no evm block or transactions events this is a heartbeat
 // event that is broadcast in intervals.
 func (c *CadenceEvents) Empty() bool {
-	b, _ := c.Block()
-	return b == nil
+	b, _ := c.Blocks()
+	return len(b) == 0
 }
 
 // CadenceHeight returns the Flow Cadence height at which the events
