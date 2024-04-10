@@ -127,7 +127,6 @@ func (s *StreamAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
 		func(ctx context.Context, height uint64) (interface{}, error) {
 			block, err := s.blocks.GetByHeight(height)
 			if err != nil {
-				fmt.Println("# new blocks [block] not found", height)
 				if errors.Is(err, storageErrs.ErrNotFound) { // make sure to wrap in not found error as the streamer expects it
 					return nil, errors.Join(flowgoStorage.ErrNotFound, err)
 				}
@@ -167,7 +166,6 @@ func (s *StreamAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) (*
 		func(ctx context.Context, height uint64) (interface{}, error) {
 			block, err := s.blocks.GetByHeight(height)
 			if err != nil {
-				fmt.Println("# pending tx [block] not found", height)
 				if errors.Is(err, storageErrs.ErrNotFound) { // make sure to wrap in not found error as the streamer expects it
 					return nil, errors.Join(flowgoStorage.ErrNotFound, err)
 				}
@@ -182,7 +180,6 @@ func (s *StreamAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) (*
 
 			tx, err := s.transactions.Get(hash)
 			if err != nil {
-				fmt.Println("# pending tx a [transaction] not found", height)
 				if errors.Is(err, storageErrs.ErrNotFound) { // make sure to wrap in not found error as the streamer expects it
 					return nil, errors.Join(flowgoStorage.ErrNotFound, err)
 				}
@@ -191,7 +188,6 @@ func (s *StreamAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) (*
 
 			rcp, err := s.receipts.GetByTransactionID(hash)
 			if err != nil {
-				fmt.Println("# pending tx [receipt] not found", height)
 				if errors.Is(err, storageErrs.ErrNotFound) { // make sure to wrap in not found error as the streamer expects it
 					return nil, errors.Join(flowgoStorage.ErrNotFound, err)
 				}
