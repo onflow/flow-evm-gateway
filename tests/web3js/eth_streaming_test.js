@@ -1,10 +1,7 @@
-const utils = require('web3-utils')
 const { assert } = require('chai')
 const conf = require('./config')
 const helpers = require('./helpers')
 const {Web3} = require("web3");
-const {startBlockHeight} = require("./config");
-const {waitWithTimeout, rejectIfConditionAtInterval} = require("web3-utils");
 const web3 = conf.web3
 
 it('streaming of logs using filters', async() => {
@@ -23,62 +20,51 @@ it('streaming of logs using filters', async() => {
     // subscribe to events
     /*
     const sub = await deployed.contract.events.Calculated()
-    await sub.sendSubscriptionRequest()
-
-    // todo figure out why I have subscribe error: {"code":-32601,"message":"notifications not supported"}
-    // request:
-    // {"level":"debug","component":"API","url":"/","id":"24c0dbde-1999-484b-a762-8075ea5a7f02","jsonrpc":"2.0","method":"eth_subscribe","params":["logs",{"address":"0x99A64c993965f8d69F985b5171bC20065Cc32fAB","topics":["0x76efea95e5da1fa661f235b2921ae1d89b99e457ec73fb88e34a1d150f95c64b",null,null,null]}],"is-ws":false,"time":"2024-04-05T19:00:51Z","message":"API request"}
-
-    // todo add pulling of new data test
-
-    sub.on("connected", function(subscriptionId){
-        console.log("subscription", subscriptionId)
-    })
-
-    sub.on('data', function(event){
-        console.log("data")
-        console.log(event)
-        done()
-    })
-
-    sub.on('error', function(error, receipt) {
-        console.log("error", err)
-    })
      */
-
-    let currentHeight = await web3.eth.getBlockNumber()
 
     let ws = new Web3("ws://localhost:8545")
 
+    let blockCount = 0
+    let blockHashes = []
     // get all the new blocks
     let doneBlocks = new Promise(async (res, rej) => {
-        let eventCount = 0
-        let sub = await ws.eth.subscribe('newBlockHeaders')
-        sub.on('data', async block => {
-            ++currentHeight
-            assert.equal(block.number, currentHeight) // make sure in order and increasing
+        let subBlocks = await ws.eth.subscribe('newBlockHeaders')
+        subBlocks.on("connected", id => console.log("blocks subscribed, id: ", id))
+        subBlocks.on('error', err => console.log("blocks subscription error: ", err))
 
-            if (++eventCount === testValues.length) {
-                await sub.unsubscribe()
+        subBlocks.on('data', async block => {
+            blockHashes.push(block.transactions[0]) // add received tx hash
+
+            blockCount++
+            if (blockCount === testValues.length) {
+                let val = await subBlocks.unsubscribe()
                 res()
             }
         })
     })
 
+    let txCount = 0
+    let txHashes = []
     // get all pending transactions
     let doneTxs = new Promise(async (res, rej) => {
-        let eventCount = 0
-        let sub = await ws.eth.subscribe('pendingTransactions')
-        sub.on('data', async tx => {
-            assert.isString(tx) // tx hash
+        let subTx = await ws.eth.subscribe('pendingTransactions')
+        subTx.on("connected", id => console.log("tx subscribed, id: ", id))
+        subTx.on('error', err => console.log("tx subscription error: ", err))
 
-            if (++eventCount === testValues.length) {
-                await sub.unsubscribe()
+        subTx.on('data', async tx => {
+            txHashes.push(tx) // add received tx hash
+            txCount++
+            if (txCount === testValues.length) {
+                let val = await subTx.unsubscribe()
                 res()
             }
         })
     })
 
+    // wait for subscription for a bit
+    await new Promise((res, rej) => setTimeout(() => res(), 300))
+
+    let sentHashes = []
     // produce events
     for (const { A, B } of testValues) {
         let res = await helpers.signAndSend({
@@ -89,10 +75,15 @@ it('streaming of logs using filters', async() => {
             gasPrice: 0
         })
         assert.equal(res.receipt.status, conf.successStatus)
+        sentHashes.push(res.receipt.transactionHash) // add sent hash
     }
 
     // wait for all events to be received
-    await doneTxs
-    await doneBlocks
+    await Promise.all([doneTxs, doneBlocks])
 
-}).timeout(15*1000)
+    // check that transaction hashes we received when submitting transactions above
+    // match array of transaction hashes received from events for blocks and txs
+    assert.deepEqual(blockHashes, sentHashes)
+    assert.deepEqual(txHashes, sentHashes)
+
+}).timeout(20*1000)
