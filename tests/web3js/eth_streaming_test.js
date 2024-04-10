@@ -20,7 +20,6 @@ it('streaming of logs using filters', async() => {
         { A: repeatA, B: 400 },
     ]
 
-
     let ws = new Web3("ws://localhost:8545")
 
     // subscribe to new blocks being produced by bellow transaction submission
@@ -33,7 +32,7 @@ it('streaming of logs using filters', async() => {
 
             blockCount++
             if (blockCount === testValues.length) {
-                let val = await subBlocks.unsubscribe()
+                await subBlocks.unsubscribe()
                 res()
             }
         })
@@ -49,23 +48,27 @@ it('streaming of logs using filters', async() => {
             txHashes.push(tx) // add received tx hash
             txCount++
             if (txCount === testValues.length) {
-                let val = await subTx.unsubscribe()
+                await subTx.unsubscribe()
                 res()
             }
         })
     })
 
+    let logCount = 0
+    let logHashes = []
     // subscribe to events being emitted by a deployed contract and bellow transaction interactions
-    // const subCalculated = await deployed.contract.events.Calculated()
-    // await subCalculated.subscribe()
-    // subCalculated.on('data', async data => {
-    //     console.log("contract data", data)
-    // })
     let doneLogs = new Promise(async (res, rej) => {
         let subLog = await ws.eth.subscribe('logs', {
             address: contractAddress,
         })
-        subLog.on('data', console.log)
+        subLog.on('data', async (data) => {
+            logHashes.push(data.transactionHash)
+            logCount++
+            if (logCount === testValues.length) {
+                await subLog.unsubscribe()
+                res()
+            }
+        })
     })
 
     // wait for subscription for a bit
@@ -92,6 +95,7 @@ it('streaming of logs using filters', async() => {
     // match array of transaction hashes received from events for blocks and txs
     assert.deepEqual(blockHashes, sentHashes)
     assert.deepEqual(txHashes, sentHashes)
+    assert.deepEqual(logHashes, sentHashes)
 
     process.exit(0) // hack around the ws connection not being closed
 }).timeout(20*1000)
