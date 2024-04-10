@@ -58,7 +58,7 @@ const (
 	servicePrivateKey = "61ceacbdce419e25ee8e7c2beceee170a05c9cab1e725a955b15ba94dcd747d2"
 	// this is a test eoa account created on account setup
 	eoaTestAddress    = "0xFACF71692421039876a5BB4F10EF7A439D8ef61E"
-	eoaTestPrivateKey = "0xf6d5333177711e562cabf1f311916196ee6ffc2a07966d9d4628094073bd5442"
+	eoaTestPrivateKey = "f6d5333177711e562cabf1f311916196ee6ffc2a07966d9d4628094073bd5442"
 	eoaFundAmount     = 5.0
 	coaFundAmount     = 10.0
 )
