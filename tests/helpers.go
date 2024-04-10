@@ -46,9 +46,10 @@ import (
 )
 
 var (
-	logger    = zerolog.New(os.Stdout)
-	sc        = systemcontracts.SystemContractsForChain(flow.Emulator)
-	logOutput = true
+	logger         = zerolog.New(os.Stdout)
+	sc             = systemcontracts.SystemContractsForChain(flow.Emulator)
+	logOutput      = true // hardcoded to toggle logging during development
+	eoaTestAccount = common.HexToAddress(eoaTestAddress)
 )
 
 const (
