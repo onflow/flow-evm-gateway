@@ -265,17 +265,17 @@ func streamData(
 
 		case err := <-rpcSub.Err():
 			// todo maybe handle nil err, this is when client disconnects unexpectedly
-			l.Info().Err(err).Msg("client unsubscribed")
+			l.Debug().Err(err).Msg("client unsubscribed")
 			return
 		case <-notifier.Closed():
-			l.Info().Msg("client unsubscribed deprecated method")
+			l.Debug().Msg("client unsubscribed deprecated method")
 			return
 		}
 	}
 }
 
 func sendData(notifier *rpc.Notifier, id rpc.ID, data any, l zerolog.Logger) {
-	l.Info().Str("subscription-id", string(id)).Any("data", data).Msg("notifying new event")
+	l.Debug().Str("subscription-id", string(id)).Any("data", data).Msg("notifying new event")
 
 	if err := notifier.Notify(id, data); err != nil {
 		l.Err(err).Msg("failed to notify")
