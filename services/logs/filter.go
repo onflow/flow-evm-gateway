@@ -169,6 +169,8 @@ func (s *StreamFilter) Match() (<-chan *gethTypes.Log, error) {
 
 // exactMatch checks the topic and address values of the log match the filter exactly.
 func exactMatch(log *gethTypes.Log, criteria FilterCriteria) bool {
+	// todo support no address matching all
+
 	// check criteria doesn't have more topics than the log, but it can have less due to wildcards
 	if len(criteria.Topics) > len(log.Topics) {
 		return false
