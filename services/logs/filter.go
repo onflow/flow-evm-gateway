@@ -23,9 +23,6 @@ type FilterCriteria struct {
 	Topics    [][]common.Hash
 }
 
-// todo think about creating an interface for all the filters
-// Filter interface { Match() (chan *gethTypes.Log, error) }
-
 // RangeFilter matches all the indexed logs within the range defined as
 // start and end block height. The start must be strictly smaller or equal than end value.
 type RangeFilter struct {

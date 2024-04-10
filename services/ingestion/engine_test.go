@@ -96,7 +96,6 @@ func TestSerialBlockIngestion(t *testing.T) {
 		close(eventsChan)
 		<-done
 		assert.Equal(t, runs-1, uint64(storedCounter))
-		// todo <-engine.Done()
 	})
 
 	t.Run("fail with events out of sequence", func(t *testing.T) {
@@ -505,8 +504,6 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		<-done
 		assert.Equal(t, eventCount, txsStored)
 		assert.Equal(t, eventCount, blocksStored)
-		// todo <-engine.Done()
-
 	})
 }
 
