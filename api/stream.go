@@ -4,19 +4,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/eth/filters"
-	"github.com/onflow/flow-evm-gateway/services/logs"
-
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/ethereum/go-ethereum/rpc"
 	errs "github.com/onflow/flow-evm-gateway/api/errors"
 	"github.com/onflow/flow-evm-gateway/config"
+	"github.com/onflow/flow-evm-gateway/services/logs"
 	"github.com/onflow/flow-evm-gateway/storage"
 	storageErrs "github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/onflow/flow-go/engine"
 	"github.com/onflow/flow-go/engine/access/state_stream/backend"
 	flowgoStorage "github.com/onflow/flow-go/storage"
 	"github.com/rs/zerolog"
+	"reflect"
 )
 
 // subscriptionBufferLimit is a constant that represents the buffer limit for subscriptions.
@@ -163,6 +163,9 @@ func (s *StreamAPI) Logs(ctx context.Context, criteria filters.FilterCriteria) (
 		func(ctx context.Context, height uint64) (interface{}, error) {
 			block, err := s.blocks.GetByHeight(height)
 			if err != nil {
+				if errors.Is(err, storageErrs.ErrNotFound) { // make sure to wrap in not found error as the streamer expects it
+					return nil, errors.Join(flowgoStorage.ErrNotFound, err)
+				}
 				return nil, fmt.Errorf("failed to get block at height: %d: %w", height, err)
 			}
 
@@ -185,7 +188,7 @@ func (s *StreamAPI) Logs(ctx context.Context, criteria filters.FilterCriteria) (
 		return nil, err
 	}
 
-	l.Error().Err(err).Msg("new logs subscription created")
+	l.Info().Msg("new logs subscription created")
 	return sub, nil
 }
 
@@ -224,31 +227,57 @@ func (s *StreamAPI) newSubscription(
 		sub,
 	).Stream(context.Background()) // todo investigate why the passed in context is canceled so quickly
 
-	go func() {
-		for {
-			select {
-			case data, open := <-sub.Channel():
-				if !open {
-					l.Debug().Msg("subscription channel closed")
-					return
-				}
-
-				l.Debug().Str("subscription-id", string(rpcSub.ID)).Any("data", data).Msg("notifying new event")
-				err = notifier.Notify(rpcSub.ID, data)
-				if err != nil {
-					l.Err(err).Msg("failed to notify")
-				}
-			case err := <-rpcSub.Err():
-				l.Info().Err(err).Msg("client unsubscribed")
-				sub.Close()
-				return
-			case <-notifier.Closed():
-				l.Info().Msg("client unsubscribed deprecated method")
-				sub.Close()
-				return
-			}
-		}
-	}()
+	// stream all available data
+	go streamData(notifier, rpcSub, sub, l)
 
 	return rpcSub, nil
+}
+
+// streamData runs a loop listening on a chanel for any new data and if
+// received it streams it to the rpc client.
+func streamData(
+	notifier *rpc.Notifier,
+	rpcSub *rpc.Subscription,
+	sub *backend.HeightBasedSubscription,
+	l zerolog.Logger,
+) {
+	defer sub.Close()
+
+	for {
+		select {
+		case data, open := <-sub.Channel():
+			if !open {
+				l.Debug().Msg("subscription channel closed")
+				return
+			}
+
+			// if we receive slice of data we stream each item separately
+			// as it's expected by the rpc specification
+			v := reflect.ValueOf(data)
+			if v.Kind() == reflect.Slice {
+				for i := 0; i < v.Len(); i++ {
+					item := v.Index(i).Interface()
+					sendData(notifier, rpcSub.ID, item, l)
+				}
+			} else {
+				sendData(notifier, rpcSub.ID, data, l)
+			}
+
+		case err := <-rpcSub.Err():
+			// todo maybe handle nil err, this is when client disconnects unexpectedly
+			l.Info().Err(err).Msg("client unsubscribed")
+			return
+		case <-notifier.Closed():
+			l.Info().Msg("client unsubscribed deprecated method")
+			return
+		}
+	}
+}
+
+func sendData(notifier *rpc.Notifier, id rpc.ID, data any, l zerolog.Logger) {
+	l.Info().Str("subscription-id", string(id)).Any("data", data).Msg("notifying new event")
+
+	if err := notifier.Notify(id, data); err != nil {
+		l.Err(err).Msg("failed to notify")
+	}
 }
