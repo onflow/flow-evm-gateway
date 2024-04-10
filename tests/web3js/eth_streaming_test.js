@@ -2,9 +2,12 @@ const { assert } = require('chai')
 const conf = require('./config')
 const helpers = require('./helpers')
 const {Web3} = require("web3");
+const {startBlockHeight} = require("./config");
 const web3 = conf.web3
 
 it('streaming of logs using filters', async() => {
+    setTimeout(() => process.exit(1), 19*1000) // hack around the fact ws connection is not closed after
+
     let deployed = await helpers.deployContract("storage")
     let contractAddress = deployed.receipt.contractAddress
 
@@ -17,21 +20,14 @@ it('streaming of logs using filters', async() => {
         { A: repeatA, B: 400 },
     ]
 
-    // subscribe to events
-    /*
-    const sub = await deployed.contract.events.Calculated()
-     */
 
     let ws = new Web3("ws://localhost:8545")
 
+    // subscribe to new blocks being produced by bellow transaction submission
     let blockCount = 0
     let blockHashes = []
-    // get all the new blocks
     let doneBlocks = new Promise(async (res, rej) => {
         let subBlocks = await ws.eth.subscribe('newBlockHeaders')
-        subBlocks.on("connected", id => console.log("blocks subscribed, id: ", id))
-        subBlocks.on('error', err => console.log("blocks subscription error: ", err))
-
         subBlocks.on('data', async block => {
             blockHashes.push(block.transactions[0]) // add received tx hash
 
@@ -41,16 +37,14 @@ it('streaming of logs using filters', async() => {
                 res()
             }
         })
+        subBlocks.on("error", console.log)
     })
 
+    // subscribe to all new transaction events being produced by transaction submission bellow
     let txCount = 0
     let txHashes = []
-    // get all pending transactions
     let doneTxs = new Promise(async (res, rej) => {
         let subTx = await ws.eth.subscribe('pendingTransactions')
-        subTx.on("connected", id => console.log("tx subscribed, id: ", id))
-        subTx.on('error', err => console.log("tx subscription error: ", err))
-
         subTx.on('data', async tx => {
             txHashes.push(tx) // add received tx hash
             txCount++
@@ -61,11 +55,24 @@ it('streaming of logs using filters', async() => {
         })
     })
 
+    // subscribe to events being emitted by a deployed contract and bellow transaction interactions
+    // const subCalculated = await deployed.contract.events.Calculated()
+    // await subCalculated.subscribe()
+    // subCalculated.on('data', async data => {
+    //     console.log("contract data", data)
+    // })
+    let doneLogs = new Promise(async (res, rej) => {
+        let subLog = await ws.eth.subscribe('logs', {
+            address: contractAddress,
+        })
+        subLog.on('data', console.log)
+    })
+
     // wait for subscription for a bit
     await new Promise((res, rej) => setTimeout(() => res(), 300))
 
     let sentHashes = []
-    // produce events
+    // produce events by submitting transactions
     for (const { A, B } of testValues) {
         let res = await helpers.signAndSend({
             from: conf.eoa.address,
@@ -79,11 +86,12 @@ it('streaming of logs using filters', async() => {
     }
 
     // wait for all events to be received
-    await Promise.all([doneTxs, doneBlocks])
+    await Promise.all([doneTxs, doneBlocks, doneLogs])
 
     // check that transaction hashes we received when submitting transactions above
     // match array of transaction hashes received from events for blocks and txs
     assert.deepEqual(blockHashes, sentHashes)
     assert.deepEqual(txHashes, sentHashes)
 
+    process.exit(0) // hack around the ws connection not being closed
 }).timeout(20*1000)
