@@ -56,69 +56,6 @@ func NewStreamAPI(
 	}
 }
 
-// newSubscription creates a new subscription for receiving events from the broadcaster.
-// The data adapter function is used to transform the raw data received from the broadcaster
-// to comply with requested RPC API response schema.
-func (s *StreamAPI) newSubscription(
-	ctx context.Context,
-	broadcaster *engine.Broadcaster,
-	getData backend.GetDataByHeightFunc,
-) (*rpc.Subscription, error) {
-	notifier, supported := rpc.NotifierFromContext(ctx)
-	if !supported {
-		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
-	}
-
-	height, err := s.blocks.LatestEVMHeight()
-	if err != nil {
-		return nil, err
-	}
-	height += 1 // subscribe to the next new event which will produce next height
-
-	sub := backend.NewHeightBasedSubscription(subscriptionBufferLimit, height, getData)
-
-	rpcSub := notifier.CreateSubscription()
-	rpcSub.ID = rpc.ID(sub.ID()) // make sure ids are unified
-
-	l := s.logger.With().Str("subscription-id", string(rpcSub.ID)).Logger()
-	l.Info().Uint64("evm-height", height).Msg("new subscription created")
-
-	go backend.NewStreamer(
-		s.logger.With().Str("component", "streamer").Logger(),
-		broadcaster,
-		s.config.StreamTimeout,
-		s.config.StreamLimit,
-		sub,
-	).Stream(context.Background()) // todo investigate why the passed in context is canceled so quickly
-
-	go func() {
-		for {
-			select {
-			case data, open := <-sub.Channel():
-				if !open {
-					l.Debug().Msg("subscription channel closed")
-					return
-				}
-
-				l.Debug().Str("subscription-id", string(rpcSub.ID)).Any("data", data).Msg("notifying new event")
-				err = notifier.Notify(rpcSub.ID, data)
-				if err != nil {
-					l.Err(err).Msg("failed to notify")
-				}
-			case err := <-rpcSub.Err():
-				l.Error().Err(err).Msg("error from rpc subscriber")
-				sub.Close()
-				return
-			case <-notifier.Closed():
-				sub.Close()
-				return
-			}
-		}
-	}()
-
-	return rpcSub, nil
-}
-
 // NewHeads send a notification each time a new block is appended to the chain.
 func (s *StreamAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
 	sub, err := s.newSubscription(
@@ -250,4 +187,68 @@ func (s *StreamAPI) Logs(ctx context.Context, criteria filters.FilterCriteria) (
 
 	l.Error().Err(err).Msg("new logs subscription created")
 	return sub, nil
+}
+
+// newSubscription creates a new subscription for receiving events from the broadcaster.
+// The data adapter function is used to transform the raw data received from the broadcaster
+// to comply with requested RPC API response schema.
+func (s *StreamAPI) newSubscription(
+	ctx context.Context,
+	broadcaster *engine.Broadcaster,
+	getData backend.GetDataByHeightFunc,
+) (*rpc.Subscription, error) {
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+	}
+
+	height, err := s.blocks.LatestEVMHeight()
+	if err != nil {
+		return nil, err
+	}
+	height += 1 // subscribe to the next new event which will produce next height
+
+	sub := backend.NewHeightBasedSubscription(subscriptionBufferLimit, height, getData)
+
+	rpcSub := notifier.CreateSubscription()
+	rpcSub.ID = rpc.ID(sub.ID()) // make sure ids are unified
+
+	l := s.logger.With().Str("subscription-id", string(rpcSub.ID)).Logger()
+	l.Info().Uint64("evm-height", height).Msg("new subscription created")
+
+	go backend.NewStreamer(
+		s.logger.With().Str("component", "streamer").Logger(),
+		broadcaster,
+		s.config.StreamTimeout,
+		s.config.StreamLimit,
+		sub,
+	).Stream(context.Background()) // todo investigate why the passed in context is canceled so quickly
+
+	go func() {
+		for {
+			select {
+			case data, open := <-sub.Channel():
+				if !open {
+					l.Debug().Msg("subscription channel closed")
+					return
+				}
+
+				l.Debug().Str("subscription-id", string(rpcSub.ID)).Any("data", data).Msg("notifying new event")
+				err = notifier.Notify(rpcSub.ID, data)
+				if err != nil {
+					l.Err(err).Msg("failed to notify")
+				}
+			case err := <-rpcSub.Err():
+				l.Info().Err(err).Msg("client unsubscribed")
+				sub.Close()
+				return
+			case <-notifier.Closed():
+				l.Info().Msg("client unsubscribed deprecated method")
+				sub.Close()
+				return
+			}
+		}
+	}()
+
+	return rpcSub, nil
 }
