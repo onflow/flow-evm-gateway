@@ -136,7 +136,7 @@ func servicesSetup(t *testing.T) func() {
 		CreateCOAResource:  false,
 		GasPrice:           new(big.Int).SetUint64(0),
 		LogLevel:           zerolog.DebugLevel,
-		LogWriter:          os.Stdout,
+		LogWriter:          zerolog.NewConsoleWriter(),
 		StreamTimeout:      time.Second * 30,
 		StreamLimit:        10,
 	}
