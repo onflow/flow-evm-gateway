@@ -73,6 +73,7 @@ func (s *StreamAPI) newSubscription(
 	if err != nil {
 		return nil, err
 	}
+	height += 1 // subscribe to the next new event which will produce next height
 
 	sub := backend.NewHeightBasedSubscription(subscriptionBufferLimit, height, getData)
 
@@ -80,7 +81,7 @@ func (s *StreamAPI) newSubscription(
 	rpcSub.ID = rpc.ID(sub.ID()) // make sure ids are unified
 
 	l := s.logger.With().Str("subscription-id", string(rpcSub.ID)).Logger()
-	l.Info().Msg("new subscription created")
+	l.Info().Uint64("evm-height", height).Msg("new subscription created")
 
 	go backend.NewStreamer(
 		s.logger.With().Str("component", "streamer").Logger(),
@@ -99,7 +100,7 @@ func (s *StreamAPI) newSubscription(
 					return
 				}
 
-				l.Debug().Msg("notifying new event")
+				l.Debug().Str("subscription-id", string(rpcSub.ID)).Any("data", data).Msg("notifying new event")
 				err = notifier.Notify(rpcSub.ID, data)
 				if err != nil {
 					l.Err(err).Msg("failed to notify")
@@ -126,6 +127,7 @@ func (s *StreamAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
 		func(ctx context.Context, height uint64) (interface{}, error) {
 			block, err := s.blocks.GetByHeight(height)
 			if err != nil {
+				fmt.Println("# new blocks [block] not found", height)
 				if errors.Is(err, storageErrs.ErrNotFound) { // make sure to wrap in not found error as the streamer expects it
 					return nil, errors.Join(flowgoStorage.ErrNotFound, err)
 				}
@@ -165,6 +167,7 @@ func (s *StreamAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) (*
 		func(ctx context.Context, height uint64) (interface{}, error) {
 			block, err := s.blocks.GetByHeight(height)
 			if err != nil {
+				fmt.Println("# pending tx [block] not found", height)
 				if errors.Is(err, storageErrs.ErrNotFound) { // make sure to wrap in not found error as the streamer expects it
 					return nil, errors.Join(flowgoStorage.ErrNotFound, err)
 				}
@@ -179,11 +182,19 @@ func (s *StreamAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) (*
 
 			tx, err := s.transactions.Get(hash)
 			if err != nil {
+				fmt.Println("# pending tx a [transaction] not found", height)
+				if errors.Is(err, storageErrs.ErrNotFound) { // make sure to wrap in not found error as the streamer expects it
+					return nil, errors.Join(flowgoStorage.ErrNotFound, err)
+				}
 				return nil, fmt.Errorf("failed to get tx with hash: %s at height: %d: %w", hash, height, err)
 			}
 
 			rcp, err := s.receipts.GetByTransactionID(hash)
 			if err != nil {
+				fmt.Println("# pending tx [receipt] not found", height)
+				if errors.Is(err, storageErrs.ErrNotFound) { // make sure to wrap in not found error as the streamer expects it
+					return nil, errors.Join(flowgoStorage.ErrNotFound, err)
+				}
 				return nil, fmt.Errorf("failed to get receipt with hash: %s at height: %d: %w", hash, height, err)
 			}
 
