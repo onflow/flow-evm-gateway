@@ -25,7 +25,7 @@ func Test_DecodeBlockExecutedEvent(t *testing.T) {
 	encEv, err := ev.Payload.CadenceEvent()
 	require.NoError(t, err)
 
-	decBlock, err := DecodeBlock(encEv)
+	decBlock, err := decodeBlock(encEv)
 	require.NoError(t, err)
 	assert.Equal(t, block, decBlock)
 }

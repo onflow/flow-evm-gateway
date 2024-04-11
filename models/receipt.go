@@ -11,7 +11,6 @@ import (
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/onflow/cadence"
-	"github.com/onflow/flow-go/fvm/evm/types"
 )
 
 // StorageReceipt is a receipt representation for storage.
@@ -39,16 +38,8 @@ type StorageReceipt struct {
 	TransactionIndex  uint
 }
 
-// DecodeReceipt takes a cadence event for transaction executed and decodes it into the receipt.
-func DecodeReceipt(event cadence.Event) (*gethTypes.Receipt, error) {
-	if !IsTransactionExecutedEvent(event) {
-		return nil, fmt.Errorf(
-			"invalid event type for decoding into receipt, received %s expected %s",
-			event.Type().ID(),
-			types.EventTypeTransactionExecuted,
-		)
-	}
-
+// decodeReceipt takes a cadence event for transaction executed and decodes it into the receipt.
+func decodeReceipt(event cadence.Event) (*gethTypes.Receipt, error) {
 	var tx txEventPayload
 	err := cadence.DecodeFields(event, &tx)
 	if err != nil {
@@ -116,8 +107,8 @@ func MarshalReceipt(
 		"blockNumber":       hexutil.Uint64(receipt.BlockNumber.Uint64()),
 		"transactionHash":   txHash,
 		"transactionIndex":  hexutil.Uint64(receipt.TransactionIndex),
-		"from":              from,
-		"to":                tx.To(),
+		"from":              from.Hex(),
+		"to":                nil,
 		"gasUsed":           hexutil.Uint64(receipt.GasUsed),
 		"cumulativeGasUsed": hexutil.Uint64(receipt.CumulativeGasUsed),
 		"contractAddress":   nil,
@@ -125,6 +116,10 @@ func MarshalReceipt(
 		"logsBloom":         receipt.Bloom,
 		"type":              hexutil.Uint(tx.Type()),
 		"effectiveGasPrice": (*hexutil.Big)(receipt.EffectiveGasPrice),
+	}
+
+	if tx.To() != nil {
+		fields["to"] = tx.To().Hex()
 	}
 
 	fields["status"] = hexutil.Uint(receipt.Status)
@@ -140,7 +135,7 @@ func MarshalReceipt(
 
 	// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
 	if receipt.ContractAddress != (common.Address{}) {
-		fields["contractAddress"] = receipt.ContractAddress
+		fields["contractAddress"] = receipt.ContractAddress.Hex()
 	}
 
 	return fields, nil

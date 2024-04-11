@@ -2,7 +2,7 @@ const { Web3 } = require('web3');
 const web3Utils = require('web3-utils')
 const fs = require('fs');
 const web3 = new Web3("http://localhost:8545");
-const storageABI = require("./storageABI.json");
+const storageABI = require("../fixtures/storageABI.json");
 
 
 /*

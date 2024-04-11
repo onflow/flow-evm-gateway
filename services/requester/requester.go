@@ -57,7 +57,6 @@ type Requester interface {
 
 	// GetBalance returns the amount of wei for the given address in the state of the
 	// given block height.
-	// todo in future this should be deprecated for local data
 	GetBalance(ctx context.Context, address common.Address, height uint64) (*big.Int, error)
 
 	// Call executes the given signed transaction data on the state for the given block number.
@@ -123,7 +122,6 @@ func NewEVM(
 	}
 
 	// create COA on the account
-	// todo improve this to first check if coa exists and only if it doesn't create it, if it doesn't and the flag is false return an error
 	if config.CreateCOAResource {
 		// we ignore errors for now since creation of already existing COA resource will fail, which is fine for now
 		id, err := evm.signAndSend(
