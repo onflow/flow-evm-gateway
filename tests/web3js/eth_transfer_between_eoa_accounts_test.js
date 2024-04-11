@@ -24,8 +24,8 @@ it('transfer flow between two EOA accounts', async() => {
         gasLimit: 55000,
     })
     assert.equal(transfer.receipt.status, conf.successStatus)
-    assert.equal(transfer.receipt.from, conf.eoa.address.toLowerCase()) // todo checksum
-    assert.equal(transfer.receipt.to, receiver.address.toLowerCase()) // todo checksum
+    assert.equal(transfer.receipt.from, conf.eoa.address)
+    assert.equal(transfer.receipt.to, receiver.address)
 
     // check balance was moved
     receiverWei = await web3.eth.getBalance(receiver.address)

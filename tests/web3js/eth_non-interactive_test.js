@@ -85,8 +85,8 @@ it('get transaction', async() => {
     assert.isNotEmpty(rcp)
     assert.equal(rcp.blockHash, blockTx.blockHash)
     assert.equal(rcp.blockNumber, conf.startBlockHeight)
-    assert.equal(rcp.from, tx.from.toLowerCase()) // todo checksum format
-    assert.equal(rcp.to, tx.to.toLowerCase()) // todo checksum format
+    assert.equal(rcp.from, tx.from)
+    assert.equal(rcp.to, tx.to)
     assert.equal(rcp.cumulativeGasUsed, tx.gas) // todo check
     assert.equal(rcp.transactionHash, tx.hash)
     assert.equal(rcp.status, conf.successStatus)
