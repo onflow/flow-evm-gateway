@@ -2,8 +2,6 @@ module github.com/onflow/flow-evm-gateway/integration
 
 go 1.21
 
-toolchain go1.21.4
-
 require (
 	github.com/ethereum/go-ethereum v1.13.5
 	github.com/goccy/go-json v0.10.2
