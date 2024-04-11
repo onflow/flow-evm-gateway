@@ -69,6 +69,8 @@ func Test_ConcurrentTransactionSubmission(t *testing.T) {
 		LogWriter:          os.Stdout,
 	}
 
+	// todo change this test to use ingestion and emulator directly so we can completely remove
+	// the rpcTest implementation
 	rpcTester := &rpcTest{
 		url: fmt.Sprintf("%s:%d", cfg.RPCHost, cfg.RPCPort),
 	}
