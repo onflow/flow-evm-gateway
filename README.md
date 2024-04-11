@@ -104,6 +104,9 @@ The application can be configured using the following flags at runtime:
 | `--coa-key`               | (required)       | *WARNING*: Do not use this flag in production! Private key value for the COA address used for submitting transactions. |
 | `--coa-resource-create`   | `false`          | Auto-create the COA resource in the Flow COA account provided if one doesn't exist.                                    |
 | `--log-level`             | `debug`          | Define verbosity of the log output ('debug', 'info', 'error')                                                          |
+| `--stream-limit`          | 10               | Rate-limits the events sent to the client within one second                                                            |
+| `--stream-timeout`        | 3sec             | Defines the timeout in seconds the server waits for the event to be sent to the client                                 |
+
 
 ## Getting Started
 

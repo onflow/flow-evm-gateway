@@ -6,7 +6,7 @@ test:
 .PHONY: e2e-test
 e2e-test:
 	# test all packages
-	cd integration && go test -cover ./...
+	cd tests && go test -cover ./...
 
 .PHONY: check-tidy
 check-tidy:

@@ -230,10 +230,8 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	ws := h.wsHandler
 	if ws != nil && isWebSocket(r) {
-		if checkPath(r, "") {
-			ws.ServeHTTP(w, r)
-			return
-		}
+		ws.ServeHTTP(w, r)
+		return
 	}
 
 	// enable logging responses

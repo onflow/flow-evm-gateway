@@ -59,6 +59,10 @@ type Config struct {
 	LogLevel zerolog.Level
 	// LogWriter defines the writer used for logging
 	LogWriter io.Writer
+	// StreamLimit rate-limits the events sent to the client within 1 second time interval.
+	StreamLimit float64
+	// StreamTimeout defines the timeout the server waits for the event to be sent to the client.
+	StreamTimeout time.Duration
 	// FilterExpiry defines the time it takes for an idle filter to expire
 	FilterExpiry time.Duration
 }
@@ -66,6 +70,7 @@ type Config struct {
 func FromFlags() (*Config, error) {
 	cfg := &Config{}
 	var evmNetwork, coinbase, gas, coa, key, keysPath, flowNetwork, logLevel, filterExpiry string
+	var streamTimeout int
 
 	// parse from flags
 	flag.StringVar(&cfg.DatabaseDir, "database-dir", "./db", "Path to the directory for the database")
@@ -81,6 +86,8 @@ func FromFlags() (*Config, error) {
 	flag.StringVar(&keysPath, "coa-key-file", "", "File path that contains JSON array of COA keys used in key-rotation mechanism, this is exclusive with coa-key flag.")
 	flag.BoolVar(&cfg.CreateCOAResource, "coa-resource-create", false, "Auto-create the COA resource in the Flow COA account provided if one doesn't exist")
 	flag.StringVar(&logLevel, "log-level", "debug", "Define verbosity of the log output ('debug', 'info', 'error')")
+	flag.Float64Var(&cfg.StreamLimit, "stream-limit", 10, "Rate-limits the events sent to the client within one second")
+	flag.IntVar(&streamTimeout, "stream-timeout", 3, "Defines the timeout in seconds the server waits for the event to be sent to the client")
 	flag.StringVar(&filterExpiry, "filter-expiry", "5m", "Filter defines the time it takes for an idle filter to expire")
 	flag.Parse()
 
@@ -156,6 +163,8 @@ func FromFlags() (*Config, error) {
 	}
 
 	cfg.LogWriter = os.Stdout
+
+	cfg.StreamTimeout = time.Second * time.Duration(streamTimeout)
 
 	exp, err := time.ParseDuration(filterExpiry)
 	if err != nil {

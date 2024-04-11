@@ -13,6 +13,7 @@ import (
 	"github.com/onflow/flow-evm-gateway/services/ingestion/mocks"
 	storageMock "github.com/onflow/flow-evm-gateway/storage/mocks"
 	"github.com/onflow/flow-go-sdk"
+	broadcast "github.com/onflow/flow-go/engine"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -47,7 +48,17 @@ func TestSerialBlockIngestion(t *testing.T) {
 				return eventsChan, make(<-chan error), nil
 			})
 
-		engine := NewEventIngestionEngine(subscriber, blocks, receipts, transactions, accounts, zerolog.Nop())
+		engine := NewEventIngestionEngine(
+			subscriber,
+			blocks,
+			receipts,
+			transactions,
+			accounts,
+			broadcast.NewBroadcaster(),
+			broadcast.NewBroadcaster(),
+			broadcast.NewBroadcaster(),
+			zerolog.Nop(),
+		)
 
 		done := make(chan struct{})
 		go func() {
@@ -85,7 +96,6 @@ func TestSerialBlockIngestion(t *testing.T) {
 		close(eventsChan)
 		<-done
 		assert.Equal(t, runs-1, uint64(storedCounter))
-		// todo <-engine.Done()
 	})
 
 	t.Run("fail with events out of sequence", func(t *testing.T) {
@@ -103,8 +113,8 @@ func TestSerialBlockIngestion(t *testing.T) {
 
 		accounts := &storageMock.AccountIndexer{}
 		accounts.
-			On("Update").
-			Return(func() error { return nil })
+			On("Update", mock.Anything, mock.Anything).
+			Return(func(t models.TransactionCall, r *gethTypes.Receipt) error { return nil })
 
 		eventsChan := make(chan flow.BlockEvents)
 		subscriber := &mocks.Subscriber{}
@@ -114,14 +124,24 @@ func TestSerialBlockIngestion(t *testing.T) {
 				return eventsChan, make(<-chan error), nil
 			})
 
-		engine := NewEventIngestionEngine(subscriber, blocks, receipts, transactions, accounts, zerolog.Nop())
+		engine := NewEventIngestionEngine(
+			subscriber,
+			blocks,
+			receipts,
+			transactions,
+			accounts,
+			broadcast.NewBroadcaster(),
+			broadcast.NewBroadcaster(),
+			broadcast.NewBroadcaster(),
+			zerolog.Nop(),
+		)
 
 		waitErr := make(chan struct{})
 		// catch eventual error due to out of sequence block height
 		go func() {
 			err := engine.Run(context.Background())
 			assert.ErrorIs(t, err, models.ErrInvalidHeight)
-			assert.EqualError(t, err, "failed to process event: invalid block height, expected 11, got 20: invalid height")
+			assert.EqualError(t, err, "invalid block height, expected 11, got 20: invalid height")
 			close(waitErr)
 		}()
 
@@ -165,83 +185,326 @@ func TestSerialBlockIngestion(t *testing.T) {
 
 }
 
-func TestTransactionIngestion(t *testing.T) {
-	receipts := &storageMock.ReceiptIndexer{}
-	transactions := &storageMock.TransactionIndexer{}
-	latestHeight := uint64(10)
+func TestBlockAndTransactionIngestion(t *testing.T) {
+	t.Run("successfully ingest transaction and block", func(t *testing.T) {
+		receipts := &storageMock.ReceiptIndexer{}
+		transactions := &storageMock.TransactionIndexer{}
+		latestHeight := uint64(10)
+		nextHeight := latestHeight + 1
 
-	blocks := &storageMock.BlockIndexer{}
-	blocks.
-		On("LatestCadenceHeight").
-		Return(func() (uint64, error) {
-			return latestHeight, nil
-		}).
-		Once() // make sure this isn't called multiple times
+		blocks := &storageMock.BlockIndexer{}
+		blocks.
+			On("LatestCadenceHeight").
+			Return(func() (uint64, error) {
+				return latestHeight, nil
+			}).
+			Once() // make sure this isn't called multiple times
 
-	blocks.
-		On("SetLatestCadenceHeight", mock.AnythingOfType("uint64")).
-		Return(func(h uint64) error {
-			assert.Equal(t, latestHeight+1, h)
-			return nil
-		})
+		blocks.
+			On("SetLatestCadenceHeight", mock.AnythingOfType("uint64")).
+			Return(func(h uint64) error {
+				assert.Equal(t, nextHeight, h)
+				return nil
+			})
 
-	accounts := &storageMock.AccountIndexer{}
-	accounts.
-		On("Update", mock.AnythingOfType("models.TransactionCall"), mock.AnythingOfType("*types.Receipt")).
-		Return(func(tx models.Transaction, receipt *gethTypes.Receipt) error { return nil })
+		accounts := &storageMock.AccountIndexer{}
+		accounts.
+			On("Update", mock.AnythingOfType("models.TransactionCall"), mock.AnythingOfType("*types.Receipt")).
+			Return(func(tx models.Transaction, receipt *gethTypes.Receipt) error { return nil })
 
-	eventsChan := make(chan flow.BlockEvents)
-	subscriber := &mocks.Subscriber{}
-	subscriber.
-		On("Subscribe", mock.Anything, mock.AnythingOfType("uint64")).
-		Return(func(ctx context.Context, latest uint64) (<-chan flow.BlockEvents, <-chan error, error) {
-			return eventsChan, make(<-chan error), nil
-		})
+		eventsChan := make(chan flow.BlockEvents)
+		subscriber := &mocks.Subscriber{}
+		subscriber.
+			On("Subscribe", mock.Anything, mock.AnythingOfType("uint64")).
+			Return(func(ctx context.Context, latest uint64) (<-chan flow.BlockEvents, <-chan error, error) {
+				return eventsChan, make(<-chan error), nil
+			})
 
-	engine := NewEventIngestionEngine(subscriber, blocks, receipts, transactions, accounts, zerolog.Nop())
+		txCdc, txEvent, transaction, result, err := newTransaction()
+		require.NoError(t, err)
+		blockCdc, block, blockEvent, err := newBlock(nextHeight)
+		require.NoError(t, err)
 
-	done := make(chan struct{})
-	go func() {
-		err := engine.Run(context.Background())
-		assert.ErrorIs(t, err, models.ErrDisconnected) // we disconnect at the end
-		close(done)
-	}()
+		engine := NewEventIngestionEngine(
+			subscriber,
+			blocks,
+			receipts,
+			transactions,
+			accounts,
+			broadcast.NewBroadcaster(),
+			broadcast.NewBroadcaster(),
+			broadcast.NewBroadcaster(),
+			zerolog.Nop(),
+		)
 
-	txCdc, event, transaction, result, err := newTransaction()
-	require.NoError(t, err)
+		done := make(chan struct{})
+		go func() {
+			err := engine.Run(context.Background())
+			assert.ErrorIs(t, err, models.ErrDisconnected) // we disconnect at the end
+			close(done)
+		}()
 
-	transactions.
-		On("Store", mock.AnythingOfType("models.TransactionCall")).
-		Return(func(tx models.Transaction) error {
-			transactionHash, err := transaction.Hash()
+		blocks.
+			On("Store", mock.AnythingOfType("uint64"), mock.AnythingOfType("*types.Block")).
+			Return(func(h uint64, storeBlock *types.Block) error {
+				assert.Equal(t, block, storeBlock)
+				assert.Equal(t, nextHeight, h)
+				return nil
+			}).
+			Once()
+
+		transactions.
+			On("Store", mock.AnythingOfType("models.TransactionCall")).
+			Return(func(tx models.Transaction) error {
+				transactionHash, err := transaction.Hash()
+				require.NoError(t, err)
+				txHash, err := tx.Hash()
+				require.NoError(t, err)
+				assert.Equal(t, transactionHash, txHash) // if hashes are equal tx is equal
+				return nil
+			}).
+			Once()
+
+		receipts.
+			On("Store", mock.AnythingOfType("*types.Receipt")).
+			Return(func(rcp *gethTypes.Receipt) error {
+				assert.Len(t, rcp.Logs, len(result.Logs))
+				assert.Equal(t, result.DeployedContractAddress.ToCommon().String(), rcp.ContractAddress.String())
+				return nil
+			}).
+			Once()
+
+		eventsChan <- flow.BlockEvents{
+			Events: []flow.Event{{
+				Type:  string(blockEvent.Etype),
+				Value: blockCdc,
+			}, {
+				Type:  string(txEvent.Etype),
+				Value: txCdc,
+			}},
+			Height: nextHeight,
+		}
+
+		close(eventsChan)
+		<-done
+	})
+
+	t.Run("ingest block first and then transaction even if received out-of-order", func(t *testing.T) {
+		receipts := &storageMock.ReceiptIndexer{}
+		transactions := &storageMock.TransactionIndexer{}
+		latestHeight := uint64(10)
+		nextHeight := latestHeight + 1
+
+		blocks := &storageMock.BlockIndexer{}
+		blocks.
+			On("LatestCadenceHeight").
+			Return(func() (uint64, error) {
+				return latestHeight, nil
+			}).
+			On("SetLatestCadenceHeight", mock.AnythingOfType("uint64")).
+			Return(func(h uint64) error { return nil })
+
+		accounts := &storageMock.AccountIndexer{}
+		accounts.
+			On("Update", mock.AnythingOfType("models.TransactionCall"), mock.AnythingOfType("*types.Receipt")).
+			Return(func(tx models.Transaction, receipt *gethTypes.Receipt) error { return nil })
+
+		eventsChan := make(chan flow.BlockEvents)
+		subscriber := &mocks.Subscriber{}
+		subscriber.
+			On("Subscribe", mock.Anything, mock.AnythingOfType("uint64")).
+			Return(func(ctx context.Context, latest uint64) (<-chan flow.BlockEvents, <-chan error, error) {
+				return eventsChan, make(<-chan error), nil
+			})
+
+		txCdc, txEvent, _, _, err := newTransaction()
+		require.NoError(t, err)
+		blockCdc, _, blockEvent, err := newBlock(nextHeight)
+		require.NoError(t, err)
+
+		engine := NewEventIngestionEngine(
+			subscriber,
+			blocks,
+			receipts,
+			transactions,
+			accounts,
+			broadcast.NewBroadcaster(),
+			broadcast.NewBroadcaster(),
+			broadcast.NewBroadcaster(),
+			zerolog.Nop(),
+		)
+
+		done := make(chan struct{})
+		go func() {
+			err := engine.Run(context.Background())
+			assert.ErrorIs(t, err, models.ErrDisconnected) // we disconnect at the end
+			close(done)
+		}()
+
+		blocksFirst := false // flag indicating we stored block first
+		blocks.
+			On("Store", mock.AnythingOfType("uint64"), mock.AnythingOfType("*types.Block")).
+			Return(func(h uint64, storeBlock *types.Block) error {
+				blocksFirst = true
+				return nil
+			}).
+			Once()
+
+		transactions.
+			On("Store", mock.AnythingOfType("models.TransactionCall")).
+			Return(func(tx models.Transaction) error {
+				require.True(t, blocksFirst)
+				return nil
+			}).
+			Once()
+
+		receipts.
+			On("Store", mock.AnythingOfType("*types.Receipt")).
+			Return(func(rcp *gethTypes.Receipt) error {
+				require.True(t, blocksFirst)
+				return nil
+			}).
+			Once()
+
+		eventsChan <- flow.BlockEvents{
+			Events: []flow.Event{
+				// first transaction
+				{
+					Type:  string(txEvent.Etype),
+					Value: txCdc,
+				},
+				// and then block (out-of-order)
+				{
+					Type:  string(blockEvent.Etype),
+					Value: blockCdc,
+				}},
+			Height: nextHeight,
+		}
+
+		close(eventsChan)
+		<-done
+	})
+
+	t.Run("ingest multiple blocks and transactions in same block event, even if out-of-order", func(t *testing.T) {
+		receipts := &storageMock.ReceiptIndexer{}
+		transactions := &storageMock.TransactionIndexer{}
+		latestCadenceHeight := uint64(0)
+
+		blocks := &storageMock.BlockIndexer{}
+		blocks.
+			On("LatestCadenceHeight").
+			Return(func() (uint64, error) {
+				return latestCadenceHeight, nil
+			}).
+			Once() // make sure this isn't called multiple times
+
+		accounts := &storageMock.AccountIndexer{}
+		accounts.
+			On("Update", mock.Anything, mock.AnythingOfType("*types.Receipt")).
+			Return(func(t models.Transaction, r *gethTypes.Receipt) error { return nil })
+
+		eventsChan := make(chan flow.BlockEvents)
+		subscriber := &mocks.Subscriber{}
+		subscriber.
+			On("Subscribe", mock.Anything, mock.AnythingOfType("uint64")).
+			Return(func(ctx context.Context, latest uint64) (<-chan flow.BlockEvents, <-chan error, error) {
+				assert.Equal(t, latestCadenceHeight, latest)
+				return eventsChan, make(<-chan error), nil
+			}).
+			Once()
+
+		engine := NewEventIngestionEngine(
+			subscriber,
+			blocks,
+			receipts,
+			transactions,
+			accounts,
+			broadcast.NewBroadcaster(),
+			broadcast.NewBroadcaster(),
+			broadcast.NewBroadcaster(),
+			zerolog.Nop(),
+		)
+
+		done := make(chan struct{})
+		go func() {
+			err := engine.Run(context.Background())
+			assert.ErrorIs(t, err, models.ErrDisconnected) // we disconnect at the end
+			close(done)
+		}()
+
+		blocksStored := 0
+		txsStored := 0
+		eventCount := 5
+		blockIndexedFirst := false
+		events := make([]flow.Event, 0)
+		for i := 0; i < eventCount; i++ {
+			evmHeight := uint64(i)
+			blockCdc, block, blockEvent, err := newBlock(evmHeight)
 			require.NoError(t, err)
-			txHash, err := tx.Hash()
+
+			// add new block for each height
+			blocks.
+				On("Store", mock.AnythingOfType("uint64"), mock.AnythingOfType("*types.Block")).
+				Return(func(h uint64, storeBlock *types.Block) error {
+					assert.Equal(t, block, storeBlock)
+					assert.Equal(t, evmHeight, block.Height)
+					assert.Equal(t, latestCadenceHeight+1, h)
+					blockIndexedFirst = true
+					blocksStored++
+					return nil
+				}).
+				Once()
+
+			events = append(events, flow.Event{
+				Type:  string(blockEvent.Etype),
+				Value: blockCdc,
+			})
+
+			txCdc, txEvent, transaction, _, err := newTransaction()
 			require.NoError(t, err)
-			assert.Equal(t, transactionHash, txHash) // if hashes are equal tx is equal
-			return nil
-		}).
-		Once()
 
-	receipts.
-		On("Store", mock.AnythingOfType("*types.Receipt")).
-		Return(func(rcp *gethTypes.Receipt) error {
-			assert.Len(t, rcp.Logs, len(result.Logs))
-			assert.Equal(t, result.DeployedContractAddress.ToCommon().String(), rcp.ContractAddress.String())
-			return nil
-		}).
-		Once()
+			// add a single transaction for each block
+			transactions.
+				On("Store", mock.AnythingOfType("models.TransactionCall")).
+				Return(func(tx models.Transaction) error {
+					transactionHash, err := transaction.Hash()
+					require.NoError(t, err)
+					txHash, err := tx.Hash()
+					require.NoError(t, err)
+					assert.Equal(t, transactionHash, txHash) // if hashes are equal tx is equal
+					require.True(t, blockIndexedFirst)
+					txsStored++
+					return nil
+				}).
+				Once()
 
-	eventsChan <- flow.BlockEvents{
-		Events: []flow.Event{{
-			Type:  string(event.Etype),
-			Value: txCdc,
-		}},
-		Height: latestHeight + 1,
-	}
+			receipts.
+				On("Store", mock.AnythingOfType("*types.Receipt")).
+				Return(func(rcp *gethTypes.Receipt) error { return nil }).
+				Once()
 
-	close(eventsChan)
-	<-done
-	// todo <-engine.Done()
+			events = append(events, flow.Event{
+				Type:  string(txEvent.Etype),
+				Value: txCdc,
+			})
+		}
+
+		// this messes up order of events to test if we still process events in-order
+		// it will make transaction event first and then block event
+		events[0], events[1] = events[1], events[0]
+		// and it will make the first block be swapped with second block out-of-order
+		events[1], events[2] = events[2], events[1]
+
+		eventsChan <- flow.BlockEvents{
+			Events: events,
+			Height: latestCadenceHeight + 1,
+		}
+
+		close(eventsChan)
+		<-done
+		assert.Equal(t, eventCount, txsStored)
+		assert.Equal(t, eventCount, blocksStored)
+	})
 }
 
 func newBlock(height uint64) (cadence.Event, *types.Block, *types.Event, error) {

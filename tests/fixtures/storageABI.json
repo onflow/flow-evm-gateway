@@ -1,5 +1,10 @@
 [
   {
+    "inputs": [],
+    "stateMutability": "payable",
+    "type": "constructor"
+  },
+  {
     "anonymous": false,
     "inputs": [
       {

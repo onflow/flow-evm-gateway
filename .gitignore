@@ -1,5 +1,8 @@
-integration/db-test
+tests/db-test
+tests/web3js/node_modules
+tests/web3js/package-lock.json
 db
 flow.json
+flow*.json
 .idea
 /tests/web3js/node_modules
