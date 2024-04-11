@@ -202,7 +202,7 @@ func (s *StreamAPI) newSubscription(
 ) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
-		return &rpc.Subscription{}, rpc.ErrNotificationsUnsupported
+		return nil, rpc.ErrNotificationsUnsupported
 	}
 
 	height, err := s.blocks.LatestEVMHeight()
