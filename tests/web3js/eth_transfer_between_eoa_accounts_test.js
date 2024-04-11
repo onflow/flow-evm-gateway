@@ -37,7 +37,7 @@ it('transfer flow between two EOA accounts', async() => {
     // make sure latest block includes the transfer tx
     let latest = await web3.eth.getBlockNumber()
     let transferTx = await web3.eth.getTransactionFromBlock(latest, 0)
-    assert.equal(transferTx.hash, transfer.transactionHash)
+    assert.equal(transferTx.hash, transfer.receipt.transactionHash)
     assert.equal(transferTx.value, transferValue)
 
 }).timeout(10*1000)
