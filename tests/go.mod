@@ -224,5 +224,3 @@ require (
 )
 
 replace github.com/onflow/flow-evm-gateway => ../
-
-replace github.com/ethereum/go-etherem => github.com/onflow/go-ethereum v1.13.4

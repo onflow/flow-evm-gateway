@@ -193,7 +193,3 @@ require (
 	lukechampine.com/blake3 v1.2.1 // indirect
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
-
-replace github.com/onflow/crypto => github.com/onflow/crypto v0.24.9
-
-replace github.com/ethereum/go-etherem => github.com/onflow/go-ethereum v1.13.4
