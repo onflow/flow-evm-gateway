@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-go/fvm/evm/types"
+	"github.com/onflow/go-ethereum/common"
+	gethTypes "github.com/onflow/go-ethereum/core/types"
 )
 
 func NewBlock(height uint64) *types.Block {
@@ -64,7 +64,7 @@ func NewReceipt(height uint64, ID common.Hash) *gethTypes.Receipt {
 func NewTransaction(nonce uint64) models.Transaction {
 	return models.TransactionCall{
 		Transaction: gethTypes.NewTx(&gethTypes.DynamicFeeTx{
-			ChainID:   types.FlowEVMTestnetChainID,
+			ChainID:   types.FlowEVMPreviewNetChainID,
 			Nonce:     nonce,
 			To:        &common.Address{0x01, 0x02},
 			Gas:       123457,

@@ -8,10 +8,6 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/common"
-	gethCore "github.com/ethereum/go-ethereum/core"
-	"github.com/ethereum/go-ethereum/core/types"
-	gethVM "github.com/ethereum/go-ethereum/core/vm"
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-evm-gateway/api/errors"
 	"github.com/onflow/flow-evm-gateway/config"
@@ -20,6 +16,10 @@ import (
 	"github.com/onflow/flow-go-sdk/crypto"
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/flow-go/fvm/systemcontracts"
+	"github.com/onflow/go-ethereum/common"
+	gethCore "github.com/onflow/go-ethereum/core"
+	"github.com/onflow/go-ethereum/core/types"
+	gethVM "github.com/onflow/go-ethereum/core/vm"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
 )
@@ -468,14 +468,6 @@ func cadenceStringToBytes(value cadence.Value) ([]byte, error) {
 // TODO(m-Peter): Consider moving this to flow-go repository
 func getErrorForCode(errorCode uint64) error {
 	switch evmTypes.ErrorCode(errorCode) {
-	case evmTypes.ValidationErrCodeInvalidBalance:
-		return evmTypes.ErrInvalidBalance
-	case evmTypes.ValidationErrCodeInsufficientComputation:
-		return evmTypes.ErrInsufficientComputation
-	case evmTypes.ValidationErrCodeUnAuthroizedMethodCall:
-		return evmTypes.ErrUnAuthroizedMethodCall
-	case evmTypes.ValidationErrCodeWithdrawBalanceRounding:
-		return evmTypes.ErrWithdrawBalanceRounding
 	case evmTypes.ValidationErrCodeGasUintOverflow:
 		return gethVM.ErrGasUintOverflow
 	case evmTypes.ValidationErrCodeNonceTooLow:

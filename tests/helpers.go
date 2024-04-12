@@ -20,9 +20,6 @@ import (
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/stretchr/testify/require"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/goccy/go-json"
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-emulator/adapters"
@@ -33,6 +30,9 @@ import (
 	evmEmulator "github.com/onflow/flow-go/fvm/evm/emulator"
 	"github.com/onflow/flow-go/fvm/systemcontracts"
 	"github.com/onflow/flow-go/model/flow"
+	"github.com/onflow/go-ethereum/common"
+	"github.com/onflow/go-ethereum/core/types"
+	"github.com/onflow/go-ethereum/rpc"
 	"github.com/rs/zerolog"
 
 	"github.com/onflow/flow-evm-gateway/config"
@@ -123,7 +123,7 @@ func servicesSetup(t *testing.T) func() {
 		RPCPort:            8545,
 		RPCHost:            "127.0.0.1",
 		FlowNetworkID:      "flow-emulator",
-		EVMNetworkID:       evmTypes.FlowEVMTestnetChainID,
+		EVMNetworkID:       evmTypes.FlowEVMTestNetChainID,
 		Coinbase:           common.HexToAddress(eoaTestAddress),
 		COAAddress:         service.Address,
 		COAKey:             service.PrivateKey,

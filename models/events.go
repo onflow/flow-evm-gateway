@@ -1,11 +1,11 @@
 package models
 
 import (
-	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/onflow/cadence"
 	"github.com/onflow/cadence/runtime/common"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go/fvm/evm/types"
+	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"golang.org/x/exp/slices"
 )
 

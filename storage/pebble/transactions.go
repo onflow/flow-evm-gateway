@@ -3,9 +3,9 @@ package pebble
 import (
 	"sync"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/storage"
+	"github.com/onflow/go-ethereum/common"
 )
 
 var _ storage.TransactionIndexer = &Transactions{}

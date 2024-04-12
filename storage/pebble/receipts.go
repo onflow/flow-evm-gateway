@@ -3,15 +3,16 @@ package pebble
 import (
 	"encoding/binary"
 	"fmt"
+	"math/big"
+	"sync"
+
 	"github.com/cockroachdb/pebble"
-	"github.com/ethereum/go-ethereum/common"
-	gethTypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/errors"
-	"math/big"
-	"sync"
+	"github.com/onflow/go-ethereum/common"
+	gethTypes "github.com/onflow/go-ethereum/core/types"
+	"github.com/onflow/go-ethereum/rlp"
 )
 
 var _ storage.ReceiptIndexer = &Receipts{}

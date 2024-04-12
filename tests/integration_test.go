@@ -4,19 +4,20 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/onflow/flow-evm-gateway/bootstrap"
-	"github.com/onflow/flow-evm-gateway/config"
-	"github.com/onflow/flow-go-sdk/access/grpc"
-	"github.com/onflow/flow-go/fvm/evm/types"
-	"github.com/rs/zerolog"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"math/big"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/onflow/flow-evm-gateway/bootstrap"
+	"github.com/onflow/flow-evm-gateway/config"
+	"github.com/onflow/flow-go-sdk/access/grpc"
+	"github.com/onflow/flow-go/fvm/evm/types"
+	"github.com/onflow/go-ethereum/common"
+	"github.com/onflow/go-ethereum/crypto"
+	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // Test_ConcurrentTransactionSubmission test submits multiple transactions concurrently
@@ -59,7 +60,7 @@ func Test_ConcurrentTransactionSubmission(t *testing.T) {
 		RPCPort:            8545,
 		RPCHost:            "127.0.0.1",
 		FlowNetworkID:      "flow-emulator",
-		EVMNetworkID:       types.FlowEVMTestnetChainID,
+		EVMNetworkID:       types.FlowEVMTestNetChainID,
 		Coinbase:           eoaTestAccount,
 		COAAddress:         *createdAddr,
 		COAKeys:            keys,

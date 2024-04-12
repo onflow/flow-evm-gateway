@@ -3,7 +3,7 @@
 package mocks
 
 import (
-	common "github.com/ethereum/go-ethereum/common"
+	common "github.com/onflow/go-ethereum/common"
 	mock "github.com/stretchr/testify/mock"
 
 	types "github.com/onflow/flow-go/fvm/evm/types"

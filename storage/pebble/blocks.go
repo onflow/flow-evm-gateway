@@ -8,10 +8,10 @@ import (
 
 	"github.com/cockroachdb/pebble"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/onflow/flow-evm-gateway/storage"
 	errs "github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/onflow/flow-go/fvm/evm/types"
+	"github.com/onflow/go-ethereum/common"
 )
 
 var _ storage.BlockIndexer = &Blocks{}
