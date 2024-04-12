@@ -20,7 +20,7 @@ it('streaming of logs using filters', async() => {
         { A: repeatA, B: 400 },
     ]
 
-    let ws = new Web3("ws://localhost:8545")
+    let ws = new Web3("ws://127.0.0.1:8545")
 
     // subscribe to new blocks being produced by bellow transaction submission
     let blockCount = 0

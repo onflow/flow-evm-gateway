@@ -6,6 +6,8 @@ test:
 .PHONY: e2e-test
 e2e-test:
 	# test all packages
+	go clean -testcache
+	cd tests/web3js && npm install
 	cd tests && go test -cover ./...
 
 .PHONY: check-tidy
