@@ -5,12 +5,13 @@ import (
 )
 
 func TestWeb3_E2E(t *testing.T) {
+
 	t.Run("test setup sanity check", func(t *testing.T) {
 		runWeb3Test(t, "setup_test")
 	})
 
 	t.Run("ready-only interactions", func(t *testing.T) {
-		runWeb3Test(t, "eth_non-interactive_test")
+		runWeb3Test(t, "eth_non_interactive_test")
 	})
 
 	t.Run("deploy contract and call methods", func(t *testing.T) {

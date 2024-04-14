@@ -123,7 +123,7 @@ func servicesSetup(t *testing.T) func() {
 		RPCPort:            8545,
 		RPCHost:            "127.0.0.1",
 		FlowNetworkID:      "flow-emulator",
-		EVMNetworkID:       evmTypes.FlowEVMTestNetChainID,
+		EVMNetworkID:       evmTypes.FlowEVMPreviewNetChainID,
 		Coinbase:           common.HexToAddress(eoaTestAddress),
 		COAAddress:         service.Address,
 		COAKey:             service.PrivateKey,
