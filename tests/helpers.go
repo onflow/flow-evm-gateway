@@ -7,9 +7,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/onflow/flow-evm-gateway/bootstrap"
-	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
-	"github.com/stretchr/testify/require"
 	"io"
 	"math/big"
 	"net/http"
@@ -18,6 +15,10 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/onflow/flow-evm-gateway/bootstrap"
+	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
+	"github.com/stretchr/testify/require"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -170,6 +171,7 @@ func executeTest(t *testing.T, testFile string) {
 				}
 				t.Fatalf("unknown test issue: %s, output: %s", err.Error(), string(out))
 			}
+			require.Fail(t, err.Error())
 		}
 		t.Log(string(out))
 	})
