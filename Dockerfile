@@ -8,7 +8,7 @@ COPY go.* ./
 COPY . ./
 RUN go mod download
 RUN go mod verify
-RUN CGO_ENABLED=0 go build -o evm-gateway ./cmd/main/main.go
+RUN CGO_ENABLED=1 go build -o evm-gateway ./cmd/main/main.go
 RUN chmod a+x evm-gateway
 RUN chmod a+x ./scripts/run.sh
 
