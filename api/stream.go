@@ -4,19 +4,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/eth/filters"
-	"github.com/ethereum/go-ethereum/rpc"
+	"reflect"
+
 	errs "github.com/onflow/flow-evm-gateway/api/errors"
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/services/logs"
 	"github.com/onflow/flow-evm-gateway/storage"
 	storageErrs "github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/onflow/flow-go/engine"
-	"github.com/onflow/flow-go/engine/access/state_stream/backend"
+	"github.com/onflow/flow-go/engine/access/subscription"
 	flowgoStorage "github.com/onflow/flow-go/storage"
+	"github.com/onflow/go-ethereum/common/hexutil"
+	"github.com/onflow/go-ethereum/eth/filters"
+	"github.com/onflow/go-ethereum/rpc"
 	"github.com/rs/zerolog"
-	"reflect"
 )
 
 // subscriptionBufferLimit is a constant that represents the buffer limit for subscriptions.
@@ -198,7 +199,7 @@ func (s *StreamAPI) Logs(ctx context.Context, criteria filters.FilterCriteria) (
 func (s *StreamAPI) newSubscription(
 	ctx context.Context,
 	broadcaster *engine.Broadcaster,
-	getData backend.GetDataByHeightFunc,
+	getData subscription.GetDataByHeightFunc,
 ) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
@@ -211,7 +212,7 @@ func (s *StreamAPI) newSubscription(
 	}
 	height += 1 // subscribe to the next new event which will produce next height
 
-	sub := backend.NewHeightBasedSubscription(subscriptionBufferLimit, height, getData)
+	sub := subscription.NewHeightBasedSubscription(subscriptionBufferLimit, height, getData)
 
 	rpcSub := notifier.CreateSubscription()
 	rpcSub.ID = rpc.ID(sub.ID()) // make sure ids are unified
@@ -219,7 +220,7 @@ func (s *StreamAPI) newSubscription(
 	l := s.logger.With().Str("subscription-id", string(rpcSub.ID)).Logger()
 	l.Info().Uint64("evm-height", height).Msg("new subscription created")
 
-	go backend.NewStreamer(
+	go subscription.NewStreamer(
 		s.logger.With().Str("component", "streamer").Logger(),
 		broadcaster,
 		s.config.StreamTimeout,
@@ -238,7 +239,7 @@ func (s *StreamAPI) newSubscription(
 func streamData(
 	notifier *rpc.Notifier,
 	rpcSub *rpc.Subscription,
-	sub *backend.HeightBasedSubscription,
+	sub *subscription.HeightBasedSubscription,
 	l zerolog.Logger,
 ) {
 	defer sub.Close()

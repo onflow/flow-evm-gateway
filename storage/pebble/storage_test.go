@@ -3,11 +3,11 @@ package pebble
 import (
 	"testing"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/onflow/flow-evm-gateway/storage/mocks"
+	"github.com/onflow/go-ethereum/common"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

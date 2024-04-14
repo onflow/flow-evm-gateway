@@ -2,12 +2,13 @@ package api
 
 import (
 	"errors"
+
 	errs "github.com/onflow/flow-evm-gateway/api/errors"
 	"github.com/onflow/flow-evm-gateway/models"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/onflow/go-ethereum/common"
+	"github.com/onflow/go-ethereum/common/hexutil"
+	"github.com/onflow/go-ethereum/core/types"
 )
 
 var (

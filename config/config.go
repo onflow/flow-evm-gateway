@@ -8,12 +8,12 @@ import (
 	"os"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/goccy/go-json"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/crypto"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	flowGo "github.com/onflow/flow-go/model/flow"
+	"github.com/onflow/go-ethereum/common"
 	"github.com/rs/zerolog"
 )
 
@@ -134,9 +134,9 @@ func FromFlags() (*Config, error) {
 
 	switch evmNetwork {
 	case "testnet":
-		cfg.EVMNetworkID = types.FlowEVMTestnetChainID
+		cfg.EVMNetworkID = types.FlowEVMTestNetChainID
 	case "mainnet":
-		cfg.EVMNetworkID = types.FlowEVMMainnetChainID
+		cfg.EVMNetworkID = types.FlowEVMMainNetChainID
 	default:
 		return nil, fmt.Errorf("EVM network ID not supported")
 	}

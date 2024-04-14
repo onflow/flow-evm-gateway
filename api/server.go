@@ -18,7 +18,7 @@ import (
 
 	"encoding/json"
 
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/onflow/go-ethereum/rpc"
 	"github.com/rs/cors"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"

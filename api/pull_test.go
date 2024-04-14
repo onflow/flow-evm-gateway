@@ -1,12 +1,12 @@
 package api
 
 import (
-	"github.com/onflow/flow-evm-gateway/config"
-	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/onflow/flow-evm-gateway/config"
+	"github.com/onflow/go-ethereum/rpc"
+	"github.com/stretchr/testify/require"
 )
 
 type MockFilter struct {

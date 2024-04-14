@@ -1,14 +1,15 @@
 package models
 
 import (
-	"github.com/ethereum/go-ethereum/common"
+	"math/big"
+	"testing"
+
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go/fvm/evm/types"
+	"github.com/onflow/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"math/big"
-	"testing"
 )
 
 func TestCadenceEvents_Block(t *testing.T) {

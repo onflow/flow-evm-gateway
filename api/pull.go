@@ -4,19 +4,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/ethereum/go-ethereum/common"
-	gethTypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth/filters"
-	"github.com/ethereum/go-ethereum/rpc"
+	"math/big"
+	"sync"
+	"time"
+
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/services/logs"
 	"github.com/onflow/flow-evm-gateway/storage"
 	errs "github.com/onflow/flow-evm-gateway/storage/errors"
+	"github.com/onflow/go-ethereum/common"
+	gethTypes "github.com/onflow/go-ethereum/core/types"
+	"github.com/onflow/go-ethereum/eth/filters"
+	"github.com/onflow/go-ethereum/rpc"
 	"github.com/rs/zerolog"
-	"math/big"
-	"sync"
-	"time"
 )
 
 // maxFilters limits the max active filters at any time to prevent abuse and OOM

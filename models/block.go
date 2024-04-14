@@ -3,9 +3,9 @@ package models
 import (
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go/fvm/evm/types"
+	"github.com/onflow/go-ethereum/common"
 )
 
 type blockEventPayload struct {

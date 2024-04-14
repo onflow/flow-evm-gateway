@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/onflow/flow-go/fvm/evm/emulator"
+	"github.com/onflow/go-ethereum/core/types"
+	"github.com/onflow/go-ethereum/crypto"
 )
 
 const defaultGasLimit uint64 = 15_000_000
