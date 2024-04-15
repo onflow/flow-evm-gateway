@@ -36,7 +36,9 @@ func createTestEvent(t *testing.T, txBinary string) (cadence.Event, *types.Resul
 		txType = types.DirectCallTxType
 	} else {
 		gethTx := &gethTypes.Transaction{}
-		gethTx.UnmarshalBinary(txEncoded)
+		err := gethTx.UnmarshalBinary(txEncoded)
+		require.NoError(t, err)
+
 		txHash = gethTx.Hash()
 		txType = gethTx.Type()
 	}

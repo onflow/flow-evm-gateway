@@ -92,10 +92,9 @@ func Test_ConcurrentTransactionSubmission(t *testing.T) {
 
 	totalTxs := keyCount*5 + 3
 	hashes := make([]common.Hash, totalTxs)
+	nonce := uint64(0)
 	for i := 0; i < totalTxs; i++ {
-		nonce := uint64(i)
 		signed, signedHash, err := evmSign(big.NewInt(10), 21000, eoaKey, nonce, &testAddr, nil)
-		nonce++
 		require.NoError(t, err)
 
 		hash, err := rpcTester.sendRawTx(signed)
@@ -108,6 +107,7 @@ func Test_ConcurrentTransactionSubmission(t *testing.T) {
 		if i%3 == 0 {
 			_, _, _ = emu.ExecuteAndCommitBlock()
 		}
+		nonce += 1
 	}
 
 	time.Sleep(5 * time.Second) // wait for all txs to be executed

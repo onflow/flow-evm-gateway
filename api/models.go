@@ -12,7 +12,6 @@ import (
 )
 
 var (
-	errFilterNotFound     = errors.New("filter not found")
 	errExceedMaxTopics    = errors.New("exceed max topics")
 	errExceedMaxAddresses = errors.New("exceed max addresses")
 )

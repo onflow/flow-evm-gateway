@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+
 	"github.com/onflow/flow-evm-gateway/bootstrap"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access/grpc"
@@ -14,7 +15,7 @@ import (
 This command creates a new account with multiple keys, which are saved to keys.json for later
 use with running the gateway in a key-rotation mode (used with --coa-key-file flag).
 */
-func setupKey() {
+func SetupKey() {
 	var (
 		keyCount                                         int
 		keyFlag, addressFlag, hostFlag, ftFlag, flowFlag string
