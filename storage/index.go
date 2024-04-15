@@ -43,14 +43,6 @@ type BlockIndexer interface {
 	// to the Cadence height.
 	// - errors.NotFound if the height is not found
 	GetCadenceHeight(evmHeight uint64) (uint64, error)
-
-	// SetStartingCadenceHeight sets the Cadence height at which
-	// the last import started.
-	SetStartingCadenceHeight(cadenceHeight uint64)
-
-	// GetStartingCadenceHeight returns the Cadence height at which
-	// the import started.
-	GetStartingCadenceHeight() uint64
 }
 
 type ReceiptIndexer interface {

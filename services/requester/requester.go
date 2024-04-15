@@ -45,6 +45,9 @@ var (
 
 	//go:embed cadence/get_code.cdc
 	getCodeScript []byte
+
+	//go:embed cadence/get_latest_evm_height.cdc
+	getLatestEVMHeight []byte
 )
 
 const minFlowBalance = 2
@@ -76,8 +79,8 @@ type Requester interface {
 	// the state for the given block number.
 	GetCode(ctx context.Context, address common.Address, height uint64) ([]byte, error)
 
-	// GetLatestCadenceHeight returns the latest Cadence height of the Flow network.
-	GetLatestCadenceHeight(ctx context.Context) (uint64, error)
+	// GetLatestEVMHeight returns the latest EVM height of the network.
+	GetLatestEVMHeight(ctx context.Context) (uint64, error)
 }
 
 var _ Requester = &EVM{}
@@ -409,13 +412,22 @@ func (e *EVM) GetCode(
 	return code, nil
 }
 
-func (e *EVM) GetLatestCadenceHeight(ctx context.Context) (uint64, error) {
-	blockHeader, err := e.client.GetLatestBlockHeader(ctx, true)
+func (e *EVM) GetLatestEVMHeight(ctx context.Context) (uint64, error) {
+	val, err := e.client.ExecuteScriptAtLatestBlock(
+		ctx,
+		e.replaceAddresses(getLatestEVMHeight),
+		[]cadence.Value{},
+	)
 	if err != nil {
 		return 0, err
 	}
 
-	return blockHeader.Height, nil
+	// sanity check, should never occur
+	if _, ok := val.(cadence.UInt64); !ok {
+		e.logger.Panic().Msg(fmt.Sprintf("failed to convert height %v to UInt64", val))
+	}
+
+	return val.(cadence.UInt64).ToGoValue().(uint64), nil
 }
 
 // getSignerNetworkInfo loads the signer account from network and returns key index and sequence number

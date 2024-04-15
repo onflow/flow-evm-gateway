@@ -50,6 +50,10 @@ type BlockChainAPI struct {
 	transactions storage.TransactionIndexer
 	receipts     storage.ReceiptIndexer
 	accounts     storage.AccountIndexer
+	// The EVM height at which the last import started.
+	// Keeps track at which EVM height we start importing
+	// after restarts/deployments.
+	startingEVMHeight uint64
 }
 
 func NewBlockChainAPI(
@@ -60,15 +64,17 @@ func NewBlockChainAPI(
 	transactions storage.TransactionIndexer,
 	receipts storage.ReceiptIndexer,
 	accounts storage.AccountIndexer,
+	startingEVMHeight uint64,
 ) *BlockChainAPI {
 	return &BlockChainAPI{
-		logger:       logger,
-		config:       config,
-		evm:          evm,
-		blocks:       blocks,
-		transactions: transactions,
-		receipts:     receipts,
-		accounts:     accounts,
+		logger:            logger,
+		config:            config,
+		evm:               evm,
+		blocks:            blocks,
+		transactions:      transactions,
+		receipts:          receipts,
+		accounts:          accounts,
+		startingEVMHeight: startingEVMHeight,
 	}
 }
 
@@ -99,22 +105,18 @@ func (b *BlockChainAPI) BlockNumber() (hexutil.Uint64, error) {
 // - currentBlock:  block number this node is currently importing
 // - highestBlock:  block number of the highest block header this node has received from peers
 func (b *BlockChainAPI) Syncing() (interface{}, error) {
-	currentBlock, err := b.blocks.LatestCadenceHeight()
+	currentBlock, err := b.blocks.LatestEVMHeight()
 	if err != nil {
 		return nil, err
 	}
 
-	highestBlock, err := b.evm.GetLatestCadenceHeight(context.Background())
+	highestBlock, err := b.evm.GetLatestEVMHeight(context.Background())
 	if err != nil {
 		return nil, err
-	}
-
-	if currentBlock == highestBlock {
-		return false, nil
 	}
 
 	return SyncStatus{
-		StartingBlock: hexutil.Uint64(b.blocks.GetStartingCadenceHeight()),
+		StartingBlock: hexutil.Uint64(b.startingEVMHeight),
 		CurrentBlock:  hexutil.Uint64(currentBlock),
 		HighestBlock:  hexutil.Uint64(highestBlock),
 	}, nil

@@ -39,18 +39,13 @@ func Start(ctx context.Context, cfg *config.Config) error {
 	transactionsBroadcaster := broadcast.NewBroadcaster()
 	logsBroadcaster := broadcast.NewBroadcaster()
 
-	latestCadenceHeight, err := blocks.LatestCadenceHeight()
-	// if database is not initialized require init height.
-	// in any case, record the starting Cadence height, for usage
-	// in eth_syncing. Useful to keep track after restarts or
-	// deployments.
-	if errors.Is(err, storageErrs.ErrNotInitialized) {
+	// if database is not initialized require init height
+	if _, err := blocks.LatestCadenceHeight(); errors.Is(err, storageErrs.ErrNotInitialized) {
 		if err := blocks.InitHeights(cfg.InitCadenceHeight); err != nil {
 			return fmt.Errorf("failed to init the database: %w", err)
 		}
 		logger.Info().Msg("database initialized with 0 evm and cadence heights")
 	}
-	blocks.SetStartingCadenceHeight(latestCadenceHeight)
 
 	go func() {
 		err := startServer(
@@ -207,6 +202,11 @@ func startServer(
 		return fmt.Errorf("failed to create EVM requester: %w", err)
 	}
 
+	startingEVMHeight, err := blocks.LatestEVMHeight()
+	if err != nil {
+		return fmt.Errorf("failed to retrieve the starting EVM height: %w", err)
+	}
+
 	blockchainAPI := api.NewBlockChainAPI(
 		logger,
 		cfg,
@@ -215,6 +215,7 @@ func startServer(
 		transactions,
 		receipts,
 		accounts,
+		startingEVMHeight,
 	)
 
 	streamAPI := api.NewStreamAPI(

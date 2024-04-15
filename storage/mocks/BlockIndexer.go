@@ -90,20 +90,6 @@ func (_m *BlockIndexer) GetCadenceHeight(evmHeight uint64) (uint64, error) {
 	return r0, r1
 }
 
-// GetStartingCadenceHeight provides a mock function with given fields:
-func (_m *BlockIndexer) GetStartingCadenceHeight() uint64 {
-	ret := _m.Called()
-
-	var r0 uint64
-	if rf, ok := ret.Get(0).(func() uint64); ok {
-		r0 = rf()
-	} else {
-		r0 = ret.Get(0).(uint64)
-	}
-
-	return r0
-}
-
 // LatestCadenceHeight provides a mock function with given fields:
 func (_m *BlockIndexer) LatestCadenceHeight() (uint64, error) {
 	ret := _m.Called()
@@ -164,11 +150,6 @@ func (_m *BlockIndexer) SetLatestCadenceHeight(height uint64) error {
 	}
 
 	return r0
-}
-
-// SetStartingCadenceHeight provides a mock function with given fields: cadenceHeight
-func (_m *BlockIndexer) SetStartingCadenceHeight(cadenceHeight uint64) {
-	_m.Called(cadenceHeight)
 }
 
 // Store provides a mock function with given fields: cadenceHeight, block
