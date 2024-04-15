@@ -94,8 +94,11 @@ it('get transaction', async() => {
 })
 
 it('get status', async() => {
-    //let mining = await web3.eth.isMining() todo
-    let sync = await web3.eth.isSyncing()
-    //assert.isFalse(mining)
-    assert.isFalse(sync)
+    let mining = await web3.eth.isMining()
+    assert.isFalse(mining)
+
+    let syncInfo = await web3.eth.isSyncing()
+    assert.equal(syncInfo.startingBlock, '0x3')
+    assert.equal(syncInfo.currentBlock, '0x3')
+    assert.equal(syncInfo.highestBlock, '0x3')
 })
