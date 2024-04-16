@@ -82,7 +82,7 @@ type StorageResult struct {
 type Transaction struct {
 	BlockHash           *common.Hash             `json:"blockHash"`
 	BlockNumber         *hexutil.Big             `json:"blockNumber"`
-	From                *common.MixedcaseAddress `json:"from"`
+	From                common.MixedcaseAddress  `json:"from"`
 	Gas                 hexutil.Uint64           `json:"gas"`
 	GasPrice            *hexutil.Big             `json:"gasPrice"`
 	GasFeeCap           *hexutil.Big             `json:"maxFeePerGas,omitempty"`
@@ -116,9 +116,10 @@ func NewTransaction(tx models.Transaction, receipt types.Receipt) (*Transaction,
 	}
 	from := common.NewMixedcaseAddress(f)
 
-	var to common.MixedcaseAddress
+	var to *common.MixedcaseAddress
 	if t := tx.To(); t != nil {
-		to = common.NewMixedcaseAddress(*t)
+		mixedCaseAddress := common.NewMixedcaseAddress(*t)
+		to = &mixedCaseAddress
 	}
 
 	v, r, s := tx.RawSignatureValues()
@@ -128,8 +129,8 @@ func NewTransaction(tx models.Transaction, receipt types.Receipt) (*Transaction,
 		Hash:             txHash,
 		BlockHash:        &receipt.BlockHash,
 		BlockNumber:      (*hexutil.Big)(receipt.BlockNumber),
-		From:             &from,
-		To:               &to,
+		From:             from,
+		To:               to,
 		Gas:              hexutil.Uint64(receipt.GasUsed),
 		GasPrice:         (*hexutil.Big)(receipt.EffectiveGasPrice),
 		Input:            tx.Data(),
