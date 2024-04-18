@@ -21,8 +21,6 @@ func (mf *MockFilter) expired() bool {
 	return mf.expiredStatus
 }
 
-func (mf *MockFilter) prepare() {}
-
 func (mf *MockFilter) updateUsed(last uint64) {
 	// update activities if needed
 }

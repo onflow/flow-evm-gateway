@@ -133,10 +133,14 @@ func (s *StreamAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) (*
 			}
 
 			h, err := tx.Hash()
-			if fullTx != nil && *fullTx == false || fullTx == nil { // make sure not nil
-				return h, nil
+			if err != nil {
+				return nil, fmt.Errorf("failed to compute tx hash: %w", err)
 			}
-			return NewTransaction(tx, *rcp)
+
+			if fullTx != nil && *fullTx {
+				return NewTransaction(tx, *rcp)
+			}
+			return h, nil
 		},
 	)
 	l := s.logger.With().Str("subscription-id", string(sub.ID)).Logger()

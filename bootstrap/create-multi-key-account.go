@@ -3,6 +3,8 @@ package bootstrap
 import (
 	"context"
 	"fmt"
+	"strings"
+
 	"github.com/onflow/cadence"
 	json2 "github.com/onflow/cadence/encoding/json"
 	"github.com/onflow/flow-go-sdk"
@@ -10,7 +12,6 @@ import (
 	"github.com/onflow/flow-go-sdk/crypto"
 	"github.com/onflow/flow-go-sdk/templates"
 	"golang.org/x/exp/rand"
-	"strings"
 )
 
 /*
@@ -31,6 +32,9 @@ func CreateMultiKeyAccount(
 	for i := 0; i < keyCount; i++ {
 		seed := make([]byte, crypto.MinSeedLength)
 		_, err := rand.Read(seed)
+		if err != nil {
+			return nil, nil, err
+		}
 
 		pk, err := crypto.GeneratePrivateKey(crypto.ECDSA_P256, seed)
 		if err != nil {

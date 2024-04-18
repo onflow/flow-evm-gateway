@@ -32,7 +32,6 @@ import (
 	"github.com/onflow/flow-go/model/flow"
 	"github.com/onflow/go-ethereum/common"
 	"github.com/onflow/go-ethereum/core/types"
-	"github.com/onflow/go-ethereum/rpc"
 	"github.com/rs/zerolog"
 
 	"github.com/onflow/flow-evm-gateway/config"
@@ -405,19 +404,4 @@ func (r *rpcTest) sendRawTx(signed []byte) (common.Hash, error) {
 	}
 
 	return h, nil
-}
-
-func (r *rpcTest) getFilterChangesLogs(id rpc.ID) ([]*types.Log, error) {
-	rpcRes, err := r.request("eth_getFilterChanges", fmt.Sprintf(`["%s"]`, id))
-	if err != nil {
-		return nil, err
-	}
-
-	var lg []*types.Log
-	err = json.Unmarshal(rpcRes, &lg)
-	if err != nil {
-		return nil, err
-	}
-
-	return lg, nil
 }
