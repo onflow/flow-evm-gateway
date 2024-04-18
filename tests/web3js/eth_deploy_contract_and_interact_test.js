@@ -60,5 +60,20 @@ it('deploy contract and interact', async() => {
     assert.equal(updateRcp.status, conf.successStatus)
     assert.equal(updateTx.data, updateData)
 
+    // submit a transaction that emits logs
+    res = await helpers.signAndSend({
+        from: conf.eoa.address,
+        to: contractAddress,
+        data: deployed.contract.methods.sum(100, 200).encodeABI(),
+        gas: 1000000,
+        gasPrice: 0
+    })
+    assert.equal(res.receipt.status, conf.successStatus)
+
+    // assert that logsBloom from transaction receipt and block match
+    latestHeight = await web3.eth.getBlockNumber()
+    let block = await web3.eth.getBlock(latestHeight)
+    assert.equal(block.logsBloom, res.receipt.logsBloom)
+
 }).timeout(10*1000)
 

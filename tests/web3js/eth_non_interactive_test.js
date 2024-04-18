@@ -17,7 +17,7 @@ it('get block', async () => {
     assert.notDeepEqual(block, {})
     assert.isString(block.hash)
     assert.isString(block.parentHash)
-    assert.isString(block.logsBloom)
+    assert.lengthOf(block.logsBloom, 514)
 
     let blockHash = await web3.eth.getBlock(block.hash)
     assert.deepEqual(block, blockHash)

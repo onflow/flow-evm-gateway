@@ -769,10 +769,18 @@ func (b *BlockChainAPI) prepareBlockResponse(
 	}
 	if len(transactions) > 0 {
 		totalGasUsed := hexutil.Uint64(0)
+		logs := make([]*types.Log, 0)
 		for _, tx := range transactions {
+			txReceipt, err := b.receipts.GetByTransactionID(tx.Hash)
+			if err != nil {
+				return nil, err
+			}
 			totalGasUsed += tx.Gas
+			logs = append(logs, txReceipt.Logs...)
 		}
 		blockResponse.GasUsed = totalGasUsed
+		// TODO(m-Peter): Consider if its worthwhile to move this in storage.
+		blockResponse.LogsBloom = types.LogsBloom(logs)
 	}
 
 	if fullTx {
