@@ -413,6 +413,8 @@ func (e *EVM) GetCode(
 }
 
 func (e *EVM) GetLatestEVMHeight(ctx context.Context) (uint64, error) {
+	// TODO(m-Peter): Consider adding some time-based caching, if this
+	// endpoint turns out to be called quite frequently.
 	val, err := e.client.ExecuteScriptAtLatestBlock(
 		ctx,
 		e.replaceAddresses(getLatestEVMHeight),
