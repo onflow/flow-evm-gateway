@@ -202,6 +202,11 @@ func startServer(
 		return fmt.Errorf("failed to create EVM requester: %w", err)
 	}
 
+	indexingResumedHeight, err := blocks.LatestEVMHeight()
+	if err != nil {
+		return fmt.Errorf("failed to retrieve the indexing resumed height: %w", err)
+	}
+
 	blockchainAPI := api.NewBlockChainAPI(
 		logger,
 		cfg,
@@ -210,6 +215,7 @@ func startServer(
 		transactions,
 		receipts,
 		accounts,
+		indexingResumedHeight,
 	)
 
 	streamAPI := api.NewStreamAPI(

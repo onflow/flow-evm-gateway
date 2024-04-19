@@ -50,6 +50,9 @@ type BlockChainAPI struct {
 	transactions storage.TransactionIndexer
 	receipts     storage.ReceiptIndexer
 	accounts     storage.AccountIndexer
+	// Stores the height from which the indexing resumed since the last restart.
+	// This is needed for syncing status.
+	indexingResumedHeight uint64
 }
 
 func NewBlockChainAPI(
@@ -60,15 +63,17 @@ func NewBlockChainAPI(
 	transactions storage.TransactionIndexer,
 	receipts storage.ReceiptIndexer,
 	accounts storage.AccountIndexer,
+	indexingResumedHeight uint64,
 ) *BlockChainAPI {
 	return &BlockChainAPI{
-		logger:       logger,
-		config:       config,
-		evm:          evm,
-		blocks:       blocks,
-		transactions: transactions,
-		receipts:     receipts,
-		accounts:     accounts,
+		logger:                logger,
+		config:                config,
+		evm:                   evm,
+		blocks:                blocks,
+		transactions:          transactions,
+		receipts:              receipts,
+		accounts:              accounts,
+		indexingResumedHeight: indexingResumedHeight,
 	}
 }
 
@@ -92,16 +97,28 @@ func (b *BlockChainAPI) BlockNumber() (hexutil.Uint64, error) {
 	return hexutil.Uint64(latestBlockHeight), nil
 }
 
-// Syncing returns false in case the node is currently not syncing with the network. It can be up-to-date or has not
-// yet received the latest block headers from its pears. In case it is synchronizing:
+// Syncing returns false in case the node is currently not syncing with the network.
+// It can be up-to-date or has not yet received the latest block headers from its peers.
+// In case it is synchronizing:
 // - startingBlock: block number this node started to synchronize from
 // - currentBlock:  block number this node is currently importing
 // - highestBlock:  block number of the highest block header this node has received from peers
-// - pulledStates:  number of state entries processed until now
-// - knownStates:   number of known state entries that still need to be pulled
 func (b *BlockChainAPI) Syncing() (interface{}, error) {
-	// todo maybe we should check if the node is caught up with the latest flow block
-	return false, nil
+	currentBlock, err := b.blocks.LatestEVMHeight()
+	if err != nil {
+		return nil, err
+	}
+
+	highestBlock, err := b.evm.GetLatestEVMHeight(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
+	return SyncStatus{
+		StartingBlock: hexutil.Uint64(b.indexingResumedHeight),
+		CurrentBlock:  hexutil.Uint64(currentBlock),
+		HighestBlock:  hexutil.Uint64(highestBlock),
+	}, nil
 }
 
 // SendRawTransaction will add the signed transaction to the transaction pool.

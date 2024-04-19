@@ -10,7 +10,7 @@ func TestWeb3_E2E(t *testing.T) {
 		runWeb3Test(t, "setup_test")
 	})
 
-	t.Run("ready-only interactions", func(t *testing.T) {
+	t.Run("read-only interactions", func(t *testing.T) {
 		runWeb3Test(t, "eth_non_interactive_test")
 	})
 

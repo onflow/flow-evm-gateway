@@ -93,9 +93,18 @@ it('get transaction', async() => {
     assert.equal(rcp.gasUsed, tx.gas)
 })
 
-it('get status', async() => {
-    //let mining = await web3.eth.isMining() todo
-    let sync = await web3.eth.isSyncing()
-    //assert.isFalse(mining)
-    assert.isFalse(sync)
+it('get mining status', async() => {
+    let mining = await web3.eth.isMining()
+    assert.isFalse(mining)
+})
+
+it('get syncing status', async() => {
+    let height = await web3.eth.getBlockNumber()
+    assert.equal(height, conf.startBlockHeight)
+
+    let syncInfo = await web3.eth.isSyncing()
+    // conf.startBlockHeight = 3n
+    assert.equal(syncInfo.startingBlock, height)
+    assert.equal(syncInfo.currentBlock, height)
+    assert.equal(syncInfo.highestBlock, height)
 })
