@@ -255,18 +255,32 @@ func (e *EVM) signAndSend(ctx context.Context, script []byte, args ...cadence.Va
 	return flowTx.ID(), nil
 }
 
-func (e *EVM) GetBalance(ctx context.Context, address common.Address, height uint64) (*big.Int, error) {
-	// todo make sure provided height is used
+func (e *EVM) GetBalance(
+	ctx context.Context,
+	address common.Address,
+	height uint64,
+) (*big.Int, error) {
 	hexEncodedAddress, err := addressToCadenceString(address)
 	if err != nil {
 		return nil, err
 	}
 
-	val, err := e.client.ExecuteScriptAtLatestBlock(
-		ctx,
-		e.replaceAddresses(getBalanceScript),
-		[]cadence.Value{hexEncodedAddress},
-	)
+	var val cadence.Value
+	if height > 0 {
+		val, err = e.client.ExecuteScriptAtBlockHeight(
+			ctx,
+			height,
+			e.replaceAddresses(getBalanceScript),
+			[]cadence.Value{hexEncodedAddress},
+		)
+	} else {
+		val, err = e.client.ExecuteScriptAtLatestBlock(
+			ctx,
+			e.replaceAddresses(getBalanceScript),
+			[]cadence.Value{hexEncodedAddress},
+		)
+	}
+
 	if err != nil {
 		return nil, err
 	}

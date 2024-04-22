@@ -40,4 +40,29 @@ it('transfer flow between two EOA accounts', async() => {
     assert.equal(transferTx.hash, transfer.receipt.transactionHash)
     assert.equal(transferTx.value, transferValue)
 
+    // get balance at special block tags
+    let blockTags = ["latest", "pending", "safe", "finalized"]
+    for (let blockTag of blockTags) {
+        receiverWei = await web3.eth.getBalance(receiver.address, blockTag)
+        assert.equal(receiverWei, transferValue)
+    }
+
+    // get balance at earliest block tag
+    receiverWei = await web3.eth.getBalance(receiver.address, "earliest")
+    assert.equal(receiverWei, transferValue)
+
+    // get balance at past block
+    receiverWei = await web3.eth.getBalance(receiver.address, latest - 1n)
+    assert.equal(receiverWei, 0n)
+
+    // get balance at non-existent block number
+    try {
+        receiverWei = await web3.eth.getBalance(receiver.address, latest + 15n)
+    } catch(error) {
+        assert.match(error.message, /entity not found/)
+    }
+
+    // get balance at latest block number
+    receiverWei = await web3.eth.getBalance(receiver.address, latest)
+    assert.equal(receiverWei, transferValue)
 }).timeout(10*1000)

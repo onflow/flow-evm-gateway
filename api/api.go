@@ -151,10 +151,35 @@ func (b *BlockChainAPI) GasPrice(ctx context.Context) (*hexutil.Big, error) {
 func (b *BlockChainAPI) GetBalance(
 	ctx context.Context,
 	address common.Address,
-	_ *rpc.BlockNumberOrHash,
+	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (*hexutil.Big, error) {
-	// todo use provided height, when height mapping is implemented
-	balance, err := b.evm.GetBalance(ctx, address, 0)
+	height := uint64(0)
+
+	if number, ok := blockNumberOrHash.Number(); ok {
+		if number >= 0 {
+			var err error
+			height, err = b.blocks.GetCadenceHeight(uint64(number.Int64()))
+			if err != nil {
+				b.logger.Error().Err(err).Msg("failed to get cadence height")
+				return nil, err
+			}
+		}
+	}
+
+	if hash, ok := blockNumberOrHash.Hash(); ok {
+		block, err := b.blocks.GetByID(hash)
+		if err != nil {
+			b.logger.Error().Err(err).Msg("failed to get block by hash")
+			return nil, err
+		}
+		height, err = b.blocks.GetCadenceHeight(block.Height)
+		if err != nil {
+			b.logger.Error().Err(err).Msg("failed to get cadence height")
+			return nil, err
+		}
+	}
+
+	balance, err := b.evm.GetBalance(ctx, address, height)
 	if err != nil {
 		b.logger.Error().Err(err).Msg("failed to get balance")
 		return nil, errs.ErrInternal
