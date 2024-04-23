@@ -65,15 +65,15 @@ type Requester interface {
 	// Call executes the given signed transaction data on the state for the given block number.
 	// Note, this function doesn't make and changes in the state/blockchain and is
 	// useful to execute and retrieve values.
-	Call(ctx context.Context, data []byte) ([]byte, error)
+	Call(ctx context.Context, data []byte, height uint64) ([]byte, error)
 
 	// EstimateGas executes the given signed transaction data on the state.
 	// Note, this function doesn't make any changes in the state/blockchain and is
 	// useful to executed and retrieve the gas consumption and possible failures.
 	EstimateGas(ctx context.Context, data []byte) (uint64, error)
 
-	// GetNonce gets nonce from the network.
-	GetNonce(ctx context.Context, address common.Address) (uint64, error)
+	// GetNonce gets nonce from the network at the given block height.
+	GetNonce(ctx context.Context, address common.Address, height uint64) (uint64, error)
 
 	// GetCode returns the code stored at the given address in
 	// the state for the given block number.
@@ -280,7 +280,6 @@ func (e *EVM) GetBalance(
 			[]cadence.Value{hexEncodedAddress},
 		)
 	}
-
 	if err != nil {
 		return nil, err
 	}
@@ -295,17 +294,31 @@ func (e *EVM) GetBalance(
 	return val.(cadence.UInt).ToGoValue().(*big.Int), nil
 }
 
-func (e *EVM) GetNonce(ctx context.Context, address common.Address) (uint64, error) {
+func (e *EVM) GetNonce(
+	ctx context.Context,
+	address common.Address,
+	height uint64,
+) (uint64, error) {
 	hexEncodedAddress, err := addressToCadenceString(address)
 	if err != nil {
 		return 0, err
 	}
 
-	val, err := e.client.ExecuteScriptAtLatestBlock(
-		ctx,
-		e.replaceAddresses(getNonceScript),
-		[]cadence.Value{hexEncodedAddress},
-	)
+	var val cadence.Value
+	if height > 0 {
+		val, err = e.client.ExecuteScriptAtBlockHeight(
+			ctx,
+			height,
+			e.replaceAddresses(getNonceScript),
+			[]cadence.Value{hexEncodedAddress},
+		)
+	} else {
+		val, err = e.client.ExecuteScriptAtLatestBlock(
+			ctx,
+			e.replaceAddresses(getNonceScript),
+			[]cadence.Value{hexEncodedAddress},
+		)
+	}
 	if err != nil {
 		return 0, err
 	}
@@ -320,7 +333,11 @@ func (e *EVM) GetNonce(ctx context.Context, address common.Address) (uint64, err
 	return val.(cadence.UInt64).ToGoValue().(uint64), nil
 }
 
-func (e *EVM) Call(ctx context.Context, data []byte) ([]byte, error) {
+func (e *EVM) Call(
+	ctx context.Context,
+	data []byte,
+	height uint64,
+) ([]byte, error) {
 	hexEncodedTx, err := cadence.NewString(hex.EncodeToString(data))
 	if err != nil {
 		return nil, err
@@ -330,11 +347,21 @@ func (e *EVM) Call(ctx context.Context, data []byte) ([]byte, error) {
 		Str("data", fmt.Sprintf("%x", data)).
 		Msg("call")
 
-	scriptResult, err := e.client.ExecuteScriptAtLatestBlock(
-		ctx,
-		e.replaceAddresses(callScript),
-		[]cadence.Value{hexEncodedTx},
-	)
+	var scriptResult cadence.Value
+	if height > 0 {
+		scriptResult, err = e.client.ExecuteScriptAtBlockHeight(
+			ctx,
+			height,
+			e.replaceAddresses(callScript),
+			[]cadence.Value{hexEncodedTx},
+		)
+	} else {
+		scriptResult, err = e.client.ExecuteScriptAtLatestBlock(
+			ctx,
+			e.replaceAddresses(callScript),
+			[]cadence.Value{hexEncodedTx},
+		)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute script: %w", err)
 	}
@@ -404,11 +431,21 @@ func (e *EVM) GetCode(
 		return nil, err
 	}
 
-	value, err := e.client.ExecuteScriptAtLatestBlock(
-		ctx,
-		e.replaceAddresses(getCodeScript),
-		[]cadence.Value{hexEncodedAddress},
-	)
+	var value cadence.Value
+	if height > 0 {
+		value, err = e.client.ExecuteScriptAtBlockHeight(
+			ctx,
+			height,
+			e.replaceAddresses(getCodeScript),
+			[]cadence.Value{hexEncodedAddress},
+		)
+	} else {
+		value, err = e.client.ExecuteScriptAtLatestBlock(
+			ctx,
+			e.replaceAddresses(getCodeScript),
+			[]cadence.Value{hexEncodedAddress},
+		)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute script for get code: %w", err)
 	}

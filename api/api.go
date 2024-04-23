@@ -153,33 +153,12 @@ func (b *BlockChainAPI) GetBalance(
 	address common.Address,
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (*hexutil.Big, error) {
-	height := uint64(0)
-
-	if number, ok := blockNumberOrHash.Number(); ok {
-		if number >= 0 {
-			var err error
-			height, err = b.blocks.GetCadenceHeight(uint64(number.Int64()))
-			if err != nil {
-				b.logger.Error().Err(err).Msg("failed to get cadence height")
-				return nil, err
-			}
-		}
+	cadenceHeight, err := b.getCadenceHeight(blockNumberOrHash)
+	if err != nil {
+		return nil, err
 	}
 
-	if hash, ok := blockNumberOrHash.Hash(); ok {
-		block, err := b.blocks.GetByID(hash)
-		if err != nil {
-			b.logger.Error().Err(err).Msg("failed to get block by hash")
-			return nil, err
-		}
-		height, err = b.blocks.GetCadenceHeight(block.Height)
-		if err != nil {
-			b.logger.Error().Err(err).Msg("failed to get cadence height")
-			return nil, err
-		}
-	}
-
-	balance, err := b.evm.GetBalance(ctx, address, height)
+	balance, err := b.evm.GetBalance(ctx, address, cadenceHeight)
 	if err != nil {
 		b.logger.Error().Err(err).Msg("failed to get balance")
 		return nil, errs.ErrInternal
@@ -416,13 +395,18 @@ func (b *BlockChainAPI) Call(
 	overrides *StateOverride,
 	blockOverrides *BlockOverrides,
 ) (hexutil.Bytes, error) {
+	cadenceHeight, err := b.getCadenceHeight(blockNumberOrHash)
+	if err != nil {
+		return nil, err
+	}
+
 	txData, err := signTxFromArgs(args)
 	if err != nil {
 		b.logger.Error().Err(err).Msg("failed to sign transaction for call")
 		return nil, errs.ErrInternal
 	}
 
-	res, err := b.evm.Call(ctx, txData)
+	res, err := b.evm.Call(ctx, txData, cadenceHeight)
 	if err != nil {
 		b.logger.Error().Err(err).Msg("failed to execute call")
 		return nil, errs.ErrInternal
@@ -469,12 +453,12 @@ func (b *BlockChainAPI) GetTransactionCount(
 	address common.Address,
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (*hexutil.Uint64, error) {
-	// todo support previous nonce
-	if blockNumberOrHash != nil && *blockNumberOrHash.BlockNumber != rpc.LatestBlockNumber {
-		b.logger.Warn().Msg("transaction count for special blocks not supported") // but still return latest for now
+	cadenceHeight, err := b.getCadenceHeight(blockNumberOrHash)
+	if err != nil {
+		return nil, err
 	}
 
-	networkNonce, err := b.evm.GetNonce(ctx, address)
+	networkNonce, err := b.evm.GetNonce(ctx, address, cadenceHeight)
 	if err != nil {
 		b.logger.Error().Err(err).Msg("get nonce on network failed")
 	}
@@ -530,13 +514,12 @@ func (b *BlockChainAPI) GetCode(
 	address common.Address,
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (hexutil.Bytes, error) {
-	// todo support previous block heights
-	if blockNumberOrHash != nil && *blockNumberOrHash.BlockNumber != rpc.LatestBlockNumber {
-		// but still return latest for now
-		b.logger.Warn().Msg("get code for special blocks not supported")
+	cadenceHeight, err := b.getCadenceHeight(blockNumberOrHash)
+	if err != nil {
+		return nil, err
 	}
 
-	code, err := b.evm.GetCode(ctx, address, 0)
+	code, err := b.evm.GetCode(ctx, address, cadenceHeight)
 	if err != nil {
 		b.logger.Error().Err(err).Msg("failed to retrieve account code")
 		return nil, err
@@ -775,4 +758,36 @@ func (b *BlockChainAPI) prepareBlockResponse(
 	}
 
 	return blockResponse, nil
+}
+
+func (b *BlockChainAPI) getCadenceHeight(
+	blockNumberOrHash *rpc.BlockNumberOrHash,
+) (uint64, error) {
+	if number, ok := blockNumberOrHash.Number(); ok {
+		height := uint64(0)
+		if number >= 0 {
+			var err error
+			height, err = b.blocks.GetCadenceHeight(uint64(number.Int64()))
+			if err != nil {
+				b.logger.Error().Err(err).Msg("failed to get cadence height")
+				return 0, err
+			}
+		}
+		return height, nil
+	} else if hash, ok := blockNumberOrHash.Hash(); ok {
+		block, err := b.blocks.GetByID(hash)
+		if err != nil {
+			b.logger.Error().Err(err).Msg("failed to get block by hash")
+			return 0, err
+		}
+		height, err := b.blocks.GetCadenceHeight(block.Height)
+		if err != nil {
+			b.logger.Error().Err(err).Msg("failed to get cadence height")
+			return 0, err
+		}
+
+		return height, nil
+	} else {
+		return 0, fmt.Errorf("invalid arguments; neither block nor hash specified")
+	}
 }
