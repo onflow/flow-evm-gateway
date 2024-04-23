@@ -15,6 +15,9 @@ it('transfer flow between two EOA accounts', async() => {
     let senderBalance = await web3.eth.getBalance(conf.eoa.address)
     assert.equal(senderBalance, utils.toWei(conf.fundedAmount, "ether"))
 
+    let txCount = await web3.eth.getTransactionCount(conf.eoa.address)
+    assert.equal(0n, txCount)
+
     let transferValue = utils.toWei("0.5", "ether")
     let transfer = await helpers.signAndSend({
         from: conf.eoa.address,
@@ -26,6 +29,10 @@ it('transfer flow between two EOA accounts', async() => {
     assert.equal(transfer.receipt.status, conf.successStatus)
     assert.equal(transfer.receipt.from, conf.eoa.address)
     assert.equal(transfer.receipt.to, receiver.address)
+
+    // check that transaction count was increased
+    txCount = await web3.eth.getTransactionCount(conf.eoa.address)
+    assert.equal(1n, txCount)
 
     // check balance was moved
     receiverWei = await web3.eth.getBalance(receiver.address)
@@ -39,6 +46,10 @@ it('transfer flow between two EOA accounts', async() => {
     let transferTx = await web3.eth.getTransactionFromBlock(latest, 0)
     assert.equal(transferTx.hash, transfer.receipt.transactionHash)
     assert.equal(transferTx.value, transferValue)
+
+    // check that getTransactionCount can handle specific block heights
+    txCount = await web3.eth.getTransactionCount(conf.eoa.address, latest - 1n)
+    assert.equal(0n, txCount)
 
     // get balance at special block tags
     let blockTags = ["latest", "pending", "safe", "finalized"]
