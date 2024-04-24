@@ -77,7 +77,7 @@ func FromFlags() (*Config, error) {
 	flag.StringVar(&cfg.RPCHost, "rpc-host", "", "Host for the RPC API server")
 	flag.IntVar(&cfg.RPCPort, "rpc-port", 8545, "Port for the RPC API server")
 	flag.StringVar(&cfg.AccessNodeGRPCHost, "access-node-grpc-host", "localhost:3569", "Host to the flow access node gRPC API")
-	flag.StringVar(&evmNetwork, "evm-network-id", "testnet", "EVM network ID (testnet, mainnet)")
+	flag.StringVar(&evmNetwork, "evm-network-id", "previewnet", "EVM network ID (previewnet, testnet, mainnet)")
 	flag.StringVar(&flowNetwork, "flow-network-id", "flow-emulator", "Flow network ID (flow-emulator, flow-previewnet)")
 	flag.StringVar(&coinbase, "coinbase", "", "Coinbase address to use for fee collection")
 	flag.StringVar(&gas, "gas-price", "1", "Static gas price used for EVM transactions")
@@ -133,6 +133,8 @@ func FromFlags() (*Config, error) {
 	}
 
 	switch evmNetwork {
+	case "previewnet":
+		cfg.EVMNetworkID = types.FlowEVMPreviewNetChainID
 	case "testnet":
 		cfg.EVMNetworkID = types.FlowEVMTestNetChainID
 	case "mainnet":
