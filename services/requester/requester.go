@@ -265,21 +265,12 @@ func (e *EVM) GetBalance(
 		return nil, err
 	}
 
-	var val cadence.Value
-	if height > 0 {
-		val, err = e.client.ExecuteScriptAtBlockHeight(
-			ctx,
-			height,
-			e.replaceAddresses(getBalanceScript),
-			[]cadence.Value{hexEncodedAddress},
-		)
-	} else {
-		val, err = e.client.ExecuteScriptAtLatestBlock(
-			ctx,
-			e.replaceAddresses(getBalanceScript),
-			[]cadence.Value{hexEncodedAddress},
-		)
-	}
+	val, err := e.executeScriptAtHeight(
+		ctx,
+		getBalanceScript,
+		height,
+		[]cadence.Value{hexEncodedAddress},
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -304,21 +295,12 @@ func (e *EVM) GetNonce(
 		return 0, err
 	}
 
-	var val cadence.Value
-	if height > 0 {
-		val, err = e.client.ExecuteScriptAtBlockHeight(
-			ctx,
-			height,
-			e.replaceAddresses(getNonceScript),
-			[]cadence.Value{hexEncodedAddress},
-		)
-	} else {
-		val, err = e.client.ExecuteScriptAtLatestBlock(
-			ctx,
-			e.replaceAddresses(getNonceScript),
-			[]cadence.Value{hexEncodedAddress},
-		)
-	}
+	val, err := e.executeScriptAtHeight(
+		ctx,
+		getNonceScript,
+		height,
+		[]cadence.Value{hexEncodedAddress},
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -347,21 +329,12 @@ func (e *EVM) Call(
 		Str("data", fmt.Sprintf("%x", data)).
 		Msg("call")
 
-	var scriptResult cadence.Value
-	if height > 0 {
-		scriptResult, err = e.client.ExecuteScriptAtBlockHeight(
-			ctx,
-			height,
-			e.replaceAddresses(callScript),
-			[]cadence.Value{hexEncodedTx},
-		)
-	} else {
-		scriptResult, err = e.client.ExecuteScriptAtLatestBlock(
-			ctx,
-			e.replaceAddresses(callScript),
-			[]cadence.Value{hexEncodedTx},
-		)
-	}
+	scriptResult, err := e.executeScriptAtHeight(
+		ctx,
+		callScript,
+		height,
+		[]cadence.Value{hexEncodedTx},
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute script: %w", err)
 	}
@@ -431,21 +404,12 @@ func (e *EVM) GetCode(
 		return nil, err
 	}
 
-	var value cadence.Value
-	if height > 0 {
-		value, err = e.client.ExecuteScriptAtBlockHeight(
-			ctx,
-			height,
-			e.replaceAddresses(getCodeScript),
-			[]cadence.Value{hexEncodedAddress},
-		)
-	} else {
-		value, err = e.client.ExecuteScriptAtLatestBlock(
-			ctx,
-			e.replaceAddresses(getCodeScript),
-			[]cadence.Value{hexEncodedAddress},
-		)
-	}
+	value, err := e.executeScriptAtHeight(
+		ctx,
+		getCodeScript,
+		height,
+		[]cadence.Value{hexEncodedAddress},
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute script for get code: %w", err)
 	}
@@ -519,6 +483,32 @@ func (e *EVM) replaceAddresses(script []byte) []byte {
 	s = strings.ReplaceAll(s, "0xCOA", e.config.COAAddress.HexWithPrefix())
 
 	return []byte(s)
+}
+
+// executeScriptAtHeight will execute the given script, at the given
+// block height, with the given arguments. A height of 0 is a special
+// value, which means the script will be executed at the latest sealed
+// block.
+func (e *EVM) executeScriptAtHeight(
+	ctx context.Context,
+	script []byte,
+	height uint64,
+	arguments []cadence.Value,
+) (cadence.Value, error) {
+	if height > 0 {
+		return e.client.ExecuteScriptAtBlockHeight(
+			ctx,
+			height,
+			e.replaceAddresses(script),
+			arguments,
+		)
+	}
+
+	return e.client.ExecuteScriptAtLatestBlock(
+		ctx,
+		e.replaceAddresses(script),
+		arguments,
+	)
 }
 
 func addressToCadenceString(address common.Address) (cadence.String, error) {
