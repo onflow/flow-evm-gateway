@@ -69,6 +69,9 @@ func TestFilterExpiryChecker(t *testing.T) {
 			// sleep to let the goroutine work
 			time.Sleep(100 * time.Millisecond)
 
+			api.mux.Lock()
+			defer api.mux.Unlock()
+
 			if len(api.filters) > 0 {
 				for id, f := range api.filters {
 					require.Falsef(t, f.expired(), "filter with id %s should be expired", id)
