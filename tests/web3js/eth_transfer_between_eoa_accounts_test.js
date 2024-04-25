@@ -60,7 +60,7 @@ it('transfer flow between two EOA accounts', async() => {
 
     // get balance at earliest block tag
     receiverWei = await web3.eth.getBalance(receiver.address, "earliest")
-    assert.equal(receiverWei, transferValue)
+    assert.equal(receiverWei, 0n)
 
     // get balance at past block
     receiverWei = await web3.eth.getBalance(receiver.address, latest - 1n)

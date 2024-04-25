@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"math/big"
 	"strings"
 
@@ -52,6 +53,8 @@ var (
 
 const minFlowBalance = 2
 const coaFundingBalance = minFlowBalance - 1
+
+const LatestBlockHeight uint64 = math.MaxUint64 - 1
 
 type Requester interface {
 	// SendRawTransaction will submit signed transaction data to the network.
@@ -486,26 +489,26 @@ func (e *EVM) replaceAddresses(script []byte) []byte {
 }
 
 // executeScriptAtHeight will execute the given script, at the given
-// block height, with the given arguments. A height of 0 is a special
-// value, which means the script will be executed at the latest sealed
-// block.
+// block height, with the given arguments. A height of `LatestBlockHeight`
+// (math.MaxUint64 - 1) is a special value, which means the script will be
+// executed at the latest sealed block.
 func (e *EVM) executeScriptAtHeight(
 	ctx context.Context,
 	script []byte,
 	height uint64,
 	arguments []cadence.Value,
 ) (cadence.Value, error) {
-	if height > 0 {
-		return e.client.ExecuteScriptAtBlockHeight(
+	if height == LatestBlockHeight {
+		return e.client.ExecuteScriptAtLatestBlock(
 			ctx,
-			height,
 			e.replaceAddresses(script),
 			arguments,
 		)
 	}
 
-	return e.client.ExecuteScriptAtLatestBlock(
+	return e.client.ExecuteScriptAtBlockHeight(
 		ctx,
+		height,
 		e.replaceAddresses(script),
 		arguments,
 	)

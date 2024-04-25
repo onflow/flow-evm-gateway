@@ -611,8 +611,8 @@ func (b *BlockChainAPI) prepareBlockResponse(
 func (b *BlockChainAPI) getCadenceHeight(
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (uint64, error) {
+	height := requester.LatestBlockHeight
 	if number, ok := blockNumberOrHash.Number(); ok {
-		height := uint64(0)
 		if number >= 0 {
 			var err error
 			height, err = b.blocks.GetCadenceHeight(uint64(number.Int64()))
