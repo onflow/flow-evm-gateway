@@ -155,13 +155,13 @@ func (b *BlockChainAPI) GetBalance(
 ) (*hexutil.Big, error) {
 	cadenceHeight, err := b.getCadenceHeight(blockNumberOrHash)
 	if err != nil {
-		return nil, err
+		return handleError[*hexutil.Big](b.logger, err)
 	}
 
 	balance, err := b.evm.GetBalance(ctx, address, cadenceHeight)
 	if err != nil {
 		b.logger.Error().Err(err).Msg("failed to get balance")
-		return nil, errs.ErrInternal
+		return handleError[*hexutil.Big](b.logger, err)
 	}
 
 	return (*hexutil.Big)(balance), nil
@@ -383,9 +383,7 @@ func (b *BlockChainAPI) GetBlockTransactionCountByNumber(
 }
 
 // Call executes the given transaction on the state for the given block number.
-//
 // Additionally, the caller can specify a batch of contract for fields overriding.
-//
 // Note, this function doesn't make and changes in the state/blockchain and is
 // useful to execute and retrieve values.
 func (b *BlockChainAPI) Call(
@@ -397,19 +395,19 @@ func (b *BlockChainAPI) Call(
 ) (hexutil.Bytes, error) {
 	cadenceHeight, err := b.getCadenceHeight(blockNumberOrHash)
 	if err != nil {
-		return nil, err
+		return handleError[hexutil.Bytes](b.logger, err)
 	}
 
 	txData, err := signTxFromArgs(args)
 	if err != nil {
 		b.logger.Error().Err(err).Msg("failed to sign transaction for call")
-		return nil, errs.ErrInternal
+		return handleError[hexutil.Bytes](b.logger, errs.ErrInternal)
 	}
 
 	res, err := b.evm.Call(ctx, txData, cadenceHeight)
 	if err != nil {
 		b.logger.Error().Err(err).Msg("failed to execute call")
-		return nil, errs.ErrInternal
+		return handleError[hexutil.Bytes](b.logger, errs.ErrInternal)
 	}
 
 	return res, nil
@@ -447,7 +445,8 @@ func (b *BlockChainAPI) GetLogs(
 	)
 }
 
-// GetTransactionCount returns the number of transactions the given address has sent for the given block number
+// GetTransactionCount returns the number of transactions the given address
+// has sent for the given block number.
 func (b *BlockChainAPI) GetTransactionCount(
 	ctx context.Context,
 	address common.Address,
@@ -455,18 +454,19 @@ func (b *BlockChainAPI) GetTransactionCount(
 ) (*hexutil.Uint64, error) {
 	cadenceHeight, err := b.getCadenceHeight(blockNumberOrHash)
 	if err != nil {
-		return nil, err
+		return handleError[*hexutil.Uint64](b.logger, err)
 	}
 
 	networkNonce, err := b.evm.GetNonce(ctx, address, cadenceHeight)
 	if err != nil {
 		b.logger.Error().Err(err).Msg("get nonce on network failed")
+		return handleError[*hexutil.Uint64](b.logger, err)
 	}
 
 	nonce, err := b.accounts.GetNonce(&address)
 	if err != nil {
 		b.logger.Error().Err(err).Msg("get nonce failed")
-		return nil, errs.ErrInternal
+		return handleError[*hexutil.Uint64](b.logger, errs.ErrInternal)
 	}
 
 	// compare both until we gain confidence in db nonce tracking working correctly
@@ -516,13 +516,13 @@ func (b *BlockChainAPI) GetCode(
 ) (hexutil.Bytes, error) {
 	cadenceHeight, err := b.getCadenceHeight(blockNumberOrHash)
 	if err != nil {
-		return nil, err
+		return handleError[hexutil.Bytes](b.logger, err)
 	}
 
 	code, err := b.evm.GetCode(ctx, address, cadenceHeight)
 	if err != nil {
 		b.logger.Error().Err(err).Msg("failed to retrieve account code")
-		return nil, err
+		return handleError[hexutil.Bytes](b.logger, err)
 	}
 
 	return hexutil.Bytes(code), nil
