@@ -25,6 +25,11 @@ type BlockIndexer interface {
 	// - errors.NotFound if the block is not found
 	GetByID(ID common.Hash) (*types.Block, error)
 
+	// GetHeightByID returns the EVM block height for the given ID.
+	// Expected errors:
+	// - errors.NotFound if the block is not found
+	GetHeightByID(ID common.Hash) (uint64, error)
+
 	// LatestEVMHeight returns the latest stored EVM block height.
 	// Expected errors:
 	// - errors.NotInitialized if the storage was not initialized

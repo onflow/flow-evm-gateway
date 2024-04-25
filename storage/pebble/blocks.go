@@ -119,6 +119,18 @@ func (b *Blocks) GetByID(ID common.Hash) (*types.Block, error) {
 	return blk, nil
 }
 
+func (b *Blocks) GetHeightByID(ID common.Hash) (uint64, error) {
+	b.mux.RLock()
+	defer b.mux.RUnlock()
+
+	height, err := b.store.get(blockIDToHeightKey, ID.Bytes())
+	if err != nil {
+		return 0, fmt.Errorf("failed to get block by ID: %w", err)
+	}
+
+	return binary.BigEndian.Uint64(height), nil
+}
+
 func (b *Blocks) LatestEVMHeight() (uint64, error) {
 	b.mux.RLock()
 	defer b.mux.RUnlock()

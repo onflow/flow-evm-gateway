@@ -623,12 +623,12 @@ func (b *BlockChainAPI) getCadenceHeight(
 		}
 		return height, nil
 	} else if hash, ok := blockNumberOrHash.Hash(); ok {
-		block, err := b.blocks.GetByID(hash)
+		evmHeight, err := b.blocks.GetHeightByID(hash)
 		if err != nil {
 			b.logger.Error().Err(err).Msg("failed to get block by hash")
 			return 0, err
 		}
-		height, err := b.blocks.GetCadenceHeight(block.Height)
+		height, err := b.blocks.GetCadenceHeight(evmHeight)
 		if err != nil {
 			b.logger.Error().Err(err).Msg("failed to get cadence height")
 			return 0, err
