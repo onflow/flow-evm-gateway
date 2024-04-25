@@ -559,61 +559,6 @@ func (b *BlockChainAPI) GetUncleCountByBlockNumber(
 	return &count
 }
 
-// NewFilter creates a new filter and returns the filter id. It can be
-// used to retrieve logs when the state changes. This method cannot be
-// used to fetch logs that are already stored in the state.
-//
-// Default criteria for the from and to block are "latest".
-// Using "latest" as block number will return logs for mined blocks.
-// Using "pending" as block number returns logs for not yet mined (pending) blocks.
-// In case logs are removed (chain reorg) previously returned logs are returned
-// again but with the removed property set to true.
-//
-// In case "fromBlock" > "toBlock" an error is returned.
-func (b *BlockChainAPI) NewFilter(
-	criteria filters.FilterCriteria,
-) (rpc.ID, error) {
-	return "", errs.ErrNotSupported
-}
-
-// UninstallFilter removes the filter with the given filter id.
-func (b *BlockChainAPI) UninstallFilter(id rpc.ID) bool {
-	return false
-}
-
-// GetFilterLogs returns the logs for the filter with the given id.
-// If the filter could not be found an empty array of logs is returned.
-func (b *BlockChainAPI) GetFilterLogs(
-	ctx context.Context,
-	id rpc.ID,
-) ([]*types.Log, error) {
-	return nil, errs.ErrNotSupported
-}
-
-// GetFilterChanges returns the logs for the filter with the given id since
-// last time it was called. This can be used for polling.
-//
-// For pending transaction and block filters the result is []common.Hash.
-// (pending)Log filters return []Log.
-func (b *BlockChainAPI) GetFilterChanges(id rpc.ID) (interface{}, error) {
-	return nil, errs.ErrNotSupported
-}
-
-// NewBlockFilter creates a filter that fetches blocks that are imported into the chain.
-// It is part of the filter package since polling goes with eth_getFilterChanges.
-func (b *BlockChainAPI) NewBlockFilter() rpc.ID {
-	return ""
-}
-
-// NewPendingTransactionFilter creates a filter that fetches pending transactions
-// as transactions enter the pending state.
-//
-// It is part of the filter package because this filter can be used through the
-// `eth_getFilterChanges` polling method that is also used for log filters.
-func (b *BlockChainAPI) NewPendingTransactionFilter(fullTx *bool) rpc.ID {
-	return ""
-}
-
 // Accounts returns the collection of accounts this node manages.
 func (b *BlockChainAPI) Accounts() []common.Address {
 	return []common.Address{}
