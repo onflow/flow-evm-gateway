@@ -635,9 +635,9 @@ func (b *BlockChainAPI) getCadenceHeight(
 		}
 
 		return height, nil
-	} else {
-		return 0, fmt.Errorf("invalid arguments; neither block nor hash specified")
 	}
+
+	return 0, fmt.Errorf("invalid arguments; neither block nor hash specified")
 }
 
 /* ====================================================================================================================
