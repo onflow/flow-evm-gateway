@@ -2053,6 +2053,7 @@ github.com/onflow/flow-ft/lib/go/templates v0.7.1-0.20240424211859-3ff4c0fe2a1e/
 github.com/onflow/flow-go v0.34.0-crescendo-preview.10 h1:eBV8TZnueDS/6is0GefxneJAZS0qKSsBAEIl9DgTAu0=
 github.com/onflow/flow-go v0.34.0-crescendo-preview.10/go.mod h1:EZYgaYQ8SUpvUL+0Dr+NRNgmrCz7UFy4dIu35b+qF2c=
 github.com/onflow/flow-go v0.34.0-crescendo-preview.10-staged-contracts-3.0.20240426161543-086ffba7aebb/go.mod h1:3pFNo6SgB2LGhPyro8Zod8aZ7nhL8A/BXJj8Djp2hzo=
+github.com/onflow/flow-go v0.34.0-crescendo-preview.10-staged-contracts-3.0.20240426162902-1640cba0aa74/go.mod h1:3pFNo6SgB2LGhPyro8Zod8aZ7nhL8A/BXJj8Djp2hzo=
 github.com/onflow/flow-go-sdk v1.0.0-M1/go.mod h1:TDW0MNuCs4SvqYRUzkbRnRmHQL1h4X8wURsCw9P9beo=
 github.com/onflow/flow-go-sdk v1.0.0-preview.17 h1:RDW+FCKWJBCX7U6bK7ZEBVqBrhdNS9CIAV+xvVeLLYY=
 github.com/onflow/flow-go-sdk v1.0.0-preview.17/go.mod h1:2XygOoc/RN2c28o3vebEc3TLhzfAviOEwpn2yQJHojQ=
