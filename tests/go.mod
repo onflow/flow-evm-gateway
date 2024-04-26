@@ -7,9 +7,9 @@ toolchain go1.21.4
 require (
 	github.com/goccy/go-json v0.10.2
 	github.com/onflow/cadence v1.0.0-preview.22
-	github.com/onflow/flow-emulator v1.0.0-preview.17
+	github.com/onflow/flow-emulator v1.0.0-preview.19
 	github.com/onflow/flow-evm-gateway v0.0.0-20240201154855-4d4d3d3f19c7
-	github.com/onflow/flow-go v0.34.0-crescendo-preview.10-staged-contracts-3.0.20240426162902-1640cba0aa74
+	github.com/onflow/flow-go v0.34.0-crescendo-preview.15
 	github.com/onflow/flow-go-sdk v1.0.0-preview.21
 	github.com/onflow/go-ethereum v1.13.4
 	github.com/rs/zerolog v1.31.0

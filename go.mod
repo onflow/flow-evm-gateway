@@ -9,7 +9,7 @@ require (
 	github.com/goccy/go-json v0.10.2
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/onflow/cadence v1.0.0-preview.22
-	github.com/onflow/flow-go v0.34.0-crescendo-preview.10-staged-contracts-3.0.20240426162902-1640cba0aa74
+	github.com/onflow/flow-go v0.34.0-crescendo-preview.15
 	github.com/onflow/flow-go-sdk v1.0.0-preview.21
 	github.com/onflow/go-ethereum v1.13.4
 	github.com/rs/cors v1.8.0
