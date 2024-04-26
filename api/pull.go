@@ -260,8 +260,50 @@ func (api *PullAPI) NewFilter(criteria filters.FilterCriteria) (rpc.ID, error) {
 
 // GetFilterLogs returns the logs for the filter with the given id.
 // If the filter could not be found an empty array of logs is returned.
-func (api *PullAPI) GetFilterLogs(ctx context.Context, id rpc.ID) ([]*gethTypes.Log, error) {
-	panic("not implemented")
+func (api *PullAPI) GetFilterLogs(
+	ctx context.Context,
+	id rpc.ID,
+) ([]*gethTypes.Log, error) {
+	api.mux.Lock()
+	defer api.mux.Unlock()
+
+	filter, ok := api.filters[id]
+	if !ok {
+		return nil, errors.Join(
+			errs.ErrNotFound,
+			fmt.Errorf("filted by id %s does not exist", id),
+		)
+	}
+
+	if filter.expired() {
+		api.UninstallFilter(id)
+		return nil, errors.Join(
+			errs.ErrNotFound,
+			fmt.Errorf("filted by id %s has expired", id),
+		)
+	}
+
+	logsFilter, ok := filter.(*logsFilter)
+	if !ok {
+		return nil, fmt.Errorf("filted by id %s is not a logs filter", id)
+	}
+
+	current, err := api.blocks.LatestEVMHeight()
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := api.getLogs(current, logsFilter)
+	if err != nil {
+		return nil, err
+	}
+
+	logs, ok := result.([]*gethTypes.Log)
+	if !ok {
+		return nil, fmt.Errorf("logs filter returned incorrect type: %T", logs)
+	}
+
+	return logs, nil
 }
 
 // GetFilterChanges returns the logs for the filter with the given id since
