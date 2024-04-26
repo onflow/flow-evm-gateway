@@ -5,6 +5,14 @@ const helpers = require('./helpers')
 const web3 = conf.web3
 chai.use(chaiHttp);
 
+it('returns a null result for missing filter', async () => {
+  // check that null is returned when the filter could not be found.
+  let response = await callRPCMethod('eth_getFilterLogs', ['0xffa1'])
+
+  chai.assert.equal(200, response.status)
+  chai.assert.isUndefined(response.body['result'])
+})
+
 it('create logs filter and call eth_getFilterLogs', async () => {
   // deploy contract
   let deployed = await helpers.deployContract('storage')
