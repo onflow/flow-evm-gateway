@@ -26,6 +26,10 @@ func TestWeb3_E2E(t *testing.T) {
 		runWeb3Test(t, "eth_logs_filtering_test")
 	})
 
+	t.Run("eth_getFilterLogs", func(t *testing.T) {
+		runWeb3Test(t, "eth_get_filter_logs_test")
+	})
+
 	t.Run("streaming of entities and subscription", func(t *testing.T) {
 		runWeb3Test(t, "eth_streaming_test")
 	})
