@@ -1,16 +1,14 @@
-const chai = require('chai')
-const chaiHttp = require('chai-http')
+const { assert } = require('chai')
 const conf = require('./config')
 const helpers = require('./helpers')
 const web3 = conf.web3
-chai.use(chaiHttp);
 
 it('returns a null result for missing filter', async () => {
   // check that null is returned when the filter could not be found.
-  let response = await callRPCMethod('eth_getFilterLogs', ['0xffa1'])
+  let response = await helpers.callRPCMethod('eth_getFilterLogs', ['0xffa1'])
 
-  chai.assert.equal(200, response.status)
-  chai.assert.isUndefined(response.body['result'])
+  assert.equal(200, response.status)
+  assert.isUndefined(response.body['result'])
 })
 
 it('create logs filter and call eth_getFilterLogs', async () => {
@@ -19,10 +17,10 @@ it('create logs filter and call eth_getFilterLogs', async () => {
   let contractAddress = deployed.receipt.contractAddress
 
   // create logs filter on the address of the deployed contract
-  let response = await callRPCMethod('eth_newFilter', [{ 'address': contractAddress }])
+  let response = await helpers.callRPCMethod('eth_newFilter', [{ 'address': contractAddress }])
 
-  chai.assert.equal(200, response.status)
-  chai.assert.isDefined(response.body['result'])
+  assert.equal(200, response.status)
+  assert.isDefined(response.body['result'])
   let filterID = response.body['result']
 
   // make contract function call that emits a log
@@ -33,18 +31,18 @@ it('create logs filter and call eth_getFilterLogs', async () => {
     gas: 1000000,
     gasPrice: 0
   })
-  chai.assert.equal(res.receipt.status, conf.successStatus)
+  assert.equal(res.receipt.status, conf.successStatus)
 
   // check the matching items from the logs filter
-  response = await callRPCMethod('eth_getFilterLogs', [filterID])
+  response = await helpers.callRPCMethod('eth_getFilterLogs', [filterID])
 
-  chai.assert.equal(200, response.status)
-  chai.assert.equal(1, response.body['result'].length)
+  assert.equal(200, response.status)
+  assert.equal(1, response.body['result'].length)
 
   let logs = response.body['result']
-  chai.assert.equal(contractAddress.toLowerCase(), logs[0].address)
-  chai.assert.lengthOf(logs[0].topics, 4)
-  chai.assert.equal(
+  assert.equal(contractAddress.toLowerCase(), logs[0].address)
+  assert.lengthOf(logs[0].topics, 4)
+  assert.equal(
     '35',
     web3.eth.abi.decodeParameter("int256", logs[0].data)
   )
@@ -58,35 +56,22 @@ it('create logs filter and call eth_getFilterLogs', async () => {
     gasPrice: 0
   })
 
-  chai.assert.equal(res.receipt.status, conf.successStatus)
+  assert.equal(res.receipt.status, conf.successStatus)
 
   // check the matching items from the logs filter include both logs
   // from the above 2 contract function calls
-  response = await callRPCMethod('eth_getFilterLogs', [filterID])
+  response = await helpers.callRPCMethod('eth_getFilterLogs', [filterID])
 
-  chai.assert.equal(200, response.status)
-  chai.assert.equal(2, response.body['result'].length)
+  assert.equal(200, response.status)
+  assert.equal(2, response.body['result'].length)
   logs = response.body['result']
   console.log()
 
-  chai.assert.equal(contractAddress.toLowerCase(), logs[1].address)
-  chai.assert.lengthOf(logs[1].topics, 4)
-  chai.assert.equal(
+  assert.equal(contractAddress.toLowerCase(), logs[1].address)
+  assert.lengthOf(logs[1].topics, 4)
+  assert.equal(
     '50',
     web3.eth.abi.decodeParameter("int256", logs[1].data)
   )
 
 }).timeout(10 * 1000)
-
-async function callRPCMethod(methodName, params) {
-  return chai.request('http://127.0.0.1:8545')
-    .post('/')
-    .set('Content-Type', 'application/json')
-    .set('Accept', 'application/json')
-    .send({
-      'jsonrpc': '2.0',
-      'method': methodName,
-      'id': 1,
-      'params': params
-    })
-}
