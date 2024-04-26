@@ -259,7 +259,7 @@ func (api *PullAPI) NewFilter(criteria filters.FilterCriteria) (rpc.ID, error) {
 }
 
 // GetFilterLogs returns the logs for the filter with the given id.
-// If the filter could not be found an empty array of logs is returned.
+// If the filter could not be found, `nil` is returned.
 func (api *PullAPI) GetFilterLogs(
 	ctx context.Context,
 	id rpc.ID,
