@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
+	"github.com/onflow/flow-go/fvm/evm/types"
 	"math/big"
 
 	"github.com/onflow/cadence"
@@ -40,8 +41,7 @@ type StorageReceipt struct {
 
 // decodeReceipt takes a cadence event for transaction executed and decodes it into the receipt.
 func decodeReceipt(event cadence.Event) (*gethTypes.Receipt, error) {
-	var tx txEventPayload
-	err := cadence.DecodeFields(event, &tx)
+	tx, err := types.DecodeTransactionEventPayload(event)
 	if err != nil {
 		return nil, fmt.Errorf("failed to cadence decode receipt: %w", err)
 	}
@@ -59,25 +59,28 @@ func decodeReceipt(event cadence.Event) (*gethTypes.Receipt, error) {
 		}
 	}
 
+	t, err := decodeTransaction(event)
+	if err != nil {
+		return nil, err
+	}
+
 	receipt := &gethTypes.Receipt{
 		BlockNumber:       big.NewInt(int64(tx.BlockHeight)),
-		Type:              uint8(tx.TransactionType),
+		Type:              tx.TransactionType,
 		Logs:              logs,
-		TxHash:            common.HexToHash(tx.TransactionHash),
-		ContractAddress:   common.HexToAddress(tx.DeployedContractAddress),
+		TxHash:            common.HexToHash(tx.Hash),
+		ContractAddress:   common.HexToAddress(tx.ContractAddress),
 		GasUsed:           tx.GasConsumed,
-		CumulativeGasUsed: tx.GasConsumed, // todo check
-		EffectiveGasPrice: nil,            // todo check
-		BlobGasUsed:       0,              // todo check
-		BlobGasPrice:      nil,            // todo check
-		TransactionIndex:  0,              // todo add tx index in evm core event
+		CumulativeGasUsed: tx.GasConsumed, // todo use cumulative after added to the tx result
+		EffectiveGasPrice: t.GasPrice(),   // since there's no base fee we can always use gas price
+		TransactionIndex:  uint(tx.Index),
 		BlockHash:         common.HexToHash(tx.BlockHash),
 	}
 
-	if tx.Failed {
-		receipt.Status = gethTypes.ReceiptStatusFailed
-	} else {
+	if tx.ErrorCode == uint16(types.ErrCodeNoError) {
 		receipt.Status = gethTypes.ReceiptStatusSuccessful
+	} else {
+		receipt.Status = gethTypes.ReceiptStatusFailed
 	}
 
 	receipt.Bloom = gethTypes.CreateBloom([]*gethTypes.Receipt{receipt})
