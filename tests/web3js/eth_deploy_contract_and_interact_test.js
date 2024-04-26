@@ -25,7 +25,11 @@ it('deploy contract and interact', async() => {
     assert.equal(deployTx.hash, deployed.receipt.transactionHash)
     assert.isUndefined(deployTx.to)
 
-    let code = await web3.eth.getCode(contractAddress)
+    // check that getCode supports specific block heights
+    let code = await web3.eth.getCode(contractAddress, latestHeight - 1n)
+    assert.equal(code, "0x") // empty at previous height
+
+    code = await web3.eth.getCode(contractAddress)
     // deploy data has more than just the contract
     // since it contains the initialization code,
     // but subset of the data is the contract code
@@ -35,8 +39,9 @@ it('deploy contract and interact', async() => {
     assert.deepEqual(deployReceipt, deployed.receipt)
 
     // get the default deployed value on contract
-    let result = await deployed.contract.methods.retrieve().call()
     const initValue = 1337
+    let callRetrieve = await deployed.contract.methods.retrieve().encodeABI()
+    result = await web3.eth.call({to: contractAddress, data: callRetrieve}, "latest")
     assert.equal(result, initValue)
 
     // update the value on the contract
@@ -53,7 +58,7 @@ it('deploy contract and interact', async() => {
     assert.equal(res.receipt.status, conf.successStatus)
 
     // check the new value on contract
-    result = await deployed.contract.methods.retrieve().call()
+    result = await web3.eth.call({to: contractAddress, data: callRetrieve}, "latest")
     assert.equal(result, newValue)
 
     // make sure receipts and txs are indexed
@@ -62,6 +67,10 @@ it('deploy contract and interact', async() => {
     let updateRcp = await web3.eth.getTransactionReceipt(updateTx.hash)
     assert.equal(updateRcp.status, conf.successStatus)
     assert.equal(updateTx.data, updateData)
+
+    // check that call can handle specific block heights
+    result = await web3.eth.call({to: contractAddress, data: callRetrieve}, latestHeight - 1n)
+    assert.equal(result, initValue)
 
     // submit a transaction that emits logs
     res = await helpers.signAndSend({
@@ -79,4 +88,3 @@ it('deploy contract and interact', async() => {
     assert.equal(block.logsBloom, res.receipt.logsBloom)
 
 }).timeout(10*1000)
-

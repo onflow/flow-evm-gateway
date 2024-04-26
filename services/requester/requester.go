@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"math/big"
 	"strings"
 
@@ -53,6 +54,8 @@ var (
 const minFlowBalance = 2
 const coaFundingBalance = minFlowBalance - 1
 
+const LatestBlockHeight uint64 = math.MaxUint64 - 1
+
 type Requester interface {
 	// SendRawTransaction will submit signed transaction data to the network.
 	// The submitted EVM transaction hash is returned.
@@ -65,15 +68,15 @@ type Requester interface {
 	// Call executes the given signed transaction data on the state for the given block number.
 	// Note, this function doesn't make and changes in the state/blockchain and is
 	// useful to execute and retrieve values.
-	Call(ctx context.Context, data []byte) ([]byte, error)
+	Call(ctx context.Context, data []byte, height uint64) ([]byte, error)
 
 	// EstimateGas executes the given signed transaction data on the state.
 	// Note, this function doesn't make any changes in the state/blockchain and is
 	// useful to executed and retrieve the gas consumption and possible failures.
 	EstimateGas(ctx context.Context, data []byte) (uint64, error)
 
-	// GetNonce gets nonce from the network.
-	GetNonce(ctx context.Context, address common.Address) (uint64, error)
+	// GetNonce gets nonce from the network at the given block height.
+	GetNonce(ctx context.Context, address common.Address, height uint64) (uint64, error)
 
 	// GetCode returns the code stored at the given address in
 	// the state for the given block number.
@@ -255,16 +258,20 @@ func (e *EVM) signAndSend(ctx context.Context, script []byte, args ...cadence.Va
 	return flowTx.ID(), nil
 }
 
-func (e *EVM) GetBalance(ctx context.Context, address common.Address, height uint64) (*big.Int, error) {
-	// todo make sure provided height is used
+func (e *EVM) GetBalance(
+	ctx context.Context,
+	address common.Address,
+	height uint64,
+) (*big.Int, error) {
 	hexEncodedAddress, err := addressToCadenceString(address)
 	if err != nil {
 		return nil, err
 	}
 
-	val, err := e.client.ExecuteScriptAtLatestBlock(
+	val, err := e.executeScriptAtHeight(
 		ctx,
-		e.replaceAddresses(getBalanceScript),
+		getBalanceScript,
+		height,
 		[]cadence.Value{hexEncodedAddress},
 	)
 	if err != nil {
@@ -281,15 +288,20 @@ func (e *EVM) GetBalance(ctx context.Context, address common.Address, height uin
 	return val.(cadence.UInt).ToGoValue().(*big.Int), nil
 }
 
-func (e *EVM) GetNonce(ctx context.Context, address common.Address) (uint64, error) {
+func (e *EVM) GetNonce(
+	ctx context.Context,
+	address common.Address,
+	height uint64,
+) (uint64, error) {
 	hexEncodedAddress, err := addressToCadenceString(address)
 	if err != nil {
 		return 0, err
 	}
 
-	val, err := e.client.ExecuteScriptAtLatestBlock(
+	val, err := e.executeScriptAtHeight(
 		ctx,
-		e.replaceAddresses(getNonceScript),
+		getNonceScript,
+		height,
 		[]cadence.Value{hexEncodedAddress},
 	)
 	if err != nil {
@@ -306,7 +318,11 @@ func (e *EVM) GetNonce(ctx context.Context, address common.Address) (uint64, err
 	return val.(cadence.UInt64).ToGoValue().(uint64), nil
 }
 
-func (e *EVM) Call(ctx context.Context, data []byte) ([]byte, error) {
+func (e *EVM) Call(
+	ctx context.Context,
+	data []byte,
+	height uint64,
+) ([]byte, error) {
 	hexEncodedTx, err := cadence.NewString(hex.EncodeToString(data))
 	if err != nil {
 		return nil, err
@@ -316,9 +332,10 @@ func (e *EVM) Call(ctx context.Context, data []byte) ([]byte, error) {
 		Str("data", fmt.Sprintf("%x", data)).
 		Msg("call")
 
-	scriptResult, err := e.client.ExecuteScriptAtLatestBlock(
+	scriptResult, err := e.executeScriptAtHeight(
 		ctx,
-		e.replaceAddresses(callScript),
+		callScript,
+		height,
 		[]cadence.Value{hexEncodedTx},
 	)
 	if err != nil {
@@ -390,9 +407,10 @@ func (e *EVM) GetCode(
 		return nil, err
 	}
 
-	value, err := e.client.ExecuteScriptAtLatestBlock(
+	value, err := e.executeScriptAtHeight(
 		ctx,
-		e.replaceAddresses(getCodeScript),
+		getCodeScript,
+		height,
 		[]cadence.Value{hexEncodedAddress},
 	)
 	if err != nil {
@@ -468,6 +486,32 @@ func (e *EVM) replaceAddresses(script []byte) []byte {
 	s = strings.ReplaceAll(s, "0xCOA", e.config.COAAddress.HexWithPrefix())
 
 	return []byte(s)
+}
+
+// executeScriptAtHeight will execute the given script, at the given
+// block height, with the given arguments. A height of `LatestBlockHeight`
+// (math.MaxUint64 - 1) is a special value, which means the script will be
+// executed at the latest sealed block.
+func (e *EVM) executeScriptAtHeight(
+	ctx context.Context,
+	script []byte,
+	height uint64,
+	arguments []cadence.Value,
+) (cadence.Value, error) {
+	if height == LatestBlockHeight {
+		return e.client.ExecuteScriptAtLatestBlock(
+			ctx,
+			e.replaceAddresses(script),
+			arguments,
+		)
+	}
+
+	return e.client.ExecuteScriptAtBlockHeight(
+		ctx,
+		height,
+		e.replaceAddresses(script),
+		arguments,
+	)
 }
 
 func addressToCadenceString(address common.Address) (cadence.String, error) {

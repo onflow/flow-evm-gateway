@@ -90,6 +90,30 @@ func (_m *BlockIndexer) GetCadenceHeight(evmHeight uint64) (uint64, error) {
 	return r0, r1
 }
 
+// GetHeightByID provides a mock function with given fields: ID
+func (_m *BlockIndexer) GetHeightByID(ID common.Hash) (uint64, error) {
+	ret := _m.Called(ID)
+
+	var r0 uint64
+	var r1 error
+	if rf, ok := ret.Get(0).(func(common.Hash) (uint64, error)); ok {
+		return rf(ID)
+	}
+	if rf, ok := ret.Get(0).(func(common.Hash) uint64); ok {
+		r0 = rf(ID)
+	} else {
+		r0 = ret.Get(0).(uint64)
+	}
+
+	if rf, ok := ret.Get(1).(func(common.Hash) error); ok {
+		r1 = rf(ID)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // LatestCadenceHeight provides a mock function with given fields:
 func (_m *BlockIndexer) LatestCadenceHeight() (uint64, error) {
 	ret := _m.Called()

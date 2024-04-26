@@ -151,13 +151,17 @@ func (b *BlockChainAPI) GasPrice(ctx context.Context) (*hexutil.Big, error) {
 func (b *BlockChainAPI) GetBalance(
 	ctx context.Context,
 	address common.Address,
-	_ *rpc.BlockNumberOrHash,
+	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (*hexutil.Big, error) {
-	// todo use provided height, when height mapping is implemented
-	balance, err := b.evm.GetBalance(ctx, address, 0)
+	cadenceHeight, err := b.getCadenceHeight(blockNumberOrHash)
+	if err != nil {
+		return handleError[*hexutil.Big](b.logger, err)
+	}
+
+	balance, err := b.evm.GetBalance(ctx, address, cadenceHeight)
 	if err != nil {
 		b.logger.Error().Err(err).Msg("failed to get balance")
-		return nil, errs.ErrInternal
+		return handleError[*hexutil.Big](b.logger, err)
 	}
 
 	return (*hexutil.Big)(balance), nil
@@ -379,9 +383,7 @@ func (b *BlockChainAPI) GetBlockTransactionCountByNumber(
 }
 
 // Call executes the given transaction on the state for the given block number.
-//
 // Additionally, the caller can specify a batch of contract for fields overriding.
-//
 // Note, this function doesn't make and changes in the state/blockchain and is
 // useful to execute and retrieve values.
 func (b *BlockChainAPI) Call(
@@ -391,16 +393,21 @@ func (b *BlockChainAPI) Call(
 	overrides *StateOverride,
 	blockOverrides *BlockOverrides,
 ) (hexutil.Bytes, error) {
+	cadenceHeight, err := b.getCadenceHeight(blockNumberOrHash)
+	if err != nil {
+		return handleError[hexutil.Bytes](b.logger, err)
+	}
+
 	txData, err := signTxFromArgs(args)
 	if err != nil {
 		b.logger.Error().Err(err).Msg("failed to sign transaction for call")
-		return nil, errs.ErrInternal
+		return handleError[hexutil.Bytes](b.logger, errs.ErrInternal)
 	}
 
-	res, err := b.evm.Call(ctx, txData)
+	res, err := b.evm.Call(ctx, txData, cadenceHeight)
 	if err != nil {
 		b.logger.Error().Err(err).Msg("failed to execute call")
-		return nil, errs.ErrInternal
+		return handleError[hexutil.Bytes](b.logger, errs.ErrInternal)
 	}
 
 	return res, nil
@@ -438,26 +445,28 @@ func (b *BlockChainAPI) GetLogs(
 	)
 }
 
-// GetTransactionCount returns the number of transactions the given address has sent for the given block number
+// GetTransactionCount returns the number of transactions the given address
+// has sent for the given block number.
 func (b *BlockChainAPI) GetTransactionCount(
 	ctx context.Context,
 	address common.Address,
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (*hexutil.Uint64, error) {
-	// todo support previous nonce
-	if blockNumberOrHash != nil && *blockNumberOrHash.BlockNumber != rpc.LatestBlockNumber {
-		b.logger.Warn().Msg("transaction count for special blocks not supported") // but still return latest for now
+	cadenceHeight, err := b.getCadenceHeight(blockNumberOrHash)
+	if err != nil {
+		return handleError[*hexutil.Uint64](b.logger, err)
 	}
 
-	networkNonce, err := b.evm.GetNonce(ctx, address)
+	networkNonce, err := b.evm.GetNonce(ctx, address, cadenceHeight)
 	if err != nil {
 		b.logger.Error().Err(err).Msg("get nonce on network failed")
+		return handleError[*hexutil.Uint64](b.logger, err)
 	}
 
 	nonce, err := b.accounts.GetNonce(&address)
 	if err != nil {
 		b.logger.Error().Err(err).Msg("get nonce failed")
-		return nil, errs.ErrInternal
+		return handleError[*hexutil.Uint64](b.logger, errs.ErrInternal)
 	}
 
 	// compare both until we gain confidence in db nonce tracking working correctly
@@ -505,16 +514,15 @@ func (b *BlockChainAPI) GetCode(
 	address common.Address,
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (hexutil.Bytes, error) {
-	// todo support previous block heights
-	if blockNumberOrHash != nil && *blockNumberOrHash.BlockNumber != rpc.LatestBlockNumber {
-		// but still return latest for now
-		b.logger.Warn().Msg("get code for special blocks not supported")
+	cadenceHeight, err := b.getCadenceHeight(blockNumberOrHash)
+	if err != nil {
+		return handleError[hexutil.Bytes](b.logger, err)
 	}
 
-	code, err := b.evm.GetCode(ctx, address, 0)
+	code, err := b.evm.GetCode(ctx, address, cadenceHeight)
 	if err != nil {
 		b.logger.Error().Err(err).Msg("failed to retrieve account code")
-		return nil, err
+		return handleError[hexutil.Bytes](b.logger, err)
 	}
 
 	return hexutil.Bytes(code), nil
@@ -533,6 +541,106 @@ func handleError[T any](log zerolog.Logger, err error) (T, error) {
 
 	log.Error().Err(err).Msg("failed to get latest block height")
 	return zero, errs.ErrInternal
+}
+
+func (b *BlockChainAPI) fetchBlockTransactions(
+	ctx context.Context,
+	block *evmTypes.Block,
+) ([]*Transaction, error) {
+	transactions := make([]*Transaction, 0)
+	for _, txHash := range block.TransactionHashes {
+		transaction, err := b.GetTransactionByHash(ctx, txHash)
+		if err != nil {
+			return nil, err
+		}
+		transactions = append(transactions, transaction)
+	}
+
+	return transactions, nil
+}
+
+func (b *BlockChainAPI) prepareBlockResponse(
+	ctx context.Context,
+	block *evmTypes.Block,
+	fullTx bool,
+) (*Block, error) {
+	h, err := block.Hash()
+	if err != nil {
+		b.logger.Error().Err(err).Msg("failed to calculate hash for block by number")
+		return nil, errs.ErrInternal
+	}
+
+	blockResponse := &Block{
+		Hash:         h,
+		Number:       hexutil.Uint64(block.Height),
+		ParentHash:   block.ParentBlockHash,
+		ReceiptsRoot: block.ReceiptRoot,
+		Transactions: block.TransactionHashes,
+		Uncles:       []common.Hash{},
+		GasLimit:     hexutil.Uint64(15_000_000),
+		Nonce:        types.BlockNonce{0x1},
+	}
+
+	transactions, err := b.fetchBlockTransactions(ctx, block)
+	if err != nil {
+		return nil, err
+	}
+	if len(transactions) > 0 {
+		totalGasUsed := hexutil.Uint64(0)
+		logs := make([]*types.Log, 0)
+		for _, tx := range transactions {
+			txReceipt, err := b.receipts.GetByTransactionID(tx.Hash)
+			if err != nil {
+				return nil, err
+			}
+			totalGasUsed += tx.Gas
+			logs = append(logs, txReceipt.Logs...)
+		}
+		blockResponse.GasUsed = totalGasUsed
+		// TODO(m-Peter): Consider if its worthwhile to move this in storage.
+		blockResponse.LogsBloom = types.LogsBloom(logs)
+	}
+
+	if fullTx {
+		blockResponse.Transactions = transactions
+	}
+
+	return blockResponse, nil
+}
+
+func (b *BlockChainAPI) getCadenceHeight(
+	blockNumberOrHash *rpc.BlockNumberOrHash,
+) (uint64, error) {
+	height := requester.LatestBlockHeight
+	if number, ok := blockNumberOrHash.Number(); ok {
+		if number < 0 {
+			// negative values are special values and we only support latest height
+			return height, nil
+		}
+
+		height, err := b.blocks.GetCadenceHeight(uint64(number.Int64()))
+		if err != nil {
+			b.logger.Error().Err(err).Msg("failed to get cadence height")
+			return 0, err
+		}
+
+		return height, nil
+	} else if hash, ok := blockNumberOrHash.Hash(); ok {
+		evmHeight, err := b.blocks.GetHeightByID(hash)
+		if err != nil {
+			b.logger.Error().Err(err).Msg("failed to get block by hash")
+			return 0, err
+		}
+		height, err = b.blocks.GetCadenceHeight(evmHeight)
+		if err != nil {
+			b.logger.Error().Err(err).Msg("failed to get cadence height")
+			return 0, err
+		}
+
+		return height, nil
+	}
+
+	return 0, fmt.Errorf("invalid arguments; neither block nor hash specified")
 }
 
 /* ====================================================================================================================
@@ -685,69 +793,4 @@ func (b *BlockChainAPI) Mining() bool {
 // may not be available in some clients since The Merge.
 func (b *BlockChainAPI) Hashrate() hexutil.Uint64 {
 	return hexutil.Uint64(0)
-}
-
-func (b *BlockChainAPI) fetchBlockTransactions(
-	ctx context.Context,
-	block *evmTypes.Block,
-) ([]*Transaction, error) {
-	transactions := make([]*Transaction, 0)
-	for _, txHash := range block.TransactionHashes {
-		transaction, err := b.GetTransactionByHash(ctx, txHash)
-		if err != nil {
-			return nil, err
-		}
-		transactions = append(transactions, transaction)
-	}
-
-	return transactions, nil
-}
-
-func (b *BlockChainAPI) prepareBlockResponse(
-	ctx context.Context,
-	block *evmTypes.Block,
-	fullTx bool,
-) (*Block, error) {
-	h, err := block.Hash()
-	if err != nil {
-		b.logger.Error().Err(err).Msg("failed to calculate hash for block by number")
-		return nil, errs.ErrInternal
-	}
-
-	blockResponse := &Block{
-		Hash:         h,
-		Number:       hexutil.Uint64(block.Height),
-		ParentHash:   block.ParentBlockHash,
-		ReceiptsRoot: block.ReceiptRoot,
-		Transactions: block.TransactionHashes,
-		Uncles:       []common.Hash{},
-		GasLimit:     hexutil.Uint64(15_000_000),
-		Nonce:        types.BlockNonce{0x1},
-	}
-
-	transactions, err := b.fetchBlockTransactions(ctx, block)
-	if err != nil {
-		return nil, err
-	}
-	if len(transactions) > 0 {
-		totalGasUsed := hexutil.Uint64(0)
-		logs := make([]*types.Log, 0)
-		for _, tx := range transactions {
-			txReceipt, err := b.receipts.GetByTransactionID(tx.Hash)
-			if err != nil {
-				return nil, err
-			}
-			totalGasUsed += tx.Gas
-			logs = append(logs, txReceipt.Logs...)
-		}
-		blockResponse.GasUsed = totalGasUsed
-		// TODO(m-Peter): Consider if its worthwhile to move this in storage.
-		blockResponse.LogsBloom = types.LogsBloom(logs)
-	}
-
-	if fullTx {
-		blockResponse.Transactions = transactions
-	}
-
-	return blockResponse, nil
 }
