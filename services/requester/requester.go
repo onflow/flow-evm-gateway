@@ -15,6 +15,7 @@ import (
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access"
 	"github.com/onflow/flow-go-sdk/crypto"
+	"github.com/onflow/flow-go/fvm/evm/stdlib"
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/flow-go/fvm/systemcontracts"
 	"github.com/onflow/go-ethereum/common"
@@ -342,17 +343,22 @@ func (e *EVM) Call(
 		return nil, fmt.Errorf("failed to execute script: %w", err)
 	}
 
-	output, err := cadenceStringToBytes(scriptResult)
+	evmResult, err := stdlib.ResultSummaryFromEVMResultValue(scriptResult)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to decode EVM result from call: %w", err)
 	}
+	if evmResult.ErrorCode != 0 {
+		return nil, getErrorForCode(evmResult.ErrorCode)
+	}
+
+	result := evmResult.ReturnedValue
 
 	e.logger.Info().
 		Str("data", fmt.Sprintf("%x", data)).
-		Str("result", hex.EncodeToString(output)).
+		Str("result", hex.EncodeToString(result)).
 		Msg("call executed")
 
-	return output, nil
+	return result, nil
 }
 
 func (e *EVM) EstimateGas(ctx context.Context, data []byte) (uint64, error) {
@@ -365,7 +371,7 @@ func (e *EVM) EstimateGas(ctx context.Context, data []byte) (uint64, error) {
 		return 0, err
 	}
 
-	value, err := e.client.ExecuteScriptAtLatestBlock(
+	scriptResult, err := e.client.ExecuteScriptAtLatestBlock(
 		ctx,
 		e.replaceAddresses(estimateGasScript),
 		[]cadence.Value{hexEncodedTx},
@@ -374,22 +380,15 @@ func (e *EVM) EstimateGas(ctx context.Context, data []byte) (uint64, error) {
 		return 0, fmt.Errorf("failed to execute script: %w", err)
 	}
 
-	// sanity check, should never occur
-	// TODO(m-Peter): Consider adding a decoder for EVM.Result struct
-	// to a Go value/type.
-	if _, ok := value.(cadence.Array); !ok {
-		e.logger.Panic().Msg(fmt.Sprintf("failed to convert value to array: %v", value))
+	evmResult, err := stdlib.ResultSummaryFromEVMResultValue(scriptResult)
+	if err != nil {
+		return 0, fmt.Errorf("failed to decode EVM result from gas estimation: %w", err)
+	}
+	if evmResult.ErrorCode != 0 {
+		return 0, getErrorForCode(evmResult.ErrorCode)
 	}
 
-	result := value.(cadence.Array)
-	errorCode := result.Values[0].ToGoValue().(uint64)
-
-	if errorCode != 0 {
-		return 0, getErrorForCode(errorCode)
-	}
-
-	gasUsed := result.Values[1].ToGoValue().(uint64)
-	return gasUsed, nil
+	return evmResult.GasConsumed, nil
 }
 
 func (e *EVM) GetCode(
@@ -536,8 +535,8 @@ func cadenceStringToBytes(value cadence.Value) ([]byte, error) {
 }
 
 // TODO(m-Peter): Consider moving this to flow-go repository
-func getErrorForCode(errorCode uint64) error {
-	switch evmTypes.ErrorCode(errorCode) {
+func getErrorForCode(errorCode evmTypes.ErrorCode) error {
+	switch errorCode {
 	case evmTypes.ValidationErrCodeGasUintOverflow:
 		return gethVM.ErrGasUintOverflow
 	case evmTypes.ValidationErrCodeNonceTooLow:
