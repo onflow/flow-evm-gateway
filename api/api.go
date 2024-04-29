@@ -579,6 +579,7 @@ func (b *BlockChainAPI) prepareBlockResponse(
 		Uncles:       []common.Hash{},
 		GasLimit:     hexutil.Uint64(15_000_000),
 		Nonce:        types.BlockNonce{0x1},
+		Timestamp:    hexutil.Uint64(block.Timestamp),
 	}
 
 	transactions, err := b.fetchBlockTransactions(ctx, block)
