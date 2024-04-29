@@ -2,8 +2,6 @@ package models
 
 import (
 	"fmt"
-	"math/big"
-
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/go-ethereum/common"
@@ -26,7 +24,7 @@ func decodeBlock(event cadence.Event) (*types.Block, error) {
 		ParentBlockHash:   common.HexToHash(payload.ParentBlockHash),
 		Height:            payload.Height,
 		Timestamp:         payload.Timestamp,
-		TotalSupply:       big.NewInt(int64(payload.TotalSupply.Int())),
+		TotalSupply:       payload.TotalSupply.Value,
 		ReceiptRoot:       common.HexToHash(payload.ReceiptRoot),
 		TransactionHashes: hashes,
 		TotalGasUsed:      payload.TotalGasUsed,
