@@ -2,8 +2,6 @@ module github.com/onflow/flow-evm-gateway/integration
 
 go 1.21
 
-toolchain go1.21.4
-
 require (
 	github.com/goccy/go-json v0.10.2
 	github.com/onflow/cadence v1.0.0-preview.23

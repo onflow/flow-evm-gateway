@@ -2,8 +2,6 @@ module github.com/onflow/flow-evm-gateway
 
 go 1.21
 
-toolchain go1.21.4
-
 require (
 	github.com/cockroachdb/pebble v0.0.0-20230928194634-aa077af62593
 	github.com/goccy/go-json v0.10.2
