@@ -29,6 +29,13 @@ func NewReceipts(store *Storage) *Receipts {
 	}
 }
 
+// Store receipt in the index.
+//
+// Storing receipt will create multiple indexes, each receipt has a transaction ID,
+// and a block height. We create following mappings:
+// - receipt transaction ID => block height bytes
+// - receipt block height => list of encoded receipts (1+ per block)
+// - receipt block height => list of bloom filters (1+ per block)
 func (r *Receipts) Store(receipt *gethTypes.Receipt) error {
 	r.mux.Lock()
 	defer r.mux.Unlock()
@@ -81,13 +88,13 @@ func (r *Receipts) GetByTransactionID(ID common.Hash) (*gethTypes.Receipt, error
 	return rcp, nil
 }
 
-func (r *Receipts) GetByBlockHeight(height *big.Int) (*gethTypes.Receipt, error) {
+func (r *Receipts) GetByBlockHeight(height *big.Int) ([]*gethTypes.Receipt, error) {
 	r.mux.RLock()
 	defer r.mux.RUnlock()
 	return r.getByBlockHeight(height.Bytes())
 }
 
-func (r *Receipts) getByBlockHeight(height []byte) (*gethTypes.Receipt, error) {
+func (r *Receipts) getByBlockHeight(height []byte) ([]*gethTypes.Receipt, error) {
 	val, err := r.store.get(receiptHeightKey, height)
 	if err != nil {
 		return nil, err
