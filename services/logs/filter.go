@@ -65,14 +65,16 @@ func (r *RangeFilter) Match() ([]*gethTypes.Log, error) {
 		}
 
 		// todo do this concurrently
-		receipt, err := r.receipts.GetByBlockHeight(heights[i])
+		receipts, err := r.receipts.GetByBlockHeight(heights[i])
 		if err != nil {
 			return nil, err
 		}
 
-		for _, log := range receipt.Logs {
-			if exactMatch(log, r.criteria) {
-				logs = append(logs, log)
+		for _, receipt := range receipts {
+			for _, log := range receipt.Logs {
+				if exactMatch(log, r.criteria) {
+					logs = append(logs, log)
+				}
 			}
 		}
 	}
@@ -109,15 +111,17 @@ func (i *IDFilter) Match() ([]*gethTypes.Log, error) {
 		return nil, err
 	}
 
-	receipt, err := i.receipts.GetByBlockHeight(big.NewInt(int64(blk.Height)))
+	receipts, err := i.receipts.GetByBlockHeight(big.NewInt(int64(blk.Height)))
 	if err != nil {
 		return nil, err
 	}
 
 	logs := make([]*gethTypes.Log, 0)
-	for _, log := range receipt.Logs {
-		if exactMatch(log, i.criteria) {
-			logs = append(logs, log)
+	for _, receipt := range receipts {
+		for _, log := range receipt.Logs {
+			if exactMatch(log, i.criteria) {
+				logs = append(logs, log)
+			}
 		}
 	}
 

@@ -52,19 +52,19 @@ func (_m *ReceiptIndexer) BloomsForBlockRange(start *big.Int, end *big.Int) ([]*
 }
 
 // GetByBlockHeight provides a mock function with given fields: height
-func (_m *ReceiptIndexer) GetByBlockHeight(height *big.Int) (*types.Receipt, error) {
+func (_m *ReceiptIndexer) GetByBlockHeight(height *big.Int) ([]*types.Receipt, error) {
 	ret := _m.Called(height)
 
-	var r0 *types.Receipt
+	var r0 []*types.Receipt
 	var r1 error
-	if rf, ok := ret.Get(0).(func(*big.Int) (*types.Receipt, error)); ok {
+	if rf, ok := ret.Get(0).(func(*big.Int) ([]*types.Receipt, error)); ok {
 		return rf(height)
 	}
-	if rf, ok := ret.Get(0).(func(*big.Int) *types.Receipt); ok {
+	if rf, ok := ret.Get(0).(func(*big.Int) []*types.Receipt); ok {
 		r0 = rf(height)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*types.Receipt)
+			r0 = ret.Get(0).([]*types.Receipt)
 		}
 	}
 

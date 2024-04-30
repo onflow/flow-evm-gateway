@@ -32,7 +32,7 @@ func TestReceipts(t *testing.T) {
 		require.NoError(t, err)
 		err = bl.Store(30, mocks.NewBlock(10)) // update first and latest height
 		require.NoError(t, err)
-		err = bl.Store(30, mocks.NewBlock(20)) // update latest
+		err = bl.Store(30, mocks.NewBlock(30)) // update latest
 		require.NoError(t, err)
 
 		suite.Run(t, &storage.ReceiptTestSuite{ReceiptIndexer: NewReceipts(db)})

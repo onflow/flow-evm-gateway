@@ -64,8 +64,7 @@ type ReceiptIndexer interface {
 	// GetByBlockHeight returns the receipt for the block height.
 	// Expected errors:
 	// - errors.NotFound if the receipt is not found
-	// TODO right now one transaction per block, but this might change in future so the API needs to be updated.
-	GetByBlockHeight(height *big.Int) (*gethTypes.Receipt, error)
+	GetByBlockHeight(height *big.Int) ([]*gethTypes.Receipt, error)
 
 	// BloomsForBlockRange returns slice of bloom values and a slice of block heights
 	// corresponding to each item in the bloom slice. It only matches the blooms between

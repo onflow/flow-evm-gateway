@@ -110,13 +110,19 @@ func receiptStorage() storage.ReceiptIndexer {
 	receiptStorage := &mocks.ReceiptIndexer{}
 	receiptStorage.
 		On("GetByBlockHeight", mock.AnythingOfType("*big.Int")).
-		Return(func(height *big.Int) (*gethTypes.Receipt, error) {
+		Return(func(height *big.Int) ([]*gethTypes.Receipt, error) {
+			rcps := make([]*gethTypes.Receipt, 0)
 			for _, r := range receipts {
 				if r.BlockNumber.Cmp(height) == 0 {
-					return r, nil
+					rcps = append(rcps, r)
 				}
 			}
-			return nil, errors.ErrNotFound
+
+			if len(rcps) == 0 {
+				return nil, errors.ErrNotFound
+			}
+
+			return rcps, nil
 		})
 
 	receiptStorage.
