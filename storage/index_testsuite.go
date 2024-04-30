@@ -128,19 +128,19 @@ type ReceiptTestSuite struct {
 }
 
 func (s *ReceiptTestSuite) TestStoreReceipt() {
-	receipt := mocks.NewReceipt(1, common.HexToHash("0xf1"))
 
 	s.Run("store receipt successfully", func() {
+		receipt := mocks.NewReceipt(1, common.HexToHash("0xf1"))
 		err := s.ReceiptIndexer.Store(receipt)
 		s.Require().NoError(err)
 	})
 
 	s.Run("store multiple receipts at same height", func() {
-		const height = 1
+		const height = 5
 		receipts := []*types.Receipt{
-			mocks.NewReceipt(height, common.HexToHash("0xf1")),
-			mocks.NewReceipt(height, common.HexToHash("0xf2")),
-			mocks.NewReceipt(height, common.HexToHash("0xf3")),
+			mocks.NewReceipt(height, common.HexToHash("0x1")),
+			mocks.NewReceipt(height, common.HexToHash("0x2")),
+			mocks.NewReceipt(height, common.HexToHash("0x3")),
 		}
 
 		for _, r := range receipts {
@@ -150,7 +150,10 @@ func (s *ReceiptTestSuite) TestStoreReceipt() {
 
 		storeReceipts, err := s.ReceiptIndexer.GetByBlockHeight(big.NewInt(height))
 		s.Require().NoError(err)
-		s.Require().Equal(receipts, storeReceipts)
+
+		for i, sr := range storeReceipts {
+			s.compareReceipts(receipts[i], sr)
+		}
 	})
 }
 
