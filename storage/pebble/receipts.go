@@ -44,8 +44,8 @@ func (r *Receipts) Store(receipt *gethTypes.Receipt) error {
 	// we must first retrieve any already saved receipts at the provided height,
 	// and if found we must add to the list, because this method can be called multiple
 	// times when indexing a single EVM height, which can contain multiple receipts
-	receipts, err := r.GetByBlockHeight(receipt.BlockNumber)
-	if !errors.Is(err, errs.ErrNotFound) { // anything but not found is failure
+	receipts, err := r.getByBlockHeight(receipt.BlockNumber.Bytes())
+	if err != nil && !errors.Is(err, errs.ErrNotFound) { // anything but not found is failure
 		return fmt.Errorf("failed to store receipt to height, retrieve errror: %w", err)
 	}
 
