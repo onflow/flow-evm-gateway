@@ -87,6 +87,10 @@ func (r *Receipts) Store(receipt *gethTypes.Receipt) error {
 	}
 
 	bloomVal, err := rlp.EncodeToBytes(blooms)
+	if err != nil {
+		return fmt.Errorf("failed to encode blooms: %w", err)
+	}
+
 	if err := r.store.set(bloomHeightKey, height, bloomVal, batch); err != nil {
 		return fmt.Errorf("failed to store bloom height: %w", err)
 	}
