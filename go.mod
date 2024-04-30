@@ -1,13 +1,15 @@
 module github.com/onflow/flow-evm-gateway
 
-go 1.20
+go 1.21
+
+toolchain go1.21.4
 
 require (
 	github.com/cockroachdb/pebble v0.0.0-20230928194634-aa077af62593
 	github.com/goccy/go-json v0.10.2
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/onflow/cadence v1.0.0-preview.23
-	github.com/onflow/flow-go v0.34.0-crescendo-preview.10-staged-contracts-3.0.20240430105130-26cb8ee40436
+	github.com/onflow/flow-go v0.34.0-crescendo-preview.16
 	github.com/onflow/flow-go-sdk v1.0.0-preview.22
 	github.com/onflow/go-ethereum v1.13.4
 	github.com/rs/cors v1.8.0
