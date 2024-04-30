@@ -12,11 +12,11 @@ it('retrieve batch transactions', async() => {
     assert.equal(block.number, deployTx.blockNumber)
     assert.equal(block.hash, deployTx.blockHash)
     assert.equal(0, deployTx.type)
-    //assert.equal(0, deployTx.transactionIndex)
+    assert.equal(0, deployTx.transactionIndex)
 
     let callTx = await web3.eth.getTransactionFromBlock(latestHeight, 1)
     assert.equal(block.number, callTx.blockNumber)
     assert.equal(block.hash, callTx.blockHash)
     assert.equal(0, callTx.type)
-    // todo wait for flow-go PR assert.equal(1, callTx.transactionIndex)
+    assert.equal(1, callTx.transactionIndex)
 })
