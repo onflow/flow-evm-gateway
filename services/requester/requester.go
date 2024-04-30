@@ -27,8 +27,8 @@ import (
 )
 
 var (
-	//go:embed cadence/call.cdc
-	callScript []byte
+	//go:embed cadence/dry_run.cdc
+	dryRunScript []byte
 
 	//go:embed cadence/run.cdc
 	runTxScript []byte
@@ -38,9 +38,6 @@ var (
 
 	//go:embed cadence/create_coa.cdc
 	createCOAScript []byte
-
-	//go:embed cadence/estimate_gas.cdc
-	estimateGasScript []byte
 
 	//go:embed cadence/get_nonce.cdc
 	getNonceScript []byte
@@ -69,12 +66,12 @@ type Requester interface {
 	// Call executes the given signed transaction data on the state for the given block number.
 	// Note, this function doesn't make and changes in the state/blockchain and is
 	// useful to execute and retrieve values.
-	Call(ctx context.Context, data []byte, height uint64) ([]byte, error)
+	Call(ctx context.Context, data []byte, from common.Address, height uint64) ([]byte, error)
 
 	// EstimateGas executes the given signed transaction data on the state.
 	// Note, this function doesn't make any changes in the state/blockchain and is
 	// useful to executed and retrieve the gas consumption and possible failures.
-	EstimateGas(ctx context.Context, data []byte) (uint64, error)
+	EstimateGas(ctx context.Context, data []byte, from common.Address) (uint64, error)
 
 	// GetNonce gets nonce from the network at the given block height.
 	GetNonce(ctx context.Context, address common.Address, height uint64) (uint64, error)
@@ -322,9 +319,15 @@ func (e *EVM) GetNonce(
 func (e *EVM) Call(
 	ctx context.Context,
 	data []byte,
+	from common.Address,
 	height uint64,
 ) ([]byte, error) {
 	hexEncodedTx, err := cadence.NewString(hex.EncodeToString(data))
+	if err != nil {
+		return nil, err
+	}
+
+	hexEncodedAddress, err := addressToCadenceString(from)
 	if err != nil {
 		return nil, err
 	}
@@ -335,9 +338,9 @@ func (e *EVM) Call(
 
 	scriptResult, err := e.executeScriptAtHeight(
 		ctx,
-		callScript,
+		dryRunScript,
 		height,
-		[]cadence.Value{hexEncodedTx},
+		[]cadence.Value{hexEncodedTx, hexEncodedAddress},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute script: %w", err)
@@ -361,7 +364,11 @@ func (e *EVM) Call(
 	return result, nil
 }
 
-func (e *EVM) EstimateGas(ctx context.Context, data []byte) (uint64, error) {
+func (e *EVM) EstimateGas(
+	ctx context.Context,
+	data []byte,
+	from common.Address,
+) (uint64, error) {
 	e.logger.Debug().
 		Str("data", fmt.Sprintf("%x", data)).
 		Msg("estimate gas")
@@ -371,10 +378,15 @@ func (e *EVM) EstimateGas(ctx context.Context, data []byte) (uint64, error) {
 		return 0, err
 	}
 
+	hexEncodedAddress, err := addressToCadenceString(from)
+	if err != nil {
+		return 0, err
+	}
+
 	scriptResult, err := e.client.ExecuteScriptAtLatestBlock(
 		ctx,
-		e.replaceAddresses(estimateGasScript),
-		[]cadence.Value{hexEncodedTx},
+		e.replaceAddresses(dryRunScript),
+		[]cadence.Value{hexEncodedTx, hexEncodedAddress},
 	)
 	if err != nil {
 		return 0, fmt.Errorf("failed to execute script: %w", err)
