@@ -176,11 +176,13 @@ func (s *ReceiptTestSuite) TestGetReceiptByTransactionID() {
 	})
 }
 
-func (s *ReceiptTestSuite) TestGetReceiptByBlockID() {
-	s.Run("existing block ID", func() {
+func (s *ReceiptTestSuite) TestGetReceiptByBlockHeight() {
+	s.Run("existing block height", func() {
 		receipt := mocks.NewReceipt(3, common.HexToHash("0x1"))
 		err := s.ReceiptIndexer.Store(receipt)
 		s.Require().NoError(err)
+		// add one more receipt that shouldn't be retrieved
+		s.Require().NoError(s.ReceiptIndexer.Store(mocks.NewReceipt(4, common.HexToHash("0x2"))))
 
 		retReceipts, err := s.ReceiptIndexer.GetByBlockHeight(receipt.BlockNumber)
 		s.Require().NoError(err)
@@ -214,7 +216,11 @@ func (s *ReceiptTestSuite) TestBloomsForBlockRange() {
 		s.Require().Len(heights, len(testBlooms))
 		s.Require().Equal(testBlooms, blooms)
 
-		// todo smaller block range
+		blooms, heights, err = s.ReceiptIndexer.BloomsForBlockRange(start, big.NewInt(13))
+		s.Require().NoError(err)
+		s.Require().Len(blooms, 3)
+		s.Require().Len(heights, 3)
+		s.Require().Equal(testBlooms[0:3], blooms)
 	})
 
 	s.Run("invalid block range", func() {
