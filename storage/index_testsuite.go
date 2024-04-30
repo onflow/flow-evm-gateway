@@ -161,9 +161,9 @@ func (s *ReceiptTestSuite) TestGetReceiptByBlockID() {
 		err := s.ReceiptIndexer.Store(receipt)
 		s.Require().NoError(err)
 
-		retReceipt, err := s.ReceiptIndexer.GetByBlockHeight(receipt.BlockNumber)
+		retReceipts, err := s.ReceiptIndexer.GetByBlockHeight(receipt.BlockNumber)
 		s.Require().NoError(err)
-		s.compareReceipts(receipt, retReceipt)
+		s.compareReceipts(receipt, retReceipts[0])
 	})
 
 	s.Run("non-existing block height", func() {
