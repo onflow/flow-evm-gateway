@@ -4,25 +4,27 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/onflow/cadence/runtime/common"
 	"github.com/onflow/flow-go/fvm/evm/types"
-	"github.com/onflow/go-ethereum/common"
+	gethCommon "github.com/onflow/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func Test_DecodeBlockExecutedEvent(t *testing.T) {
 	block := &types.Block{
-		ParentBlockHash: common.HexToHash("0x1"),
+		ParentBlockHash: gethCommon.HexToHash("0x1"),
 		Height:          100,
 		TotalSupply:     big.NewInt(100),
-		ReceiptRoot:     common.HexToHash("0x2"),
-		TransactionHashes: []common.Hash{
-			common.HexToHash("0xf1"),
+		ReceiptRoot:     gethCommon.HexToHash("0x2"),
+		TransactionHashes: []gethCommon.Hash{
+			gethCommon.HexToHash("0xf1"),
 		},
 	}
-	ev := types.NewBlockExecutedEvent(block)
+	ev := types.NewBlockEvent(block)
 
-	encEv, err := ev.Payload.CadenceEvent()
+	location := common.NewAddressLocation(nil, common.Address{0x1}, string(types.EventTypeBlockExecuted))
+	encEv, err := ev.Payload.ToCadence(location)
 	require.NoError(t, err)
 
 	decBlock, err := decodeBlock(encEv)

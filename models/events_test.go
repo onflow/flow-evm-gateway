@@ -5,9 +5,10 @@ import (
 	"testing"
 
 	"github.com/onflow/cadence"
+	"github.com/onflow/cadence/runtime/common"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go/fvm/evm/types"
-	"github.com/onflow/go-ethereum/common"
+	gethCommon "github.com/onflow/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -76,9 +77,11 @@ func TestCadenceEvents_Block(t *testing.T) {
 }
 
 func newBlock(height uint64) (*types.Block, flow.Event, error) {
-	evmBlock := types.NewBlock(common.HexToHash("0x01"), height, big.NewInt(100), common.HexToHash("0x02"), nil)
-	ev := types.NewBlockExecutedEvent(evmBlock)
-	cadenceEvent, err := ev.Payload.CadenceEvent()
+	evmBlock := types.NewBlock(gethCommon.HexToHash("0x01"), height, uint64(1337), big.NewInt(100), gethCommon.HexToHash("0x02"), nil)
+	ev := types.NewBlockEvent(evmBlock)
+
+	location := common.NewAddressLocation(nil, common.Address{0x1}, string(types.EventTypeBlockExecuted))
+	cadenceEvent, err := ev.Payload.ToCadence(location)
 	if err != nil {
 		return nil, flow.Event{}, err
 	}

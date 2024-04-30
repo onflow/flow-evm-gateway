@@ -2,23 +2,11 @@ package models
 
 import (
 	"github.com/onflow/cadence"
-	"github.com/onflow/cadence/runtime/common"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"golang.org/x/exp/slices"
-)
-
-var evmLocation common.Location = flow.EVMLocation{}
-
-var BlockExecutedEventType = evmLocation.TypeID(
-	nil,
-	string(types.EventTypeBlockExecuted),
-)
-
-var TransactionExecutedEventType = evmLocation.TypeID(
-	nil,
-	string(types.EventTypeTransactionExecuted),
+	"strings"
 )
 
 // isBlockExecutedEvent checks whether the given event contains block executed data.
@@ -26,7 +14,7 @@ func isBlockExecutedEvent(event cadence.Event) bool {
 	if event.EventType == nil {
 		return false
 	}
-	return common.TypeID(event.EventType.ID()) == BlockExecutedEventType
+	return strings.Contains(event.EventType.ID(), string(types.EventTypeBlockExecuted))
 }
 
 // isTransactionExecutedEvent checks whether the given event contains transaction executed data.
@@ -34,7 +22,7 @@ func isTransactionExecutedEvent(event cadence.Event) bool {
 	if event.EventType == nil {
 		return false
 	}
-	return common.TypeID(event.EventType.ID()) == TransactionExecutedEventType
+	return strings.Contains(event.EventType.ID(), string(types.EventTypeTransactionExecuted))
 }
 
 type CadenceEvents struct {

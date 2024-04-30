@@ -13,7 +13,6 @@ import (
 	storageErrs "github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/onflow/flow-go/engine"
 	"github.com/onflow/flow-go/engine/access/subscription"
-	flowgoStorage "github.com/onflow/flow-go/storage"
 	"github.com/onflow/go-ethereum/common/hexutil"
 	"github.com/onflow/go-ethereum/eth/filters"
 	"github.com/onflow/go-ethereum/rpc"
@@ -65,8 +64,9 @@ func (s *StreamAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
 		func(ctx context.Context, height uint64) (interface{}, error) {
 			block, err := s.blocks.GetByHeight(height)
 			if err != nil {
-				if errors.Is(err, storageErrs.ErrNotFound) { // make sure to wrap in not found error as the streamer expects it
-					return nil, errors.Join(flowgoStorage.ErrNotFound, err)
+				if errors.Is(err, storageErrs.ErrNotFound) {
+					// make sure to wrap in not found error as the streamer expects it
+					return nil, errors.Join(subscription.ErrBlockNotReady, err)
 				}
 				return nil, fmt.Errorf("failed to get block at height: %d: %w", height, err)
 			}
@@ -104,8 +104,9 @@ func (s *StreamAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) (*
 		func(ctx context.Context, height uint64) (interface{}, error) {
 			block, err := s.blocks.GetByHeight(height)
 			if err != nil {
-				if errors.Is(err, storageErrs.ErrNotFound) { // make sure to wrap in not found error as the streamer expects it
-					return nil, errors.Join(flowgoStorage.ErrNotFound, err)
+				if errors.Is(err, storageErrs.ErrNotFound) {
+					// make sure to wrap in not found error as the streamer expects it
+					return nil, errors.Join(subscription.ErrBlockNotReady, err)
 				}
 				return nil, fmt.Errorf("failed to get block at height: %d: %w", height, err)
 			}
@@ -118,16 +119,18 @@ func (s *StreamAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) (*
 
 			tx, err := s.transactions.Get(hash)
 			if err != nil {
-				if errors.Is(err, storageErrs.ErrNotFound) { // make sure to wrap in not found error as the streamer expects it
-					return nil, errors.Join(flowgoStorage.ErrNotFound, err)
+				if errors.Is(err, storageErrs.ErrNotFound) {
+					// make sure to wrap in not found error as the streamer expects it
+					return nil, errors.Join(subscription.ErrBlockNotReady, err)
 				}
 				return nil, fmt.Errorf("failed to get tx with hash: %s at height: %d: %w", hash, height, err)
 			}
 
 			rcp, err := s.receipts.GetByTransactionID(hash)
 			if err != nil {
-				if errors.Is(err, storageErrs.ErrNotFound) { // make sure to wrap in not found error as the streamer expects it
-					return nil, errors.Join(flowgoStorage.ErrNotFound, err)
+				if errors.Is(err, storageErrs.ErrNotFound) {
+					// make sure to wrap in not found error as the streamer expects it
+					return nil, errors.Join(subscription.ErrBlockNotReady, err)
 				}
 				return nil, fmt.Errorf("failed to get receipt with hash: %s at height: %d: %w", hash, height, err)
 			}
@@ -168,8 +171,9 @@ func (s *StreamAPI) Logs(ctx context.Context, criteria filters.FilterCriteria) (
 		func(ctx context.Context, height uint64) (interface{}, error) {
 			block, err := s.blocks.GetByHeight(height)
 			if err != nil {
-				if errors.Is(err, storageErrs.ErrNotFound) { // make sure to wrap in not found error as the streamer expects it
-					return nil, errors.Join(flowgoStorage.ErrNotFound, err)
+				if errors.Is(err, storageErrs.ErrNotFound) {
+					// make sure to wrap in not found error as the streamer expects it
+					return nil, errors.Join(subscription.ErrBlockNotReady, err)
 				}
 				return nil, fmt.Errorf("failed to get block at height: %d: %w", height, err)
 			}

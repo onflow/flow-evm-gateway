@@ -121,42 +121,23 @@ func (tc TransactionCall) MarshalBinary() ([]byte, error) {
 	return append([]byte{tc.Type()}, encoded...), err
 }
 
-type txEventPayload struct {
-	BlockHeight             uint64 `cadence:"blockHeight"`
-	BlockHash               string `cadence:"blockHash"`
-	TransactionHash         string `cadence:"transactionHash"`
-	Transaction             string `cadence:"transaction"`
-	Failed                  bool   `cadence:"failed"`
-	VMError                 string `cadence:"vmError"`
-	TransactionType         uint8  `cadence:"transactionType"`
-	GasConsumed             uint64 `cadence:"gasConsumed"`
-	DeployedContractAddress string `cadence:"deployedContractAddress"`
-	ReturnedValue           string `cadence:"returnedValue"`
-	Logs                    string `cadence:"logs"`
-}
-
-func (tx *txEventPayload) IsDirectCall() bool {
-	return tx.TransactionType == types.DirectCallTxType
-}
-
 // decodeTransaction takes a cadence event for transaction executed
 // and decodes it into a Transaction interface. The concrete type
 // will be either a TransactionCall or a DirectCall.
 func decodeTransaction(event cadence.Event) (Transaction, error) {
-	t := &txEventPayload{}
-	err := cadence.DecodeFields(event, t)
+	tx, err := types.DecodeTransactionEventPayload(event)
 	if err != nil {
 		return nil, fmt.Errorf("failed to cadence decode transaction: %w", err)
 	}
 
-	encodedTx, err := hex.DecodeString(t.Transaction)
+	encodedTx, err := hex.DecodeString(tx.Payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode transaction hex: %w", err)
 	}
 
 	// check if the transaction data is actually from a direct call,
 	// which is a special state transition in Flow EVM.
-	if t.IsDirectCall() {
+	if tx.TransactionType == types.DirectCallTxType {
 		directCall, err := types.DirectCallFromEncoded(encodedTx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to rlp decode direct call: %w", err)
