@@ -5,7 +5,7 @@ go 1.21
 require (
 	github.com/goccy/go-json v0.10.2
 	github.com/onflow/cadence v1.0.0-preview.23
-	github.com/onflow/flow-emulator v1.0.0-preview.19.0.20240430110431-c04996980dbc
+	github.com/onflow/flow-emulator v1.0.0-preview.20
 	github.com/onflow/flow-evm-gateway v0.0.0-20240201154855-4d4d3d3f19c7
 	github.com/onflow/flow-go v0.34.0-crescendo-preview.10-staged-contracts-3.0.20240430105130-26cb8ee40436
 	github.com/onflow/flow-go-sdk v1.0.0-preview.22
