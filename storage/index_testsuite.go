@@ -218,9 +218,29 @@ func (s *ReceiptTestSuite) TestBloomsForBlockRange() {
 
 		blooms, heights, err = s.ReceiptIndexer.BloomsForBlockRange(start, big.NewInt(13))
 		s.Require().NoError(err)
-		s.Require().Len(blooms, 3)
-		s.Require().Len(heights, 3)
-		s.Require().Equal(testBlooms[0:3], blooms)
+		s.Require().Len(blooms, 4)
+		s.Require().Len(heights, 4)
+		s.Require().Equal(testBlooms[0:4], blooms)
+	})
+
+	s.Run("valid block range with multiple receipts per block", func() {
+		start := big.NewInt(10)
+		end := big.NewInt(15)
+		testBlooms := make([]*types.Bloom, 0)
+
+		for i := start.Uint64(); i < end.Uint64(); i++ {
+			r1 := mocks.NewReceipt(i, common.HexToHash(fmt.Sprintf("0x%d", i)))
+			r2 := mocks.NewReceipt(i, common.HexToHash(fmt.Sprintf("0x%d", i)))
+			testBlooms = append(testBlooms, &r1.Bloom, &r2.Bloom)
+			s.Require().NoError(s.ReceiptIndexer.Store(r1))
+			s.Require().NoError(s.ReceiptIndexer.Store(r2))
+		}
+
+		blooms, heights, err := s.ReceiptIndexer.BloomsForBlockRange(start, end)
+		s.Require().NoError(err)
+		s.Require().Len(blooms, len(testBlooms))
+		s.Require().Len(heights, len(testBlooms))
+		s.Require().Equal(testBlooms, blooms)
 	})
 
 	s.Run("invalid block range", func() {
