@@ -2,6 +2,7 @@ package models
 
 import (
 	"fmt"
+
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/go-ethereum/common"
