@@ -2,6 +2,7 @@ package pebble
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math/big"
 	"sync"
@@ -9,7 +10,7 @@ import (
 	"github.com/cockroachdb/pebble"
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/storage"
-	"github.com/onflow/flow-evm-gateway/storage/errors"
+	errs "github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/onflow/go-ethereum/common"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/onflow/go-ethereum/rlp"
@@ -29,31 +30,68 @@ func NewReceipts(store *Storage) *Receipts {
 	}
 }
 
+// Store receipt in the index.
+//
+// Storing receipt will create multiple indexes, each receipt has a transaction ID,
+// and a block height. We create following mappings:
+// - receipt transaction ID => block height bytes
+// - receipt block height => list of encoded receipts (1+ per block)
+// - receipt block height => list of bloom filters (1+ per block)
 func (r *Receipts) Store(receipt *gethTypes.Receipt) error {
 	r.mux.Lock()
 	defer r.mux.Unlock()
 
-	// convert to storage receipt to preserve all values
-	rr := (*models.StorageReceipt)(receipt)
-	val, err := rlp.EncodeToBytes(rr)
-	if err != nil {
-		return err
+	// we must first retrieve any already saved receipts at the provided height,
+	// and if found we must add to the list, because this method can be called multiple
+	// times when indexing a single EVM height, which can contain multiple receipts
+	blockHeight := receipt.BlockNumber.Bytes()
+	receipts, err := r.getByBlockHeight(blockHeight)
+	if err != nil && !errors.Is(err, errs.ErrNotFound) { // anything but not found is failure
+		return fmt.Errorf("failed to store receipt to height, retrieve exisint receipt errror: %w", err)
 	}
+
+	// same goes for blooms
+	blooms, err := r.getBloomsByBlockHeight(blockHeight)
+	if err != nil && !errors.Is(err, errs.ErrNotFound) {
+		return fmt.Errorf("failed to store receipt to height, retrieve existing blooms error: %w", err)
+	}
+
+	// add new receipt to the list of all receipts, if the receipts do not yet exist at the
+	// provided height, the above get will return ErrNotFound (which we ignore) and the bellow
+	// line will init an empty receipts slice with only the provided receipt
+	receipts = append(receipts, receipt)
+	blooms = append(blooms, &receipt.Bloom)
 
 	batch := r.store.newBatch()
 	defer batch.Close()
 
+	// convert to storage receipt to preserve all values
+	storeReceipts := make([]*models.StorageReceipt, len(receipts))
+	for i, rr := range receipts {
+		storeReceipts[i] = (*models.StorageReceipt)(rr)
+	}
+
+	val, err := rlp.EncodeToBytes(storeReceipts)
+	if err != nil {
+		return err
+	}
+
 	height := receipt.BlockNumber.Bytes()
+
 	if err := r.store.set(receiptTxIDToHeightKey, receipt.TxHash.Bytes(), height, batch); err != nil {
 		return fmt.Errorf("failed to store receipt tx height: %w", err)
 	}
 
-	// todo if there are more transactions per block we need to update this
 	if err := r.store.set(receiptHeightKey, height, val, batch); err != nil {
 		return fmt.Errorf("failed to store receipt height: %w", err)
 	}
 
-	if err := r.store.set(bloomHeightKey, height, receipt.Bloom.Bytes(), batch); err != nil {
+	bloomVal, err := rlp.EncodeToBytes(blooms)
+	if err != nil {
+		return fmt.Errorf("failed to encode blooms: %w", err)
+	}
+
+	if err := r.store.set(bloomHeightKey, height, bloomVal, batch); err != nil {
 		return fmt.Errorf("failed to store bloom height: %w", err)
 	}
 
@@ -73,47 +111,75 @@ func (r *Receipts) GetByTransactionID(ID common.Hash) (*gethTypes.Receipt, error
 		return nil, fmt.Errorf("failed to get receipt by tx ID: %w", err)
 	}
 
-	rcp, err := r.getByBlockHeight(height)
+	receipts, err := r.getByBlockHeight(height)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get receipt by height: %w", err)
 	}
 
-	return rcp, nil
+	for _, rcp := range receipts {
+		if rcp.TxHash.Cmp(ID) == 0 {
+			return rcp, nil
+		}
+	}
+
+	return nil, errs.ErrNotFound
 }
 
-func (r *Receipts) GetByBlockHeight(height *big.Int) (*gethTypes.Receipt, error) {
+func (r *Receipts) GetByBlockHeight(height *big.Int) ([]*gethTypes.Receipt, error) {
 	r.mux.RLock()
 	defer r.mux.RUnlock()
 	return r.getByBlockHeight(height.Bytes())
 }
 
-func (r *Receipts) getByBlockHeight(height []byte) (*gethTypes.Receipt, error) {
+func (r *Receipts) getByBlockHeight(height []byte) ([]*gethTypes.Receipt, error) {
 	val, err := r.store.get(receiptHeightKey, height)
 	if err != nil {
 		return nil, err
 	}
 
-	var rcp models.StorageReceipt
-	err = rlp.DecodeBytes(val, &rcp)
+	var storeReceipts []*models.StorageReceipt
+	err = rlp.DecodeBytes(val, &storeReceipts)
 	if err != nil {
 		return nil, err
 	}
 
-	// dynamically populate the values since they are not stored to save space
-	for i, l := range rcp.Logs {
-		l.BlockHash = rcp.BlockHash
-		l.BlockNumber = rcp.BlockNumber.Uint64()
-		l.TxHash = rcp.TxHash
-		l.TxIndex = rcp.TransactionIndex
-		l.Index = uint(i)
+	receipts := make([]*gethTypes.Receipt, len(storeReceipts))
+	for i, rcp := range storeReceipts {
+		// dynamically populate the values since they are not stored to save space
+		for i, l := range rcp.Logs {
+			l.BlockHash = rcp.BlockHash
+			l.BlockNumber = rcp.BlockNumber.Uint64()
+			l.TxHash = rcp.TxHash
+			l.TxIndex = rcp.TransactionIndex
+			l.Index = uint(i)
+		}
+
+		receipts[i] = (*gethTypes.Receipt)(rcp)
 	}
 
-	return (*gethTypes.Receipt)(&rcp), nil
+	return receipts, nil
+}
+
+func (r *Receipts) getBloomsByBlockHeight(height []byte) ([]*gethTypes.Bloom, error) {
+	val, err := r.store.get(bloomHeightKey, height)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get bloom at height: %w", err)
+	}
+
+	var blooms []*gethTypes.Bloom
+	if err := rlp.DecodeBytes(val, &blooms); err != nil {
+		return nil, fmt.Errorf("failed to decode blooms at height: %w", err)
+	}
+
+	return blooms, nil
 }
 
 func (r *Receipts) BloomsForBlockRange(start, end *big.Int) ([]*gethTypes.Bloom, []*big.Int, error) {
+	r.mux.RLock()
+	defer r.mux.RUnlock()
+
 	if start.Cmp(end) > 0 {
-		return nil, nil, fmt.Errorf("start is bigger than end: %w", errors.ErrInvalidRange)
+		return nil, nil, fmt.Errorf("start is bigger than end: %w", errs.ErrInvalidRange)
 	}
 
 	// make sure the first and last height are within indexed values
@@ -127,7 +193,7 @@ func (r *Receipts) BloomsForBlockRange(start, end *big.Int) ([]*gethTypes.Bloom,
 			"start value %d is not within the indexed range of [0 - %d]: %w",
 			start,
 			last,
-			errors.ErrInvalidRange,
+			errs.ErrInvalidRange,
 		)
 	}
 
@@ -136,7 +202,7 @@ func (r *Receipts) BloomsForBlockRange(start, end *big.Int) ([]*gethTypes.Bloom,
 			"end value %d is not within the indexed range of [0 - %d]: %w",
 			end,
 			last,
-			errors.ErrInvalidRange,
+			errs.ErrInvalidRange,
 		)
 	}
 
@@ -166,11 +232,15 @@ func (r *Receipts) BloomsForBlockRange(start, end *big.Int) ([]*gethTypes.Bloom,
 			return nil, nil, err
 		}
 
-		bloom := gethTypes.BytesToBloom(val)
+		var bloomsHeight []*gethTypes.Bloom
+		if err := rlp.DecodeBytes(val, &bloomsHeight); err != nil {
+			return nil, nil, fmt.Errorf("failed to decode blooms: %w", err)
+		}
+
 		h := stripPrefix(iterator.Key())
 		height := new(big.Int).SetBytes(h)
 
-		blooms = append(blooms, &bloom)
+		blooms = append(blooms, bloomsHeight...)
 		heights = append(heights, height)
 	}
 

@@ -234,6 +234,7 @@ func (e *Engine) indexTransaction(tx models.Transaction, receipt *gethTypes.Rece
 		Str("contract-address", receipt.ContractAddress.String()).
 		Int("log-count", len(receipt.Logs)).
 		Uint64("evm-height", receipt.BlockNumber.Uint64()).
+		Uint("tx-index", receipt.TransactionIndex).
 		Str("receipt-tx-hash", receipt.TxHash.String()).
 		Str("tx-hash", txHash.String()).
 		Msg("ingesting new transaction executed event")
