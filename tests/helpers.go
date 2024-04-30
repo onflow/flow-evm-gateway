@@ -100,14 +100,26 @@ func startEmulator(createTestAccounts bool) (*server.EmulatorServer, error) {
 // runWeb3Test will run the test by name, the name
 // must match an existing js test file (without the extension)
 func runWeb3Test(t *testing.T, name string) {
-	stop := servicesSetup(t)
+	_, stop := servicesSetup(t)
+	executeTest(t, name)
+	stop()
+}
+
+func runWeb3TestWithSetup(
+	t *testing.T,
+	name string,
+	setupFunc func(emu emulator.Emulator) error,
+) {
+	emulator, stop := servicesSetup(t)
+	err := setupFunc(emulator)
+	require.NoError(t, err)
 	executeTest(t, name)
 	stop()
 }
 
 // servicesSetup starts up an emulator and the gateway
 // engines required for operation of the evm gateway.
-func servicesSetup(t *testing.T) func() {
+func servicesSetup(t *testing.T) (emulator.Emulator, func()) {
 	srv, err := startEmulator(true)
 	require.NoError(t, err)
 
@@ -144,7 +156,7 @@ func servicesSetup(t *testing.T) func() {
 	}()
 
 	time.Sleep(1 * time.Second) // some time to startup
-	return func() {
+	return emu, func() {
 		cancel()
 		srv.Stop()
 	}
