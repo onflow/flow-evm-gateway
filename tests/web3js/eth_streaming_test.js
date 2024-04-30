@@ -1,13 +1,11 @@
-const { assert } = require('chai')
 const conf = require('./config')
 const helpers = require('./helpers')
+const { assert } = require('chai')
 const {Web3} = require("web3");
-const {startBlockHeight} = require("./config");
-const web3 = conf.web3
+
+const timeout = 30 // test timeout seconds
 
 it('streaming of logs using filters', async() => {
-    setTimeout(() => process.exit(1), 19*1000) // hack around the fact ws connection is not closed after
-
     let deployed = await helpers.deployContract("storage")
     let contractAddress = deployed.receipt.contractAddress
 
@@ -21,6 +19,9 @@ it('streaming of logs using filters', async() => {
     ]
 
     let ws = new Web3("ws://127.0.0.1:8545")
+
+    // wait for subscription for a bit
+    await new Promise((res, rej) => setTimeout(() => res(), 1000))
 
     // subscribe to new blocks being produced by bellow transaction submission
     let blockCount = 0
@@ -97,5 +98,7 @@ it('streaming of logs using filters', async() => {
     assert.deepEqual(txHashes, sentHashes)
     assert.deepEqual(logHashes, sentHashes)
 
-    process.exit(0) // hack around the ws connection not being closed
-}).timeout(20*1000)
+    await ws.eth.clearSubscriptions()
+
+    process.exit(0)
+}).timeout(timeout*1000)

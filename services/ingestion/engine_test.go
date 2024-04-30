@@ -7,13 +7,14 @@ import (
 	"testing"
 
 	"github.com/onflow/cadence"
+	"github.com/onflow/cadence/runtime/common"
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/services/ingestion/mocks"
 	storageMock "github.com/onflow/flow-evm-gateway/storage/mocks"
 	"github.com/onflow/flow-go-sdk"
 	broadcast "github.com/onflow/flow-go/engine"
 	"github.com/onflow/flow-go/fvm/evm/types"
-	"github.com/onflow/go-ethereum/common"
+	gethCommon "github.com/onflow/go-ethereum/common"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -509,17 +510,18 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 
 func newBlock(height uint64) (cadence.Event, *types.Block, *types.Event, error) {
 	block := &types.Block{
-		ParentBlockHash: common.HexToHash("0x1"),
+		ParentBlockHash: gethCommon.HexToHash("0x1"),
 		Height:          height,
 		TotalSupply:     big.NewInt(100),
-		ReceiptRoot:     common.HexToHash("0x2"),
-		TransactionHashes: []common.Hash{
-			common.HexToHash("0xf1"),
+		ReceiptRoot:     gethCommon.HexToHash("0x2"),
+		TransactionHashes: []gethCommon.Hash{
+			gethCommon.HexToHash("0xf1"),
 		},
 	}
 
-	blockEvent := types.NewBlockExecutedEvent(block)
-	blockCdc, err := blockEvent.Payload.CadenceEvent()
+	blockEvent := types.NewBlockEvent(block)
+	location := common.NewAddressLocation(nil, common.Address{0x1}, string(types.EventTypeBlockExecuted))
+	blockCdc, err := blockEvent.Payload.ToCadence(location)
 
 	return blockCdc, block, blockEvent, err
 }
@@ -529,14 +531,14 @@ func newTransaction() (cadence.Event, *types.Event, models.Transaction, *types.R
 		VMError:                 nil,
 		TxType:                  1,
 		GasConsumed:             1337,
-		DeployedContractAddress: types.Address{0x5, 0x6, 0x7},
+		DeployedContractAddress: &types.Address{0x5, 0x6, 0x7},
 		ReturnedValue:           []byte{0x55},
 		Logs: []*gethTypes.Log{{
-			Address: common.Address{0x1, 0x2},
-			Topics:  []common.Hash{{0x5, 0x6}, {0x7, 0x8}},
+			Address: gethCommon.Address{0x1, 0x2},
+			Topics:  []gethCommon.Hash{{0x5, 0x6}, {0x7, 0x8}},
 		}, {
-			Address: common.Address{0x3, 0x5},
-			Topics:  []common.Hash{{0x2, 0x66}, {0x7, 0x1}},
+			Address: gethCommon.Address{0x3, 0x5},
+			Topics:  []gethCommon.Hash{{0x2, 0x66}, {0x7, 0x1}},
 		}},
 	}
 
@@ -551,15 +553,15 @@ func newTransaction() (cadence.Event, *types.Event, models.Transaction, *types.R
 		return cadence.Event{}, nil, nil, nil, err
 	}
 
-	ev := types.NewTransactionExecutedEvent(
-		1,
-		txEncoded,
-		common.HexToHash("0x1"),
-		tx.Hash(),
+	ev := types.NewTransactionEvent(
 		res,
+		txEncoded,
+		1,
+		tx.Hash(),
 	)
 
-	cdcEv, err := ev.Payload.CadenceEvent()
+	location := common.NewAddressLocation(nil, common.Address{0x1}, string(types.EventTypeBlockExecuted))
+	cdcEv, err := ev.Payload.ToCadence(location)
 
 	return cdcEv, ev, models.TransactionCall{Transaction: tx}, res, err
 }
