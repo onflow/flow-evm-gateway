@@ -5,19 +5,6 @@ const helpers = require('./helpers')
 const web3 = conf.web3
 
 it('transfer flow between two EOA accounts', async () => {
-  // TODO: Temporary workaround until `EVM.dryRun` is introduced
-  let transferValue = utils.toWei("0.5", "ether")
-  const signedTx = await conf.eoa.signTransaction({
-    from: conf.eoa.address,
-    to: '0xa94f5374Fce5edBC8E2a8697C15331677e6EbF0B',
-    value: transferValue,
-    gasPrice: '0',
-    gasLimit: 55000,
-  })
-  let response = await helpers.callRPCMethod('eth_sendRawTransaction', [signedTx.rawTransaction])
-  assert.equal(200, response.status)
-  assert.isDefined(response.body['result'])
-
   let receiver = web3.eth.accounts.create()
 
   // make sure receiver balance is initially 0
@@ -26,13 +13,12 @@ it('transfer flow between two EOA accounts', async () => {
 
   // get sender balance
   let senderBalance = await web3.eth.getBalance(conf.eoa.address)
-  // we moved some value before, for `eth_call` to work properly with the
-  // test EOA.
-  assert.equal(senderBalance, utils.toWei(conf.fundedAmount, "ether") - transferValue)
+  assert.equal(senderBalance, utils.toWei(conf.fundedAmount, "ether"))
 
   let txCount = await web3.eth.getTransactionCount(conf.eoa.address)
-  assert.equal(1n, txCount)
+  assert.equal(0n, txCount)
 
+  let transferValue = utils.toWei("0.5", "ether")
   let transfer = await helpers.signAndSend({
     from: conf.eoa.address,
     to: receiver.address,
@@ -46,14 +32,14 @@ it('transfer flow between two EOA accounts', async () => {
 
   // check that transaction count was increased
   txCount = await web3.eth.getTransactionCount(conf.eoa.address)
-  assert.equal(2n, txCount)
+  assert.equal(1n, txCount)
 
   // check balance was moved
   receiverWei = await web3.eth.getBalance(receiver.address)
   assert.equal(receiverWei, transferValue)
 
   senderBalance = await web3.eth.getBalance(conf.eoa.address)
-  assert.equal(senderBalance, utils.toWei(conf.fundedAmount, "ether") - (2*transferValue))
+  assert.equal(senderBalance, utils.toWei(conf.fundedAmount, "ether") - transferValue)
 
   // make sure latest block includes the transfer tx
   let latest = await web3.eth.getBlockNumber()
@@ -63,7 +49,7 @@ it('transfer flow between two EOA accounts', async () => {
 
   // check that getTransactionCount can handle specific block heights
   txCount = await web3.eth.getTransactionCount(conf.eoa.address, latest - 1n)
-  assert.equal(1n, txCount)
+  assert.equal(0n, txCount)
 
   // get balance at special block tags
   let blockTags = ["latest", "pending", "safe", "finalized"]

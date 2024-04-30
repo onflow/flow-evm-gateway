@@ -398,13 +398,19 @@ func (b *BlockChainAPI) Call(
 		return handleError[hexutil.Bytes](b.logger, err)
 	}
 
-	txData, err := signTxFromArgs(args)
+	tx, err := encodeTxFromArgs(args)
 	if err != nil {
-		b.logger.Error().Err(err).Msg("failed to sign transaction for call")
+		b.logger.Error().Err(err).Msg("failed to encode transaction for call")
 		return handleError[hexutil.Bytes](b.logger, errs.ErrInternal)
 	}
 
-	res, err := b.evm.Call(ctx, txData, cadenceHeight)
+	// Default address in case user does not provide one
+	from := b.config.Coinbase
+	if args.From != nil {
+		from = *args.From
+	}
+
+	res, err := b.evm.Call(ctx, tx, from, cadenceHeight)
 	if err != nil {
 		b.logger.Error().Err(err).Msg("failed to execute call")
 		return handleError[hexutil.Bytes](b.logger, errs.ErrInternal)
@@ -492,13 +498,19 @@ func (b *BlockChainAPI) EstimateGas(
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 	overrides *StateOverride,
 ) (hexutil.Uint64, error) {
-	txData, err := signTxFromArgs(args)
+	tx, err := encodeTxFromArgs(args)
 	if err != nil {
-		b.logger.Error().Err(err).Msg("failed to sign transaction for gas estimate")
+		b.logger.Error().Err(err).Msg("failed to encode transaction for gas estimate")
 		return hexutil.Uint64(defaultGasLimit), nil // return default gas limit
 	}
 
-	estimatedGas, err := b.evm.EstimateGas(ctx, txData)
+	// Default address in case user does not provide one
+	from := b.config.Coinbase
+	if args.From != nil {
+		from = *args.From
+	}
+
+	estimatedGas, err := b.evm.EstimateGas(ctx, tx, from)
 	if err != nil {
 		b.logger.Error().Err(err).Msg("failed to estimate gas")
 		return hexutil.Uint64(0), err
