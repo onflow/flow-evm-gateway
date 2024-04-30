@@ -40,23 +40,14 @@ func TestWeb3_E2E(t *testing.T) {
 		runWeb3TestWithSetup(t, "eth_batch_retrieval_test", func(emu emulator.Emulator) error {
 			code := `
 			transaction(tx1: String, tx2: String) {
-				let coa: &EVM.CadenceOwnedAccount
 				prepare(signer: auth(Storage) &Account) {
-					self.coa = signer.storage.borrow<&EVM.CadenceOwnedAccount>(
-						from: /storage/evm
-					) ?? panic("Could not borrow reference to the COA!")
-				}
-				execute {
 					let txs: [[UInt8]] = [tx1.decodeHex(), tx2.decodeHex()]
 					let txResults = EVM.batchRun(
 						txs: txs,
-						coinbase: self.coa.address()
+						coinbase: EVM.EVMAddress(bytes: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19])
 					)
 					for txResult in txResults {
-						assert(
-							txResult.status == EVM.Status.successful,
-							message: "failed to execute evm transaction: ".concat(txResult.errorCode.toString())
-						)
+						assert(txResult.status == EVM.Status.successful, message: "failed to execute tx"))
 					}
 				}
 			}
