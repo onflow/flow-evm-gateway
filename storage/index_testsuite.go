@@ -224,22 +224,24 @@ func (s *ReceiptTestSuite) TestBloomsForBlockRange() {
 	})
 
 	s.Run("valid block range with multiple receipts per block", func() {
-		start := big.NewInt(10)
-		end := big.NewInt(15)
+		start := big.NewInt(15)
+		end := big.NewInt(20)
 		testBlooms := make([]*types.Bloom, 0)
+		testHeights := make([]*big.Int, 0)
 
 		for i := start.Uint64(); i < end.Uint64(); i++ {
 			r1 := mocks.NewReceipt(i, common.HexToHash(fmt.Sprintf("0x%d", i)))
 			r2 := mocks.NewReceipt(i, common.HexToHash(fmt.Sprintf("0x%d", i)))
-			testBlooms = append(testBlooms, &r1.Bloom, &r2.Bloom)
 			s.Require().NoError(s.ReceiptIndexer.Store(r1))
 			s.Require().NoError(s.ReceiptIndexer.Store(r2))
+			testBlooms = append(testBlooms, &r1.Bloom, &r2.Bloom)
+			testHeights = append(testHeights, big.NewInt(int64(i)))
 		}
 
 		blooms, heights, err := s.ReceiptIndexer.BloomsForBlockRange(start, end)
 		s.Require().NoError(err)
 		s.Require().Len(blooms, len(testBlooms))
-		s.Require().Len(heights, len(testBlooms))
+		s.Require().Len(heights, len(testHeights))
 		s.Require().Equal(testBlooms, blooms)
 	})
 
