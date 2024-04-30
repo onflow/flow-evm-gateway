@@ -134,6 +134,24 @@ func (s *ReceiptTestSuite) TestStoreReceipt() {
 		err := s.ReceiptIndexer.Store(receipt)
 		s.Require().NoError(err)
 	})
+
+	s.Run("store multiple receipts at same height", func() {
+		const height = 1
+		receipts := []*types.Receipt{
+			mocks.NewReceipt(height, common.HexToHash("0xf1")),
+			mocks.NewReceipt(height, common.HexToHash("0xf2")),
+			mocks.NewReceipt(height, common.HexToHash("0xf3")),
+		}
+
+		for _, r := range receipts {
+			err := s.ReceiptIndexer.Store(r)
+			s.Require().NoError(err)
+		}
+
+		storeReceipts, err := s.ReceiptIndexer.GetByBlockHeight(big.NewInt(height))
+		s.Require().NoError(err)
+		s.Require().Equal(receipts, storeReceipts)
+	})
 }
 
 func (s *ReceiptTestSuite) TestGetReceiptByTransactionID() {
