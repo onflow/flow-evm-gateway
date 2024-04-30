@@ -60,37 +60,33 @@ func (c *CadenceEvents) Blocks() ([]*types.Block, error) {
 	return blocks, nil
 }
 
-// Transactions finds all the transactions evm events and decodes them into transaction map,
-// that has block height as the key, and all transactions at that height as the value,
+// Transactions finds all the transactions evm events and decodes them into transaction slice,
 // if no transactions is found nil is returned.
 //
 // Return values:
-// block_height => []transaction, nil - if transactions are found
+// []transaction, nil - if transactions are found
 // nil, nil - if no transactions are found
 // nil, err - unexpected error
-func (c *CadenceEvents) Transactions() (map[uint64][]*Transaction, map[uint64][]*gethTypes.Receipt, error) {
-	txs := make(map[uint64][]*Transaction)
-	receipts := make(map[uint64][]*gethTypes.Receipt)
-
+func (c *CadenceEvents) Transactions() ([]Transaction, []*gethTypes.Receipt, error) {
+	txs := make([]Transaction, 0)
+	rcps := make([]*gethTypes.Receipt, 0)
 	for _, e := range c.events.Events {
 		if isTransactionExecutedEvent(e.Value) {
 			tx, err := decodeTransaction(e.Value)
 			if err != nil {
 				return nil, nil, err
 			}
-
 			rcp, err := decodeReceipt(e.Value)
 			if err != nil {
 				return nil, nil, err
 			}
 
-			height := rcp.BlockNumber.Uint64()
-			txs[height] = append(txs[height], &tx)
-			receipts[height] = append(receipts[height], rcp)
+			txs = append(txs, tx)
+			rcps = append(rcps, rcp)
 		}
 	}
 
-	return txs, receipts, nil
+	return txs, rcps, nil
 }
 
 // Empty checks if there are any evm block or transactions events.
