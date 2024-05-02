@@ -71,6 +71,7 @@ func FromFlags() (*Config, error) {
 	cfg := &Config{}
 	var evmNetwork, coinbase, gas, coa, key, keysPath, flowNetwork, logLevel, filterExpiry string
 	var streamTimeout int
+	var initHeight uint64
 
 	// parse from flags
 	flag.StringVar(&cfg.DatabaseDir, "database-dir", "./db", "Path to the directory for the database")
@@ -80,6 +81,7 @@ func FromFlags() (*Config, error) {
 	flag.StringVar(&evmNetwork, "evm-network-id", "previewnet", "EVM network ID (previewnet, testnet, mainnet)")
 	flag.StringVar(&flowNetwork, "flow-network-id", "flow-emulator", "Flow network ID (flow-emulator, flow-previewnet)")
 	flag.StringVar(&coinbase, "coinbase", "", "Coinbase address to use for fee collection")
+	flag.Uint64Var(&initHeight, "init-cadence-height", 0, "Define the Cadence block height at which to start the indexing, if starting on a new network this flag should not be used.")
 	flag.StringVar(&gas, "gas-price", "1", "Static gas price used for EVM transactions")
 	flag.StringVar(&coa, "coa-address", "", "Flow address that holds COA account used for submitting transactions")
 	flag.StringVar(&key, "coa-key", "", "Private key value for the COA address used for submitting transactions")
@@ -152,6 +154,11 @@ func FromFlags() (*Config, error) {
 		cfg.InitCadenceHeight = EmulatorInitCadenceHeight
 	default:
 		return nil, fmt.Errorf("flow network ID not supported, only possible to specify 'flow-previewnet' or 'flow-emulator'")
+	}
+
+	// if a specific value was provided use it
+	if initHeight != 0 {
+		cfg.InitCadenceHeight = initHeight
 	}
 
 	// configure logging
