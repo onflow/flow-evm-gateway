@@ -1,6 +1,6 @@
 module github.com/onflow/flow-evm-gateway
 
-go 1.21
+go 1.20
 
 require (
 	github.com/cockroachdb/pebble v0.0.0-20230928194634-aa077af62593
@@ -74,7 +74,7 @@ require (
 	github.com/huin/goupnp v1.3.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/ipfs/bbloom v0.0.4 // indirect
-	github.com/ipfs/boxo v0.19.0 // indirect
+	github.com/ipfs/boxo v0.17.1-0.20240131173518-89bceff34bf1 // indirect
 	github.com/ipfs/go-block-format v0.2.0 // indirect
 	github.com/ipfs/go-cid v0.4.1 // indirect
 	github.com/ipfs/go-datastore v0.6.0 // indirect
