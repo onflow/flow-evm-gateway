@@ -1,14 +1,14 @@
 module github.com/onflow/flow-evm-gateway/integration
 
-go 1.21
+go 1.20
 
 require (
 	github.com/goccy/go-json v0.10.2
-	github.com/onflow/cadence v1.0.0-preview.23
-	github.com/onflow/flow-emulator v1.0.0-preview.21
+	github.com/onflow/cadence v1.0.0-preview.25
+	github.com/onflow/flow-emulator v1.0.0-preview.22
 	github.com/onflow/flow-evm-gateway v0.0.0-20240201154855-4d4d3d3f19c7
-	github.com/onflow/flow-go v0.34.0-crescendo-preview.17
-	github.com/onflow/flow-go-sdk v1.0.0-preview.22
+	github.com/onflow/flow-go v0.34.0-crescendo-preview.18
+	github.com/onflow/flow-go-sdk v1.0.0-preview.25
 	github.com/onflow/go-ethereum v1.13.4
 	github.com/rs/zerolog v1.31.0
 	github.com/stretchr/testify v1.9.0
@@ -88,7 +88,7 @@ require (
 	github.com/improbable-eng/grpc-web v0.15.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/ipfs/bbloom v0.0.4 // indirect
-	github.com/ipfs/boxo v0.19.0 // indirect
+	github.com/ipfs/boxo v0.17.1-0.20240131173518-89bceff34bf1 // indirect
 	github.com/ipfs/go-block-format v0.2.0 // indirect
 	github.com/ipfs/go-cid v0.4.1 // indirect
 	github.com/ipfs/go-datastore v0.6.0 // indirect
@@ -129,7 +129,7 @@ require (
 	github.com/multiformats/go-multistream v0.5.0 // indirect
 	github.com/multiformats/go-varint v0.0.7 // indirect
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
-	github.com/onflow/atree v0.6.1-0.20240416233652-f4568c0c03df // indirect
+	github.com/onflow/atree v0.7.0-rc.1 // indirect
 	github.com/onflow/crypto v0.25.1 // indirect
 	github.com/onflow/flow-core-contracts/lib/go/contracts v0.15.2-0.20240429192223-e696a8e439b5 // indirect
 	github.com/onflow/flow-core-contracts/lib/go/templates v0.15.2-0.20240429192223-e696a8e439b5 // indirect
