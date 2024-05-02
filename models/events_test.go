@@ -15,8 +15,7 @@ import (
 
 func TestCadenceEvents_Block(t *testing.T) {
 
-	v, _ := cadence.NewString("invalid")
-	invalid, _ := cadence.NewValue(v)
+	invalid := cadence.String("invalid")
 
 	b0, e0, err := newBlock(0)
 	require.NoError(t, err)

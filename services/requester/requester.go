@@ -10,8 +10,6 @@ import (
 	"strings"
 
 	"github.com/onflow/cadence"
-	"github.com/onflow/flow-evm-gateway/api/errors"
-	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access"
 	"github.com/onflow/flow-go-sdk/crypto"
@@ -24,6 +22,9 @@ import (
 	gethVM "github.com/onflow/go-ethereum/core/vm"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/onflow/flow-evm-gateway/api/errors"
+	"github.com/onflow/flow-evm-gateway/config"
 )
 
 var (
@@ -283,7 +284,7 @@ func (e *EVM) GetBalance(
 		e.logger.Panic().Msg(fmt.Sprintf("failed to convert balance %v to UInt", val))
 	}
 
-	return val.(cadence.UInt).ToGoValue().(*big.Int), nil
+	return val.(cadence.UInt).Big(), nil
 }
 
 func (e *EVM) GetNonce(
@@ -313,7 +314,7 @@ func (e *EVM) GetNonce(
 		e.logger.Panic().Msg(fmt.Sprintf("failed to convert balance %v to UInt64", val))
 	}
 
-	return val.(cadence.UInt64).ToGoValue().(uint64), nil
+	return uint64(val.(cadence.UInt64)), nil
 }
 
 func (e *EVM) Call(
@@ -458,7 +459,7 @@ func (e *EVM) GetLatestEVMHeight(ctx context.Context) (uint64, error) {
 		e.logger.Panic().Msg(fmt.Sprintf("failed to convert height %v to UInt64", val))
 	}
 
-	return val.(cadence.UInt64).ToGoValue().(uint64), nil
+	return uint64(val.(cadence.UInt64)), nil
 }
 
 // getSignerNetworkInfo loads the signer account from network and returns key index and sequence number
@@ -537,8 +538,7 @@ func cadenceStringToBytes(value cadence.Value) ([]byte, error) {
 		return nil, fmt.Errorf("failed to convert cadence value to string: %v", value)
 	}
 
-	hexEncodedCode := cdcString.ToGoValue().(string)
-	code, err := hex.DecodeString(hexEncodedCode)
+	code, err := hex.DecodeString(string(cdcString))
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode string to byte array: %w", err)
 	}

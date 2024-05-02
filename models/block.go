@@ -18,7 +18,7 @@ func decodeBlock(event cadence.Event) (*types.Block, error) {
 
 	hashes := make([]common.Hash, len(payload.TransactionHashes))
 	for i, h := range payload.TransactionHashes {
-		hashes[i] = common.HexToHash(h.ToGoValue().(string))
+		hashes[i] = common.HexToHash(string(h))
 	}
 
 	return &types.Block{
