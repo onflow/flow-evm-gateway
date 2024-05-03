@@ -22,4 +22,5 @@ COPY --from=builder /flow-evm-gateway/evm-gateway /flow-evm-gateway/evm-gateway
 COPY --from=builder /flow-evm-gateway/previewnet-keys.json /flow-evm-gateway/previewnet-keys.json
 COPY --from=builder /flow-evm-gateway/scripts/run.sh /flow-evm-gateway/run.sh
 EXPOSE 8545
-CMD cd /flow-evm-gateway && ./run.sh
+WORKDIR /flow-evm-gateway
+ENTRYPOINT ["sh", "run.sh"]
