@@ -90,23 +90,26 @@ it should return:
 
 The application can be configured using the following flags at runtime:
 
-| Flag                      | Default Value    | Description                                                                                                            |
-|---------------------------|------------------|------------------------------------------------------------------------------------------------------------------------|
-| `--database-dir`          | `./db`           | Path to the directory for the database.                                                                                |
-| `--rpc-host`              | `localhost`      | Host for the JSON RPC API server.                                                                                      |
-| `--rpc-port`              | `8545`           | Port for the JSON RPC API server.                                                                                      |
-| `--access-node-grpc-host` | `localhost:3569` | Host to the Flow access node (AN) gRPC API.                                                                            |
-| `--evm-network-id`        | `testnet`        | EVM network ID (options: `testnet`, `mainnet`).                                                                        |
-| `--flow-network-id`       | `emulator`       | Flow network ID (options: `emulator`, `previewnet`).                                                                   |
-| `--coinbase`              | (required)       | Coinbase address to use for fee collection.                                                                            |
-| `--gas-price`             | `1`              | Static gas price used for EVM transactions.                                                                            |
-| `--coa-address`           | (required)       | Flow address that holds COA account used for submitting transactions.                                                  |
-| `--coa-key`               | (required)       | *WARNING*: Do not use this flag in production! Private key value for the COA address used for submitting transactions. |
-| `--coa-resource-create`   | `false`          | Auto-create the COA resource in the Flow COA account provided if one doesn't exist.                                    |
-| `--log-level`             | `debug`          | Define verbosity of the log output ('debug', 'info', 'error')                                                          |
-| `--stream-limit`          | 10               | Rate-limits the events sent to the client within one second                                                            |
-| `--stream-timeout`        | 3sec             | Defines the timeout in seconds the server waits for the event to be sent to the client                                 |
-
+| Flag                        | Default Value    | Description                                                                                                            |
+|-----------------------------|------------------|------------------------------------------------------------------------------------------------------------------------|
+| `--database-dir`            | `./db`           | Path to the directory for the database.                                                                                |
+| `--rpc-host`                | `localhost`      | Host for the JSON RPC API server.                                                                                      |
+| `--rpc-port`                | `8545`           | Port for the JSON RPC API server.                                                                                      |
+| `--access-node-grpc-host`   | `localhost:3569` | Host to the Flow access node (AN) gRPC API.                                                                            |
+| `--access-node-spork-hosts` |                  | Previous spork AN hosts, defined following the schema: {latest height}@{host} as comma separated list                  |
+| `--evm-network-id`          | `testnet`        | EVM network ID (options: `testnet`, `mainnet`).                                                                        |
+| `--flow-network-id`         | `emulator`       | Flow network ID (options: `emulator`, `previewnet`).                                                                   |
+| `--coinbase`                | (required)       | Coinbase address to use for fee collection.                                                                            |
+| `--init-cadence-height`     | 0                | Define the Cadence block height at which to start the indexing.                                                        |
+| `--gas-price`               | `1`              | Static gas price used for EVM transactions.                                                                            |
+| `--coa-address`             | (required)       | Flow address that holds COA account used for submitting transactions.                                                  |
+| `--coa-key`                 | (required)       | *WARNING*: Do not use this flag in production! Private key value for the COA address used for submitting transactions. |
+| `--coa-key-file`            |                  | File path that contains JSON array of COA keys used in key-rotation mechanism, this is exclusive with `coa-key` flag.  |
+| `--coa-resource-create`     | `false`          | Auto-create the COA resource in the Flow COA account provided if one doesn't exist.                                    |
+| `--log-level`               | `debug`          | Define verbosity of the log output ('debug', 'info', 'error')                                                          |
+| `--stream-limit`            | 10               | Rate-limits the events sent to the client within one second                                                            |
+| `--stream-timeout`          | 3sec             | Defines the timeout in seconds the server waits for the event to be sent to the client                                 |
+| `--filter-expiry`           | `5m`             | Filter defines the time it takes for an idle filter to expire                                                          |
 
 ## Getting Started
 
