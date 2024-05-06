@@ -35,4 +35,8 @@ func TestCrossSporkClient_MultiClient(t *testing.T) {
 	// this height should use test3 client
 	_, err = client.GetBlockByHeight(ctx, 50)
 	require.ErrorContains(t, err, clientHosts[2])
+
+	// test boundaries are inclusive
+	_, err = client.GetBlockByHeight(ctx, 200)
+	require.ErrorContains(t, err, clientHosts[2])
 }
