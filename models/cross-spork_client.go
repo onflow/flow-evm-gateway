@@ -7,6 +7,7 @@ import (
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access"
 	"github.com/onflow/flow-go-sdk/access/grpc"
+	"github.com/rs/zerolog"
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 )
@@ -20,6 +21,7 @@ import (
 // Any API that supports cross-spork access must have a defined function
 // that shadows the original access Client function.
 type CrossSporkClient struct {
+	logger zerolog.Logger
 	// this map holds the last heights and clients for each spork
 	sporkHosts map[uint64]access.Client
 
@@ -28,7 +30,7 @@ type CrossSporkClient struct {
 
 // NewCrossSporkClient creates a new instance of the client, it accepts the
 // host to the current spork AN API.
-func NewCrossSporkClient(currentSporkHost string) (*CrossSporkClient, error) {
+func NewCrossSporkClient(currentSporkHost string, logger zerolog.Logger) (*CrossSporkClient, error) {
 	// add current spork AN host as the default client
 	client, err := grpc.NewClient(currentSporkHost)
 	if err != nil {
@@ -36,6 +38,7 @@ func NewCrossSporkClient(currentSporkHost string) (*CrossSporkClient, error) {
 	}
 
 	return &CrossSporkClient{
+		logger,
 		make(map[uint64]access.Client),
 		client,
 	}, nil
@@ -52,6 +55,11 @@ func (c *CrossSporkClient) AddSpork(lastHeight uint64, host string) error {
 	}
 
 	c.sporkHosts[lastHeight] = client
+
+	c.logger.Info().
+		Uint64("spork-boundary", lastHeight).
+		Str("host", host).
+		Msg("added spork specific client")
 
 	return nil
 }
@@ -73,8 +81,12 @@ func (c *CrossSporkClient) getClientForHeight(height uint64) access.Client {
 	// and find the last client that still contains the height in its upper height limit
 	client := c.Client
 	for _, upperBound := range heights {
-		if upperBound > height {
+		if upperBound >= height {
 			client = c.sporkHosts[upperBound]
+
+			c.logger.Debug().
+				Uint64("spork-boundary", upperBound).
+				Msg("using previous spork client")
 		}
 	}
 
