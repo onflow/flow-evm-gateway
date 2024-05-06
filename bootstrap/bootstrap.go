@@ -99,9 +99,16 @@ func startIngestion(
 ) error {
 	logger.Info().Msg("starting up event ingestion")
 
-	client, err := grpc.NewClient(cfg.AccessNodeGRPCHost)
+	client, err := models.NewCrossSporkClient(cfg.AccessNodeHost)
 	if err != nil {
 		return err
+	}
+
+	// if we provided access node previous spork hosts add them to the client
+	for height, host := range cfg.AccessNodePreviousSporkHosts {
+		if err := client.AddSpork(height, host); err != nil {
+			return fmt.Errorf("failed to add previous spork host to the client: %w", err)
+		}
 	}
 
 	blk, err := client.GetLatestBlock(context.Background(), false)
@@ -172,7 +179,7 @@ func startServer(
 
 	srv := api.NewHTTPServer(l, rpc.DefaultHTTPTimeouts)
 
-	client, err := grpc.NewClient(cfg.AccessNodeGRPCHost)
+	client, err := grpc.NewClient(cfg.AccessNodeHost)
 	if err != nil {
 		return err
 	}
