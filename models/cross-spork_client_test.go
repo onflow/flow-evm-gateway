@@ -2,6 +2,7 @@ package models
 
 import (
 	"context"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 	"testing"
 )
@@ -9,7 +10,7 @@ import (
 func TestCrossSporkClient_MultiClient(t *testing.T) {
 	clientHosts := []string{"test1.com", "test2.com", "test3.com"}
 
-	client, err := NewCrossSporkClient(clientHosts[0])
+	client, err := NewCrossSporkClient(clientHosts[0], zerolog.Nop())
 	require.NoError(t, err)
 
 	err = client.AddSpork(100, clientHosts[1])
