@@ -40,3 +40,14 @@ func TestCrossSporkClient_MultiClient(t *testing.T) {
 	_, err = client.GetBlockByHeight(ctx, 200)
 	require.ErrorContains(t, err, clientHosts[2])
 }
+
+func TestCrossSporkClient_ExistingHeight(t *testing.T) {
+	client, err := NewCrossSporkClient("host1.com", zerolog.Nop())
+	require.NoError(t, err)
+
+	err = client.AddSpork(100, "host2.com")
+	require.NoError(t, err)
+
+	err = client.AddSpork(100, "host3.com")
+	require.EqualError(t, err, "provided last height already exists")
+}
