@@ -99,7 +99,7 @@ func startIngestion(
 ) error {
 	logger.Info().Msg("starting up event ingestion")
 
-	client, err := models.NewCrossSporkClient(cfg.AccessNodeHost)
+	client, err := models.NewCrossSporkClient(cfg.AccessNodeHost, logger)
 	if err != nil {
 		return err
 	}
