@@ -5,4 +5,5 @@
   --coa-address 0x585ef6547d41cc98 \
   --coa-key-file ./previewnet-keys.json \
   --coa-resource-create \
-  --gas-price 0
+  --gas-price 0 \
+  --force-start-height 10814323
