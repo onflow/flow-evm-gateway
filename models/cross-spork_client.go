@@ -27,7 +27,6 @@ type CrossSporkClient struct {
 	logger zerolog.Logger
 	// this map holds the last heights and clients for each spork
 	sporkHosts map[uint64]*grpc.BaseClient
-
 	*grpc.BaseClient
 }
 

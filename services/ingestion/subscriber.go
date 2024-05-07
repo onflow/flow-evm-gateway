@@ -55,17 +55,15 @@ func (r *RPCSubscriber) Subscribe(ctx context.Context, height uint64) <-chan mod
 				Msg("height found in previous spork, starting to backfill")
 
 			for ev := range r.backfill(ctx, height) {
-				// keep updating height, so after we are done back-filling it will be at the
-				// first height in the current spork
-				if ev.Events != nil {
-					height = ev.Events.CadenceHeight()
-				}
-
 				events <- ev
 
 				if ev.Err != nil {
 					return
 				}
+
+				// keep updating height, so after we are done back-filling
+				// it will be at the first height in the current spork
+				height = ev.Events.CadenceHeight()
 			}
 
 			// after back-filling is done, increment height by one,
@@ -184,9 +182,13 @@ func (r *RPCSubscriber) backfill(ctx context.Context, height uint64) <-chan mode
 			for ev := range r.subscribe(ctx, height, grpc.WithHeartbeatInterval(1)) {
 				events <- ev
 
+				if ev.Err != nil {
+					return
+				}
+
 				r.logger.Debug().Msg(fmt.Sprintf("backfilling [%d / %d]...", ev.Events.CadenceHeight(), latestHeight))
 
-				if ev.Events.CadenceHeight() == latestHeight {
+				if ev.Events != nil && ev.Events.CadenceHeight() == latestHeight {
 					height = ev.Events.CadenceHeight() + 1 // go to next height in the next spork
 
 					r.logger.Info().
