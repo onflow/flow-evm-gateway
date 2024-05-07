@@ -47,6 +47,14 @@ func Start(ctx context.Context, cfg *config.Config) error {
 		logger.Info().Msg("database initialized with 0 evm and cadence heights")
 	}
 
+	// this should only be used locally or for testing
+	if cfg.ForceStartCadenceHeight != 0 {
+		logger.Warn().Uint64("height", cfg.ForceStartCadenceHeight).Msg("force setting starting Cadence height!!!")
+		if err := blocks.SetLatestCadenceHeight(cfg.ForceStartCadenceHeight); err != nil {
+			return err
+		}
+	}
+
 	go func() {
 		err := startServer(
 			ctx,
