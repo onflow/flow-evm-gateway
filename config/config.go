@@ -193,6 +193,9 @@ func FromFlags() (*Config, error) {
 		heightHosts := strings.Split(accessSporkHosts, ",")
 		for _, hh := range heightHosts {
 			v := strings.Split(hh, "@")
+			if len(v) != 2 {
+				return nil, fmt.Errorf("failed to parse AN spork value provided with --access-node-spork-hosts flag")
+			}
 			heightVal, host := v[0], v[1]
 			height, err := strconv.Atoi(heightVal)
 			if err != nil {
