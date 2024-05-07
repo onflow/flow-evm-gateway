@@ -110,7 +110,18 @@ func (c *CadenceEvents) Length() int {
 
 // BlockEvents is a wrapper around events streamed, and it also contains an error
 type BlockEvents struct {
-	Events *flow.BlockEvents
+	Events *CadenceEvents
 	Err    error
-	Done   bool
+}
+
+func NewBlockEvents(events flow.BlockEvents) BlockEvents {
+	return BlockEvents{
+		Events: NewCadenceEvents(events),
+	}
+}
+
+func NewBlockEventsError(err error) BlockEvents {
+	return BlockEvents{
+		Err: err,
+	}
 }
