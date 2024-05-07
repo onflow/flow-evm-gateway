@@ -316,12 +316,12 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			On("Update", mock.AnythingOfType("models.TransactionCall"), mock.AnythingOfType("*types.Receipt")).
 			Return(func(tx models.Transaction, receipt *gethTypes.Receipt) error { return nil })
 
-		eventsChan := make(chan flow.BlockEvents)
+		eventsChan := make(chan models.BlockEvents)
 		subscriber := &mocks.EventSubscriber{}
 		subscriber.
 			On("Subscribe", mock.Anything, mock.AnythingOfType("uint64")).
-			Return(func(ctx context.Context, latest uint64) (<-chan flow.BlockEvents, <-chan error, error) {
-				return eventsChan, make(<-chan error), nil
+			Return(func(ctx context.Context, latest uint64) <-chan models.BlockEvents {
+				return eventsChan
 			})
 
 		txCdc, txEvent, _, _, err := newTransaction()
@@ -373,7 +373,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			}).
 			Once()
 
-		eventsChan <- flow.BlockEvents{
+		eventsChan <- models.NewBlockEvents(flow.BlockEvents{
 			Events: []flow.Event{
 				// first transaction
 				{
@@ -386,7 +386,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 					Value: blockCdc,
 				}},
 			Height: nextHeight,
-		}
+		})
 
 		close(eventsChan)
 		<-done
@@ -410,13 +410,13 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			On("Update", mock.Anything, mock.AnythingOfType("*types.Receipt")).
 			Return(func(t models.Transaction, r *gethTypes.Receipt) error { return nil })
 
-		eventsChan := make(chan flow.BlockEvents)
+		eventsChan := make(chan models.BlockEvents)
 		subscriber := &mocks.EventSubscriber{}
 		subscriber.
 			On("Subscribe", mock.Anything, mock.AnythingOfType("uint64")).
-			Return(func(ctx context.Context, latest uint64) (<-chan flow.BlockEvents, <-chan error, error) {
+			Return(func(ctx context.Context, latest uint64) <-chan models.BlockEvents {
 				assert.Equal(t, latestCadenceHeight, latest)
-				return eventsChan, make(<-chan error), nil
+				return eventsChan
 			}).
 			Once()
 
@@ -502,10 +502,10 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		// and it will make the first block be swapped with second block out-of-order
 		events[1], events[2] = events[2], events[1]
 
-		eventsChan <- flow.BlockEvents{
+		eventsChan <- models.NewBlockEvents(flow.BlockEvents{
 			Events: events,
 			Height: latestCadenceHeight + 1,
-		}
+		})
 
 		close(eventsChan)
 		<-done
