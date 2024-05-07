@@ -5,12 +5,15 @@ import (
 	"fmt"
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go-sdk"
-	"github.com/onflow/flow-go-sdk/access"
 	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/rs/zerolog"
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
+	gogrpc "google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
+
+var dialOpts = gogrpc.WithTransportCredentials(insecure.NewCredentials())
 
 // CrossSporkClient is a wrapper around the Flow AN client that can
 // access different AN APIs based on the height boundaries of the sporks.
@@ -23,23 +26,23 @@ import (
 type CrossSporkClient struct {
 	logger zerolog.Logger
 	// this map holds the last heights and clients for each spork
-	sporkHosts map[uint64]access.Client
+	sporkHosts map[uint64]*grpc.BaseClient
 
-	access.Client
+	*grpc.BaseClient
 }
 
 // NewCrossSporkClient creates a new instance of the client, it accepts the
 // host to the current spork AN API.
 func NewCrossSporkClient(currentSporkHost string, logger zerolog.Logger) (*CrossSporkClient, error) {
 	// add current spork AN host as the default client
-	client, err := grpc.NewClient(currentSporkHost)
+	client, err := grpc.NewBaseClient(currentSporkHost, dialOpts)
 	if err != nil {
 		return nil, err
 	}
 
 	return &CrossSporkClient{
 		logger,
-		make(map[uint64]access.Client),
+		make(map[uint64]*grpc.BaseClient),
 		client,
 	}, nil
 }
@@ -50,7 +53,7 @@ func (c *CrossSporkClient) AddSpork(lastHeight uint64, host string) error {
 		return fmt.Errorf("provided last height already exists")
 	}
 
-	client, err := grpc.NewClient(host)
+	client, err := grpc.NewBaseClient(host, dialOpts)
 	if err != nil {
 		return err
 	}
@@ -78,11 +81,11 @@ func (c *CrossSporkClient) IsPastSpork(height uint64) bool {
 // because it still might not have access to the height provided, because there might be other sporks with
 // lower height boundaries that we didn't configure for.
 // This would result in the error when using the client to access such data.
-func (c *CrossSporkClient) getClientForHeight(height uint64) access.Client {
+func (c *CrossSporkClient) getClientForHeight(height uint64) *grpc.BaseClient {
 
 	// start by using the current spork client, then iterate all the upper height boundaries
 	// and find the last client that still contains the height in its upper height limit
-	client := c.Client
+	client := c.BaseClient
 	for _, upperBound := range c.getSporkBoundariesDesc() {
 		if upperBound >= height {
 			client = c.sporkHosts[upperBound]
@@ -128,8 +131,9 @@ func (c *CrossSporkClient) SubscribeEventsByBlockHeight(
 	ctx context.Context,
 	startHeight uint64,
 	filter flow.EventFilter,
+	opts ...grpc.SubscribeOption,
 ) (<-chan flow.BlockEvents, <-chan error, error) {
 	return c.
 		getClientForHeight(startHeight).
-		SubscribeEventsByBlockHeight(ctx, startHeight, filter)
+		SubscribeEventsByBlockHeight(ctx, startHeight, filter, opts...)
 }
