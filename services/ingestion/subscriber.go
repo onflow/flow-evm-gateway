@@ -79,6 +79,8 @@ func (r *RPCSubscriber) Subscribe(ctx context.Context, height uint64) <-chan mod
 		for ev := range r.subscribe(ctx, height) {
 			events <- ev
 		}
+
+		r.logger.Warn().Msg("ended subscription for events")
 	}()
 
 	return events
