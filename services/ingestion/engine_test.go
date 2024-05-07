@@ -219,12 +219,12 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			On("Update", mock.AnythingOfType("models.TransactionCall"), mock.AnythingOfType("*types.Receipt")).
 			Return(func(tx models.Transaction, receipt *gethTypes.Receipt) error { return nil })
 
-		eventsChan := make(chan flow.BlockEvents)
+		eventsChan := make(chan models.BlockEvents)
 		subscriber := &mocks.EventSubscriber{}
 		subscriber.
 			On("Subscribe", mock.Anything, mock.AnythingOfType("uint64")).
-			Return(func(ctx context.Context, latest uint64) (<-chan flow.BlockEvents, <-chan error, error) {
-				return eventsChan, make(<-chan error), nil
+			Return(func(ctx context.Context, latest uint64) <-chan models.BlockEvents {
+				return eventsChan
 			})
 
 		txCdc, txEvent, transaction, result, err := newTransaction()
@@ -281,7 +281,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			}).
 			Once()
 
-		eventsChan <- flow.BlockEvents{
+		eventsChan <- models.NewBlockEvents(flow.BlockEvents{
 			Events: []flow.Event{{
 				Type:  string(blockEvent.Etype),
 				Value: blockCdc,
@@ -290,7 +290,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 				Value: txCdc,
 			}},
 			Height: nextHeight,
-		}
+		})
 
 		close(eventsChan)
 		<-done
