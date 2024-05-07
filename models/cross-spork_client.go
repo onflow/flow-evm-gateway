@@ -69,7 +69,7 @@ func (c *CrossSporkClient) AddSpork(lastHeight uint64, host string) error {
 
 // IsPastSpork will check if the provided height is contained in the previous sporks.
 func (c *CrossSporkClient) IsPastSpork(height uint64) bool {
-	return height <= c.getSporkBoundariesDesc()[0]
+	return len(c.getSporkBoundariesDesc()) > 0 && height <= c.getSporkBoundariesDesc()[0]
 }
 
 // getClientForHeight returns the client for the given height. It starts by using the current spork client,
