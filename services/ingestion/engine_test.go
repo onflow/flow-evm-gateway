@@ -119,12 +119,12 @@ func TestSerialBlockIngestion(t *testing.T) {
 			On("Update", mock.Anything, mock.Anything).
 			Return(func(t models.TransactionCall, r *gethTypes.Receipt) error { return nil })
 
-		eventsChan := make(chan flow.BlockEvents)
+		eventsChan := make(chan models.BlockEvents)
 		subscriber := &mocks.EventSubscriber{}
 		subscriber.
 			On("Subscribe", mock.Anything, mock.AnythingOfType("uint64")).
-			Return(func(ctx context.Context, latest uint64) (<-chan flow.BlockEvents, <-chan error, error) {
-				return eventsChan, make(<-chan error), nil
+			Return(func(ctx context.Context, latest uint64) <-chan models.BlockEvents {
+				return eventsChan
 			})
 
 		engine := NewEventIngestionEngine(
@@ -162,24 +162,28 @@ func TestSerialBlockIngestion(t *testing.T) {
 			}).
 			Once() // this should only be called for first valid block
 
-		eventsChan <- flow.BlockEvents{
-			Events: []flow.Event{{
-				Type:  string(blockEvent.Etype),
-				Value: blockCdc,
-			}},
-			Height: cadenceHeight,
+		eventsChan <- models.BlockEvents{
+			Events: models.NewCadenceEvents(flow.BlockEvents{
+				Events: []flow.Event{{
+					Type:  string(blockEvent.Etype),
+					Value: blockCdc,
+				}},
+				Height: cadenceHeight,
+			}),
 		}
 
 		// fail with next block height being incorrect
 		blockCdc, _, blockEvent, err = newBlock(latestHeight + 10) // not sequential next block height
 		require.NoError(t, err)
 
-		eventsChan <- flow.BlockEvents{
-			Events: []flow.Event{{
-				Type:  string(blockEvent.Etype),
-				Value: blockCdc,
-			}},
-			Height: cadenceHeight + 1,
+		eventsChan <- models.BlockEvents{
+			Events: models.NewCadenceEvents(flow.BlockEvents{
+				Events: []flow.Event{{
+					Type:  string(blockEvent.Etype),
+					Value: blockCdc,
+				}},
+				Height: cadenceHeight + 1,
+			}),
 		}
 
 		close(eventsChan)
