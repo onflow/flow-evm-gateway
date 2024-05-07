@@ -31,6 +31,7 @@ type RPCSubscriber struct {
 }
 
 func NewRPCSubscriber(client *models.CrossSporkClient, chainID flowGo.ChainID, logger zerolog.Logger) *RPCSubscriber {
+	logger = logger.With().Str("component", "subscriber").Logger()
 	return &RPCSubscriber{client: client, chain: chainID, logger: logger}
 }
 
@@ -49,6 +50,10 @@ func (r *RPCSubscriber) Subscribe(ctx context.Context, height uint64) <-chan mod
 
 		// if the height is from the previous spork, backfill all the events from previous sporks first
 		if r.client.IsPastSpork(height) {
+			r.logger.Info().
+				Uint64("height", height).
+				Msg("height found in previous spork, starting to backfill")
+
 			for ev := range r.backfill(ctx, height) {
 				// keep updating height, so after we are done back-filling it will be at the
 				// first height in the current spork
@@ -67,6 +72,10 @@ func (r *RPCSubscriber) Subscribe(ctx context.Context, height uint64) <-chan mod
 			// so we start with the height in the current spork
 			height = height + 1
 		}
+
+		r.logger.Info().
+			Uint64("next-height", height).
+			Msg("backfilling done, subscribe for live data")
 
 		// subscribe in the current spork
 		for ev := range r.subscribe(ctx, height) {
@@ -154,20 +163,36 @@ func (r *RPCSubscriber) backfill(ctx context.Context, height uint64) <-chan mode
 		for {
 			// check if the current height is still in past sporks, and if not return since we are done with backfilling
 			if !r.client.IsPastSpork(height) {
+				r.logger.Info().
+					Uint64("height", height).
+					Msg("completed backfilling")
+
 				return
 			}
 
-			latestBlock, err := r.client.GetLatestBlock(ctx, true)
+			latestHeight, err := r.client.GetLatestHeightForSpork(ctx, height)
 			if err != nil {
 				events <- models.NewBlockEventsError(err)
 				return
 			}
 
+			r.logger.Info().
+				Uint64("start-height", height).
+				Uint64("last-spork-height", latestHeight).
+				Msg("backfilling spork")
+
 			for ev := range r.subscribe(ctx, height, grpc.WithHeartbeatInterval(1)) {
 				events <- ev
 
-				if ev.Events.CadenceHeight() == latestBlock.Height {
+				r.logger.Debug().Msg(fmt.Sprintf("backfilling [%d / %d]...", ev.Events.CadenceHeight(), latestHeight))
+
+				if ev.Events.CadenceHeight() == latestHeight {
 					height = ev.Events.CadenceHeight() + 1 // go to next height in the next spork
+
+					r.logger.Info().
+						Uint64("next-height", height).
+						Msg("reached the end of spork, checking next spork")
+
 					break
 				}
 			}
