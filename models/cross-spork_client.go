@@ -107,6 +107,19 @@ func (c *CrossSporkClient) getSporkBoundariesDesc() []uint64 {
 	return heights
 }
 
+// GetLatestHeightForSpork will determine the spork client in which the provided height is contained
+// and then find the latest height in that spork.
+func (c *CrossSporkClient) GetLatestHeightForSpork(ctx context.Context, height uint64) (uint64, error) {
+	block, err := c.
+		getClientForHeight(height).
+		GetLatestBlock(ctx, true)
+	if err != nil {
+		return 0, err
+	}
+
+	return block.Height, nil
+}
+
 func (c *CrossSporkClient) GetBlockByHeight(
 	ctx context.Context,
 	height uint64,
