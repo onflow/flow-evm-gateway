@@ -3,13 +3,14 @@ package ingestion
 import (
 	"context"
 	"encoding/hex"
+	"github.com/onflow/flow-evm-gateway/services/ingestion/mocks"
 	"math/big"
 	"testing"
 
 	"github.com/onflow/cadence"
 	"github.com/onflow/cadence/runtime/common"
 	"github.com/onflow/flow-evm-gateway/models"
-	"github.com/onflow/flow-evm-gateway/services/ingestion/mocks"
+
 	storageMock "github.com/onflow/flow-evm-gateway/storage/mocks"
 	"github.com/onflow/flow-go-sdk"
 	broadcast "github.com/onflow/flow-go/engine"
@@ -41,12 +42,13 @@ func TestSerialBlockIngestion(t *testing.T) {
 			On("Update").
 			Return(func() error { return nil })
 
-		eventsChan := make(chan flow.BlockEvents)
-		subscriber := &mocks.Subscriber{}
+		eventsChan := make(chan models.BlockEvents)
+
+		subscriber := &mocks.EventSubscriber{}
 		subscriber.
 			On("Subscribe", mock.Anything, mock.AnythingOfType("uint64")).
-			Return(func(ctx context.Context, latest uint64) (<-chan flow.BlockEvents, <-chan error, error) {
-				return eventsChan, make(<-chan error), nil
+			Return(func(ctx context.Context, latest uint64) <-chan models.BlockEvents {
+				return eventsChan
 			})
 
 		engine := NewEventIngestionEngine(
@@ -85,13 +87,13 @@ func TestSerialBlockIngestion(t *testing.T) {
 				}).
 				Once()
 
-			eventsChan <- flow.BlockEvents{
+			eventsChan <- models.NewBlockEvents(flow.BlockEvents{
 				Events: []flow.Event{{
 					Type:  string(blockEvent.Etype),
 					Value: blockCdc,
 				}},
 				Height: cadenceHeight,
-			}
+			})
 		}
 
 		close(eventsChan)
@@ -118,7 +120,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 			Return(func(t models.TransactionCall, r *gethTypes.Receipt) error { return nil })
 
 		eventsChan := make(chan flow.BlockEvents)
-		subscriber := &mocks.Subscriber{}
+		subscriber := &mocks.EventSubscriber{}
 		subscriber.
 			On("Subscribe", mock.Anything, mock.AnythingOfType("uint64")).
 			Return(func(ctx context.Context, latest uint64) (<-chan flow.BlockEvents, <-chan error, error) {
@@ -214,7 +216,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			Return(func(tx models.Transaction, receipt *gethTypes.Receipt) error { return nil })
 
 		eventsChan := make(chan flow.BlockEvents)
-		subscriber := &mocks.Subscriber{}
+		subscriber := &mocks.EventSubscriber{}
 		subscriber.
 			On("Subscribe", mock.Anything, mock.AnythingOfType("uint64")).
 			Return(func(ctx context.Context, latest uint64) (<-chan flow.BlockEvents, <-chan error, error) {
@@ -311,7 +313,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			Return(func(tx models.Transaction, receipt *gethTypes.Receipt) error { return nil })
 
 		eventsChan := make(chan flow.BlockEvents)
-		subscriber := &mocks.Subscriber{}
+		subscriber := &mocks.EventSubscriber{}
 		subscriber.
 			On("Subscribe", mock.Anything, mock.AnythingOfType("uint64")).
 			Return(func(ctx context.Context, latest uint64) (<-chan flow.BlockEvents, <-chan error, error) {
@@ -405,7 +407,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			Return(func(t models.Transaction, r *gethTypes.Receipt) error { return nil })
 
 		eventsChan := make(chan flow.BlockEvents)
-		subscriber := &mocks.Subscriber{}
+		subscriber := &mocks.EventSubscriber{}
 		subscriber.
 			On("Subscribe", mock.Anything, mock.AnythingOfType("uint64")).
 			Return(func(ctx context.Context, latest uint64) (<-chan flow.BlockEvents, <-chan error, error) {
