@@ -2,12 +2,10 @@ package ingestion
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/storage"
-	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go/engine"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
@@ -96,45 +94,21 @@ func (e *Engine) Run(ctx context.Context) error {
 
 	e.log.Info().Uint64("start-cadence-height", latestCadence).Msg("starting ingestion")
 
-	events, errs, err := e.subscriber.Subscribe(ctx, latestCadence)
-	if err != nil {
-		return fmt.Errorf("failed to subscribe to events: %w", err)
-	}
-
 	e.status.MarkReady()
 
-	for {
-		select {
-		case <-ctx.Done():
-			e.log.Info().Msg("event ingestion received done signal")
-			return nil
+	for events := range e.subscriber.Subscribe(ctx, latestCadence) {
+		if events.Err != nil {
+			return fmt.Errorf("failure in event subscription: %w", events.Err)
+		}
 
-		case blockEvents, ok := <-events:
-			if !ok {
-				if ctx.Err() != nil {
-					return ctx.Err()
-				}
-				return models.ErrDisconnected
-			}
-
-			err = e.processEvents(blockEvents)
-			if err != nil {
-				e.log.Error().Err(err).Msg("failed to process EVM events")
-				return err
-			}
-
-		case err, ok := <-errs:
-			if !ok {
-				if ctx.Err() != nil {
-					return ctx.Err()
-				}
-
-				return models.ErrDisconnected
-			}
-
-			return errors.Join(err, models.ErrDisconnected)
+		err = e.processEvents(events.Events)
+		if err != nil {
+			e.log.Error().Err(err).Msg("failed to process EVM events")
+			return err
 		}
 	}
+
+	return nil
 }
 
 // processEvents converts the events to block and transactions and indexes them.
@@ -149,13 +123,11 @@ func (e *Engine) Run(ctx context.Context) error {
 // https://github.com/onflow/flow-go/blob/master/fvm/evm/types/events.go
 //
 // Any error is unexpected and fatal.
-func (e *Engine) processEvents(blockEvents flow.BlockEvents) error {
+func (e *Engine) processEvents(events *models.CadenceEvents) error {
 	e.log.Debug().
-		Uint64("cadence-height", blockEvents.Height).
-		Int("cadence-event-length", len(blockEvents.Events)).
+		Uint64("cadence-height", events.CadenceHeight()).
+		Int("cadence-event-length", events.Length()).
 		Msg("received new cadence evm events")
-
-	events := models.NewCadenceEvents(blockEvents)
 
 	// if heartbeat interval with no data still update the cadence height
 	if events.Empty() {
