@@ -107,3 +107,10 @@ func (c *CadenceEvents) CadenceHeight() uint64 {
 func (c *CadenceEvents) Length() int {
 	return len(c.events.Events)
 }
+
+// BlockEvents is a wrapper around events streamed, and it also contains an error
+type BlockEvents struct {
+	Events *flow.BlockEvents
+	Err    error
+	Done   bool
+}
