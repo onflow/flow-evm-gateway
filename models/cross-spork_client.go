@@ -6,7 +6,6 @@ import (
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access"
-	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/rs/zerolog"
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
@@ -29,36 +28,31 @@ type CrossSporkClient struct {
 
 // NewCrossSporkClient creates a new instance of the client, it accepts the
 // host to the current spork AN API.
-func NewCrossSporkClient(currentSporkHost string, logger zerolog.Logger) (*CrossSporkClient, error) {
-	// add current spork AN host as the default client
-	client, err := grpc.NewClient(currentSporkHost)
-	if err != nil {
-		return nil, err
-	}
-
+func NewCrossSporkClient(currentSporkClient access.Client, logger zerolog.Logger) (*CrossSporkClient, error) {
 	return &CrossSporkClient{
 		logger,
 		make(map[uint64]access.Client),
-		client,
+		currentSporkClient,
 	}, nil
 }
 
 // AddSpork will add a new spork host defined by the last height boundary in that spork.
-func (c *CrossSporkClient) AddSpork(lastHeight uint64, host string) error {
-	if _, ok := c.sporkHosts[lastHeight]; ok {
-		return fmt.Errorf("provided last height already exists")
+func (c *CrossSporkClient) AddSpork(client access.Client) error {
+	header, err := client.GetLatestBlockHeader(context.Background(), true)
+	if err != nil {
+		return fmt.Errorf("could not get latest height using the spork client: %w", err)
 	}
 
-	client, err := grpc.NewClient(host)
-	if err != nil {
-		return err
+	lastHeight := header.Height
+
+	if _, ok := c.sporkHosts[lastHeight]; ok {
+		return fmt.Errorf("provided last height already exists")
 	}
 
 	c.sporkHosts[lastHeight] = client
 
 	c.logger.Info().
 		Uint64("spork-boundary", lastHeight).
-		Str("host", host).
 		Msg("added spork specific client")
 
 	return nil

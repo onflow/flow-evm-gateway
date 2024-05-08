@@ -99,14 +99,24 @@ func startIngestion(
 ) error {
 	logger.Info().Msg("starting up event ingestion")
 
-	client, err := models.NewCrossSporkClient(cfg.AccessNodeHost, logger)
+	grpcClient, err := grpc.NewClient(cfg.AccessNodeHost)
+	if err != nil {
+		return fmt.Errorf("failed to create client connection for host: %s, with error: %w", cfg.AccessNodeHost, err)
+	}
+
+	client, err := models.NewCrossSporkClient(grpcClient, logger)
 	if err != nil {
 		return err
 	}
 
 	// if we provided access node previous spork hosts add them to the client
-	for height, host := range cfg.AccessNodePreviousSporkHosts {
-		if err := client.AddSpork(height, host); err != nil {
+	for _, host := range cfg.AccessNodePreviousSporkHosts {
+		grpcClient, err := grpc.NewClient(host)
+		if err != nil {
+			return fmt.Errorf("failed to create client connection for host: %s, with error: %w", host, err)
+		}
+
+		if err := client.AddSpork(grpcClient); err != nil {
 			return fmt.Errorf("failed to add previous spork host to the client: %w", err)
 		}
 	}

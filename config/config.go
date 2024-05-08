@@ -6,7 +6,6 @@ import (
 	"io"
 	"math/big"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -33,9 +32,8 @@ type Config struct {
 	DatabaseDir string
 	// AccessNodeHost defines the current spork Flow network AN host.
 	AccessNodeHost string
-	// AccessNodePreviousSporkHosts contains a map of latest heights for each spork,
-	// which can be accessed via the host of the AN provided
-	AccessNodePreviousSporkHosts map[uint64]string
+	// AccessNodePreviousSporkHosts contains a list of the ANs hosts for each spork
+	AccessNodePreviousSporkHosts []string
 	// GRPCPort for the RPC API server
 	RPCPort int
 	// GRPCHost for the RPC API server
@@ -73,9 +71,7 @@ type Config struct {
 }
 
 func FromFlags() (*Config, error) {
-	cfg := &Config{
-		AccessNodePreviousSporkHosts: make(map[uint64]string),
-	}
+	cfg := &Config{}
 	var evmNetwork, coinbase, gas, coa, key, keysPath, flowNetwork, logLevel, filterExpiry, accessSporkHosts string
 	var streamTimeout int
 	var initHeight uint64
@@ -85,7 +81,7 @@ func FromFlags() (*Config, error) {
 	flag.StringVar(&cfg.RPCHost, "rpc-host", "", "Host for the RPC API server")
 	flag.IntVar(&cfg.RPCPort, "rpc-port", 8545, "Port for the RPC API server")
 	flag.StringVar(&cfg.AccessNodeHost, "access-node-grpc-host", "localhost:3569", "Host to the flow access node gRPC API")
-	flag.StringVar(&accessSporkHosts, "access-node-spork-hosts", "", `Previous spork AN hosts, defined following the schema: {latest height}@{host} as comma separated list (e.g. "200@host-1.com,300@host2.com")`)
+	flag.StringVar(&accessSporkHosts, "access-node-spork-hosts", "", `Previous spork AN hosts, defined following the schema: {host1},{host2} as a comma separated list (e.g. "host-1.com,host2.com")`)
 	flag.StringVar(&evmNetwork, "evm-network-id", "previewnet", "EVM network ID (previewnet, testnet, mainnet)")
 	flag.StringVar(&flowNetwork, "flow-network-id", "flow-emulator", "Flow network ID (flow-emulator, flow-previewnet)")
 	flag.StringVar(&coinbase, "coinbase", "", "Coinbase address to use for fee collection")
@@ -192,17 +188,7 @@ func FromFlags() (*Config, error) {
 	if accessSporkHosts != "" {
 		heightHosts := strings.Split(accessSporkHosts, ",")
 		for _, hh := range heightHosts {
-			v := strings.Split(hh, "@")
-			if len(v) != 2 {
-				return nil, fmt.Errorf("failed to parse AN spork value provided with --access-node-spork-hosts flag")
-			}
-			heightVal, host := v[0], v[1]
-			height, err := strconv.Atoi(heightVal)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse AN host height value for previous sporks, provided with --access-node-spork-hosts flag")
-			}
-
-			cfg.AccessNodePreviousSporkHosts[uint64(height)] = host
+			cfg.AccessNodePreviousSporkHosts = append(cfg.AccessNodePreviousSporkHosts, hh)
 		}
 	}
 
