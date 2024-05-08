@@ -6,9 +6,9 @@ import (
 
 	"github.com/onflow/flow-evm-gateway/models"
 
-	flowSDK "github.com/onflow/flow-go-sdk"
+	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access/mocks"
-	"github.com/onflow/flow-go/model/flow"
+	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/onflow/flow-go/storage"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/mock"
@@ -17,32 +17,30 @@ import (
 
 func setupClient(client *mocks.Client, startHeight uint64, endHeight uint64) {
 	client.
-		On("GetLatestBlockHeader", mock.Anything, mock.AnythingOfType("bool")).
-		Return(func(ctx context.Context, sealed bool) (*flowSDK.BlockHeader, error) {
-			return &flowSDK.BlockHeader{
-				Height: endHeight,
-			}, nil
-		})
+		On("GetLatestBlockHeader", mock.Anything, mock.Anything).
+		Return(&flow.BlockHeader{
+			Height: endHeight,
+		}, nil)
 
 	client.
-		On("GetBlockHeaderByHeight", mock.Anything, mock.AnythingOfType("uint64")).
-		Return(func(ctx context.Context, height uint64) (*flowSDK.BlockHeader, error) {
+		On("GetBlockHeaderByHeight", mock.Anything, mock.Anything).
+		Return(func(ctx context.Context, height uint64) (*flow.BlockHeader, error) {
 			if height < startHeight || height > endHeight {
 				return nil, storage.ErrNotFound
 			}
 
-			return &flowSDK.BlockHeader{
+			return &flow.BlockHeader{
 				Height: height,
 			}, nil
 		})
 
 	client.
-		On("SubscribeEventsByBlockHeight", mock.Anything, mock.AnythingOfType("uint64"), mock.Anything).
-		Return(func() (<-chan flow.BlockEvents, <-chan error, error) {
-			events := make(chan flow.BlockEvents)
+		On("SubscribeEventsByBlockHeight", mock.Anything, mock.Anything, mock.Anything).
+		Return(func() (<-chan flowGo.BlockEvents, <-chan error, error) {
+			events := make(chan flowGo.BlockEvents)
 
 			for i := startHeight; i <= endHeight; i++ {
-				events <- flow.BlockEvents{
+				events <- flowGo.BlockEvents{
 					BlockHeight: i,
 				}
 			}
@@ -75,7 +73,7 @@ func Test_Subscribing(t *testing.T) {
 	err = client.AddSpork(spork1Client)
 	require.NoError(t, err)
 
-	subscriber := NewRPCSubscriber(client, flow.Emulator, zerolog.Nop())
+	subscriber := NewRPCSubscriber(client, flowGo.Emulator, zerolog.Nop())
 
 	events := subscriber.Subscribe(context.Background(), 1)
 
