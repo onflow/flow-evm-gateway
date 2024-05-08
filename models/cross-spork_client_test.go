@@ -25,19 +25,19 @@ func TestCrossSporkClient_MultiClient(t *testing.T) {
 	ctx := context.Background()
 
 	// this height should use current spork client
-	_, err = client.GetBlockByHeight(ctx, 300)
+	_, err = client.GetBlockHeaderByHeight(ctx, 300)
 	require.ErrorContains(t, err, clientHosts[0])
 
 	// this height should use test2 client
-	_, err = client.GetBlockByHeight(ctx, 150)
+	_, err = client.GetBlockHeaderByHeight(ctx, 150)
 	require.ErrorContains(t, err, clientHosts[2])
 
 	// this height should use test3 client
-	_, err = client.GetBlockByHeight(ctx, 50)
+	_, err = client.GetBlockHeaderByHeight(ctx, 50)
 	require.ErrorContains(t, err, clientHosts[1])
 
 	// test boundaries are inclusive
-	_, err = client.GetBlockByHeight(ctx, 200)
+	_, err = client.GetBlockHeaderByHeight(ctx, 200)
 	require.ErrorContains(t, err, clientHosts[2])
 }
 

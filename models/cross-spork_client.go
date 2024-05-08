@@ -111,7 +111,7 @@ func (c *CrossSporkClient) getSporkBoundariesDesc() []uint64 {
 func (c *CrossSporkClient) GetLatestHeightForSpork(ctx context.Context, height uint64) (uint64, error) {
 	block, err := c.
 		getClientForHeight(height).
-		GetLatestBlock(ctx, true)
+		GetLatestBlockHeader(ctx, true)
 	if err != nil {
 		return 0, err
 	}
@@ -119,13 +119,13 @@ func (c *CrossSporkClient) GetLatestHeightForSpork(ctx context.Context, height u
 	return block.Height, nil
 }
 
-func (c *CrossSporkClient) GetBlockByHeight(
+func (c *CrossSporkClient) GetBlockHeaderByHeight(
 	ctx context.Context,
 	height uint64,
-) (*flow.Block, error) {
+) (*flow.BlockHeader, error) {
 	return c.
 		getClientForHeight(height).
-		GetBlockByHeight(ctx, height)
+		GetBlockHeaderByHeight(ctx, height)
 }
 
 func (c *CrossSporkClient) ExecuteScriptAtBlockHeight(

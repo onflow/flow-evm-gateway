@@ -122,7 +122,7 @@ func startIngestion(
 	}
 
 	// make sure the provided block to start the indexing can be loaded
-	_, err = client.GetBlockByHeight(context.Background(), latestCadenceHeight)
+	_, err = client.GetBlockHeaderByHeight(context.Background(), latestCadenceHeight)
 	if err != nil {
 		return fmt.Errorf("failed to get provided cadence height: %w", err)
 	}

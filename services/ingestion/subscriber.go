@@ -90,7 +90,7 @@ func (r *RPCSubscriber) Subscribe(ctx context.Context, height uint64) <-chan mod
 func (r *RPCSubscriber) subscribe(ctx context.Context, height uint64, opts ...grpc.SubscribeOption) <-chan models.BlockEvents {
 	events := make(chan models.BlockEvents)
 
-	_, err := r.client.GetBlockByHeight(ctx, height)
+	_, err := r.client.GetBlockHeaderByHeight(ctx, height)
 	if err != nil {
 		err = fmt.Errorf("failed to subscribe for events, the block height %d doesn't exist: %w", height, err)
 		events <- models.NewBlockEventsError(err)
