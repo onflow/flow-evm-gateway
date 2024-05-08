@@ -8,7 +8,7 @@ require (
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/onflow/cadence v1.0.0-preview.26
 	github.com/onflow/flow-go v0.34.0-crescendo-preview.18
-	github.com/onflow/flow-go-sdk v1.0.0-preview.26.0.20240508134612-8ffbdd39d357
+	github.com/onflow/flow-go-sdk v1.0.0-preview.26.0.20240508143638-d03c30a27530
 	github.com/onflow/go-ethereum v1.13.4
 	github.com/rs/cors v1.8.0
 	github.com/rs/zerolog v1.31.0
