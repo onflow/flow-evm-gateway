@@ -7,7 +7,7 @@ import (
 	"github.com/onflow/cadence/runtime/common"
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-go-sdk"
-	"github.com/onflow/flow-go-sdk/access/grpc"
+	"github.com/onflow/flow-go-sdk/access"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/flow-go/fvm/systemcontracts"
 	flowGo "github.com/onflow/flow-go/model/flow"
@@ -91,7 +91,7 @@ func (r *RPCSubscriber) Subscribe(ctx context.Context, height uint64) <-chan mod
 //
 // Subscribing to EVM specific events and handle any disconnection errors
 // as well as context cancellations.
-func (r *RPCSubscriber) subscribe(ctx context.Context, height uint64, opts ...grpc.SubscribeOption) <-chan models.BlockEvents {
+func (r *RPCSubscriber) subscribe(ctx context.Context, height uint64, opts ...access.SubscribeOption) <-chan models.BlockEvents {
 	events := make(chan models.BlockEvents)
 
 	_, err := r.client.GetBlockHeaderByHeight(ctx, height)
@@ -185,7 +185,7 @@ func (r *RPCSubscriber) backfill(ctx context.Context, height uint64) <-chan mode
 				Uint64("last-spork-height", latestHeight).
 				Msg("backfilling spork")
 
-			for ev := range r.subscribe(ctx, height, grpc.WithHeartbeatInterval(1)) {
+			for ev := range r.subscribe(ctx, height, access.WithHeartbeatInterval(1)) {
 				events <- ev
 
 				if ev.Err != nil {
