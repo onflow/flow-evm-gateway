@@ -54,6 +54,7 @@ func (r *RPCSubscriber) Subscribe(ctx context.Context, height uint64) <-chan mod
 				Uint64("height", height).
 				Msg("height found in previous spork, starting to backfill")
 
+			// backfill all the missed events, handling of context cancelation is done by the producer
 			for ev := range r.backfill(ctx, height) {
 				events <- ev
 
@@ -75,7 +76,7 @@ func (r *RPCSubscriber) Subscribe(ctx context.Context, height uint64) <-chan mod
 			Uint64("next-height", height).
 			Msg("backfilling done, subscribe for live data")
 
-		// subscribe in the current spork
+		// subscribe in the current spork, handling of context cancelation is done by the producer
 		for ev := range r.subscribe(ctx, height) {
 			events <- ev
 		}
@@ -87,6 +88,9 @@ func (r *RPCSubscriber) Subscribe(ctx context.Context, height uint64) <-chan mod
 }
 
 // subscribe to events by the provided height and handle any errors.
+//
+// Subscribing to EVM specific events and handle any disconnection errors
+// as well as context cancelations.
 func (r *RPCSubscriber) subscribe(ctx context.Context, height uint64, opts ...grpc.SubscribeOption) <-chan models.BlockEvents {
 	events := make(chan models.BlockEvents)
 
