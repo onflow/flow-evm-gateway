@@ -112,7 +112,7 @@ func (r *RPCSubscriber) subscribe(ctx context.Context, height uint64, opts ...gr
 			close(events)
 		}()
 
-		for {
+		for ctx.Err() == nil {
 			select {
 			case <-ctx.Done():
 				r.logger.Info().Msg("event ingestion received done signal")
