@@ -140,13 +140,14 @@ func (r *Receipts) getByBlockHeight(height []byte) ([]*gethTypes.Receipt, error)
 
 	var storeReceipts []*models.StorageReceipt
 	if err = rlp.DecodeBytes(val, &storeReceipts); err != nil {
+		// todo remove this after previewnet is reset
 		// try to decode single receipt (breaking change migration)
-		var storeReceipt *models.StorageReceipt
+		var storeReceipt models.StorageReceipt
 		if err = rlp.DecodeBytes(val, &storeReceipt); err != nil {
 			return nil, err
 		}
 
-		storeReceipts = append(storeReceipts, storeReceipt)
+		storeReceipts = []*models.StorageReceipt{&storeReceipt}
 	}
 
 	receipts := make([]*gethTypes.Receipt, len(storeReceipts))
