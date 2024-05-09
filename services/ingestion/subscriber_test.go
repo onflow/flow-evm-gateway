@@ -65,11 +65,15 @@ func setupClient(startHeight uint64, endHeight uint64) access.Client {
 		) (<-chan flow.BlockEvents, <-chan error, error) {
 			events := make(chan flow.BlockEvents)
 
-			for i := startHeight; i <= endHeight; i++ {
-				events <- flow.BlockEvents{
-					Height: i,
+			go func() {
+				defer close(events)
+
+				for i := startHeight; i <= endHeight; i++ {
+					events <- flow.BlockEvents{
+						Height: i,
+					}
 				}
-			}
+			}()
 
 			return events, make(chan error), nil
 		},
@@ -90,10 +94,10 @@ func Test_Subscribing(t *testing.T) {
 	client, err := models.NewCrossSporkClient(currentClient, zerolog.Nop())
 	require.NoError(t, err)
 
-	err = client.AddSpork(spork2Client)
+	err = client.AddSpork(spork1Client)
 	require.NoError(t, err)
 
-	err = client.AddSpork(spork1Client)
+	err = client.AddSpork(spork2Client)
 	require.NoError(t, err)
 
 	subscriber := NewRPCSubscriber(client, flowGo.Emulator, zerolog.Nop())
@@ -103,6 +107,11 @@ func Test_Subscribing(t *testing.T) {
 	var prevHeight uint64
 
 	for ev := range events {
+		if prevHeight == endHeight {
+			require.ErrorIs(t, ev.Err, models.ErrDisconnected)
+			break
+		}
+
 		require.NoError(t, ev.Err)
 
 		// this makes sure all the event heights are sequential
@@ -112,5 +121,5 @@ func Test_Subscribing(t *testing.T) {
 	}
 
 	// this makes sure we indexed all the events
-	require.Equal(t, endHeight, prevHeight)
+	require.Equal(t, uint64(endHeight), prevHeight)
 }
