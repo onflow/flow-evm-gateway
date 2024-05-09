@@ -282,7 +282,12 @@ func (b *BlockChainAPI) GetBlockByHash(
 		return handleError[*Block](b.logger, err)
 	}
 
-	return b.prepareBlockResponse(ctx, block, fullTx)
+	apiBlock, err := b.prepareBlockResponse(ctx, block, fullTx)
+	if err != nil {
+		return handleError[*Block](b.logger, err)
+	}
+
+	return apiBlock, nil
 }
 
 // GetBlockByNumber returns the requested canonical block.
@@ -312,7 +317,12 @@ func (b *BlockChainAPI) GetBlockByNumber(
 		return handleError[*Block](b.logger, err)
 	}
 
-	return b.prepareBlockResponse(ctx, block, fullTx)
+	apiBlock, err := b.prepareBlockResponse(ctx, block, fullTx)
+	if err != nil {
+		return handleError[*Block](b.logger, err)
+	}
+
+	return apiBlock, nil
 }
 
 // GetBlockReceipts returns the block receipts for the given block hash or number or tag.
