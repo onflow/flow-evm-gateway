@@ -6,13 +6,6 @@ import (
 	"errors"
 	"fmt"
 
-	errs "github.com/onflow/flow-evm-gateway/api/errors"
-	"github.com/onflow/flow-evm-gateway/config"
-	"github.com/onflow/flow-evm-gateway/models"
-	"github.com/onflow/flow-evm-gateway/services/logs"
-	"github.com/onflow/flow-evm-gateway/services/requester"
-	"github.com/onflow/flow-evm-gateway/storage"
-	storageErrs "github.com/onflow/flow-evm-gateway/storage/errors"
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/go-ethereum/common"
 	"github.com/onflow/go-ethereum/common/hexutil"
@@ -21,6 +14,14 @@ import (
 	"github.com/onflow/go-ethereum/eth/filters"
 	"github.com/onflow/go-ethereum/rpc"
 	"github.com/rs/zerolog"
+
+	errs "github.com/onflow/flow-evm-gateway/api/errors"
+	"github.com/onflow/flow-evm-gateway/config"
+	"github.com/onflow/flow-evm-gateway/models"
+	"github.com/onflow/flow-evm-gateway/services/logs"
+	"github.com/onflow/flow-evm-gateway/services/requester"
+	"github.com/onflow/flow-evm-gateway/storage"
+	storageErrs "github.com/onflow/flow-evm-gateway/storage/errors"
 )
 
 func SupportedAPIs(blockChainAPI *BlockChainAPI, streamAPI *StreamAPI, pullAPI *PullAPI) []rpc.API {
@@ -551,7 +552,7 @@ func handleError[T any](log zerolog.Logger, err error) (T, error) {
 		return zero, nil
 	}
 
-	log.Error().Err(err).Msg("failed to get latest block height")
+	log.Error().Err(err).Msg("api error")
 	return zero, errs.ErrInternal
 }
 
