@@ -576,6 +576,14 @@ func (b *BlockChainAPI) fetchBlockTransactions(
 		if err != nil {
 			return nil, err
 		}
+		if transaction == nil {
+			b.logger.Warn().
+				Str("tx-hash", txHash.String()).
+				Uint64("evm-height", block.Height).
+				Msg("not found a transaction the block references")
+
+			continue
+		}
 		transactions = append(transactions, transaction)
 	}
 
