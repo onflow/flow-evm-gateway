@@ -8,12 +8,13 @@ import (
 	"sync"
 
 	"github.com/cockroachdb/pebble"
-	"github.com/onflow/flow-evm-gateway/models"
-	"github.com/onflow/flow-evm-gateway/storage"
-	errs "github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/onflow/go-ethereum/common"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/onflow/go-ethereum/rlp"
+
+	"github.com/onflow/flow-evm-gateway/models"
+	"github.com/onflow/flow-evm-gateway/storage"
+	errs "github.com/onflow/flow-evm-gateway/storage/errors"
 )
 
 var _ storage.ReceiptIndexer = &Receipts{}
@@ -138,9 +139,14 @@ func (r *Receipts) getByBlockHeight(height []byte) ([]*gethTypes.Receipt, error)
 	}
 
 	var storeReceipts []*models.StorageReceipt
-	err = rlp.DecodeBytes(val, &storeReceipts)
-	if err != nil {
-		return nil, err
+	if err = rlp.DecodeBytes(val, &storeReceipts); err != nil {
+		// try to decode single receipt (breaking change migration)
+		var storeReceipt *models.StorageReceipt
+		if err = rlp.DecodeBytes(val, &storeReceipt); err != nil {
+			return nil, err
+		}
+
+		storeReceipts = append(storeReceipts, storeReceipt)
 	}
 
 	receipts := make([]*gethTypes.Receipt, len(storeReceipts))
