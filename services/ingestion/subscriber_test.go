@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/onflow/flow-go-sdk/access"
+
 	"github.com/onflow/flow-evm-gateway/models"
 
 	"github.com/onflow/flow-go-sdk"
@@ -11,20 +13,42 @@ import (
 	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/onflow/flow-go/storage"
 	"github.com/rs/zerolog"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
-func setupClient(client *mocks.Client, startHeight uint64, endHeight uint64) {
-	client.
-		On("GetLatestBlockHeader", mock.Anything, mock.Anything).
-		Return(&flow.BlockHeader{
-			Height: endHeight,
-		}, nil)
+type mockClient struct {
+	*mocks.Client
+	getLatestBlockHeaderFunc         func(context.Context, bool) (*flow.BlockHeader, error)
+	getBlockHeaderByHeightFunc       func(context.Context, uint64) (*flow.BlockHeader, error)
+	subscribeEventsByBlockHeightFunc func(context.Context, uint64, flow.EventFilter, ...access.SubscribeOption) (<-chan flow.BlockEvents, <-chan error, error)
+}
 
-	client.
-		On("GetBlockHeaderByHeight", mock.Anything, mock.Anything).
-		Return(func(ctx context.Context, height uint64) (*flow.BlockHeader, error) {
+func (c *mockClient) GetBlockHeaderByHeight(ctx context.Context, height uint64) (*flow.BlockHeader, error) {
+	return c.getBlockHeaderByHeightFunc(ctx, height)
+}
+
+func (c *mockClient) GetLatestBlockHeader(ctx context.Context, sealed bool) (*flow.BlockHeader, error) {
+	return c.getLatestBlockHeaderFunc(ctx, sealed)
+}
+
+func (c *mockClient) SubscribeEventsByBlockHeight(
+	ctx context.Context,
+	startHeight uint64,
+	filter flow.EventFilter,
+	opts ...access.SubscribeOption,
+) (<-chan flow.BlockEvents, <-chan error, error) {
+	return c.subscribeEventsByBlockHeightFunc(ctx, startHeight, filter, opts...)
+}
+
+func setupClient(startHeight uint64, endHeight uint64) access.Client {
+	return &mockClient{
+		Client: &mocks.Client{},
+		getLatestBlockHeaderFunc: func(ctx context.Context, sealed bool) (*flow.BlockHeader, error) {
+			return &flow.BlockHeader{
+				Height: endHeight,
+			}, nil
+		},
+		getBlockHeaderByHeightFunc: func(ctx context.Context, height uint64) (*flow.BlockHeader, error) {
 			if height < startHeight || height > endHeight {
 				return nil, storage.ErrNotFound
 			}
@@ -32,21 +56,24 @@ func setupClient(client *mocks.Client, startHeight uint64, endHeight uint64) {
 			return &flow.BlockHeader{
 				Height: height,
 			}, nil
-		})
-
-	client.
-		On("SubscribeEventsByBlockHeight", mock.Anything, mock.Anything, mock.Anything).
-		Return(func() (<-chan flowGo.BlockEvents, <-chan error, error) {
-			events := make(chan flowGo.BlockEvents)
+		},
+		subscribeEventsByBlockHeightFunc: func(
+			ctx context.Context,
+			startHeight uint64,
+			filter flow.EventFilter,
+			opts ...access.SubscribeOption,
+		) (<-chan flow.BlockEvents, <-chan error, error) {
+			events := make(chan flow.BlockEvents)
 
 			for i := startHeight; i <= endHeight; i++ {
-				events <- flowGo.BlockEvents{
-					BlockHeight: i,
+				events <- flow.BlockEvents{
+					Height: i,
 				}
 			}
 
 			return events, make(chan error), nil
-		})
+		},
+	}
 }
 
 // this test simulates two previous sporks and current spork
@@ -55,14 +82,10 @@ func setupClient(client *mocks.Client, startHeight uint64, endHeight uint64) {
 // All event heights should be emitted in sequence.
 func Test_Subscribing(t *testing.T) {
 
-	currentClient := &mocks.Client{}
-	spork1Client := &mocks.Client{}
-	spork2Client := &mocks.Client{}
-
 	const endHeight = 50
-	setupClient(spork1Client, 1, 10)
-	setupClient(spork2Client, 11, 20)
-	setupClient(currentClient, 21, endHeight)
+	spork1Client := setupClient(1, 10)
+	spork2Client := setupClient(11, 20)
+	currentClient := setupClient(21, endHeight)
 
 	client, err := models.NewCrossSporkClient(currentClient, zerolog.Nop())
 	require.NoError(t, err)
