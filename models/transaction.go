@@ -166,6 +166,12 @@ func UnmarshalTransaction(value []byte) (Transaction, error) {
 
 	tx := &gethTypes.Transaction{}
 	if err := tx.UnmarshalBinary(value[1:]); err != nil {
+		// todo remove this after previewnet is reset
+		// breaking change on transaction data, try without type
+		if err := tx.UnmarshalBinary(value); err == nil {
+			return TransactionCall{Transaction: tx}, nil
+		}
+
 		return nil, fmt.Errorf("failed to rlp decode transaction: %w", err)
 	}
 
