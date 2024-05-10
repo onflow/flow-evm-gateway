@@ -17,12 +17,15 @@ const timeout = 20
 async function assertFilterLogs(contract, filterObj, expectedLogs) {
     const subscription = await contract.events.Calculated(filterObj)
 
-    let subId = new Promise(res => subscription.on("connected", res))
+    let subId = new Promise((res => subscription.on("connected", res)))
+
+    subscription.on("error", err => console.log(err))
 
     let allLogs = []
     let logs = new Promise((res, rej) => subscription.on("data", data => {
         allLogs.push(data)
-        console.log("### event", data.returnValues, allLogs.length, expectedLogs.length)
+        console.log("# event received: ", data.returnValues)
+
         // we do this timeout as a trick, to wait if we receive more logs than we should
         // since resolving at the expected length right away might miss another
         // log that would unexpectedly come after.
@@ -38,8 +41,7 @@ async function assertFilterLogs(contract, filterObj, expectedLogs) {
                     for (const key in expected) {
                         let expectedVal = expected[key]
                         let actualVal = allLogs[i].returnValues[key]
-                        console.log(actualVal, expectedVal)
-                        assert.equal("####", actualVal, expectedVal)
+                        assert.equal(actualVal, expectedVal)
                     }
                 }
 
@@ -78,10 +80,38 @@ it('streaming of logs using filters', async() => {
     let firstBlock = await ws.eth.getBlockNumber()
 
     let allTests = [
-        //assertFilterLogs(storageContract, { fromBlock: firstBlock }, testValues),
-        assertFilterLogs(storageContract, { fromBlock: firstBlock+1n }, testValues.splice(1, 5)),
-        //assertFilterLogs(storageContract, { fromBlock: firstBlock+2n }, testValues.splice(0, 2)),
-        //assertFilterLogs(storageContract, { fromBlock: firstBlock+3n }, testValues.splice(0, 3)),
+        // stream all events
+        assertFilterLogs(storageContract, {}, testValues),
+        // stream only one event that has numA set to -1
+        assertFilterLogs(
+            storageContract,
+            { filter: {numA: -1} },
+            testValues.filter(v => v.numA === -1)
+        ),
+        // stream only events that have numB set to 200
+        assertFilterLogs(
+            storageContract,
+            { filter: {numB: 200} },
+            testValues.filter(v => v.numB === 200)
+        ),
+        // stream events that have numA set to 10 and numB set to 200
+        assertFilterLogs(
+            storageContract,
+            { filter: {numA: repeatA, numB: 200} },
+            testValues.filter(v => v.numB === 200 && v.numA === repeatA)
+        ),
+        // stream only events that have numA value set to 10
+        assertFilterLogs(
+            storageContract,
+            { filter: {numA: repeatA} },
+            testValues.filter(v => v.numA === repeatA)
+        ),
+        // stream events that have numB 200 OR 300 value
+        assertFilterLogs(
+            storageContract,
+            { filter: {numB: [200, 300]} },
+            testValues.filter(v => v.numB === 200 || v.numB === 300)
+        ),
     ]
 
 
