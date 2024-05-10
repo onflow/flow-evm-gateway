@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/go-ethereum/common"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"golang.org/x/exp/slices"
+
+	"github.com/onflow/flow-evm-gateway/storage"
 )
 
 // FilterCriteria for log filtering.
@@ -124,46 +125,6 @@ func (i *IDFilter) Match() ([]*gethTypes.Log, error) {
 			}
 		}
 	}
-
-	return logs, nil
-}
-
-// StreamFilter matches all the logs against the criteria from the receipt channel.
-type StreamFilter struct {
-	criteria      FilterCriteria
-	receiptStream chan *gethTypes.Receipt
-}
-
-func NewStreamFilter(criteria FilterCriteria, receipts chan *gethTypes.Receipt) *StreamFilter {
-	return &StreamFilter{
-		criteria:      criteria,
-		receiptStream: receipts,
-	}
-}
-
-func (s *StreamFilter) Match() (<-chan *gethTypes.Log, error) {
-	logs := make(chan *gethTypes.Log)
-
-	go func() {
-		defer close(logs)
-
-		for {
-			receipt, ok := <-s.receiptStream
-			if !ok {
-				return // exit the goroutine if receiptStream is closed
-			}
-
-			if !bloomMatch(receipt.Bloom, s.criteria) {
-				continue
-			}
-
-			for _, log := range receipt.Logs {
-				if exactMatch(log, s.criteria) {
-					logs <- log
-				}
-			}
-		}
-	}()
 
 	return logs, nil
 }
