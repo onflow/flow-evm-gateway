@@ -1,9 +1,10 @@
 package tests
 
 import (
+	"testing"
+
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-emulator/emulator"
-	"testing"
 )
 
 func TestWeb3_E2E(t *testing.T) {
@@ -34,6 +35,10 @@ func TestWeb3_E2E(t *testing.T) {
 
 	t.Run("streaming of entities and subscription", func(t *testing.T) {
 		runWeb3Test(t, "eth_streaming_test")
+	})
+
+	t.Run("streaming of entities and subscription with filters", func(t *testing.T) {
+		runWeb3Test(t, "eth_streaming_filters_test")
 	})
 
 	t.Run("batch run transactions", func(t *testing.T) {
