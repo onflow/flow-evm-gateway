@@ -1,11 +1,3 @@
-// todo add test that uses different log filters
-// - specified address and all topics
-// - not specified address (all logs)
-// - specified address and single topic
-// - specified address and multiple topics
-// - combinations of from / to blocks
-
-
 const helpers = require("./helpers");
 const {Web3} = require("web3");
 const conf = require("./config");
