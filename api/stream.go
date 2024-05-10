@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/big"
 	"reflect"
 
 	"github.com/onflow/flow-go/engine"
@@ -165,60 +164,15 @@ func (s *StreamAPI) Logs(ctx context.Context, criteria filters.FilterCriteria) (
 		return nil, fmt.Errorf("failed to crete log subscription filter: %w", err)
 	}
 
-	latest, err := s.blocks.LatestEVMHeight()
-	if err != nil {
-		return nil, err
-	}
-
-	notifier, supported := rpc.NotifierFromContext(ctx)
-	if !supported {
-		return nil, rpc.ErrNotificationsUnsupported
-	}
-	rpcSub := notifier.CreateSubscription()
-
-	// if we have a defined block as starting block we must backfill events
-	if criteria.FromBlock != nil {
-		if criteria.FromBlock.Uint64() > latest {
-			return nil, fmt.Errorf("from block can not be higher than the latest block number")
-		}
-
-		to := criteria.ToBlock
-		if to == nil { // if set as latest use the latest value
-			to = big.NewInt(int64(latest))
-		}
-
-		logFilter, err := logs.NewRangeFilter(
-			*criteria.FromBlock,
-			*to,
-			*filter,
-			s.receipts,
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		matched, err := logFilter.Match()
-		if err != nil {
-			return nil, err
-		}
-
-		go func() {
-			for _, log := range matched {
-				sendData(notifier, rpcSub.ID, log, s.logger)
-			}
-		}()
-	}
-
-	if criteria.ToBlock.Uint64() < latest {
-		return rpcSub, nil
-	}
-
 	sub, err := s.newSubscription(
 		ctx,
 		s.logsBroadcaster,
 		func(ctx context.Context, height uint64) (interface{}, error) {
 			if criteria.ToBlock != nil && height > criteria.ToBlock.Uint64() {
-				// todo end it
+				return nil, nil
+			}
+			if criteria.FromBlock != nil && height < criteria.FromBlock.Uint64() {
+				return nil, nil
 			}
 
 			block, err := s.blocks.GetByHeight(height)
