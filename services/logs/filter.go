@@ -11,6 +11,12 @@ import (
 	"github.com/onflow/flow-evm-gateway/storage"
 )
 
+// The maximum number of topic criteria allowed
+const maxTopics = 4
+
+// The maximum number of addresses allowed
+const maxAddresses = 6
+
 // FilterCriteria for log filtering.
 // Address of the contract emitting the log.
 // Topics that match the log topics, following the format:
@@ -22,6 +28,20 @@ import (
 type FilterCriteria struct {
 	Addresses []common.Address
 	Topics    [][]common.Hash
+}
+
+func NewFilterCriteria(addresses []common.Address, topics [][]common.Hash) (*FilterCriteria, error) {
+	if len(topics) > maxTopics {
+		return nil, fmt.Errorf("max topics exceeded, only %d allowed", maxTopics)
+	}
+	if len(addresses) > maxAddresses {
+		return nil, fmt.Errorf("max addresses exceeded, only %d allowed", maxAddresses)
+	}
+
+	return &FilterCriteria{
+		Addresses: addresses,
+		Topics:    topics,
+	}, nil
 }
 
 // RangeFilter matches all the indexed logs within the range defined as
