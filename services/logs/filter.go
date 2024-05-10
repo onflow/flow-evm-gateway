@@ -103,6 +103,8 @@ func (r *RangeFilter) Match() ([]*gethTypes.Log, error) {
 	return logs, nil
 }
 
+// todo add HeightFilter
+
 // IDFilter matches all logs against the criteria found in a single block identified
 // by the provided block ID.
 type IDFilter struct {
@@ -158,11 +160,14 @@ func exactMatch(log *gethTypes.Log, criteria FilterCriteria) bool {
 		return false
 	}
 
-	for _, sub := range criteria.Topics {
-		for _, topic := range sub {
-			if !slices.Contains(log.Topics, topic) {
-				return false
-			}
+	for i, sub := range criteria.Topics {
+		// wildcard matching all
+		if len(sub) == 0 {
+			continue
+		}
+
+		if !slices.Contains(sub, log.Topics[i]) {
+			return false
 		}
 	}
 
