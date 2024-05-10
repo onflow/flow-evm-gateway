@@ -189,6 +189,8 @@ func (s *StreamAPI) Logs(ctx context.Context, criteria filters.FilterCriteria) (
 				return nil, err
 			}
 
+			// todo change this to height filter so we don't have to get the same block twice, once for height and then for id
+
 			return logs.NewIDFilter(id, *filter, s.blocks, s.receipts).Match()
 		},
 	)
