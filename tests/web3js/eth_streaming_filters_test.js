@@ -50,6 +50,9 @@ async function assertFilterLogs(contract, filterObj, expectedLogs) {
     return logs
 }
 
+// todo add streaming of logs without address provided (any address)
+// todo add get past logs with from/to and topic filters combinations
+
 it('streaming of logs using filters', async() => {
     let contractDeployment = await helpers.deployContract("storage")
     let contractAddress = contractDeployment.receipt.contractAddress
