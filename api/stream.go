@@ -4,19 +4,21 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
 	"reflect"
 
-	errs "github.com/onflow/flow-evm-gateway/api/errors"
-	"github.com/onflow/flow-evm-gateway/config"
-	"github.com/onflow/flow-evm-gateway/services/logs"
-	"github.com/onflow/flow-evm-gateway/storage"
-	storageErrs "github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/onflow/flow-go/engine"
 	"github.com/onflow/flow-go/engine/access/subscription"
 	"github.com/onflow/go-ethereum/common/hexutil"
 	"github.com/onflow/go-ethereum/eth/filters"
 	"github.com/onflow/go-ethereum/rpc"
 	"github.com/rs/zerolog"
+
+	errs "github.com/onflow/flow-evm-gateway/api/errors"
+	"github.com/onflow/flow-evm-gateway/config"
+	"github.com/onflow/flow-evm-gateway/services/logs"
+	"github.com/onflow/flow-evm-gateway/storage"
+	storageErrs "github.com/onflow/flow-evm-gateway/storage/errors"
 )
 
 // subscriptionBufferLimit is a constant that represents the buffer limit for subscriptions.
@@ -158,17 +160,67 @@ func (s *StreamAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) (*
 
 // Logs creates a subscription that fires for all new log that match the given filter criteria.
 func (s *StreamAPI) Logs(ctx context.Context, criteria filters.FilterCriteria) (*rpc.Subscription, error) {
-	if len(criteria.Topics) > maxTopics {
-		return nil, errExceedMaxTopics
+	filter, err := logs.NewFilterCriteria(criteria.Addresses, criteria.Topics)
+	if err != nil {
+		return nil, fmt.Errorf("failed to crete log subscription filter: %w", err)
 	}
-	if len(criteria.Addresses) > maxAddresses {
-		return nil, errExceedMaxAddresses
+
+	latest, err := s.blocks.LatestEVMHeight()
+	if err != nil {
+		return nil, err
+	}
+
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return nil, rpc.ErrNotificationsUnsupported
+	}
+	rpcSub := notifier.CreateSubscription()
+
+	// if we have a defined block as starting block we must backfill events
+	if criteria.FromBlock != nil {
+		if criteria.FromBlock.Uint64() > latest {
+			return nil, fmt.Errorf("from block can not be higher than the latest block number")
+		}
+
+		to := criteria.ToBlock
+		if to == nil { // if set as latest use the latest value
+			to = big.NewInt(int64(latest))
+		}
+
+		logFilter, err := logs.NewRangeFilter(
+			*criteria.FromBlock,
+			*to,
+			*filter,
+			s.receipts,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		matched, err := logFilter.Match()
+		if err != nil {
+			return nil, err
+		}
+
+		go func() {
+			for _, log := range matched {
+				sendData(notifier, rpcSub.ID, log, s.logger)
+			}
+		}()
+	}
+
+	if criteria.ToBlock.Uint64() < latest {
+		return rpcSub, nil
 	}
 
 	sub, err := s.newSubscription(
 		ctx,
 		s.logsBroadcaster,
 		func(ctx context.Context, height uint64) (interface{}, error) {
+			if criteria.ToBlock != nil && height > criteria.ToBlock.Uint64() {
+				// todo end it
+			}
+
 			block, err := s.blocks.GetByHeight(height)
 			if err != nil {
 				if errors.Is(err, storageErrs.ErrNotFound) {
@@ -183,12 +235,7 @@ func (s *StreamAPI) Logs(ctx context.Context, criteria filters.FilterCriteria) (
 				return nil, err
 			}
 
-			// convert from the API type
-			f := logs.FilterCriteria{
-				Addresses: criteria.Addresses,
-				Topics:    criteria.Topics,
-			}
-			return logs.NewIDFilter(id, f, s.blocks, s.receipts).Match()
+			return logs.NewIDFilter(id, *filter, s.blocks, s.receipts).Match()
 		},
 	)
 	l := s.logger.With().Str("subscription-id", string(sub.ID)).Logger()
@@ -198,6 +245,7 @@ func (s *StreamAPI) Logs(ctx context.Context, criteria filters.FilterCriteria) (
 	}
 
 	l.Info().Msg("new logs subscription created")
+
 	return sub, nil
 }
 
@@ -223,7 +271,7 @@ func (s *StreamAPI) newSubscription(
 	sub := subscription.NewHeightBasedSubscription(subscriptionBufferLimit, height, getData)
 
 	rpcSub := notifier.CreateSubscription()
-	rpcSub.ID = rpc.ID(sub.ID()) // make sure ids are unified
+	//rpcSub.ID = rpc.ID(sub.ID()) // make sure ids are unified
 
 	l := s.logger.With().Str("subscription-id", string(rpcSub.ID)).Logger()
 	l.Info().Uint64("evm-height", height).Msg("new subscription created")
