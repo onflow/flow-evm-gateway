@@ -227,7 +227,7 @@ func (s *StreamAPI) newSubscription(
 	sub := subscription.NewHeightBasedSubscription(subscriptionBufferLimit, height, getData)
 
 	rpcSub := notifier.CreateSubscription()
-	//rpcSub.ID = rpc.ID(sub.ID()) // make sure ids are unified
+	rpcSub.ID = rpc.ID(sub.ID()) // make sure ids are unified
 
 	l := s.logger.With().Str("subscription-id", string(rpcSub.ID)).Logger()
 	l.Info().Uint64("evm-height", height).Msg("new subscription created")
