@@ -153,8 +153,6 @@ func (i *IDFilter) Match() ([]*gethTypes.Log, error) {
 
 // exactMatch checks the topic and address values of the log match the filter exactly.
 func exactMatch(log *gethTypes.Log, criteria FilterCriteria) bool {
-	// todo support no address matching all
-
 	// check criteria doesn't have more topics than the log, but it can have less due to wildcards
 	if len(criteria.Topics) > len(log.Topics) {
 		return false
@@ -169,6 +167,11 @@ func exactMatch(log *gethTypes.Log, criteria FilterCriteria) bool {
 		if !slices.Contains(sub, log.Topics[i]) {
 			return false
 		}
+	}
+
+	// no addresses is a wildcard to match all
+	if len(criteria.Addresses) == 0 {
+		return true
 	}
 
 	return slices.Contains(criteria.Addresses, log.Address)
