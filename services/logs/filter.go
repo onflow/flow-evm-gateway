@@ -1,6 +1,7 @@
 package logs
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -8,6 +9,7 @@ import (
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"golang.org/x/exp/slices"
 
+	errs "github.com/onflow/flow-evm-gateway/api/errors"
 	"github.com/onflow/flow-evm-gateway/storage"
 )
 
@@ -57,8 +59,13 @@ func NewRangeFilter(
 	criteria FilterCriteria,
 	receipts storage.ReceiptIndexer,
 ) (*RangeFilter, error) {
-	if start.Cmp(&end) > 0 {
-		return nil, fmt.Errorf("invalid start and end block height, start must be smaller or equal than end value")
+	// check if both start and end don't have special values (negative values representing last block etc.)
+	// if so, make sure that beginning number is not bigger than end
+	if start.Cmp(big.NewInt(0)) > 0 && end.Cmp(big.NewInt(0)) > 0 && start.Cmp(&end) > 0 {
+		return nil, errors.Join(
+			errs.ErrInvalid,
+			fmt.Errorf("start block number must be smaller or equal to end block number"),
+		)
 	}
 
 	return &RangeFilter{
