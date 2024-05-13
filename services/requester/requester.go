@@ -323,6 +323,10 @@ func (e *EVM) Call(
 	from common.Address,
 	height uint64,
 ) ([]byte, error) {
+	e.logger.Debug().
+		Str("data", fmt.Sprintf("%x", data)).
+		Msg("call")
+
 	hexEncodedTx, err := cadence.NewString(hex.EncodeToString(data))
 	if err != nil {
 		return nil, err
@@ -332,10 +336,6 @@ func (e *EVM) Call(
 	if err != nil {
 		return nil, err
 	}
-
-	e.logger.Debug().
-		Str("data", fmt.Sprintf("%x", data)).
-		Msg("call")
 
 	scriptResult, err := e.executeScriptAtHeight(
 		ctx,
