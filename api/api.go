@@ -460,17 +460,18 @@ func (b *BlockChainAPI) GetLogs(
 		to = criteria.ToBlock
 	}
 
-	latest, err := b.blocks.LatestEVMHeight()
+	l, err := b.blocks.LatestEVMHeight()
 	if err != nil {
 		return nil, err
 	}
+	latest := big.NewInt(int64(l))
 
 	// if special value, use latest block number
 	if from.Cmp(models.EarliestBlockNumber) < 0 {
-		from = big.NewInt(int64(latest))
+		from = latest
 	}
 	if to.Cmp(models.EarliestBlockNumber) < 0 {
-		to = big.NewInt(int64(latest))
+		to = latest
 	}
 
 	f, err := logs.NewRangeFilter(*from, *to, filter, b.receipts)
