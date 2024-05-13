@@ -8,6 +8,7 @@ import (
 
 	"github.com/onflow/flow-go/engine"
 	"github.com/onflow/flow-go/engine/access/subscription"
+	"github.com/onflow/go-ethereum/common"
 	"github.com/onflow/go-ethereum/common/hexutil"
 	"github.com/onflow/go-ethereum/eth/filters"
 	"github.com/onflow/go-ethereum/rpc"
@@ -112,39 +113,47 @@ func (s *StreamAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) (*
 				return nil, fmt.Errorf("failed to get block at height: %d: %w", height, err)
 			}
 
-			// todo once a block can contain multiple transactions this needs to be refactored
-			if len(block.TransactionHashes) != 1 {
-				return nil, fmt.Errorf("block contains more than a single transaction")
-			}
-			hash := block.TransactionHashes[0]
+			hashes := make([]common.Hash, len(block.TransactionHashes))
+			txs := make([]*Transaction, len(block.TransactionHashes))
 
-			tx, err := s.transactions.Get(hash)
-			if err != nil {
-				if errors.Is(err, storageErrs.ErrNotFound) {
-					// make sure to wrap in not found error as the streamer expects it
-					return nil, errors.Join(subscription.ErrBlockNotReady, err)
+			for i, hash := range block.TransactionHashes {
+
+				tx, err := s.transactions.Get(hash)
+				if err != nil {
+					if errors.Is(err, storageErrs.ErrNotFound) {
+						// make sure to wrap in not found error as the streamer expects it
+						return nil, errors.Join(subscription.ErrBlockNotReady, err)
+					}
+					return nil, fmt.Errorf("failed to get tx with hash: %s at height: %d: %w", hash, height, err)
 				}
-				return nil, fmt.Errorf("failed to get tx with hash: %s at height: %d: %w", hash, height, err)
-			}
 
-			rcp, err := s.receipts.GetByTransactionID(hash)
-			if err != nil {
-				if errors.Is(err, storageErrs.ErrNotFound) {
-					// make sure to wrap in not found error as the streamer expects it
-					return nil, errors.Join(subscription.ErrBlockNotReady, err)
+				rcp, err := s.receipts.GetByTransactionID(hash)
+				if err != nil {
+					if errors.Is(err, storageErrs.ErrNotFound) {
+						// make sure to wrap in not found error as the streamer expects it
+						return nil, errors.Join(subscription.ErrBlockNotReady, err)
+					}
+					return nil, fmt.Errorf("failed to get receipt with hash: %s at height: %d: %w", hash, height, err)
 				}
-				return nil, fmt.Errorf("failed to get receipt with hash: %s at height: %d: %w", hash, height, err)
-			}
 
-			h, err := tx.Hash()
-			if err != nil {
-				return nil, fmt.Errorf("failed to compute tx hash: %w", err)
+				h, err := tx.Hash()
+				if err != nil {
+					return nil, fmt.Errorf("failed to compute tx hash: %w", err)
+				}
+
+				t, err := NewTransaction(tx, *rcp)
+				if err != nil {
+					return nil, err
+				}
+
+				hashes[i] = h
+				txs[i] = t
 			}
 
 			if fullTx != nil && *fullTx {
-				return NewTransaction(tx, *rcp)
+				return txs, nil
 			}
-			return h, nil
+			return hashes, nil
 		},
 	)
 	l := s.logger.With().Str("subscription-id", string(sub.ID)).Logger()
