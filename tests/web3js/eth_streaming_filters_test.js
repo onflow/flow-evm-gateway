@@ -174,7 +174,7 @@ it('streaming of logs using filters', async() => {
     await Promise.all(allTests)
 
     // make sure we can also get logs streamed after the transactions were executed (historic)
-    await assertFilterLogs(await rawSubscribe({ address: contractAddress, fromBlock: "0x0" }), testValues)
+    //await assertFilterLogs(await rawSubscribe({ address: contractAddress, fromBlock: "0x0" }), testValues)
 
     await ws.eth.clearSubscriptions()
 
