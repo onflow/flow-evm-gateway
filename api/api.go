@@ -423,8 +423,8 @@ func (b *BlockChainAPI) Call(
 
 	res, err := b.evm.Call(ctx, tx, from, cadenceHeight)
 	if err != nil {
-		b.logger.Error().Err(err).Msg("failed to execute call")
-		return handleError[hexutil.Bytes](b.logger, errs.ErrInternal)
+		b.logger.Debug().Err(err).Msg("failed to execute call")
+		return nil, err
 	}
 
 	return res, nil
