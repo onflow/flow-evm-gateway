@@ -63,9 +63,6 @@ async function assertFilterLogs(subscription, expectedLogs) {
     })
 }
 
-// todo add streaming of logs without address provided (any address)
-// todo add get past logs with from/to and topic filters combinations
-
 it('streaming of logs using filters', async() => {
     let contractDeployment = await helpers.deployContract("storage")
     let contractAddress = contractDeployment.receipt.contractAddress
@@ -92,48 +89,59 @@ it('streaming of logs using filters', async() => {
 
     let rawSubscribe = filter => ws.eth.subscribe('logs', filter)
 
+    let latestBlock = await ws.eth.getBlockNumber()
 
     // wait for subscription for a bit
     await new Promise((res, rej) => setTimeout(() => res(), 500))
 
     let allTests = [
         // stream all events
-        // assertFilterLogs(calculatedEvent({ }), testValues),
-        // // stream only one event that has numA set to -1
-        // assertFilterLogs(
-        //     calculatedEvent({ filter: {numA: -1} }),
-        //     testValues.filter(v => v.numA === -1)
-        // ),
-        // // stream only events that have numB set to 200
-        // assertFilterLogs(
-        //     calculatedEvent({ filter: {numB: 200} }),
-        //     testValues.filter(v => v.numB === 200)
-        // ),
-        // // stream events that have numA set to 10 and numB set to 200
-        // assertFilterLogs(
-        //     calculatedEvent({ filter: {numA: repeatA, numB: 200} }),
-        //     testValues.filter(v => v.numB === 200 && v.numA === repeatA)
-        // ),
-        // // stream only events that have numA value set to 10
-        // assertFilterLogs(
-        //     calculatedEvent({ filter: {numA: repeatA} }),
-        //     testValues.filter(v => v.numA === repeatA)
-        // ),
+        assertFilterLogs(calculatedEvent({ }), testValues),
+        // stream only one event that has numA set to -1
+        assertFilterLogs(
+            calculatedEvent({ filter: {numA: -1} }),
+            testValues.filter(v => v.numA === -1)
+        ),
+        // stream only events that have numB set to 200
+        assertFilterLogs(
+            calculatedEvent({ filter: {numB: 200} }),
+            testValues.filter(v => v.numB === 200)
+        ),
+        // stream events that have numA set to 10 and numB set to 200
+        assertFilterLogs(
+            calculatedEvent({ filter: {numA: repeatA, numB: 200} }),
+            testValues.filter(v => v.numB === 200 && v.numA === repeatA)
+        ),
+        // stream only events that have numA value set to 10
+        assertFilterLogs(
+            calculatedEvent({ filter: {numA: repeatA} }),
+            testValues.filter(v => v.numA === repeatA)
+        ),
         // stream events that have numB 200 OR 300 value
-        // assertFilterLogs(
-        //     calculatedEvent({ filter: {numB: [200, 300]} }),
-        //     testValues.filter(v => v.numB === 200 || v.numB === 300)
-        // ),
+        assertFilterLogs(
+            calculatedEvent({ filter: {numB: [200, 300]} }),
+            testValues.filter(v => v.numB === 200 || v.numB === 300)
+        ),
 
         // we also test the raw subscriptions since they allow for specifying raw values
 
         // stream all events by any contract, we have two same contracts, so we duplicate expected values and in order
-        //assertFilterLogs(await rawSubscribe({}), testValues.concat(testValues)),
+        assertFilterLogs(
+            await rawSubscribe({}),
+            testValues.concat(testValues)
+         ),
 
         // return all values by only a single contract
-        //assertFilterLogs(await rawSubscribe({ address: contractAddress }), testValues)
+        assertFilterLogs(
+            await rawSubscribe({ address: contractAddress }),
+            testValues
+        ),
 
-        assertFilterLogs(await rawSubscribe({ address: contractAddress, fromBlock: "0x0" }), testValues)
+        // get all events and handle from block provided
+        assertFilterLogs(
+            await rawSubscribe({ address: contractAddress, fromBlock: "0x0" }),
+            testValues,
+        )
     ]
 
 
@@ -164,6 +172,9 @@ it('streaming of logs using filters', async() => {
     }
 
     await Promise.all(allTests)
+
+    // make sure we can also get logs streamed after the transactions were executed (historic)
+    await assertFilterLogs(await rawSubscribe({ address: contractAddress, fromBlock: "0x0" }), testValues)
 
     await ws.eth.clearSubscriptions()
 
