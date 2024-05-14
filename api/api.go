@@ -613,6 +613,18 @@ func (b *BlockChainAPI) prepareBlockResponse(
 		Timestamp:    hexutil.Uint64(block.Timestamp),
 	}
 
+	// todo remove after previewnet, temp fix to mock some of the timestamps
+	if block.Timestamp == 0 {
+		first := uint64(1715189257)
+		blockTime := uint64(200)
+		firstRecordedTimestampBlock := uint64(5493)
+
+		diff := firstRecordedTimestampBlock - block.Height
+		timestamp := first - blockTime*diff
+
+		blockResponse.Timestamp = hexutil.Uint64(timestamp)
+	}
+
 	transactions, err := b.fetchBlockTransactions(ctx, block)
 	if err != nil {
 		return nil, err
