@@ -286,7 +286,6 @@ func streamData(
 			}
 
 		case err := <-rpcSub.Err():
-			// todo maybe handle nil err, this is when client disconnects unexpectedly
 			l.Debug().Err(err).Msg("client unsubscribed")
 			return
 		case <-notifier.Closed():

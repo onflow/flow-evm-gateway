@@ -10,55 +10,56 @@ async function assertFilterLogs(subscription, expectedLogs) {
     let allLogs = []
     return new Promise((res, rej) => {
         subscription.on("error", err => {
-            console.log(err)
             rej(err)
         })
 
-        subscription.on("data", data => {
+        subscription.on("data", async data => {
             allLogs.push(data)
 
-            // we do this timeout as a trick, to wait if we receive more logs than we should
-            // since resolving at the expected length right away might miss another
-            // log that would unexpectedly come after.
-            setTimeout(() => {
-                if (allLogs.length === expectedLogs.length) {
-                    subscription.unsubscribe()
+            if (allLogs.length !== expectedLogs.length) {
+                return
+            }
 
-                    // after we receive all logs, we make sure each received
-                    // logs matches the entry in the expected log by all the values
-                    for (let i = 0; i < expectedLogs.length; i++) {
-                        let expected = expectedLogs[i]
+            // if logs matches expected logs length,
+            // wait for a bit and re-check, so there's no new logs that came in after delay
+            await new Promise(res => setTimeout(() => res(), 1000))
+            assert.equal(allLogs.length, expectedLogs.length)
 
-                        // if we have ABI decoded event values as return values
-                        if (allLogs[i].returnValues != undefined) {
-                            for (const key in expected) {
-                                let expectedVal = expected[key]
-                                assert.isDefined(allLogs[i].returnValues)
-                                let actualVal = allLogs[i].returnValues[key]
-                                assert.equal(actualVal, expectedVal)
-                            }
-                        } else { // otherwise compare by position
-                            let position = 2 // we start at 2 since first two topics are address and event name
-                            for (const key in expected) {
-                                let expectedVal = expected[key]
-                                assert.isDefined(allLogs[i].topics)
-                                // convert big int hex values
-                                let actualVal = BigInt(allLogs[i].topics[position])
-                                if (actualVal & (1n << 255n)) {
-                                    actualVal -= (1n << 256n) // convert as signed int256 number
-                                }
+            console.log("## unsubscribe", subscription.id)
 
-                                assert.equal(actualVal, expectedVal)
-                                position++
-                            }
-                        }
+            subscription.unsubscribe()
+
+            // after we receive all logs, we make sure each received
+            // logs matches the entry in the expected log by all the values
+            for (let i = 0; i < expectedLogs.length; i++) {
+                let expected = expectedLogs[i]
+
+                // if we have ABI decoded event values as return values
+                if (allLogs[i].returnValues != undefined) {
+                    for (const key in expected) {
+                        let expectedVal = expected[key]
+                        assert.isDefined(allLogs[i].returnValues)
+                        let actualVal = allLogs[i].returnValues[key]
+                        assert.equal(actualVal, expectedVal)
                     }
+                } else { // otherwise compare by position
+                    let position = 2 // we start at 2 since first two topics are address and event name
+                    for (const key in expected) {
+                        let expectedVal = expected[key]
+                        assert.isDefined(allLogs[i].topics)
+                        // convert big int hex values
+                        let actualVal = BigInt(allLogs[i].topics[position])
+                        if (actualVal & (1n << 255n)) {
+                            actualVal -= (1n << 256n) // convert as signed int256 number
+                        }
 
-                    res(allLogs)
-                } else if (allLogs.length > expectedLogs.length) {
-                    rej(allLogs)
+                        assert.equal(actualVal, expectedVal)
+                        position++
+                    }
                 }
-            }, 500)
+            }
+
+            res(allLogs)
         })
     })
 }
@@ -174,9 +175,7 @@ it('streaming of logs using filters', async() => {
     await Promise.all(allTests)
 
     // make sure we can also get logs streamed after the transactions were executed (historic)
-    //await assertFilterLogs(await rawSubscribe({ address: contractAddress, fromBlock: "0x0" }), testValues)
-
-    await ws.eth.clearSubscriptions()
+    await assertFilterLogs(await rawSubscribe({ address: contractAddress, fromBlock: "0x0" }), testValues)
 
     process.exit(0)
 }).timeout(timeout*1000)
