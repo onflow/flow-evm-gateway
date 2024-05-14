@@ -13,16 +13,31 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
 	"encoding/json"
 
+	gethLog "github.com/onflow/go-ethereum/log"
 	"github.com/onflow/go-ethereum/rpc"
 	"github.com/rs/cors"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
+
+var stderrHandler = gethLog.StreamHandler(
+	os.Stderr,
+	gethLog.JSONFormat(),
+)
+
+const (
+	shutdownTimeout = 5 * time.Second
+)
+
+func init() {
+	gethLog.Root().SetHandler(stderrHandler)
+}
 
 type rpcHandler struct {
 	http.Handler
@@ -47,10 +62,6 @@ type httpServer struct {
 	host     string
 	port     int
 }
-
-const (
-	shutdownTimeout = 5 * time.Second
-)
 
 func NewHTTPServer(logger zerolog.Logger, timeouts rpc.HTTPTimeouts) *httpServer {
 	return &httpServer{
