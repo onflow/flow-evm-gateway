@@ -82,15 +82,12 @@ it('streaming of logs using filters', async() => {
     ]
 
     let ws = new Web3("ws://127.0.0.1:8545")
+
     let storageContract = new ws.eth.Contract(storageABI, contractAddress)
     let storageContract2 = new ws.eth.Contract(storageABI, contractAddress);
-
     let calculatedEvent = storageContract.events.Calculated
-    let calculatedEvent2 = storageContract.events.Calculated
 
     let rawSubscribe = filter => ws.eth.subscribe('logs', filter)
-
-    let latestBlock = await ws.eth.getBlockNumber()
 
     // wait for subscription for a bit
     await new Promise((res, rej) => setTimeout(() => res(), 500))
