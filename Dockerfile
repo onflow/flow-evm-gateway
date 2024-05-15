@@ -1,26 +1,32 @@
-
 # BUILD BIN
 
-FROM golang:1.22.0 as builder
+FROM golang:1.20.0 as app-builder
+
+# Build the app binary in /app
+WORKDIR /app
+
 # Install go modules
-WORKDIR /flow-evm-gateway
 COPY go.* ./
 COPY . ./
+
 RUN go mod download
 RUN go mod verify
-RUN CGO_ENABLED=1 go build -o evm-gateway ./cmd/main/main.go
-RUN chmod a+x evm-gateway
-RUN chmod a+x ./scripts/run.sh
+
+# Build binary
+RUN CGO_ENABLED=1 go build -o bin ./cmd/main/main.go
+RUN chmod a+x bin
 
 # RUN APP
+
 FROM debian:latest
+
 WORKDIR /flow-evm-gateway
-# ENV MNT_DIR /flow-evm-gateway/db
+
 RUN apt-get update
-# RUN apt-get install -y nfs-common
-COPY --from=builder /flow-evm-gateway/evm-gateway /flow-evm-gateway/evm-gateway
-COPY --from=builder /flow-evm-gateway/previewnet-keys.json /flow-evm-gateway/previewnet-keys.json
-COPY --from=builder /flow-evm-gateway/scripts/run.sh /flow-evm-gateway/run.sh
+
+COPY --from=app-builder /app/bin /flow-evm-gateway/app
+COPY --from=app-builder /app/previewnet-keys.json /flow-evm-gateway/previewnet-keys.json
+
 EXPOSE 8545
-WORKDIR /flow-evm-gateway
-ENTRYPOINT ["sh", "run.sh"]
+
+ENTRYPOINT ["/flow-evm-gateway/app"]
