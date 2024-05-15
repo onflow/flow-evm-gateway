@@ -6,17 +6,19 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/onflow/flow-go/engine"
+	"github.com/onflow/flow-go/engine/access/subscription"
+	"github.com/onflow/go-ethereum/common"
+	"github.com/onflow/go-ethereum/common/hexutil"
+	"github.com/onflow/go-ethereum/eth/filters"
+	"github.com/onflow/go-ethereum/rpc"
+	"github.com/rs/zerolog"
+
 	errs "github.com/onflow/flow-evm-gateway/api/errors"
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/services/logs"
 	"github.com/onflow/flow-evm-gateway/storage"
 	storageErrs "github.com/onflow/flow-evm-gateway/storage/errors"
-	"github.com/onflow/flow-go/engine"
-	"github.com/onflow/flow-go/engine/access/subscription"
-	"github.com/onflow/go-ethereum/common/hexutil"
-	"github.com/onflow/go-ethereum/eth/filters"
-	"github.com/onflow/go-ethereum/rpc"
-	"github.com/rs/zerolog"
 )
 
 // subscriptionBufferLimit is a constant that represents the buffer limit for subscriptions.
@@ -111,39 +113,47 @@ func (s *StreamAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) (*
 				return nil, fmt.Errorf("failed to get block at height: %d: %w", height, err)
 			}
 
-			// todo once a block can contain multiple transactions this needs to be refactored
-			if len(block.TransactionHashes) != 1 {
-				return nil, fmt.Errorf("block contains more than a single transaction")
-			}
-			hash := block.TransactionHashes[0]
+			hashes := make([]common.Hash, len(block.TransactionHashes))
+			txs := make([]*Transaction, len(block.TransactionHashes))
 
-			tx, err := s.transactions.Get(hash)
-			if err != nil {
-				if errors.Is(err, storageErrs.ErrNotFound) {
-					// make sure to wrap in not found error as the streamer expects it
-					return nil, errors.Join(subscription.ErrBlockNotReady, err)
+			for i, hash := range block.TransactionHashes {
+
+				tx, err := s.transactions.Get(hash)
+				if err != nil {
+					if errors.Is(err, storageErrs.ErrNotFound) {
+						// make sure to wrap in not found error as the streamer expects it
+						return nil, errors.Join(subscription.ErrBlockNotReady, err)
+					}
+					return nil, fmt.Errorf("failed to get tx with hash: %s at height: %d: %w", hash, height, err)
 				}
-				return nil, fmt.Errorf("failed to get tx with hash: %s at height: %d: %w", hash, height, err)
-			}
 
-			rcp, err := s.receipts.GetByTransactionID(hash)
-			if err != nil {
-				if errors.Is(err, storageErrs.ErrNotFound) {
-					// make sure to wrap in not found error as the streamer expects it
-					return nil, errors.Join(subscription.ErrBlockNotReady, err)
+				rcp, err := s.receipts.GetByTransactionID(hash)
+				if err != nil {
+					if errors.Is(err, storageErrs.ErrNotFound) {
+						// make sure to wrap in not found error as the streamer expects it
+						return nil, errors.Join(subscription.ErrBlockNotReady, err)
+					}
+					return nil, fmt.Errorf("failed to get receipt with hash: %s at height: %d: %w", hash, height, err)
 				}
-				return nil, fmt.Errorf("failed to get receipt with hash: %s at height: %d: %w", hash, height, err)
-			}
 
-			h, err := tx.Hash()
-			if err != nil {
-				return nil, fmt.Errorf("failed to compute tx hash: %w", err)
+				h, err := tx.Hash()
+				if err != nil {
+					return nil, fmt.Errorf("failed to compute tx hash: %w", err)
+				}
+
+				t, err := NewTransaction(tx, *rcp)
+				if err != nil {
+					return nil, err
+				}
+
+				hashes[i] = h
+				txs[i] = t
 			}
 
 			if fullTx != nil && *fullTx {
-				return NewTransaction(tx, *rcp)
+				return txs, nil
 			}
-			return h, nil
+			return hashes, nil
 		},
 	)
 	l := s.logger.With().Str("subscription-id", string(sub.ID)).Logger()
@@ -158,17 +168,22 @@ func (s *StreamAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) (*
 
 // Logs creates a subscription that fires for all new log that match the given filter criteria.
 func (s *StreamAPI) Logs(ctx context.Context, criteria filters.FilterCriteria) (*rpc.Subscription, error) {
-	if len(criteria.Topics) > maxTopics {
-		return nil, errExceedMaxTopics
-	}
-	if len(criteria.Addresses) > maxAddresses {
-		return nil, errExceedMaxAddresses
+	filter, err := logs.NewFilterCriteria(criteria.Addresses, criteria.Topics)
+	if err != nil {
+		return nil, fmt.Errorf("failed to crete log subscription filter: %w", err)
 	}
 
 	sub, err := s.newSubscription(
 		ctx,
 		s.logsBroadcaster,
 		func(ctx context.Context, height uint64) (interface{}, error) {
+			if criteria.ToBlock != nil && height > criteria.ToBlock.Uint64() {
+				return nil, nil
+			}
+			if criteria.FromBlock != nil && height < criteria.FromBlock.Uint64() {
+				return nil, nil
+			}
+
 			block, err := s.blocks.GetByHeight(height)
 			if err != nil {
 				if errors.Is(err, storageErrs.ErrNotFound) {
@@ -183,12 +198,9 @@ func (s *StreamAPI) Logs(ctx context.Context, criteria filters.FilterCriteria) (
 				return nil, err
 			}
 
-			// convert from the API type
-			f := logs.FilterCriteria{
-				Addresses: criteria.Addresses,
-				Topics:    criteria.Topics,
-			}
-			return logs.NewIDFilter(id, f, s.blocks, s.receipts).Match()
+			// todo change this to height filter so we don't have to get the same block twice, once for height and then for id
+
+			return logs.NewIDFilter(id, *filter, s.blocks, s.receipts).Match()
 		},
 	)
 	l := s.logger.With().Str("subscription-id", string(sub.ID)).Logger()
@@ -198,6 +210,7 @@ func (s *StreamAPI) Logs(ctx context.Context, criteria filters.FilterCriteria) (
 	}
 
 	l.Info().Msg("new logs subscription created")
+
 	return sub, nil
 }
 
@@ -273,7 +286,6 @@ func streamData(
 			}
 
 		case err := <-rpcSub.Err():
-			// todo maybe handle nil err, this is when client disconnects unexpectedly
 			l.Debug().Err(err).Msg("client unsubscribed")
 			return
 		case <-notifier.Closed():

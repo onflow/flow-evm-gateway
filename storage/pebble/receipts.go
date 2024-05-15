@@ -8,12 +8,13 @@ import (
 	"sync"
 
 	"github.com/cockroachdb/pebble"
-	"github.com/onflow/flow-evm-gateway/models"
-	"github.com/onflow/flow-evm-gateway/storage"
-	errs "github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/onflow/go-ethereum/common"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/onflow/go-ethereum/rlp"
+
+	"github.com/onflow/flow-evm-gateway/models"
+	"github.com/onflow/flow-evm-gateway/storage"
+	errs "github.com/onflow/flow-evm-gateway/storage/errors"
 )
 
 var _ storage.ReceiptIndexer = &Receipts{}
@@ -138,9 +139,15 @@ func (r *Receipts) getByBlockHeight(height []byte) ([]*gethTypes.Receipt, error)
 	}
 
 	var storeReceipts []*models.StorageReceipt
-	err = rlp.DecodeBytes(val, &storeReceipts)
-	if err != nil {
-		return nil, err
+	if err = rlp.DecodeBytes(val, &storeReceipts); err != nil {
+		// todo remove this after previewnet is reset
+		// try to decode single receipt (breaking change migration)
+		var storeReceipt models.StorageReceipt
+		if err = rlp.DecodeBytes(val, &storeReceipt); err != nil {
+			return nil, err
+		}
+
+		storeReceipts = []*models.StorageReceipt{&storeReceipt}
 	}
 
 	receipts := make([]*gethTypes.Receipt, len(storeReceipts))
@@ -222,9 +229,8 @@ func (r *Receipts) BloomsForBlockRange(start, end *big.Int) ([]*gethTypes.Bloom,
 		}
 	}()
 
-	caps := end.Div(end, start).Uint64() // max capacity for slices
-	blooms := make([]*gethTypes.Bloom, 0, caps)
-	heights := make([]*big.Int, 0, caps)
+	blooms := make([]*gethTypes.Bloom, 0)
+	heights := make([]*big.Int, 0)
 
 	for iterator.First(); iterator.Valid(); iterator.Next() {
 		val, err := iterator.ValueAndErr()

@@ -58,7 +58,7 @@ it('streaming of logs using filters', async() => {
     let logCount = 0
     let logHashes = []
     // subscribe to events being emitted by a deployed contract and bellow transaction interactions
-    let doneLogs = new Promise(async (res, rej) => {
+    let doneAddressLogs = new Promise(async (res, rej) => {
         let subLog = await ws.eth.subscribe('logs', {
             address: contractAddress,
         })
@@ -90,7 +90,7 @@ it('streaming of logs using filters', async() => {
     }
 
     // wait for all events to be received
-    await Promise.all([doneTxs, doneBlocks, doneLogs])
+    await Promise.all([doneTxs, doneBlocks, doneAddressLogs])
 
     // check that transaction hashes we received when submitting transactions above
     // match array of transaction hashes received from events for blocks and txs

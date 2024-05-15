@@ -1,7 +1,7 @@
 const { assert } = require('chai')
 const conf = require('./config')
-const helpers = require('./helpers')
 const web3 = conf.web3
+
 
 it('retrieve batch transactions', async() => {
     let latestHeight = await web3.eth.getBlockNumber()

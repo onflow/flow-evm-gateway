@@ -5,14 +5,8 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"math/big"
 
-	errs "github.com/onflow/flow-evm-gateway/api/errors"
-	"github.com/onflow/flow-evm-gateway/config"
-	"github.com/onflow/flow-evm-gateway/models"
-	"github.com/onflow/flow-evm-gateway/services/logs"
-	"github.com/onflow/flow-evm-gateway/services/requester"
-	"github.com/onflow/flow-evm-gateway/storage"
-	storageErrs "github.com/onflow/flow-evm-gateway/storage/errors"
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/go-ethereum/common"
 	"github.com/onflow/go-ethereum/common/hexutil"
@@ -21,6 +15,14 @@ import (
 	"github.com/onflow/go-ethereum/eth/filters"
 	"github.com/onflow/go-ethereum/rpc"
 	"github.com/rs/zerolog"
+
+	errs "github.com/onflow/flow-evm-gateway/api/errors"
+	"github.com/onflow/flow-evm-gateway/config"
+	"github.com/onflow/flow-evm-gateway/models"
+	"github.com/onflow/flow-evm-gateway/services/logs"
+	"github.com/onflow/flow-evm-gateway/services/requester"
+	"github.com/onflow/flow-evm-gateway/storage"
+	storageErrs "github.com/onflow/flow-evm-gateway/storage/errors"
 )
 
 func SupportedAPIs(blockChainAPI *BlockChainAPI, streamAPI *StreamAPI, pullAPI *PullAPI) []rpc.API {
@@ -281,7 +283,12 @@ func (b *BlockChainAPI) GetBlockByHash(
 		return handleError[*Block](b.logger, err)
 	}
 
-	return b.prepareBlockResponse(ctx, block, fullTx)
+	apiBlock, err := b.prepareBlockResponse(ctx, block, fullTx)
+	if err != nil {
+		return handleError[*Block](b.logger, err)
+	}
+
+	return apiBlock, nil
 }
 
 // GetBlockByNumber returns the requested canonical block.
@@ -311,7 +318,12 @@ func (b *BlockChainAPI) GetBlockByNumber(
 		return handleError[*Block](b.logger, err)
 	}
 
-	return b.prepareBlockResponse(ctx, block, fullTx)
+	apiBlock, err := b.prepareBlockResponse(ctx, block, fullTx)
+	if err != nil {
+		return handleError[*Block](b.logger, err)
+	}
+
+	return apiBlock, nil
 }
 
 // GetBlockReceipts returns the block receipts for the given block hash or number or tag.
@@ -412,8 +424,8 @@ func (b *BlockChainAPI) Call(
 
 	res, err := b.evm.Call(ctx, tx, from, cadenceHeight)
 	if err != nil {
-		b.logger.Error().Err(err).Msg("failed to execute call")
-		return handleError[hexutil.Bytes](b.logger, errs.ErrInternal)
+		b.logger.Debug().Err(err).Msg("failed to execute call")
+		return nil, err
 	}
 
 	return res, nil
@@ -424,31 +436,50 @@ func (b *BlockChainAPI) GetLogs(
 	ctx context.Context,
 	criteria filters.FilterCriteria,
 ) ([]*types.Log, error) {
-
 	filter := logs.FilterCriteria{
 		Addresses: criteria.Addresses,
 		Topics:    criteria.Topics,
 	}
 
+	// if filter provided specific block ID
 	if criteria.BlockHash != nil {
 		return logs.
 			NewIDFilter(*criteria.BlockHash, filter, b.blocks, b.receipts).
 			Match()
 	}
-	if criteria.FromBlock != nil && criteria.ToBlock != nil {
-		f, err := logs.
-			NewRangeFilter(*criteria.FromBlock, *criteria.ToBlock, filter, b.receipts)
-		if err != nil {
-			return nil, err
-		}
 
-		return f.Match()
+	// otherwise we use the block range as the filter
+
+	// assign default values to latest block number, unless provided
+	from := models.LatestBlockNumber
+	if criteria.FromBlock != nil {
+		from = criteria.FromBlock
+	}
+	to := models.LatestBlockNumber
+	if criteria.ToBlock != nil {
+		to = criteria.ToBlock
 	}
 
-	return nil, errors.Join(
-		errs.ErrInvalid,
-		fmt.Errorf("must provide either block ID or 'from' and 'to' block nubmers, to filter events"),
-	)
+	l, err := b.blocks.LatestEVMHeight()
+	if err != nil {
+		return nil, err
+	}
+	latest := big.NewInt(int64(l))
+
+	// if special value, use latest block number
+	if from.Cmp(models.EarliestBlockNumber) < 0 {
+		from = latest
+	}
+	if to.Cmp(models.EarliestBlockNumber) < 0 {
+		to = latest
+	}
+
+	f, err := logs.NewRangeFilter(*from, *to, filter, b.receipts)
+	if err != nil {
+		return nil, err
+	}
+
+	return f.Match()
 }
 
 // GetTransactionCount returns the number of transactions the given address
@@ -551,7 +582,7 @@ func handleError[T any](log zerolog.Logger, err error) (T, error) {
 		return zero, nil
 	}
 
-	log.Error().Err(err).Msg("failed to get latest block height")
+	log.Error().Err(err).Msg("api error")
 	return zero, errs.ErrInternal
 }
 
@@ -564,6 +595,14 @@ func (b *BlockChainAPI) fetchBlockTransactions(
 		transaction, err := b.GetTransactionByHash(ctx, txHash)
 		if err != nil {
 			return nil, err
+		}
+		if transaction == nil {
+			b.logger.Warn().
+				Str("tx-hash", txHash.String()).
+				Uint64("evm-height", block.Height).
+				Msg("not found a transaction the block references")
+
+			continue
 		}
 		transactions = append(transactions, transaction)
 	}
@@ -592,6 +631,18 @@ func (b *BlockChainAPI) prepareBlockResponse(
 		GasLimit:     hexutil.Uint64(15_000_000),
 		Nonce:        types.BlockNonce{0x1},
 		Timestamp:    hexutil.Uint64(block.Timestamp),
+	}
+
+	// todo remove after previewnet, temp fix to mock some of the timestamps
+	if block.Timestamp == 0 {
+		first := uint64(1715189257)
+		blockTime := uint64(200)
+		firstRecordedTimestampBlock := uint64(5493)
+
+		diff := firstRecordedTimestampBlock - block.Height
+		timestamp := first - blockTime*diff
+
+		blockResponse.Timestamp = hexutil.Uint64(timestamp)
 	}
 
 	transactions, err := b.fetchBlockTransactions(ctx, block)

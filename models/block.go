@@ -2,10 +2,19 @@ package models
 
 import (
 	"fmt"
+	"math/big"
 
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/go-ethereum/common"
+)
+
+var (
+	SafeBlockNumber      = big.NewInt(-4)
+	FinalizedBlockNumber = big.NewInt(-3)
+	LatestBlockNumber    = big.NewInt(-2)
+	PendingBlockNumber   = big.NewInt(-1)
+	EarliestBlockNumber  = big.NewInt(0)
 )
 
 // decodeBlock takes a cadence event that contains executed block payload and

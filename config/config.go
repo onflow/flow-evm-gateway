@@ -68,13 +68,15 @@ type Config struct {
 	StreamTimeout time.Duration
 	// FilterExpiry defines the time it takes for an idle filter to expire
 	FilterExpiry time.Duration
+	// ForceStartCadenceHeight will force set the starting Cadence height, this should be only used for testing or locally.
+	ForceStartCadenceHeight uint64
 }
 
 func FromFlags() (*Config, error) {
 	cfg := &Config{}
 	var evmNetwork, coinbase, gas, coa, key, keysPath, flowNetwork, logLevel, filterExpiry, accessSporkHosts string
 	var streamTimeout int
-	var initHeight uint64
+	var initHeight, forceStartHeight uint64
 
 	// parse from flags
 	flag.StringVar(&cfg.DatabaseDir, "database-dir", "./db", "Path to the directory for the database")
@@ -94,6 +96,7 @@ func FromFlags() (*Config, error) {
 	flag.StringVar(&logLevel, "log-level", "debug", "Define verbosity of the log output ('debug', 'info', 'error')")
 	flag.Float64Var(&cfg.StreamLimit, "stream-limit", 10, "Rate-limits the events sent to the client within one second")
 	flag.IntVar(&streamTimeout, "stream-timeout", 3, "Defines the timeout in seconds the server waits for the event to be sent to the client")
+	flag.Uint64Var(&forceStartHeight, "force-start-height", 0, "Force set starting Cadence height. This should only be used locally or for testing, never in production.")
 	flag.StringVar(&filterExpiry, "filter-expiry", "5m", "Filter defines the time it takes for an idle filter to expire")
 	flag.Parse()
 
@@ -190,6 +193,10 @@ func FromFlags() (*Config, error) {
 		for _, hh := range heightHosts {
 			cfg.AccessNodePreviousSporkHosts = append(cfg.AccessNodePreviousSporkHosts, hh)
 		}
+	}
+
+	if forceStartHeight != 0 {
+		cfg.ForceStartCadenceHeight = forceStartHeight
 	}
 
 	// todo validate Config values

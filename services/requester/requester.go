@@ -20,6 +20,7 @@ import (
 	gethCore "github.com/onflow/go-ethereum/core"
 	"github.com/onflow/go-ethereum/core/types"
 	gethVM "github.com/onflow/go-ethereum/core/vm"
+	"github.com/onflow/go-ethereum/params"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
 
@@ -323,6 +324,10 @@ func (e *EVM) Call(
 	from common.Address,
 	height uint64,
 ) ([]byte, error) {
+	e.logger.Debug().
+		Str("data", fmt.Sprintf("%x", data)).
+		Msg("call")
+
 	hexEncodedTx, err := cadence.NewString(hex.EncodeToString(data))
 	if err != nil {
 		return nil, err
@@ -332,10 +337,6 @@ func (e *EVM) Call(
 	if err != nil {
 		return nil, err
 	}
-
-	e.logger.Debug().
-		Str("data", fmt.Sprintf("%x", data)).
-		Msg("call")
 
 	scriptResult, err := e.executeScriptAtHeight(
 		ctx,
@@ -401,7 +402,14 @@ func (e *EVM) EstimateGas(
 		return 0, getErrorForCode(evmResult.ErrorCode)
 	}
 
-	return evmResult.GasConsumed, nil
+	// This minimum gas availability is needed for:
+	// https://github.com/onflow/go-ethereum/blob/master/core/vm/operations_acl.go#L29-L32
+	// Note that this is not actually consumed in the end.
+	// TODO: Consider moving this to `EVM.dryRun`, if we want the
+	// fix to also apply for the EVM API, on Cadence side.
+	gasConsumed := evmResult.GasConsumed + params.SstoreSentryGasEIP2200 + 1
+
+	return gasConsumed, nil
 }
 
 func (e *EVM) GetCode(
