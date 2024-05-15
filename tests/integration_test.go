@@ -9,8 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/onflow/flow-evm-gateway/bootstrap"
-	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/go-ethereum/common"
@@ -18,6 +16,9 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/onflow/flow-evm-gateway/bootstrap"
+	"github.com/onflow/flow-evm-gateway/config"
 )
 
 // Test_ConcurrentTransactionSubmission test submits multiple transactions concurrently
@@ -44,7 +45,7 @@ func Test_ConcurrentTransactionSubmission(t *testing.T) {
 
 	// create new account with keys used for key-rotation
 	keyCount := 5
-	createdAddr, keys, err := bootstrap.CreateMultiKeyAccount(
+	createdAddr, keys, err := bootstrap.createMultiKey(
 		client,
 		keyCount,
 		service.Address,
