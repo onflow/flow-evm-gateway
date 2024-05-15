@@ -229,9 +229,8 @@ func (r *Receipts) BloomsForBlockRange(start, end *big.Int) ([]*gethTypes.Bloom,
 		}
 	}()
 
-	caps := end.Div(end, start).Uint64() // max capacity for slices
-	blooms := make([]*gethTypes.Bloom, 0, caps)
-	heights := make([]*big.Int, 0, caps)
+	blooms := make([]*gethTypes.Bloom, 0)
+	heights := make([]*big.Int, 0)
 
 	for iterator.First(); iterator.Valid(); iterator.Next() {
 		val, err := iterator.ValueAndErr()

@@ -1,14 +1,23 @@
 package logs
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 
-	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/go-ethereum/common"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"golang.org/x/exp/slices"
+
+	errs "github.com/onflow/flow-evm-gateway/api/errors"
+	"github.com/onflow/flow-evm-gateway/storage"
 )
+
+// The maximum number of topic criteria allowed
+const maxTopics = 4
+
+// The maximum number of addresses allowed
+const maxAddresses = 6
 
 // FilterCriteria for log filtering.
 // Address of the contract emitting the log.
@@ -21,6 +30,20 @@ import (
 type FilterCriteria struct {
 	Addresses []common.Address
 	Topics    [][]common.Hash
+}
+
+func NewFilterCriteria(addresses []common.Address, topics [][]common.Hash) (*FilterCriteria, error) {
+	if len(topics) > maxTopics {
+		return nil, fmt.Errorf("max topics exceeded, only %d allowed", maxTopics)
+	}
+	if len(addresses) > maxAddresses {
+		return nil, fmt.Errorf("max addresses exceeded, only %d allowed", maxAddresses)
+	}
+
+	return &FilterCriteria{
+		Addresses: addresses,
+		Topics:    topics,
+	}, nil
 }
 
 // RangeFilter matches all the indexed logs within the range defined as
@@ -36,8 +59,13 @@ func NewRangeFilter(
 	criteria FilterCriteria,
 	receipts storage.ReceiptIndexer,
 ) (*RangeFilter, error) {
-	if start.Cmp(&end) > 0 {
-		return nil, fmt.Errorf("invalid start and end block height, start must be smaller or equal than end value")
+	// check if both start and end don't have special values (negative values representing last block etc.)
+	// if so, make sure that beginning number is not bigger than end
+	if start.Cmp(big.NewInt(0)) > 0 && end.Cmp(big.NewInt(0)) > 0 && start.Cmp(&end) > 0 {
+		return nil, errors.Join(
+			errs.ErrInvalid,
+			fmt.Errorf("start block number must be smaller or equal to end block number"),
+		)
 	}
 
 	return &RangeFilter{
@@ -81,6 +109,8 @@ func (r *RangeFilter) Match() ([]*gethTypes.Log, error) {
 
 	return logs, nil
 }
+
+// todo add HeightFilter
 
 // IDFilter matches all logs against the criteria found in a single block identified
 // by the provided block ID.
@@ -128,61 +158,27 @@ func (i *IDFilter) Match() ([]*gethTypes.Log, error) {
 	return logs, nil
 }
 
-// StreamFilter matches all the logs against the criteria from the receipt channel.
-type StreamFilter struct {
-	criteria      FilterCriteria
-	receiptStream chan *gethTypes.Receipt
-}
-
-func NewStreamFilter(criteria FilterCriteria, receipts chan *gethTypes.Receipt) *StreamFilter {
-	return &StreamFilter{
-		criteria:      criteria,
-		receiptStream: receipts,
-	}
-}
-
-func (s *StreamFilter) Match() (<-chan *gethTypes.Log, error) {
-	logs := make(chan *gethTypes.Log)
-
-	go func() {
-		defer close(logs)
-
-		for {
-			receipt, ok := <-s.receiptStream
-			if !ok {
-				return // exit the goroutine if receiptStream is closed
-			}
-
-			if !bloomMatch(receipt.Bloom, s.criteria) {
-				continue
-			}
-
-			for _, log := range receipt.Logs {
-				if exactMatch(log, s.criteria) {
-					logs <- log
-				}
-			}
-		}
-	}()
-
-	return logs, nil
-}
-
 // exactMatch checks the topic and address values of the log match the filter exactly.
 func exactMatch(log *gethTypes.Log, criteria FilterCriteria) bool {
-	// todo support no address matching all
-
 	// check criteria doesn't have more topics than the log, but it can have less due to wildcards
 	if len(criteria.Topics) > len(log.Topics) {
 		return false
 	}
 
-	for _, sub := range criteria.Topics {
-		for _, topic := range sub {
-			if !slices.Contains(log.Topics, topic) {
-				return false
-			}
+	for i, sub := range criteria.Topics {
+		// wildcard matching all
+		if len(sub) == 0 {
+			continue
 		}
+
+		if !slices.Contains(sub, log.Topics[i]) {
+			return false
+		}
+	}
+
+	// no addresses is a wildcard to match all
+	if len(criteria.Addresses) == 0 {
+		return true
 	}
 
 	return slices.Contains(criteria.Addresses, log.Address)

@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"math/big"
 
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/go-ethereum/common"
@@ -435,31 +436,50 @@ func (b *BlockChainAPI) GetLogs(
 	ctx context.Context,
 	criteria filters.FilterCriteria,
 ) ([]*types.Log, error) {
-
 	filter := logs.FilterCriteria{
 		Addresses: criteria.Addresses,
 		Topics:    criteria.Topics,
 	}
 
+	// if filter provided specific block ID
 	if criteria.BlockHash != nil {
 		return logs.
 			NewIDFilter(*criteria.BlockHash, filter, b.blocks, b.receipts).
 			Match()
 	}
-	if criteria.FromBlock != nil && criteria.ToBlock != nil {
-		f, err := logs.
-			NewRangeFilter(*criteria.FromBlock, *criteria.ToBlock, filter, b.receipts)
-		if err != nil {
-			return nil, err
-		}
 
-		return f.Match()
+	// otherwise we use the block range as the filter
+
+	// assign default values to latest block number, unless provided
+	from := models.LatestBlockNumber
+	if criteria.FromBlock != nil {
+		from = criteria.FromBlock
+	}
+	to := models.LatestBlockNumber
+	if criteria.ToBlock != nil {
+		to = criteria.ToBlock
 	}
 
-	return nil, errors.Join(
-		errs.ErrInvalid,
-		fmt.Errorf("must provide either block ID or 'from' and 'to' block nubmers, to filter events"),
-	)
+	l, err := b.blocks.LatestEVMHeight()
+	if err != nil {
+		return nil, err
+	}
+	latest := big.NewInt(int64(l))
+
+	// if special value, use latest block number
+	if from.Cmp(models.EarliestBlockNumber) < 0 {
+		from = latest
+	}
+	if to.Cmp(models.EarliestBlockNumber) < 0 {
+		to = latest
+	}
+
+	f, err := logs.NewRangeFilter(*from, *to, filter, b.receipts)
+	if err != nil {
+		return nil, err
+	}
+
+	return f.Match()
 }
 
 // GetTransactionCount returns the number of transactions the given address
