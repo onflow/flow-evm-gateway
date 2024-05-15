@@ -20,16 +20,6 @@ RUN chmod a+x bin
 
 FROM debian:latest
 
-ENV ACCESS_NODE_GRPC_HOST=""
-ENV RPC_PORT=""
-ENV FLOW_NETWORK_ID=""
-ENV COINBASE=""
-ENV COA_ADDRESS=""
-ENV COA_KEY_FILE=""
-ENV COA_RESOURCE_CREATE=""
-ENV GAS_PRICE=""
-ENV INIT_CADENCE_HEIGHT=""
-
 WORKDIR /flow-evm-gateway
 
 RUN apt-get update
@@ -39,12 +29,4 @@ COPY --from=app-builder /app/previewnet-keys.json /flow-evm-gateway/previewnet-k
 
 EXPOSE 8545
 
-ENTRYPOINT /flow-evm-gateway/app -access-node-grpc-host=$ACCESS_NODE_GRPC_HOST \
-    -rpc-port=$RPC_PORT \
-    -flow-network-id=$FLOW_NETWORK_ID \
-    -coinbase=$COINBASE \
-    -coa-address=$COA_ADDRESS \
-    -coa-key-file=$COA_KEY_FILE \
-    -coa-resource-create=$COA_RESOURCE_CREATE \
-    -gas-price=$GAS_PRICE \
-    -init-cadence-height=$INIT_CADENCE_HEIGHT
+ENTRYPOINT ["/flow-evm-gateway/app"]
