@@ -44,11 +44,27 @@ it('deploy contract and interact', async() => {
     result = await web3.eth.call({to: contractAddress, data: callRetrieve}, "latest")
     assert.equal(result, initValue)
 
-    // update the value on the contract
-    let newValue = 100
-    let updateData = deployed.contract.methods.store(newValue).encodeABI()
+    // set the value on the contract, to its current value
+    let updateData = deployed.contract.methods.store(initValue).encodeABI()
     // store a value in the contract
     let res = await helpers.signAndSend({
+        from: conf.eoa.address,
+        to: contractAddress,
+        data: updateData,
+        value: '0',
+        gasPrice: '0',
+    })
+    assert.equal(res.receipt.status, conf.successStatus)
+
+    // check the new value on contract
+    result = await web3.eth.call({to: contractAddress, data: callRetrieve}, "latest")
+    assert.equal(result, initValue)
+
+    // update the value on the contract
+    newValue = 100
+    updateData = deployed.contract.methods.store(newValue).encodeABI()
+    // store a value in the contract
+    res = await helpers.signAndSend({
         from: conf.eoa.address,
         to: contractAddress,
         data: updateData,
