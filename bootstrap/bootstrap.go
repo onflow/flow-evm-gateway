@@ -5,6 +5,13 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/onflow/flow-go-sdk/access"
+	"github.com/onflow/flow-go-sdk/access/grpc"
+	"github.com/onflow/flow-go-sdk/crypto"
+	broadcast "github.com/onflow/flow-go/engine"
+	"github.com/onflow/go-ethereum/rpc"
+	"github.com/rs/zerolog"
+
 	"github.com/onflow/flow-evm-gateway/api"
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/models"
@@ -13,11 +20,6 @@ import (
 	"github.com/onflow/flow-evm-gateway/storage"
 	storageErrs "github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
-	"github.com/onflow/flow-go-sdk/access/grpc"
-	"github.com/onflow/flow-go-sdk/crypto"
-	broadcast "github.com/onflow/flow-go/engine"
-	"github.com/onflow/go-ethereum/rpc"
-	"github.com/rs/zerolog"
 )
 
 func Start(ctx context.Context, cfg *config.Config) error {
@@ -99,26 +101,25 @@ func startIngestion(
 ) error {
 	logger.Info().Msg("starting up event ingestion")
 
-	grpcClient, err := grpc.NewClient(cfg.AccessNodeHost)
+	currentSporkClient, err := grpc.NewClient(cfg.AccessNodeHost)
 	if err != nil {
 		return fmt.Errorf("failed to create client connection for host: %s, with error: %w", cfg.AccessNodeHost, err)
 	}
 
-	client, err := models.NewCrossSporkClient(grpcClient, logger)
-	if err != nil {
-		return err
-	}
-
 	// if we provided access node previous spork hosts add them to the client
-	for _, host := range cfg.AccessNodePreviousSporkHosts {
+	pastSporkClients := make([]access.Client, len(cfg.AccessNodePreviousSporkHosts))
+	for i, host := range cfg.AccessNodePreviousSporkHosts {
 		grpcClient, err := grpc.NewClient(host)
 		if err != nil {
 			return fmt.Errorf("failed to create client connection for host: %s, with error: %w", host, err)
 		}
 
-		if err := client.AddSpork(grpcClient); err != nil {
-			return fmt.Errorf("failed to add previous spork host to the client: %w", err)
-		}
+		pastSporkClients[i] = grpcClient
+	}
+
+	client, err := models.NewCrossSporkClient(currentSporkClient, pastSporkClients, logger)
+	if err != nil {
+		return err
 	}
 
 	blk, err := client.GetLatestBlock(context.Background(), false)

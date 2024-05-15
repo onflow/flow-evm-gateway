@@ -87,17 +87,13 @@ func setupClient(startHeight uint64, endHeight uint64) access.Client {
 func Test_Subscribing(t *testing.T) {
 
 	const endHeight = 50
-	spork1Client := setupClient(1, 10)
-	spork2Client := setupClient(11, 20)
+	sporkClients := []access.Client{
+		setupClient(1, 10),
+		setupClient(11, 20),
+	}
 	currentClient := setupClient(21, endHeight)
 
-	client, err := models.NewCrossSporkClient(currentClient, zerolog.Nop())
-	require.NoError(t, err)
-
-	err = client.AddSpork(spork1Client)
-	require.NoError(t, err)
-
-	err = client.AddSpork(spork2Client)
+	client, err := models.NewCrossSporkClient(currentClient, sporkClients, zerolog.Nop())
 	require.NoError(t, err)
 
 	subscriber := NewRPCSubscriber(client, flowGo.Emulator, zerolog.Nop())
