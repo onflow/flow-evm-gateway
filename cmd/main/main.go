@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"os"
 	"os/signal"
@@ -18,8 +17,6 @@ func main() {
 		bootstrap.CreateMultiKeyAccount()
 		return
 	}
-
-	flag.Parse()
 
 	cfg, err := config.FromFlags()
 	if err != nil {
