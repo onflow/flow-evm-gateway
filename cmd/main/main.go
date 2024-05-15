@@ -14,7 +14,7 @@ import (
 func main() {
 	// create multi-key account
 	if _, exists := os.LookupEnv("MULTIKEY_MODE"); exists {
-		bootstrap.CreateMultiKeyAccount()
+		bootstrap.RunCreateMultiKeyAccount()
 		return
 	}
 

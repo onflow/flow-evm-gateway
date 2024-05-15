@@ -45,7 +45,7 @@ func Test_ConcurrentTransactionSubmission(t *testing.T) {
 
 	// create new account with keys used for key-rotation
 	keyCount := 5
-	createdAddr, keys, err := bootstrap.createMultiKey(
+	createdAddr, keys, err := bootstrap.CreateMultiKeyAccount(
 		client,
 		keyCount,
 		service.Address,

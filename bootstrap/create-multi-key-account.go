@@ -16,9 +16,9 @@ import (
 	"golang.org/x/exp/rand"
 )
 
-// CreateMultiKeyAccount command creates a new account with multiple keys, which are saved to keys.json for later
+// RunCreateMultiKeyAccount command creates a new account with multiple keys, which are saved to keys.json for later
 // use with running the gateway in a key-rotation mode (used with --coa-key-file flag).
-func CreateMultiKeyAccount() {
+func RunCreateMultiKeyAccount() {
 	var (
 		keyCount                                         int
 		keyFlag, addressFlag, hostFlag, ftFlag, flowFlag string
@@ -48,7 +48,7 @@ func CreateMultiKeyAccount() {
 		panic(err)
 	}
 
-	address, keys, err := createMultiKey(client, keyCount, payer, ftFlag, flowFlag, key)
+	address, keys, err := CreateMultiKeyAccount(client, keyCount, payer, ftFlag, flowFlag, key)
 	if err != nil {
 		panic(err)
 	}
@@ -61,10 +61,10 @@ func CreateMultiKeyAccount() {
 }
 
 /*
-createMultiKey is used to setup an account that can be used with key-rotation mechanism
+CreateMultiKeyAccount is used to setup an account that can be used with key-rotation mechanism
 // todo parts of this are copied from flowkit and go-sdk/templates and should be refactored out once the package are migrated to Cadence 1.0
 */
-func createMultiKey(
+func CreateMultiKeyAccount(
 	client *grpc.Client,
 	keyCount int,
 	payer flow.Address,
