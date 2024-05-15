@@ -4,8 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"github.com/onflow/cadence/runtime/common"
+
 	"github.com/onflow/flow-evm-gateway/models"
+	"github.com/onflow/flow-evm-gateway/services/requester"
+
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access"
 	"github.com/onflow/flow-go/fvm/evm/types"
@@ -25,12 +29,12 @@ type EventSubscriber interface {
 var _ EventSubscriber = &RPCSubscriber{}
 
 type RPCSubscriber struct {
-	client *models.CrossSporkClient
+	client *requester.CrossSporkClient
 	chain  flowGo.ChainID
 	logger zerolog.Logger
 }
 
-func NewRPCSubscriber(client *models.CrossSporkClient, chainID flowGo.ChainID, logger zerolog.Logger) *RPCSubscriber {
+func NewRPCSubscriber(client *requester.CrossSporkClient, chainID flowGo.ChainID, logger zerolog.Logger) *RPCSubscriber {
 	logger = logger.With().Str("component", "subscriber").Logger()
 	return &RPCSubscriber{client: client, chain: chainID, logger: logger}
 }

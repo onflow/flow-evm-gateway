@@ -117,7 +117,7 @@ func startIngestion(
 		pastSporkClients[i] = grpcClient
 	}
 
-	client, err := models.NewCrossSporkClient(currentSporkClient, pastSporkClients, logger)
+	client, err := requester.NewCrossSporkClient(currentSporkClient, pastSporkClients, logger)
 	if err != nil {
 		return err
 	}

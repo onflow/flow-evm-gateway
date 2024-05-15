@@ -7,6 +7,7 @@ import (
 	"github.com/onflow/flow-go-sdk/access"
 
 	"github.com/onflow/flow-evm-gateway/models"
+	"github.com/onflow/flow-evm-gateway/services/requester"
 
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access/mocks"
@@ -93,7 +94,7 @@ func Test_Subscribing(t *testing.T) {
 	}
 	currentClient := setupClient(21, endHeight)
 
-	client, err := models.NewCrossSporkClient(currentClient, sporkClients, zerolog.Nop())
+	client, err := requester.NewCrossSporkClient(currentClient, sporkClients, zerolog.Nop())
 	require.NoError(t, err)
 
 	subscriber := NewRPCSubscriber(client, flowGo.Emulator, zerolog.Nop())
