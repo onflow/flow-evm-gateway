@@ -2,8 +2,10 @@ package bootstrap
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/onflow/cadence"
 	json2 "github.com/onflow/cadence/encoding/json"
@@ -13,6 +15,50 @@ import (
 	"github.com/onflow/flow-go-sdk/templates"
 	"golang.org/x/exp/rand"
 )
+
+// RunCreateMultiKeyAccount command creates a new account with multiple keys, which are saved to keys.json for later
+// use with running the gateway in a key-rotation mode (used with --coa-key-file flag).
+func RunCreateMultiKeyAccount() {
+	var (
+		keyCount                                         int
+		keyFlag, addressFlag, hostFlag, ftFlag, flowFlag string
+	)
+
+	flag.IntVar(&keyCount, "key-count", 20, "how many keys you want to create and assign to account")
+	flag.StringVar(&keyFlag, "signer-key", "", "signer key used to create the new account")
+	flag.StringVar(&addressFlag, "signer-address", "", "signer address used to create new account")
+	flag.StringVar(&ftFlag, "ft-address", "0xee82856bf20e2aa6", "address of fungible token contract")
+	flag.StringVar(&flowFlag, "flow-token-address", "0x0ae53cb6e3f42a79", "address of flow token contract")
+	flag.StringVar(&hostFlag, "access-node-grpc-host", "localhost:3569", "host to the flow access node gRPC API")
+
+	flag.Parse()
+
+	key, err := crypto.DecodePrivateKeyHex(crypto.ECDSA_P256, keyFlag)
+	if err != nil {
+		panic(err)
+	}
+
+	payer := flow.HexToAddress(addressFlag)
+	if payer == flow.EmptyAddress {
+		panic("invalid address")
+	}
+
+	client, err := grpc.NewClient(hostFlag)
+	if err != nil {
+		panic(err)
+	}
+
+	address, keys, err := CreateMultiKeyAccount(client, keyCount, payer, ftFlag, flowFlag, key)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println("Address: ", address.Hex())
+	fmt.Println("Keys:")
+	for _, pk := range keys {
+		fmt.Println(pk.String())
+	}
+}
 
 /*
 CreateMultiKeyAccount is used to setup an account that can be used with key-rotation mechanism
@@ -131,12 +177,21 @@ func CreateMultiKeyAccount(
 		return nil, nil, err
 	}
 
-	res, err := client.GetTransactionResult(context.Background(), tx.ID())
-	if err != nil {
-		return nil, nil, err
-	}
-	if res.Error != nil {
-		return nil, nil, res.Error
+	var res *flow.TransactionResult
+	for {
+		res, err = client.GetTransactionResult(context.Background(), tx.ID())
+		if err != nil {
+			return nil, nil, err
+		}
+		if res.Error != nil {
+			return nil, nil, res.Error
+		}
+
+		if res.Status != flow.TransactionStatusPending {
+			break
+		}
+
+		time.Sleep(2 * time.Second)
 	}
 
 	events := eventsFromTx(res)
