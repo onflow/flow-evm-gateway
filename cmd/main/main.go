@@ -3,14 +3,21 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/onflow/flow-evm-gateway/bootstrap"
-	"github.com/onflow/flow-evm-gateway/config"
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/onflow/flow-evm-gateway/bootstrap"
+	"github.com/onflow/flow-evm-gateway/config"
 )
 
 func main() {
+	// create multi-key account
+	if _, exists := os.LookupEnv("MULTIKEY_MODE"); exists {
+		bootstrap.RunCreateMultiKeyAccount()
+		return
+	}
+
 	cfg, err := config.FromFlags()
 	if err != nil {
 		panic(err)
