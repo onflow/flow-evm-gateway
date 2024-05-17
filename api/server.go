@@ -28,7 +28,7 @@ import (
 
 var stderrHandler = gethLog.StreamHandler(
 	os.Stderr,
-	gethLog.JSONFormat(),
+	JSONFormat(false, true),
 )
 
 const (
