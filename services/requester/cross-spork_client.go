@@ -23,7 +23,8 @@ import (
 type CrossSporkClient struct {
 	logger zerolog.Logger
 	// this map holds the last heights and clients for each spork
-	sporkClients map[uint64]access.Client
+	sporkClients    map[uint64]access.Client
+	sporkBoundaries []uint64
 	access.Client
 }
 
@@ -35,9 +36,9 @@ func NewCrossSporkClient(
 	logger zerolog.Logger,
 ) (*CrossSporkClient, error) {
 	client := &CrossSporkClient{
-		logger,
-		make(map[uint64]access.Client),
-		currentSpork,
+		logger:       logger,
+		sporkClients: make(map[uint64]access.Client),
+		Client:       currentSpork,
 	}
 
 	for _, sporkClient := range pastSporks {
@@ -45,6 +46,13 @@ func NewCrossSporkClient(
 			return nil, err
 		}
 	}
+
+	// create a descending list of block heights that represent boundaries
+	// of each spork, after crossing each height, we use a different client
+	heights := maps.Keys(client.sporkClients)
+	slices.Sort(heights)
+	slices.Reverse(heights) // make it descending
+	client.sporkBoundaries = heights
 
 	return client, nil
 }
@@ -73,7 +81,7 @@ func (c *CrossSporkClient) addSpork(client access.Client) error {
 
 // IsPastSpork will check if the provided height is contained in the previous sporks.
 func (c *CrossSporkClient) IsPastSpork(height uint64) bool {
-	return len(c.getSporkBoundariesDesc()) > 0 && height <= c.getSporkBoundariesDesc()[0]
+	return len(c.sporkBoundaries) > 0 && height <= c.sporkBoundaries[0]
 }
 
 // getClientForHeight returns the client for the given height. It starts by using the current spork client,
@@ -89,7 +97,7 @@ func (c *CrossSporkClient) getClientForHeight(height uint64) access.Client {
 	// start by using the current spork client, then iterate all the upper height boundaries
 	// and find the last client that still contains the height in its upper height limit
 	client := c.Client
-	for _, upperBound := range c.getSporkBoundariesDesc() {
+	for _, upperBound := range c.sporkBoundaries {
 		if upperBound >= height {
 			client = c.sporkClients[upperBound]
 
@@ -100,14 +108,6 @@ func (c *CrossSporkClient) getClientForHeight(height uint64) access.Client {
 	}
 
 	return client
-}
-
-// getSporkBoundaries will return descending order of spork height boundaries
-func (c *CrossSporkClient) getSporkBoundariesDesc() []uint64 {
-	heights := maps.Keys(c.sporkClients)
-	slices.Sort(heights)    // order heights in ascending order
-	slices.Reverse(heights) // make it descending
-	return heights
 }
 
 // GetLatestHeightForSpork will determine the spork client in which the provided height is contained
