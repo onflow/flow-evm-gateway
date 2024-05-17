@@ -35,10 +35,6 @@ const (
 	shutdownTimeout = 5 * time.Second
 )
 
-func init() {
-	gethLog.Root().SetHandler(stderrHandler)
-}
-
 type rpcHandler struct {
 	http.Handler
 	server *rpc.Server
@@ -64,6 +60,8 @@ type httpServer struct {
 }
 
 func NewHTTPServer(logger zerolog.Logger, timeouts rpc.HTTPTimeouts) *httpServer {
+	gethLog.Root().SetHandler(stderrHandler)
+
 	return &httpServer{
 		logger:   logger,
 		timeouts: timeouts,
