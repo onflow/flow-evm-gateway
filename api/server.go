@@ -13,7 +13,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -24,11 +23,6 @@ import (
 	"github.com/rs/cors"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-)
-
-var stderrHandler = gethLog.StreamHandler(
-	os.Stderr,
-	JSONFormat(false, true),
 )
 
 const (
@@ -60,7 +54,16 @@ type httpServer struct {
 }
 
 func NewHTTPServer(logger zerolog.Logger, timeouts rpc.HTTPTimeouts) *httpServer {
-	gethLog.Root().SetHandler(stderrHandler)
+	gethLog.Root().SetHandler(gethLog.FuncHandler(func(r *gethLog.Record) error {
+		switch r.Lvl {
+		case gethLog.LvlInfo:
+			logger.Info().Msg(r.Msg)
+		case gethLog.LvlError:
+			logger.Error().Msg(r.Msg)
+		}
+
+		return nil
+	}))
 
 	return &httpServer{
 		logger:   logger,
