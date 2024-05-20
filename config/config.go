@@ -6,6 +6,7 @@ import (
 	"io"
 	"math/big"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/goccy/go-json"
@@ -29,8 +30,10 @@ const LiveNetworkInitCadenceHeght = uint64(1)
 type Config struct {
 	// DatabaseDir is where the database should be stored.
 	DatabaseDir string
-	// AccessNodeGRPCHost defines the Flow network AN host.
-	AccessNodeGRPCHost string
+	// AccessNodeHost defines the current spork Flow network AN host.
+	AccessNodeHost string
+	// AccessNodePreviousSporkHosts contains a list of the ANs hosts for each spork
+	AccessNodePreviousSporkHosts []string
 	// GRPCPort for the RPC API server
 	RPCPort int
 	// GRPCHost for the RPC API server
@@ -71,7 +74,7 @@ type Config struct {
 
 func FromFlags() (*Config, error) {
 	cfg := &Config{}
-	var evmNetwork, coinbase, gas, coa, key, keysPath, flowNetwork, logLevel, filterExpiry string
+	var evmNetwork, coinbase, gas, coa, key, keysPath, flowNetwork, logLevel, filterExpiry, accessSporkHosts string
 	var streamTimeout int
 	var initHeight, forceStartHeight uint64
 
@@ -79,7 +82,8 @@ func FromFlags() (*Config, error) {
 	flag.StringVar(&cfg.DatabaseDir, "database-dir", "./db", "Path to the directory for the database")
 	flag.StringVar(&cfg.RPCHost, "rpc-host", "", "Host for the RPC API server")
 	flag.IntVar(&cfg.RPCPort, "rpc-port", 8545, "Port for the RPC API server")
-	flag.StringVar(&cfg.AccessNodeGRPCHost, "access-node-grpc-host", "localhost:3569", "Host to the flow access node gRPC API")
+	flag.StringVar(&cfg.AccessNodeHost, "access-node-grpc-host", "localhost:3569", "Host to the flow access node gRPC API")
+	flag.StringVar(&accessSporkHosts, "access-node-spork-hosts", "", `Previous spork AN hosts, defined following the schema: {host1},{host2} as a comma separated list (e.g. "host-1.com,host2.com")`)
 	flag.StringVar(&evmNetwork, "evm-network-id", "previewnet", "EVM network ID (previewnet, testnet, mainnet)")
 	flag.StringVar(&flowNetwork, "flow-network-id", "flow-emulator", "Flow network ID (flow-emulator, flow-previewnet)")
 	flag.StringVar(&coinbase, "coinbase", "", "Coinbase address to use for fee collection")
@@ -183,6 +187,11 @@ func FromFlags() (*Config, error) {
 		return nil, fmt.Errorf("filter expiry not valid unit: %w", err)
 	}
 	cfg.FilterExpiry = exp
+
+	if accessSporkHosts != "" {
+		heightHosts := strings.Split(accessSporkHosts, ",")
+		cfg.AccessNodePreviousSporkHosts = append(cfg.AccessNodePreviousSporkHosts, heightHosts...)
+	}
 
 	if forceStartHeight != 0 {
 		cfg.ForceStartCadenceHeight = forceStartHeight

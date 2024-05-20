@@ -5,6 +5,13 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/onflow/flow-go-sdk/access"
+	"github.com/onflow/flow-go-sdk/access/grpc"
+	"github.com/onflow/flow-go-sdk/crypto"
+	broadcast "github.com/onflow/flow-go/engine"
+	"github.com/onflow/go-ethereum/rpc"
+	"github.com/rs/zerolog"
+
 	"github.com/onflow/flow-evm-gateway/api"
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/models"
@@ -13,11 +20,6 @@ import (
 	"github.com/onflow/flow-evm-gateway/storage"
 	storageErrs "github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
-	"github.com/onflow/flow-go-sdk/access/grpc"
-	"github.com/onflow/flow-go-sdk/crypto"
-	broadcast "github.com/onflow/flow-go/engine"
-	"github.com/onflow/go-ethereum/rpc"
-	"github.com/rs/zerolog"
 )
 
 func Start(ctx context.Context, cfg *config.Config) error {
@@ -107,7 +109,23 @@ func startIngestion(
 ) error {
 	logger.Info().Msg("starting up event ingestion")
 
-	client, err := grpc.NewClient(cfg.AccessNodeGRPCHost)
+	currentSporkClient, err := grpc.NewClient(cfg.AccessNodeHost)
+	if err != nil {
+		return fmt.Errorf("failed to create client connection for host: %s, with error: %w", cfg.AccessNodeHost, err)
+	}
+
+	// if we provided access node previous spork hosts add them to the client
+	pastSporkClients := make([]access.Client, len(cfg.AccessNodePreviousSporkHosts))
+	for i, host := range cfg.AccessNodePreviousSporkHosts {
+		grpcClient, err := grpc.NewClient(host)
+		if err != nil {
+			return fmt.Errorf("failed to create client connection for host: %s, with error: %w", host, err)
+		}
+
+		pastSporkClients[i] = grpcClient
+	}
+
+	client, err := requester.NewCrossSporkClient(currentSporkClient, pastSporkClients, logger)
 	if err != nil {
 		return err
 	}
@@ -123,7 +141,7 @@ func startIngestion(
 	}
 
 	// make sure the provided block to start the indexing can be loaded
-	_, err = client.GetBlockByHeight(context.Background(), latestCadenceHeight)
+	_, err = client.GetBlockHeaderByHeight(context.Background(), latestCadenceHeight)
 	if err != nil {
 		return fmt.Errorf("failed to get provided cadence height: %w", err)
 	}
@@ -134,7 +152,7 @@ func startIngestion(
 		Uint64("missed-heights", blk.Height-latestCadenceHeight).
 		Msg("indexing cadence height information")
 
-	subscriber := ingestion.NewRPCSubscriber(client, cfg.FlowNetworkID)
+	subscriber := ingestion.NewRPCSubscriber(client, cfg.FlowNetworkID, logger)
 	engine := ingestion.NewEventIngestionEngine(
 		subscriber,
 		blocks,
@@ -180,7 +198,7 @@ func startServer(
 
 	srv := api.NewHTTPServer(l, rpc.DefaultHTTPTimeouts)
 
-	client, err := grpc.NewClient(cfg.AccessNodeGRPCHost)
+	client, err := grpc.NewClient(cfg.AccessNodeHost)
 	if err != nil {
 		return err
 	}
