@@ -26,6 +26,7 @@ RUN apt-get update
 
 COPY --from=app-builder /app/bin /flow-evm-gateway/app
 COPY --from=app-builder /app/previewnet-keys.json /flow-evm-gateway/previewnet-keys.json
+COPY --from=app-builder /app/migration-keys.json /flow-evm-gateway/migration-keys.json
 
 EXPOSE 8545
 
