@@ -190,9 +190,7 @@ func FromFlags() (*Config, error) {
 
 	if accessSporkHosts != "" {
 		heightHosts := strings.Split(accessSporkHosts, ",")
-		for _, hh := range heightHosts {
-			cfg.AccessNodePreviousSporkHosts = append(cfg.AccessNodePreviousSporkHosts, hh)
-		}
+		cfg.AccessNodePreviousSporkHosts = append(cfg.AccessNodePreviousSporkHosts, heightHosts...)
 	}
 
 	if forceStartHeight != 0 {
