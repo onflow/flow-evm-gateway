@@ -8,6 +8,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -16,8 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"encoding/json"
-
+	gethLog "github.com/onflow/go-ethereum/log"
 	"github.com/onflow/go-ethereum/rpc"
 	"github.com/rs/cors"
 	"github.com/rs/zerolog"
@@ -53,6 +53,19 @@ const (
 )
 
 func NewHTTPServer(logger zerolog.Logger, timeouts rpc.HTTPTimeouts) *httpServer {
+	gethLog.Root().SetHandler(gethLog.FuncHandler(func(r *gethLog.Record) error {
+		switch r.Lvl {
+		case gethLog.LvlInfo:
+			logger.Info().Msg(r.Msg)
+		case gethLog.LvlError:
+			logger.Error().Str("trace", r.Call.String()).Msg(r.Msg)
+		default:
+			logger.Debug().Msg(r.Msg)
+		}
+
+		return nil
+	}))
+
 	return &httpServer{
 		logger:   logger,
 		timeouts: timeouts,
