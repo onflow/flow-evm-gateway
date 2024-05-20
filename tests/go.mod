@@ -4,11 +4,11 @@ go 1.20
 
 require (
 	github.com/goccy/go-json v0.10.2
-	github.com/onflow/cadence v1.0.0-preview-atree-register-inlining.27
-	github.com/onflow/flow-emulator v1.0.0-preview.22
+	github.com/onflow/cadence v1.0.0-preview.29
+	github.com/onflow/flow-emulator v1.0.0-preview.23
 	github.com/onflow/flow-evm-gateway v0.0.0-20240201154855-4d4d3d3f19c7
-	github.com/onflow/flow-go v0.35.6-crescendo-preview.22-atree-inlining
-	github.com/onflow/flow-go-sdk v1.0.0-preview.28
+	github.com/onflow/flow-go v0.35.5-0.20240517202625-55f862b45dfd
+	github.com/onflow/flow-go-sdk v1.0.0-preview.30
 	github.com/onflow/go-ethereum v1.13.4
 	github.com/rs/zerolog v1.31.0
 	github.com/stretchr/testify v1.9.0
@@ -131,13 +131,13 @@ require (
 	github.com/multiformats/go-multistream v0.5.0 // indirect
 	github.com/multiformats/go-varint v0.0.7 // indirect
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
-	github.com/onflow/atree v0.8.0-rc.2 // indirect
+	github.com/onflow/atree v0.7.0-rc.2 // indirect
 	github.com/onflow/crypto v0.25.1 // indirect
-	github.com/onflow/flow-core-contracts/lib/go/contracts v1.0.0 // indirect
+	github.com/onflow/flow-core-contracts/lib/go/contracts v1.1.0 // indirect
 	github.com/onflow/flow-core-contracts/lib/go/templates v1.0.0 // indirect
 	github.com/onflow/flow-ft/lib/go/contracts v1.0.0 // indirect
 	github.com/onflow/flow-ft/lib/go/templates v1.0.0 // indirect
-	github.com/onflow/flow-nft/lib/go/contracts v1.2.0 // indirect
+	github.com/onflow/flow-nft/lib/go/contracts v1.2.1 // indirect
 	github.com/onflow/flow-nft/lib/go/templates v1.2.0 // indirect
 	github.com/onflow/flow/protobuf/go/flow v0.4.3 // indirect
 	github.com/onflow/sdks v0.5.1-0.20230912225508-b35402f12bba // indirect
