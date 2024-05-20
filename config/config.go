@@ -85,7 +85,7 @@ func FromFlags() (*Config, error) {
 	flag.StringVar(&cfg.AccessNodeHost, "access-node-grpc-host", "localhost:3569", "Host to the flow access node gRPC API")
 	flag.StringVar(&accessSporkHosts, "access-node-spork-hosts", "", `Previous spork AN hosts, defined following the schema: {host1},{host2} as a comma separated list (e.g. "host-1.com,host2.com")`)
 	flag.StringVar(&evmNetwork, "evm-network-id", "previewnet", "EVM network ID (previewnet, testnet, mainnet)")
-	flag.StringVar(&flowNetwork, "flow-network-id", "flow-emulator", "Flow network ID (flow-emulator, flow-previewnet)")
+	flag.StringVar(&flowNetwork, "flow-network-id", "flow-emulator", "Flow network ID (flow-emulator, flow-previewnet, flow-testnet)")
 	flag.StringVar(&coinbase, "coinbase", "", "Coinbase address to use for fee collection")
 	flag.Uint64Var(&initHeight, "init-cadence-height", 0, "Define the Cadence block height at which to start the indexing, if starting on a new network this flag should not be used.")
 	flag.StringVar(&gas, "gas-price", "1", "Static gas price used for EVM transactions")
@@ -159,6 +159,9 @@ func FromFlags() (*Config, error) {
 	case "flow-emulator":
 		cfg.FlowNetworkID = flowGo.Emulator
 		cfg.InitCadenceHeight = EmulatorInitCadenceHeight
+	case "flow-testnet":
+		cfg.FlowNetworkID = flowGo.Testnet
+		cfg.InitCadenceHeight = LiveNetworkInitCadenceHeght
 	default:
 		return nil, fmt.Errorf("flow network ID not supported, only possible to specify 'flow-previewnet' or 'flow-emulator'")
 	}
