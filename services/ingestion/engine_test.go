@@ -3,13 +3,14 @@ package ingestion
 import (
 	"context"
 	"encoding/hex"
+	"github.com/onflow/flow-evm-gateway/services/ingestion/mocks"
 	"math/big"
 	"testing"
 
 	"github.com/onflow/cadence"
 	"github.com/onflow/cadence/runtime/common"
 	"github.com/onflow/flow-evm-gateway/models"
-	"github.com/onflow/flow-evm-gateway/services/ingestion/mocks"
+
 	storageMock "github.com/onflow/flow-evm-gateway/storage/mocks"
 	"github.com/onflow/flow-go-sdk"
 	broadcast "github.com/onflow/flow-go/engine"
@@ -41,12 +42,13 @@ func TestSerialBlockIngestion(t *testing.T) {
 			On("Update").
 			Return(func() error { return nil })
 
-		eventsChan := make(chan flow.BlockEvents)
-		subscriber := &mocks.Subscriber{}
+		eventsChan := make(chan models.BlockEvents)
+
+		subscriber := &mocks.EventSubscriber{}
 		subscriber.
 			On("Subscribe", mock.Anything, mock.AnythingOfType("uint64")).
-			Return(func(ctx context.Context, latest uint64) (<-chan flow.BlockEvents, <-chan error, error) {
-				return eventsChan, make(<-chan error), nil
+			Return(func(ctx context.Context, latest uint64) <-chan models.BlockEvents {
+				return eventsChan
 			})
 
 		engine := NewEventIngestionEngine(
@@ -64,7 +66,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 		done := make(chan struct{})
 		go func() {
 			err := engine.Run(context.Background())
-			assert.ErrorIs(t, err, models.ErrDisconnected) // we disconnect at the end
+			assert.NoError(t, err)
 			close(done)
 		}()
 
@@ -85,13 +87,13 @@ func TestSerialBlockIngestion(t *testing.T) {
 				}).
 				Once()
 
-			eventsChan <- flow.BlockEvents{
+			eventsChan <- models.NewBlockEvents(flow.BlockEvents{
 				Events: []flow.Event{{
 					Type:  string(blockEvent.Etype),
 					Value: blockCdc,
 				}},
 				Height: cadenceHeight,
-			}
+			})
 		}
 
 		close(eventsChan)
@@ -117,12 +119,12 @@ func TestSerialBlockIngestion(t *testing.T) {
 			On("Update", mock.Anything, mock.Anything).
 			Return(func(t models.TransactionCall, r *gethTypes.Receipt) error { return nil })
 
-		eventsChan := make(chan flow.BlockEvents)
-		subscriber := &mocks.Subscriber{}
+		eventsChan := make(chan models.BlockEvents)
+		subscriber := &mocks.EventSubscriber{}
 		subscriber.
 			On("Subscribe", mock.Anything, mock.AnythingOfType("uint64")).
-			Return(func(ctx context.Context, latest uint64) (<-chan flow.BlockEvents, <-chan error, error) {
-				return eventsChan, make(<-chan error), nil
+			Return(func(ctx context.Context, latest uint64) <-chan models.BlockEvents {
+				return eventsChan
 			})
 
 		engine := NewEventIngestionEngine(
@@ -160,24 +162,28 @@ func TestSerialBlockIngestion(t *testing.T) {
 			}).
 			Once() // this should only be called for first valid block
 
-		eventsChan <- flow.BlockEvents{
-			Events: []flow.Event{{
-				Type:  string(blockEvent.Etype),
-				Value: blockCdc,
-			}},
-			Height: cadenceHeight,
+		eventsChan <- models.BlockEvents{
+			Events: models.NewCadenceEvents(flow.BlockEvents{
+				Events: []flow.Event{{
+					Type:  string(blockEvent.Etype),
+					Value: blockCdc,
+				}},
+				Height: cadenceHeight,
+			}),
 		}
 
 		// fail with next block height being incorrect
 		blockCdc, _, blockEvent, err = newBlock(latestHeight + 10) // not sequential next block height
 		require.NoError(t, err)
 
-		eventsChan <- flow.BlockEvents{
-			Events: []flow.Event{{
-				Type:  string(blockEvent.Etype),
-				Value: blockCdc,
-			}},
-			Height: cadenceHeight + 1,
+		eventsChan <- models.BlockEvents{
+			Events: models.NewCadenceEvents(flow.BlockEvents{
+				Events: []flow.Event{{
+					Type:  string(blockEvent.Etype),
+					Value: blockCdc,
+				}},
+				Height: cadenceHeight + 1,
+			}),
 		}
 
 		close(eventsChan)
@@ -213,12 +219,12 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			On("Update", mock.AnythingOfType("models.TransactionCall"), mock.AnythingOfType("*types.Receipt")).
 			Return(func(tx models.Transaction, receipt *gethTypes.Receipt) error { return nil })
 
-		eventsChan := make(chan flow.BlockEvents)
-		subscriber := &mocks.Subscriber{}
+		eventsChan := make(chan models.BlockEvents)
+		subscriber := &mocks.EventSubscriber{}
 		subscriber.
 			On("Subscribe", mock.Anything, mock.AnythingOfType("uint64")).
-			Return(func(ctx context.Context, latest uint64) (<-chan flow.BlockEvents, <-chan error, error) {
-				return eventsChan, make(<-chan error), nil
+			Return(func(ctx context.Context, latest uint64) <-chan models.BlockEvents {
+				return eventsChan
 			})
 
 		txCdc, txEvent, transaction, result, err := newTransaction()
@@ -241,7 +247,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		done := make(chan struct{})
 		go func() {
 			err := engine.Run(context.Background())
-			assert.ErrorIs(t, err, models.ErrDisconnected) // we disconnect at the end
+			assert.NoError(t, err)
 			close(done)
 		}()
 
@@ -275,7 +281,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			}).
 			Once()
 
-		eventsChan <- flow.BlockEvents{
+		eventsChan <- models.NewBlockEvents(flow.BlockEvents{
 			Events: []flow.Event{{
 				Type:  string(blockEvent.Etype),
 				Value: blockCdc,
@@ -284,7 +290,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 				Value: txCdc,
 			}},
 			Height: nextHeight,
-		}
+		})
 
 		close(eventsChan)
 		<-done
@@ -310,12 +316,12 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			On("Update", mock.AnythingOfType("models.TransactionCall"), mock.AnythingOfType("*types.Receipt")).
 			Return(func(tx models.Transaction, receipt *gethTypes.Receipt) error { return nil })
 
-		eventsChan := make(chan flow.BlockEvents)
-		subscriber := &mocks.Subscriber{}
+		eventsChan := make(chan models.BlockEvents)
+		subscriber := &mocks.EventSubscriber{}
 		subscriber.
 			On("Subscribe", mock.Anything, mock.AnythingOfType("uint64")).
-			Return(func(ctx context.Context, latest uint64) (<-chan flow.BlockEvents, <-chan error, error) {
-				return eventsChan, make(<-chan error), nil
+			Return(func(ctx context.Context, latest uint64) <-chan models.BlockEvents {
+				return eventsChan
 			})
 
 		txCdc, txEvent, _, _, err := newTransaction()
@@ -338,7 +344,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		done := make(chan struct{})
 		go func() {
 			err := engine.Run(context.Background())
-			assert.ErrorIs(t, err, models.ErrDisconnected) // we disconnect at the end
+			assert.NoError(t, err)
 			close(done)
 		}()
 
@@ -367,7 +373,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			}).
 			Once()
 
-		eventsChan <- flow.BlockEvents{
+		eventsChan <- models.NewBlockEvents(flow.BlockEvents{
 			Events: []flow.Event{
 				// first transaction
 				{
@@ -380,7 +386,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 					Value: blockCdc,
 				}},
 			Height: nextHeight,
-		}
+		})
 
 		close(eventsChan)
 		<-done
@@ -404,13 +410,13 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			On("Update", mock.Anything, mock.AnythingOfType("*types.Receipt")).
 			Return(func(t models.Transaction, r *gethTypes.Receipt) error { return nil })
 
-		eventsChan := make(chan flow.BlockEvents)
-		subscriber := &mocks.Subscriber{}
+		eventsChan := make(chan models.BlockEvents)
+		subscriber := &mocks.EventSubscriber{}
 		subscriber.
 			On("Subscribe", mock.Anything, mock.AnythingOfType("uint64")).
-			Return(func(ctx context.Context, latest uint64) (<-chan flow.BlockEvents, <-chan error, error) {
+			Return(func(ctx context.Context, latest uint64) <-chan models.BlockEvents {
 				assert.Equal(t, latestCadenceHeight, latest)
-				return eventsChan, make(<-chan error), nil
+				return eventsChan
 			}).
 			Once()
 
@@ -429,7 +435,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		done := make(chan struct{})
 		go func() {
 			err := engine.Run(context.Background())
-			assert.ErrorIs(t, err, models.ErrDisconnected) // we disconnect at the end
+			assert.NoError(t, err)
 			close(done)
 		}()
 
@@ -496,10 +502,10 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		// and it will make the first block be swapped with second block out-of-order
 		events[1], events[2] = events[2], events[1]
 
-		eventsChan <- flow.BlockEvents{
+		eventsChan <- models.NewBlockEvents(flow.BlockEvents{
 			Events: events,
 			Height: latestCadenceHeight + 1,
-		}
+		})
 
 		close(eventsChan)
 		<-done

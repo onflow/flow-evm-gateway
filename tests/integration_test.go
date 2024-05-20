@@ -56,19 +56,19 @@ func Test_ConcurrentTransactionSubmission(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &config.Config{
-		DatabaseDir:        t.TempDir(),
-		AccessNodeGRPCHost: grpcHost,
-		RPCPort:            8545,
-		RPCHost:            "127.0.0.1",
-		FlowNetworkID:      "flow-emulator",
-		EVMNetworkID:       types.FlowEVMTestNetChainID,
-		Coinbase:           eoaTestAccount,
-		COAAddress:         *createdAddr,
-		COAKeys:            keys,
-		CreateCOAResource:  true,
-		GasPrice:           new(big.Int).SetUint64(0),
-		LogLevel:           zerolog.DebugLevel,
-		LogWriter:          os.Stdout,
+		DatabaseDir:       t.TempDir(),
+		AccessNodeHost:    grpcHost,
+		RPCPort:           8545,
+		RPCHost:           "127.0.0.1",
+		FlowNetworkID:     "flow-emulator",
+		EVMNetworkID:      types.FlowEVMTestNetChainID,
+		Coinbase:          eoaTestAccount,
+		COAAddress:        *createdAddr,
+		COAKeys:           keys,
+		CreateCOAResource: true,
+		GasPrice:          new(big.Int).SetUint64(0),
+		LogLevel:          zerolog.DebugLevel,
+		LogWriter:         os.Stdout,
 	}
 
 	// todo change this test to use ingestion and emulator directly so we can completely remove
