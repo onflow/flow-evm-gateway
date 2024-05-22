@@ -152,7 +152,7 @@ func startIngestion(
 		Uint64("missed-heights", blk.Height-latestCadenceHeight).
 		Msg("indexing cadence height information")
 
-	subscriber := ingestion.NewRPCSubscriber(client, cfg.FlowNetworkID, logger)
+	subscriber := ingestion.NewRPCSubscriber(client, cfg.HeartbeatInterval, cfg.FlowNetworkID, logger)
 	engine := ingestion.NewEventIngestionEngine(
 		subscriber,
 		blocks,

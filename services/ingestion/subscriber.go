@@ -29,14 +29,25 @@ type EventSubscriber interface {
 var _ EventSubscriber = &RPCSubscriber{}
 
 type RPCSubscriber struct {
-	client *requester.CrossSporkClient
-	chain  flowGo.ChainID
-	logger zerolog.Logger
+	client            *requester.CrossSporkClient
+	chain             flowGo.ChainID
+	heartbeatInterval uint64
+	logger            zerolog.Logger
 }
 
-func NewRPCSubscriber(client *requester.CrossSporkClient, chainID flowGo.ChainID, logger zerolog.Logger) *RPCSubscriber {
+func NewRPCSubscriber(
+	client *requester.CrossSporkClient,
+	heartbeatInterval uint64,
+	chainID flowGo.ChainID,
+	logger zerolog.Logger,
+) *RPCSubscriber {
 	logger = logger.With().Str("component", "subscriber").Logger()
-	return &RPCSubscriber{client: client, chain: chainID, logger: logger}
+	return &RPCSubscriber{
+		client:            client,
+		heartbeatInterval: heartbeatInterval,
+		chain:             chainID,
+		logger:            logger,
+	}
 }
 
 // Subscribe will retrieve all the events from the provided height. If the height is from previous
@@ -81,7 +92,7 @@ func (r *RPCSubscriber) Subscribe(ctx context.Context, height uint64) <-chan mod
 			Msg("backfilling done, subscribe for live data")
 
 		// subscribe in the current spork, handling of context cancellation is done by the producer
-		for ev := range r.subscribe(ctx, height) {
+		for ev := range r.subscribe(ctx, height, access.WithHeartbeatInterval(r.heartbeatInterval)) {
 			events <- ev
 		}
 

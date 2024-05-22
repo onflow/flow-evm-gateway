@@ -71,7 +71,7 @@ type Config struct {
 	// ForceStartCadenceHeight will force set the starting Cadence height, this should be only used for testing or locally.
 	ForceStartCadenceHeight uint64
 	// HeartbeatInterval sets custom heartbeat interval for events
-	HeartbeatInterval int
+	HeartbeatInterval uint64
 }
 
 func FromFlags() (*Config, error) {
@@ -97,7 +97,7 @@ func FromFlags() (*Config, error) {
 	flag.BoolVar(&cfg.CreateCOAResource, "coa-resource-create", false, "Auto-create the COA resource in the Flow COA account provided if one doesn't exist")
 	flag.StringVar(&logLevel, "log-level", "debug", "Define verbosity of the log output ('debug', 'info', 'error')")
 	flag.Float64Var(&cfg.StreamLimit, "stream-limit", 10, "Rate-limits the events sent to the client within one second")
-	flag.IntVar(&cfg.HeartbeatInterval, "heartbeat-interval", 100, "Heartbeat interval for AN event subscription")
+	flag.Uint64Var(&cfg.HeartbeatInterval, "heartbeat-interval", 100, "Heartbeat interval for AN event subscription")
 	flag.IntVar(&streamTimeout, "stream-timeout", 3, "Defines the timeout in seconds the server waits for the event to be sent to the client")
 	flag.Uint64Var(&forceStartHeight, "force-start-height", 0, "Force set starting Cadence height. This should only be used locally or for testing, never in production.")
 	flag.StringVar(&filterExpiry, "filter-expiry", "5m", "Filter defines the time it takes for an idle filter to expire")
