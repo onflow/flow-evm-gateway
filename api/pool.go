@@ -12,16 +12,23 @@ func NewTxPoolAPI() *TxPool {
 }
 
 type content struct {
-	Pending []any
-	Queued  []any
+	Pending any
+	Queued  any
+}
+
+func emptyPool() content {
+	return content{
+		Pending: struct{}{},
+		Queued:  struct{}{},
+	}
 }
 
 func (s *TxPool) Content() content {
-	return content{}
+	return emptyPool()
 }
 
 func (s *TxPool) ContentFrom(addr common.Address) content {
-	return content{}
+	return emptyPool()
 }
 
 func (s *TxPool) Status() map[string]hexutil.Uint {
@@ -32,5 +39,5 @@ func (s *TxPool) Status() map[string]hexutil.Uint {
 }
 
 func (s *TxPool) Inspect() content {
-	return content{}
+	return emptyPool()
 }
