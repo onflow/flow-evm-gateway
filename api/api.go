@@ -162,7 +162,6 @@ func (b *BlockChainAPI) GetBalance(
 
 	balance, err := b.evm.GetBalance(ctx, address, cadenceHeight)
 	if err != nil {
-		b.logger.Error().Err(err).Msg("failed to get balance")
 		return handleError[*hexutil.Big](b.logger, err)
 	}
 
@@ -424,7 +423,8 @@ func (b *BlockChainAPI) Call(
 
 	res, err := b.evm.Call(ctx, tx, from, cadenceHeight)
 	if err != nil {
-		b.logger.Debug().Err(err).Msg("failed to execute call")
+		// we debug output this error because the execution error is related to user input
+		b.logger.Debug().Str("error", err.Error()).Msg("failed to execute call")
 		return nil, err
 	}
 

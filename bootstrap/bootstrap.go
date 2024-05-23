@@ -151,8 +151,8 @@ func startIngestion(
 	}
 
 	logger.Info().
-		Uint64("start-height", latestCadenceHeight).
-		Uint64("latest-network-height", blk.Height).
+		Uint64("start-cadence-height", latestCadenceHeight).
+		Uint64("latest-cadence-height", blk.Height).
 		Uint64("missed-heights", blk.Height-latestCadenceHeight).
 		Msg("indexing cadence height information")
 

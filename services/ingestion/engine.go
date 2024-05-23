@@ -4,12 +4,13 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/onflow/flow-evm-gateway/models"
-	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-go/engine"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/rs/zerolog"
+
+	"github.com/onflow/flow-evm-gateway/models"
+	"github.com/onflow/flow-evm-gateway/storage"
 )
 
 var _ models.Engine = &Engine{}
@@ -124,7 +125,7 @@ func (e *Engine) Run(ctx context.Context) error {
 //
 // Any error is unexpected and fatal.
 func (e *Engine) processEvents(events *models.CadenceEvents) error {
-	e.log.Debug().
+	e.log.Info().
 		Uint64("cadence-height", events.CadenceHeight()).
 		Int("cadence-event-length", events.Length()).
 		Msg("received new cadence evm events")
@@ -175,12 +176,17 @@ func (e *Engine) indexBlock(cadenceHeight uint64, block *types.Block) error {
 		return fmt.Errorf("invalid block height, expected %d, got %d: %w", e.evmLastHeight.Load(), block.Height, err)
 	}
 
-	h, _ := block.Hash()
+	blockHash, _ := block.Hash()
+	txHashes := make([]string, len(block.TransactionHashes))
+	for i, t := range block.TransactionHashes {
+		txHashes[i] = t.Hex()
+	}
 	e.log.Info().
-		Str("hash", h.Hex()).
+		Str("hash", blockHash.Hex()).
 		Uint64("evm-height", block.Height).
+		Uint64("cadence-height", cadenceHeight).
 		Str("parent-hash", block.ParentBlockHash.String()).
-		Str("tx-hash", block.TransactionHashes[0].Hex()). // now we only have 1 tx per block
+		Strs("tx-hashes", txHashes).
 		Msg("new evm block executed event")
 
 	// todo should probably be batch in the same as bellow tx
@@ -207,7 +213,6 @@ func (e *Engine) indexTransaction(tx models.Transaction, receipt *gethTypes.Rece
 		Int("log-count", len(receipt.Logs)).
 		Uint64("evm-height", receipt.BlockNumber.Uint64()).
 		Uint("tx-index", receipt.TransactionIndex).
-		Str("receipt-tx-hash", receipt.TxHash.String()).
 		Str("tx-hash", txHash.String()).
 		Msg("ingesting new transaction executed event")
 
