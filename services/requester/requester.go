@@ -11,7 +11,6 @@ import (
 
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go-sdk"
-	"github.com/onflow/flow-go-sdk/access"
 	"github.com/onflow/flow-go-sdk/crypto"
 	"github.com/onflow/flow-go/fvm/evm/stdlib"
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
@@ -89,14 +88,14 @@ type Requester interface {
 var _ Requester = &EVM{}
 
 type EVM struct {
-	client access.Client
+	client *CrossSporkClient
 	config *config.Config
 	signer crypto.Signer
 	logger zerolog.Logger
 }
 
 func NewEVM(
-	client access.Client,
+	client *CrossSporkClient,
 	config *config.Config,
 	signer crypto.Signer,
 	logger zerolog.Logger,
@@ -145,10 +144,6 @@ func NewEVM(
 }
 
 func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash, error) {
-	e.logger.Debug().
-		Str("data", fmt.Sprintf("%x", data)).
-		Msg("send raw transaction")
-
 	tx := &types.Transaction{}
 	if err := tx.UnmarshalBinary(data); err != nil {
 		return common.Hash{}, err
@@ -167,6 +162,7 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 	script := e.replaceAddresses(runTxScript)
 	flowID, err := e.signAndSend(ctx, script, hexEncodedTx)
 	if err != nil {
+		e.logger.Error().Err(err).Str("data", string(data)).Msg("failed to send transaction")
 		return common.Hash{}, err
 	}
 
@@ -236,24 +232,22 @@ func (e *EVM) signAndSend(ctx context.Context, script []byte, args ...cadence.Va
 		return flow.EmptyID, fmt.Errorf("failed to send transaction: %w", err)
 	}
 
-	// this is only used for debugging purposes
-	if d := e.logger.Debug(); d.Enabled() {
-		go func(id flow.Identifier) {
-			res, _ := e.client.GetTransactionResult(context.Background(), id)
-			if res != nil && res.Error != nil {
-				e.logger.Error().
-					Str("flow-id", id.String()).
-					Err(res.Error).
-					Msg("flow transaction failed to execute")
-				return
-			}
-
-			e.logger.Debug().
+	go func(id flow.Identifier) {
+		res, _ := e.client.GetTransactionResult(context.Background(), id)
+		if res != nil && res.Error != nil {
+			e.logger.Error().
 				Str("flow-id", id.String()).
-				Str("events", fmt.Sprintf("%v", res.Events)).
-				Msg("flow transaction executed successfully")
-		}(flowTx.ID())
-	}
+				Err(res.Error).
+				Msg("flow transaction failed to execute")
+			return
+		}
+
+		e.logger.Info().
+			Str("flow-id", id.String()).
+			Str("events", fmt.Sprintf("%v", res.Events)).
+			Str("status", res.Status.String()).
+			Msg("flow transaction executed successfully")
+	}(flowTx.ID())
 
 	return flowTx.ID(), nil
 }
