@@ -9,6 +9,7 @@ import (
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access"
 	"github.com/rs/zerolog"
+	"golang.org/x/exp/slices"
 )
 
 var ErrOutOfRange = errors.New("height is out of range for provided spork clients")
@@ -24,6 +25,64 @@ func (s *sporkClient) contains(height uint64) bool {
 	return height >= s.firstHeight && height <= s.lastHeight
 }
 
+type sporkClients []*sporkClient
+
+// addSpork will add a new spork host defined by the first and last height boundary in that spork.
+func (s *sporkClients) add(client access.Client) error {
+	header, err := client.GetLatestBlockHeader(context.Background(), true)
+	if err != nil {
+		return fmt.Errorf("could not get latest height using the spork client: %w", err)
+	}
+
+	info, err := client.GetNodeVersionInfo(context.Background())
+	if err != nil {
+		return fmt.Errorf("could not get node info using the spork client: %w", err)
+	}
+
+	*s = append(*s, &sporkClient{
+		firstHeight: info.NodeRootBlockHeight,
+		lastHeight:  header.Height,
+		client:      client,
+	})
+
+	return nil
+}
+
+// get spork client that contains the height or nil if not found.
+func (s *sporkClients) get(height uint64) access.Client {
+	for _, spork := range *s {
+		if spork.contains(height) {
+			return spork.client
+		}
+	}
+
+	return nil
+}
+
+// continuous checks if all the past spork clients create a continuous
+// range of heights.
+func (s *sporkClients) continuous() bool {
+	firsts := make([]uint64, len(*s))
+	lasts := make([]uint64, len(*s))
+
+	for i, c := range *s {
+		firsts[i] = c.firstHeight
+		lasts[i] = c.lastHeight
+	}
+
+	slices.Sort(firsts)
+	slices.Sort(lasts)
+
+	// make sure each last height is one smaller than next range first height
+	for i := 0; i < len(lasts)-1; i++ {
+		if lasts[i]+1 != firsts[i+1] {
+			return false
+		}
+	}
+
+	return true
+}
+
 // CrossSporkClient is a wrapper around the Flow AN client that can
 // access different AN APIs based on the height boundaries of the sporks.
 //
@@ -34,7 +93,7 @@ func (s *sporkClient) contains(height uint64) bool {
 // that shadows the original access Client function.
 type CrossSporkClient struct {
 	logger                  zerolog.Logger
-	sporkClients            []*sporkClient
+	sporkClients            *sporkClients
 	currentSporkFirstHeight uint64
 	access.Client
 }
@@ -51,48 +110,23 @@ func NewCrossSporkClient(
 		return nil, err
 	}
 
-	client := &CrossSporkClient{
-		logger:                  logger,
-		sporkClients:            make([]*sporkClient, 0),
-		currentSporkFirstHeight: info.NodeRootBlockHeight,
-		Client:                  currentSpork,
-	}
-
-	for _, sporkClient := range pastSporks {
-		if err := client.addSpork(sporkClient); err != nil {
+	clients := &sporkClients{}
+	for _, c := range pastSporks {
+		if err := clients.add(c); err != nil {
 			return nil, err
 		}
 	}
 
-	return client, nil
-}
-
-// addSpork will add a new spork host defined by the first and last height boundary in that spork.
-func (c *CrossSporkClient) addSpork(client access.Client) error {
-	header, err := client.GetLatestBlockHeader(context.Background(), true)
-	if err != nil {
-		return fmt.Errorf("could not get latest height using the spork client: %w", err)
+	if !clients.continuous() {
+		return nil, fmt.Errorf("provided past-spork clients don't create a continuous range of heights")
 	}
 
-	info, err := client.GetNodeVersionInfo(context.Background())
-	if err != nil {
-		return fmt.Errorf("could not get node info using the spork client: %w", err)
-	}
-
-	spork := &sporkClient{
-		firstHeight: info.NodeRootBlockHeight,
-		lastHeight:  header.Height,
-		client:      client,
-	}
-
-	c.sporkClients = append(c.sporkClients, spork)
-
-	c.logger.Info().
-		Uint64("spork-last-height", header.Height).
-		Uint64("spork-first-height", info.NodeRootBlockHeight).
-		Msg("added spork client")
-
-	return nil
+	return &CrossSporkClient{
+		logger:                  logger,
+		currentSporkFirstHeight: info.NodeRootBlockHeight,
+		sporkClients:            clients,
+		Client:                  currentSpork,
+	}, nil
 }
 
 // IsPastSpork will check if the provided height is contained in the previous sporks.
@@ -111,18 +145,16 @@ func (c *CrossSporkClient) getClientForHeight(height uint64) (access.Client, err
 		return c.Client, nil
 	}
 
-	for _, spork := range c.sporkClients {
-		if spork.contains(height) {
-			c.logger.Debug().
-				Uint64("requested-cadence-height", height).
-				Msg("using previous spork client")
-
-			return spork.client, nil
-		}
+	client := c.sporkClients.get(height)
+	if client == nil {
+		return nil, ErrOutOfRange
 	}
 
-	// if not found return an error
-	return nil, ErrOutOfRange
+	c.logger.Debug().
+		Uint64("requested-cadence-height", height).
+		Msg("using previous spork client")
+
+	return client, nil
 }
 
 // GetLatestHeightForSpork will determine the spork client in which the provided height is contained
