@@ -57,58 +57,7 @@ func Start(ctx context.Context, cfg *config.Config) error {
 		}
 	}
 
-	go func() {
-		err := startServer(
-			ctx,
-			cfg,
-			blocks,
-			transactions,
-			receipts,
-			accounts,
-			blocksBroadcaster,
-			transactionsBroadcaster,
-			logsBroadcaster,
-			logger,
-		)
-		if err != nil {
-			logger.Error().Err(err).Msg("failed to start the API server")
-			panic(err)
-		}
-	}()
-
-	err = startIngestion(
-		ctx,
-		cfg,
-		blocks,
-		transactions,
-		receipts,
-		accounts,
-		blocksBroadcaster,
-		transactionsBroadcaster,
-		logsBroadcaster,
-		logger,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to start event ingestion: %w", err)
-	}
-
-	return nil
-}
-
-func startIngestion(
-	ctx context.Context,
-	cfg *config.Config,
-	blocks storage.BlockIndexer,
-	transactions storage.TransactionIndexer,
-	receipts storage.ReceiptIndexer,
-	accounts storage.AccountIndexer,
-	blocksBroadcaster *broadcast.Broadcaster,
-	transactionsBroadcaster *broadcast.Broadcaster,
-	logsBroadcaster *broadcast.Broadcaster,
-	logger zerolog.Logger,
-) error {
-	logger.Info().Msg("starting up event ingestion")
-
+	// create access client with cross-spork capabilities
 	currentSporkClient, err := grpc.NewClient(cfg.AccessNodeHost)
 	if err != nil {
 		return fmt.Errorf("failed to create client connection for host: %s, with error: %w", cfg.AccessNodeHost, err)
@@ -129,6 +78,61 @@ func startIngestion(
 	if err != nil {
 		return err
 	}
+
+	go func() {
+		err := startServer(
+			ctx,
+			cfg,
+			client,
+			blocks,
+			transactions,
+			receipts,
+			accounts,
+			blocksBroadcaster,
+			transactionsBroadcaster,
+			logsBroadcaster,
+			logger,
+		)
+		if err != nil {
+			logger.Error().Err(err).Msg("failed to start the API server")
+			panic(err)
+		}
+	}()
+
+	err = startIngestion(
+		ctx,
+		cfg,
+		client,
+		blocks,
+		transactions,
+		receipts,
+		accounts,
+		blocksBroadcaster,
+		transactionsBroadcaster,
+		logsBroadcaster,
+		logger,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to start event ingestion: %w", err)
+	}
+
+	return nil
+}
+
+func startIngestion(
+	ctx context.Context,
+	cfg *config.Config,
+	client *requester.CrossSporkClient,
+	blocks storage.BlockIndexer,
+	transactions storage.TransactionIndexer,
+	receipts storage.ReceiptIndexer,
+	accounts storage.AccountIndexer,
+	blocksBroadcaster *broadcast.Broadcaster,
+	transactionsBroadcaster *broadcast.Broadcaster,
+	logsBroadcaster *broadcast.Broadcaster,
+	logger zerolog.Logger,
+) error {
+	logger.Info().Msg("starting up event ingestion")
 
 	blk, err := client.GetLatestBlock(context.Background(), false)
 	if err != nil {
@@ -184,6 +188,7 @@ func startIngestion(
 func startServer(
 	ctx context.Context,
 	cfg *config.Config,
+	client access.Client,
 	blocks storage.BlockIndexer,
 	transactions storage.TransactionIndexer,
 	receipts storage.ReceiptIndexer,
@@ -198,14 +203,10 @@ func startServer(
 
 	srv := api.NewHTTPServer(l, rpc.DefaultHTTPTimeouts)
 
-	client, err := grpc.NewClient(cfg.AccessNodeHost)
-	if err != nil {
-		return err
-	}
-
 	// create the signer based on either a single coa key being provided and using a simple in-memory
 	// signer, or multiple keys being provided and using signer with key-rotation mechanism.
 	var signer crypto.Signer
+	var err error
 	switch {
 	case cfg.COAKey != nil:
 		signer, err = crypto.NewInMemorySigner(cfg.COAKey, crypto.SHA3_256)
