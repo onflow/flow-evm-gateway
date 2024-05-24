@@ -232,23 +232,6 @@ func (e *EVM) signAndSend(ctx context.Context, script []byte, args ...cadence.Va
 		return flow.EmptyID, fmt.Errorf("failed to send transaction: %w", err)
 	}
 
-	go func(id flow.Identifier) {
-		res, _ := e.client.GetTransactionResult(context.Background(), id)
-		if res != nil && res.Error != nil {
-			e.logger.Error().
-				Str("flow-id", id.String()).
-				Err(res.Error).
-				Msg("flow transaction failed to execute")
-			return
-		}
-
-		e.logger.Info().
-			Str("flow-id", id.String()).
-			Str("events", fmt.Sprintf("%v", res.Events)).
-			Str("status", res.Status.String()).
-			Msg("flow transaction executed successfully")
-	}(flowTx.ID())
-
 	return flowTx.ID(), nil
 }
 
