@@ -275,10 +275,13 @@ func (e *EVM) GetBalance(
 		[]cadence.Value{hexEncodedAddress},
 	)
 	if err != nil {
-		return nil, err
+		e.logger.Error().
+			Err(err).
+			Str("address", address.String()).
+			Uint64("cadence-height", height).
+			Msg("failed to get get balance")
+		return nil, fmt.Errorf("failed to get balance: %w", err)
 	}
-
-	e.logger.Info().Str("address", address.String()).Msg("get balance")
 
 	// sanity check, should never occur
 	if _, ok := val.(cadence.UInt); !ok {
@@ -305,10 +308,12 @@ func (e *EVM) GetNonce(
 		[]cadence.Value{hexEncodedAddress},
 	)
 	if err != nil {
-		return 0, err
+		e.logger.Error().Err(err).
+			Str("address", address.String()).
+			Uint64("cadence-height", height).
+			Msg("failed to get nonce")
+		return 0, fmt.Errorf("failed to get nonce: %w", err)
 	}
-
-	e.logger.Info().Str("address", address.String()).Msg("get nonce")
 
 	// sanity check, should never occur
 	if _, ok := val.(cadence.UInt64); !ok {
@@ -324,10 +329,6 @@ func (e *EVM) Call(
 	from common.Address,
 	height uint64,
 ) ([]byte, error) {
-	e.logger.Debug().
-		Str("data", fmt.Sprintf("%x", data)).
-		Msg("call")
-
 	hexEncodedTx, err := cadence.NewString(hex.EncodeToString(data))
 	if err != nil {
 		return nil, err
@@ -345,6 +346,12 @@ func (e *EVM) Call(
 		[]cadence.Value{hexEncodedTx, hexEncodedAddress},
 	)
 	if err != nil {
+		e.logger.Error().
+			Err(err).
+			Uint64("cadence-height", height).
+			Str("from", from.String()).
+			Str("data", string(data)).
+			Msg("failed to execute call")
 		return nil, fmt.Errorf("failed to execute script: %w", err)
 	}
 
@@ -358,8 +365,7 @@ func (e *EVM) Call(
 
 	result := evmResult.ReturnedValue
 
-	e.logger.Info().
-		Str("data", fmt.Sprintf("%x", data)).
+	e.logger.Debug().
 		Str("result", hex.EncodeToString(result)).
 		Msg("call executed")
 
