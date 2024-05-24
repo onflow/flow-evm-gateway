@@ -107,7 +107,7 @@ func NewCrossSporkClient(
 ) (*CrossSporkClient, error) {
 	info, err := currentSpork.GetNodeVersionInfo(context.Background())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get node version info: %w", err)
 	}
 
 	clients := &sporkClients{}
