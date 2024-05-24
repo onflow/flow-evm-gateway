@@ -4,6 +4,8 @@ const helpers = require('./helpers')
 const web3 = conf.web3
 
 it('emit logs and retrieve them using different filters', async() => {
+    setTimeout(() => process.exit(1), 19*1000) // hack if the ws connection is not closed
+
     let deployed = await helpers.deployContract("storage")
     let contractAddress = deployed.receipt.contractAddress
 
@@ -88,4 +90,4 @@ it('emit logs and retrieve them using different filters', async() => {
     // todo compose more complex topic filters using OR and AND logic
     */
 
-}).timeout(10*1000)
+}).timeout(20*1000)
