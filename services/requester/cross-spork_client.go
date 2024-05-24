@@ -45,6 +45,11 @@ func (s *sporkClients) add(client access.Client) error {
 		client:      client,
 	})
 
+	// make sure clients are always sorted
+	slices.SortFunc(*s, func(a, b *sporkClient) int {
+		return int(a.firstHeight) - int(b.firstHeight)
+	})
+
 	return nil
 }
 
@@ -62,20 +67,8 @@ func (s *sporkClients) get(height uint64) access.Client {
 // continuous checks if all the past spork clients create a continuous
 // range of heights.
 func (s *sporkClients) continuous() bool {
-	firsts := make([]uint64, len(*s))
-	lasts := make([]uint64, len(*s))
-
-	for i, c := range *s {
-		firsts[i] = c.firstHeight
-		lasts[i] = c.lastHeight
-	}
-
-	slices.Sort(firsts)
-	slices.Sort(lasts)
-
-	// make sure each last height is one smaller than next range first height
-	for i := 0; i < len(lasts)-1; i++ {
-		if lasts[i]+1 != firsts[i+1] {
+	for i := 0; i < len(*s)-1; i++ {
+		if (*s)[i].lastHeight+1 != (*s)[i+1].firstHeight {
 			return false
 		}
 	}

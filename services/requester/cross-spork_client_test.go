@@ -37,8 +37,10 @@ func Test_CrossSporkClients(t *testing.T) {
 
 		client1 := testutils.SetupClientForRange(10, 100)
 		client2 := testutils.SetupClientForRange(101, 200)
+		client3 := testutils.SetupClientForRange(201, 300)
 
 		require.NoError(t, clients.add(client2))
+		require.NoError(t, clients.add(client3))
 		require.NoError(t, clients.add(client1))
 
 		require.True(t, clients.continuous())
@@ -51,7 +53,7 @@ func Test_CrossSporkClients(t *testing.T) {
 		require.Equal(t, client2, clients.get(200))
 
 		require.Equal(t, nil, clients.get(5))
-		require.Equal(t, nil, clients.get(300))
+		require.Equal(t, nil, clients.get(310))
 	})
 
 	t.Run("add and validate not-continues", func(t *testing.T) {
