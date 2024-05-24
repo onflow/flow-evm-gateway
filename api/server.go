@@ -419,10 +419,17 @@ func (w *loggingResponseWriter) Write(data []byte) (int, error) {
 	_ = json.Unmarshal(data, &body)
 	delete(body, "jsonrpc")
 
-	w.logger.
-		Debug().
-		Fields(body).
-		Msg("API response")
+	if body["error"] != nil {
+		w.logger.
+			Error().
+			Fields(body).
+			Msg("API response")
+	} else {
+		w.logger.
+			Debug().
+			Fields(body).
+			Msg("API response")
+	}
 
 	return w.ResponseWriter.Write(data)
 }

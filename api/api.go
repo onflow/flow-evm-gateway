@@ -41,6 +41,9 @@ func SupportedAPIs(blockChainAPI *BlockChainAPI, streamAPI *StreamAPI, pullAPI *
 	}, {
 		Namespace: "net",
 		Service:   &NetAPI{},
+	}, {
+		Namespace: "txpool",
+		Service:   NewTxPoolAPI(),
 	}}
 }
 
