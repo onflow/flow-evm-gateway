@@ -234,7 +234,7 @@ func startServer(
 		return fmt.Errorf("failed to retrieve the indexing resumed height: %w", err)
 	}
 
-	blockchainAPI := api.NewBlockChainAPI(
+	blockchainAPI, err := api.NewBlockChainAPI(
 		logger,
 		cfg,
 		evm,
@@ -244,6 +244,9 @@ func startServer(
 		accounts,
 		indexingResumedHeight,
 	)
+	if err != nil {
+		return err
+	}
 
 	streamAPI := api.NewStreamAPI(
 		logger,
