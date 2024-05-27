@@ -809,14 +809,20 @@ func (b *BlockChainAPI) getCadenceHeight(
 }
 
 func (b *BlockChainAPI) rateLimit(ctx context.Context) error {
-	origin := core.MetadataFromContext(ctx).Origin
-	if origin == "" {
-		return nil // if no origin disable limit
+	// Future improvement: implement a leaky bucket with wait times instead of errors.
+	// Investigate middleware application for all methods, including websockets.
+	// Current go-ethereum server doesn't expose ws connection for inspection
+	// don't change this to naive middleware handler, because it won't limit
+	// websocket requests.
+
+	remote := core.MetadataFromContext(ctx).Remote
+	if remote == "NA" {
+		return nil // if no client identifier disable limit
 	}
 
-	_, _, _, ok, _ := b.limiter.Take(ctx, origin)
+	_, _, _, ok, _ := b.limiter.Take(ctx, remote)
 	if !ok {
-		b.logger.Warn().Str("origin", origin).Msg("rate limit reached")
+		b.logger.Warn().Str("origin", remote).Msg("rate limit reached")
 		return errs.ErrRateLimit
 	}
 
