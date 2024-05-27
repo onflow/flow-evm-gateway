@@ -253,7 +253,6 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		logger:         h.logger,
 	}
 
-	// If JSON-RPC over HTTP is enabled, try to serve the request
 	rpc := recoverHandler(h.logger, h.httpHandler)
 	if rpc != nil {
 		if checkPath(r, "") {
