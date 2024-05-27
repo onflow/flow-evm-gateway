@@ -188,7 +188,7 @@ func startIngestion(
 func startServer(
 	ctx context.Context,
 	cfg *config.Config,
-	client access.Client,
+	client *requester.CrossSporkClient,
 	blocks storage.BlockIndexer,
 	transactions storage.TransactionIndexer,
 	receipts storage.ReceiptIndexer,

@@ -5,10 +5,10 @@ go 1.20
 require (
 	github.com/goccy/go-json v0.10.2
 	github.com/onflow/cadence v1.0.0-preview.29
-	github.com/onflow/flow-emulator v1.0.0-preview.23
+	github.com/onflow/flow-emulator v1.0.0-preview.23.0.20240524112921-431194fd9bc0
 	github.com/onflow/flow-evm-gateway v0.0.0-20240201154855-4d4d3d3f19c7
 	github.com/onflow/flow-go v0.35.5-0.20240517202625-55f862b45dfd
-	github.com/onflow/flow-go-sdk v1.0.0-preview.30
+	github.com/onflow/flow-go-sdk v1.0.0-preview.30.0.20240523120036-f9d51677b347
 	github.com/onflow/go-ethereum v1.13.4
 	github.com/rs/zerolog v1.31.0
 	github.com/stretchr/testify v1.9.0
