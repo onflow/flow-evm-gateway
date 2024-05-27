@@ -14,7 +14,6 @@ import (
 	"github.com/onflow/go-ethereum/core/types"
 	"github.com/onflow/go-ethereum/eth/filters"
 	"github.com/onflow/go-ethereum/rpc"
-	"github.com/onflow/go-ethereum/signer/core"
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-limiter"
 
@@ -97,7 +96,7 @@ func NewBlockChainAPI(
 // wasn't synced up to a block where EIP-155 is enabled, but this behavior caused issues
 // in CL clients.
 func (b *BlockChainAPI) ChainId(ctx context.Context) (*hexutil.Big, error) {
-	if err := b.rateLimit(ctx); err != nil {
+	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
 		return nil, err
 	}
 
@@ -106,7 +105,7 @@ func (b *BlockChainAPI) ChainId(ctx context.Context) (*hexutil.Big, error) {
 
 // BlockNumber returns the block number of the chain head.
 func (b *BlockChainAPI) BlockNumber(ctx context.Context) (hexutil.Uint64, error) {
-	if err := b.rateLimit(ctx); err != nil {
+	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
 		return 0, err
 	}
 
@@ -125,7 +124,7 @@ func (b *BlockChainAPI) BlockNumber(ctx context.Context) (hexutil.Uint64, error)
 // - currentBlock:  block number this node is currently importing
 // - highestBlock:  block number of the highest block header this node has received from peers
 func (b *BlockChainAPI) Syncing(ctx context.Context) (interface{}, error) {
-	if err := b.rateLimit(ctx); err != nil {
+	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
 		return nil, err
 	}
 
@@ -152,7 +151,7 @@ func (b *BlockChainAPI) SendRawTransaction(
 	ctx context.Context,
 	input hexutil.Bytes,
 ) (common.Hash, error) {
-	if err := b.rateLimit(ctx); err != nil {
+	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
 		return common.Hash{}, err
 	}
 
@@ -171,7 +170,7 @@ func (b *BlockChainAPI) SendRawTransaction(
 
 // GasPrice returns a suggestion for a gas price for legacy transactions.
 func (b *BlockChainAPI) GasPrice(ctx context.Context) (*hexutil.Big, error) {
-	if err := b.rateLimit(ctx); err != nil {
+	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
 		return nil, err
 	}
 
@@ -186,7 +185,7 @@ func (b *BlockChainAPI) GetBalance(
 	address common.Address,
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (*hexutil.Big, error) {
-	if err := b.rateLimit(ctx); err != nil {
+	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
 		return nil, err
 	}
 
@@ -208,7 +207,7 @@ func (b *BlockChainAPI) GetTransactionByHash(
 	ctx context.Context,
 	hash common.Hash,
 ) (*Transaction, error) {
-	if err := b.rateLimit(ctx); err != nil {
+	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
 		return nil, err
 	}
 
@@ -237,7 +236,7 @@ func (b *BlockChainAPI) GetTransactionByBlockHashAndIndex(
 	blockHash common.Hash,
 	index hexutil.Uint,
 ) (*Transaction, error) {
-	if err := b.rateLimit(ctx); err != nil {
+	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
 		return nil, err
 	}
 
@@ -266,7 +265,7 @@ func (b *BlockChainAPI) GetTransactionByBlockNumberAndIndex(
 	blockNumber rpc.BlockNumber,
 	index hexutil.Uint,
 ) (*Transaction, error) {
-	if err := b.rateLimit(ctx); err != nil {
+	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
 		return nil, err
 	}
 
@@ -294,7 +293,7 @@ func (b *BlockChainAPI) GetTransactionReceipt(
 	ctx context.Context,
 	hash common.Hash,
 ) (map[string]interface{}, error) {
-	if err := b.rateLimit(ctx); err != nil {
+	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
 		return nil, err
 	}
 
@@ -318,7 +317,7 @@ func (b *BlockChainAPI) GetTransactionReceipt(
 
 // Coinbase is the address that mining rewards will be sent to (alias for Etherbase).
 func (b *BlockChainAPI) Coinbase(ctx context.Context) (common.Address, error) {
-	if err := b.rateLimit(ctx); err != nil {
+	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
 		return common.Address{}, err
 	}
 
@@ -332,7 +331,7 @@ func (b *BlockChainAPI) GetBlockByHash(
 	hash common.Hash,
 	fullTx bool,
 ) (*Block, error) {
-	if err := b.rateLimit(ctx); err != nil {
+	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
 		return nil, err
 	}
 
@@ -361,7 +360,7 @@ func (b *BlockChainAPI) GetBlockByNumber(
 	blockNumber rpc.BlockNumber,
 	fullTx bool,
 ) (*Block, error) {
-	if err := b.rateLimit(ctx); err != nil {
+	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
 		return nil, err
 	}
 
@@ -393,7 +392,7 @@ func (b *BlockChainAPI) GetBlockReceipts(
 	ctx context.Context,
 	numHash rpc.BlockNumberOrHash,
 ) ([]*types.Receipt, error) {
-	if err := b.rateLimit(ctx); err != nil {
+	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
 		return nil, err
 	}
 
@@ -432,7 +431,7 @@ func (b *BlockChainAPI) GetBlockTransactionCountByHash(
 	ctx context.Context,
 	blockHash common.Hash,
 ) (*hexutil.Uint, error) {
-	if err := b.rateLimit(ctx); err != nil {
+	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
 		return nil, err
 	}
 
@@ -450,7 +449,7 @@ func (b *BlockChainAPI) GetBlockTransactionCountByNumber(
 	ctx context.Context,
 	blockNumber rpc.BlockNumber,
 ) (*hexutil.Uint, error) {
-	if err := b.rateLimit(ctx); err != nil {
+	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
 		return nil, err
 	}
 
@@ -479,7 +478,7 @@ func (b *BlockChainAPI) Call(
 	overrides *StateOverride,
 	blockOverrides *BlockOverrides,
 ) (hexutil.Bytes, error) {
-	if err := b.rateLimit(ctx); err != nil {
+	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
 		return nil, err
 	}
 
@@ -515,7 +514,7 @@ func (b *BlockChainAPI) GetLogs(
 	ctx context.Context,
 	criteria filters.FilterCriteria,
 ) ([]*types.Log, error) {
-	if err := b.rateLimit(ctx); err != nil {
+	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
 		return nil, err
 	}
 
@@ -572,7 +571,7 @@ func (b *BlockChainAPI) GetTransactionCount(
 	address common.Address,
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (*hexutil.Uint64, error) {
-	if err := b.rateLimit(ctx); err != nil {
+	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
 		return nil, err
 	}
 
@@ -616,7 +615,7 @@ func (b *BlockChainAPI) EstimateGas(
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 	overrides *StateOverride,
 ) (hexutil.Uint64, error) {
-	if err := b.rateLimit(ctx); err != nil {
+	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
 		return 0, err
 	}
 
@@ -648,7 +647,7 @@ func (b *BlockChainAPI) GetCode(
 	address common.Address,
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (hexutil.Bytes, error) {
-	if err := b.rateLimit(ctx); err != nil {
+	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
 		return nil, err
 	}
 
@@ -800,27 +799,6 @@ func (b *BlockChainAPI) getCadenceHeight(
 	}
 
 	return 0, fmt.Errorf("invalid arguments; neither block nor hash specified")
-}
-
-func (b *BlockChainAPI) rateLimit(ctx context.Context) error {
-	// Future improvement: implement a leaky bucket with wait times instead of errors.
-	// Investigate middleware application for all methods, including websockets.
-	// Current go-ethereum server doesn't expose ws connection for inspection
-	// don't change this to naive middleware handler, because it won't limit
-	// websocket requests.
-
-	remote := core.MetadataFromContext(ctx).Remote
-	if remote == "NA" {
-		return nil // if no client identifier disable limit
-	}
-
-	_, _, _, ok, _ := b.limiter.Take(ctx, remote)
-	if !ok {
-		b.logger.Warn().Str("origin", remote).Msg("rate limit reached")
-		return errs.ErrRateLimit
-	}
-
-	return nil
 }
 
 /* ====================================================================================================================

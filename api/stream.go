@@ -226,6 +226,10 @@ func (s *StreamAPI) newSubscription(
 	broadcaster *engine.Broadcaster,
 	getData subscription.GetDataByHeightFunc,
 ) (*rpc.Subscription, error) {
+	if err := rateLimit(ctx, s.ratelimiter, s.logger); err != nil {
+		return nil, err
+	}
+
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
 		return nil, rpc.ErrNotificationsUnsupported
