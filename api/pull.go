@@ -8,16 +8,18 @@ import (
 	"sync"
 	"time"
 
-	"github.com/onflow/flow-evm-gateway/config"
-	"github.com/onflow/flow-evm-gateway/models"
-	"github.com/onflow/flow-evm-gateway/services/logs"
-	"github.com/onflow/flow-evm-gateway/storage"
-	errs "github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/onflow/go-ethereum/common"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/onflow/go-ethereum/eth/filters"
 	"github.com/onflow/go-ethereum/rpc"
 	"github.com/rs/zerolog"
+	"github.com/sethvargo/go-limiter"
+
+	"github.com/onflow/flow-evm-gateway/config"
+	"github.com/onflow/flow-evm-gateway/models"
+	"github.com/onflow/flow-evm-gateway/services/logs"
+	"github.com/onflow/flow-evm-gateway/storage"
+	errs "github.com/onflow/flow-evm-gateway/storage/errors"
 )
 
 // maxFilters limits the max active filters at any time to prevent abuse and OOM
@@ -134,6 +136,7 @@ type PullAPI struct {
 	receipts     storage.ReceiptIndexer
 	filters      map[rpc.ID]filter
 	mux          sync.Mutex
+	ratelimiter  limiter.Store
 }
 
 func NewPullAPI(
@@ -142,6 +145,7 @@ func NewPullAPI(
 	blocks storage.BlockIndexer,
 	transactions storage.TransactionIndexer,
 	receipts storage.ReceiptIndexer,
+	ratelimiter limiter.Store,
 ) *PullAPI {
 	api := &PullAPI{
 		logger:       logger,
@@ -150,6 +154,7 @@ func NewPullAPI(
 		transactions: transactions,
 		receipts:     receipts,
 		filters:      make(map[rpc.ID]filter),
+		ratelimiter:  ratelimiter,
 	}
 
 	go api.filterExpiryChecker()

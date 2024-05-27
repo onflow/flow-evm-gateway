@@ -13,6 +13,7 @@ import (
 	"github.com/onflow/go-ethereum/eth/filters"
 	"github.com/onflow/go-ethereum/rpc"
 	"github.com/rs/zerolog"
+	"github.com/sethvargo/go-limiter"
 
 	errs "github.com/onflow/flow-evm-gateway/api/errors"
 	"github.com/onflow/flow-evm-gateway/config"
@@ -34,6 +35,7 @@ type StreamAPI struct {
 	blocksBroadcaster       *engine.Broadcaster
 	transactionsBroadcaster *engine.Broadcaster
 	logsBroadcaster         *engine.Broadcaster
+	ratelimiter             limiter.Store
 }
 
 func NewStreamAPI(
@@ -45,6 +47,7 @@ func NewStreamAPI(
 	blocksBroadcaster *engine.Broadcaster,
 	transactionsBroadcaster *engine.Broadcaster,
 	logsBroadcaster *engine.Broadcaster,
+	ratelimiter limiter.Store,
 ) *StreamAPI {
 	return &StreamAPI{
 		logger:                  logger,
@@ -55,6 +58,7 @@ func NewStreamAPI(
 		blocksBroadcaster:       blocksBroadcaster,
 		transactionsBroadcaster: transactionsBroadcaster,
 		logsBroadcaster:         logsBroadcaster,
+		ratelimiter:             ratelimiter,
 	}
 }
 

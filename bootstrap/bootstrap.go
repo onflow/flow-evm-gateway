@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/onflow/flow-go-sdk/access"
 	"github.com/onflow/flow-go-sdk/access/grpc"
@@ -11,6 +12,7 @@ import (
 	broadcast "github.com/onflow/flow-go/engine"
 	"github.com/onflow/go-ethereum/rpc"
 	"github.com/rs/zerolog"
+	"github.com/sethvargo/go-limiter/memorystore"
 
 	"github.com/onflow/flow-evm-gateway/api"
 	"github.com/onflow/flow-evm-gateway/config"
@@ -229,9 +231,11 @@ func startServer(
 		return fmt.Errorf("failed to create EVM requester: %w", err)
 	}
 
-	indexingResumedHeight, err := blocks.LatestEVMHeight()
+	// create rate limiter for requests on the APIs.
+	// tokens are number of requests allowed per interval
+	ratelimiter, err := memorystore.New(&memorystore.Config{Tokens: cfg.RateLimit, Interval: time.Second})
 	if err != nil {
-		return fmt.Errorf("failed to retrieve the indexing resumed height: %w", err)
+		return fmt.Errorf("failed to create rate limiter: %w", err)
 	}
 
 	blockchainAPI, err := api.NewBlockChainAPI(
@@ -242,7 +246,7 @@ func startServer(
 		transactions,
 		receipts,
 		accounts,
-		indexingResumedHeight,
+		ratelimiter,
 	)
 	if err != nil {
 		return err
@@ -257,6 +261,7 @@ func startServer(
 		blocksBroadcaster,
 		transactionsBroadcaster,
 		logsBroadcaster,
+		ratelimiter,
 	)
 
 	pullAPI := api.NewPullAPI(
@@ -265,6 +270,7 @@ func startServer(
 		blocks,
 		transactions,
 		receipts,
+		ratelimiter,
 	)
 
 	supportedAPIs := api.SupportedAPIs(blockchainAPI, streamAPI, pullAPI)

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"time"
 
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/go-ethereum/common"
@@ -18,7 +17,6 @@ import (
 	"github.com/onflow/go-ethereum/signer/core"
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-limiter"
-	"github.com/sethvargo/go-limiter/memorystore"
 
 	errs "github.com/onflow/flow-evm-gateway/api/errors"
 	"github.com/onflow/flow-evm-gateway/config"
@@ -52,15 +50,13 @@ func SupportedAPIs(blockChainAPI *BlockChainAPI, streamAPI *StreamAPI, pullAPI *
 }
 
 type BlockChainAPI struct {
-	logger       zerolog.Logger
-	config       *config.Config
-	evm          requester.Requester
-	blocks       storage.BlockIndexer
-	transactions storage.TransactionIndexer
-	receipts     storage.ReceiptIndexer
-	accounts     storage.AccountIndexer
-	// Stores the height from which the indexing resumed since the last restart.
-	// This is needed for syncing status.
+	logger                zerolog.Logger
+	config                *config.Config
+	evm                   requester.Requester
+	blocks                storage.BlockIndexer
+	transactions          storage.TransactionIndexer
+	receipts              storage.ReceiptIndexer
+	accounts              storage.AccountIndexer
 	indexingResumedHeight uint64
 	limiter               limiter.Store
 }
@@ -73,14 +69,12 @@ func NewBlockChainAPI(
 	transactions storage.TransactionIndexer,
 	receipts storage.ReceiptIndexer,
 	accounts storage.AccountIndexer,
-	indexingResumedHeight uint64,
+	ratelimiter limiter.Store,
 ) (*BlockChainAPI, error) {
-	ratelimiter, err := memorystore.New(&memorystore.Config{
-		Tokens:   config.RateLimit, // number of tokens allowed per interval
-		Interval: time.Second,      // interval until tokens reset
-	})
+	// get the height from which the indexing resumed since the last restart, this is needed for syncing status.
+	indexingResumedHeight, err := blocks.LatestEVMHeight()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to retrieve the indexing resumed height: %w", err)
 	}
 
 	return &BlockChainAPI{
