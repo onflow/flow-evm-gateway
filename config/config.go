@@ -38,6 +38,8 @@ type Config struct {
 	RPCPort int
 	// GRPCHost for the RPC API server
 	RPCHost string
+	// WSEnabled determines if the websocket server is enabled.
+	WSEnabled bool
 	// EVMNetworkID provides the EVM chain ID.
 	EVMNetworkID *big.Int
 	// FlowNetworkID is the Flow network ID that the EVM is hosted on (mainnet, testnet, emulator...)
@@ -84,6 +86,7 @@ func FromFlags() (*Config, error) {
 	flag.StringVar(&cfg.DatabaseDir, "database-dir", "./db", "Path to the directory for the database")
 	flag.StringVar(&cfg.RPCHost, "rpc-host", "", "Host for the RPC API server")
 	flag.IntVar(&cfg.RPCPort, "rpc-port", 8545, "Port for the RPC API server")
+	flag.BoolVar(&cfg.WSEnabled, "ws-enabled", false, "Enable websocket connections")
 	flag.StringVar(&cfg.AccessNodeHost, "access-node-grpc-host", "localhost:3569", "Host to the flow access node gRPC API")
 	flag.StringVar(&accessSporkHosts, "access-node-spork-hosts", "", `Previous spork AN hosts, defined following the schema: {host1},{host2} as a comma separated list (e.g. "host-1.com,host2.com")`)
 	flag.StringVar(&evmNetwork, "evm-network-id", "previewnet", "EVM network ID (previewnet, testnet, mainnet)")
