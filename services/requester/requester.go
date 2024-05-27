@@ -11,7 +11,6 @@ import (
 
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go-sdk"
-	"github.com/onflow/flow-go-sdk/access"
 	"github.com/onflow/flow-go-sdk/crypto"
 	"github.com/onflow/flow-go/fvm/evm/stdlib"
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
@@ -89,14 +88,14 @@ type Requester interface {
 var _ Requester = &EVM{}
 
 type EVM struct {
-	client access.Client
+	client *CrossSporkClient
 	config *config.Config
 	signer crypto.Signer
 	logger zerolog.Logger
 }
 
 func NewEVM(
-	client access.Client,
+	client *CrossSporkClient,
 	config *config.Config,
 	signer crypto.Signer,
 	logger zerolog.Logger,
@@ -145,10 +144,6 @@ func NewEVM(
 }
 
 func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash, error) {
-	e.logger.Debug().
-		Str("data", fmt.Sprintf("%x", data)).
-		Msg("send raw transaction")
-
 	tx := &types.Transaction{}
 	if err := tx.UnmarshalBinary(data); err != nil {
 		return common.Hash{}, err
@@ -167,6 +162,7 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 	script := e.replaceAddresses(runTxScript)
 	flowID, err := e.signAndSend(ctx, script, hexEncodedTx)
 	if err != nil {
+		e.logger.Error().Err(err).Str("data", string(data)).Msg("failed to send transaction")
 		return common.Hash{}, err
 	}
 
@@ -236,25 +232,6 @@ func (e *EVM) signAndSend(ctx context.Context, script []byte, args ...cadence.Va
 		return flow.EmptyID, fmt.Errorf("failed to send transaction: %w", err)
 	}
 
-	// this is only used for debugging purposes
-	if d := e.logger.Debug(); d.Enabled() {
-		go func(id flow.Identifier) {
-			res, _ := e.client.GetTransactionResult(context.Background(), id)
-			if res != nil && res.Error != nil {
-				e.logger.Error().
-					Str("flow-id", id.String()).
-					Err(res.Error).
-					Msg("flow transaction failed to execute")
-				return
-			}
-
-			e.logger.Debug().
-				Str("flow-id", id.String()).
-				Str("events", fmt.Sprintf("%v", res.Events)).
-				Msg("flow transaction executed successfully")
-		}(flowTx.ID())
-	}
-
 	return flowTx.ID(), nil
 }
 
@@ -275,10 +252,13 @@ func (e *EVM) GetBalance(
 		[]cadence.Value{hexEncodedAddress},
 	)
 	if err != nil {
-		return nil, err
+		e.logger.Error().
+			Err(err).
+			Str("address", address.String()).
+			Uint64("cadence-height", height).
+			Msg("failed to get get balance")
+		return nil, fmt.Errorf("failed to get balance: %w", err)
 	}
-
-	e.logger.Info().Str("address", address.String()).Msg("get balance")
 
 	// sanity check, should never occur
 	if _, ok := val.(cadence.UInt); !ok {
@@ -305,10 +285,12 @@ func (e *EVM) GetNonce(
 		[]cadence.Value{hexEncodedAddress},
 	)
 	if err != nil {
-		return 0, err
+		e.logger.Error().Err(err).
+			Str("address", address.String()).
+			Uint64("cadence-height", height).
+			Msg("failed to get nonce")
+		return 0, fmt.Errorf("failed to get nonce: %w", err)
 	}
-
-	e.logger.Info().Str("address", address.String()).Msg("get nonce")
 
 	// sanity check, should never occur
 	if _, ok := val.(cadence.UInt64); !ok {
@@ -324,10 +306,6 @@ func (e *EVM) Call(
 	from common.Address,
 	height uint64,
 ) ([]byte, error) {
-	e.logger.Debug().
-		Str("data", fmt.Sprintf("%x", data)).
-		Msg("call")
-
 	hexEncodedTx, err := cadence.NewString(hex.EncodeToString(data))
 	if err != nil {
 		return nil, err
@@ -345,6 +323,12 @@ func (e *EVM) Call(
 		[]cadence.Value{hexEncodedTx, hexEncodedAddress},
 	)
 	if err != nil {
+		e.logger.Error().
+			Err(err).
+			Uint64("cadence-height", height).
+			Str("from", from.String()).
+			Str("data", string(data)).
+			Msg("failed to execute call")
 		return nil, fmt.Errorf("failed to execute script: %w", err)
 	}
 
@@ -358,8 +342,7 @@ func (e *EVM) Call(
 
 	result := evmResult.ReturnedValue
 
-	e.logger.Info().
-		Str("data", fmt.Sprintf("%x", data)).
+	e.logger.Debug().
 		Str("result", hex.EncodeToString(result)).
 		Msg("call executed")
 
