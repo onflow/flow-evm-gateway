@@ -270,8 +270,10 @@ func startServer(
 		return err
 	}
 
-	if err := srv.EnableWS(supportedAPIs); err != nil {
-		return err
+	if cfg.WSEnabled {
+		if err := srv.EnableWS(supportedAPIs); err != nil {
+			return err
+		}
 	}
 
 	if err := srv.SetListenAddr(cfg.RPCHost, cfg.RPCPort); err != nil {

@@ -16,9 +16,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/onflow/flow-evm-gateway/bootstrap"
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/stretchr/testify/require"
+
+	"github.com/onflow/flow-evm-gateway/bootstrap"
 
 	"github.com/goccy/go-json"
 	"github.com/onflow/cadence"
@@ -144,6 +145,7 @@ func servicesSetup(t *testing.T) (emulator.Emulator, func()) {
 		LogWriter:         zerolog.NewConsoleWriter(),
 		StreamTimeout:     time.Second * 30,
 		StreamLimit:       10,
+		WSEnabled:         true,
 	}
 
 	if !logOutput {

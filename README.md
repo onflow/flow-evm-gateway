@@ -95,6 +95,7 @@ The application can be configured using the following flags at runtime:
 | `--database-dir`            | `./db`           | Path to the directory for the database.                                                                                                         |
 | `--rpc-host`                | `localhost`      | Host for the JSON RPC API server.                                                                                                               |
 | `--rpc-port`                | `8545`           | Port for the JSON RPC API server.                                                                                                               |
+| `--ws-enabled`              | `false`          | Enable websocket support.                                                                                                                       |
 | `--access-node-grpc-host`   | `localhost:3569` | Host to the current spork Flow access node (AN) gRPC API.                                                                                       |
 | `--access-node-spork-hosts` |                  | Previous spork AN hosts, defined following the schema: `{latest height}@{host}` as comma separated list (e.g. `"200@host-1.com,300@host2.com"`) |
 | `--evm-network-id`          | `testnet`        | EVM network ID (options: `testnet`, `mainnet`).                                                                                                 |
