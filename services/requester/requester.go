@@ -219,6 +219,7 @@ func (e *EVM) GetBalance(
 			e.logger.Error().
 				Err(err).
 				Str("address", address.String()).
+				Int64("evm-height", evmHeight).
 				Uint64("cadence-height", height).
 				Msg("failed to get get balance")
 		}
@@ -255,10 +256,13 @@ func (e *EVM) GetNonce(
 		[]cadence.Value{hexEncodedAddress},
 	)
 	if err != nil {
-		e.logger.Error().Err(err).
-			Str("address", address.String()).
-			Uint64("cadence-height", height).
-			Msg("failed to get nonce")
+		if !errors.Is(err, ErrOutOfRange) {
+			e.logger.Error().Err(err).
+				Str("address", address.String()).
+				Int64("evm-height", evmHeight).
+				Uint64("cadence-height", height).
+				Msg("failed to get nonce")
+		}
 		return 0, fmt.Errorf("failed to get nonce: %w", err)
 	}
 
@@ -306,12 +310,15 @@ func (e *EVM) Call(
 		[]cadence.Value{hexEncodedTx, hexEncodedAddress},
 	)
 	if err != nil {
-		e.logger.Error().
-			Err(err).
-			Uint64("cadence-height", height).
-			Str("from", from.String()).
-			Str("data", string(data)).
-			Msg("failed to execute call")
+		if !errors.Is(err, ErrOutOfRange) {
+			e.logger.Error().
+				Err(err).
+				Uint64("cadence-height", height).
+				Int64("evm-height", evmHeight).
+				Str("from", from.String()).
+				Str("data", string(data)).
+				Msg("failed to execute call")
+		}
 		return nil, fmt.Errorf("failed to execute script: %w", err)
 	}
 
@@ -402,6 +409,15 @@ func (e *EVM) GetCode(
 		[]cadence.Value{hexEncodedAddress},
 	)
 	if err != nil {
+		if !errors.Is(err, ErrOutOfRange) {
+			e.logger.Error().
+				Err(err).
+				Uint64("cadence-height", height).
+				Int64("evm-height", evmHeight).
+				Str("address", address.String()).
+				Msg("failed to get code")
+		}
+
 		return nil, fmt.Errorf("failed to execute script for get code: %w", err)
 	}
 
