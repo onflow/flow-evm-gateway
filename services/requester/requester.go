@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "embed"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -24,7 +25,7 @@ import (
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/onflow/flow-evm-gateway/api/errors"
+	errs "github.com/onflow/flow-evm-gateway/api/errors"
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/storage"
 )
@@ -155,7 +156,7 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 	}
 
 	if tx.GasPrice().Cmp(e.config.GasPrice) < 0 {
-		return common.Hash{}, errors.NewErrGasPriceTooLow(e.config.GasPrice)
+		return common.Hash{}, errs.NewErrGasPriceTooLow(e.config.GasPrice)
 	}
 
 	hexEncodedTx, err := cadence.NewString(hex.EncodeToString(data))
@@ -214,11 +215,13 @@ func (e *EVM) GetBalance(
 		[]cadence.Value{hexEncodedAddress},
 	)
 	if err != nil {
-		e.logger.Error().
-			Err(err).
-			Str("address", address.String()).
-			Uint64("cadence-height", height).
-			Msg("failed to get get balance")
+		if !errors.Is(err, ErrOutOfRange) {
+			e.logger.Error().
+				Err(err).
+				Str("address", address.String()).
+				Uint64("cadence-height", height).
+				Msg("failed to get get balance")
+		}
 		return nil, fmt.Errorf("failed to get balance: %w", err)
 	}
 
