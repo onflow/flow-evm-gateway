@@ -254,7 +254,7 @@ func (e *EVM) signAndSend(
 			case <-fetchTicker.C:
 				res, err := e.client.GetTransactionResult(context.Background(), id)
 				if err != nil {
-					e.logger.Error().Err(err).Msg("failed to get transaction result")
+					e.logger.Error().Str("id", id.String()).Err(err).Msg("failed to get transaction result")
 					return
 				}
 				if res != nil && res.Status > flow.TransactionStatusPending {
