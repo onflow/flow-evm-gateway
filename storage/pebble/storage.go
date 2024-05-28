@@ -4,11 +4,13 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
+
 	"github.com/cockroachdb/pebble"
 	lru "github.com/hashicorp/golang-lru/v2"
-	errs "github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/rs/zerolog"
-	"io"
+
+	errs "github.com/onflow/flow-evm-gateway/storage/errors"
 )
 
 type Storage struct {
@@ -82,19 +84,19 @@ func New(dir string, log zerolog.Logger) (*Storage, error) {
 // commit the batch or revert it.
 func (s *Storage) set(keyCode byte, key []byte, value []byte, batch *pebble.Batch) error {
 	prefixedKey := makePrefix(keyCode, key)
-  
-  var err error
+
+	var err error
 	if batch != nil {
-    err = batch.Set(prefixedKey, value, nil)
-  } else {
-    err = s.db.Set(prefixedKey, value, nil)
-  }
-  if err != nil {
-    return err
-  }
-  
-  s.cache.Add(hex.EncodeToString(prefixedKey), value)  
-  return nil
+		err = batch.Set(prefixedKey, value, nil)
+	} else {
+		err = s.db.Set(prefixedKey, value, nil)
+	}
+	if err != nil {
+		return err
+	}
+
+	s.cache.Add(hex.EncodeToString(prefixedKey), value)
+	return nil
 }
 
 func (s *Storage) get(keyCode byte, key ...[]byte) ([]byte, error) {

@@ -26,6 +26,7 @@ import (
 
 	"github.com/onflow/flow-evm-gateway/api/errors"
 	"github.com/onflow/flow-evm-gateway/config"
+	"github.com/onflow/flow-evm-gateway/storage"
 )
 
 var (
@@ -62,25 +63,25 @@ type Requester interface {
 	SendRawTransaction(ctx context.Context, data []byte) (common.Hash, error)
 
 	// GetBalance returns the amount of wei for the given address in the state of the
-	// given block height.
-	GetBalance(ctx context.Context, address common.Address, height uint64) (*big.Int, error)
+	// given EVM block height.
+	GetBalance(ctx context.Context, address common.Address, evmHeight int64) (*big.Int, error)
 
-	// Call executes the given signed transaction data on the state for the given block number.
+	// Call executes the given signed transaction data on the state for the given EVM block height.
 	// Note, this function doesn't make and changes in the state/blockchain and is
 	// useful to execute and retrieve values.
-	Call(ctx context.Context, data []byte, from common.Address, height uint64) ([]byte, error)
+	Call(ctx context.Context, data []byte, from common.Address, evmHeight int64) ([]byte, error)
 
 	// EstimateGas executes the given signed transaction data on the state.
 	// Note, this function doesn't make any changes in the state/blockchain and is
 	// useful to executed and retrieve the gas consumption and possible failures.
 	EstimateGas(ctx context.Context, data []byte, from common.Address) (uint64, error)
 
-	// GetNonce gets nonce from the network at the given block height.
-	GetNonce(ctx context.Context, address common.Address, height uint64) (uint64, error)
+	// GetNonce gets nonce from the network at the given EVM block height.
+	GetNonce(ctx context.Context, address common.Address, evmHeight int64) (uint64, error)
 
 	// GetCode returns the code stored at the given address in
-	// the state for the given block number.
-	GetCode(ctx context.Context, address common.Address, height uint64) ([]byte, error)
+	// the state for the given EVM block height.
+	GetCode(ctx context.Context, address common.Address, evmHeight int64) ([]byte, error)
 
 	// GetLatestEVMHeight returns the latest EVM height of the network.
 	GetLatestEVMHeight(ctx context.Context) (uint64, error)
@@ -93,6 +94,7 @@ type EVM struct {
 	config *config.Config
 	signer crypto.Signer
 	logger zerolog.Logger
+	blocks storage.BlockIndexer
 }
 
 func NewEVM(
@@ -100,6 +102,7 @@ func NewEVM(
 	config *config.Config,
 	signer crypto.Signer,
 	logger zerolog.Logger,
+	blocks storage.BlockIndexer,
 ) (*EVM, error) {
 	logger = logger.With().Str("component", "requester").Logger()
 	// check that the address stores already created COA resource in the "evm" storage path.
@@ -128,6 +131,7 @@ func NewEVM(
 		config: config,
 		signer: signer,
 		logger: logger,
+		blocks: blocks,
 	}
 
 	// create COA on the account
@@ -186,6 +190,348 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 		Msg("raw transaction sent")
 
 	return tx.Hash(), nil
+}
+
+func (e *EVM) GetBalance(
+	ctx context.Context,
+	address common.Address,
+	evmHeight int64,
+) (*big.Int, error) {
+	hexEncodedAddress, err := addressToCadenceString(address)
+	if err != nil {
+		return nil, err
+	}
+
+	height, err := e.evmToCadenceHeight(evmHeight)
+	if err != nil {
+		return nil, err
+	}
+
+	val, err := e.executeScriptAtHeight(
+		ctx,
+		getBalanceScript,
+		height,
+		[]cadence.Value{hexEncodedAddress},
+	)
+	if err != nil {
+		e.logger.Error().
+			Err(err).
+			Str("address", address.String()).
+			Uint64("cadence-height", height).
+			Msg("failed to get get balance")
+		return nil, fmt.Errorf("failed to get balance: %w", err)
+	}
+
+	// sanity check, should never occur
+	if _, ok := val.(cadence.UInt); !ok {
+		e.logger.Panic().Msg(fmt.Sprintf("failed to convert balance %v to UInt", val))
+	}
+
+	return val.(cadence.UInt).Big(), nil
+}
+
+func (e *EVM) GetNonce(
+	ctx context.Context,
+	address common.Address,
+	evmHeight int64,
+) (uint64, error) {
+	hexEncodedAddress, err := addressToCadenceString(address)
+	if err != nil {
+		return 0, err
+	}
+
+	height, err := e.evmToCadenceHeight(evmHeight)
+	if err != nil {
+		return 0, err
+	}
+
+	val, err := e.executeScriptAtHeight(
+		ctx,
+		getNonceScript,
+		height,
+		[]cadence.Value{hexEncodedAddress},
+	)
+	if err != nil {
+		e.logger.Error().Err(err).
+			Str("address", address.String()).
+			Uint64("cadence-height", height).
+			Msg("failed to get nonce")
+		return 0, fmt.Errorf("failed to get nonce: %w", err)
+	}
+
+	// sanity check, should never occur
+	if _, ok := val.(cadence.UInt64); !ok {
+		e.logger.Panic().Msg(fmt.Sprintf("failed to convert balance %v to UInt64", val))
+	}
+
+	nonce := uint64(val.(cadence.UInt64))
+
+	e.logger.Debug().
+		Uint64("nonce", nonce).
+		Int64("evm-height", evmHeight).
+		Uint64("cadence-height", height).
+		Msg("get nonce executed")
+
+	return nonce, nil
+}
+
+func (e *EVM) Call(
+	ctx context.Context,
+	data []byte,
+	from common.Address,
+	evmHeight int64,
+) ([]byte, error) {
+	hexEncodedTx, err := cadence.NewString(hex.EncodeToString(data))
+	if err != nil {
+		return nil, err
+	}
+
+	hexEncodedAddress, err := addressToCadenceString(from)
+	if err != nil {
+		return nil, err
+	}
+
+	height, err := e.evmToCadenceHeight(evmHeight)
+	if err != nil {
+		return nil, err
+	}
+
+	scriptResult, err := e.executeScriptAtHeight(
+		ctx,
+		dryRunScript,
+		height,
+		[]cadence.Value{hexEncodedTx, hexEncodedAddress},
+	)
+	if err != nil {
+		e.logger.Error().
+			Err(err).
+			Uint64("cadence-height", height).
+			Str("from", from.String()).
+			Str("data", string(data)).
+			Msg("failed to execute call")
+		return nil, fmt.Errorf("failed to execute script: %w", err)
+	}
+
+	evmResult, err := stdlib.ResultSummaryFromEVMResultValue(scriptResult)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode EVM result from call: %w", err)
+	}
+	if evmResult.ErrorCode != 0 {
+		return nil, getErrorForCode(evmResult.ErrorCode)
+	}
+
+	result := evmResult.ReturnedValue
+
+	e.logger.Debug().
+		Str("result", hex.EncodeToString(result)).
+		Int64("evm-height", evmHeight).
+		Uint64("cadence-height", height).
+		Msg("call executed")
+
+	return result, nil
+}
+
+func (e *EVM) EstimateGas(
+	ctx context.Context,
+	data []byte,
+	from common.Address,
+) (uint64, error) {
+	hexEncodedTx, err := cadence.NewString(hex.EncodeToString(data))
+	if err != nil {
+		return 0, err
+	}
+
+	hexEncodedAddress, err := addressToCadenceString(from)
+	if err != nil {
+		return 0, err
+	}
+
+	scriptResult, err := e.client.ExecuteScriptAtLatestBlock(
+		ctx,
+		e.replaceAddresses(dryRunScript),
+		[]cadence.Value{hexEncodedTx, hexEncodedAddress},
+	)
+	if err != nil {
+		return 0, fmt.Errorf("failed to execute script: %w", err)
+	}
+
+	evmResult, err := stdlib.ResultSummaryFromEVMResultValue(scriptResult)
+	if err != nil {
+		return 0, fmt.Errorf("failed to decode EVM result from gas estimation: %w", err)
+	}
+	if evmResult.ErrorCode != 0 {
+		return 0, getErrorForCode(evmResult.ErrorCode)
+	}
+
+	// This minimum gas availability is needed for:
+	// https://github.com/onflow/go-ethereum/blob/master/core/vm/operations_acl.go#L29-L32
+	// Note that this is not actually consumed in the end.
+	// TODO: Consider moving this to `EVM.dryRun`, if we want the
+	// fix to also apply for the EVM API, on Cadence side.
+	gasConsumed := evmResult.GasConsumed + params.SstoreSentryGasEIP2200 + 1
+
+	e.logger.Debug().
+		Uint64("gas", gasConsumed).
+		Msg("gas estimation executed")
+
+	return gasConsumed, nil
+}
+
+func (e *EVM) GetCode(
+	ctx context.Context,
+	address common.Address,
+	evmHeight int64,
+) ([]byte, error) {
+	hexEncodedAddress, err := addressToCadenceString(address)
+	if err != nil {
+		return nil, err
+	}
+
+	height, err := e.evmToCadenceHeight(evmHeight)
+	if err != nil {
+		return nil, err
+	}
+
+	value, err := e.executeScriptAtHeight(
+		ctx,
+		getCodeScript,
+		height,
+		[]cadence.Value{hexEncodedAddress},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute script for get code: %w", err)
+	}
+
+	code, err := cadenceStringToBytes(value)
+	if err != nil {
+		return nil, err
+	}
+
+	e.logger.Debug().
+		Str("address", address.Hex()).
+		Int64("evm-height", evmHeight).
+		Uint64("cadence-height", height).
+		Str("code size", fmt.Sprintf("%d", len(code))).
+		Msg("get code executed")
+
+	return code, nil
+}
+
+func (e *EVM) GetLatestEVMHeight(ctx context.Context) (uint64, error) {
+	// TODO(m-Peter): Consider adding some time-based caching, if this
+	// endpoint turns out to be called quite frequently.
+	val, err := e.client.ExecuteScriptAtLatestBlock(
+		ctx,
+		e.replaceAddresses(getLatestEVMHeight),
+		[]cadence.Value{},
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	// sanity check, should never occur
+	if _, ok := val.(cadence.UInt64); !ok {
+		e.logger.Panic().Msg(fmt.Sprintf("failed to convert height %v to UInt64", val))
+	}
+
+	height := uint64(val.(cadence.UInt64))
+
+	e.logger.Debug().
+		Uint64("evm-height", height).
+		Msg("get latest evm height executed")
+
+	return height, nil
+}
+
+// getSignerNetworkInfo loads the signer account from network and returns key index and sequence number
+func (e *EVM) getSignerNetworkInfo(ctx context.Context) (int, uint64, error) {
+	account, err := e.client.GetAccount(ctx, e.config.COAAddress)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to get signer info account: %w", err)
+	}
+
+	signerPub := e.signer.PublicKey()
+	for _, k := range account.Keys {
+		if k.PublicKey.Equals(signerPub) {
+			return k.Index, k.SequenceNumber, nil
+		}
+	}
+
+	return 0, 0, fmt.Errorf("provided account address and signer keys do not match")
+}
+
+// replaceAddresses replace the addresses based on the network
+func (e *EVM) replaceAddresses(script []byte) []byte {
+	// make the list of all contracts we should replace address for
+	sc := systemcontracts.SystemContractsForChain(e.config.FlowNetworkID)
+	contracts := []systemcontracts.SystemContract{sc.EVMContract, sc.FungibleToken, sc.FlowToken}
+
+	s := string(script)
+	// iterate over all the import name and address pairs and replace them in script
+	for _, contract := range contracts {
+		s = strings.ReplaceAll(s,
+			fmt.Sprintf("import %s", contract.Name),
+			fmt.Sprintf("import %s from %s", contract.Name, contract.Address.HexWithPrefix()),
+		)
+	}
+
+	// also replace COA address if used (in scripts)
+	s = strings.ReplaceAll(s, "0xCOA", e.config.COAAddress.HexWithPrefix())
+
+	return []byte(s)
+}
+
+func (e *EVM) evmToCadenceHeight(height int64) (uint64, error) {
+	if height < 0 {
+		return LatestBlockHeight, nil
+	}
+
+	evmHeight := uint64(height)
+	evmLatest, err := e.blocks.LatestEVMHeight()
+	if err != nil {
+		return 0, fmt.Errorf("failed to map evm to cadence height, getting latest evm height: %w", err)
+	}
+
+	// if provided evm height equals to latest evm height indexed we
+	// return latest height special value to signal requester to execute
+	// script at the latest block, not at the cadence height we get from the
+	// index, that is because at that point the height might already be pruned
+	if evmHeight == evmLatest {
+		return LatestBlockHeight, nil
+	}
+
+	cadenceHeight, err := e.blocks.GetCadenceHeight(uint64(evmHeight))
+	if err != nil {
+		return 0, fmt.Errorf("failed to map evm to cadence height: %w", err)
+	}
+
+	return cadenceHeight, nil
+}
+
+// executeScriptAtHeight will execute the given script, at the given
+// block height, with the given arguments. A height of `LatestBlockHeight`
+// (math.MaxUint64 - 1) is a special value, which means the script will be
+// executed at the latest sealed block.
+func (e *EVM) executeScriptAtHeight(
+	ctx context.Context,
+	script []byte,
+	height uint64,
+	arguments []cadence.Value,
+) (cadence.Value, error) {
+	if height == LatestBlockHeight {
+		return e.client.ExecuteScriptAtLatestBlock(
+			ctx,
+			e.replaceAddresses(script),
+			arguments,
+		)
+	}
+
+	return e.client.ExecuteScriptAtBlockHeight(
+		ctx,
+		height,
+		e.replaceAddresses(script),
+		arguments,
+	)
 }
 
 // signAndSend creates a flow transaction from the provided script
@@ -274,288 +620,6 @@ func (e *EVM) signAndSend(
 	}(flowTx.ID())
 
 	return flowTx.ID(), nil
-}
-
-func (e *EVM) GetBalance(
-	ctx context.Context,
-	address common.Address,
-	height uint64,
-) (*big.Int, error) {
-	hexEncodedAddress, err := addressToCadenceString(address)
-	if err != nil {
-		return nil, err
-	}
-
-	val, err := e.executeScriptAtHeight(
-		ctx,
-		getBalanceScript,
-		height,
-		[]cadence.Value{hexEncodedAddress},
-	)
-	if err != nil {
-		e.logger.Error().
-			Err(err).
-			Str("address", address.String()).
-			Uint64("cadence-height", height).
-			Msg("failed to get get balance")
-		return nil, fmt.Errorf("failed to get balance: %w", err)
-	}
-
-	// sanity check, should never occur
-	if _, ok := val.(cadence.UInt); !ok {
-		e.logger.Panic().Msg(fmt.Sprintf("failed to convert balance %v to UInt", val))
-	}
-
-	return val.(cadence.UInt).Big(), nil
-}
-
-func (e *EVM) GetNonce(
-	ctx context.Context,
-	address common.Address,
-	height uint64,
-) (uint64, error) {
-	hexEncodedAddress, err := addressToCadenceString(address)
-	if err != nil {
-		return 0, err
-	}
-
-	val, err := e.executeScriptAtHeight(
-		ctx,
-		getNonceScript,
-		height,
-		[]cadence.Value{hexEncodedAddress},
-	)
-	if err != nil {
-		e.logger.Error().Err(err).
-			Str("address", address.String()).
-			Uint64("cadence-height", height).
-			Msg("failed to get nonce")
-		return 0, fmt.Errorf("failed to get nonce: %w", err)
-	}
-
-	// sanity check, should never occur
-	if _, ok := val.(cadence.UInt64); !ok {
-		e.logger.Panic().Msg(fmt.Sprintf("failed to convert balance %v to UInt64", val))
-	}
-
-	return uint64(val.(cadence.UInt64)), nil
-}
-
-func (e *EVM) Call(
-	ctx context.Context,
-	data []byte,
-	from common.Address,
-	height uint64,
-) ([]byte, error) {
-	hexEncodedTx, err := cadence.NewString(hex.EncodeToString(data))
-	if err != nil {
-		return nil, err
-	}
-
-	hexEncodedAddress, err := addressToCadenceString(from)
-	if err != nil {
-		return nil, err
-	}
-
-	scriptResult, err := e.executeScriptAtHeight(
-		ctx,
-		dryRunScript,
-		height,
-		[]cadence.Value{hexEncodedTx, hexEncodedAddress},
-	)
-	if err != nil {
-		e.logger.Error().
-			Err(err).
-			Uint64("cadence-height", height).
-			Str("from", from.String()).
-			Str("data", string(data)).
-			Msg("failed to execute call")
-		return nil, fmt.Errorf("failed to execute script: %w", err)
-	}
-
-	evmResult, err := stdlib.ResultSummaryFromEVMResultValue(scriptResult)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode EVM result from call: %w", err)
-	}
-	if evmResult.ErrorCode != 0 {
-		return nil, getErrorForCode(evmResult.ErrorCode)
-	}
-
-	result := evmResult.ReturnedValue
-
-	e.logger.Debug().
-		Str("result", hex.EncodeToString(result)).
-		Msg("call executed")
-
-	return result, nil
-}
-
-func (e *EVM) EstimateGas(
-	ctx context.Context,
-	data []byte,
-	from common.Address,
-) (uint64, error) {
-	e.logger.Debug().
-		Str("data", fmt.Sprintf("%x", data)).
-		Msg("estimate gas")
-
-	hexEncodedTx, err := cadence.NewString(hex.EncodeToString(data))
-	if err != nil {
-		return 0, err
-	}
-
-	hexEncodedAddress, err := addressToCadenceString(from)
-	if err != nil {
-		return 0, err
-	}
-
-	scriptResult, err := e.client.ExecuteScriptAtLatestBlock(
-		ctx,
-		e.replaceAddresses(dryRunScript),
-		[]cadence.Value{hexEncodedTx, hexEncodedAddress},
-	)
-	if err != nil {
-		return 0, fmt.Errorf("failed to execute script: %w", err)
-	}
-
-	evmResult, err := stdlib.ResultSummaryFromEVMResultValue(scriptResult)
-	if err != nil {
-		return 0, fmt.Errorf("failed to decode EVM result from gas estimation: %w", err)
-	}
-	if evmResult.ErrorCode != 0 {
-		return 0, getErrorForCode(evmResult.ErrorCode)
-	}
-
-	// This minimum gas availability is needed for:
-	// https://github.com/onflow/go-ethereum/blob/master/core/vm/operations_acl.go#L29-L32
-	// Note that this is not actually consumed in the end.
-	// TODO: Consider moving this to `EVM.dryRun`, if we want the
-	// fix to also apply for the EVM API, on Cadence side.
-	gasConsumed := evmResult.GasConsumed + params.SstoreSentryGasEIP2200 + 1
-
-	return gasConsumed, nil
-}
-
-func (e *EVM) GetCode(
-	ctx context.Context,
-	address common.Address,
-	height uint64,
-) ([]byte, error) {
-	e.logger.Debug().
-		Str("address", address.Hex()).
-		Uint64("height", height).
-		Msg("get code")
-
-	hexEncodedAddress, err := addressToCadenceString(address)
-	if err != nil {
-		return nil, err
-	}
-
-	value, err := e.executeScriptAtHeight(
-		ctx,
-		getCodeScript,
-		height,
-		[]cadence.Value{hexEncodedAddress},
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute script for get code: %w", err)
-	}
-
-	code, err := cadenceStringToBytes(value)
-	if err != nil {
-		return nil, err
-	}
-
-	e.logger.Info().
-		Str("address", address.Hex()).
-		Str("code size", fmt.Sprintf("%d", len(code))).
-		Msg("get code executed")
-
-	return code, nil
-}
-
-func (e *EVM) GetLatestEVMHeight(ctx context.Context) (uint64, error) {
-	// TODO(m-Peter): Consider adding some time-based caching, if this
-	// endpoint turns out to be called quite frequently.
-	val, err := e.client.ExecuteScriptAtLatestBlock(
-		ctx,
-		e.replaceAddresses(getLatestEVMHeight),
-		[]cadence.Value{},
-	)
-	if err != nil {
-		return 0, err
-	}
-
-	// sanity check, should never occur
-	if _, ok := val.(cadence.UInt64); !ok {
-		e.logger.Panic().Msg(fmt.Sprintf("failed to convert height %v to UInt64", val))
-	}
-
-	return uint64(val.(cadence.UInt64)), nil
-}
-
-// getSignerNetworkInfo loads the signer account from network and returns key index and sequence number
-func (e *EVM) getSignerNetworkInfo(ctx context.Context) (int, uint64, error) {
-	account, err := e.client.GetAccount(ctx, e.config.COAAddress)
-	if err != nil {
-		return 0, 0, fmt.Errorf("failed to get signer info account: %w", err)
-	}
-
-	signerPub := e.signer.PublicKey()
-	for _, k := range account.Keys {
-		if k.PublicKey.Equals(signerPub) {
-			return k.Index, k.SequenceNumber, nil
-		}
-	}
-
-	return 0, 0, fmt.Errorf("provided account address and signer keys do not match")
-}
-
-// replaceAddresses replace the addresses based on the network
-func (e *EVM) replaceAddresses(script []byte) []byte {
-	// make the list of all contracts we should replace address for
-	sc := systemcontracts.SystemContractsForChain(e.config.FlowNetworkID)
-	contracts := []systemcontracts.SystemContract{sc.EVMContract, sc.FungibleToken, sc.FlowToken}
-
-	s := string(script)
-	// iterate over all the import name and address pairs and replace them in script
-	for _, contract := range contracts {
-		s = strings.ReplaceAll(s,
-			fmt.Sprintf("import %s", contract.Name),
-			fmt.Sprintf("import %s from %s", contract.Name, contract.Address.HexWithPrefix()),
-		)
-	}
-
-	// also replace COA address if used (in scripts)
-	s = strings.ReplaceAll(s, "0xCOA", e.config.COAAddress.HexWithPrefix())
-
-	return []byte(s)
-}
-
-// executeScriptAtHeight will execute the given script, at the given
-// block height, with the given arguments. A height of `LatestBlockHeight`
-// (math.MaxUint64 - 1) is a special value, which means the script will be
-// executed at the latest sealed block.
-func (e *EVM) executeScriptAtHeight(
-	ctx context.Context,
-	script []byte,
-	height uint64,
-	arguments []cadence.Value,
-) (cadence.Value, error) {
-	if height == LatestBlockHeight {
-		return e.client.ExecuteScriptAtLatestBlock(
-			ctx,
-			e.replaceAddresses(script),
-			arguments,
-		)
-	}
-
-	return e.client.ExecuteScriptAtBlockHeight(
-		ctx,
-		height,
-		e.replaceAddresses(script),
-		arguments,
-	)
 }
 
 func addressToCadenceString(address common.Address) (cadence.String, error) {

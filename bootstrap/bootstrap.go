@@ -224,6 +224,7 @@ func startServer(
 		cfg,
 		signer,
 		logger,
+		blocks,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create EVM requester: %w", err)
