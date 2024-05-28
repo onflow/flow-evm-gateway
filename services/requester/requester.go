@@ -242,25 +242,34 @@ func (e *EVM) signAndSend(
 	go func(id flow.Identifier) {
 		const fetchInterval = time.Millisecond * 500
 		const fetchTimeout = time.Second * 60
-		select {
-		case <-time.NewTicker(fetchInterval).C:
-			res, err := e.client.GetTransactionResult(context.Background(), id)
-			if err != nil {
-				e.logger.Error().Err(err).Msg("failed to get transaction result")
+
+		fetchTicker := time.NewTicker(fetchInterval)
+		timeoutTicker := time.NewTicker(fetchTimeout)
+
+		defer fetchTicker.Stop()
+		defer timeoutTicker.Stop()
+
+		for {
+			select {
+			case <-fetchTicker.C:
+				res, err := e.client.GetTransactionResult(context.Background(), id)
+				if err != nil {
+					e.logger.Error().Err(err).Msg("failed to get transaction result")
+					return
+				}
+				if res != nil && res.Status > flow.TransactionStatusPending {
+					e.logger.Info().
+						Str("status", res.Status.String()).
+						Str("id", id.String()).
+						Int("events", len(res.Events)).
+						Err(res.Error).
+						Msg("transaction result received")
+					return
+				}
+			case <-timeoutTicker.C:
+				e.logger.Error().Str("id", id.String()).Msg("could not get transaction result")
 				return
 			}
-			if res != nil && res.Status > flow.TransactionStatusPending {
-				e.logger.Info().
-					Str("status", res.Status.String()).
-					Str("id", id.String()).
-					Int("events", len(res.Events)).
-					Err(res.Error).
-					Msg("transaction result received")
-				return
-			}
-		case <-time.NewTicker(fetchTimeout).C:
-			e.logger.Error().Str("id", id.String()).Msg("could not get transaction result")
-			return
 		}
 	}(flowTx.ID())
 
