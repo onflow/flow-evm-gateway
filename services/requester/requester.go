@@ -245,7 +245,7 @@ func (e *EVM) signAndSend(
 		ticker := time.NewTicker(fetchInterval)
 		select {
 		case <-ticker.C:
-			ctx, _ = context.WithTimeout(ctx, fetchTimeout)
+			ctx, _ = context.WithTimeout(context.Background(), fetchTimeout)
 			res, err := e.client.GetTransactionResult(ctx, id)
 			if err != nil {
 				e.logger.Error().Err(err).Msg("failed to get transaction result")
