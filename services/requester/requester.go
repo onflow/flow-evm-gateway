@@ -242,17 +242,14 @@ func (e *EVM) signAndSend(
 	go func(id flow.Identifier) {
 		const fetchInterval = time.Millisecond * 500
 		const fetchTimeout = time.Second * 60
-		ticker := time.NewTicker(fetchInterval)
 		select {
-		case <-ticker.C:
-			ctx, _ = context.WithTimeout(context.Background(), fetchTimeout)
-			res, err := e.client.GetTransactionResult(ctx, id)
+		case <-time.NewTicker(fetchInterval).C:
+			res, err := e.client.GetTransactionResult(context.Background(), id)
 			if err != nil {
 				e.logger.Error().Err(err).Msg("failed to get transaction result")
 				return
 			}
 			if res != nil && res.Status > flow.TransactionStatusPending {
-				ticker.Stop()
 				e.logger.Info().
 					Str("status", res.Status.String()).
 					Str("id", id.String()).
@@ -261,7 +258,7 @@ func (e *EVM) signAndSend(
 					Msg("transaction result received")
 				return
 			}
-		case <-ctx.Done():
+		case <-time.NewTicker(fetchTimeout).C:
 			e.logger.Error().Str("id", id.String()).Msg("could not get transaction result")
 			return
 		}
