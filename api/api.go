@@ -679,6 +679,13 @@ func (b *BlockChainAPI) getCadenceHeight(
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (uint64, error) {
 	height := requester.LatestBlockHeight
+
+	latest, err := b.blocks.LatestEVMHeight()
+	if err != nil {
+		b.logger.Error().Err(err).Msg("failed to get latest evm height")
+		return 0, err
+	}
+
 	if number, ok := blockNumberOrHash.Number(); ok {
 		if number < 0 {
 			// negative values are special values and we only support latest height
@@ -689,6 +696,15 @@ func (b *BlockChainAPI) getCadenceHeight(
 		if err != nil {
 			b.logger.Error().Err(err).Msg("failed to get cadence height")
 			return 0, err
+		}
+
+		// special case where requested height is actually latest evm height,
+		// we should then return the special value latest height since that
+		// is understood by the requester to execute at latest height, but if
+		// we provide specific evm height even tho it is latest the script execution
+		// will be done at that mapped cadence height, which might already be pruned.
+		if height == latest {
+			return requester.LatestBlockHeight, nil
 		}
 
 		return height, nil
@@ -702,6 +718,10 @@ func (b *BlockChainAPI) getCadenceHeight(
 		if err != nil {
 			b.logger.Error().Err(err).Msg("failed to get cadence height")
 			return 0, err
+		}
+
+		if height == latest {
+			return requester.LatestBlockHeight, nil
 		}
 
 		return height, nil
