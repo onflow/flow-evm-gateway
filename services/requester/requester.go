@@ -259,7 +259,11 @@ func (e *EVM) signAndSend(
 					Int("events", len(res.Events)).
 					Err(res.Error).
 					Msg("transaction result received")
+				return
 			}
+		case <-ctx.Done():
+			e.logger.Error().Str("id", id.String()).Msg("could not get transaction result")
+			return
 		}
 	}(flowTx.ID())
 
