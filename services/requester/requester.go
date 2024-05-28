@@ -8,6 +8,7 @@ import (
 	"math"
 	"math/big"
 	"strings"
+	"time"
 
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go-sdk"
@@ -187,9 +188,14 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 	return tx.Hash(), nil
 }
 
-// signAndSend creates a flow transaction from the provided script with the arguments and signs it with the
-// configured COA account and then submits it to the network.
-func (e *EVM) signAndSend(ctx context.Context, script []byte, args ...cadence.Value) (flow.Identifier, error) {
+// signAndSend creates a flow transaction from the provided script
+// with the arguments and signs it with the configured COA account
+// and then submits it to the network.
+func (e *EVM) signAndSend(
+	ctx context.Context,
+	script []byte,
+	args ...cadence.Value,
+) (flow.Identifier, error) {
 	var (
 		g           = errgroup.Group{}
 		err1, err2  error
@@ -231,6 +237,28 @@ func (e *EVM) signAndSend(ctx context.Context, script []byte, args ...cadence.Va
 	if err := e.client.SendTransaction(ctx, *flowTx); err != nil {
 		return flow.EmptyID, fmt.Errorf("failed to send transaction: %w", err)
 	}
+
+	// get transaction status after it is submitted
+	go func(id flow.Identifier) {
+		const fetchInterval = time.Millisecond * 500
+		ticker := time.NewTicker(fetchInterval)
+		select {
+		case <-ticker.C:
+			res, err := e.client.GetTransactionResult(ctx, id)
+			if err != nil {
+				e.logger.Error().Err(err).Msg("failed to get transaction result")
+			}
+			if res.Status > flow.TransactionStatusPending {
+				ticker.Stop()
+				e.logger.Info().
+					Str("status", res.Status.String()).
+					Str("id", id.String()).
+					Int("events", len(res.Events)).
+					Err(res.Error).
+					Msg("transaction result received")
+			}
+		}
+	}(flowTx.ID())
 
 	return flowTx.ID(), nil
 }
