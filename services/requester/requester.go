@@ -8,6 +8,7 @@ import (
 	"math"
 	"math/big"
 	"strings"
+	"time"
 
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go-sdk"
@@ -533,9 +534,14 @@ func (e *EVM) executeScriptAtHeight(
 	)
 }
 
-// signAndSend creates a flow transaction from the provided script with the arguments and signs it with the
-// configured COA account and then submits it to the network.
-func (e *EVM) signAndSend(ctx context.Context, script []byte, args ...cadence.Value) (flow.Identifier, error) {
+// signAndSend creates a flow transaction from the provided script
+// with the arguments and signs it with the configured COA account
+// and then submits it to the network.
+func (e *EVM) signAndSend(
+	ctx context.Context,
+	script []byte,
+	args ...cadence.Value,
+) (flow.Identifier, error) {
 	var (
 		g           = errgroup.Group{}
 		err1, err2  error
@@ -577,6 +583,41 @@ func (e *EVM) signAndSend(ctx context.Context, script []byte, args ...cadence.Va
 	if err := e.client.SendTransaction(ctx, *flowTx); err != nil {
 		return flow.EmptyID, fmt.Errorf("failed to send transaction: %w", err)
 	}
+
+	// get transaction status after it is submitted
+	go func(id flow.Identifier) {
+		const fetchInterval = time.Millisecond * 500
+		const fetchTimeout = time.Second * 60
+
+		fetchTicker := time.NewTicker(fetchInterval)
+		timeoutTicker := time.NewTicker(fetchTimeout)
+
+		defer fetchTicker.Stop()
+		defer timeoutTicker.Stop()
+
+		for {
+			select {
+			case <-fetchTicker.C:
+				res, err := e.client.GetTransactionResult(context.Background(), id)
+				if err != nil {
+					e.logger.Error().Str("id", id.String()).Err(err).Msg("failed to get transaction result")
+					return
+				}
+				if res != nil && res.Status > flow.TransactionStatusPending {
+					e.logger.Info().
+						Str("status", res.Status.String()).
+						Str("id", id.String()).
+						Int("events", len(res.Events)).
+						Err(res.Error).
+						Msg("transaction result received")
+					return
+				}
+			case <-timeoutTicker.C:
+				e.logger.Error().Str("id", id.String()).Msg("could not get transaction result")
+				return
+			}
+		}
+	}(flowTx.ID())
 
 	return flowTx.ID(), nil
 }
