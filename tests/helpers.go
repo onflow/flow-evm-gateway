@@ -145,6 +145,7 @@ func servicesSetup(t *testing.T) (emulator.Emulator, func()) {
 		LogWriter:         zerolog.NewConsoleWriter(),
 		StreamTimeout:     time.Second * 30,
 		StreamLimit:       10,
+		RateLimit:         500,
 		WSEnabled:         true,
 	}
 
