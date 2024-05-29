@@ -22,6 +22,8 @@ import (
 	"github.com/rs/cors"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+
+	"github.com/onflow/flow-evm-gateway/config"
 )
 
 type rpcHandler struct {
@@ -46,13 +48,15 @@ type httpServer struct {
 	endpoint string
 	host     string
 	port     int
+
+	config *config.Config
 }
 
 const (
 	shutdownTimeout = 5 * time.Second
 )
 
-func NewHTTPServer(logger zerolog.Logger, timeouts rpc.HTTPTimeouts) *httpServer {
+func NewHTTPServer(logger zerolog.Logger, cfg *config.Config) *httpServer {
 	gethLog.Root().SetHandler(gethLog.FuncHandler(func(r *gethLog.Record) error {
 		switch r.Lvl {
 		case gethLog.LvlInfo:
@@ -68,7 +72,8 @@ func NewHTTPServer(logger zerolog.Logger, timeouts rpc.HTTPTimeouts) *httpServer
 
 	return &httpServer{
 		logger:   logger,
-		timeouts: timeouts,
+		timeouts: rpc.DefaultHTTPTimeouts,
+		config:   cfg,
 	}
 }
 
@@ -226,6 +231,12 @@ func (h *httpServer) disableRPC() bool {
 }
 
 func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// this overwrites the remote address with the header value, this is used when the server is
+	// behind a proxy, and the true source address is overwritten by proxy, but retained in a header.
+	if h.config.AddressHeader != "" {
+		r.RemoteAddr = r.Header.Get(h.config.AddressHeader)
+	}
+
 	// Check if WebSocket request and serve if JSON-RPC over WebSocket is enabled
 	if b, err := io.ReadAll(r.Body); err == nil {
 		body := make(map[string]any)

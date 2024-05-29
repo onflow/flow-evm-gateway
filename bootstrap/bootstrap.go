@@ -10,7 +10,6 @@ import (
 	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/onflow/flow-go-sdk/crypto"
 	broadcast "github.com/onflow/flow-go/engine"
-	"github.com/onflow/go-ethereum/rpc"
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-limiter/memorystore"
 
@@ -203,7 +202,7 @@ func startServer(
 	l := logger.With().Str("component", "API").Logger()
 	l.Info().Msg("starting up RPC server")
 
-	srv := api.NewHTTPServer(l, rpc.DefaultHTTPTimeouts)
+	srv := api.NewHTTPServer(l, cfg)
 
 	// create the signer based on either a single coa key being provided and using a simple in-memory
 	// signer, or multiple keys being provided and using signer with key-rotation mechanism.

@@ -66,6 +66,8 @@ type Config struct {
 	LogWriter io.Writer
 	// RateLimit requests made by the client identified by IP over any protocol (ws/http).
 	RateLimit uint64
+	// Address header used to identified clients, usually set by the proxy
+	AddressHeader string
 	// StreamLimit rate-limits the events sent to the client within 1 second time interval.
 	StreamLimit float64
 	// StreamTimeout defines the timeout the server waits for the event to be sent to the client.
@@ -102,7 +104,8 @@ func FromFlags() (*Config, error) {
 	flag.BoolVar(&cfg.CreateCOAResource, "coa-resource-create", false, "Auto-create the COA resource in the Flow COA account provided if one doesn't exist")
 	flag.StringVar(&logLevel, "log-level", "debug", "Define verbosity of the log output ('debug', 'info', 'error')")
 	flag.Float64Var(&cfg.StreamLimit, "stream-limit", 10, "Rate-limits the events sent to the client within one second")
-	flag.Uint64Var(&cfg.RateLimit, "rate-limit", 20, "Rate-limit requests per second made by the client over any protocol (ws/http)")
+	flag.Uint64Var(&cfg.RateLimit, "rate-limit", 50, "Rate-limit requests per second made by the client over any protocol (ws/http)")
+	flag.StringVar(&cfg.AddressHeader, "address-header", "", "Address header that contains the client IP, this is useful when the server is behind a proxy that sets the source IP of the client. Leave empty if no proxy is used.")
 	flag.Uint64Var(&cfg.HeartbeatInterval, "heartbeat-interval", 100, "Heartbeat interval for AN event subscription")
 	flag.IntVar(&streamTimeout, "stream-timeout", 3, "Defines the timeout in seconds the server waits for the event to be sent to the client")
 	flag.Uint64Var(&forceStartHeight, "force-start-height", 0, "Force set starting Cadence height. This should only be used locally or for testing, never in production.")
