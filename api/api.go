@@ -584,6 +584,9 @@ func handleError[T any](log zerolog.Logger, err error) (T, error) {
 		// as per specification returning nil and nil for not found resources
 		return zero, nil
 	}
+	if errors.Is(err, requester.ErrOutOfRange) {
+		return zero, fmt.Errorf("requested height is out of supported range")
+	}
 
 	log.Error().Err(err).Msg("api error")
 	return zero, errs.ErrInternal
