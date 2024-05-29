@@ -243,6 +243,7 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		_ = json.Unmarshal(b, &body)
 
 		h.logger.Debug().
+			Str("IP", r.RemoteAddr).
 			Str("url", r.URL.String()).
 			Fields(body).
 			Bool("is-ws", isWebSocket(r)).

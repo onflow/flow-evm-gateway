@@ -8,25 +8,26 @@ import (
 
 	"github.com/cockroachdb/pebble"
 
-	"github.com/onflow/flow-evm-gateway/storage"
-	errs "github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/go-ethereum/common"
+
+	"github.com/onflow/flow-evm-gateway/storage"
+	errs "github.com/onflow/flow-evm-gateway/storage/errors"
 )
 
 var _ storage.BlockIndexer = &Blocks{}
 
 type Blocks struct {
-	store           *Storage
-	mux             sync.RWMutex
-	latestEVMHeight uint64
+	store                *Storage
+	mux                  sync.RWMutex
+	latestEVMHeightCache uint64
 }
 
 func NewBlocks(store *Storage) *Blocks {
 	return &Blocks{
-		store:           store,
-		mux:             sync.RWMutex{},
-		latestEVMHeight: 0,
+		store:                store,
+		mux:                  sync.RWMutex{},
+		latestEVMHeightCache: 0,
 	}
 }
 
@@ -76,7 +77,7 @@ func (b *Blocks) Store(cadenceHeight uint64, block *types.Block) error {
 		return fmt.Errorf("failed to commit block: %w", err)
 	}
 
-	b.latestEVMHeight = block.Height
+	b.latestEVMHeightCache = block.Height
 	return nil
 }
 
@@ -84,7 +85,7 @@ func (b *Blocks) GetByHeight(height uint64) (*types.Block, error) {
 	b.mux.RLock()
 	defer b.mux.RUnlock()
 
-	last, err := b.LatestEVMHeight()
+	last, err := b.latestEVMHeight()
 	if err != nil {
 		return nil, err
 	}
@@ -135,8 +136,12 @@ func (b *Blocks) LatestEVMHeight() (uint64, error) {
 	b.mux.RLock()
 	defer b.mux.RUnlock()
 
-	if b.latestEVMHeight != 0 {
-		return b.latestEVMHeight, nil
+	return b.latestEVMHeight()
+}
+
+func (b *Blocks) latestEVMHeight() (uint64, error) {
+	if b.latestEVMHeightCache != 0 {
+		return b.latestEVMHeightCache, nil
 	}
 
 	val, err := b.store.get(latestEVMHeightKey)
@@ -148,7 +153,7 @@ func (b *Blocks) LatestEVMHeight() (uint64, error) {
 	}
 
 	h := binary.BigEndian.Uint64(val)
-	b.latestEVMHeight = h
+	b.latestEVMHeightCache = h
 	return h, nil
 }
 

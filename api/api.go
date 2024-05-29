@@ -189,12 +189,12 @@ func (b *BlockChainAPI) GetBalance(
 		return nil, err
 	}
 
-	cadenceHeight, err := b.getCadenceHeight(blockNumberOrHash)
+	evmHeight, err := b.getBlockNumber(blockNumberOrHash)
 	if err != nil {
 		return handleError[*hexutil.Big](b.logger, err)
 	}
 
-	balance, err := b.evm.GetBalance(ctx, address, cadenceHeight)
+	balance, err := b.evm.GetBalance(ctx, address, evmHeight)
 	if err != nil {
 		return handleError[*hexutil.Big](b.logger, err)
 	}
@@ -482,7 +482,7 @@ func (b *BlockChainAPI) Call(
 		return nil, err
 	}
 
-	cadenceHeight, err := b.getCadenceHeight(blockNumberOrHash)
+	evmHeight, err := b.getBlockNumber(blockNumberOrHash)
 	if err != nil {
 		return handleError[hexutil.Bytes](b.logger, err)
 	}
@@ -499,7 +499,7 @@ func (b *BlockChainAPI) Call(
 		from = *args.From
 	}
 
-	res, err := b.evm.Call(ctx, tx, from, cadenceHeight)
+	res, err := b.evm.Call(ctx, tx, from, evmHeight)
 	if err != nil {
 		// we debug output this error because the execution error is related to user input
 		b.logger.Debug().Err(err).Msg("failed to execute call")
@@ -575,12 +575,12 @@ func (b *BlockChainAPI) GetTransactionCount(
 		return nil, err
 	}
 
-	cadenceHeight, err := b.getCadenceHeight(blockNumberOrHash)
+	evmHeight, err := b.getBlockNumber(blockNumberOrHash)
 	if err != nil {
 		return handleError[*hexutil.Uint64](b.logger, err)
 	}
 
-	networkNonce, err := b.evm.GetNonce(ctx, address, cadenceHeight)
+	networkNonce, err := b.evm.GetNonce(ctx, address, evmHeight)
 	if err != nil {
 		b.logger.Error().Err(err).Msg("get nonce on network failed")
 		return handleError[*hexutil.Uint64](b.logger, err)
@@ -651,18 +651,18 @@ func (b *BlockChainAPI) GetCode(
 		return nil, err
 	}
 
-	cadenceHeight, err := b.getCadenceHeight(blockNumberOrHash)
+	evmHeight, err := b.getBlockNumber(blockNumberOrHash)
 	if err != nil {
 		return handleError[hexutil.Bytes](b.logger, err)
 	}
 
-	code, err := b.evm.GetCode(ctx, address, cadenceHeight)
+	code, err := b.evm.GetCode(ctx, address, evmHeight)
 	if err != nil {
 		b.logger.Error().Err(err).Msg("failed to retrieve account code")
 		return handleError[hexutil.Bytes](b.logger, err)
 	}
 
-	return hexutil.Bytes(code), nil
+	return code, nil
 }
 
 // handleError takes in an error and in case the error is of type ErrNotFound
@@ -674,6 +674,9 @@ func handleError[T any](log zerolog.Logger, err error) (T, error) {
 	if errors.Is(err, storageErrs.ErrNotFound) {
 		// as per specification returning nil and nil for not found resources
 		return zero, nil
+	}
+	if errors.Is(err, requester.ErrOutOfRange) {
+		return zero, fmt.Errorf("requested height is out of supported range")
 	}
 
 	log.Error().Err(err).Msg("api error")
@@ -766,36 +769,18 @@ func (b *BlockChainAPI) prepareBlockResponse(
 	return blockResponse, nil
 }
 
-func (b *BlockChainAPI) getCadenceHeight(
-	blockNumberOrHash *rpc.BlockNumberOrHash,
-) (uint64, error) {
-	height := requester.LatestBlockHeight
+func (b *BlockChainAPI) getBlockNumber(blockNumberOrHash *rpc.BlockNumberOrHash) (int64, error) {
 	if number, ok := blockNumberOrHash.Number(); ok {
-		if number < 0 {
-			// negative values are special values and we only support latest height
-			return height, nil
-		}
+		return number.Int64(), nil
+	}
 
-		height, err := b.blocks.GetCadenceHeight(uint64(number.Int64()))
-		if err != nil {
-			b.logger.Error().Err(err).Msg("failed to get cadence height")
-			return 0, err
-		}
-
-		return height, nil
-	} else if hash, ok := blockNumberOrHash.Hash(); ok {
+	if hash, ok := blockNumberOrHash.Hash(); ok {
 		evmHeight, err := b.blocks.GetHeightByID(hash)
 		if err != nil {
 			b.logger.Error().Err(err).Msg("failed to get block by hash")
 			return 0, err
 		}
-		height, err = b.blocks.GetCadenceHeight(evmHeight)
-		if err != nil {
-			b.logger.Error().Err(err).Msg("failed to get cadence height")
-			return 0, err
-		}
-
-		return height, nil
+		return int64(evmHeight), nil
 	}
 
 	return 0, fmt.Errorf("invalid arguments; neither block nor hash specified")
