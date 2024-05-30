@@ -69,6 +69,7 @@ func Test_ConcurrentTransactionSubmission(t *testing.T) {
 		GasPrice:          new(big.Int).SetUint64(0),
 		LogLevel:          zerolog.DebugLevel,
 		LogWriter:         os.Stdout,
+		RateLimit:         100,
 	}
 
 	// todo change this test to use ingestion and emulator directly so we can completely remove
