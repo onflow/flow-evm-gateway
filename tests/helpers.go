@@ -109,11 +109,10 @@ func runWeb3Test(t *testing.T, name string) {
 func runWeb3TestWithSetup(
 	t *testing.T,
 	name string,
-	setupFunc func(emu emulator.Emulator) error,
+	setupFunc func(emu emulator.Emulator),
 ) {
 	emu, stop := servicesSetup(t)
-	err := setupFunc(emu)
-	require.NoError(t, err)
+	setupFunc(emu)
 	executeTest(t, name)
 	stop()
 }

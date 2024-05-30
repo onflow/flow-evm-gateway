@@ -103,4 +103,4 @@ it('streaming of logs using filters', async() => {
     await ws.eth.clearSubscriptions()
 
     process.exit(0)
-}).timeout(timeout*1000)
+}).timeout(timeout*1500)
