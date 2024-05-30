@@ -38,14 +38,6 @@ func TestWeb3_E2E(t *testing.T) {
 		runWeb3Test(t, "eth_get_filter_logs_test")
 	})
 
-	t.Run("streaming of entities and subscription", func(t *testing.T) {
-		runWeb3Test(t, "eth_streaming_test")
-	})
-
-	t.Run("streaming of entities and subscription with filters", func(t *testing.T) {
-		runWeb3Test(t, "eth_streaming_filters_test")
-	})
-
 	t.Run("batch run transactions", func(t *testing.T) {
 		// create multiple value transfers and batch run them before the test
 		runWeb3TestWithSetup(t, "eth_batch_retrieval_test", func(emu emulator.Emulator) {
@@ -90,5 +82,13 @@ func TestWeb3_E2E(t *testing.T) {
 			require.NoError(t, err)
 			require.NoError(t, res.Error)
 		})
+	})
+
+	t.Run("streaming of entities and subscription", func(t *testing.T) {
+		runWeb3Test(t, "eth_streaming_test")
+	})
+
+	t.Run("streaming of entities and subscription with filters", func(t *testing.T) {
+		runWeb3Test(t, "eth_streaming_filters_test")
 	})
 }
