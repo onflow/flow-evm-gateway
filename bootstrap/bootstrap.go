@@ -237,9 +237,9 @@ func startServer(
 	rateLimit := cfg.RateLimit
 	if rateLimit == 0 {
 		l.Warn().Msg("no rate-limiting is set")
-		rateLimit = math.MaxUint64
+		rateLimit = math.MaxInt
 	}
-	ratelimiter, err := memorystore.New(&memorystore.Config{Tokens: cfg.RateLimit, Interval: time.Second})
+	ratelimiter, err := memorystore.New(&memorystore.Config{Tokens: rateLimit, Interval: time.Second})
 	if err != nil {
 		return fmt.Errorf("failed to create rate limiter: %w", err)
 	}
