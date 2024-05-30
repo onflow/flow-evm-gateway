@@ -11,7 +11,7 @@ it('rate limit after X requests', async () => {
     let requestsFailed = 0
     let requests = 60
 
-    for (let i = 0; i < requests; i++) {
+    for (let i = 0; i <= requests; i++) {
         try {
             await ws.eth.getBlockNumber()
             requestsMade++
