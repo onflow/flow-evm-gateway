@@ -96,11 +96,17 @@ func NewBlockChainAPI(
 // wasn't synced up to a block where EIP-155 is enabled, but this behavior caused issues
 // in CL clients.
 func (b *BlockChainAPI) ChainId(ctx context.Context) (*hexutil.Big, error) {
-	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
-		return nil, err
-	}
-
 	return (*hexutil.Big)(b.config.EVMNetworkID), nil
+}
+
+// Coinbase is the address that mining rewards will be sent to (alias for Etherbase).
+func (b *BlockChainAPI) Coinbase(ctx context.Context) (common.Address, error) {
+	return b.config.Coinbase, nil
+}
+
+// GasPrice returns a suggestion for a gas price for legacy transactions.
+func (b *BlockChainAPI) GasPrice(ctx context.Context) (*hexutil.Big, error) {
+	return (*hexutil.Big)(b.config.GasPrice), nil
 }
 
 // BlockNumber returns the block number of the chain head.
@@ -166,15 +172,6 @@ func (b *BlockChainAPI) SendRawTransaction(
 	}
 
 	return id, nil
-}
-
-// GasPrice returns a suggestion for a gas price for legacy transactions.
-func (b *BlockChainAPI) GasPrice(ctx context.Context) (*hexutil.Big, error) {
-	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
-		return nil, err
-	}
-
-	return (*hexutil.Big)(b.config.GasPrice), nil
 }
 
 // GetBalance returns the amount of wei for the given address in the state of the
@@ -313,15 +310,6 @@ func (b *BlockChainAPI) GetTransactionReceipt(
 	}
 
 	return txReceipt, nil
-}
-
-// Coinbase is the address that mining rewards will be sent to (alias for Etherbase).
-func (b *BlockChainAPI) Coinbase(ctx context.Context) (common.Address, error) {
-	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
-		return common.Address{}, err
-	}
-
-	return b.config.Coinbase, nil
 }
 
 // GetBlockByHash returns the requested block. When fullTx is true all transactions in the block are returned in full
