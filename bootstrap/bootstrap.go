@@ -236,6 +236,7 @@ func startServer(
 	// if no limit is defined we specify max value, effectively disabling rate-limiting
 	rateLimit := cfg.RateLimit
 	if rateLimit == 0 {
+		l.Warn().Msg("no rate-limiting is set")
 		rateLimit = math.MaxUint64
 	}
 	ratelimiter, err := memorystore.New(&memorystore.Config{Tokens: cfg.RateLimit, Interval: time.Second})
