@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/onflow/flow-go-sdk/access"
@@ -231,8 +232,12 @@ func startServer(
 		return fmt.Errorf("failed to create EVM requester: %w", err)
 	}
 
-	// create rate limiter for requests on the APIs.
-	// tokens are number of requests allowed per interval
+	// create rate limiter for requests on the APIs. Tokens are number of requests allowed per 1 second interval
+	// if no limit is defined we specify max value, effectively disabling rate-limiting
+	rateLimit := cfg.RateLimit
+	if rateLimit == 0 {
+		rateLimit = math.MaxUint64
+	}
 	ratelimiter, err := memorystore.New(&memorystore.Config{Tokens: cfg.RateLimit, Interval: time.Second})
 	if err != nil {
 		return fmt.Errorf("failed to create rate limiter: %w", err)
