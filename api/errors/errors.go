@@ -10,6 +10,7 @@ var (
 	ErrNotSupported = errors.New("endpoint is not supported")
 	ErrInvalid      = errors.New("invalid request")
 	ErrInternal     = errors.New("internal error")
+	ErrRateLimit    = errors.New("limit of requests per second reached")
 )
 
 type ErrGasPriceTooLow struct {
