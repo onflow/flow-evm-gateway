@@ -6,10 +6,10 @@ it('rate limit after X requests', async () => {
     setTimeout(() => process.exit(0), 5000) // make sure the process exits
     let ws = new Web3("ws://127.0.0.1:8545")
 
-    let requestLimit = 20 // this should be synced with the value on server config
+    let requestLimit = 50 // this should be synced with the value on server config
     let requestsMade = 0
     let requestsFailed = 0
-    let requests = 40
+    let requests = 60
 
     for (let i = 0; i < requests; i++) {
         try {

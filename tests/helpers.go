@@ -145,7 +145,7 @@ func servicesSetup(t *testing.T) (emulator.Emulator, func()) {
 		LogWriter:         zerolog.NewConsoleWriter(),
 		StreamTimeout:     time.Second * 30,
 		StreamLimit:       10,
-		RateLimit:         500,
+		RateLimit:         50,
 		WSEnabled:         true,
 	}
 
@@ -158,7 +158,7 @@ func servicesSetup(t *testing.T) (emulator.Emulator, func()) {
 		require.NoError(t, err)
 	}()
 
-	time.Sleep(1 * time.Second) // some time to startup
+	time.Sleep(2 * time.Second) // some time to startup
 	return emu, func() {
 		cancel()
 		srv.Stop()
