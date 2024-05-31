@@ -6,9 +6,9 @@ require (
 	github.com/cockroachdb/pebble v0.0.0-20230928194634-aa077af62593
 	github.com/goccy/go-json v0.10.2
 	github.com/hashicorp/golang-lru/v2 v2.0.7
-	github.com/onflow/cadence v1.0.0-preview.29
-	github.com/onflow/flow-go v0.35.5-0.20240517202625-55f862b45dfd
-	github.com/onflow/flow-go-sdk v1.0.0-preview.30.0.20240523120036-f9d51677b347
+	github.com/onflow/cadence v1.0.0-preview.30
+	github.com/onflow/flow-go v0.35.10-crescendo-preview.25.0.20240530124823-b968034713f6
+	github.com/onflow/flow-go-sdk v1.0.0-preview.31
 	github.com/onflow/go-ethereum v1.13.4
 	github.com/rs/cors v1.8.0
 	github.com/rs/zerolog v1.31.0
@@ -121,7 +121,7 @@ require (
 	github.com/onflow/flow-ft/lib/go/templates v1.0.0 // indirect
 	github.com/onflow/flow-nft/lib/go/contracts v1.2.1 // indirect
 	github.com/onflow/flow-nft/lib/go/templates v1.2.0 // indirect
-	github.com/onflow/flow/protobuf/go/flow v0.4.3 // indirect
+	github.com/onflow/flow/protobuf/go/flow v0.4.4 // indirect
 	github.com/onflow/sdks v0.5.1-0.20230912225508-b35402f12bba // indirect
 	github.com/onsi/ginkgo v1.16.5 // indirect
 	github.com/onsi/gomega v1.18.1 // indirect

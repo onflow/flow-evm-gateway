@@ -8,6 +8,7 @@ import (
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access"
+	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/rs/zerolog"
 	"golang.org/x/exp/slices"
 )
@@ -97,10 +98,18 @@ func NewCrossSporkClient(
 	currentSpork access.Client,
 	pastSporks []access.Client,
 	logger zerolog.Logger,
+	chainID flowGo.ChainID,
 ) (*CrossSporkClient, error) {
-	info, err := currentSpork.GetNodeVersionInfo(context.Background())
-	if err != nil {
-		return nil, fmt.Errorf("failed to get node version info: %w", err)
+	nodeRootBlockHeight := uint64(0)
+
+	// Temp fix due to the fact that Emulator does not support the
+	// GetNodeVersionInfo method.
+	if chainID != flowGo.Emulator {
+		info, err := currentSpork.GetNodeVersionInfo(context.Background())
+		if err != nil {
+			return nil, fmt.Errorf("failed to get node version info: %w", err)
+		}
+		nodeRootBlockHeight = info.NodeRootBlockHeight
 	}
 
 	clients := &sporkClients{}
@@ -116,7 +125,7 @@ func NewCrossSporkClient(
 
 	return &CrossSporkClient{
 		logger:                  logger,
-		currentSporkFirstHeight: info.NodeRootBlockHeight,
+		currentSporkFirstHeight: nodeRootBlockHeight,
 		sporkClients:            clients,
 		Client:                  currentSpork,
 	}, nil
