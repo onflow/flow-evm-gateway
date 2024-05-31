@@ -127,6 +127,15 @@ EVM Gateway has public RPC endpoints available for the following environments:
 
 | Name            | Value                                  |
 |-----------------|----------------------------------------|
+| Network Name    | Migrationnet                             |
+| Description     | The public RPC URL for Flow Migrationnet |
+| RPC Endpoint    | https://evm-001.migrationtestnet1.nodes.onflow.org|
+| Chain ID        | 646                                    |
+| Currency Symbol | FLOW                                   |
+| Block Explorer  | /        |
+
+| Name            | Value                                  |
+|-----------------|----------------------------------------|
 | Network Name    | Previewnet                             |
 | Description     | The public RPC URL for Flow Previewnet |
 | RPC Endpoint    | https://previewnet.evm.nodes.onflow.org|
