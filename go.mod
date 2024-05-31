@@ -1,6 +1,6 @@
 module github.com/onflow/flow-evm-gateway
 
-go 1.20
+go 1.22
 
 require (
 	github.com/cockroachdb/pebble v0.0.0-20230928194634-aa077af62593
