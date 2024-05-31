@@ -1,14 +1,14 @@
 module github.com/onflow/flow-evm-gateway/integration
 
-go 1.20
+go 1.22
 
 require (
 	github.com/goccy/go-json v0.10.2
-	github.com/onflow/cadence v1.0.0-preview.29
-	github.com/onflow/flow-emulator v1.0.0-preview.23.0.20240524112921-431194fd9bc0
+	github.com/onflow/cadence v1.0.0-preview.30
+	github.com/onflow/flow-emulator v1.0.0-preview.25
 	github.com/onflow/flow-evm-gateway v0.0.0-20240201154855-4d4d3d3f19c7
-	github.com/onflow/flow-go v0.35.5-0.20240517202625-55f862b45dfd
-	github.com/onflow/flow-go-sdk v1.0.0-preview.30.0.20240523120036-f9d51677b347
+	github.com/onflow/flow-go v0.35.10-crescendo-preview.25.0.20240530124823-b968034713f6
+	github.com/onflow/flow-go-sdk v1.0.0-preview.31
 	github.com/onflow/go-ethereum v1.13.4
 	github.com/rs/zerolog v1.31.0
 	github.com/stretchr/testify v1.9.0
@@ -101,6 +101,7 @@ require (
 	github.com/jackpal/go-nat-pmp v1.0.2 // indirect
 	github.com/jbenet/goprocess v0.1.4 // indirect
 	github.com/k0kubun/pp v3.0.1+incompatible // indirect
+	github.com/karalabe/usb v0.0.2 // indirect
 	github.com/kevinburke/go-bindata v3.24.0+incompatible // indirect
 	github.com/klauspost/compress v1.17.4 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.6 // indirect
@@ -139,11 +140,12 @@ require (
 	github.com/onflow/flow-ft/lib/go/templates v1.0.0 // indirect
 	github.com/onflow/flow-nft/lib/go/contracts v1.2.1 // indirect
 	github.com/onflow/flow-nft/lib/go/templates v1.2.0 // indirect
-	github.com/onflow/flow/protobuf/go/flow v0.4.3 // indirect
+	github.com/onflow/flow/protobuf/go/flow v0.4.4 // indirect
 	github.com/onflow/sdks v0.5.1-0.20230912225508-b35402f12bba // indirect
 	github.com/onflow/wal v1.0.2 // indirect
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.6 // indirect
+	github.com/peterh/liner v1.1.1-0.20190123174540-a2c9a5303de7 // indirect
 	github.com/pierrec/lz4 v2.6.1+incompatible // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
@@ -158,6 +160,7 @@ require (
 	github.com/rogpeppe/go-internal v1.10.0 // indirect
 	github.com/rs/cors v1.8.0 // indirect
 	github.com/schollz/progressbar/v3 v3.13.1 // indirect
+	github.com/sethvargo/go-limiter v1.0.0 // indirect
 	github.com/sethvargo/go-retry v0.2.3 // indirect
 	github.com/shirou/gopsutil v3.21.4-0.20210419000835-c7a38de76ee5+incompatible // indirect
 	github.com/slok/go-http-metrics v0.10.0 // indirect

@@ -38,6 +38,10 @@ func TestWeb3_E2E(t *testing.T) {
 		runWeb3Test(t, "eth_get_filter_logs_test")
 	})
 
+  t.Run("rate-limit requests made by single client", func(t *testing.T) {
+		runWeb3Test(t, "eth_rate_limit_test")
+	})
+  
 	t.Run("batch run transactions", func(t *testing.T) {
 		// create multiple value transfers and batch run them before the test
 		runWeb3TestWithSetup(t, "eth_batch_retrieval_test", func(emu emulator.Emulator) {

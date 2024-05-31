@@ -28,10 +28,15 @@ func Test_Subscribing(t *testing.T) {
 	}
 	currentClient := testutils.SetupClientForRange(21, endHeight)
 
-	client, err := requester.NewCrossSporkClient(currentClient, sporkClients, zerolog.Nop())
+	client, err := requester.NewCrossSporkClient(
+		currentClient,
+		sporkClients,
+		zerolog.Nop(),
+		flowGo.Previewnet,
+	)
 	require.NoError(t, err)
 
-	subscriber := NewRPCSubscriber(client, 100, flowGo.Emulator, zerolog.Nop())
+	subscriber := NewRPCSubscriber(client, 100, flowGo.Previewnet, zerolog.Nop())
 
 	events := subscriber.Subscribe(context.Background(), 1)
 
