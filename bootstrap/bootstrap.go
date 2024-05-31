@@ -76,7 +76,12 @@ func Start(ctx context.Context, cfg *config.Config) error {
 		pastSporkClients[i] = grpcClient
 	}
 
-	client, err := requester.NewCrossSporkClient(currentSporkClient, pastSporkClients, logger)
+	client, err := requester.NewCrossSporkClient(
+		currentSporkClient,
+		pastSporkClients,
+		logger,
+		cfg.FlowNetworkID,
+	)
 	if err != nil {
 		return err
 	}

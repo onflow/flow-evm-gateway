@@ -6,6 +6,7 @@ import (
 
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access"
+	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 
@@ -78,7 +79,12 @@ func Test_CrossSpork(t *testing.T) {
 		past1 := testutils.SetupClientForRange(100, past1Last)
 		past2 := testutils.SetupClientForRange(301, past2Last)
 
-		client, err := NewCrossSporkClient(current, []access.Client{past2, past1}, zerolog.Nop())
+		client, err := NewCrossSporkClient(
+			current,
+			[]access.Client{past2, past1},
+			zerolog.Nop(),
+			flowGo.Previewnet,
+		)
 		require.NoError(t, err)
 
 		c, err := client.getClientForHeight(150)
