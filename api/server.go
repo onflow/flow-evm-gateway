@@ -53,7 +53,9 @@ type httpServer struct {
 }
 
 const (
-	shutdownTimeout = 5 * time.Second
+	shutdownTimeout      = 5 * time.Second
+	batchRequestLimit    = 5
+	batchResponseMaxSize = 5 * 1000 * 1000 // 5 MB
 )
 
 func NewHTTPServer(logger zerolog.Logger, cfg *config.Config) *httpServer {
@@ -107,6 +109,7 @@ func (h *httpServer) EnableRPC(apis []rpc.API) error {
 
 	// Create RPC server and handler.
 	srv := rpc.NewServer()
+	srv.SetBatchLimits(batchRequestLimit, batchResponseMaxSize)
 
 	// Register all the APIs exposed by the services
 	for _, api := range apis {
