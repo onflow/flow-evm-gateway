@@ -3,7 +3,7 @@ const { assert } = require('chai')
 const conf = require('./config')
 const web3 = conf.web3
 
-it('get chain ID', async() => {
+it('get chain ID', async () => {
     let chainID = await web3.eth.getChainId()
     assert.isDefined(chainID)
     assert.equal(chainID, 646n)
@@ -43,7 +43,7 @@ it('get block', async () => {
     assert.isNull(no)
 })
 
-it('get balance', async() => {
+it('get balance', async () => {
     let wei = await web3.eth.getBalance(conf.eoa.address)
     assert.isNotNull(wei)
 
@@ -54,22 +54,22 @@ it('get balance', async() => {
     assert.equal(wei, weiAtBlock)
 })
 
-it('get code', async() => {
+it('get code', async () => {
     let code = await web3.eth.getCode(conf.eoa.address)
     assert.equal(code, "0x") // empty
 })
 
-it('get coinbase', async() => {
+it('get coinbase', async () => {
     let coinbase = await web3.eth.getCoinbase()
     assert.equal(coinbase, conf.serviceEOA) // e2e configured account
 })
 
-it('get gas price', async() => {
+it('get gas price', async () => {
     let gasPrice = await web3.eth.getGasPrice()
     assert.equal(gasPrice, 0n) // 0 by default in tests
 })
 
-it('get transaction', async() => {
+it('get transaction', async () => {
     let blockTx = await web3.eth.getTransactionFromBlock(conf.startBlockHeight, 0)
     assert.isNotNull(blockTx)
 
@@ -95,12 +95,12 @@ it('get transaction', async() => {
     assert.equal(rcp.gasUsed, tx.gas)
 })
 
-it('get mining status', async() => {
+it('get mining status', async () => {
     let mining = await web3.eth.isMining()
     assert.isFalse(mining)
 })
 
-it('get syncing status', async() => {
+it('get syncing status', async () => {
     let height = await web3.eth.getBlockNumber()
     assert.equal(height, conf.startBlockHeight)
 
@@ -109,4 +109,88 @@ it('get syncing status', async() => {
     assert.equal(syncInfo.startingBlock, height)
     assert.equal(syncInfo.currentBlock, height)
     assert.equal(syncInfo.highestBlock, height)
+})
+
+it('can make batch requests', async () => {
+    let batch = new web3.BatchRequest()
+    let getBlockNumber = {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'eth_blockNumber',
+        params: [],
+    }
+    let getChainId = {
+        jsonrpc: '2.0',
+        id: 2,
+        method: 'eth_chainId',
+        params: [],
+    }
+    let getSyncing = {
+        jsonrpc: '2.0',
+        id: 3,
+        method: 'eth_syncing',
+        params: [],
+    }
+    let getNetVersion = {
+        jsonrpc: '2.0',
+        id: 4,
+        method: 'net_version',
+        params: [],
+    }
+    let getBlockTransactionCount = {
+        jsonrpc: '2.0',
+        id: 5,
+        method: 'eth_getBlockTransactionCountByNumber',
+        params: ['0x2'],
+    }
+
+    batch.add(getBlockNumber)
+    batch.add(getChainId)
+    batch.add(getSyncing)
+    batch.add(getNetVersion)
+    batch.add(getBlockTransactionCount)
+
+    let results = await batch.execute()
+
+    assert.deepEqual(
+        results[0],
+        { jsonrpc: '2.0', id: 1, result: '0x3' }
+    )
+    assert.deepEqual(
+        results[1],
+        { jsonrpc: '2.0', id: 2, result: '0x286' }
+    )
+    assert.deepEqual(
+        results[2],
+        {
+            jsonrpc: '2.0',
+            id: 3,
+            result: { startingBlock: '0x3', currentBlock: '0x3', highestBlock: '0x3' }
+        }
+    )
+    assert.deepEqual(
+        results[3],
+        { jsonrpc: '2.0', id: 4, result: '545' }
+    )
+    assert.deepEqual(
+        results[4],
+        { jsonrpc: '2.0', id: 5, result: '0x1' }
+    )
+
+    // The maximum number of batch requests is 5,
+    // so this next batch should fail.
+    let getTransactionCount = {
+        jsonrpc: '2.0',
+        id: 6,
+        method: 'eth_getTransactionCount',
+        params: ['0x658Bdf435d810C91414eC09147DAA6DB62406379', 'latest'],
+    }
+
+    batch.add(getTransactionCount)
+
+    try {
+        results = await batch.execute()
+    } catch (error) {
+        assert.equal(error.innerError[0].message, 'batch too large')
+    }
 })
