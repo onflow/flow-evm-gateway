@@ -20,6 +20,9 @@ const (
 	accountNonceKey   = byte(30)
 	accountBalanceKey = byte(31)
 
+	// traces keys
+	traceTxIDKey = byte(40)
+
 	// special keys
 	latestEVMHeightKey     = byte(100)
 	latestCadenceHeightKey = byte(102)

@@ -16,6 +16,7 @@ type Engine struct {
 	status            *models.EngineStatus
 	blocksBroadcaster *engine.Broadcaster
 	blocks            storage.BlockIndexer
+	traces            storage.TraceIndexer
 	downloader        Downloader
 	currentHeight     atomic.Uint64
 }
@@ -41,11 +42,12 @@ func (e *Engine) Notify() {
 	}
 
 	for _, h := range block.TransactionHashes {
-		trace, err := e.downloader.Download(h.String())
+		trace, err := e.downloader.Download(h)
 		if err != nil {
 			//return nil, err
 		}
 
+		e.traces.StoreTransaction(h, trace)
 	}
 }
 
