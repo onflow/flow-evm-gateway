@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/onflow/go-ethereum/common"
 	"github.com/rs/zerolog"
 )
@@ -24,6 +25,7 @@ var _ Downloader = &GCPDownloader{}
 type GCPDownloader struct {
 	client     *storage.Client
 	logger     zerolog.Logger
+	cache      *lru.TwoQueueCache[string, []byte]
 	bucketName string
 }
 
@@ -53,6 +55,12 @@ func NewGCPDownloader(bucketName string, logger zerolog.Logger) (*GCPDownloader,
 
 func (g *GCPDownloader) Download(id common.Hash) (json.RawMessage, error) {
 	l := g.logger.With().Str("tx-id", id.String()).Logger()
+	val, ok := g.cache.Get(id.String())
+	if ok {
+		l.Debug().Msg("transaction trace cache hit")
+		return val, nil
+	}
+
 	l.Debug().Msg("downloading transaction trace")
 
 	ctx, cancel := context.WithTimeout(context.Background(), downloadTimeout)
@@ -68,6 +76,8 @@ func (g *GCPDownloader) Download(id common.Hash) (json.RawMessage, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to read trace id %s: %w", id, err)
 	}
+
+	g.cache.Add(id.String(), trace)
 
 	l.Info().Int("trace-size", len(trace)).Msg("transaction trace downloaded")
 
