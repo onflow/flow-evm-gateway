@@ -3,10 +3,12 @@ package storage
 import (
 	"math/big"
 
-	"github.com/onflow/flow-evm-gateway/models"
+	"github.com/goccy/go-json"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/go-ethereum/common"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
+
+	"github.com/onflow/flow-evm-gateway/models"
 )
 
 type BlockIndexer interface {
@@ -96,4 +98,11 @@ type AccountIndexer interface {
 
 	// GetBalance gets an account balance. If no balance was indexed it returns 0.
 	GetBalance(address *common.Address) (*big.Int, error)
+}
+
+type TraceIndexer interface {
+	// StoreTransaction will index transaction trace by the transaction ID.
+	StoreTransaction(ID common.Hash, trace json.RawMessage) error
+	// GetTransaction will retrieve transaction trace by the transaction ID.
+	GetTransaction(ID common.Hash) (json.RawMessage, error)
 }
