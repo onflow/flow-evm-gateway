@@ -46,10 +46,16 @@ func NewGCPDownloader(bucketName string, logger zerolog.Logger) (*GCPDownloader,
 		return nil, fmt.Errorf("error accessing bucket: %s, make sure bucket exists: %w", bucketName, err)
 	}
 
+	valueCache, err := lru.New2Q[string, []byte](128)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create trace cache: %w", err)
+	}
+
 	return &GCPDownloader{
 		client:     client,
 		logger:     logger,
 		bucketName: bucketName,
+		cache:      valueCache,
 	}, nil
 }
 
