@@ -4,14 +4,17 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/onflow/flow-evm-gateway/models"
-	"github.com/onflow/flow-evm-gateway/storage/errors"
-	"github.com/onflow/flow-evm-gateway/storage/mocks"
 	evmEmulator "github.com/onflow/flow-go/fvm/evm/emulator"
+
+	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/go-ethereum/common"
 	"github.com/onflow/go-ethereum/core/types"
 	"github.com/onflow/go-ethereum/crypto"
 	"github.com/stretchr/testify/suite"
+
+	"github.com/onflow/flow-evm-gateway/models"
+	"github.com/onflow/flow-evm-gateway/storage/errors"
+	"github.com/onflow/flow-evm-gateway/storage/mocks"
 )
 
 type BlockTestSuite struct {
@@ -22,8 +25,9 @@ type BlockTestSuite struct {
 func (b *BlockTestSuite) TestGet() {
 	b.Run("existing block", func() {
 		height := uint64(1)
+		flowID := flow.Identifier{0x01}
 		block := mocks.NewBlock(height)
-		err := b.Blocks.Store(height+1, block)
+		err := b.Blocks.Store(height+1, flowID, block)
 		b.Require().NoError(err)
 
 		ID, err := block.Hash()
@@ -55,17 +59,18 @@ func (b *BlockTestSuite) TestStore() {
 	block := mocks.NewBlock(10)
 
 	b.Run("success", func() {
-		err := b.Blocks.Store(2, block)
+		flowID := flow.Identifier{0x01}
+		err := b.Blocks.Store(2, flowID, block)
 		b.Require().NoError(err)
 
 		// we allow overwriting blocks to make the actions idempotent
-		err = b.Blocks.Store(2, block)
+		err = b.Blocks.Store(2, flowID, block)
 		b.Require().NoError(err)
 	})
 
 	b.Run("store multiple blocks, and get one", func() {
 		for i := 0; i < 10; i++ {
-			err := b.Blocks.Store(uint64(i+5), mocks.NewBlock(uint64(10+i)))
+			err := b.Blocks.Store(uint64(i+5), flow.Identifier{byte(i)}, mocks.NewBlock(uint64(10+i)))
 			b.Require().NoError(err)
 		}
 
@@ -85,7 +90,7 @@ func (b *BlockTestSuite) TestHeights() {
 	b.Run("last EVM height", func() {
 		for i := 0; i < 5; i++ {
 			lastHeight := uint64(100 + i)
-			err := b.Blocks.Store(lastHeight+10, mocks.NewBlock(lastHeight))
+			err := b.Blocks.Store(lastHeight+10, flow.Identifier{byte(i)}, mocks.NewBlock(lastHeight))
 			b.Require().NoError(err)
 
 			last, err := b.Blocks.LatestEVMHeight()
@@ -97,7 +102,7 @@ func (b *BlockTestSuite) TestHeights() {
 	b.Run("last Cadence height", func() {
 		for i := 0; i < 5; i++ {
 			lastHeight := uint64(100 + i)
-			err := b.Blocks.Store(lastHeight, mocks.NewBlock(lastHeight-10))
+			err := b.Blocks.Store(lastHeight, flow.Identifier{byte(i)}, mocks.NewBlock(lastHeight-10))
 			b.Require().NoError(err)
 
 			last, err := b.Blocks.LatestCadenceHeight()
@@ -110,7 +115,7 @@ func (b *BlockTestSuite) TestHeights() {
 		evmHeights := []uint64{10, 11, 12, 13}
 		cadenceHeights := []uint64{20, 24, 26, 27}
 		for i, evmHeight := range evmHeights {
-			err := b.Blocks.Store(cadenceHeights[i], mocks.NewBlock(evmHeight))
+			err := b.Blocks.Store(cadenceHeights[i], flow.Identifier{byte(i)}, mocks.NewBlock(evmHeight))
 			b.Require().NoError(err)
 		}
 

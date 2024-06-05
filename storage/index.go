@@ -4,6 +4,7 @@ import (
 	"math/big"
 
 	"github.com/goccy/go-json"
+	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/go-ethereum/common"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
@@ -12,10 +13,10 @@ import (
 )
 
 type BlockIndexer interface {
-	// Store provided EVM block with the matching Cadence height.
+	// Store provided EVM block with the matching Cadence height and Cadence Block ID.
 	// Expected errors:
 	// - errors.Duplicate if the block already exists
-	Store(cadenceHeight uint64, block *types.Block) error
+	Store(cadenceHeight uint64, cadenceID flow.Identifier, block *types.Block) error
 
 	// GetByHeight returns an EVM block stored by EVM height.
 	// Expected errors:

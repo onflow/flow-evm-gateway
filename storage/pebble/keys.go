@@ -7,6 +7,7 @@ const (
 	blockHeightKey              = byte(1)
 	blockIDToHeightKey          = byte(2)
 	evmHeightToCadenceHeightKey = byte(3)
+	evmHeightToCadenceIDKey     = byte(4)
 
 	// transaction keys
 	txIDKey = byte(10)

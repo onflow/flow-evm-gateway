@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go/engine"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
@@ -144,7 +145,7 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 		return err
 	}
 	for _, block := range blocks {
-		if err := e.indexBlock(events.CadenceHeight(), block); err != nil {
+		if err := e.indexBlock(events.CadenceHeight(), events.CadenceBlockID(), block); err != nil {
 			return err
 		}
 	}
@@ -162,7 +163,7 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 	return nil
 }
 
-func (e *Engine) indexBlock(cadenceHeight uint64, block *types.Block) error {
+func (e *Engine) indexBlock(cadenceHeight uint64, cadenceID flow.Identifier, block *types.Block) error {
 	if block == nil { // safety check shouldn't happen
 		return fmt.Errorf("can't process empty block")
 	}
@@ -185,12 +186,13 @@ func (e *Engine) indexBlock(cadenceHeight uint64, block *types.Block) error {
 		Str("hash", blockHash.Hex()).
 		Uint64("evm-height", block.Height).
 		Uint64("cadence-height", cadenceHeight).
+		Str("cadence-id", cadenceID.String()).
 		Str("parent-hash", block.ParentBlockHash.String()).
 		Strs("tx-hashes", txHashes).
 		Msg("new evm block executed event")
 
 	// todo should probably be batch in the same as bellow tx
-	if err := e.blocks.Store(cadenceHeight, block); err != nil {
+	if err := e.blocks.Store(cadenceHeight, cadenceID, block); err != nil {
 		return err
 	}
 

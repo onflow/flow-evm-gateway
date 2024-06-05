@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/cockroachdb/pebble"
+	"github.com/onflow/flow-go-sdk"
 
 	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/go-ethereum/common"
@@ -31,7 +32,7 @@ func NewBlocks(store *Storage) *Blocks {
 	}
 }
 
-func (b *Blocks) Store(cadenceHeight uint64, block *types.Block) error {
+func (b *Blocks) Store(cadenceHeight uint64, cadenceID flow.Identifier, block *types.Block) error {
 	b.mux.Lock()
 	defer b.mux.Unlock()
 
@@ -60,9 +61,14 @@ func (b *Blocks) Store(cadenceHeight uint64, block *types.Block) error {
 		return fmt.Errorf("failed to store block: %w", err)
 	}
 
-	// set latest height
+	// set mapping of evm height to cadence block height
 	if err := b.store.set(evmHeightToCadenceHeightKey, evmHeightBytes, cadenceHeightBytes, batch); err != nil {
 		return fmt.Errorf("failed to store evm to cadence height: %w", err)
+	}
+
+	// set mapping of evm height to cadence block id
+	if err := b.store.set(evmHeightToCadenceIDKey, evmHeightBytes, cadenceID.Bytes(), batch); err != nil {
+		return fmt.Errorf("failed to store evm to cadence id: %w", err)
 	}
 
 	if err := b.store.set(latestCadenceHeightKey, nil, cadenceHeightBytes, batch); err != nil {
@@ -184,7 +190,7 @@ func (b *Blocks) SetLatestCadenceHeight(height uint64) error {
 }
 
 // InitHeights sets the Cadence height to zero as well as EVM heights. Used for empty database init.
-func (b *Blocks) InitHeights(cadenceHeight uint64) error {
+func (b *Blocks) InitHeights(cadenceHeight uint64, cadenceID flow.Identifier) error {
 	// sanity check, make sure we don't have any heights stored, disable overwriting the database
 	_, err := b.LatestEVMHeight()
 	if !errors.Is(err, errs.ErrNotInitialized) {
@@ -200,7 +206,7 @@ func (b *Blocks) InitHeights(cadenceHeight uint64) error {
 	}
 
 	// we store genesis block because it isn't emitted over the network
-	if err := b.Store(cadenceHeight, types.GenesisBlock); err != nil {
+	if err := b.Store(cadenceHeight, cadenceID, types.GenesisBlock); err != nil {
 		return fmt.Errorf("faield to set init genesis block: %w", err)
 	}
 
