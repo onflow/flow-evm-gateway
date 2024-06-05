@@ -6,6 +6,7 @@ import (
 
 	"github.com/goccy/go-json"
 	evmEmulator "github.com/onflow/flow-go/fvm/evm/emulator"
+	goTypes "github.com/onflow/flow-go/fvm/evm/types"
 
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/go-ethereum/common"
@@ -97,6 +98,30 @@ func (b *BlockTestSuite) TestHeights() {
 			last, err := b.Blocks.LatestEVMHeight()
 			b.Require().NoError(err)
 			b.Require().Equal(lastHeight, last)
+
+			last, err = b.Blocks.LatestEVMHeight() // second time it should get it from cache
+			b.Require().NoError(err)
+			b.Require().Equal(lastHeight, last)
+		}
+	})
+
+	b.Run("get height by ID", func() {
+		evmHeights := []uint64{10, 11, 12, 13}
+		cadenceIDs := []flow.Identifier{{0x01}, {0x02}, {0x03}, {0x04}}
+		blocks := make([]*goTypes.Block, 4)
+
+		for i, evmHeight := range evmHeights {
+			blocks[i] = mocks.NewBlock(evmHeight)
+			err := b.Blocks.Store(uint64(i), cadenceIDs[i], blocks[i])
+			b.Require().NoError(err)
+		}
+
+		for i, _ := range evmHeights {
+			id, err := blocks[i].Hash()
+			b.Require().NoError(err)
+			evm, err := b.Blocks.GetHeightByID(id)
+			b.Require().NoError(err)
+			b.Assert().Equal(evmHeights[i], evm)
 		}
 	})
 

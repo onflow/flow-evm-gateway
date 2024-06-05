@@ -53,6 +53,12 @@ func TestAccounts(t *testing.T) {
 	})
 }
 
+func TestTraces(t *testing.T) {
+	runDB("traces", t, func(t *testing.T, db *Storage) {
+		suite.Run(t, &storage.TraceTestSuite{TraceIndexer: NewTraces(db)})
+	})
+}
+
 func TestBlock(t *testing.T) {
 
 	runDB("store block", t, func(t *testing.T, db *Storage) {
