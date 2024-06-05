@@ -6,9 +6,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go/engine"
 	"github.com/onflow/flow-go/fvm/evm/types"
-	"github.com/onflow/flow-go/model/flow"
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-retry"
 	"golang.org/x/sync/errgroup"
@@ -16,6 +16,8 @@ import (
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/storage"
 )
+
+// todo add ability to backfill missing traces
 
 var _ models.Engine = &Engine{}
 
@@ -29,7 +31,14 @@ type Engine struct {
 	currentHeight     *atomic.Uint64
 }
 
-func NewTracesIngestionEngine(initEVMHeight uint64, logger zerolog.Logger) *Engine {
+func NewTracesIngestionEngine(
+	initEVMHeight uint64,
+	blocksBroadcaster *engine.Broadcaster,
+	blocks storage.BlockIndexer,
+	traces storage.TraceIndexer,
+	downloader Downloader,
+	logger zerolog.Logger,
+) *Engine {
 	height := &atomic.Uint64{}
 	height.Store(initEVMHeight)
 
@@ -51,19 +60,20 @@ func (e *Engine) Notify() {
 	// proceed indexing the next height
 	height := e.currentHeight.Add(1)
 
+	l := e.logger.With().Uint64("evm-height", height).Logger()
+
 	block, err := e.blocks.GetByHeight(height)
 	if err != nil {
-		e.logger.Error().Err(err).
-			Uint64("height", height).
-			Msg("failed to get block")
+		l.Error().Err(err).Msg("failed to get block")
 	}
 
-	e.blocks.GetCadenceHeight(block.Height)
+	cadenceID, err := e.blocks.GetCadenceID(height)
+	if err != nil {
+		l.Error().Err(err).Msg("failed to get cadence block ID")
+	}
 
-	if err := e.indexBlockTraces(block, nil); err != nil {
-		e.logger.Error().Err(err).
-			Uint64("evm-height", block.Height).
-			Msg("failed to index traces")
+	if err := e.indexBlockTraces(block, cadenceID); err != nil {
+		l.Error().Err(err).Msg("failed to index traces")
 	}
 }
 
