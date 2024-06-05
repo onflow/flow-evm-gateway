@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/goccy/go-json"
 	evmEmulator "github.com/onflow/flow-go/fvm/evm/emulator"
 
 	"github.com/onflow/flow-go-sdk"
@@ -123,6 +124,21 @@ func (b *BlockTestSuite) TestHeights() {
 			cadence, err := b.Blocks.GetCadenceHeight(evmHeight)
 			b.Require().NoError(err)
 			b.Assert().Equal(cadenceHeights[i], cadence)
+		}
+	})
+
+	b.Run("Cadence ID from EVM height", func() {
+		evmHeights := []uint64{10, 11, 12, 13}
+		cadenceIDs := []flow.Identifier{{0x01}, {0x02}, {0x03}, {0x04}}
+		for i, evmHeight := range evmHeights {
+			err := b.Blocks.Store(uint64(i), cadenceIDs[i], mocks.NewBlock(evmHeight))
+			b.Require().NoError(err)
+		}
+
+		for i, evmHeight := range evmHeights {
+			cadence, err := b.Blocks.GetCadenceID(evmHeight)
+			b.Require().NoError(err)
+			b.Assert().Equal(cadenceIDs[i], cadence)
 		}
 	})
 }
@@ -414,5 +430,49 @@ func (a *AccountTestSuite) TestNonce() {
 			a.Require().NoError(err)
 			a.Require().Equal(uint64(4), nonce) // always equal to latest nonce
 		}
+	})
+}
+
+type TraceTestSuite struct {
+	suite.Suite
+	TraceIndexer TraceIndexer
+}
+
+func (s *TraceTestSuite) TestStore() {
+	s.Run("store new trace", func() {
+		id := common.Hash{0x01}
+		trace := json.RawMessage(`{ "test": "foo" }`)
+		err := s.TraceIndexer.StoreTransaction(id, trace)
+		s.Require().NoError(err)
+	})
+
+	s.Run("overwrite existing trace", func() {
+		for i := 0; i < 2; i++ {
+			id := common.Hash{0x01}
+			trace := json.RawMessage(`{ "test": "foo" }`)
+			err := s.TraceIndexer.StoreTransaction(id, trace)
+			s.Require().NoError(err)
+		}
+	})
+}
+
+func (s *TraceTestSuite) TestGet() {
+	s.Run("get existing trace", func() {
+		id := common.Hash{0x01}
+		trace := json.RawMessage(`{ "test": "foo" }`)
+
+		err := s.TraceIndexer.StoreTransaction(id, trace)
+		s.Require().NoError(err)
+
+		val, err := s.TraceIndexer.GetTransaction(id)
+		s.Require().NoError(err)
+		s.Require().Equal(trace, val)
+	})
+
+	s.Run("get not found trace", func() {
+		id := common.Hash{0x02}
+		val, err := s.TraceIndexer.GetTransaction(id)
+		s.Require().ErrorIs(err, errors.ErrNotFound)
+		s.Require().Nil(val)
 	})
 }

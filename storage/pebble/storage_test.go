@@ -67,13 +67,15 @@ func TestBlock(t *testing.T) {
 
 	runDB("get stored block", t, func(t *testing.T, db *Storage) {
 		const height = uint64(12)
+		cadenceID := flow.Identifier{0x1}
+		cadenceHeight := uint64(20)
 		bl := mocks.NewBlock(height)
 
 		blocks := NewBlocks(db)
 		err := blocks.InitHeights(config.EmulatorInitCadenceHeight, flow.Identifier{0x1})
 		require.NoError(t, err)
 
-		err = blocks.Store(30, flow.Identifier{0x1}, bl)
+		err = blocks.Store(cadenceHeight, cadenceID, bl)
 		require.NoError(t, err)
 
 		block, err := blocks.GetByHeight(height)
@@ -86,6 +88,14 @@ func TestBlock(t *testing.T) {
 		block, err = blocks.GetByID(id)
 		require.NoError(t, err)
 		assert.Equal(t, bl, block)
+
+		h, err := blocks.GetCadenceHeight(height)
+		require.NoError(t, err)
+		require.Equal(t, cadenceHeight, h)
+
+		cid, err := blocks.GetCadenceID(height)
+		require.NoError(t, err)
+		require.Equal(t, cadenceID, cid)
 	})
 
 	runDB("get not found block error", t, func(t *testing.T, db *Storage) {
