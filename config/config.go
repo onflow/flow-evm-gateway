@@ -78,6 +78,10 @@ type Config struct {
 	ForceStartCadenceHeight uint64
 	// HeartbeatInterval sets custom heartbeat interval for events
 	HeartbeatInterval uint64
+	// TracesBucketName sets the GCP bucket name where transaction traces are being stored.
+	TracesBucketName string
+	// TracesEnabled sets whether the node is supporting transaction traces.
+	TracesEnabled bool
 }
 
 func FromFlags() (*Config, error) {
@@ -110,6 +114,7 @@ func FromFlags() (*Config, error) {
 	flag.IntVar(&streamTimeout, "stream-timeout", 3, "Defines the timeout in seconds the server waits for the event to be sent to the client")
 	flag.Uint64Var(&forceStartHeight, "force-start-height", 0, "Force set starting Cadence height. This should only be used locally or for testing, never in production.")
 	flag.StringVar(&filterExpiry, "filter-expiry", "5m", "Filter defines the time it takes for an idle filter to expire")
+	flag.StringVar(&cfg.TracesBucketName, "traces-gcp-bucket", "", "GCP bucket name where transaction traces are stored")
 	flag.Parse()
 
 	if coinbase == "" {
@@ -211,6 +216,8 @@ func FromFlags() (*Config, error) {
 	if forceStartHeight != 0 {
 		cfg.ForceStartCadenceHeight = forceStartHeight
 	}
+
+	cfg.TracesEnabled = cfg.TracesBucketName != ""
 
 	// todo validate Config values
 	return cfg, nil
