@@ -43,6 +43,7 @@ func NewTracesIngestionEngine(
 	height.Store(initEVMHeight)
 
 	return &Engine{
+		status:            models.NewEngineStatus(),
 		logger:            logger.With().Str("component", "trace-ingestion").Logger(),
 		currentHeight:     height,
 		blocksBroadcaster: blocksBroadcaster,
