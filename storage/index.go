@@ -51,6 +51,13 @@ type BlockIndexer interface {
 	// to the Cadence height.
 	// - errors.NotFound if the height is not found
 	GetCadenceHeight(evmHeight uint64) (uint64, error)
+
+	// GetCadenceID returns the Cadence block ID that matches the
+	// provided EVM height. Each EVM block indexed contains a link to the
+	// Cadence block ID. Multiple EVM heights can point to the same
+	// Cadence block ID.
+	// - errors.NotFound if the height is not found
+	GetCadenceID(evmHeight uint64) (flow.Identifier, error)
 }
 
 type ReceiptIndexer interface {

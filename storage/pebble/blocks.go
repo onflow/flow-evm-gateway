@@ -225,6 +225,18 @@ func (b *Blocks) GetCadenceHeight(evmHeight uint64) (uint64, error) {
 	return binary.BigEndian.Uint64(val), nil
 }
 
+func (b *Blocks) GetCadenceID(evmHeight uint64) (flow.Identifier, error) {
+	b.mux.RLock()
+	defer b.mux.RUnlock()
+
+	val, err := b.store.get(evmHeightToCadenceIDKey, uint64Bytes(evmHeight))
+	if err != nil {
+		return flow.Identifier{}, err
+	}
+
+	return flow.BytesToID(val), nil
+}
+
 func (b *Blocks) getBlock(keyCode byte, key []byte) (*types.Block, error) {
 	data, err := b.store.get(keyCode, key)
 	if err != nil {
