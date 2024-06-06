@@ -2,16 +2,16 @@ package traces
 
 import (
 	"context"
-	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go/engine"
 	"github.com/onflow/flow-go/fvm/evm/types"
+	gethCommon "github.com/onflow/go-ethereum/common"
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-retry"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/storage"
@@ -61,6 +61,8 @@ func (e *Engine) Run(ctx context.Context) error {
 	return nil
 }
 
+// Notify is a handler that is being used to subscribe for new EVM block notifications.
+// This method should be non-blocking.
 func (e *Engine) Notify() {
 	// proceed indexing the next height
 	height := e.currentHeight.Add(1)
@@ -79,43 +81,51 @@ func (e *Engine) Notify() {
 		return
 	}
 
-	if err := e.indexBlockTraces(block, cadenceID); err != nil {
-		l.Error().Err(err).Msg("failed to index traces")
-	}
+	go e.indexBlockTraces(block, cadenceID)
 }
 
-func (e *Engine) indexBlockTraces(evmBlock *types.Block, cadenceBlockID flow.Identifier) error {
-	g, ctx := errgroup.WithContext(context.Background())
-	ctx, cancel := context.WithTimeout(ctx, downloadTimeout)
+// indexBlockTraces iterates the block transaction hashes and tries to download the traces
+func (e *Engine) indexBlockTraces(evmBlock *types.Block, cadenceBlockID flow.Identifier) {
+	ctx, cancel := context.WithTimeout(context.Background(), downloadTimeout)
 	defer cancel()
 
-	const maxConcurrentDownloads = 10 // limit number of concurrent downloads
+	const maxConcurrentDownloads = 5 // limit number of concurrent downloads
 	limiter := make(chan struct{}, maxConcurrentDownloads)
 
+	wg := sync.WaitGroup{}
+
 	for _, h := range evmBlock.TransactionHashes {
-		h := h // local copy the goroutine will reference
-		g.Go(func() error {
-			limiter <- struct{}{}        // acquire a slot
+		wg.Add(1)
+		limiter <- struct{}{} // acquire a slot
+
+		go func(h gethCommon.Hash) {
+			defer wg.Done()
 			defer func() { <-limiter }() // release a slot after done
 
-			return retry.Fibonacci(ctx, time.Second*1, func(ctx context.Context) error {
+			l := e.logger.With().
+				Str("tx-id", h.String()).
+				Str("cadence-block-id", cadenceBlockID.String()).
+				Logger()
+
+			err := retry.Fibonacci(ctx, time.Second*1, func(ctx context.Context) error {
 				trace, err := e.downloader.Download(h, cadenceBlockID)
 				if err != nil {
-					err = fmt.Errorf("failed to download trace %s: %w", h.String(), err)
-					e.logger.Debug().Err(err).Msg("retrying download")
+					l.Warn().Err(err).Msg("retrying failed download")
 					return retry.RetryableError(err)
 				}
 
-				if err = e.traces.StoreTransaction(h, trace); err != nil {
-					return fmt.Errorf("failed to store trace %s: %w", h.String(), err)
-				}
-
-				return nil
+				return e.traces.StoreTransaction(h, trace)
 			})
-		})
+
+			if err != nil {
+				l.Error().Err(err).Msg("failed to download trace")
+				return
+			}
+			l.Info().Msg("trace downloaded successfully")
+		}(h)
 	}
 
-	return g.Wait()
+	wg.Wait()
 }
 
 func (e *Engine) Stop() {
