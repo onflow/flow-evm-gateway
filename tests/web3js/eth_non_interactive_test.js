@@ -1,6 +1,7 @@
 const web3Utils = require('web3-utils')
 const { assert } = require('chai')
 const conf = require('./config')
+const helpers = require('./helpers')
 const web3 = conf.web3
 
 it('get chain ID', async () => {
@@ -193,4 +194,18 @@ it('can make batch requests', async () => {
     } catch (error) {
         assert.equal(error.innerError[0].message, 'batch too large')
     }
+})
+
+it('get fee history', async () => {
+    let response = await web3.eth.getFeeHistory(10, 'latest', [20])
+
+    assert.deepEqual(
+        response,
+        {
+            oldestBlock: 1n,
+            reward: [['0x0'], ['0x0'], ['0x0']], // gas price is always 0 during testing
+            baseFeePerGas: [0n, 0n, 0n],
+            gasUsedRatio: [0.04684, 0.0014036666666666666, 0.0014]
+        }
+    )
 })
