@@ -70,11 +70,13 @@ func (e *Engine) Notify() {
 	block, err := e.blocks.GetByHeight(height)
 	if err != nil {
 		l.Error().Err(err).Msg("failed to get block")
+		return
 	}
 
 	cadenceID, err := e.blocks.GetCadenceID(height)
 	if err != nil {
 		l.Error().Err(err).Msg("failed to get cadence block ID")
+		return
 	}
 
 	if err := e.indexBlockTraces(block, cadenceID); err != nil {
@@ -83,13 +85,20 @@ func (e *Engine) Notify() {
 }
 
 func (e *Engine) indexBlockTraces(evmBlock *types.Block, cadenceBlockID flow.Identifier) error {
-	g := errgroup.Group{}
-	ctx, cancel := context.WithTimeout(context.Background(), downloadTimeout)
+	g, ctx := errgroup.WithContext(context.Background())
+	ctx, cancel := context.WithTimeout(ctx, downloadTimeout)
 	defer cancel()
 
+	const maxConcurrentDownloads = 10 // limit number of concurrent downloads
+	limiter := make(chan struct{}, maxConcurrentDownloads)
+
 	for _, h := range evmBlock.TransactionHashes {
+		h := h // local copy the goroutine will reference
 		g.Go(func() error {
-			err := retry.Fibonacci(ctx, time.Second*1, func(ctx context.Context) error {
+			limiter <- struct{}{}        // acquire a slot
+			defer func() { <-limiter }() // release a slot after done
+
+			return retry.Fibonacci(ctx, time.Second*1, func(ctx context.Context) error {
 				trace, err := e.downloader.Download(h, cadenceBlockID)
 				if err != nil {
 					err = fmt.Errorf("failed to download trace %s: %w", h.String(), err)
@@ -103,11 +112,6 @@ func (e *Engine) indexBlockTraces(evmBlock *types.Block, cadenceBlockID flow.Ide
 
 				return nil
 			})
-			if err != nil {
-				return err
-			}
-
-			return nil
 		})
 	}
 
