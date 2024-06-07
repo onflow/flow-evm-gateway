@@ -180,12 +180,12 @@ func startIngestion(
 		logger,
 	)
 
-	downloader, err := traces.NewGCPDownloader(cfg.TracesBucketName, logger)
-	if err != nil {
-		return err
-	}
-
 	if cfg.TracesEnabled {
+		downloader, err := traces.NewGCPDownloader(cfg.TracesBucketName, logger)
+		if err != nil {
+			return err
+		}
+
 		initHeight, err := blocks.LatestEVMHeight()
 		if err != nil {
 			return err
