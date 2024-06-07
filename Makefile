@@ -15,6 +15,10 @@ check-tidy:
 	go mod tidy
 	git diff --exit-code
 
+.PHONY: fix-lint
+fix-lint:
+	golangci-lint run -v --fix ./...
+
 .PHONY: generate
 generate:
 	go get -d github.com/vektra/mockery/v2@v2.21.4
