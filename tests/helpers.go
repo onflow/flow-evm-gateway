@@ -171,6 +171,12 @@ func executeTest(t *testing.T, testFile string) {
 	parts := strings.Fields(command)
 
 	t.Run(testFile, func(t *testing.T) {
+		// timeout for tests
+		go func() {
+			time.Sleep(time.Minute * 2)
+			t.FailNow()
+		}()
+
 		cmd := exec.Command(parts[0], parts[1:]...)
 		if cmd.Err != nil {
 			panic(cmd.Err)
