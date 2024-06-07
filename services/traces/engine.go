@@ -17,8 +17,6 @@ import (
 	"github.com/onflow/flow-evm-gateway/storage"
 )
 
-// todo add ability to backfill missing traces
-
 var _ models.Engine = &Engine{}
 
 type Engine struct {
