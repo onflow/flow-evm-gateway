@@ -11,6 +11,7 @@ import (
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/go-ethereum/common"
 	"github.com/rs/zerolog"
+	"google.golang.org/api/option"
 )
 
 const downloadTimeout = 5 * time.Minute
@@ -34,7 +35,8 @@ func NewGCPDownloader(bucketName string, logger zerolog.Logger) (*GCPDownloader,
 	}
 
 	ctx := context.Background()
-	client, err := storage.NewClient(ctx)
+	// we don't require authentication for public bucket
+	client, err := storage.NewClient(ctx, option.WithoutAuthentication())
 	if err != nil {
 		return nil, fmt.Errorf("storage.NewClient: %w", err)
 	}
