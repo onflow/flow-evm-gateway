@@ -128,7 +128,6 @@ func TestTraceIngestion(t *testing.T) {
 		// generate mock blocks, each with mock transactions
 		mockBlocks := make([]*types.Block, blockCount+1)
 		mockCadenceIDs := make([]flow.Identifier, blockCount+1)
-		downloadIDs := make([]string, 0)
 
 		for i := range mockBlocks {
 			b := storageMock.NewBlock(uint64(i))
@@ -137,7 +136,6 @@ func TestTraceIngestion(t *testing.T) {
 			h := make([]gethCommon.Hash, txCount)
 			for j := range h {
 				h[j] = gethCommon.Hash{byte(j), byte(i)}
-				downloadIDs = append(downloadIDs, fmt.Sprintf("%s-%s", cid.String(), h[j].String()))
 			}
 
 			b.TransactionHashes = h
@@ -204,11 +202,6 @@ func TestTraceIngestion(t *testing.T) {
 		}, time.Second*10, time.Millisecond*100, "traces not indexed")
 
 		close(stored)
-
-		storedHashes := make([]string, 0)
-		for h := range stored {
-			storedHashes = append(storedHashes, h.String())
-		}
 
 		// make sure we downloaded and indexed all the hashes in the block
 		for id := range downloadedIDs {

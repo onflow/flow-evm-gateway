@@ -116,7 +116,7 @@ func (b *BlockTestSuite) TestHeights() {
 			b.Require().NoError(err)
 		}
 
-		for i, _ := range evmHeights {
+		for i := range evmHeights {
 			id, err := blocks[i].Hash()
 			b.Require().NoError(err)
 			evm, err := b.Blocks.GetHeightByID(id)
