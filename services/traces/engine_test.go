@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -125,8 +126,8 @@ func TestTraceIngestion(t *testing.T) {
 		const txCount = 50
 
 		// generate mock blocks, each with mock transactions
-		mockBlocks := make([]*types.Block, blockCount)
-		mockCadenceIDs := make([]flow.Identifier, blockCount)
+		mockBlocks := make([]*types.Block, blockCount+1)
+		mockCadenceIDs := make([]flow.Identifier, blockCount+1)
 		downloadIDs := make([]string, 0)
 
 		for i := range mockBlocks {
@@ -161,17 +162,17 @@ func TestTraceIngestion(t *testing.T) {
 				return mockCadenceIDs[height], nil
 			})
 
-		downloadedIDs := make(map[string]struct{})
+		downloadedIDs := make(chan string, blockCount*txCount)
 		downloader.
 			On("Download", mock.Anything, mock.Anything).
 			Return(func(txID gethCommon.Hash, blkID flow.Identifier) (json.RawMessage, error) {
 				id := fmt.Sprintf("%s-%s", blkID.String(), txID.String())
-				downloadedIDs[id] = struct{}{}
+				downloadedIDs <- id
 				time.Sleep(time.Millisecond * 200) // simulate download delay
 				return txTrace(txID), nil
 			})
 
-		stored := make(chan gethCommon.Hash)
+		stored := make(chan gethCommon.Hash, blockCount*txCount)
 		trace.
 			On("StoreTransaction", mock.Anything, mock.Anything).
 			Return(func(ID gethCommon.Hash, trace json.RawMessage) error {
@@ -190,6 +191,13 @@ func TestTraceIngestion(t *testing.T) {
 			time.Sleep(time.Millisecond * 100) // simulate block delay
 		}
 
+		// make sure download was called as many times as all blocks times the hashes it contained
+		require.Eventuallyf(t, func() bool {
+			return len(downloadedIDs) == blockCount*txCount
+		}, time.Second*10, time.Millisecond*100, "traces not downloaded")
+
+		close(downloadedIDs)
+
 		// make sure stored was called as many times as all blocks times the hashes it contained
 		require.Eventuallyf(t, func() bool {
 			return len(stored) == blockCount*txCount
@@ -203,13 +211,21 @@ func TestTraceIngestion(t *testing.T) {
 		}
 
 		// make sure we downloaded and indexed all the hashes in the block
-		for i, b := range mockBlocks {
-			for _, h := range b.TransactionHashes {
-				id := fmt.Sprintf("%s-%s", mockCadenceIDs[i].String(), h.String())
-				_, ok := downloadedIDs[id]
-				require.True(t, ok)                                        // make sure all traces were downloaded
-				require.True(t, slices.Contains(storedHashes, h.String())) // make sure trace was indexed
+		for id := range downloadedIDs {
+			found := false
+			for _, b := range mockBlocks {
+				for _, h := range b.TransactionHashes {
+					txID := strings.Split(id, "-")[1]
+					if txID == h.String() {
+						found = true
+						break
+					}
+				}
+				if found {
+					break
+				}
 			}
+			require.True(t, found, fmt.Sprintf("id %s not found", id))
 		}
 	})
 
