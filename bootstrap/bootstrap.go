@@ -19,6 +19,7 @@ import (
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/services/ingestion"
 	"github.com/onflow/flow-evm-gateway/services/requester"
+	"github.com/onflow/flow-evm-gateway/services/traces"
 	"github.com/onflow/flow-evm-gateway/storage"
 	storageErrs "github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
@@ -38,18 +39,11 @@ func Start(ctx context.Context, cfg *config.Config) error {
 	transactions := pebble.NewTransactions(pebbleDB)
 	receipts := pebble.NewReceipts(pebbleDB)
 	accounts := pebble.NewAccounts(pebbleDB)
+	trace := pebble.NewTraces(pebbleDB)
 
 	blocksBroadcaster := broadcast.NewBroadcaster()
 	transactionsBroadcaster := broadcast.NewBroadcaster()
 	logsBroadcaster := broadcast.NewBroadcaster()
-
-	// if database is not initialized require init height
-	if _, err := blocks.LatestCadenceHeight(); errors.Is(err, storageErrs.ErrNotInitialized) {
-		if err := blocks.InitHeights(cfg.InitCadenceHeight); err != nil {
-			return fmt.Errorf("failed to init the database: %w", err)
-		}
-		logger.Info().Msg("database initialized with 0 evm and cadence heights")
-	}
 
 	// this should only be used locally or for testing
 	if cfg.ForceStartCadenceHeight != 0 {
@@ -86,6 +80,20 @@ func Start(ctx context.Context, cfg *config.Config) error {
 		return err
 	}
 
+	// if database is not initialized require init height
+	if _, err := blocks.LatestCadenceHeight(); errors.Is(err, storageErrs.ErrNotInitialized) {
+		cadenceHeight := cfg.InitCadenceHeight
+		cadenceBlock, err := client.GetBlockHeaderByHeight(ctx, cadenceHeight)
+		if err != nil {
+			return err
+		}
+
+		if err := blocks.InitHeights(cadenceHeight, cadenceBlock.ID); err != nil {
+			return fmt.Errorf("failed to init the database: %w", err)
+		}
+		logger.Info().Msg("database initialized with 0 evm and cadence heights")
+	}
+
 	go func() {
 		err := startServer(
 			ctx,
@@ -114,6 +122,7 @@ func Start(ctx context.Context, cfg *config.Config) error {
 		transactions,
 		receipts,
 		accounts,
+		trace,
 		blocksBroadcaster,
 		transactionsBroadcaster,
 		logsBroadcaster,
@@ -134,6 +143,7 @@ func startIngestion(
 	transactions storage.TransactionIndexer,
 	receipts storage.ReceiptIndexer,
 	accounts storage.AccountIndexer,
+	trace storage.TraceIndexer,
 	blocksBroadcaster *broadcast.Broadcaster,
 	transactionsBroadcaster *broadcast.Broadcaster,
 	logsBroadcaster *broadcast.Broadcaster,
@@ -163,8 +173,44 @@ func startIngestion(
 		Uint64("missed-heights", blk.Height-latestCadenceHeight).
 		Msg("indexing cadence height information")
 
-	subscriber := ingestion.NewRPCSubscriber(client, cfg.HeartbeatInterval, cfg.FlowNetworkID, logger)
-	engine := ingestion.NewEventIngestionEngine(
+	subscriber := ingestion.NewRPCSubscriber(
+		client,
+		cfg.HeartbeatInterval,
+		cfg.FlowNetworkID,
+		logger,
+	)
+
+	if cfg.TracesEnabled {
+		downloader, err := traces.NewGCPDownloader(cfg.TracesBucketName, logger)
+		if err != nil {
+			return err
+		}
+
+		initHeight, err := blocks.LatestEVMHeight()
+		if err != nil {
+			return err
+		}
+		tracesEngine := traces.NewTracesIngestionEngine(
+			initHeight,
+			blocksBroadcaster,
+			blocks,
+			trace,
+			downloader,
+			logger,
+		)
+
+		go func() {
+			err = tracesEngine.Run(ctx)
+			if err != nil {
+				logger.Error().Err(err).Msg("traces ingestion engine failed to run")
+				panic(err)
+			}
+		}()
+
+		<-tracesEngine.Ready()
+	}
+
+	eventEngine := ingestion.NewEventIngestionEngine(
 		subscriber,
 		blocks,
 		receipts,
@@ -176,17 +222,18 @@ func startIngestion(
 		logger,
 	)
 	const retries = 15
-	restartable := models.NewRestartableEngine(engine, retries, logger)
+	restartableEventEngine := models.NewRestartableEngine(eventEngine, retries, logger)
 
 	go func() {
-		err = restartable.Run(ctx)
+		err = restartableEventEngine.Run(ctx)
 		if err != nil {
-			logger.Error().Err(err).Msg("ingestion engine failed to run")
+			logger.Error().Err(err).Msg("event ingestion engine failed to run")
 			panic(err)
 		}
 	}()
 
-	<-restartable.Ready() // wait for engine to be ready
+	// wait for ingestion engines to be ready
+	<-restartableEventEngine.Ready()
 
 	logger.Info().Msg("ingestion start up successful")
 	return nil

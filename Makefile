@@ -15,6 +15,10 @@ check-tidy:
 	go mod tidy
 	git diff --exit-code
 
+.PHONY: fix-lint
+fix-lint:
+	golangci-lint run -v --fix ./...
+
 .PHONY: generate
 generate:
 	go get -d github.com/vektra/mockery/v2@v2.21.4
@@ -22,6 +26,8 @@ generate:
 	mockery --dir=storage --name=ReceiptIndexer --output=storage/mocks
 	mockery --dir=storage --name=TransactionIndexer --output=storage/mocks
 	mockery --dir=storage --name=AccountIndexer --output=storage/mocks
+	mockery --dir=storage --name=TraceIndexer --output=storage/mocks
+	mockery --all --dir=services/traces --output=services/traces/mocks
 	mockery --all --dir=services/ingestion --output=services/ingestion/mocks
 	mockery --dir=models --name=Engine --output=models/mocks
 

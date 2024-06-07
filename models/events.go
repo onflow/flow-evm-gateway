@@ -1,12 +1,13 @@
 package models
 
 import (
+	"strings"
+
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"golang.org/x/exp/slices"
-	"strings"
 )
 
 // isBlockExecutedEvent checks whether the given event contains block executed data.
@@ -101,6 +102,11 @@ func (c *CadenceEvents) Empty() bool {
 // were emitted.
 func (c *CadenceEvents) CadenceHeight() uint64 {
 	return c.events.Height
+}
+
+// CadenceBlockID returns the Flow Cadence block ID.
+func (c *CadenceEvents) CadenceBlockID() flow.Identifier {
+	return c.events.BlockID
 }
 
 // Length of the Cadence events emitted.

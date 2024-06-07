@@ -4,14 +4,19 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/onflow/flow-evm-gateway/models"
-	"github.com/onflow/flow-evm-gateway/storage/errors"
-	"github.com/onflow/flow-evm-gateway/storage/mocks"
+	"github.com/goccy/go-json"
 	evmEmulator "github.com/onflow/flow-go/fvm/evm/emulator"
+	goTypes "github.com/onflow/flow-go/fvm/evm/types"
+
+	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/go-ethereum/common"
 	"github.com/onflow/go-ethereum/core/types"
 	"github.com/onflow/go-ethereum/crypto"
 	"github.com/stretchr/testify/suite"
+
+	"github.com/onflow/flow-evm-gateway/models"
+	"github.com/onflow/flow-evm-gateway/storage/errors"
+	"github.com/onflow/flow-evm-gateway/storage/mocks"
 )
 
 type BlockTestSuite struct {
@@ -22,8 +27,9 @@ type BlockTestSuite struct {
 func (b *BlockTestSuite) TestGet() {
 	b.Run("existing block", func() {
 		height := uint64(1)
+		flowID := flow.Identifier{0x01}
 		block := mocks.NewBlock(height)
-		err := b.Blocks.Store(height+1, block)
+		err := b.Blocks.Store(height+1, flowID, block)
 		b.Require().NoError(err)
 
 		ID, err := block.Hash()
@@ -55,17 +61,18 @@ func (b *BlockTestSuite) TestStore() {
 	block := mocks.NewBlock(10)
 
 	b.Run("success", func() {
-		err := b.Blocks.Store(2, block)
+		flowID := flow.Identifier{0x01}
+		err := b.Blocks.Store(2, flowID, block)
 		b.Require().NoError(err)
 
 		// we allow overwriting blocks to make the actions idempotent
-		err = b.Blocks.Store(2, block)
+		err = b.Blocks.Store(2, flowID, block)
 		b.Require().NoError(err)
 	})
 
 	b.Run("store multiple blocks, and get one", func() {
 		for i := 0; i < 10; i++ {
-			err := b.Blocks.Store(uint64(i+5), mocks.NewBlock(uint64(10+i)))
+			err := b.Blocks.Store(uint64(i+5), flow.Identifier{byte(i)}, mocks.NewBlock(uint64(10+i)))
 			b.Require().NoError(err)
 		}
 
@@ -85,19 +92,43 @@ func (b *BlockTestSuite) TestHeights() {
 	b.Run("last EVM height", func() {
 		for i := 0; i < 5; i++ {
 			lastHeight := uint64(100 + i)
-			err := b.Blocks.Store(lastHeight+10, mocks.NewBlock(lastHeight))
+			err := b.Blocks.Store(lastHeight+10, flow.Identifier{byte(i)}, mocks.NewBlock(lastHeight))
 			b.Require().NoError(err)
 
 			last, err := b.Blocks.LatestEVMHeight()
 			b.Require().NoError(err)
 			b.Require().Equal(lastHeight, last)
+
+			last, err = b.Blocks.LatestEVMHeight() // second time it should get it from cache
+			b.Require().NoError(err)
+			b.Require().Equal(lastHeight, last)
+		}
+	})
+
+	b.Run("get height by ID", func() {
+		evmHeights := []uint64{10, 11, 12, 13}
+		cadenceIDs := []flow.Identifier{{0x01}, {0x02}, {0x03}, {0x04}}
+		blocks := make([]*goTypes.Block, 4)
+
+		for i, evmHeight := range evmHeights {
+			blocks[i] = mocks.NewBlock(evmHeight)
+			err := b.Blocks.Store(uint64(i), cadenceIDs[i], blocks[i])
+			b.Require().NoError(err)
+		}
+
+		for i := range evmHeights {
+			id, err := blocks[i].Hash()
+			b.Require().NoError(err)
+			evm, err := b.Blocks.GetHeightByID(id)
+			b.Require().NoError(err)
+			b.Assert().Equal(evmHeights[i], evm)
 		}
 	})
 
 	b.Run("last Cadence height", func() {
 		for i := 0; i < 5; i++ {
 			lastHeight := uint64(100 + i)
-			err := b.Blocks.Store(lastHeight, mocks.NewBlock(lastHeight-10))
+			err := b.Blocks.Store(lastHeight, flow.Identifier{byte(i)}, mocks.NewBlock(lastHeight-10))
 			b.Require().NoError(err)
 
 			last, err := b.Blocks.LatestCadenceHeight()
@@ -110,7 +141,7 @@ func (b *BlockTestSuite) TestHeights() {
 		evmHeights := []uint64{10, 11, 12, 13}
 		cadenceHeights := []uint64{20, 24, 26, 27}
 		for i, evmHeight := range evmHeights {
-			err := b.Blocks.Store(cadenceHeights[i], mocks.NewBlock(evmHeight))
+			err := b.Blocks.Store(cadenceHeights[i], flow.Identifier{byte(i)}, mocks.NewBlock(evmHeight))
 			b.Require().NoError(err)
 		}
 
@@ -118,6 +149,21 @@ func (b *BlockTestSuite) TestHeights() {
 			cadence, err := b.Blocks.GetCadenceHeight(evmHeight)
 			b.Require().NoError(err)
 			b.Assert().Equal(cadenceHeights[i], cadence)
+		}
+	})
+
+	b.Run("Cadence ID from EVM height", func() {
+		evmHeights := []uint64{10, 11, 12, 13}
+		cadenceIDs := []flow.Identifier{{0x01}, {0x02}, {0x03}, {0x04}}
+		for i, evmHeight := range evmHeights {
+			err := b.Blocks.Store(uint64(i), cadenceIDs[i], mocks.NewBlock(evmHeight))
+			b.Require().NoError(err)
+		}
+
+		for i, evmHeight := range evmHeights {
+			cadence, err := b.Blocks.GetCadenceID(evmHeight)
+			b.Require().NoError(err)
+			b.Assert().Equal(cadenceIDs[i], cadence)
 		}
 	})
 }
@@ -409,5 +455,49 @@ func (a *AccountTestSuite) TestNonce() {
 			a.Require().NoError(err)
 			a.Require().Equal(uint64(4), nonce) // always equal to latest nonce
 		}
+	})
+}
+
+type TraceTestSuite struct {
+	suite.Suite
+	TraceIndexer TraceIndexer
+}
+
+func (s *TraceTestSuite) TestStore() {
+	s.Run("store new trace", func() {
+		id := common.Hash{0x01}
+		trace := json.RawMessage(`{ "test": "foo" }`)
+		err := s.TraceIndexer.StoreTransaction(id, trace)
+		s.Require().NoError(err)
+	})
+
+	s.Run("overwrite existing trace", func() {
+		for i := 0; i < 2; i++ {
+			id := common.Hash{0x01}
+			trace := json.RawMessage(`{ "test": "foo" }`)
+			err := s.TraceIndexer.StoreTransaction(id, trace)
+			s.Require().NoError(err)
+		}
+	})
+}
+
+func (s *TraceTestSuite) TestGet() {
+	s.Run("get existing trace", func() {
+		id := common.Hash{0x01}
+		trace := json.RawMessage(`{ "test": "foo" }`)
+
+		err := s.TraceIndexer.StoreTransaction(id, trace)
+		s.Require().NoError(err)
+
+		val, err := s.TraceIndexer.GetTransaction(id)
+		s.Require().NoError(err)
+		s.Require().Equal(trace, val)
+	})
+
+	s.Run("get not found trace", func() {
+		id := common.Hash{0x02}
+		val, err := s.TraceIndexer.GetTransaction(id)
+		s.Require().ErrorIs(err, errors.ErrNotFound)
+		s.Require().Nil(val)
 	})
 }

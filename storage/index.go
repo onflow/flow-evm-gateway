@@ -3,17 +3,20 @@ package storage
 import (
 	"math/big"
 
-	"github.com/onflow/flow-evm-gateway/models"
+	"github.com/goccy/go-json"
+	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/go-ethereum/common"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
+
+	"github.com/onflow/flow-evm-gateway/models"
 )
 
 type BlockIndexer interface {
-	// Store provided EVM block with the matching Cadence height.
+	// Store provided EVM block with the matching Cadence height and Cadence Block ID.
 	// Expected errors:
 	// - errors.Duplicate if the block already exists
-	Store(cadenceHeight uint64, block *types.Block) error
+	Store(cadenceHeight uint64, cadenceID flow.Identifier, block *types.Block) error
 
 	// GetByHeight returns an EVM block stored by EVM height.
 	// Expected errors:
@@ -48,6 +51,13 @@ type BlockIndexer interface {
 	// to the Cadence height.
 	// - errors.NotFound if the height is not found
 	GetCadenceHeight(evmHeight uint64) (uint64, error)
+
+	// GetCadenceID returns the Cadence block ID that matches the
+	// provided EVM height. Each EVM block indexed contains a link to the
+	// Cadence block ID. Multiple EVM heights can point to the same
+	// Cadence block ID.
+	// - errors.NotFound if the height is not found
+	GetCadenceID(evmHeight uint64) (flow.Identifier, error)
 }
 
 type ReceiptIndexer interface {
@@ -96,4 +106,11 @@ type AccountIndexer interface {
 
 	// GetBalance gets an account balance. If no balance was indexed it returns 0.
 	GetBalance(address *common.Address) (*big.Int, error)
+}
+
+type TraceIndexer interface {
+	// StoreTransaction will index transaction trace by the transaction ID.
+	StoreTransaction(ID common.Hash, trace json.RawMessage) error
+	// GetTransaction will retrieve transaction trace by the transaction ID.
+	GetTransaction(ID common.Hash) (json.RawMessage, error)
 }

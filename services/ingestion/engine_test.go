@@ -3,15 +3,16 @@ package ingestion
 import (
 	"context"
 	"encoding/hex"
-	"github.com/onflow/flow-evm-gateway/services/ingestion/mocks"
 	"math/big"
 	"testing"
 
+	"github.com/onflow/flow-evm-gateway/services/ingestion/mocks"
+
 	"github.com/onflow/cadence"
 	"github.com/onflow/cadence/runtime/common"
+
 	"github.com/onflow/flow-evm-gateway/models"
 
-	storageMock "github.com/onflow/flow-evm-gateway/storage/mocks"
 	"github.com/onflow/flow-go-sdk"
 	broadcast "github.com/onflow/flow-go/engine"
 	"github.com/onflow/flow-go/fvm/evm/types"
@@ -21,6 +22,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	storageMock "github.com/onflow/flow-evm-gateway/storage/mocks"
 )
 
 func TestSerialBlockIngestion(t *testing.T) {
@@ -78,8 +81,8 @@ func TestSerialBlockIngestion(t *testing.T) {
 			require.NoError(t, err)
 
 			blocks.
-				On("Store", mock.AnythingOfType("uint64"), mock.AnythingOfType("*types.Block")).
-				Return(func(h uint64, storeBlock *types.Block) error {
+				On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*types.Block")).
+				Return(func(h uint64, id flow.Identifier, storeBlock *types.Block) error {
 					assert.Equal(t, block, storeBlock)
 					assert.Equal(t, cadenceHeight, h)
 					storedCounter++
@@ -154,8 +157,8 @@ func TestSerialBlockIngestion(t *testing.T) {
 		require.NoError(t, err)
 
 		blocks.
-			On("Store", mock.AnythingOfType("uint64"), mock.AnythingOfType("*types.Block")).
-			Return(func(h uint64, storeBlock *types.Block) error {
+			On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*types.Block")).
+			Return(func(h uint64, id flow.Identifier, storeBlock *types.Block) error {
 				assert.Equal(t, block, storeBlock)
 				assert.Equal(t, cadenceHeight, h)
 				return nil
@@ -198,6 +201,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		transactions := &storageMock.TransactionIndexer{}
 		latestHeight := uint64(10)
 		nextHeight := latestHeight + 1
+		blockID := flow.Identifier{0x01}
 
 		blocks := &storageMock.BlockIndexer{}
 		blocks.
@@ -252,9 +256,10 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		}()
 
 		blocks.
-			On("Store", mock.AnythingOfType("uint64"), mock.AnythingOfType("*types.Block")).
-			Return(func(h uint64, storeBlock *types.Block) error {
+			On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*types.Block")).
+			Return(func(h uint64, id flow.Identifier, storeBlock *types.Block) error {
 				assert.Equal(t, block, storeBlock)
+				assert.Equal(t, blockID, id)
 				assert.Equal(t, nextHeight, h)
 				return nil
 			}).
@@ -289,7 +294,8 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 				Type:  string(txEvent.Etype),
 				Value: txCdc,
 			}},
-			Height: nextHeight,
+			Height:  nextHeight,
+			BlockID: blockID,
 		})
 
 		close(eventsChan)
@@ -350,8 +356,8 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 
 		blocksFirst := false // flag indicating we stored block first
 		blocks.
-			On("Store", mock.AnythingOfType("uint64"), mock.AnythingOfType("*types.Block")).
-			Return(func(h uint64, storeBlock *types.Block) error {
+			On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*types.Block")).
+			Return(func(h uint64, id flow.Identifier, storeBlock *types.Block) error {
 				blocksFirst = true
 				return nil
 			}).
@@ -451,8 +457,8 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 
 			// add new block for each height
 			blocks.
-				On("Store", mock.AnythingOfType("uint64"), mock.AnythingOfType("*types.Block")).
-				Return(func(h uint64, storeBlock *types.Block) error {
+				On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*types.Block")).
+				Return(func(h uint64, id flow.Identifier, storeBlock *types.Block) error {
 					assert.Equal(t, block, storeBlock)
 					assert.Equal(t, evmHeight, block.Height)
 					assert.Equal(t, latestCadenceHeight+1, h)

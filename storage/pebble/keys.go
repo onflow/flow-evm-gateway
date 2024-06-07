@@ -7,6 +7,7 @@ const (
 	blockHeightKey              = byte(1)
 	blockIDToHeightKey          = byte(2)
 	evmHeightToCadenceHeightKey = byte(3)
+	evmHeightToCadenceIDKey     = byte(4)
 
 	// transaction keys
 	txIDKey = byte(10)
@@ -19,6 +20,9 @@ const (
 	// account keys
 	accountNonceKey   = byte(30)
 	accountBalanceKey = byte(31)
+
+	// traces keys
+	traceTxIDKey = byte(40)
 
 	// special keys
 	latestEVMHeightKey     = byte(100)
