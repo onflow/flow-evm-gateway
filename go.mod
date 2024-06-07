@@ -7,9 +7,9 @@ require (
 	github.com/cockroachdb/pebble v0.0.0-20230928194634-aa077af62593
 	github.com/goccy/go-json v0.10.2
 	github.com/hashicorp/golang-lru/v2 v2.0.7
-	github.com/onflow/cadence v1.0.0-preview.30
-	github.com/onflow/flow-go v0.35.10-crescendo-preview.25.0.20240530124823-b968034713f6
-	github.com/onflow/flow-go-sdk v1.0.0-preview.31
+	github.com/onflow/cadence v1.0.0-preview.32
+	github.com/onflow/flow-go v0.35.10-crescendo-preview.25.0.20240604172940-c504b454e576
+	github.com/onflow/flow-go-sdk v1.0.0-preview.34
 	github.com/onflow/go-ethereum v1.13.4
 	github.com/rs/cors v1.8.0
 	github.com/rs/zerolog v1.31.0
