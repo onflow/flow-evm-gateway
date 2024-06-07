@@ -39,16 +39,10 @@ func NewGCPDownloader(bucketName string, logger zerolog.Logger) (*GCPDownloader,
 		return nil, fmt.Errorf("storage.NewClient: %w", err)
 	}
 
-	bucket := client.Bucket(bucketName)
-	// try accessing buckets to validate settings
-	if _, err = bucket.Attrs(ctx); err != nil {
-		return nil, fmt.Errorf("error accessing bucket: %s, make sure bucket exists: %w", bucketName, err)
-	}
-
 	return &GCPDownloader{
 		client: client,
 		logger: logger,
-		bucket: bucket,
+		bucket: client.Bucket(bucketName),
 	}, nil
 }
 
