@@ -53,6 +53,11 @@ type Config struct {
 	COAKey crypto.PrivateKey
 	// COAKeys is a slice of all the keys that will be used in key-rotation mechanism.
 	COAKeys []crypto.PrivateKey
+	// COACloudKMSKeys is a slice of all the keys that will be used in Cloud KMS key-rotation mechanism.
+	COACloudKMSKeys       []string
+	COACloudKMSProjectID  string
+	COACloudKMSLocationID string
+	COACloudKMSKeyRingID  string
 	// CreateCOAResource indicates if the COA resource should be auto-created on
 	// startup if one doesn't exist in the COA Flow address account
 	CreateCOAResource bool
@@ -86,7 +91,7 @@ type Config struct {
 
 func FromFlags() (*Config, error) {
 	cfg := &Config{}
-	var evmNetwork, coinbase, gas, coa, key, keysPath, flowNetwork, logLevel, filterExpiry, accessSporkHosts string
+	var evmNetwork, coinbase, gas, coa, key, keysPath, flowNetwork, logLevel, filterExpiry, accessSporkHosts, cloudKMSKeys string
 	var streamTimeout int
 	var initHeight, forceStartHeight uint64
 
@@ -115,6 +120,10 @@ func FromFlags() (*Config, error) {
 	flag.Uint64Var(&forceStartHeight, "force-start-height", 0, "Force set starting Cadence height. This should only be used locally or for testing, never in production.")
 	flag.StringVar(&filterExpiry, "filter-expiry", "5m", "Filter defines the time it takes for an idle filter to expire")
 	flag.StringVar(&cfg.TracesBucketName, "traces-gcp-bucket", "", "GCP bucket name where transaction traces are stored")
+	flag.StringVar(&cloudKMSKeys, "coa-cloud-kms-keys", "", "COA Cloud KMS keys")
+	flag.StringVar(&cfg.COACloudKMSProjectID, "coa-cloud-kms-project-id", "", "")
+	flag.StringVar(&cfg.COACloudKMSLocationID, "coa-cloud-kms-location-id", "", "")
+	flag.StringVar(&cfg.COACloudKMSKeyRingID, "coa-cloud-kms-key-ring-id", "", "")
 	flag.Parse()
 
 	if coinbase == "" {
@@ -154,6 +163,8 @@ func FromFlags() (*Config, error) {
 			}
 			cfg.COAKeys[i] = pk
 		}
+	} else if cloudKMSKeys != "" {
+		cfg.COACloudKMSKeys = strings.Split(cloudKMSKeys, ",")
 	} else {
 		return nil, fmt.Errorf("must either provide coa-key or coa-key-path flag")
 	}

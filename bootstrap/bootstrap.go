@@ -16,6 +16,7 @@ import (
 
 	"github.com/onflow/flow-evm-gateway/api"
 	"github.com/onflow/flow-evm-gateway/config"
+	"github.com/onflow/flow-evm-gateway/crypto/cloudkms"
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/services/ingestion"
 	"github.com/onflow/flow-evm-gateway/services/requester"
@@ -23,6 +24,7 @@ import (
 	"github.com/onflow/flow-evm-gateway/storage"
 	storageErrs "github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
+	flowGoKMS "github.com/onflow/flow-go-sdk/crypto/cloudkms"
 )
 
 func Start(ctx context.Context, cfg *config.Config) error {
@@ -268,6 +270,29 @@ func startServer(
 		signer, err = crypto.NewInMemorySigner(cfg.COAKey, crypto.SHA3_256)
 	case cfg.COAKeys != nil:
 		signer, err = requester.NewKeyRotationSigner(cfg.COAKeys, crypto.SHA3_256)
+	case cfg.COACloudKMSKeys != nil:
+		kmsKeys := make([]flowGoKMS.Key, len(cfg.COACloudKMSKeys))
+		for i, keyID := range cfg.COACloudKMSKeys {
+			kmsKeys[i] = flowGoKMS.Key{
+				ProjectID:  cfg.COACloudKMSProjectID,
+				LocationID: cfg.COACloudKMSLocationID,
+				KeyRingID:  cfg.COACloudKMSKeyRingID,
+				KeyID:      keyID,
+				KeyVersion: "1",
+			}
+		}
+		kmsClient, err := flowGoKMS.NewClient(ctx)
+		if err != nil {
+			return fmt.Errorf("unable to create Cloud KMS client")
+		}
+		signer, err = cloudkms.NewSignerForKeys(
+			ctx,
+			kmsClient,
+			kmsKeys,
+		)
+		if err != nil {
+			return fmt.Errorf("unable to create Cloud KMS key rotation signer")
+		}
 	default:
 		return fmt.Errorf("must either provide single COA key, or list of COA keys")
 	}
