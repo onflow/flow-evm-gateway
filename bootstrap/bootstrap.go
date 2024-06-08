@@ -16,7 +16,6 @@ import (
 
 	"github.com/onflow/flow-evm-gateway/api"
 	"github.com/onflow/flow-evm-gateway/config"
-	"github.com/onflow/flow-evm-gateway/crypto/cloudkms"
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/services/ingestion"
 	"github.com/onflow/flow-evm-gateway/services/requester"
@@ -281,17 +280,18 @@ func startServer(
 				KeyVersion: "1",
 			}
 		}
-		kmsClient, err := flowGoKMS.NewClient(ctx)
+		kmsCtx := context.Background()
+		kmsClient, err := flowGoKMS.NewClient(kmsCtx)
 		if err != nil {
-			return fmt.Errorf("unable to create Cloud KMS client")
+			return fmt.Errorf("unable to create Cloud KMS client: %w", err)
 		}
-		signer, err = cloudkms.NewSignerForKeys(
-			ctx,
+		signer, err = requester.NewSignerForKeys(
+			kmsCtx,
 			kmsClient,
 			kmsKeys,
 		)
 		if err != nil {
-			return fmt.Errorf("unable to create Cloud KMS key rotation signer")
+			return fmt.Errorf("unable to create Cloud KMS key rotation signer: %w", err)
 		}
 	default:
 		return fmt.Errorf("must either provide single COA key, or list of COA keys")

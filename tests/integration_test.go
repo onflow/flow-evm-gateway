@@ -119,3 +119,101 @@ func Test_ConcurrentTransactionSubmission(t *testing.T) {
 		assert.Equal(t, uint64(1), rcp.Status)
 	}
 }
+
+func Test_CloudKMSConcurrentTransactionSubmission(t *testing.T) {
+	srv, err := startEmulator(true)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer func() {
+		cancel()
+		srv.Stop()
+	}()
+
+	grpcHost := "localhost:3569"
+	emu := srv.Emulator()
+	service := emu.ServiceKey()
+
+	client, err := grpc.NewClient(grpcHost)
+	require.NoError(t, err)
+
+	time.Sleep(500 * time.Millisecond) // some time to startup
+
+	// create new account with Cloud KMS keys used for key-rotation
+	keyCount := 5
+	createdAddr, err := bootstrap.CreateCloudKMSMultiKeyAccount(
+		client,
+		service.Address,
+		"0xee82856bf20e2aa6",
+		"0x0ae53cb6e3f42a79",
+		service.PrivateKey,
+	)
+	require.NoError(t, err)
+
+	cfg := &config.Config{
+		DatabaseDir:           t.TempDir(),
+		AccessNodeHost:        grpcHost,
+		RPCPort:               8545,
+		RPCHost:               "127.0.0.1",
+		FlowNetworkID:         "flow-emulator",
+		EVMNetworkID:          types.FlowEVMTestNetChainID,
+		Coinbase:              eoaTestAccount,
+		COAAddress:            *createdAddr,
+		COACloudKMSProjectID:  "flow-evm-gateway",
+		COACloudKMSLocationID: "global",
+		COACloudKMSKeyRingID:  "tx-signing",
+		COACloudKMSKeys:       []string{"gw-key-6", "gw-key-7", "gw-key-8", "gw-key-9", "gw-key-10"},
+		CreateCOAResource:     true,
+		GasPrice:              new(big.Int).SetUint64(0),
+		LogLevel:              zerolog.DebugLevel,
+		LogWriter:             os.Stdout,
+	}
+
+	// todo change this test to use ingestion and emulator directly so we can completely remove
+	// the rpcTest implementation
+	rpcTester := &rpcTest{
+		url: fmt.Sprintf("%s:%d", cfg.RPCHost, cfg.RPCPort),
+	}
+
+	go func() {
+		err = bootstrap.Start(ctx, cfg)
+		require.NoError(t, err)
+	}()
+	time.Sleep(2500 * time.Millisecond) // some time to startup
+
+	eoaKey, err := crypto.HexToECDSA(eoaTestPrivateKey)
+	require.NoError(t, err)
+
+	testAddr := common.HexToAddress("55253ed90B70b96C73092D8680915aaF50081194")
+
+	// disable auto-mine so we can control delays
+	emu.DisableAutoMine()
+
+	totalTxs := keyCount*5 + 3
+	hashes := make([]common.Hash, totalTxs)
+	nonce := uint64(0)
+	for i := 0; i < totalTxs; i++ {
+		signed, signedHash, err := evmSign(big.NewInt(10), 21000, eoaKey, nonce, &testAddr, nil)
+		require.NoError(t, err)
+
+		hash, err := rpcTester.sendRawTx(signed)
+		require.NoError(t, err)
+		assert.NotNil(t, hash)
+		assert.Equal(t, signedHash.String(), hash.String())
+		hashes[i] = signedHash
+
+		// execute commit block every 3 blocks so we make sure we should have conflicts with seq numbers if keys not rotated
+		if i%3 == 0 {
+			_, _, _ = emu.ExecuteAndCommitBlock()
+		}
+		nonce += 1
+	}
+
+	time.Sleep(5 * time.Second) // wait for all txs to be executed
+
+	for _, h := range hashes {
+		rcp, err := rpcTester.getReceipt(h.String())
+		require.NoError(t, err)
+		assert.Equal(t, uint64(1), rcp.Status)
+	}
+}

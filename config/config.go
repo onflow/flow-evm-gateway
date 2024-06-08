@@ -54,10 +54,13 @@ type Config struct {
 	// COAKeys is a slice of all the keys that will be used in key-rotation mechanism.
 	COAKeys []crypto.PrivateKey
 	// COACloudKMSKeys is a slice of all the keys that will be used in Cloud KMS key-rotation mechanism.
-	COACloudKMSKeys       []string
-	COACloudKMSProjectID  string
+	COACloudKMSKeys []string
+	// COACloudKMSProjectID is the project ID containing the KMS keys
+	COACloudKMSProjectID string
+	// COACloudKMSLocationID is the location ID where the key ring is grouped into
 	COACloudKMSLocationID string
-	COACloudKMSKeyRingID  string
+	// COACloudKMSKeyRingID is the key ring ID where the KMS keys exist
+	COACloudKMSKeyRingID string
 	// CreateCOAResource indicates if the COA resource should be auto-created on
 	// startup if one doesn't exist in the COA Flow address account
 	CreateCOAResource bool
@@ -120,10 +123,10 @@ func FromFlags() (*Config, error) {
 	flag.Uint64Var(&forceStartHeight, "force-start-height", 0, "Force set starting Cadence height. This should only be used locally or for testing, never in production.")
 	flag.StringVar(&filterExpiry, "filter-expiry", "5m", "Filter defines the time it takes for an idle filter to expire")
 	flag.StringVar(&cfg.TracesBucketName, "traces-gcp-bucket", "", "GCP bucket name where transaction traces are stored")
-	flag.StringVar(&cloudKMSKeys, "coa-cloud-kms-keys", "", "COA Cloud KMS keys")
-	flag.StringVar(&cfg.COACloudKMSProjectID, "coa-cloud-kms-project-id", "", "")
-	flag.StringVar(&cfg.COACloudKMSLocationID, "coa-cloud-kms-location-id", "", "")
-	flag.StringVar(&cfg.COACloudKMSKeyRingID, "coa-cloud-kms-key-ring-id", "", "")
+	flag.StringVar(&cfg.COACloudKMSProjectID, "coa-cloud-kms-project-id", "", "The project ID containing the KMS keys, e.g. 'flow-evm-gateway'")
+	flag.StringVar(&cfg.COACloudKMSLocationID, "coa-cloud-kms-location-id", "", "The location ID where the key ring is grouped into, e.g. 'global'")
+	flag.StringVar(&cfg.COACloudKMSKeyRingID, "coa-cloud-kms-key-ring-id", "", "The key ring ID where the KMS keys exist, e.g. 'tx-signing'")
+	flag.StringVar(&cloudKMSKeys, "coa-cloud-kms-keys", "", `Names of the KMS keys as a comma separated list, e.g. "gw-key-6,gw-key-7,gw-key-8"`)
 	flag.Parse()
 
 	if coinbase == "" {
