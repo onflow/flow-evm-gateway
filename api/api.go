@@ -26,6 +26,8 @@ import (
 	storageErrs "github.com/onflow/flow-evm-gateway/storage/errors"
 )
 
+const maxFeeHistoryBlockCount = 1024
+
 func SupportedAPIs(
 	blockChainAPI *BlockChainAPI,
 	streamAPI *StreamAPI,
@@ -625,7 +627,7 @@ func (b *BlockChainAPI) EstimateGas(
 	tx, err := encodeTxFromArgs(args)
 	if err != nil {
 		b.logger.Error().Err(err).Msg("failed to encode transaction for gas estimate")
-		return hexutil.Uint64(defaultGasLimit), nil // return default gas limit
+		return hexutil.Uint64(blockGasLimit), nil // return block gas limit
 	}
 
 	// Default address in case user does not provide one
@@ -722,15 +724,16 @@ func (b *BlockChainAPI) prepareBlockResponse(
 	}
 
 	blockResponse := &Block{
-		Hash:         h,
-		Number:       hexutil.Uint64(block.Height),
-		ParentHash:   block.ParentBlockHash,
-		ReceiptsRoot: block.ReceiptRoot,
-		Transactions: block.TransactionHashes,
-		Uncles:       []common.Hash{},
-		GasLimit:     hexutil.Uint64(15_000_000),
-		Nonce:        types.BlockNonce{0x1},
-		Timestamp:    hexutil.Uint64(block.Timestamp),
+		Hash:          h,
+		Number:        hexutil.Uint64(block.Height),
+		ParentHash:    block.ParentBlockHash,
+		ReceiptsRoot:  block.ReceiptRoot,
+		Transactions:  block.TransactionHashes,
+		Uncles:        []common.Hash{},
+		GasLimit:      hexutil.Uint64(blockGasLimit),
+		Nonce:         types.BlockNonce{0x1},
+		Timestamp:     hexutil.Uint64(block.Timestamp),
+		BaseFeePerGas: hexutil.Big(*big.NewInt(0)),
 	}
 
 	// todo remove after previewnet, temp fix to mock some of the timestamps
@@ -787,6 +790,80 @@ func (b *BlockChainAPI) getBlockNumber(blockNumberOrHash *rpc.BlockNumberOrHash)
 	}
 
 	return 0, fmt.Errorf("invalid arguments; neither block nor hash specified")
+}
+
+// FeeHistory returns transaction base fee per gas and effective priority fee
+// per gas for the requested/supported block range.
+// blockCount: Requested range of blocks. Clients will return less than the
+// requested range if not all blocks are available.
+// lastBlock: Highest block of the requested range.
+// rewardPercentiles: A monotonically increasing list of percentile values.
+// For each block in the requested range, the transactions will be sorted in
+// ascending order by effective tip per gas and the coresponding effective tip
+// for the percentile will be determined, accounting for gas consumed.
+func (b *BlockChainAPI) FeeHistory(
+	ctx context.Context,
+	blockCount math.HexOrDecimal64,
+	lastBlock rpc.BlockNumber,
+	rewardPercentiles []float64,
+) (*FeeHistoryResult, error) {
+	if blockCount > maxFeeHistoryBlockCount {
+		return nil, fmt.Errorf("block count has to be between 1 and 1024")
+	}
+
+	lastBlockNumber := uint64(lastBlock)
+	var err error
+	if lastBlock < 0 {
+		// From the special block tags, we only support "latest".
+		lastBlockNumber, err = b.blocks.LatestEVMHeight()
+		if err != nil {
+			return nil, fmt.Errorf("could not fetch latest EVM block number")
+		}
+	}
+
+	var oldestBlock *hexutil.Big
+	baseFees := []*hexutil.Big{}
+	rewards := [][]*hexutil.Big{}
+	gasUsedRatios := []float64{}
+
+	maxCount := uint64(blockCount)
+	if maxCount > lastBlockNumber {
+		maxCount = lastBlockNumber
+	}
+
+	blockRewards := make([]*hexutil.Big, len(rewardPercentiles))
+	for i := range rewardPercentiles {
+		blockRewards[i] = (*hexutil.Big)(b.config.GasPrice)
+	}
+
+	for i := maxCount; i >= uint64(1); i-- {
+		// If the requested block count is 5, and the last block number
+		// is 20, then we need the blocks [16, 17, 18, 19, 20] in this
+		// specific order. The first block we fetch is 20 - 5 + 1 = 16.
+		blockHeight := lastBlockNumber - i + 1
+		block, err := b.blocks.GetByHeight(blockHeight)
+		if err != nil {
+			continue
+		}
+
+		if i == maxCount {
+			oldestBlock = (*hexutil.Big)(big.NewInt(int64(block.Height)))
+		}
+
+		baseFees = append(baseFees, (*hexutil.Big)(big.NewInt(0)))
+
+		rewards = append(rewards, blockRewards)
+
+		gasUsedRatio := float64(block.TotalGasUsed) / float64(blockGasLimit)
+		gasUsedRatios = append(gasUsedRatios, gasUsedRatio)
+	}
+
+	return &FeeHistoryResult{
+		OldestBlock:  oldestBlock,
+		Reward:       rewards,
+		BaseFee:      baseFees,
+		GasUsedRatio: gasUsedRatios,
+	}, nil
 }
 
 /* ====================================================================================================================
@@ -900,24 +977,6 @@ func (b *BlockChainAPI) CreateAccessList(
 	args TransactionArgs,
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (*AccessListResult, error) {
-	return nil, errs.ErrNotSupported
-}
-
-// FeeHistory returns transaction base fee per gas and effective priority fee
-// per gas for the requested/supported block range.
-// blockCount: Requested range of blocks. Clients will return less than the
-// requested range if not all blocks are available.
-// lastBlock: Highest block of the requested range.
-// rewardPercentiles: A monotonically increasing list of percentile values.
-// For each block in the requested range, the transactions will be sorted in
-// ascending order by effective tip per gas and the coresponding effective tip
-// for the percentile will be determined, accounting for gas consumed.
-func (b *BlockChainAPI) FeeHistory(
-	ctx context.Context,
-	blockCount math.HexOrDecimal64,
-	lastBlock rpc.BlockNumber,
-	rewardPercentiles []float64,
-) (*FeeHistoryResult, error) {
 	return nil, errs.ErrNotSupported
 }
 

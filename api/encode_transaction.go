@@ -6,7 +6,7 @@ import (
 	"github.com/onflow/go-ethereum/core/types"
 )
 
-const defaultGasLimit uint64 = 15_000_000
+const blockGasLimit uint64 = 15_000_000
 
 // encodeTxFromArgs will create a transaction from the given arguments.
 // The resulting unsigned transaction is only supposed to be used through
@@ -23,7 +23,7 @@ func encodeTxFromArgs(args TransactionArgs) ([]byte, error) {
 
 	// provide a high enough gas for the tx to be able to execute,
 	// capped by the gas set in transaction args.
-	gasLimit := defaultGasLimit
+	gasLimit := blockGasLimit
 	if args.Gas != nil {
 		gasLimit = uint64(*args.Gas)
 	}
