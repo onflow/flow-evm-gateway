@@ -280,13 +280,12 @@ func startServer(
 				KeyVersion: "1",
 			}
 		}
-		kmsCtx := context.Background()
-		kmsClient, err := flowGoKMS.NewClient(kmsCtx)
+		kmsClient, err := flowGoKMS.NewClient(ctx)
 		if err != nil {
 			return fmt.Errorf("unable to create Cloud KMS client: %w", err)
 		}
 		signer, err = requester.NewSignerForKeys(
-			kmsCtx,
+			ctx,
 			kmsClient,
 			kmsKeys,
 		)
