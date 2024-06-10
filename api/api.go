@@ -26,8 +26,13 @@ import (
 	storageErrs "github.com/onflow/flow-evm-gateway/storage/errors"
 )
 
-func SupportedAPIs(blockChainAPI *BlockChainAPI, streamAPI *StreamAPI, pullAPI *PullAPI) []rpc.API {
-	return []rpc.API{{
+func SupportedAPIs(
+	blockChainAPI *BlockChainAPI,
+	streamAPI *StreamAPI,
+	pullAPI *PullAPI,
+	debugAPI *DebugAPI,
+) []rpc.API {
+	apis := []rpc.API{{
 		Namespace: "eth",
 		Service:   blockChainAPI,
 	}, {
@@ -46,6 +51,16 @@ func SupportedAPIs(blockChainAPI *BlockChainAPI, streamAPI *StreamAPI, pullAPI *
 		Namespace: "txpool",
 		Service:   NewTxPoolAPI(),
 	}}
+
+	// optional debug api
+	if debugAPI != nil {
+		apis = append(apis, rpc.API{
+			Namespace: "debug",
+			Service:   debugAPI,
+		})
+	}
+
+	return apis
 }
 
 type BlockChainAPI struct {
