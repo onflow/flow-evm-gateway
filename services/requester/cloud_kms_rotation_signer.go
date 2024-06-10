@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/onflow/flow-go-sdk/crypto"
 	"github.com/onflow/flow-go-sdk/crypto/cloudkms"
+	"github.com/rs/zerolog"
 )
 
 var _ crypto.Signer = &CloudKMSKeyRotationSigner{}
@@ -30,6 +32,7 @@ type CloudKMSKeyRotationSigner struct {
 	kmsSigners []*cloudkms.Signer
 	index      int
 	signersLen int
+	logger     zerolog.Logger
 }
 
 // NewSignerForKeys returns a new CloudKMSKeyRotationSigner, for the
@@ -38,6 +41,7 @@ func NewSignerForKeys(
 	ctx context.Context,
 	client *cloudkms.Client,
 	keys []cloudkms.Key,
+	logger zerolog.Logger,
 ) (*CloudKMSKeyRotationSigner, error) {
 	if len(keys) == 0 {
 		return nil, fmt.Errorf("no asymmetric signing keys provided")
@@ -56,9 +60,12 @@ func NewSignerForKeys(
 		kmsSigners[i] = kmsSigner
 	}
 
+	logger = logger.With().Str("component", "cloud_kms_signer").Logger()
+
 	return &CloudKMSKeyRotationSigner{
 		kmsSigners: kmsSigners,
 		signersLen: len(kmsSigners),
+		logger:     logger,
 	}, nil
 }
 
@@ -66,6 +73,8 @@ func NewSignerForKeys(
 // Note: if you want to get the public key pair, you should first call
 // PublicKey and then Sign.
 func (s *CloudKMSKeyRotationSigner) Sign(message []byte) ([]byte, error) {
+	defer s.timeTrack(time.Now())
+
 	s.mux.Lock()
 	defer s.mux.Unlock()
 
@@ -85,4 +94,11 @@ func (s *CloudKMSKeyRotationSigner) PublicKey() crypto.PublicKey {
 	// the same public key for fetching key sequence number before the transaction
 	// that already used it is not executed and thus the key would be incremented.
 	return s.kmsSigners[s.index].PublicKey()
+}
+
+func (s *CloudKMSKeyRotationSigner) timeTrack(start time.Time) {
+	elapsed := time.Since(start)
+	s.logger.Info().
+		Int64("duration", elapsed.Milliseconds()).
+		Msg("messaged was signed")
 }

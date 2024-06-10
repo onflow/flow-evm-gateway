@@ -294,6 +294,7 @@ func startServer(
 			ctx,
 			kmsClient,
 			kmsKeys,
+			logger,
 		)
 		if err != nil {
 			return fmt.Errorf("unable to create Cloud KMS key rotation signer: %w", err)
