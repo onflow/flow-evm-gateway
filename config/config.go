@@ -53,7 +53,7 @@ type Config struct {
 	COAKey crypto.PrivateKey
 	// COAKeys is a slice of all the keys that will be used in key-rotation mechanism.
 	COAKeys []crypto.PrivateKey
-	// COACloudKMSKeys is a slice of all the keys that will be used in Cloud KMS key-rotation mechanism.
+	// COACloudKMSKeys is a slice of all the keys and their versions that will be used in Cloud KMS key-rotation mechanism.
 	COACloudKMSKeys []string
 	// COACloudKMSProjectID is the project ID containing the KMS keys
 	COACloudKMSProjectID string
@@ -126,7 +126,7 @@ func FromFlags() (*Config, error) {
 	flag.StringVar(&cfg.COACloudKMSProjectID, "coa-cloud-kms-project-id", "", "The project ID containing the KMS keys, e.g. 'flow-evm-gateway'")
 	flag.StringVar(&cfg.COACloudKMSLocationID, "coa-cloud-kms-location-id", "", "The location ID where the key ring is grouped into, e.g. 'global'")
 	flag.StringVar(&cfg.COACloudKMSKeyRingID, "coa-cloud-kms-key-ring-id", "", "The key ring ID where the KMS keys exist, e.g. 'tx-signing'")
-	flag.StringVar(&cloudKMSKeys, "coa-cloud-kms-keys", "", `Names of the KMS keys as a comma separated list, e.g. "gw-key-6,gw-key-7,gw-key-8"`)
+	flag.StringVar(&cloudKMSKeys, "coa-cloud-kms-keys", "", `Names of the KMS keys and their versions as a comma separated list, e.g. "gw-key-6@1,gw-key-7@1,gw-key-8@1"`)
 	flag.Parse()
 
 	if coinbase == "" {

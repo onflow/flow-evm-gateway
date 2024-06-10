@@ -162,7 +162,7 @@ func Test_CloudKMSConcurrentTransactionSubmission(t *testing.T) {
 		COACloudKMSProjectID:  "flow-evm-gateway",
 		COACloudKMSLocationID: "global",
 		COACloudKMSKeyRingID:  "tx-signing",
-		COACloudKMSKeys:       []string{"gw-key-6", "gw-key-7", "gw-key-8", "gw-key-9", "gw-key-10"},
+		COACloudKMSKeys:       []string{"gw-key-6@1", "gw-key-7@1", "gw-key-8@1", "gw-key-9@1", "gw-key-10@1"},
 		CreateCOAResource:     true,
 		GasPrice:              new(big.Int).SetUint64(0),
 		LogLevel:              zerolog.DebugLevel,
