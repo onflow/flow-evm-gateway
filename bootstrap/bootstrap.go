@@ -103,6 +103,7 @@ func Start(ctx context.Context, cfg *config.Config) error {
 			transactions,
 			receipts,
 			accounts,
+			trace,
 			blocksBroadcaster,
 			transactionsBroadcaster,
 			logsBroadcaster,
@@ -247,6 +248,7 @@ func startServer(
 	transactions storage.TransactionIndexer,
 	receipts storage.ReceiptIndexer,
 	accounts storage.AccountIndexer,
+	trace storage.TraceIndexer,
 	blocksBroadcaster *broadcast.Broadcaster,
 	transactionsBroadcaster *broadcast.Broadcaster,
 	logsBroadcaster *broadcast.Broadcaster,
@@ -331,7 +333,12 @@ func startServer(
 		ratelimiter,
 	)
 
-	supportedAPIs := api.SupportedAPIs(blockchainAPI, streamAPI, pullAPI)
+	var debugAPI *api.DebugAPI
+	if cfg.TracesEnabled {
+		debugAPI = api.NewDebugAPI(trace, logger)
+	}
+
+	supportedAPIs := api.SupportedAPIs(blockchainAPI, streamAPI, pullAPI, debugAPI)
 
 	if err := srv.EnableRPC(supportedAPIs); err != nil {
 		return err
