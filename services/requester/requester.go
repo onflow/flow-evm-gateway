@@ -373,12 +373,14 @@ func (e *EVM) EstimateGas(
 		return 0, getErrorForCode(evmResult.ErrorCode)
 	}
 
-	// This minimum gas availability is needed for:
-	// https://github.com/onflow/go-ethereum/blob/master/core/vm/operations_acl.go#L29-L32
+	// This buffer size is needed in the case where there's a refund
+	// after clearing a lot. This happens when changing a fields value
+	// to its zero value (according to what Solidity considers a
+	// zero value).
 	// Note that this is not actually consumed in the end.
 	// TODO: Consider moving this to `EVM.dryRun`, if we want the
 	// fix to also apply for the EVM API, on Cadence side.
-	gasConsumed := evmResult.GasConsumed + params.SstoreSentryGasEIP2200 + 1
+	gasConsumed := evmResult.GasConsumed + params.SstoreClearsScheduleRefundEIP3529 + 1
 
 	e.logger.Debug().
 		Uint64("gas", gasConsumed).

@@ -77,6 +77,24 @@ it('deploy contract and interact', async() => {
     result = await web3.eth.call({to: contractAddress, data: callRetrieve}, "latest")
     assert.equal(result, newValue)
 
+    // clear the value on the contract
+    newValue = 0
+    updateData = deployed.contract.methods.store(newValue).encodeABI()
+    // store a value in the contract
+    res = await helpers.signAndSend({
+        from: conf.eoa.address,
+        to: contractAddress,
+        data: updateData,
+        value: '0',
+        gasPrice: '0',
+    })
+    assert.equal(res.receipt.status, conf.successStatus)
+
+    // check the new value on contract
+    result = await web3.eth.call({to: contractAddress, data: callRetrieve}, "latest")
+    console.log("Result: ", result)
+    assert.equal(result, newValue)
+
     // make sure receipts and txs are indexed
     latestHeight = await web3.eth.getBlockNumber()
     let updateTx = await web3.eth.getTransactionFromBlock(latestHeight, 0)
@@ -85,7 +103,7 @@ it('deploy contract and interact', async() => {
     assert.equal(updateTx.data, updateData)
 
     // check that call can handle specific block heights
-    result = await web3.eth.call({to: contractAddress, data: callRetrieve}, latestHeight - 1n)
+    result = await web3.eth.call({to: contractAddress, data: callRetrieve}, latestHeight - 2n)
     assert.equal(result, initValue)
 
     // submit a transaction that emits logs
