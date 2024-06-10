@@ -15,6 +15,13 @@ type DebugAPI struct {
 	tracer storage.TraceIndexer
 }
 
+func NewDebugAPI(tracer storage.TraceIndexer, logger zerolog.Logger) *DebugAPI {
+	return &DebugAPI{
+		logger: logger,
+		tracer: tracer,
+	}
+}
+
 // TraceTransaction will return a debug execution trace of a transaction if it exists,
 // currently we only support CALL traces, so the config is ignored.
 func (d *DebugAPI) TraceTransaction(
