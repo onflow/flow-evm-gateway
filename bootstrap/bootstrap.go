@@ -335,7 +335,7 @@ func startServer(
 
 	var debugAPI *api.DebugAPI
 	if cfg.TracesEnabled {
-		debugAPI = api.NewDebugAPI(trace, logger)
+		debugAPI = api.NewDebugAPI(trace, blocks, logger)
 	}
 
 	supportedAPIs := api.SupportedAPIs(blockchainAPI, streamAPI, pullAPI, debugAPI)

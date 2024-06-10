@@ -18,10 +18,11 @@ type DebugAPI struct {
 	blocks storage.BlockIndexer
 }
 
-func NewDebugAPI(tracer storage.TraceIndexer, logger zerolog.Logger) *DebugAPI {
+func NewDebugAPI(tracer storage.TraceIndexer, blocks storage.BlockIndexer, logger zerolog.Logger) *DebugAPI {
 	return &DebugAPI{
 		logger: logger,
 		tracer: tracer,
+		blocks: blocks,
 	}
 }
 
