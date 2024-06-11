@@ -11,9 +11,9 @@ import (
 	"github.com/rs/zerolog"
 )
 
-var _ crypto.Signer = &CloudKMSKeyRotationSigner{}
+var _ crypto.Signer = &KMSKeyRotationSigner{}
 
-// CloudKMSKeyRotationSigner is a crypto signer that contains a pool of
+// KMSKeyRotationSigner is a crypto signer that contains a pool of
 // `crypto.Signer`[1] objects, each of which is tied to a Cloud KMS
 // asymmetric signing key.
 // It keeps track of the signer/key combination that should be used for
@@ -27,7 +27,7 @@ var _ crypto.Signer = &CloudKMSKeyRotationSigner{}
 // The signer is concurrency-safe.
 //
 // [1](https://github.com/onflow/flow-go-sdk/blob/master/crypto/cloudkms/signer.go#L37)
-type CloudKMSKeyRotationSigner struct {
+type KMSKeyRotationSigner struct {
 	mux        sync.RWMutex
 	kmsSigners []*cloudkms.Signer
 	index      int
@@ -35,13 +35,13 @@ type CloudKMSKeyRotationSigner struct {
 	logger     zerolog.Logger
 }
 
-// NewSignerForKeys returns a new CloudKMSKeyRotationSigner, for the
-// given slice of Cloud KMS keys.
-func NewSignerForKeys(
+// NewKMSKeyRotationSigner returns a new KMSKeyRotationSigner,
+// for the given slice of Cloud KMS keys.
+func NewKMSKeyRotationSigner(
 	ctx context.Context,
 	keys []cloudkms.Key,
 	logger zerolog.Logger,
-) (*CloudKMSKeyRotationSigner, error) {
+) (*KMSKeyRotationSigner, error) {
 	if len(keys) == 0 {
 		return nil, fmt.Errorf("no asymmetric signing keys provided")
 	}
@@ -66,7 +66,7 @@ func NewSignerForKeys(
 
 	logger = logger.With().Str("component", "cloud_kms_signer").Logger()
 
-	return &CloudKMSKeyRotationSigner{
+	return &KMSKeyRotationSigner{
 		kmsSigners: kmsSigners,
 		signersLen: len(kmsSigners),
 		logger:     logger,
@@ -76,7 +76,7 @@ func NewSignerForKeys(
 // Sign signs the message and then rotates to the next key.
 // Note: if you want to get the public key pair, you should first call
 // PublicKey and then Sign.
-func (s *CloudKMSKeyRotationSigner) Sign(message []byte) ([]byte, error) {
+func (s *KMSKeyRotationSigner) Sign(message []byte) ([]byte, error) {
 	defer s.timeTrack(time.Now())
 
 	s.mux.Lock()
@@ -98,7 +98,7 @@ func (s *CloudKMSKeyRotationSigner) Sign(message []byte) ([]byte, error) {
 }
 
 // PublicKey returns the current public key which is available for signing.
-func (s *CloudKMSKeyRotationSigner) PublicKey() crypto.PublicKey {
+func (s *KMSKeyRotationSigner) PublicKey() crypto.PublicKey {
 	s.mux.RLock()
 	defer s.mux.RUnlock()
 
@@ -109,7 +109,7 @@ func (s *CloudKMSKeyRotationSigner) PublicKey() crypto.PublicKey {
 	return s.kmsSigners[s.index].PublicKey()
 }
 
-func (s *CloudKMSKeyRotationSigner) timeTrack(start time.Time) {
+func (s *KMSKeyRotationSigner) timeTrack(start time.Time) {
 	elapsed := time.Since(start)
 	s.logger.Info().
 		Int64("duration", elapsed.Milliseconds()).

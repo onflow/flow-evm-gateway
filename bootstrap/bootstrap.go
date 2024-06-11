@@ -269,7 +269,7 @@ func startServer(
 	case cfg.COAKeys != nil:
 		signer, err = requester.NewKeyRotationSigner(cfg.COAKeys, crypto.SHA3_256)
 	case len(cfg.COACloudKMSKeys) > 0:
-		signer, err = requester.NewSignerForKeys(
+		signer, err = requester.NewKMSKeyRotationSigner(
 			ctx,
 			cfg.COACloudKMSKeys,
 			logger,
