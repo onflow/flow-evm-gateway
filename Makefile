@@ -14,6 +14,9 @@ e2e-test:
 check-tidy:
 	go mod tidy
 	git diff --exit-code
+	cd tests
+	go mod tidy
+	git diff --exit-code
 
 .PHONY: fix-lint
 fix-lint:

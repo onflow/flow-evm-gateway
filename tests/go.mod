@@ -5,6 +5,7 @@ go 1.22
 require (
 	github.com/goccy/go-json v0.10.2
 	github.com/onflow/cadence v1.0.0-preview.32
+	github.com/onflow/crypto v0.25.1
 	github.com/onflow/flow-emulator v1.0.0-preview.31
 	github.com/onflow/flow-evm-gateway v0.0.0-20240201154855-4d4d3d3f19c7
 	github.com/onflow/flow-go v0.35.12
@@ -19,6 +20,7 @@ require (
 	cloud.google.com/go/compute v1.24.0 // indirect
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
 	cloud.google.com/go/iam v1.1.6 // indirect
+	cloud.google.com/go/kms v1.15.7 // indirect
 	cloud.google.com/go/storage v1.36.0 // indirect
 	github.com/DataDog/zstd v1.5.2 // indirect
 	github.com/Microsoft/go-winio v0.6.1 // indirect
@@ -143,7 +145,6 @@ require (
 	github.com/multiformats/go-varint v0.0.7 // indirect
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
 	github.com/onflow/atree v0.7.0-rc.2 // indirect
-	github.com/onflow/crypto v0.25.1 // indirect
 	github.com/onflow/flow-core-contracts/lib/go/contracts v1.1.0 // indirect
 	github.com/onflow/flow-core-contracts/lib/go/templates v1.0.0 // indirect
 	github.com/onflow/flow-ft/lib/go/contracts v1.0.0 // indirect
