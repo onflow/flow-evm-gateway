@@ -179,6 +179,7 @@ Listed below are the JSON-RPC namespaces and methods currently supported by the 
     * eth_getTransactionByHash
     * eth_getCode
     * eth_gasPrice 
+    * eth_feeHistory
     * eth_getBalance
     * eth_estimateGas
     * eth_getTransactionByBlockNumberAndIndex
@@ -190,6 +191,7 @@ Listed below are the JSON-RPC namespaces and methods currently supported by the 
     * eth_newFilter
     * eth_uninstallFilter
     * eth_getFilterChanges
+    * eth_getFilterLogs
     * eth_newBlockFilter
     * eth_newPendingTransactionFilter
     * eth_getUncleCountByBlockHash // return 0
@@ -197,11 +199,9 @@ Listed below are the JSON-RPC namespaces and methods currently supported by the 
     * eth_syncing // return false for now
   * Unsupported but coming soon
     * eth_createAccessList
-    * eth_feeHistory
     * eth_maxPriorityFeePerGas
     * eth_getProof
     * eth_getStorageAt
-    * eth_getFilterLogs
     * eth_accounts
     * eth_sign
     * eth_signTransaction
@@ -215,6 +215,11 @@ Listed below are the JSON-RPC namespaces and methods currently supported by the 
     * net_listening
     * net_peerCount
     * net_version
+* `debug`
+  * Supported
+    * debug_traceTransaction
+    * debug_traceBlockByNumber
+    * debug_traceBlockByHash
 
 We also plan to add support for the `admin` namespace in the near future.
 
