@@ -23,7 +23,6 @@ import (
 	"github.com/onflow/flow-evm-gateway/storage"
 	storageErrs "github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
-	flowGoKMS "github.com/onflow/flow-go-sdk/crypto/cloudkms"
 )
 
 func Start(ctx context.Context, cfg *config.Config) error {
@@ -270,13 +269,8 @@ func startServer(
 	case cfg.COAKeys != nil:
 		signer, err = requester.NewKeyRotationSigner(cfg.COAKeys, crypto.SHA3_256)
 	case len(cfg.COACloudKMSKeys) > 0:
-		kmsClient, err := flowGoKMS.NewClient(ctx)
-		if err != nil {
-			return fmt.Errorf("unable to create Cloud KMS client: %w", err)
-		}
 		signer, err = requester.NewSignerForKeys(
 			ctx,
-			kmsClient,
 			cfg.COACloudKMSKeys,
 			logger,
 		)

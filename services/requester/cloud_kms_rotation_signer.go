@@ -39,7 +39,6 @@ type CloudKMSKeyRotationSigner struct {
 // given slice of Cloud KMS keys.
 func NewSignerForKeys(
 	ctx context.Context,
-	client *cloudkms.Client,
 	keys []cloudkms.Key,
 	logger zerolog.Logger,
 ) (*CloudKMSKeyRotationSigner, error) {
@@ -47,9 +46,14 @@ func NewSignerForKeys(
 		return nil, fmt.Errorf("no asymmetric signing keys provided")
 	}
 
+	kmsClient, err := cloudkms.NewClient(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create Cloud KMS client: %w", err)
+	}
+
 	kmsSigners := make([]*cloudkms.Signer, len(keys))
 	for i, key := range keys {
-		kmsSigner, err := client.SignerForKey(ctx, key)
+		kmsSigner, err := kmsClient.SignerForKey(ctx, key)
 		if err != nil {
 			return nil, fmt.Errorf(
 				"could not create signer for key with ID: %s: %w",
