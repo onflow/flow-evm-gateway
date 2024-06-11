@@ -81,7 +81,16 @@ func (s *CloudKMSKeyRotationSigner) Sign(message []byte) ([]byte, error) {
 	signer := s.kmsSigners[s.index]
 	s.index = (s.index + 1) % s.signersLen
 
-	return signer.Sign(message)
+	signature, err := signer.Sign(message)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"failed to sign message with public key %s: %w",
+			signer.PublicKey(),
+			err,
+		)
+	}
+
+	return signature, err
 }
 
 // PublicKey returns the current public key which is available for signing.
