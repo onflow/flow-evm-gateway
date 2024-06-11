@@ -162,6 +162,12 @@ func FromFlags() (*Config, error) {
 			cfg.COAKeys[i] = pk
 		}
 	} else if cloudKMSKeys != "" {
+		if cloudKMSProjectID == "" || cloudKMSLocationID == "" || cloudKMSKeyRingID == "" {
+			return nil, fmt.Errorf(
+				"using coa-cloud-kms-keys requires also coa-cloud-kms-project-id & coa-cloud-kms-location-id & coa-cloud-kms-key-ring-id",
+			)
+		}
+
 		kmsKeys := strings.Split(cloudKMSKeys, ",")
 		cfg.COACloudKMSKeys = make([]flowGoKMS.Key, len(kmsKeys))
 		for i, key := range kmsKeys {
@@ -179,7 +185,9 @@ func FromFlags() (*Config, error) {
 			}
 		}
 	} else {
-		return nil, fmt.Errorf("must either provide coa-key or coa-key-path flag")
+		return nil, fmt.Errorf(
+			"must either provide coa-key / coa-key-path / coa-cloud-kms-keys",
+		)
 	}
 
 	switch evmNetwork {
