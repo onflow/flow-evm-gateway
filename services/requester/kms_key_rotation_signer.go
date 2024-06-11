@@ -43,7 +43,9 @@ func NewKMSKeyRotationSigner(
 	logger zerolog.Logger,
 ) (*KMSKeyRotationSigner, error) {
 	if len(keys) == 0 {
-		return nil, fmt.Errorf("no asymmetric signing keys provided")
+		return nil, fmt.Errorf(
+			"could not create KMS key rotation signer, no KMS keys provided",
+		)
 	}
 
 	kmsClient, err := cloudkms.NewClient(ctx)
@@ -56,7 +58,7 @@ func NewKMSKeyRotationSigner(
 		kmsSigner, err := kmsClient.SignerForKey(ctx, key)
 		if err != nil {
 			return nil, fmt.Errorf(
-				"could not create signer for key with ID: %s: %w",
+				"could not create KMS signer for the key with ID: %s: %w",
 				key.KeyID,
 				err,
 			)
