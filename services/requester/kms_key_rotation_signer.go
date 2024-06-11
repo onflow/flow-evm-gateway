@@ -79,7 +79,12 @@ func NewKMSKeyRotationSigner(
 // Note: if you want to get the public key pair, you should first call
 // PublicKey and then Sign.
 func (s *KMSKeyRotationSigner) Sign(message []byte) ([]byte, error) {
-	defer s.timeTrack(time.Now())
+	defer func(start time.Time) {
+		elapsed := time.Since(start)
+		s.logger.Debug().
+			Int64("duration", elapsed.Milliseconds()).
+			Msg("messaged was signed")
+	}(time.Now())
 
 	s.mux.Lock()
 	defer s.mux.Unlock()
@@ -109,11 +114,4 @@ func (s *KMSKeyRotationSigner) PublicKey() crypto.PublicKey {
 	// the same public key for fetching key sequence number before the transaction
 	// that already used it is not executed and thus the key would be incremented.
 	return s.kmsSigners[s.index].PublicKey()
-}
-
-func (s *KMSKeyRotationSigner) timeTrack(start time.Time) {
-	elapsed := time.Since(start)
-	s.logger.Info().
-		Int64("duration", elapsed.Milliseconds()).
-		Msg("messaged was signed")
 }
