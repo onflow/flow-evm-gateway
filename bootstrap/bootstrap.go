@@ -274,9 +274,6 @@ func startServer(
 			cfg.COACloudKMSKeys,
 			logger,
 		)
-		if err != nil {
-			return fmt.Errorf("unable to create Cloud KMS key rotation signer: %w", err)
-		}
 	default:
 		return fmt.Errorf("must either provide single COA key, or list of COA keys")
 	}
