@@ -89,7 +89,10 @@ func (s *KMSKeyRotationSigner) Sign(message []byte) ([]byte, error) {
 	s.mux.Lock()
 	defer s.mux.Unlock()
 
+	// Get the next available signer, for the message signing request.
 	signer := s.kmsSigners[s.index]
+	// Update the available signer that should be used for the next
+	// message signing request.
 	s.index = (s.index + 1) % s.signersLen
 
 	signature, err := signer.Sign(message)
