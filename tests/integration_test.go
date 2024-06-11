@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/onflow/crypto/hash"
 	"github.com/onflow/flow-go-sdk/access/grpc"
 	flowGoKMS "github.com/onflow/flow-go-sdk/crypto/cloudkms"
 	"github.com/onflow/flow-go/fvm/evm/types"
@@ -150,24 +152,6 @@ func Test_CloudKMSConcurrentTransactionSubmission(t *testing.T) {
 
 	time.Sleep(500 * time.Millisecond) // some time to startup
 
-	// create new account with Cloud KMS keys used for key-rotation
-	publicKeys := []string{
-		"3549d9d17014d02feb159c5069fd79c2290b075cce8496c476dad6aadad4cefb91928c1ab2709652fc46cfbafb8bac89844a305da3382c4aebb13e9525698daa",
-		"9d5d95dd245b48c37bebb15d92d6e20b069ee1118acb313f1adf43a05e1fc37fdd1f266f756610ddd7fb32ca4285d0c46358170bdc2ff96ce9dd1796e5a302ba",
-		"1208f683ece6b3b3d275edf7a8356a5b5d21cddab5e013329ed025148ce48f338e9461444fe555f61a09eeac739072cdf8f23bb58675308197a3f82b3ad41c3c",
-		"13f6be6ead79eea18c86a22e9eb7dcedf2729641c1e8823acbab9fd9ed88668056a0d102b5455f486fc630ca028b8e171794dfab5291c88f079bc2a8fd23f28f",
-		"b83ff59a869799cc7df80cdd7e69c9df35df93658beeb201a942b74e8f8417cb4c28555235986e53e61fd83b762e1337a720f266649ea3f24801b3d8f1341487",
-	}
-	keyCount := len(publicKeys)
-	createdAddr, err := bootstrap.CreateMultiCloudKMSKeysAccount(
-		client,
-		publicKeys,
-		service.Address,
-		"0xee82856bf20e2aa6",
-		"0x0ae53cb6e3f42a79",
-		service.PrivateKey,
-	)
-	require.NoError(t, err)
 	kmsKeyIDs := []string{
 		"gw-key-6", "gw-key-7", "gw-key-8", "gw-key-9", "gw-key-10",
 	}
@@ -181,6 +165,28 @@ func Test_CloudKMSConcurrentTransactionSubmission(t *testing.T) {
 			KeyVersion: "1",
 		}
 	}
+
+	kmsClient, err := flowGoKMS.NewClient(ctx)
+	require.NoError(t, err)
+	publicKeys := make([]string, len(kmsKeyIDs))
+	for i, kmsKey := range kmsKeys {
+		publicKey, hashAlgo, err := kmsClient.GetPublicKey(ctx, kmsKey)
+		require.NoError(t, err)
+		require.Equal(t, hash.SHA2_256, hashAlgo)
+		publicKeys[i] = strings.Replace(publicKey.String(), "0x", "", 1)
+	}
+
+	keyCount := len(kmsKeyIDs)
+	// create new account with Cloud KMS keys used for key-rotation
+	createdAddr, err := bootstrap.CreateMultiCloudKMSKeysAccount(
+		client,
+		publicKeys,
+		service.Address,
+		"0xee82856bf20e2aa6",
+		"0x0ae53cb6e3f42a79",
+		service.PrivateKey,
+	)
+	require.NoError(t, err)
 
 	cfg := &config.Config{
 		DatabaseDir:       t.TempDir(),
