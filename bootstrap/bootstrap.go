@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"strings"
 	"time"
 
 	"github.com/onflow/flow-go-sdk/access"
@@ -270,22 +269,7 @@ func startServer(
 		signer, err = crypto.NewInMemorySigner(cfg.COAKey, crypto.SHA3_256)
 	case cfg.COAKeys != nil:
 		signer, err = requester.NewKeyRotationSigner(cfg.COAKeys, crypto.SHA3_256)
-	case cfg.COACloudKMSKeys != nil:
-		kmsKeys := make([]flowGoKMS.Key, len(cfg.COACloudKMSKeys))
-		for i, key := range cfg.COACloudKMSKeys {
-			// key has the form "{keyID}@{keyVersion}", where
-			keyParts := strings.Split(key, "@")
-			if len(keyParts) != 2 {
-				return fmt.Errorf("wrong format for Cloud KMS key: %s", key)
-			}
-			kmsKeys[i] = flowGoKMS.Key{
-				ProjectID:  cfg.COACloudKMSProjectID,
-				LocationID: cfg.COACloudKMSLocationID,
-				KeyRingID:  cfg.COACloudKMSKeyRingID,
-				KeyID:      keyParts[0],
-				KeyVersion: keyParts[1],
-			}
-		}
+	case len(cfg.COACloudKMSKeys) > 0:
 		kmsClient, err := flowGoKMS.NewClient(ctx)
 		if err != nil {
 			return fmt.Errorf("unable to create Cloud KMS client: %w", err)
@@ -293,7 +277,7 @@ func startServer(
 		signer, err = requester.NewSignerForKeys(
 			ctx,
 			kmsClient,
-			kmsKeys,
+			cfg.COACloudKMSKeys,
 			logger,
 		)
 		if err != nil {

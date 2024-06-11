@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/onflow/flow-go-sdk/access/grpc"
+	flowGoKMS "github.com/onflow/flow-go-sdk/crypto/cloudkms"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/go-ethereum/common"
 	"github.com/onflow/go-ethereum/crypto"
@@ -157,24 +158,34 @@ func Test_CloudKMSConcurrentTransactionSubmission(t *testing.T) {
 		service.PrivateKey,
 	)
 	require.NoError(t, err)
+	kmsKeyIDs := []string{
+		"gw-key-6", "gw-key-7", "gw-key-8", "gw-key-9", "gw-key-10",
+	}
+	kmsKeys := make([]flowGoKMS.Key, len(kmsKeyIDs))
+	for i, keyID := range kmsKeyIDs {
+		kmsKeys[i] = flowGoKMS.Key{
+			ProjectID:  "flow-evm-gateway",
+			LocationID: "global",
+			KeyRingID:  "tx-signing",
+			KeyID:      keyID,
+			KeyVersion: "1",
+		}
+	}
 
 	cfg := &config.Config{
-		DatabaseDir:           t.TempDir(),
-		AccessNodeHost:        grpcHost,
-		RPCPort:               8545,
-		RPCHost:               "127.0.0.1",
-		FlowNetworkID:         "flow-emulator",
-		EVMNetworkID:          types.FlowEVMTestNetChainID,
-		Coinbase:              eoaTestAccount,
-		COAAddress:            *createdAddr,
-		COACloudKMSProjectID:  "flow-evm-gateway",
-		COACloudKMSLocationID: "global",
-		COACloudKMSKeyRingID:  "tx-signing",
-		COACloudKMSKeys:       []string{"gw-key-6@1", "gw-key-7@1", "gw-key-8@1", "gw-key-9@1", "gw-key-10@1"},
-		CreateCOAResource:     true,
-		GasPrice:              new(big.Int).SetUint64(0),
-		LogLevel:              zerolog.DebugLevel,
-		LogWriter:             os.Stdout,
+		DatabaseDir:       t.TempDir(),
+		AccessNodeHost:    grpcHost,
+		RPCPort:           8545,
+		RPCHost:           "127.0.0.1",
+		FlowNetworkID:     "flow-emulator",
+		EVMNetworkID:      types.FlowEVMTestNetChainID,
+		Coinbase:          eoaTestAccount,
+		COAAddress:        *createdAddr,
+		COACloudKMSKeys:   kmsKeys,
+		CreateCOAResource: true,
+		GasPrice:          new(big.Int).SetUint64(0),
+		LogLevel:          zerolog.DebugLevel,
+		LogWriter:         os.Stdout,
 	}
 
 	// todo change this test to use ingestion and emulator directly so we can completely remove
