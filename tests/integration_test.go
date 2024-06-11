@@ -122,6 +122,16 @@ func Test_ConcurrentTransactionSubmission(t *testing.T) {
 }
 
 func Test_CloudKMSConcurrentTransactionSubmission(t *testing.T) {
+	// When this env var is missing, we simply skip the entire test
+	// as it requires access to Google Cloud KMS to properly run.
+	// Run from command line, in the `tests` directory, with:
+	// GOOGLE_APPLICATION_CREDENTIALS="/some-path/google-app-creds-c97e30ff5f30.json" go test -timeout 130s -run ^Test_CloudKMSConcurrentTransactionSubmission$ github.com/onflow/flow-evm-gateway/integration
+	// Make sure to update the slice of `publicKeys` below.
+	googleAppCreds := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
+	if len(googleAppCreds) == 0 {
+		t.Skip()
+	}
+
 	srv, err := startEmulator(true)
 	require.NoError(t, err)
 
