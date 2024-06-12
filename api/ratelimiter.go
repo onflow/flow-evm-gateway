@@ -26,7 +26,7 @@ func rateLimit(ctx context.Context, limiter limiter.Store, logger zerolog.Logger
 
 	_, _, _, ok, _ := limiter.Take(ctx, remote)
 	if !ok {
-		logger.Warn().Str("origin", remote).Msg("rate limit reached")
+		logger.Debug().Str("origin", remote).Msg("rate limit reached")
 		return errs.ErrRateLimit
 	}
 
