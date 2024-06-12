@@ -2,14 +2,19 @@ package requester
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/onflow/flow-go-sdk"
+	"github.com/onflow/flow-go/fvm/evm/types"
 	gethCommon "github.com/onflow/go-ethereum/common"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/rs/zerolog"
+
+	"github.com/onflow/flow-evm-gateway/models"
 )
 
 const evmErrorDivider = "[evm]"
@@ -81,8 +86,14 @@ func (t *TxPool) Send(
 				// is a validation error due to assert statement in the run.cdc script.
 				errStr := res.Error.Error()
 				if strings.Contains(errStr, evmErrorDivider) {
-					evmErr := strings.Split(errStr, evmErrorDivider)[1]
-					return fmt.Errorf("invalid evm transaction: %s", evmErr)
+					codeStr := strings.Split(errStr, evmErrorDivider)[1]
+
+					err := fmt.Errorf("%s", codeStr)
+					if code, convErr := strconv.Atoi(codeStr); convErr == nil {
+						err = types.ErrorFromCode(types.ErrorCode(code))
+					}
+
+					errors.Join(models.ErrInvalidEVMTransaction, err)
 				}
 
 				t.logger.Error().Err(res.Error).
