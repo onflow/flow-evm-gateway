@@ -330,9 +330,8 @@ func (e *EVM) Call(
 	if evmResult.ErrorCode != 0 {
 		if evmResult.ErrorCode == evmTypes.ExecutionErrCodeExecutionReverted {
 			return nil, errs.NewRevertError(evmResult.ReturnedData)
-		} else {
-			return nil, getErrorForCode(evmResult.ErrorCode)
 		}
+		return nil, getErrorForCode(evmResult.ErrorCode)
 	}
 
 	result := evmResult.ReturnedData
