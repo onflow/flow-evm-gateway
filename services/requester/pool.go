@@ -25,6 +25,14 @@ type TxPool struct {
 	pool   map[gethCommon.Hash]*gethTypes.Transaction
 }
 
+func NewTxPool(client *CrossSporkClient, logger zerolog.Logger) *TxPool {
+	return &TxPool{
+		logger: logger.With().Str("component", "tx-pool").Logger(),
+		client: client,
+		pool:   make(map[gethCommon.Hash]*gethTypes.Transaction),
+	}
+}
+
 // Send flow transaction that executes EVM run function which takes in the encoded EVM transaction.
 // The flow transaction status is awaited and an error is returned in case of a failure in submission,
 // or an EVM validation error.
