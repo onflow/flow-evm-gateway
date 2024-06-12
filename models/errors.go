@@ -6,7 +6,8 @@ import (
 )
 
 var (
-	ErrDisconnected = NewRecoverableError(errors.New("disconnected"))
+	ErrDisconnected          = NewRecoverableError(errors.New("disconnected"))
+	ErrInvalidEVMTransaction = errors.New("invalid evm transaction")
 )
 
 func NewRecoverableError(err error) RecoverableError {
