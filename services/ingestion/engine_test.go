@@ -544,7 +544,7 @@ func newTransaction() (cadence.Event, *types.Event, models.Transaction, *types.R
 		TxType:                  1,
 		GasConsumed:             1337,
 		DeployedContractAddress: &types.Address{0x5, 0x6, 0x7},
-		ReturnedValue:           []byte{0x55},
+		ReturnedData:            []byte{0x55},
 		Logs: []*gethTypes.Log{{
 			Address: gethCommon.Address{0x1, 0x2},
 			Topics:  []gethCommon.Hash{{0x5, 0x6}, {0x7, 0x8}},
