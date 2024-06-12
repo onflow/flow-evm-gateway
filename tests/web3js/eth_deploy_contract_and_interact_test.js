@@ -103,4 +103,74 @@ it('deploy contract and interact', async() => {
     let block = await web3.eth.getBlock(latestHeight)
     assert.equal(block.logsBloom, res.receipt.logsBloom)
 
+    // check that revert reason for custom error is correctly returned for signed transaction
+    try {
+        let callCustomError = deployed.contract.methods.customError().encodeABI()
+        result = await helpers.signAndSend({
+            from: conf.eoa.address,
+            to: contractAddress,
+            data: callCustomError,
+            gas: 1_000_000,
+            gasPrice: 0
+        })
+    } catch (error) {
+        assert.equal(error.reason, 'execution reverted')
+        assert.equal(error.signature, '0x9195785a')
+        assert.equal(
+            error.data,
+            '00000000000000000000000000000000000000000000000000000000000000050000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000001056616c756520697320746f6f206c6f7700000000000000000000000000000000'
+        )
+    }
+
+    // check that revert reason for custom error is correctly returned for contract call
+    // and it is properly ABI decoded.
+    try {
+        result = await deployed.contract.methods.customError().call({from: conf.eoa.address})
+    } catch (err) {
+        let error = err.innerError
+        assert.equal(
+            error.data,
+            '0x9195785a00000000000000000000000000000000000000000000000000000000000000050000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000001056616c756520697320746f6f206c6f7700000000000000000000000000000000'
+        )
+        assert.equal(error.errorName,'MyCustomError')
+        assert.equal(error.errorSignature, 'MyCustomError(uint256,string)')
+        assert.equal(error.errorArgs.value, 5n)
+        assert.equal(error.errorArgs.message, 'Value is too low')
+    }
+
+    // check that assertion error is correctly returned for signed transaction
+    try {
+        let callAssertError = deployed.contract.methods.assertError().encodeABI()
+        result = await helpers.signAndSend({
+            from: conf.eoa.address,
+            to: contractAddress,
+            data: callAssertError,
+            gas: 1_000_000,
+            gasPrice: 0
+        })
+    } catch (error) {
+        assert.equal(error.reason, 'execution reverted: Assert Error Message')
+        assert.equal(error.signature, '0x08c379a0')
+        assert.equal(
+            error.data,
+            '00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000014417373657274204572726f72204d657373616765000000000000000000000000'
+        )
+    }
+
+    // check that assertion error is correctly returned for contract call
+    // and it is properly ABI decoded.
+    try {
+        result = await deployed.contract.methods.assertError().call({from: conf.eoa.address})
+    } catch (err) {
+        let error = err.innerError
+        assert.equal(
+            error.message,
+            'execution reverted: Assert Error Message'
+        )
+        assert.equal(
+            error.data,
+            '0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000014417373657274204572726f72204d657373616765000000000000000000000000'
+        )
+    }
+
 }).timeout(10*1000)

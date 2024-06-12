@@ -326,11 +326,16 @@ func (e *EVM) Call(
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode EVM result from call: %w", err)
 	}
+
 	if evmResult.ErrorCode != 0 {
-		return nil, getErrorForCode(evmResult.ErrorCode)
+		if evmResult.ErrorCode == evmTypes.ExecutionErrCodeExecutionReverted {
+			return nil, errs.NewRevertError(evmResult.ReturnedData)
+		} else {
+			return nil, getErrorForCode(evmResult.ErrorCode)
+		}
 	}
 
-	result := evmResult.ReturnedValue
+	result := evmResult.ReturnedData
 
 	e.logger.Debug().
 		Str("result", hex.EncodeToString(result)).

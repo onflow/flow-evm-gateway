@@ -15,7 +15,7 @@ chai.use(chaiHttp);
 async function deployContract(name) {
   const abi = require(`../fixtures/${name}ABI.json`)
   const code = await fs.promises.readFile(`${__dirname}/../fixtures/${name}.byte`, 'utf8')
-  const contractABI = new web3.eth.Contract(abi)
+  const contractABI = new web3.eth.Contract(abi, { handleReverted: true })
 
   let data = contractABI
     .deploy({ data: `0x${code}` })
@@ -31,7 +31,7 @@ async function deployContract(name) {
   let receipt = await web3.eth.sendSignedTransaction(signed.rawTransaction)
 
   return {
-    contract: new web3.eth.Contract(abi, receipt.contractAddress),
+    contract: new web3.eth.Contract(abi, receipt.contractAddress, { handleReverted: true }),
     receipt: receipt
   }
 }
