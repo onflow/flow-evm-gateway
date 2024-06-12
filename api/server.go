@@ -23,6 +23,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
+	errs "github.com/onflow/flow-evm-gateway/api/errors"
 	"github.com/onflow/flow-evm-gateway/config"
 )
 
@@ -429,21 +430,21 @@ type loggingResponseWriter struct {
 }
 
 func (w *loggingResponseWriter) Write(data []byte) (int, error) {
-	body := make(map[string]any)
+	body := make(map[string]string)
 	_ = json.Unmarshal(data, &body)
 	delete(body, "jsonrpc")
 
-	if body["error"] != nil {
-		w.logger.
-			Error().
-			Fields(body).
-			Msg("API response")
-	} else {
-		w.logger.
-			Debug().
-			Fields(body).
-			Msg("API response")
+	l := w.logger.Debug()
+
+	// only set error level if error is present in response
+	if body["error"] != "" {
+		// and it's not rate limit error, we want to downgrade them since they are common
+		if !strings.Contains(body["error"], errs.ErrRateLimit.Error()) {
+			l = w.logger.Error()
+		}
 	}
+
+	l.Fields(body).Msg("API response")
 
 	return w.ResponseWriter.Write(data)
 }
