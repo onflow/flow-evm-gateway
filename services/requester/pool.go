@@ -69,7 +69,7 @@ func (t *TxPool) Send(
 			if err != nil {
 				return fmt.Errorf("failed to retrieve flow transaction result %s: %w", flowTx.ID(), err)
 			}
-			if res.Status <= flow.TransactionStatusSealed {
+			if res.Status < flow.TransactionStatusSealed {
 				continue
 			}
 
