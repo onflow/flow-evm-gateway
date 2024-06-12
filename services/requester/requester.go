@@ -128,6 +128,7 @@ func NewEVM(
 		config: config,
 		signer: signer,
 		logger: logger,
+		txPool: NewTxPool(client, logger),
 	}
 
 	// create COA on the account
