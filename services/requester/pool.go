@@ -23,6 +23,8 @@ type TxPool struct {
 	logger zerolog.Logger
 	client *CrossSporkClient
 	pool   map[gethCommon.Hash]*gethTypes.Transaction
+	// todo add a broadcaster for pending transaction streaming
+	// todo add methods to inspect transaction pool state
 }
 
 func NewTxPool(client *CrossSporkClient, logger zerolog.Logger) *TxPool {
