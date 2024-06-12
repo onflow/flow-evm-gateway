@@ -2097,6 +2097,7 @@ github.com/onflow/flow-ft/lib/go/templates v1.0.0 h1:6cMS/lUJJ17HjKBfMO/eh0GGvnp
 github.com/onflow/flow-ft/lib/go/templates v1.0.0/go.mod h1:uQ8XFqmMK2jxyBSVrmyuwdWjTEb+6zGjRYotfDJ5pAE=
 github.com/onflow/flow-go v0.35.13-0.20240611224823-09b08708974c h1:IY5MYhOwz+N/38uURYOnepbm2Vaqq2QDUb3kMd1MVz4=
 github.com/onflow/flow-go v0.35.13-0.20240611224823-09b08708974c/go.mod h1:SIGA1krHtMyu23JxrR23blKXQfCl8eyA+JFr3h+TVX0=
+github.com/onflow/flow-go v0.35.13/go.mod h1:SIGA1krHtMyu23JxrR23blKXQfCl8eyA+JFr3h+TVX0=
 github.com/onflow/flow-go-sdk v1.0.0-M1/go.mod h1:TDW0MNuCs4SvqYRUzkbRnRmHQL1h4X8wURsCw9P9beo=
 github.com/onflow/flow-go-sdk v1.0.0-preview.35 h1:2ptBhFYFGOaYghZTRbj51BbYqTZjkyEpXDyaWDYrHwA=
 github.com/onflow/flow-go-sdk v1.0.0-preview.35/go.mod h1:/G8vtAekhvgynLYVDtd6OnhixoGTzzknmhYCJB2YWWU=
