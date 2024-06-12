@@ -149,6 +149,13 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 		return common.Hash{}, err
 	}
 
+	// todo do further validation
+
+	from, err := types.Sender(types.LatestSignerForChainID(tx.ChainId()), tx)
+	if err != nil {
+		return common.Hash{}, fmt.Errorf("failed to derive the sender: %w", err)
+	}
+
 	if tx.GasPrice().Cmp(e.config.GasPrice) < 0 {
 		return common.Hash{}, errors.NewErrGasPriceTooLow(e.config.GasPrice)
 	}
@@ -158,7 +165,6 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 		return common.Hash{}, err
 	}
 
-	// todo make sure the gas price is not bellow the configured gas price
 	script := e.replaceAddresses(runTxScript)
 	flowID, err := e.signAndSend(ctx, script, hexEncodedTx)
 	if err != nil {
@@ -169,11 +175,6 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 	var to string
 	if tx.To() != nil {
 		to = tx.To().String()
-	}
-
-	from, err := types.Sender(types.LatestSignerForChainID(tx.ChainId()), tx)
-	if err != nil {
-		e.logger.Error().Err(err).Msg("failed to calculate sender")
 	}
 
 	e.logger.Info().
