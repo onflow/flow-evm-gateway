@@ -127,6 +127,15 @@ EVM Gateway has public RPC endpoints available for the following environments:
 
 | Name            | Value                                  |
 |-----------------|----------------------------------------|
+| Network Name    | Migrationnet                             |
+| Description     | The public RPC URL for Flow Migrationnet |
+| RPC Endpoint    | https://evm-001.migrationtestnet1.nodes.onflow.org|
+| Chain ID        | 646                                    |
+| Currency Symbol | FLOW                                   |
+| Block Explorer  | /        |
+
+| Name            | Value                                  |
+|-----------------|----------------------------------------|
 | Network Name    | Previewnet                             |
 | Description     | The public RPC URL for Flow Previewnet |
 | RPC Endpoint    | https://previewnet.evm.nodes.onflow.org|
@@ -170,6 +179,7 @@ Listed below are the JSON-RPC namespaces and methods currently supported by the 
     * eth_getTransactionByHash
     * eth_getCode
     * eth_gasPrice 
+    * eth_feeHistory
     * eth_getBalance
     * eth_estimateGas
     * eth_getTransactionByBlockNumberAndIndex
@@ -181,6 +191,7 @@ Listed below are the JSON-RPC namespaces and methods currently supported by the 
     * eth_newFilter
     * eth_uninstallFilter
     * eth_getFilterChanges
+    * eth_getFilterLogs
     * eth_newBlockFilter
     * eth_newPendingTransactionFilter
     * eth_getUncleCountByBlockHash // return 0
@@ -188,11 +199,9 @@ Listed below are the JSON-RPC namespaces and methods currently supported by the 
     * eth_syncing // return false for now
   * Unsupported but coming soon
     * eth_createAccessList
-    * eth_feeHistory
     * eth_maxPriorityFeePerGas
     * eth_getProof
     * eth_getStorageAt
-    * eth_getFilterLogs
     * eth_accounts
     * eth_sign
     * eth_signTransaction
@@ -206,6 +215,11 @@ Listed below are the JSON-RPC namespaces and methods currently supported by the 
     * net_listening
     * net_peerCount
     * net_version
+* `debug`
+  * Supported
+    * debug_traceTransaction
+    * debug_traceBlockByNumber
+    * debug_traceBlockByHash
 
 We also plan to add support for the `admin` namespace in the near future.
 

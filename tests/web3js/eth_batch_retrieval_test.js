@@ -2,21 +2,21 @@ const { assert } = require('chai')
 const conf = require('./config')
 const web3 = conf.web3
 
+it('retrieve batch transactions', async () => {
+  // this test relies on the setup of batched transactions found in ../e2e_web3js_test.go
 
-it('retrieve batch transactions', async() => {
-    let latestHeight = await web3.eth.getBlockNumber()
-    let block = await web3.eth.getBlock(latestHeight)
-    assert.lengthOf(block.transactions, 2)
+  let latestHeight = await web3.eth.getBlockNumber()
+  let block = await web3.eth.getBlock(latestHeight)
 
-    let deployTx = await web3.eth.getTransactionFromBlock(latestHeight, 0)
-    assert.equal(block.number, deployTx.blockNumber)
-    assert.equal(block.hash, deployTx.blockHash)
-    assert.equal(0, deployTx.type)
-    assert.equal(0, deployTx.transactionIndex)
+  let batchSize = 10
+  assert.lengthOf(block.transactions, batchSize)
 
-    let callTx = await web3.eth.getTransactionFromBlock(latestHeight, 1)
-    assert.equal(block.number, callTx.blockNumber)
-    assert.equal(block.hash, callTx.blockHash)
-    assert.equal(0, callTx.type)
-    assert.equal(1, callTx.transactionIndex)
+  for (let i = 0; i < block.transactions.length; i++) {
+    let tx = await web3.eth.getTransactionFromBlock(latestHeight, i)
+    assert.equal(tx.blockNumber, block.number, "wrong block number")
+    assert.equal(tx.blockHash, block.hash, "wrong block hash")
+    assert.equal(tx.type, 0, "wrong type")
+    assert.equal(tx.transactionIndex, i, "wrong index")
+    assert.isBelow(i, batchSize, "wrong batch size")
+  }
 })

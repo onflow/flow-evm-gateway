@@ -4,10 +4,12 @@ import (
 	"context"
 	_ "embed"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
 	"strings"
+	"time"
 
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go-sdk"
@@ -23,8 +25,9 @@ import (
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/onflow/flow-evm-gateway/api/errors"
+	errs "github.com/onflow/flow-evm-gateway/api/errors"
 	"github.com/onflow/flow-evm-gateway/config"
+	"github.com/onflow/flow-evm-gateway/storage"
 )
 
 var (
@@ -61,25 +64,25 @@ type Requester interface {
 	SendRawTransaction(ctx context.Context, data []byte) (common.Hash, error)
 
 	// GetBalance returns the amount of wei for the given address in the state of the
-	// given block height.
-	GetBalance(ctx context.Context, address common.Address, height uint64) (*big.Int, error)
+	// given EVM block height.
+	GetBalance(ctx context.Context, address common.Address, evmHeight int64) (*big.Int, error)
 
-	// Call executes the given signed transaction data on the state for the given block number.
+	// Call executes the given signed transaction data on the state for the given EVM block height.
 	// Note, this function doesn't make and changes in the state/blockchain and is
 	// useful to execute and retrieve values.
-	Call(ctx context.Context, data []byte, from common.Address, height uint64) ([]byte, error)
+	Call(ctx context.Context, data []byte, from common.Address, evmHeight int64) ([]byte, error)
 
 	// EstimateGas executes the given signed transaction data on the state.
 	// Note, this function doesn't make any changes in the state/blockchain and is
 	// useful to executed and retrieve the gas consumption and possible failures.
 	EstimateGas(ctx context.Context, data []byte, from common.Address) (uint64, error)
 
-	// GetNonce gets nonce from the network at the given block height.
-	GetNonce(ctx context.Context, address common.Address, height uint64) (uint64, error)
+	// GetNonce gets nonce from the network at the given EVM block height.
+	GetNonce(ctx context.Context, address common.Address, evmHeight int64) (uint64, error)
 
 	// GetCode returns the code stored at the given address in
-	// the state for the given block number.
-	GetCode(ctx context.Context, address common.Address, height uint64) ([]byte, error)
+	// the state for the given EVM block height.
+	GetCode(ctx context.Context, address common.Address, evmHeight int64) ([]byte, error)
 
 	// GetLatestEVMHeight returns the latest EVM height of the network.
 	GetLatestEVMHeight(ctx context.Context) (uint64, error)
@@ -93,6 +96,7 @@ type EVM struct {
 	signer crypto.Signer
 	txPool *TxPool
 	logger zerolog.Logger
+	blocks storage.BlockIndexer
 }
 
 func NewEVM(
@@ -100,6 +104,7 @@ func NewEVM(
 	config *config.Config,
 	signer crypto.Signer,
 	logger zerolog.Logger,
+	blocks storage.BlockIndexer,
 ) (*EVM, error) {
 	logger = logger.With().Str("component", "requester").Logger()
 	// check that the address stores already created COA resource in the "evm" storage path.
@@ -128,6 +133,7 @@ func NewEVM(
 		config: config,
 		signer: signer,
 		logger: logger,
+		blocks: blocks,
 		txPool: NewTxPool(client, logger),
 	}
 
@@ -164,7 +170,7 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 	}
 
 	if tx.GasPrice().Cmp(e.config.GasPrice) < 0 {
-		return common.Hash{}, errors.NewErrGasPriceTooLow(e.config.GasPrice)
+		return common.Hash{}, errs.NewErrGasPriceTooLow(e.config.GasPrice)
 	}
 
 	txData := hex.EncodeToString(data)
@@ -248,9 +254,14 @@ func (e *EVM) buildTransaction(ctx context.Context, script []byte, args ...caden
 func (e *EVM) GetBalance(
 	ctx context.Context,
 	address common.Address,
-	height uint64,
+	evmHeight int64,
 ) (*big.Int, error) {
 	hexEncodedAddress, err := addressToCadenceString(address)
+	if err != nil {
+		return nil, err
+	}
+
+	height, err := e.evmToCadenceHeight(evmHeight)
 	if err != nil {
 		return nil, err
 	}
@@ -262,11 +273,14 @@ func (e *EVM) GetBalance(
 		[]cadence.Value{hexEncodedAddress},
 	)
 	if err != nil {
-		e.logger.Error().
-			Err(err).
-			Str("address", address.String()).
-			Uint64("cadence-height", height).
-			Msg("failed to get get balance")
+		if !errors.Is(err, ErrOutOfRange) {
+			e.logger.Error().
+				Err(err).
+				Str("address", address.String()).
+				Int64("evm-height", evmHeight).
+				Uint64("cadence-height", height).
+				Msg("failed to get get balance")
+		}
 		return nil, fmt.Errorf("failed to get balance: %w", err)
 	}
 
@@ -281,9 +295,14 @@ func (e *EVM) GetBalance(
 func (e *EVM) GetNonce(
 	ctx context.Context,
 	address common.Address,
-	height uint64,
+	evmHeight int64,
 ) (uint64, error) {
 	hexEncodedAddress, err := addressToCadenceString(address)
+	if err != nil {
+		return 0, err
+	}
+
+	height, err := e.evmToCadenceHeight(evmHeight)
 	if err != nil {
 		return 0, err
 	}
@@ -295,10 +314,13 @@ func (e *EVM) GetNonce(
 		[]cadence.Value{hexEncodedAddress},
 	)
 	if err != nil {
-		e.logger.Error().Err(err).
-			Str("address", address.String()).
-			Uint64("cadence-height", height).
-			Msg("failed to get nonce")
+		if !errors.Is(err, ErrOutOfRange) {
+			e.logger.Error().Err(err).
+				Str("address", address.String()).
+				Int64("evm-height", evmHeight).
+				Uint64("cadence-height", height).
+				Msg("failed to get nonce")
+		}
 		return 0, fmt.Errorf("failed to get nonce: %w", err)
 	}
 
@@ -307,14 +329,22 @@ func (e *EVM) GetNonce(
 		e.logger.Panic().Msg(fmt.Sprintf("failed to convert balance %v to UInt64", val))
 	}
 
-	return uint64(val.(cadence.UInt64)), nil
+	nonce := uint64(val.(cadence.UInt64))
+
+	e.logger.Debug().
+		Uint64("nonce", nonce).
+		Int64("evm-height", evmHeight).
+		Uint64("cadence-height", height).
+		Msg("get nonce executed")
+
+	return nonce, nil
 }
 
 func (e *EVM) Call(
 	ctx context.Context,
 	data []byte,
 	from common.Address,
-	height uint64,
+	evmHeight int64,
 ) ([]byte, error) {
 	hexEncodedTx, err := cadence.NewString(hex.EncodeToString(data))
 	if err != nil {
@@ -326,6 +356,11 @@ func (e *EVM) Call(
 		return nil, err
 	}
 
+	height, err := e.evmToCadenceHeight(evmHeight)
+	if err != nil {
+		return nil, err
+	}
+
 	scriptResult, err := e.executeScriptAtHeight(
 		ctx,
 		dryRunScript,
@@ -333,12 +368,15 @@ func (e *EVM) Call(
 		[]cadence.Value{hexEncodedTx, hexEncodedAddress},
 	)
 	if err != nil {
-		e.logger.Error().
-			Err(err).
-			Uint64("cadence-height", height).
-			Str("from", from.String()).
-			Str("data", string(data)).
-			Msg("failed to execute call")
+		if !errors.Is(err, ErrOutOfRange) {
+			e.logger.Error().
+				Err(err).
+				Uint64("cadence-height", height).
+				Int64("evm-height", evmHeight).
+				Str("from", from.String()).
+				Str("data", string(data)).
+				Msg("failed to execute call")
+		}
 		return nil, fmt.Errorf("failed to execute script: %w", err)
 	}
 
@@ -346,14 +384,20 @@ func (e *EVM) Call(
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode EVM result from call: %w", err)
 	}
+
 	if evmResult.ErrorCode != 0 {
+		if evmResult.ErrorCode == evmTypes.ExecutionErrCodeExecutionReverted {
+			return nil, errs.NewRevertError(evmResult.ReturnedData)
+		}
 		return nil, getErrorForCode(evmResult.ErrorCode)
 	}
 
-	result := evmResult.ReturnedValue
+	result := evmResult.ReturnedData
 
 	e.logger.Debug().
 		Str("result", hex.EncodeToString(result)).
+		Int64("evm-height", evmHeight).
+		Uint64("cadence-height", height).
 		Msg("call executed")
 
 	return result, nil
@@ -364,10 +408,6 @@ func (e *EVM) EstimateGas(
 	data []byte,
 	from common.Address,
 ) (uint64, error) {
-	e.logger.Debug().
-		Str("data", fmt.Sprintf("%x", data)).
-		Msg("estimate gas")
-
 	hexEncodedTx, err := cadence.NewString(hex.EncodeToString(data))
 	if err != nil {
 		return 0, err
@@ -402,20 +442,24 @@ func (e *EVM) EstimateGas(
 	// fix to also apply for the EVM API, on Cadence side.
 	gasConsumed := evmResult.GasConsumed + params.SstoreSentryGasEIP2200 + 1
 
+	e.logger.Debug().
+		Uint64("gas", gasConsumed).
+		Msg("gas estimation executed")
+
 	return gasConsumed, nil
 }
 
 func (e *EVM) GetCode(
 	ctx context.Context,
 	address common.Address,
-	height uint64,
+	evmHeight int64,
 ) ([]byte, error) {
-	e.logger.Debug().
-		Str("address", address.Hex()).
-		Uint64("height", height).
-		Msg("get code")
-
 	hexEncodedAddress, err := addressToCadenceString(address)
+	if err != nil {
+		return nil, err
+	}
+
+	height, err := e.evmToCadenceHeight(evmHeight)
 	if err != nil {
 		return nil, err
 	}
@@ -427,6 +471,15 @@ func (e *EVM) GetCode(
 		[]cadence.Value{hexEncodedAddress},
 	)
 	if err != nil {
+		if !errors.Is(err, ErrOutOfRange) {
+			e.logger.Error().
+				Err(err).
+				Uint64("cadence-height", height).
+				Int64("evm-height", evmHeight).
+				Str("address", address.String()).
+				Msg("failed to get code")
+		}
+
 		return nil, fmt.Errorf("failed to execute script for get code: %w", err)
 	}
 
@@ -435,8 +488,10 @@ func (e *EVM) GetCode(
 		return nil, err
 	}
 
-	e.logger.Info().
+	e.logger.Debug().
 		Str("address", address.Hex()).
+		Int64("evm-height", evmHeight).
+		Uint64("cadence-height", height).
 		Str("code size", fmt.Sprintf("%d", len(code))).
 		Msg("get code executed")
 
@@ -460,7 +515,13 @@ func (e *EVM) GetLatestEVMHeight(ctx context.Context) (uint64, error) {
 		e.logger.Panic().Msg(fmt.Sprintf("failed to convert height %v to UInt64", val))
 	}
 
-	return uint64(val.(cadence.UInt64)), nil
+	height := uint64(val.(cadence.UInt64))
+
+	e.logger.Debug().
+		Uint64("evm-height", height).
+		Msg("get latest evm height executed")
+
+	return height, nil
 }
 
 // getSignerNetworkInfo loads the signer account from network and returns key index and sequence number
@@ -501,6 +562,33 @@ func (e *EVM) replaceAddresses(script []byte) []byte {
 	return []byte(s)
 }
 
+func (e *EVM) evmToCadenceHeight(height int64) (uint64, error) {
+	if height < 0 {
+		return LatestBlockHeight, nil
+	}
+
+	evmHeight := uint64(height)
+	evmLatest, err := e.blocks.LatestEVMHeight()
+	if err != nil {
+		return 0, fmt.Errorf("failed to map evm to cadence height, getting latest evm height: %w", err)
+	}
+
+	// if provided evm height equals to latest evm height indexed we
+	// return latest height special value to signal requester to execute
+	// script at the latest block, not at the cadence height we get from the
+	// index, that is because at that point the height might already be pruned
+	if evmHeight == evmLatest {
+		return LatestBlockHeight, nil
+	}
+
+	cadenceHeight, err := e.blocks.GetCadenceHeight(uint64(evmHeight))
+	if err != nil {
+		return 0, fmt.Errorf("failed to map evm to cadence height: %w", err)
+	}
+
+	return cadenceHeight, nil
+}
+
 // executeScriptAtHeight will execute the given script, at the given
 // block height, with the given arguments. A height of `LatestBlockHeight`
 // (math.MaxUint64 - 1) is a special value, which means the script will be
@@ -525,6 +613,94 @@ func (e *EVM) executeScriptAtHeight(
 		e.replaceAddresses(script),
 		arguments,
 	)
+}
+
+// signAndSend creates a flow transaction from the provided script
+// with the arguments and signs it with the configured COA account
+// and then submits it to the network.
+func (e *EVM) signAndSend(
+	ctx context.Context,
+	script []byte,
+	args ...cadence.Value,
+) (flow.Identifier, error) {
+	var (
+		g           = errgroup.Group{}
+		err1, err2  error
+		latestBlock *flow.Block
+		index       int
+		seqNum      uint64
+	)
+	// execute concurrently so we can speed up all the information we need for tx
+	g.Go(func() error {
+		latestBlock, err1 = e.client.GetLatestBlock(ctx, true)
+		return err1
+	})
+	g.Go(func() error {
+		index, seqNum, err2 = e.getSignerNetworkInfo(ctx)
+		return err2
+	})
+	if err := g.Wait(); err != nil {
+		return flow.EmptyID, err
+	}
+
+	address := e.config.COAAddress
+	flowTx := flow.NewTransaction().
+		SetScript(script).
+		SetProposalKey(address, index, seqNum).
+		SetReferenceBlockID(latestBlock.ID).
+		SetPayer(address).
+		AddAuthorizer(address)
+
+	for _, arg := range args {
+		if err := flowTx.AddArgument(arg); err != nil {
+			return flow.EmptyID, fmt.Errorf("failed to add argument: %w", err)
+		}
+	}
+
+	if err := flowTx.SignEnvelope(address, index, e.signer); err != nil {
+		return flow.EmptyID, fmt.Errorf("failed to sign envelope: %w", err)
+	}
+
+	if err := e.client.SendTransaction(ctx, *flowTx); err != nil {
+		return flow.EmptyID, fmt.Errorf("failed to send transaction: %w", err)
+	}
+
+	// get transaction status after it is submitted
+	go func(id flow.Identifier) {
+		const fetchInterval = time.Millisecond * 500
+		const fetchTimeout = time.Second * 60
+
+		fetchTicker := time.NewTicker(fetchInterval)
+		timeoutTicker := time.NewTicker(fetchTimeout)
+
+		defer fetchTicker.Stop()
+		defer timeoutTicker.Stop()
+
+		for {
+			select {
+			case <-fetchTicker.C:
+				res, err := e.client.GetTransactionResult(context.Background(), id)
+				if err != nil {
+					e.logger.Error().Str("id", id.String()).Err(err).Msg("failed to get transaction result")
+					return
+				}
+				if res != nil && res.Status > flow.TransactionStatusPending {
+					e.logger.Info().
+						Str("status", res.Status.String()).
+						Str("id", id.String()).
+						Int("events", len(res.Events)).
+						Err(res.Error).
+						Msg("transaction result received")
+					return
+				}
+			case <-timeoutTicker.C:
+				e.logger.Error().Str("id", id.String()).Msg("could not get transaction result")
+				return
+			}
+		}
+	}(flowTx.ID())
+
+	return flowTx.ID(), nil
 }
 
 func addressToCadenceString(address common.Address) (cadence.String, error) {

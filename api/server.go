@@ -22,6 +22,9 @@ import (
 	"github.com/rs/cors"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+
+	errs "github.com/onflow/flow-evm-gateway/api/errors"
+	"github.com/onflow/flow-evm-gateway/config"
 )
 
 type rpcHandler struct {
@@ -46,13 +49,17 @@ type httpServer struct {
 	endpoint string
 	host     string
 	port     int
+
+	config *config.Config
 }
 
 const (
-	shutdownTimeout = 5 * time.Second
+	shutdownTimeout      = 5 * time.Second
+	batchRequestLimit    = 5
+	batchResponseMaxSize = 5 * 1000 * 1000 // 5 MB
 )
 
-func NewHTTPServer(logger zerolog.Logger, timeouts rpc.HTTPTimeouts) *httpServer {
+func NewHTTPServer(logger zerolog.Logger, cfg *config.Config) *httpServer {
 	gethLog.Root().SetHandler(gethLog.FuncHandler(func(r *gethLog.Record) error {
 		switch r.Lvl {
 		case gethLog.LvlInfo:
@@ -68,7 +75,8 @@ func NewHTTPServer(logger zerolog.Logger, timeouts rpc.HTTPTimeouts) *httpServer
 
 	return &httpServer{
 		logger:   logger,
-		timeouts: timeouts,
+		timeouts: rpc.DefaultHTTPTimeouts,
+		config:   cfg,
 	}
 }
 
@@ -102,6 +110,7 @@ func (h *httpServer) EnableRPC(apis []rpc.API) error {
 
 	// Create RPC server and handler.
 	srv := rpc.NewServer()
+	srv.SetBatchLimits(batchRequestLimit, batchResponseMaxSize)
 
 	// Register all the APIs exposed by the services
 	for _, api := range apis {
@@ -226,12 +235,19 @@ func (h *httpServer) disableRPC() bool {
 }
 
 func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// this overwrites the remote address with the header value, this is used when the server is
+	// behind a proxy, and the true source address is overwritten by proxy, but retained in a header.
+	if h.config.AddressHeader != "" {
+		r.RemoteAddr = r.Header.Get(h.config.AddressHeader)
+	}
+
 	// Check if WebSocket request and serve if JSON-RPC over WebSocket is enabled
 	if b, err := io.ReadAll(r.Body); err == nil {
 		body := make(map[string]any)
 		_ = json.Unmarshal(b, &body)
 
 		h.logger.Debug().
+			Str("IP", r.RemoteAddr).
 			Str("url", r.URL.String()).
 			Fields(body).
 			Bool("is-ws", isWebSocket(r)).
@@ -253,7 +269,6 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		logger:         h.logger,
 	}
 
-	// If JSON-RPC over HTTP is enabled, try to serve the request
 	rpc := recoverHandler(h.logger, h.httpHandler)
 	if rpc != nil {
 		if checkPath(r, "") {
@@ -415,21 +430,21 @@ type loggingResponseWriter struct {
 }
 
 func (w *loggingResponseWriter) Write(data []byte) (int, error) {
-	body := make(map[string]any)
+	body := make(map[string]string)
 	_ = json.Unmarshal(data, &body)
 	delete(body, "jsonrpc")
 
-	if body["error"] != nil {
-		w.logger.
-			Error().
-			Fields(body).
-			Msg("API response")
-	} else {
-		w.logger.
-			Debug().
-			Fields(body).
-			Msg("API response")
+	l := w.logger.Debug()
+
+	// only set error level if error is present in response
+	if body["error"] != "" {
+		// and it's not rate limit error, we want to downgrade them since they are common
+		if !strings.Contains(body["error"], errs.ErrRateLimit.Error()) {
+			l = w.logger.Error()
+		}
 	}
+
+	l.Fields(body).Msg("API response")
 
 	return w.ResponseWriter.Write(data)
 }

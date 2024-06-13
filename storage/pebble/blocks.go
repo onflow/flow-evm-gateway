@@ -7,30 +7,32 @@ import (
 	"sync"
 
 	"github.com/cockroachdb/pebble"
+	"github.com/onflow/flow-go-sdk"
+
+	"github.com/onflow/flow-go/fvm/evm/types"
+	"github.com/onflow/go-ethereum/common"
 
 	"github.com/onflow/flow-evm-gateway/storage"
 	errs "github.com/onflow/flow-evm-gateway/storage/errors"
-	"github.com/onflow/flow-go/fvm/evm/types"
-	"github.com/onflow/go-ethereum/common"
 )
 
 var _ storage.BlockIndexer = &Blocks{}
 
 type Blocks struct {
-	store           *Storage
-	mux             sync.RWMutex
-	latestEVMHeight uint64
+	store                *Storage
+	mux                  sync.RWMutex
+	latestEVMHeightCache uint64
 }
 
 func NewBlocks(store *Storage) *Blocks {
 	return &Blocks{
-		store:           store,
-		mux:             sync.RWMutex{},
-		latestEVMHeight: 0,
+		store:                store,
+		mux:                  sync.RWMutex{},
+		latestEVMHeightCache: 0,
 	}
 }
 
-func (b *Blocks) Store(cadenceHeight uint64, block *types.Block) error {
+func (b *Blocks) Store(cadenceHeight uint64, cadenceID flow.Identifier, block *types.Block) error {
 	b.mux.Lock()
 	defer b.mux.Unlock()
 
@@ -59,9 +61,14 @@ func (b *Blocks) Store(cadenceHeight uint64, block *types.Block) error {
 		return fmt.Errorf("failed to store block: %w", err)
 	}
 
-	// set latest height
+	// set mapping of evm height to cadence block height
 	if err := b.store.set(evmHeightToCadenceHeightKey, evmHeightBytes, cadenceHeightBytes, batch); err != nil {
 		return fmt.Errorf("failed to store evm to cadence height: %w", err)
+	}
+
+	// set mapping of evm height to cadence block id
+	if err := b.store.set(evmHeightToCadenceIDKey, evmHeightBytes, cadenceID.Bytes(), batch); err != nil {
+		return fmt.Errorf("failed to store evm to cadence id: %w", err)
 	}
 
 	if err := b.store.set(latestCadenceHeightKey, nil, cadenceHeightBytes, batch); err != nil {
@@ -76,7 +83,7 @@ func (b *Blocks) Store(cadenceHeight uint64, block *types.Block) error {
 		return fmt.Errorf("failed to commit block: %w", err)
 	}
 
-	b.latestEVMHeight = block.Height
+	b.latestEVMHeightCache = block.Height
 	return nil
 }
 
@@ -84,7 +91,7 @@ func (b *Blocks) GetByHeight(height uint64) (*types.Block, error) {
 	b.mux.RLock()
 	defer b.mux.RUnlock()
 
-	last, err := b.LatestEVMHeight()
+	last, err := b.latestEVMHeight()
 	if err != nil {
 		return nil, err
 	}
@@ -135,8 +142,12 @@ func (b *Blocks) LatestEVMHeight() (uint64, error) {
 	b.mux.RLock()
 	defer b.mux.RUnlock()
 
-	if b.latestEVMHeight != 0 {
-		return b.latestEVMHeight, nil
+	return b.latestEVMHeight()
+}
+
+func (b *Blocks) latestEVMHeight() (uint64, error) {
+	if b.latestEVMHeightCache != 0 {
+		return b.latestEVMHeightCache, nil
 	}
 
 	val, err := b.store.get(latestEVMHeightKey)
@@ -148,7 +159,7 @@ func (b *Blocks) LatestEVMHeight() (uint64, error) {
 	}
 
 	h := binary.BigEndian.Uint64(val)
-	b.latestEVMHeight = h
+	b.latestEVMHeightCache = h
 	return h, nil
 }
 
@@ -179,7 +190,7 @@ func (b *Blocks) SetLatestCadenceHeight(height uint64) error {
 }
 
 // InitHeights sets the Cadence height to zero as well as EVM heights. Used for empty database init.
-func (b *Blocks) InitHeights(cadenceHeight uint64) error {
+func (b *Blocks) InitHeights(cadenceHeight uint64, cadenceID flow.Identifier) error {
 	// sanity check, make sure we don't have any heights stored, disable overwriting the database
 	_, err := b.LatestEVMHeight()
 	if !errors.Is(err, errs.ErrNotInitialized) {
@@ -195,7 +206,7 @@ func (b *Blocks) InitHeights(cadenceHeight uint64) error {
 	}
 
 	// we store genesis block because it isn't emitted over the network
-	if err := b.Store(cadenceHeight, types.GenesisBlock); err != nil {
+	if err := b.Store(cadenceHeight, cadenceID, types.GenesisBlock); err != nil {
 		return fmt.Errorf("faield to set init genesis block: %w", err)
 	}
 
@@ -212,6 +223,18 @@ func (b *Blocks) GetCadenceHeight(evmHeight uint64) (uint64, error) {
 	}
 
 	return binary.BigEndian.Uint64(val), nil
+}
+
+func (b *Blocks) GetCadenceID(evmHeight uint64) (flow.Identifier, error) {
+	b.mux.RLock()
+	defer b.mux.RUnlock()
+
+	val, err := b.store.get(evmHeightToCadenceIDKey, uint64Bytes(evmHeight))
+	if err != nil {
+		return flow.Identifier{}, err
+	}
+
+	return flow.BytesToID(val), nil
 }
 
 func (b *Blocks) getBlock(keyCode byte, key []byte) (*types.Block, error) {

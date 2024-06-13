@@ -1,12 +1,12 @@
 const conf = require('./config')
 const helpers = require('./helpers')
 const { assert } = require('chai')
-const {Web3} = require("web3");
+const { Web3 } = require("web3");
 
 const timeout = 30 // test timeout seconds
 
-it('streaming of logs using filters', async() => {
-    setTimeout(() => process.exit(1), (timeout-1)*1000) // hack if the ws connection is not closed
+it('streaming of blocks, transactions, logs using filters', async () => {
+    setTimeout(() => process.exit(1), (timeout - 1) * 1000) // hack if the ws connection is not closed
 
     let deployed = await helpers.deployContract("storage")
     let contractAddress = deployed.receipt.contractAddress
@@ -26,56 +26,63 @@ it('streaming of logs using filters', async() => {
     await new Promise((res, rej) => setTimeout(() => res(), 1000))
 
     // subscribe to new blocks being produced by bellow transaction submission
-    let blockCount = 0
-    let blockHashes = []
+    let blockTxHashes = []
+    let subBlocks = await ws.eth.subscribe('newBlockHeaders')
     let doneBlocks = new Promise(async (res, rej) => {
-        let subBlocks = await ws.eth.subscribe('newBlockHeaders')
-        subBlocks.on('data', async block => {
-            blockHashes.push(block.transactions[0]) // add received tx hash
+        subBlocks.on("error", err => {
+            rej(err)
+        })
 
-            blockCount++
-            if (blockCount === testValues.length) {
-                await subBlocks.unsubscribe()
+        subBlocks.on('data', async block => {
+            blockTxHashes.push(block.transactions[0]) // add received tx hash
+
+            if (blockTxHashes.length === testValues.length) {
+                subBlocks.unsubscribe()
                 res()
             }
         })
-        subBlocks.on("error", console.log)
     })
 
     // subscribe to all new transaction events being produced by transaction submission bellow
-    let txCount = 0
     let txHashes = []
+    let subTx = await ws.eth.subscribe('pendingTransactions')
     let doneTxs = new Promise(async (res, rej) => {
-        let subTx = await ws.eth.subscribe('pendingTransactions')
+        subTx.on("error", err => {
+            rej(err)
+        })
+
         subTx.on('data', async tx => {
             txHashes.push(tx) // add received tx hash
-            txCount++
-            if (txCount === testValues.length) {
-                await subTx.unsubscribe()
+
+            if (txHashes.length === testValues.length) {
+                subTx.unsubscribe()
                 res()
             }
         })
     })
 
-    let logCount = 0
-    let logHashes = []
+    let logTxHashes = []
+    let subLog = await ws.eth.subscribe('logs', {
+        address: contractAddress,
+    })
     // subscribe to events being emitted by a deployed contract and bellow transaction interactions
     let doneAddressLogs = new Promise(async (res, rej) => {
-        let subLog = await ws.eth.subscribe('logs', {
-            address: contractAddress,
+        subLog.on("error", err => {
+            rej(err)
         })
+
         subLog.on('data', async (data) => {
-            logHashes.push(data.transactionHash)
-            logCount++
-            if (logCount === testValues.length) {
-                await subLog.unsubscribe()
+            logTxHashes.push(data.transactionHash)
+
+            if (logTxHashes.length === testValues.length) {
+                subLog.unsubscribe()
                 res()
             }
         })
     })
 
     // wait for subscription for a bit
-    await new Promise((res, rej) => setTimeout(() => res(), 300))
+    await new Promise((res, rej) => setTimeout(() => res(), 1000))
 
     let sentHashes = []
     // produce events by submitting transactions
@@ -96,11 +103,9 @@ it('streaming of logs using filters', async() => {
 
     // check that transaction hashes we received when submitting transactions above
     // match array of transaction hashes received from events for blocks and txs
-    assert.deepEqual(blockHashes, sentHashes)
+    assert.deepEqual(blockTxHashes, sentHashes)
     assert.deepEqual(txHashes, sentHashes)
-    assert.deepEqual(logHashes, sentHashes)
-
-    await ws.eth.clearSubscriptions()
+    assert.deepEqual(logTxHashes, sentHashes)
 
     process.exit(0)
-}).timeout(timeout*1000)
+}).timeout(timeout * 1500)

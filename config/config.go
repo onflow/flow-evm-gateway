@@ -12,6 +12,7 @@ import (
 	"github.com/goccy/go-json"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/crypto"
+	flowGoKMS "github.com/onflow/flow-go-sdk/crypto/cloudkms"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/onflow/go-ethereum/common"
@@ -53,6 +54,8 @@ type Config struct {
 	COAKey crypto.PrivateKey
 	// COAKeys is a slice of all the keys that will be used in key-rotation mechanism.
 	COAKeys []crypto.PrivateKey
+	// COACloudKMSKeys is a slice of all the keys and their versions that will be used in Cloud KMS key-rotation mechanism.
+	COACloudKMSKeys []flowGoKMS.Key
 	// CreateCOAResource indicates if the COA resource should be auto-created on
 	// startup if one doesn't exist in the COA Flow address account
 	CreateCOAResource bool
@@ -64,6 +67,10 @@ type Config struct {
 	LogLevel zerolog.Level
 	// LogWriter defines the writer used for logging
 	LogWriter io.Writer
+	// RateLimit requests made by the client identified by IP over any protocol (ws/http).
+	RateLimit uint64
+	// Address header used to identified clients, usually set by the proxy
+	AddressHeader string
 	// StreamLimit rate-limits the events sent to the client within 1 second time interval.
 	StreamLimit float64
 	// StreamTimeout defines the timeout the server waits for the event to be sent to the client.
@@ -74,11 +81,15 @@ type Config struct {
 	ForceStartCadenceHeight uint64
 	// HeartbeatInterval sets custom heartbeat interval for events
 	HeartbeatInterval uint64
+	// TracesBucketName sets the GCP bucket name where transaction traces are being stored.
+	TracesBucketName string
+	// TracesEnabled sets whether the node is supporting transaction traces.
+	TracesEnabled bool
 }
 
 func FromFlags() (*Config, error) {
 	cfg := &Config{}
-	var evmNetwork, coinbase, gas, coa, key, keysPath, flowNetwork, logLevel, filterExpiry, accessSporkHosts string
+	var evmNetwork, coinbase, gas, coa, key, keysPath, flowNetwork, logLevel, filterExpiry, accessSporkHosts, cloudKMSKeys, cloudKMSProjectID, cloudKMSLocationID, cloudKMSKeyRingID string
 	var streamTimeout int
 	var initHeight, forceStartHeight uint64
 
@@ -100,10 +111,17 @@ func FromFlags() (*Config, error) {
 	flag.BoolVar(&cfg.CreateCOAResource, "coa-resource-create", false, "Auto-create the COA resource in the Flow COA account provided if one doesn't exist")
 	flag.StringVar(&logLevel, "log-level", "debug", "Define verbosity of the log output ('debug', 'info', 'error')")
 	flag.Float64Var(&cfg.StreamLimit, "stream-limit", 10, "Rate-limits the events sent to the client within one second")
+	flag.Uint64Var(&cfg.RateLimit, "rate-limit", 50, "Rate-limit requests per second made by the client over any protocol (ws/http)")
+	flag.StringVar(&cfg.AddressHeader, "address-header", "", "Address header that contains the client IP, this is useful when the server is behind a proxy that sets the source IP of the client. Leave empty if no proxy is used.")
 	flag.Uint64Var(&cfg.HeartbeatInterval, "heartbeat-interval", 100, "Heartbeat interval for AN event subscription")
 	flag.IntVar(&streamTimeout, "stream-timeout", 3, "Defines the timeout in seconds the server waits for the event to be sent to the client")
 	flag.Uint64Var(&forceStartHeight, "force-start-height", 0, "Force set starting Cadence height. This should only be used locally or for testing, never in production.")
 	flag.StringVar(&filterExpiry, "filter-expiry", "5m", "Filter defines the time it takes for an idle filter to expire")
+	flag.StringVar(&cfg.TracesBucketName, "traces-gcp-bucket", "", "GCP bucket name where transaction traces are stored")
+	flag.StringVar(&cloudKMSProjectID, "coa-cloud-kms-project-id", "", "The project ID containing the KMS keys, e.g. 'flow-evm-gateway'")
+	flag.StringVar(&cloudKMSLocationID, "coa-cloud-kms-location-id", "", "The location ID where the key ring is grouped into, e.g. 'global'")
+	flag.StringVar(&cloudKMSKeyRingID, "coa-cloud-kms-key-ring-id", "", "The key ring ID where the KMS keys exist, e.g. 'tx-signing'")
+	flag.StringVar(&cloudKMSKeys, "coa-cloud-kms-keys", "", `Names of the KMS keys and their versions as a comma separated list, e.g. "gw-key-6@1,gw-key-7@1,gw-key-8@1"`)
 	flag.Parse()
 
 	if coinbase == "" {
@@ -143,8 +161,33 @@ func FromFlags() (*Config, error) {
 			}
 			cfg.COAKeys[i] = pk
 		}
+	} else if cloudKMSKeys != "" {
+		if cloudKMSProjectID == "" || cloudKMSLocationID == "" || cloudKMSKeyRingID == "" {
+			return nil, fmt.Errorf(
+				"using coa-cloud-kms-keys requires also coa-cloud-kms-project-id & coa-cloud-kms-location-id & coa-cloud-kms-key-ring-id",
+			)
+		}
+
+		kmsKeys := strings.Split(cloudKMSKeys, ",")
+		cfg.COACloudKMSKeys = make([]flowGoKMS.Key, len(kmsKeys))
+		for i, key := range kmsKeys {
+			// key has the form "{keyID}@{keyVersion}"
+			keyParts := strings.Split(key, "@")
+			if len(keyParts) != 2 {
+				return nil, fmt.Errorf("wrong format for Cloud KMS key: %s", key)
+			}
+			cfg.COACloudKMSKeys[i] = flowGoKMS.Key{
+				ProjectID:  cloudKMSProjectID,
+				LocationID: cloudKMSLocationID,
+				KeyRingID:  cloudKMSKeyRingID,
+				KeyID:      keyParts[0],
+				KeyVersion: keyParts[1],
+			}
+		}
 	} else {
-		return nil, fmt.Errorf("must either provide coa-key or coa-key-path flag")
+		return nil, fmt.Errorf(
+			"must either provide coa-key / coa-key-path / coa-cloud-kms-keys",
+		)
 	}
 
 	switch evmNetwork {
@@ -205,6 +248,8 @@ func FromFlags() (*Config, error) {
 	if forceStartHeight != 0 {
 		cfg.ForceStartCadenceHeight = forceStartHeight
 	}
+
+	cfg.TracesEnabled = cfg.TracesBucketName != ""
 
 	// todo validate Config values
 	return cfg, nil

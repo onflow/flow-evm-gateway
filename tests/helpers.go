@@ -109,11 +109,10 @@ func runWeb3Test(t *testing.T, name string) {
 func runWeb3TestWithSetup(
 	t *testing.T,
 	name string,
-	setupFunc func(emu emulator.Emulator) error,
+	setupFunc func(emu emulator.Emulator),
 ) {
 	emu, stop := servicesSetup(t)
-	err := setupFunc(emu)
-	require.NoError(t, err)
+	setupFunc(emu)
 	executeTest(t, name)
 	stop()
 }
@@ -145,6 +144,7 @@ func servicesSetup(t *testing.T) (emulator.Emulator, func()) {
 		LogWriter:         zerolog.NewConsoleWriter(),
 		StreamTimeout:     time.Second * 30,
 		StreamLimit:       10,
+		RateLimit:         50,
 		WSEnabled:         true,
 	}
 
@@ -157,7 +157,7 @@ func servicesSetup(t *testing.T) (emulator.Emulator, func()) {
 		require.NoError(t, err)
 	}()
 
-	time.Sleep(1 * time.Second) // some time to startup
+	time.Sleep(2 * time.Second) // some time to startup
 	return emu, func() {
 		cancel()
 		srv.Stop()
@@ -171,6 +171,12 @@ func executeTest(t *testing.T, testFile string) {
 	parts := strings.Fields(command)
 
 	t.Run(testFile, func(t *testing.T) {
+		// timeout for tests
+		go func() {
+			time.Sleep(time.Minute * 2)
+			t.FailNow()
+		}()
+
 		cmd := exec.Command(parts[0], parts[1:]...)
 		if cmd.Err != nil {
 			panic(cmd.Err)

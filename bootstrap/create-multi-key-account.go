@@ -200,6 +200,133 @@ func CreateMultiKeyAccount(
 	return createdAddrs[0], pks, nil
 }
 
+func CreateMultiCloudKMSKeysAccount(
+	client *grpc.Client,
+	publicKeys []string,
+	payer flow.Address,
+	ftAddress string,
+	flowAddress string,
+	key crypto.PrivateKey,
+) (*flow.Address, error) {
+	accountKeys := make([]*flow.AccountKey, len(publicKeys))
+	for i, pubKey := range publicKeys {
+		publicKey, err := crypto.DecodePublicKeyHex(crypto.ECDSA_P256, pubKey)
+		if err != nil {
+			return nil, err
+		}
+
+		accountKeys[i] = &flow.AccountKey{
+			Index:     i,
+			PublicKey: publicKey,
+			SigAlgo:   crypto.ECDSA_P256,
+			HashAlgo:  crypto.SHA2_256,
+			Weight:    1000,
+		}
+	}
+
+	var err error
+	keyList := make([]cadence.Value, len(publicKeys))
+	for i, key := range accountKeys {
+		keyList[i], err = templates.AccountKeyToCadenceCryptoKey(key)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	cadencePublicKeys := cadence.NewArray(keyList)
+	cadenceContracts := cadence.NewDictionary(nil)
+
+	args := [][]byte{
+		json2.MustEncode(cadencePublicKeys),
+		json2.MustEncode(cadenceContracts),
+	}
+
+	createAndFund = []byte(strings.ReplaceAll(
+		string(createAndFund),
+		`import "FlowToken"`,
+		fmt.Sprintf(`import FlowToken from %s`, flowAddress),
+	))
+	createAndFund = []byte(strings.ReplaceAll(
+		string(createAndFund),
+		`import "FungibleToken"`,
+		fmt.Sprintf(`import FungibleToken from %s`, ftAddress),
+	))
+
+	val, err := cadence.NewUFix64("10.0")
+	if err != nil {
+		return nil, err
+	}
+	args = append(args, json2.MustEncode(val))
+
+	tx := flow.NewTransaction().
+		SetScript(createAndFund).
+		AddAuthorizer(payer)
+
+	for _, arg := range args {
+		tx.AddRawArgument(arg)
+	}
+
+	blk, err := client.GetLatestBlock(context.Background(), true)
+	if err != nil {
+		return nil, err
+	}
+
+	signer, err := crypto.NewInMemorySigner(key, crypto.SHA3_256)
+	if err != nil {
+		return nil, err
+	}
+
+	acc, err := client.GetAccount(context.Background(), payer)
+	if err != nil {
+		return nil, err
+	}
+
+	var seq uint64
+	var index int
+	for _, k := range acc.Keys {
+		if k.PublicKey.Equals(key.PublicKey()) {
+			seq = k.SequenceNumber
+			index = k.Index
+		}
+	}
+
+	err = tx.
+		SetPayer(payer).
+		SetProposalKey(payer, index, seq).
+		SetReferenceBlockID(blk.ID).
+		SignEnvelope(payer, index, signer)
+	if err != nil {
+		return nil, err
+	}
+
+	err = client.SendTransaction(context.Background(), *tx)
+	if err != nil {
+		return nil, err
+	}
+
+	var res *flow.TransactionResult
+	for {
+		res, err = client.GetTransactionResult(context.Background(), tx.ID())
+		if err != nil {
+			return nil, err
+		}
+		if res.Error != nil {
+			return nil, res.Error
+		}
+
+		if res.Status != flow.TransactionStatusPending {
+			break
+		}
+
+		time.Sleep(2 * time.Second)
+	}
+
+	events := eventsFromTx(res)
+	createdAddrs := events.GetCreatedAddresses()
+
+	return createdAddrs[0], nil
+}
+
 type flowEvent struct {
 	Type   string
 	Values map[string]cadence.Value

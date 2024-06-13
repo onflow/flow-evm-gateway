@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"github.com/onflow/flow-go/fvm/evm/types"
 	"math/big"
+
+	"github.com/onflow/flow-go/fvm/evm/types"
 
 	"github.com/onflow/cadence"
 	"github.com/onflow/go-ethereum/common"

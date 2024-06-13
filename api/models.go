@@ -187,6 +187,7 @@ type Block struct {
 	Transactions     interface{}      `json:"transactions"`
 	Uncles           []common.Hash    `json:"uncles"`
 	MixHash          common.Hash      `json:"mixHash"`
+	BaseFeePerGas    hexutil.Big      `json:"baseFeePerGas"`
 }
 
 type SyncStatus struct {
