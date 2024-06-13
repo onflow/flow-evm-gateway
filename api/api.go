@@ -180,8 +180,6 @@ func (b *BlockChainAPI) SendRawTransaction(
 
 	id, err := b.evm.SendRawTransaction(ctx, input)
 	if err != nil {
-		b.logger.Error().Err(err).Msg("failed to send raw transaction")
-
 		// handle specific typed errors
 		var errGasPriceTooLow *errs.GasPriceTooLowError
 		if errors.As(err, &errGasPriceTooLow) {

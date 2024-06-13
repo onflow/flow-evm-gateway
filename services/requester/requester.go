@@ -187,7 +187,6 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 	}
 
 	if err := e.txPool.Send(ctx, flowTx, tx); err != nil {
-		e.logger.Error().Err(err).Str("data", txData).Msg("failed to send transaction")
 		return common.Hash{}, err
 	}
 
