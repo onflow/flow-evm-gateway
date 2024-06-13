@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go/fvm/evm/types"
-	gethCommon "github.com/onflow/go-ethereum/common"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/rs/zerolog"
 
@@ -27,7 +27,7 @@ const evmErrorRegex = `evm_error=(\d+)`
 type TxPool struct {
 	logger zerolog.Logger
 	client *CrossSporkClient
-	pool   map[gethCommon.Hash]*gethTypes.Transaction
+	pool   *sync.Map
 	// todo add a broadcaster for pending transaction streaming
 	// todo add methods to inspect transaction pool state
 }
@@ -36,7 +36,7 @@ func NewTxPool(client *CrossSporkClient, logger zerolog.Logger) *TxPool {
 	return &TxPool{
 		logger: logger.With().Str("component", "tx-pool").Logger(),
 		client: client,
-		pool:   make(map[gethCommon.Hash]*gethTypes.Transaction),
+		pool:   &sync.Map{},
 	}
 }
 
@@ -54,7 +54,7 @@ func (t *TxPool) Send(
 	}
 
 	// add to pool
-	t.pool[evmTx.Hash()] = evmTx
+	t.pool.Store(evmTx.Hash(), evmTx)
 
 	const fetchInterval = time.Millisecond * 500
 	const fetchTimeout = time.Minute * 3
@@ -62,7 +62,7 @@ func (t *TxPool) Send(
 	timeout := time.NewTimer(fetchTimeout)
 
 	defer func() {
-		delete(t.pool, evmTx.Hash())
+		t.pool.Delete(evmTx.Hash())
 		timeout.Stop()
 		ticker.Stop()
 	}()
