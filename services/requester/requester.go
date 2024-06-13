@@ -373,7 +373,11 @@ func (e *EVM) EstimateGas(
 	if err != nil {
 		return 0, fmt.Errorf("failed to decode EVM result from gas estimation: %w", err)
 	}
+
 	if evmResult.ErrorCode != 0 {
+		if evmResult.ErrorCode == evmTypes.ExecutionErrCodeExecutionReverted {
+			return 0, errs.NewRevertError(evmResult.ReturnedData)
+		}
 		return 0, getErrorForCode(evmResult.ErrorCode)
 	}
 
