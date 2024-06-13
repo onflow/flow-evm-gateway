@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/onflow/flow-go-sdk"
@@ -17,7 +17,7 @@ import (
 	"github.com/onflow/flow-evm-gateway/models"
 )
 
-const evmErrorDivider = "[evm]"
+const evmErrorRegex = `evm_error=(\d+)`
 
 // todo this is a simple implementation of the transaction pool that is mostly used
 // to track the status of submitted transaction, but transactions will always be submitted
@@ -80,26 +80,14 @@ func (t *TxPool) Send(
 			}
 
 			if res.Error != nil {
-				// this will extract the evm specific error from the Flow transaction error message
-				// the run.cdc script panics with the evm specific error as the message which we
-				// extract and return to the client. Any error returned that is evm specific
-				// is a validation error due to assert statement in the run.cdc script.
-				errStr := res.Error.Error()
-				if strings.Contains(errStr, evmErrorDivider) {
-					codeStr := strings.Split(errStr, evmErrorDivider)[1]
-
-					err := fmt.Errorf("%s", codeStr)
-					if code, convErr := strconv.Atoi(codeStr); convErr == nil {
-						err = types.ErrorFromCode(types.ErrorCode(code))
-					}
-
-					errors.Join(models.ErrInvalidEVMTransaction, err)
-				}
-
 				t.logger.Error().Err(res.Error).
 					Str("flow-id", flowTx.ID().String()).
 					Str("evm-id", evmTx.Hash().Hex()).
 					Msg("flow transaction error")
+
+				if err, ok := parseInvalidError(res.Error.Error()); ok {
+					return err
+				}
 
 				// hide specific cause since it's an implementation issue
 				return fmt.Errorf("failed to submit flow evm transaction %s", evmTx.Hash())
@@ -112,4 +100,25 @@ func (t *TxPool) Send(
 			return err
 		}
 	}
+}
+
+// this will extract the evm specific error from the Flow transaction error message
+// the run.cdc script panics with the evm specific error as the message which we
+// extract and return to the client. Any error returned that is evm specific
+// is a validation error due to assert statement in the run.cdc script.
+func parseInvalidError(errorMessage string) (error, bool) {
+	r := regexp.MustCompile(evmErrorRegex)
+	matches := r.FindStringSubmatch(errorMessage)
+	if len(matches) != 2 {
+		return nil, false
+	}
+	codeStr := matches[1]
+
+	code, err := strconv.Atoi(codeStr)
+	if err != nil {
+		return nil, false
+	}
+
+	err = types.ErrorFromCode(types.ErrorCode(code))
+	return errors.Join(models.ErrInvalidEVMTransaction, err), true
 }

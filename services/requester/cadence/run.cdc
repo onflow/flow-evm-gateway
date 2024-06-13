@@ -16,7 +16,7 @@ transaction(hexEncodedTx: String) {
         )
         assert(
             txResult.status == EVM.Status.failed || txResult.status == EVM.Status.successful,
-            message: "[evm]".concat(txResult.errorCode.toString())
+            message: "evm_error=".concat(txResult.errorCode.toString()).concat("\n")
         )
     }
 }
