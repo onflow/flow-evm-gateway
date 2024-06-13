@@ -180,16 +180,17 @@ func (b *BlockChainAPI) SendRawTransaction(
 
 	id, err := b.evm.SendRawTransaction(ctx, input)
 	if err != nil {
-		// handle specific typed errors
 		var errGasPriceTooLow *errs.GasPriceTooLowError
-		if errors.As(err, &errGasPriceTooLow) {
-			return common.Hash{}, errGasPriceTooLow
-		}
-		if errors.Is(err, models.ErrInvalidEVMTransaction) {
-			return common.Hash{}, err
-		}
 
-		return common.Hash{}, errs.ErrInternal
+		// handle typed errors
+		switch {
+		case errors.As(err, &errGasPriceTooLow):
+			return common.Hash{}, errGasPriceTooLow
+		case errors.Is(err, models.ErrInvalidEVMTransaction):
+			return common.Hash{}, err
+		default:
+			return common.Hash{}, errs.ErrInternal
+		}
 	}
 
 	return id, nil
