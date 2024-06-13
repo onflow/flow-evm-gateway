@@ -18,9 +18,7 @@ import (
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/flow-go/fvm/systemcontracts"
 	"github.com/onflow/go-ethereum/common"
-	gethCore "github.com/onflow/go-ethereum/core"
 	"github.com/onflow/go-ethereum/core/types"
-	gethVM "github.com/onflow/go-ethereum/core/vm"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
 
@@ -330,7 +328,7 @@ func (e *EVM) Call(
 		if evmResult.ErrorCode == evmTypes.ExecutionErrCodeExecutionReverted {
 			return nil, errs.NewRevertError(evmResult.ReturnedData)
 		}
-		return nil, getErrorForCode(evmResult.ErrorCode)
+		return nil, evmTypes.ErrorFromCode(evmResult.ErrorCode)
 	}
 
 	result := evmResult.ReturnedData
@@ -377,7 +375,7 @@ func (e *EVM) EstimateGas(
 		if evmResult.ErrorCode == evmTypes.ExecutionErrCodeExecutionReverted {
 			return 0, errs.NewRevertError(evmResult.ReturnedData)
 		}
-		return 0, getErrorForCode(evmResult.ErrorCode)
+		return 0, evmTypes.ErrorFromCode(evmResult.ErrorCode)
 	}
 
 	gasConsumed := evmResult.GasConsumed
@@ -661,76 +659,4 @@ func cadenceStringToBytes(value cadence.Value) ([]byte, error) {
 	}
 
 	return code, nil
-}
-
-// TODO(m-Peter): Consider moving this to flow-go repository
-func getErrorForCode(errorCode evmTypes.ErrorCode) error {
-	switch errorCode {
-	case evmTypes.ValidationErrCodeGasUintOverflow:
-		return gethVM.ErrGasUintOverflow
-	case evmTypes.ValidationErrCodeNonceTooLow:
-		return gethCore.ErrNonceTooLow
-	case evmTypes.ValidationErrCodeNonceTooHigh:
-		return gethCore.ErrNonceTooHigh
-	case evmTypes.ValidationErrCodeNonceMax:
-		return gethCore.ErrNonceMax
-	case evmTypes.ValidationErrCodeGasLimitReached:
-		return gethCore.ErrGasLimitReached
-	case evmTypes.ValidationErrCodeInsufficientFundsForTransfer:
-		return gethCore.ErrInsufficientFundsForTransfer
-	case evmTypes.ValidationErrCodeMaxInitCodeSizeExceeded:
-		return gethCore.ErrMaxInitCodeSizeExceeded
-	case evmTypes.ValidationErrCodeInsufficientFunds:
-		return gethCore.ErrInsufficientFunds
-	case evmTypes.ValidationErrCodeIntrinsicGas:
-		return gethCore.ErrIntrinsicGas
-	case evmTypes.ValidationErrCodeTxTypeNotSupported:
-		return gethCore.ErrTxTypeNotSupported
-	case evmTypes.ValidationErrCodeTipAboveFeeCap:
-		return gethCore.ErrTipAboveFeeCap
-	case evmTypes.ValidationErrCodeTipVeryHigh:
-		return gethCore.ErrTipVeryHigh
-	case evmTypes.ValidationErrCodeFeeCapVeryHigh:
-		return gethCore.ErrFeeCapVeryHigh
-	case evmTypes.ValidationErrCodeFeeCapTooLow:
-		return gethCore.ErrFeeCapTooLow
-	case evmTypes.ValidationErrCodeSenderNoEOA:
-		return gethCore.ErrSenderNoEOA
-	case evmTypes.ValidationErrCodeBlobFeeCapTooLow:
-		return gethCore.ErrBlobFeeCapTooLow
-	case evmTypes.ExecutionErrCodeOutOfGas:
-		return gethVM.ErrOutOfGas
-	case evmTypes.ExecutionErrCodeCodeStoreOutOfGas:
-		return gethVM.ErrCodeStoreOutOfGas
-	case evmTypes.ExecutionErrCodeDepth:
-		return gethVM.ErrDepth
-	case evmTypes.ExecutionErrCodeInsufficientBalance:
-		return gethVM.ErrInsufficientBalance
-	case evmTypes.ExecutionErrCodeContractAddressCollision:
-		return gethVM.ErrContractAddressCollision
-	case evmTypes.ExecutionErrCodeExecutionReverted:
-		return gethVM.ErrExecutionReverted
-	case evmTypes.ExecutionErrCodeMaxInitCodeSizeExceeded:
-		return gethVM.ErrMaxInitCodeSizeExceeded
-	case evmTypes.ExecutionErrCodeMaxCodeSizeExceeded:
-		return gethVM.ErrMaxCodeSizeExceeded
-	case evmTypes.ExecutionErrCodeInvalidJump:
-		return gethVM.ErrInvalidJump
-	case evmTypes.ExecutionErrCodeWriteProtection:
-		return gethVM.ErrWriteProtection
-	case evmTypes.ExecutionErrCodeReturnDataOutOfBounds:
-		return gethVM.ErrReturnDataOutOfBounds
-	case evmTypes.ExecutionErrCodeGasUintOverflow:
-		return gethVM.ErrGasUintOverflow
-	case evmTypes.ExecutionErrCodeInvalidCode:
-		return gethVM.ErrInvalidCode
-	case evmTypes.ExecutionErrCodeNonceUintOverflow:
-		return gethVM.ErrNonceUintOverflow
-	case evmTypes.ValidationErrCodeMisc:
-		return fmt.Errorf("validation error: %d", errorCode)
-	case evmTypes.ExecutionErrCodeMisc:
-		return fmt.Errorf("execution error: %d", errorCode)
-	}
-
-	return fmt.Errorf("unknown error code: %d", errorCode)
 }
