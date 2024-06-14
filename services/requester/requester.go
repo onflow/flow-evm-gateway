@@ -165,7 +165,7 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 	script := e.replaceAddresses(runTxScript)
 	flowID, err := e.signAndSend(ctx, script, hexEncodedTx)
 	if err != nil {
-		e.logger.Error().Err(err).Str("data", string(data)).Msg("failed to send transaction")
+		e.logger.Error().Err(err).Str("data", string(hexEncodedTx)).Msg("failed to send transaction")
 		return common.Hash{}, err
 	}
 

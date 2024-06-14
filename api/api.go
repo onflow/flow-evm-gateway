@@ -288,8 +288,7 @@ func (b *BlockChainAPI) GetTransactionByBlockNumberAndIndex(
 		return handleError[*Transaction](b.logger, err)
 	}
 
-	highestIndex := len(block.TransactionHashes) - 1
-	if index > hexutil.Uint(highestIndex) {
+	if int(index) >= len(block.TransactionHashes) {
 		return nil, nil
 	}
 
