@@ -241,7 +241,7 @@ func (b *BlockChainAPI) GetTransactionByHash(
 		return handleError[*Transaction](b.logger, err)
 	}
 
-	return NewTransaction(tx, *rcp)
+	return NewTransaction(tx, *rcp, *b.config)
 }
 
 // GetTransactionByBlockHashAndIndex returns the transaction for the given block hash and index.
