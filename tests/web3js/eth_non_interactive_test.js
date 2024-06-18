@@ -97,7 +97,7 @@ it('get transaction', async () => {
     assert.deepEqual(blockTx, tx)
     assert.isString(tx.hash)
     assert.equal(tx.blockNumber, conf.startBlockHeight)
-    assert.isAbove(parseInt(tx.gas), 1)
+    assert.equal(tx.gas, 300000n)
     assert.isNotEmpty(tx.from)
     assert.isNotEmpty(tx.r)
     assert.isNotEmpty(tx.s)
@@ -109,10 +109,10 @@ it('get transaction', async () => {
     assert.equal(rcp.blockNumber, conf.startBlockHeight)
     assert.equal(rcp.from, tx.from)
     assert.equal(rcp.to, tx.to)
-    assert.equal(rcp.cumulativeGasUsed, tx.gas) // todo check
+    assert.equal(rcp.cumulativeGasUsed, 21000n) // todo check
     assert.equal(rcp.transactionHash, tx.hash)
     assert.equal(rcp.status, conf.successStatus)
-    assert.equal(rcp.gasUsed, tx.gas)
+    assert.equal(rcp.gasUsed, 21000n)
 })
 
 it('get mining status', async () => {
