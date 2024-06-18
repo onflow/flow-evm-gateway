@@ -77,7 +77,7 @@ func (dc DirectCall) Value() *big.Int {
 }
 
 func (dc DirectCall) Type() uint8 {
-	return dc.DirectCall.Type
+	return dc.DirectCall.Transaction().Type()
 }
 
 func (dc DirectCall) Gas() uint64 {
