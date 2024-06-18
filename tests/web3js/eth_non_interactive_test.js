@@ -1,7 +1,6 @@
 const web3Utils = require('web3-utils')
 const { assert } = require('chai')
 const conf = require('./config')
-const helpers = require('./helpers')
 const web3 = conf.web3
 
 it('get chain ID', async () => {
@@ -42,6 +41,26 @@ it('get block', async () => {
     // not existing transaction
     let no = await web3.eth.getTransactionFromBlock(conf.startBlockHeight, 1)
     assert.isNull(no)
+})
+
+it('get block and transactions with COA interactions', async () => {
+    // First 2 blocks are formed from COA deployment and fund.
+    const blockNumbers = [1, 2]
+
+    for (const blockNumber of blockNumbers) {
+        let block = await web3.eth.getBlock(blockNumber)
+        assert.notDeepEqual(block, {})
+
+        // get block transaction
+        let tx = await web3.eth.getTransactionFromBlock(block.number, 0)
+        // Assert that the transaction type is `0`, the type of `LegacyTx`.
+        assert.equal(tx.type, 0n)
+
+        // get transaction receipt
+        let receipt = await web3.eth.getTransactionReceipt(tx.hash)
+        // Assert that the transaction type from receipt is `0`, the type of `LegacyTx`.
+        assert.equal(receipt.type, 0n)
+    }
 })
 
 it('get balance', async () => {
