@@ -4,6 +4,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/onflow/flow-evm-gateway/storage/mocks"
@@ -26,7 +27,7 @@ func mustHash(b *types.Block) common.Hash {
 	return h
 }
 
-var receipts = []*gethTypes.Receipt{
+var receipts = []*models.StorageReceipt{
 	{
 		BlockNumber: big.NewInt(int64(blocks[0].Height)),
 		BlockHash:   mustHash(blocks[0]),
@@ -104,14 +105,15 @@ func blockStorage() storage.BlockIndexer {
 
 func receiptStorage() storage.ReceiptIndexer {
 	for _, r := range receipts { // calculate bloom filters
-		r.Bloom = gethTypes.CreateBloom(gethTypes.Receipts{r})
+		rcp := r.ToGethReceipt()
+		r.Bloom = gethTypes.CreateBloom(gethTypes.Receipts{rcp})
 	}
 
 	receiptStorage := &mocks.ReceiptIndexer{}
 	receiptStorage.
 		On("GetByBlockHeight", mock.AnythingOfType("*big.Int")).
-		Return(func(height *big.Int) ([]*gethTypes.Receipt, error) {
-			rcps := make([]*gethTypes.Receipt, 0)
+		Return(func(height *big.Int) ([]*models.StorageReceipt, error) {
+			rcps := make([]*models.StorageReceipt, 0)
 			for _, r := range receipts {
 				if r.BlockNumber.Cmp(height) == 0 {
 					rcps = append(rcps, r)

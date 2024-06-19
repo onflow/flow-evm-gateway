@@ -94,7 +94,7 @@ type Transaction struct {
 
 func NewTransaction(
 	tx models.Transaction,
-	receipt types.Receipt,
+	receipt models.StorageReceipt,
 	config config.Config,
 ) (*Transaction, error) {
 	txHash, err := tx.Hash()

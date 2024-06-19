@@ -38,7 +38,7 @@ func NewReceipts(store *Storage) *Receipts {
 // - receipt transaction ID => block height bytes
 // - receipt block height => list of encoded receipts (1+ per block)
 // - receipt block height => list of bloom filters (1+ per block)
-func (r *Receipts) Store(receipt *gethTypes.Receipt) error {
+func (r *Receipts) Store(receipt *models.StorageReceipt) error {
 	r.mux.Lock()
 	defer r.mux.Unlock()
 
@@ -66,13 +66,7 @@ func (r *Receipts) Store(receipt *gethTypes.Receipt) error {
 	batch := r.store.newBatch()
 	defer batch.Close()
 
-	// convert to storage receipt to preserve all values
-	storeReceipts := make([]*models.StorageReceipt, len(receipts))
-	for i, rr := range receipts {
-		storeReceipts[i] = (*models.StorageReceipt)(rr)
-	}
-
-	val, err := rlp.EncodeToBytes(storeReceipts)
+	val, err := rlp.EncodeToBytes(receipts)
 	if err != nil {
 		return err
 	}
@@ -103,7 +97,7 @@ func (r *Receipts) Store(receipt *gethTypes.Receipt) error {
 	return nil
 }
 
-func (r *Receipts) GetByTransactionID(ID common.Hash) (*gethTypes.Receipt, error) {
+func (r *Receipts) GetByTransactionID(ID common.Hash) (*models.StorageReceipt, error) {
 	r.mux.RLock()
 	defer r.mux.RUnlock()
 
@@ -126,20 +120,21 @@ func (r *Receipts) GetByTransactionID(ID common.Hash) (*gethTypes.Receipt, error
 	return nil, errs.ErrNotFound
 }
 
-func (r *Receipts) GetByBlockHeight(height *big.Int) ([]*gethTypes.Receipt, error) {
+func (r *Receipts) GetByBlockHeight(height *big.Int) ([]*models.StorageReceipt, error) {
 	r.mux.RLock()
 	defer r.mux.RUnlock()
+
 	return r.getByBlockHeight(height.Bytes())
 }
 
-func (r *Receipts) getByBlockHeight(height []byte) ([]*gethTypes.Receipt, error) {
+func (r *Receipts) getByBlockHeight(height []byte) ([]*models.StorageReceipt, error) {
 	val, err := r.store.get(receiptHeightKey, height)
 	if err != nil {
 		return nil, err
 	}
 
-	var storeReceipts []*models.StorageReceipt
-	if err = rlp.DecodeBytes(val, &storeReceipts); err != nil {
+	var receipts []*models.StorageReceipt
+	if err = rlp.DecodeBytes(val, &receipts); err != nil {
 		// todo remove this after previewnet is reset
 		// try to decode single receipt (breaking change migration)
 		var storeReceipt models.StorageReceipt
@@ -147,11 +142,10 @@ func (r *Receipts) getByBlockHeight(height []byte) ([]*gethTypes.Receipt, error)
 			return nil, err
 		}
 
-		storeReceipts = []*models.StorageReceipt{&storeReceipt}
+		receipts = []*models.StorageReceipt{&storeReceipt}
 	}
 
-	receipts := make([]*gethTypes.Receipt, len(storeReceipts))
-	for i, rcp := range storeReceipts {
+	for _, rcp := range receipts {
 		// dynamically populate the values since they are not stored to save space
 		for i, l := range rcp.Logs {
 			l.BlockHash = rcp.BlockHash
@@ -160,8 +154,6 @@ func (r *Receipts) getByBlockHeight(height []byte) ([]*gethTypes.Receipt, error)
 			l.TxIndex = rcp.TransactionIndex
 			l.Index = uint(i)
 		}
-
-		receipts[i] = (*gethTypes.Receipt)(rcp)
 	}
 
 	return receipts, nil
