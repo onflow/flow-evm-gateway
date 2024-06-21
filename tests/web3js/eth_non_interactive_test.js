@@ -190,7 +190,7 @@ it('can make batch requests', async () => {
     )
     assert.deepEqual(
         results[3],
-        { jsonrpc: '2.0', id: 4, result: '545' }
+        { jsonrpc: '2.0', id: 4, result: '646' }
     )
     assert.deepEqual(
         results[4],

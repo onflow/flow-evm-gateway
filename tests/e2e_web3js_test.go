@@ -18,6 +18,10 @@ func TestWeb3_E2E(t *testing.T) {
 		runWeb3Test(t, "setup_test")
 	})
 
+	t.Run("test net_* JSON-RPC endpoints", func(t *testing.T) {
+		runWeb3Test(t, "net_namespace_test")
+	})
+
 	t.Run("read-only interactions", func(t *testing.T) {
 		runWeb3Test(t, "eth_non_interactive_test")
 	})
