@@ -39,9 +39,9 @@ import (
 )
 
 var (
-	logger         = zerolog.New(os.Stdout)
+	logger         = zerolog.New(zerolog.NewConsoleWriter())
 	sc             = systemcontracts.SystemContractsForChain(flow.Emulator)
-	logOutput      = true // hardcoded to toggle logging during development
+	logOutput      = os.Getenv("LOG_OUTPUT")
 	eoaTestAccount = common.HexToAddress(eoaTestAddress)
 )
 
@@ -67,9 +67,8 @@ func startEmulator(createTestAccounts bool) (*server.EmulatorServer, error) {
 		return nil, err
 	}
 
-	log := logger.With().Str("component", "emulator").Logger().Level(zerolog.DebugLevel)
-	// todo remove
-	if !logOutput {
+	log := logger.With().Timestamp().Str("component", "emulator").Logger().Level(zerolog.DebugLevel)
+	if logOutput == "false" {
 		log = zerolog.Nop()
 	}
 	srv := server.NewEmulatorServer(&log, &server.Config{
@@ -148,7 +147,7 @@ func servicesSetup(t *testing.T) (emulator.Emulator, func()) {
 		WSEnabled:         true,
 	}
 
-	if !logOutput {
+	if logOutput == "false" {
 		cfg.LogWriter = zerolog.Nop()
 	}
 
@@ -265,7 +264,7 @@ func flowSendTransaction(
 		code,
 	))
 
-	log := logger.With().Str("component", "adapter").Logger().Level(zerolog.DebugLevel)
+	log := logger.With().Timestamp().Str("component", "adapter").Logger().Level(zerolog.DebugLevel)
 	adapter := adapters.NewSDKAdapter(&log, emu)
 
 	blk, _, err := adapter.GetLatestBlock(context.Background(), true)
