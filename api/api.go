@@ -33,6 +33,7 @@ func SupportedAPIs(
 	streamAPI *StreamAPI,
 	pullAPI *PullAPI,
 	debugAPI *DebugAPI,
+	config *config.Config,
 ) []rpc.API {
 	apis := []rpc.API{{
 		Namespace: "eth",
@@ -48,7 +49,7 @@ func SupportedAPIs(
 		Service:   &Web3API{},
 	}, {
 		Namespace: "net",
-		Service:   &NetAPI{},
+		Service:   NewNetAPI(config),
 	}, {
 		Namespace: "txpool",
 		Service:   NewTxPoolAPI(),

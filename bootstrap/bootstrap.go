@@ -344,7 +344,13 @@ func startServer(
 		debugAPI = api.NewDebugAPI(trace, blocks, logger)
 	}
 
-	supportedAPIs := api.SupportedAPIs(blockchainAPI, streamAPI, pullAPI, debugAPI)
+	supportedAPIs := api.SupportedAPIs(
+		blockchainAPI,
+		streamAPI,
+		pullAPI,
+		debugAPI,
+		cfg,
+	)
 
 	if err := srv.EnableRPC(supportedAPIs); err != nil {
 		return err
