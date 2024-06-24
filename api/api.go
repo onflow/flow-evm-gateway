@@ -186,7 +186,7 @@ func (b *BlockChainAPI) SendRawTransaction(
 		if errors.As(err, &errGasPriceTooLow) {
 			return common.Hash{}, errGasPriceTooLow
 		}
-		return common.Hash{}, errs.ErrInternal
+		return common.Hash{}, err
 	}
 
 	return id, nil
