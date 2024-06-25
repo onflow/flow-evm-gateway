@@ -14,7 +14,7 @@ import (
 	"github.com/onflow/flow-evm-gateway/models"
 )
 
-const evmErrorRegex = `evm_error=(\d+)`
+const evmErrorRegex = `evm_error=(.*)\n`
 
 // todo this is a simple implementation of the transaction pool that is mostly used
 // to track the status of submitted transaction, but transactions will always be submitted
