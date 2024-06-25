@@ -494,8 +494,7 @@ func (b *BlockChainAPI) Call(
 
 	tx, err := encodeTxFromArgs(args)
 	if err != nil {
-		b.logger.Error().Err(err).Msg("failed to encode transaction for call")
-		return handleError[hexutil.Bytes](b.logger, errs.ErrInternal)
+		return handleError[hexutil.Bytes](b.logger, err)
 	}
 
 	// Default address in case user does not provide one
@@ -549,7 +548,7 @@ func (b *BlockChainAPI) GetLogs(
 
 	l, err := b.blocks.LatestEVMHeight()
 	if err != nil {
-		return nil, err
+		return handleError[[]*types.Log](b.logger, err)
 	}
 	latest := big.NewInt(int64(l))
 
@@ -563,10 +562,15 @@ func (b *BlockChainAPI) GetLogs(
 
 	f, err := logs.NewRangeFilter(*from, *to, filter, b.receipts)
 	if err != nil {
-		return nil, err
+		return handleError[[]*types.Log](b.logger, err)
 	}
 
-	return f.Match()
+	res, err := f.Match()
+	if err != nil {
+		return handleError[[]*types.Log](b.logger, err)
+	}
+
+	return res, nil
 }
 
 // GetTransactionCount returns the number of transactions the given address
@@ -626,7 +630,6 @@ func (b *BlockChainAPI) EstimateGas(
 
 	tx, err := encodeTxFromArgs(args)
 	if err != nil {
-		b.logger.Error().Err(err).Msg("failed to encode transaction for gas estimate")
 		return hexutil.Uint64(blockGasLimit), nil // return block gas limit
 	}
 
@@ -676,16 +679,20 @@ func (b *BlockChainAPI) GetCode(
 // empty type.
 func handleError[T any](log zerolog.Logger, err error) (T, error) {
 	var zero T
-	if errors.Is(err, storageErrs.ErrNotFound) {
-		// as per specification returning nil and nil for not found resources
+	switch {
+	// as per specification returning nil and nil for not found resources
+	case errors.Is(err, storageErrs.ErrNotFound):
 		return zero, nil
-	}
-	if errors.Is(err, requester.ErrOutOfRange) {
+	case errors.Is(err, storageErrs.ErrInvalidRange):
+		return zero, err
+	case errors.Is(err, requester.ErrOutOfRange):
 		return zero, fmt.Errorf("requested height is out of supported range")
+	case errors.Is(err, errs.ErrInvalid):
+		return zero, err
+	default:
+		log.Error().Err(err).Msg("api error")
+		return zero, errs.ErrInternal
 	}
-
-	log.Error().Err(err).Msg("api error")
-	return zero, errs.ErrInternal
 }
 
 func (b *BlockChainAPI) fetchBlockTransactions(
@@ -776,6 +783,10 @@ func (b *BlockChainAPI) prepareBlockResponse(
 }
 
 func (b *BlockChainAPI) getBlockNumber(blockNumberOrHash *rpc.BlockNumberOrHash) (int64, error) {
+	err := errors.Join(errs.ErrInvalid, fmt.Errorf("neither block number nor hash specified"))
+	if blockNumberOrHash == nil {
+		return 0, err
+	}
 	if number, ok := blockNumberOrHash.Number(); ok {
 		return number.Int64(), nil
 	}
@@ -789,7 +800,7 @@ func (b *BlockChainAPI) getBlockNumber(blockNumberOrHash *rpc.BlockNumberOrHash)
 		return int64(evmHeight), nil
 	}
 
-	return 0, fmt.Errorf("invalid arguments; neither block nor hash specified")
+	return 0, err
 }
 
 // FeeHistory returns transaction base fee per gas and effective priority fee
