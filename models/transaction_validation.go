@@ -25,7 +25,9 @@ func ValidateTransaction(tx *types.Transaction) error {
 			}
 			// No value submitted at least, critically Warn, but don't blow up
 			return errors.New("transaction will create a contract with empty code")
-		} else if txDataLen < 40 { // arbitrary heuristic limit
+		}
+
+		if txDataLen < 40 { // arbitrary heuristic limit
 			return fmt.Errorf(
 				"transaction will create a contract, but the payload is suspiciously small (%d bytes)",
 				txDataLen,
