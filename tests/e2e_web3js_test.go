@@ -53,6 +53,7 @@ func TestWeb3_E2E(t *testing.T) {
 	t.Run("handling of failures", func(t *testing.T) {
 		runWeb3Test(t, "eth_failure_handling_test")
 	})
+
 	t.Run("batch run transactions", func(t *testing.T) {
 		// create multiple value transfers and batch run them before the test
 		runWeb3TestWithSetup(t, "eth_batch_retrieval_test", func(emu emulator.Emulator) {
