@@ -194,12 +194,14 @@ Listed below are the JSON-RPC namespaces and methods currently supported by the 
     * eth_getFilterLogs
     * eth_newBlockFilter
     * eth_newPendingTransactionFilter
-    * eth_getUncleCountByBlockHash // return 0
-    * eth_getUncleCountByBlockNumber // return 0
-    * eth_syncing // return false for now
+    * eth_getUncleCountByBlockHash 
+    * eth_getUncleCountByBlockNumber
+    * eth_getUncleByBlockHashAndIndex
+    * eth_getUncleByBlockNumberAndIndex
+    * eth_maxPriorityFeePerGas
+    * eth_syncing
   * Unsupported but coming soon
     * eth_createAccessList
-    * eth_maxPriorityFeePerGas
     * eth_getProof
     * eth_getStorageAt
     * eth_accounts
