@@ -1,9 +1,12 @@
 package api
 
 import (
+	"errors"
 	"math/big"
 
 	"github.com/onflow/go-ethereum/core/types"
+
+	errs "github.com/onflow/flow-evm-gateway/api/errors"
 )
 
 const blockGasLimit uint64 = 15_000_000
@@ -44,5 +47,10 @@ func encodeTxFromArgs(args TransactionArgs) ([]byte, error) {
 		},
 	)
 
-	return tx.MarshalBinary()
+	enc, err := tx.MarshalBinary()
+	if err != nil {
+		return nil, errors.Join(err, errs.ErrInvalid)
+	}
+
+	return enc, nil
 }
