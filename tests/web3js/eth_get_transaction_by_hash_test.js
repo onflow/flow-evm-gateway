@@ -30,4 +30,4 @@ it('returns proper response for eth_getTransactionByHash', async () => {
     assert.equal(tx.maxFeePerGas, 3000000000n)
     assert.equal(tx.maxPriorityFeePerGas, 800000000n)
     assert.equal(tx.gasPrice, 3000000000n)
-}).timeout(10 * 1000)
+})

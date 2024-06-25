@@ -74,4 +74,4 @@ it('create logs filter and call eth_getFilterLogs', async () => {
     web3.eth.abi.decodeParameter("int256", logs[1].data)
   )
 
-}).timeout(10 * 1000)
+})
