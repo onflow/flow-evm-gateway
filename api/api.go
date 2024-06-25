@@ -821,10 +821,12 @@ func (b *BlockChainAPI) FeeHistory(
 		}
 	}
 
-	var oldestBlock *hexutil.Big
-	baseFees := []*hexutil.Big{}
-	rewards := [][]*hexutil.Big{}
-	gasUsedRatios := []float64{}
+	var (
+		oldestBlock   *hexutil.Big
+		baseFees      []*hexutil.Big
+		rewards       [][]*hexutil.Big
+		gasUsedRatios []float64
+	)
 
 	maxCount := uint64(blockCount)
 	if maxCount > lastBlockNumber {
@@ -866,11 +868,12 @@ func (b *BlockChainAPI) FeeHistory(
 	}, nil
 }
 
-/* ====================================================================================================================
+/*
+Static responses section
 
- NOT SUPPORTED SECTION
-
-====================================================================================================================== */
+The API endpoints bellow return a static response because the values are not relevant for Flow EVM implementation
+or because it doesn't make sense yet to implement more complex solution
+*/
 
 // GetUncleCountByBlockHash returns number of uncles in the block for the given block hash
 func (b *BlockChainAPI) GetUncleCountByBlockHash(
@@ -890,18 +893,13 @@ func (b *BlockChainAPI) GetUncleCountByBlockNumber(
 	return &count
 }
 
-// Accounts returns the collection of accounts this node manages.
-func (b *BlockChainAPI) Accounts() []common.Address {
-	return []common.Address{}
-}
-
 // GetUncleByBlockHashAndIndex returns the uncle block for the given block hash and index.
 func (b *BlockChainAPI) GetUncleByBlockHashAndIndex(
 	ctx context.Context,
 	blockHash common.Hash,
 	index hexutil.Uint,
 ) (map[string]interface{}, error) {
-	return nil, errs.ErrNotSupported
+	return map[string]interface{}{}, nil
 }
 
 // GetUncleByBlockNumberAndIndex returns the uncle block for the given block hash and index.
@@ -910,7 +908,41 @@ func (b *BlockChainAPI) GetUncleByBlockNumberAndIndex(
 	blockNumber rpc.BlockNumber,
 	index hexutil.Uint,
 ) (map[string]interface{}, error) {
-	return nil, errs.ErrNotSupported
+	return map[string]interface{}{}, nil
+}
+
+// MaxPriorityFeePerGas returns a suggestion for a gas tip cap for dynamic fee transactions.
+func (b *BlockChainAPI) MaxPriorityFeePerGas(ctx context.Context) (*hexutil.Big, error) {
+	fee := hexutil.Big(*big.NewInt(1))
+	return &fee, nil
+}
+
+// Mining returns true if client is actively mining new blocks.
+// This can only return true for proof-of-work networks and may
+// not be available in some clients since The Merge.
+func (b *BlockChainAPI) Mining() bool {
+	return false
+}
+
+// Hashrate returns the number of hashes per second that the
+// node is mining with.
+// This can only return true for proof-of-work networks and
+// may not be available in some clients since The Merge.
+func (b *BlockChainAPI) Hashrate() hexutil.Uint64 {
+	return hexutil.Uint64(0)
+}
+
+/*
+Not supported section
+
+The API endpoints bellow return a non-supported error indicating the API requested is not supported (yet).
+This is because a decision to not support this API was made either because we don't intend to support it
+ever or we don't support it at this phase.
+*/
+
+// Accounts returns the collection of accounts this node manages.
+func (b *BlockChainAPI) Accounts() []common.Address {
+	return []common.Address{}
 }
 
 // Sign calculates an ECDSA signature for:
@@ -978,24 +1010,4 @@ func (b *BlockChainAPI) CreateAccessList(
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (*AccessListResult, error) {
 	return nil, errs.ErrNotSupported
-}
-
-// MaxPriorityFeePerGas returns a suggestion for a gas tip cap for dynamic fee transactions.
-func (b *BlockChainAPI) MaxPriorityFeePerGas(ctx context.Context) (*hexutil.Big, error) {
-	return nil, errs.ErrNotSupported
-}
-
-// Mining returns true if client is actively mining new blocks.
-// This can only return true for proof-of-work networks and may
-// not be available in some clients since The Merge.
-func (b *BlockChainAPI) Mining() bool {
-	return false
-}
-
-// Hashrate returns the number of hashes per second that the
-// node is mining with.
-// This can only return true for proof-of-work networks and
-// may not be available in some clients since The Merge.
-func (b *BlockChainAPI) Hashrate() hexutil.Uint64 {
-	return hexutil.Uint64(0)
 }
