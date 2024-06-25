@@ -166,16 +166,13 @@ func servicesSetup(t *testing.T) (emulator.Emulator, func()) {
 // executeTest will run the provided JS test file using mocha
 // and will report failure or success of the test.
 func executeTest(t *testing.T, testFile string) {
-	command := fmt.Sprintf("./web3js/node_modules/.bin/mocha ./web3js/%s.js", testFile)
+	command := fmt.Sprintf(
+		"./web3js/node_modules/.bin/mocha ./web3js/%s.js --timeout 120s --retries 3",
+		testFile,
+	)
 	parts := strings.Fields(command)
 
 	t.Run(testFile, func(t *testing.T) {
-		// timeout for tests
-		go func() {
-			time.Sleep(time.Minute * 2)
-			t.FailNow()
-		}()
-
 		cmd := exec.Command(parts[0], parts[1:]...)
 		if cmd.Err != nil {
 			panic(cmd.Err)

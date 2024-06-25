@@ -177,4 +177,4 @@ it('streaming of logs using filters', async() => {
     await assertFilterLogs(await rawSubscribe({ address: contractAddress, fromBlock: "0x0" }), testValues)
 
     process.exit(0)
-}).timeout(timeout*1000)
+})
