@@ -76,4 +76,4 @@ it('transfer flow between two EOA accounts', async () => {
   // get balance at latest block number
   receiverWei = await web3.eth.getBalance(receiver.address, latest)
   assert.equal(receiverWei, transferValue)
-}).timeout(10 * 1000)
+})

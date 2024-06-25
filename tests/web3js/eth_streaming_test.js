@@ -108,4 +108,4 @@ it('streaming of blocks, transactions, logs using filters', async () => {
     assert.deepEqual(logTxHashes, sentHashes)
 
     process.exit(0)
-}).timeout(timeout * 1500)
+})

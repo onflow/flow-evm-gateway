@@ -209,4 +209,4 @@ it('deploy contract and interact', async() => {
         )
     }
 
-}).timeout(10*1000)
+})

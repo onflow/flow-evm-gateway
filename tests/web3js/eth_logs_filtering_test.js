@@ -90,4 +90,4 @@ it('emit logs and retrieve them using different filters', async() => {
     // todo compose more complex topic filters using OR and AND logic
     */
 
-}).timeout(20*1000)
+})
