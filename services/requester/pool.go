@@ -10,6 +10,8 @@ import (
 	"github.com/onflow/flow-go-sdk"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/rs/zerolog"
+
+	errs "github.com/onflow/flow-evm-gateway/api/errors"
 )
 
 const evmErrorRegex = `evm_error=(\d+)`
@@ -108,5 +110,5 @@ func parseInvalidError(err error) (error, bool) {
 		return nil, false
 	}
 
-	return fmt.Errorf("%s", matches[1]), true
+	return fmt.Errorf("%w: %s", errs.ErrInvalid, matches[1]), true
 }
