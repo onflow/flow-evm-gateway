@@ -58,7 +58,7 @@ it('store revertReason field in transaction receipts', async () => {
         '0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000014417373657274204572726f72204d657373616765000000000000000000000000'
     )
 
-    // we construct a transaction that reverts on purpose, with an assertion error
+    // we construct a transaction that reverts on purpose, with a custom error
     let callCustomError = deployed.contract.methods.customError().encodeABI()
     let customErrorTx = {
         from: conf.eoa.address,
