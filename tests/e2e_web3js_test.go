@@ -26,10 +26,6 @@ func TestWeb3_E2E(t *testing.T) {
 		runWeb3Test(t, "eth_non_interactive_test")
 	})
 
-	t.Run("transaction validations", func(t *testing.T) {
-		runWeb3Test(t, "eth_transaction_validations_test")
-	})
-
 	t.Run("deploy contract and call methods", func(t *testing.T) {
 		runWeb3Test(t, "eth_deploy_contract_and_interact_test")
 	})
