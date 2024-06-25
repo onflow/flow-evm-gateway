@@ -2,6 +2,7 @@ package api
 
 import (
 	errs "github.com/onflow/flow-evm-gateway/api/errors"
+	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/models"
 
 	"github.com/onflow/go-ethereum/common"
@@ -91,7 +92,11 @@ type Transaction struct {
 	YParity             *hexutil.Uint64          `json:"yParity,omitempty"`
 }
 
-func NewTransaction(tx models.Transaction, receipt types.Receipt) (*Transaction, error) {
+func NewTransaction(
+	tx models.Transaction,
+	receipt types.Receipt,
+	config config.Config,
+) (*Transaction, error) {
 	txHash, err := tx.Hash()
 	if err != nil {
 		return nil, err
@@ -112,23 +117,61 @@ func NewTransaction(tx models.Transaction, receipt types.Receipt) (*Transaction,
 	v, r, s := tx.RawSignatureValues()
 	index := uint64(receipt.TransactionIndex)
 
-	return &Transaction{
-		Hash:             txHash,
-		BlockHash:        &receipt.BlockHash,
-		BlockNumber:      (*hexutil.Big)(receipt.BlockNumber),
+	result := &Transaction{
+		Type:             hexutil.Uint64(tx.Type()),
 		From:             from,
-		To:               to,
-		Gas:              hexutil.Uint64(receipt.GasUsed),
-		GasPrice:         (*hexutil.Big)(receipt.EffectiveGasPrice),
+		Gas:              hexutil.Uint64(tx.Gas()),
+		GasPrice:         (*hexutil.Big)(tx.GasPrice()),
+		Hash:             txHash,
 		Input:            tx.Data(),
 		Nonce:            hexutil.Uint64(tx.Nonce()),
-		TransactionIndex: (*hexutil.Uint64)(&index),
+		To:               to,
 		Value:            (*hexutil.Big)(tx.Value()),
-		Type:             hexutil.Uint64(tx.Type()),
 		V:                (*hexutil.Big)(v),
 		R:                (*hexutil.Big)(r),
 		S:                (*hexutil.Big)(s),
-	}, nil
+		BlockHash:        &receipt.BlockHash,
+		BlockNumber:      (*hexutil.Big)(receipt.BlockNumber),
+		TransactionIndex: (*hexutil.Uint64)(&index),
+	}
+	chainID := config.EVMNetworkID
+
+	switch tx.Type() {
+	case types.LegacyTxType:
+		result.ChainID = (*hexutil.Big)(chainID)
+	case types.AccessListTxType:
+		al := tx.AccessList()
+		yparity := hexutil.Uint64(v.Sign())
+		result.Accesses = &al
+		result.ChainID = (*hexutil.Big)(chainID)
+		result.YParity = &yparity
+	case types.DynamicFeeTxType:
+		al := tx.AccessList()
+		yparity := hexutil.Uint64(v.Sign())
+		result.Accesses = &al
+		result.ChainID = (*hexutil.Big)(chainID)
+		result.YParity = &yparity
+		result.GasFeeCap = (*hexutil.Big)(tx.GasFeeCap())
+		result.GasTipCap = (*hexutil.Big)(tx.GasTipCap())
+		// Since BaseFee is `0`, this is the effective gas price
+		// the sender is willing to pay.
+		result.GasPrice = (*hexutil.Big)(tx.GasFeeCap())
+	case types.BlobTxType:
+		al := tx.AccessList()
+		yparity := hexutil.Uint64(v.Sign())
+		result.Accesses = &al
+		result.ChainID = (*hexutil.Big)(chainID)
+		result.YParity = &yparity
+		result.GasFeeCap = (*hexutil.Big)(tx.GasFeeCap())
+		result.GasTipCap = (*hexutil.Big)(tx.GasTipCap())
+		// Since BaseFee is `0`, this is the effective gas price
+		// the sender is willing to pay.
+		result.GasPrice = (*hexutil.Big)(tx.GasFeeCap())
+		result.MaxFeePerBlobGas = (*hexutil.Big)(tx.BlobGasFeeCap())
+		result.BlobVersionedHashes = tx.BlobHashes()
+	}
+
+	return result, nil
 }
 
 // SignTransactionResult represents a RLP encoded signed transaction.

@@ -1,7 +1,6 @@
 const web3Utils = require('web3-utils')
 const { assert } = require('chai')
 const conf = require('./config')
-const helpers = require('./helpers')
 const web3 = conf.web3
 
 it('get chain ID', async () => {
@@ -44,6 +43,26 @@ it('get block', async () => {
     assert.isNull(no)
 })
 
+it('get block and transactions with COA interactions', async () => {
+    // First 2 blocks are formed from COA deployment and fund.
+    const blockNumbers = [1, 2]
+
+    for (const blockNumber of blockNumbers) {
+        let block = await web3.eth.getBlock(blockNumber)
+        assert.notDeepEqual(block, {})
+
+        // get block transaction
+        let tx = await web3.eth.getTransactionFromBlock(block.number, 0)
+        // Assert that the transaction type is `0`, the type of `LegacyTx`.
+        assert.equal(tx.type, 0n)
+
+        // get transaction receipt
+        let receipt = await web3.eth.getTransactionReceipt(tx.hash)
+        // Assert that the transaction type from receipt is `0`, the type of `LegacyTx`.
+        assert.equal(receipt.type, 0n)
+    }
+})
+
 it('get balance', async () => {
     let wei = await web3.eth.getBalance(conf.eoa.address)
     assert.isNotNull(wei)
@@ -78,7 +97,7 @@ it('get transaction', async () => {
     assert.deepEqual(blockTx, tx)
     assert.isString(tx.hash)
     assert.equal(tx.blockNumber, conf.startBlockHeight)
-    assert.isAbove(parseInt(tx.gas), 1)
+    assert.equal(tx.gas, 300000n)
     assert.isNotEmpty(tx.from)
     assert.isNotEmpty(tx.r)
     assert.isNotEmpty(tx.s)
@@ -90,10 +109,10 @@ it('get transaction', async () => {
     assert.equal(rcp.blockNumber, conf.startBlockHeight)
     assert.equal(rcp.from, tx.from)
     assert.equal(rcp.to, tx.to)
-    assert.equal(rcp.cumulativeGasUsed, tx.gas) // todo check
+    assert.equal(rcp.cumulativeGasUsed, 21000n) // todo check
     assert.equal(rcp.transactionHash, tx.hash)
     assert.equal(rcp.status, conf.successStatus)
-    assert.equal(rcp.gasUsed, tx.gas)
+    assert.equal(rcp.gasUsed, 21000n)
 })
 
 it('get mining status', async () => {
@@ -171,7 +190,7 @@ it('can make batch requests', async () => {
     )
     assert.deepEqual(
         results[3],
-        { jsonrpc: '2.0', id: 4, result: '545' }
+        { jsonrpc: '2.0', id: 4, result: '646' }
     )
     assert.deepEqual(
         results[4],

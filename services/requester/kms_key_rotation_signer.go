@@ -42,6 +42,8 @@ func NewKMSKeyRotationSigner(
 	keys []cloudkms.Key,
 	logger zerolog.Logger,
 ) (*KMSKeyRotationSigner, error) {
+	logger = logger.With().Str("component", "cloud_kms_signer").Logger()
+
 	if len(keys) == 0 {
 		return nil, fmt.Errorf(
 			"could not create KMS key rotation signer, no KMS keys provided",
@@ -63,10 +65,10 @@ func NewKMSKeyRotationSigner(
 				err,
 			)
 		}
+		logger.Info().Str("public-key", kmsSigner.PublicKey().String()).Msg("KMS signer added")
+
 		kmsSigners[i] = kmsSigner
 	}
-
-	logger = logger.With().Str("component", "cloud_kms_signer").Logger()
 
 	return &KMSKeyRotationSigner{
 		kmsSigners: kmsSigners,

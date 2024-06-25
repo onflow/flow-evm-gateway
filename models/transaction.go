@@ -22,9 +22,14 @@ type Transaction interface {
 	Value() *big.Int
 	Type() uint8
 	Gas() uint64
+	GasFeeCap() *big.Int
+	GasTipCap() *big.Int
 	GasPrice() *big.Int
 	BlobGas() uint64
+	BlobGasFeeCap() *big.Int
+	BlobHashes() []common.Hash
 	Size() uint64
+	AccessList() gethTypes.AccessList
 	MarshalBinary() ([]byte, error)
 }
 
@@ -72,11 +77,19 @@ func (dc DirectCall) Value() *big.Int {
 }
 
 func (dc DirectCall) Type() uint8 {
-	return dc.DirectCall.Type
+	return dc.DirectCall.Transaction().Type()
 }
 
 func (dc DirectCall) Gas() uint64 {
 	return dc.DirectCall.GasLimit
+}
+
+func (dc DirectCall) GasFeeCap() *big.Int {
+	return big.NewInt(0)
+}
+
+func (dc DirectCall) GasTipCap() *big.Int {
+	return big.NewInt(0)
 }
 
 func (dc DirectCall) GasPrice() *big.Int {
@@ -87,12 +100,24 @@ func (dc DirectCall) BlobGas() uint64 {
 	return 0
 }
 
+func (dc DirectCall) BlobGasFeeCap() *big.Int {
+	return big.NewInt(0)
+}
+
+func (dc DirectCall) BlobHashes() []common.Hash {
+	return []common.Hash{}
+}
+
 func (dc DirectCall) Size() uint64 {
 	encoded, err := dc.MarshalBinary()
 	if err != nil {
 		return 0
 	}
 	return uint64(len(encoded))
+}
+
+func (dc DirectCall) AccessList() gethTypes.AccessList {
+	return gethTypes.AccessList{}
 }
 
 func (dc DirectCall) MarshalBinary() ([]byte, error) {

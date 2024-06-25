@@ -173,4 +173,40 @@ it('deploy contract and interact', async() => {
         )
     }
 
-}).timeout(10*1000)
+    // check that revert reason for custom error is correctly returned for gas estimation
+    try {
+        let callCustomError = deployed.contract.methods.customError().encodeABI()
+        result = await web3.eth.estimateGas({
+            from: conf.eoa.address,
+            to: contractAddress,
+            data: callCustomError,
+            gas: 1_000_000,
+            gasPrice: 0
+        })
+    } catch (error) {
+        assert.equal(error.innerError.message, 'execution reverted')
+        assert.equal(
+            error.innerError.data,
+            '0x9195785a00000000000000000000000000000000000000000000000000000000000000050000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000001056616c756520697320746f6f206c6f7700000000000000000000000000000000'
+        )
+    }
+
+    // check that assertion error is correctly returned for gas estimation
+    try {
+        let callAssertError = deployed.contract.methods.assertError().encodeABI()
+        result = await web3.eth.estimateGas({
+            from: conf.eoa.address,
+            to: contractAddress,
+            data: callAssertError,
+            gas: 1_000_000,
+            gasPrice: 0
+        })
+    } catch (error) {
+        assert.equal(error.innerError.message, 'execution reverted: Assert Error Message')
+        assert.equal(
+            error.innerError.data,
+            '0x08c379a000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000014417373657274204572726f72204d657373616765000000000000000000000000'
+        )
+    }
+
+})

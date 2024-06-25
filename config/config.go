@@ -89,7 +89,7 @@ type Config struct {
 
 func FromFlags() (*Config, error) {
 	cfg := &Config{}
-	var evmNetwork, coinbase, gas, coa, key, keysPath, flowNetwork, logLevel, filterExpiry, accessSporkHosts, cloudKMSKeys, cloudKMSProjectID, cloudKMSLocationID, cloudKMSKeyRingID string
+	var evmNetwork, coinbase, gas, coa, key, keysPath, flowNetwork, logLevel, logWriter, filterExpiry, accessSporkHosts, cloudKMSKeys, cloudKMSProjectID, cloudKMSLocationID, cloudKMSKeyRingID string
 	var streamTimeout int
 	var initHeight, forceStartHeight uint64
 
@@ -109,7 +109,8 @@ func FromFlags() (*Config, error) {
 	flag.StringVar(&key, "coa-key", "", "Private key value for the COA address used for submitting transactions")
 	flag.StringVar(&keysPath, "coa-key-file", "", "File path that contains JSON array of COA keys used in key-rotation mechanism, this is exclusive with coa-key flag.")
 	flag.BoolVar(&cfg.CreateCOAResource, "coa-resource-create", false, "Auto-create the COA resource in the Flow COA account provided if one doesn't exist")
-	flag.StringVar(&logLevel, "log-level", "debug", "Define verbosity of the log output ('debug', 'info', 'error')")
+	flag.StringVar(&logLevel, "log-level", "debug", "Define verbosity of the log output ('debug', 'info', 'warn', 'error', 'fatal', 'panic')")
+	flag.StringVar(&logWriter, "log-writer", "stderr", "Log writer used for output ('stderr', 'console')")
 	flag.Float64Var(&cfg.StreamLimit, "stream-limit", 10, "Rate-limits the events sent to the client within one second")
 	flag.Uint64Var(&cfg.RateLimit, "rate-limit", 50, "Rate-limit requests per second made by the client over any protocol (ws/http)")
 	flag.StringVar(&cfg.AddressHeader, "address-header", "", "Address header that contains the client IP, this is useful when the server is behind a proxy that sets the source IP of the client. Leave empty if no proxy is used.")
@@ -226,11 +227,21 @@ func FromFlags() (*Config, error) {
 		cfg.LogLevel = zerolog.DebugLevel
 	case "info":
 		cfg.LogLevel = zerolog.InfoLevel
+	case "warn":
+		cfg.LogLevel = zerolog.WarnLevel
 	case "error":
 		cfg.LogLevel = zerolog.ErrorLevel
+	case "fatal":
+		cfg.LogLevel = zerolog.FatalLevel
+	case "panic":
+		cfg.LogLevel = zerolog.PanicLevel
 	}
 
-	cfg.LogWriter = os.Stdout
+	if logWriter == "stderr" {
+		cfg.LogWriter = os.Stderr
+	} else {
+		cfg.LogWriter = zerolog.NewConsoleWriter()
+	}
 
 	cfg.StreamTimeout = time.Second * time.Duration(streamTimeout)
 

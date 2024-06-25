@@ -18,12 +18,20 @@ func TestWeb3_E2E(t *testing.T) {
 		runWeb3Test(t, "setup_test")
 	})
 
+	t.Run("test net_* JSON-RPC endpoints", func(t *testing.T) {
+		runWeb3Test(t, "net_namespace_test")
+	})
+
 	t.Run("read-only interactions", func(t *testing.T) {
 		runWeb3Test(t, "eth_non_interactive_test")
 	})
 
 	t.Run("deploy contract and call methods", func(t *testing.T) {
 		runWeb3Test(t, "eth_deploy_contract_and_interact_test")
+	})
+
+	t.Run("eth_getTransactionByHash", func(t *testing.T) {
+		runWeb3Test(t, "eth_get_transaction_by_hash_test")
 	})
 
 	t.Run("transfer Flow between EOA accounts", func(t *testing.T) {
@@ -38,7 +46,7 @@ func TestWeb3_E2E(t *testing.T) {
 		runWeb3Test(t, "eth_get_filter_logs_test")
 	})
 
-  t.Run("rate-limit requests made by single client", func(t *testing.T) {
+	t.Run("rate-limit requests made by single client", func(t *testing.T) {
 		runWeb3Test(t, "eth_rate_limit_test")
 	})
 

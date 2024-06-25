@@ -145,7 +145,7 @@ func (s *StreamAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) (*
 					return nil, fmt.Errorf("failed to compute tx hash: %w", err)
 				}
 
-				t, err := NewTransaction(tx, *rcp)
+				t, err := NewTransaction(tx, *rcp, *s.config)
 				if err != nil {
 					return nil, err
 				}
