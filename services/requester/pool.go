@@ -2,19 +2,14 @@ package requester
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"regexp"
-	"strconv"
 	"sync"
 	"time"
 
 	"github.com/onflow/flow-go-sdk"
-	"github.com/onflow/flow-go/fvm/evm/types"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/rs/zerolog"
-
-	"github.com/onflow/flow-evm-gateway/models"
 )
 
 const evmErrorRegex = `evm_error=(\d+)`
@@ -85,7 +80,7 @@ func (t *TxPool) Send(
 					Str("evm-id", evmTx.Hash().Hex()).
 					Msg("flow transaction error")
 
-				if err, ok := parseInvalidError(res.Error.Error()); ok {
+				if err, ok := parseInvalidError(res.Error); ok {
 					return err
 				}
 
@@ -106,19 +101,12 @@ func (t *TxPool) Send(
 // the run.cdc script panics with the evm specific error as the message which we
 // extract and return to the client. Any error returned that is evm specific
 // is a validation error due to assert statement in the run.cdc script.
-func parseInvalidError(errorMessage string) (error, bool) {
+func parseInvalidError(err error) (error, bool) {
 	r := regexp.MustCompile(evmErrorRegex)
-	matches := r.FindStringSubmatch(errorMessage)
+	matches := r.FindStringSubmatch(err.Error())
 	if len(matches) != 2 {
 		return nil, false
 	}
-	codeStr := matches[1]
 
-	code, err := strconv.Atoi(codeStr)
-	if err != nil {
-		return nil, false
-	}
-
-	err = types.ErrorFromCode(types.ErrorCode(code))
-	return errors.Join(models.ErrInvalidEVMTransaction, err), true
+	return fmt.Errorf("%s", matches[1]), true
 }
