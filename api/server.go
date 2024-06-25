@@ -21,7 +21,6 @@ import (
 	"github.com/onflow/go-ethereum/rpc"
 	"github.com/rs/cors"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 
 	errs "github.com/onflow/flow-evm-gateway/api/errors"
 	"github.com/onflow/flow-evm-gateway/config"
@@ -212,12 +211,12 @@ func (h *httpServer) Start() error {
 	}()
 
 	if h.rpcAllowed() {
-		log.Info().Msg(fmt.Sprintf("JSON-RPC over HTTP enabled: %v", listener.Addr()))
+		h.logger.Info().Msgf("JSON-RPC over HTTP enabled: %v", listener.Addr())
 	}
 
 	if h.wsAllowed() {
 		url := fmt.Sprintf("ws://%v", listener.Addr())
-		log.Info().Msg(fmt.Sprint("JSON-RPC over WebSocket enabled: ", url))
+		h.logger.Info().Msgf("JSON-RPC over WebSocket enabled: %s", url)
 	}
 
 	return nil
@@ -303,13 +302,13 @@ func (h *httpServer) Stop() {
 	defer cancel()
 	err := h.server.Shutdown(ctx)
 	if err != nil && err == ctx.Err() {
-		log.Warn().Msg("HTTP server graceful shutdown timed out")
+		h.logger.Warn().Msg("HTTP server graceful shutdown timed out")
 		h.server.Close()
 	}
 
 	h.listener.Close()
-	log.Info().Msg(
-		fmt.Sprint("HTTP server stopped", "endpoint", h.listener.Addr()),
+	h.logger.Info().Msgf(
+		"HTTP server stopped, endpoint: %s", h.listener.Addr(),
 	)
 
 	// Clear out everything to allow re-configuring it later.
@@ -320,7 +319,7 @@ func (h *httpServer) Stop() {
 // CheckTimeouts ensures that timeout values are meaningful
 func CheckTimeouts(logger zerolog.Logger, timeouts *rpc.HTTPTimeouts) {
 	if timeouts.ReadTimeout < time.Second {
-		log.Warn().Msg(
+		logger.Warn().Msg(
 			fmt.Sprint(
 				"Sanitizing invalid HTTP read timeout",
 				"provided",
@@ -332,7 +331,7 @@ func CheckTimeouts(logger zerolog.Logger, timeouts *rpc.HTTPTimeouts) {
 		timeouts.ReadTimeout = rpc.DefaultHTTPTimeouts.ReadTimeout
 	}
 	if timeouts.ReadHeaderTimeout < time.Second {
-		log.Warn().Msg(
+		logger.Warn().Msg(
 			fmt.Sprint(
 				"Sanitizing invalid HTTP read header timeout",
 				"provided",
@@ -344,7 +343,7 @@ func CheckTimeouts(logger zerolog.Logger, timeouts *rpc.HTTPTimeouts) {
 		timeouts.ReadHeaderTimeout = rpc.DefaultHTTPTimeouts.ReadHeaderTimeout
 	}
 	if timeouts.WriteTimeout < time.Second {
-		log.Warn().Msg(
+		logger.Warn().Msg(
 			fmt.Sprint(
 				"Sanitizing invalid HTTP write timeout",
 				"provided",
@@ -356,7 +355,7 @@ func CheckTimeouts(logger zerolog.Logger, timeouts *rpc.HTTPTimeouts) {
 		timeouts.WriteTimeout = rpc.DefaultHTTPTimeouts.WriteTimeout
 	}
 	if timeouts.IdleTimeout < time.Second {
-		log.Warn().Msg(
+		logger.Warn().Msg(
 			fmt.Sprint(
 				"Sanitizing invalid HTTP idle timeout",
 				"provided",
