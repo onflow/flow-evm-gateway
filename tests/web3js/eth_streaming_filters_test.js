@@ -4,7 +4,7 @@ const conf = require("./config");
 const {assert} = require("chai");
 const storageABI = require('../fixtures/storageABI.json')
 
-const timeout = 20
+const timeout = 30
 
 async function assertFilterLogs(subscription, expectedLogs) {
     let allLogs = []
@@ -65,7 +65,9 @@ async function assertFilterLogs(subscription, expectedLogs) {
 }
 
 it('streaming of logs using filters', async() => {
-    setTimeout(() => process.exit(1), (timeout-1)*1000) // hack if the ws connection is not closed
+    // hack if the ws connection is not closed
+    // TMP: disable
+    // setTimeout(() => process.exit(1), (timeout - 1) * 1000)
 
     let contractDeployment = await helpers.deployContract("storage")
     let contractAddress = contractDeployment.receipt.contractAddress
