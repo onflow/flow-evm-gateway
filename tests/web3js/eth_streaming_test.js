@@ -3,11 +3,7 @@ const helpers = require('./helpers')
 const { assert } = require('chai')
 const { Web3 } = require("web3");
 
-const timeout = 30 // test timeout seconds
-
 it('streaming of blocks, transactions, logs using filters', async () => {
-    setTimeout(() => process.exit(1), (timeout - 1) * 1000) // hack if the ws connection is not closed
-
     let deployed = await helpers.deployContract("storage")
     let contractAddress = deployed.receipt.contractAddress
 

@@ -183,7 +183,7 @@ func (s *ReceiptTestSuite) TestStoreReceipt() {
 
 	s.Run("store multiple receipts at same height", func() {
 		const height = 5
-		receipts := []*types.Receipt{
+		receipts := []*models.StorageReceipt{
 			mocks.NewReceipt(height, common.HexToHash("0x1")),
 			mocks.NewReceipt(height, common.HexToHash("0x2")),
 			mocks.NewReceipt(height, common.HexToHash("0x3")),
@@ -310,7 +310,7 @@ func (s *ReceiptTestSuite) TestBloomsForBlockRange() {
 	})
 }
 
-func (s *ReceiptTestSuite) compareReceipts(expected *types.Receipt, actual *types.Receipt) {
+func (s *ReceiptTestSuite) compareReceipts(expected *models.StorageReceipt, actual *models.StorageReceipt) {
 	s.Require().Equal(expected.BlockNumber, actual.BlockNumber)
 	s.Require().Equal(expected.TxHash, actual.TxHash)
 	s.Require().Equal(expected.Type, actual.Type)

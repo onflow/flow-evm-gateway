@@ -64,17 +64,17 @@ type ReceiptIndexer interface {
 	// Store provided receipt.
 	// Expected errors:
 	// - errors.Duplicate if the block already exists.
-	Store(receipt *gethTypes.Receipt) error
+	Store(receipt *models.StorageReceipt) error
 
 	// GetByTransactionID returns the receipt for the transaction ID.
 	// Expected errors:
 	// - errors.NotFound if the receipt is not found
-	GetByTransactionID(ID common.Hash) (*gethTypes.Receipt, error)
+	GetByTransactionID(ID common.Hash) (*models.StorageReceipt, error)
 
 	// GetByBlockHeight returns the receipt for the block height.
 	// Expected errors:
 	// - errors.NotFound if the receipt is not found
-	GetByBlockHeight(height *big.Int) ([]*gethTypes.Receipt, error)
+	GetByBlockHeight(height *big.Int) ([]*models.StorageReceipt, error)
 
 	// BloomsForBlockRange returns slice of bloom values and a slice of block heights
 	// corresponding to each item in the bloom slice. It only matches the blooms between
@@ -98,7 +98,7 @@ type TransactionIndexer interface {
 
 type AccountIndexer interface {
 	// Update account with executed transactions.
-	Update(tx models.Transaction, receipt *gethTypes.Receipt) error
+	Update(tx models.Transaction, receipt *models.StorageReceipt) error
 
 	// GetNonce gets an account nonce. If no nonce was indexed it returns 0.
 	// todo add getting nonce at provided block height / hash

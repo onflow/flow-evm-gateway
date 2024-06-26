@@ -1,6 +1,11 @@
 package api
 
 import (
+	"bytes"
+	"errors"
+	"fmt"
+	"math/big"
+
 	errs "github.com/onflow/flow-evm-gateway/api/errors"
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/models"
@@ -31,6 +36,75 @@ type TransactionArgs struct {
 	// Introduced by AccessListTxType transaction.
 	AccessList *types.AccessList `json:"accessList,omitempty"`
 	ChainID    *hexutil.Big      `json:"chainId,omitempty"`
+}
+
+func (txArgs TransactionArgs) Validate() error {
+	// Prevent accidental erroneous usage of both 'input' and 'data' (show stopper)
+	if txArgs.Data != nil && txArgs.Input != nil && !bytes.Equal(*txArgs.Data, *txArgs.Input) {
+		return errors.New(`ambiguous request: both "data" and "input" are set and are not identical`)
+	}
+
+	// Place data on 'data'
+	var data []byte
+	if txArgs.Input != nil {
+		txArgs.Data = txArgs.Input
+	}
+	if txArgs.Data != nil {
+		data = *txArgs.Data
+	}
+
+	txDataLen := len(data)
+
+	// Contract creation doesn't validate call data, handle first
+	if txArgs.To == nil {
+		// Contract creation should contain sufficient data to deploy a contract. A
+		// typical error is omitting sender due to some quirk in the javascript call
+		// e.g. https://github.com/onflow/go-ethereum/issues/16106.
+		if txDataLen == 0 {
+			// Prevent sending ether into black hole (show stopper)
+			if txArgs.Value.ToInt().Cmp(big.NewInt(0)) > 0 {
+				return errors.New("transaction will create a contract with value but empty code")
+			}
+
+			// No value submitted at least, critically Warn, but don't blow up
+			return errors.New("transaction will create a contract with empty code")
+		}
+
+		if txDataLen < 40 { // arbitrary heuristic limit
+			return fmt.Errorf(
+				"transaction will create a contract, but the payload is suspiciously small (%d bytes)",
+				txDataLen,
+			)
+		}
+	}
+
+	// Not a contract creation, validate as a plain transaction
+	if txArgs.To != nil {
+		to := common.NewMixedcaseAddress(*txArgs.To)
+		if !to.ValidChecksum() {
+			return errors.New("invalid checksum on recipient address")
+		}
+
+		if bytes.Equal(to.Address().Bytes(), common.Address{}.Bytes()) {
+			return errors.New("transaction recipient is the zero address")
+		}
+
+		// If the data is not empty, validate that it has the 4byte prefix and the rest divisible by 32 bytes
+		if txDataLen > 0 {
+			if txDataLen < 4 {
+				return errors.New("transaction data is not valid ABI (missing the 4 byte call prefix)")
+			}
+
+			if n := txDataLen - 4; n%32 != 0 {
+				return fmt.Errorf(
+					"transaction data is not valid ABI (length should be a multiple of 32 (was %d))",
+					n,
+				)
+			}
+		}
+	}
+
+	return nil
 }
 
 // AccessListResult returns an optional accesslist
@@ -94,7 +168,7 @@ type Transaction struct {
 
 func NewTransaction(
 	tx models.Transaction,
-	receipt types.Receipt,
+	receipt models.StorageReceipt,
 	config config.Config,
 ) (*Transaction, error) {
 	txHash, err := tx.Hash()

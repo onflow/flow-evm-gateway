@@ -401,7 +401,7 @@ func (b *BlockChainAPI) GetBlockByNumber(
 func (b *BlockChainAPI) GetBlockReceipts(
 	ctx context.Context,
 	numHash rpc.BlockNumberOrHash,
-) ([]*types.Receipt, error) {
+) ([]*models.StorageReceipt, error) {
 	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
 		return nil, err
 	}
@@ -421,14 +421,14 @@ func (b *BlockChainAPI) GetBlockReceipts(
 		)
 	}
 	if err != nil {
-		return handleError[[]*types.Receipt](b.logger, err)
+		return handleError[[]*models.StorageReceipt](b.logger, err)
 	}
 
-	receipts := make([]*types.Receipt, len(block.TransactionHashes))
+	receipts := make([]*models.StorageReceipt, len(block.TransactionHashes))
 	for i, hash := range block.TransactionHashes {
 		rcp, err := b.receipts.GetByTransactionID(hash)
 		if err != nil {
-			return handleError[[]*types.Receipt](b.logger, err)
+			return handleError[[]*models.StorageReceipt](b.logger, err)
 		}
 		receipts[i] = rcp
 	}
@@ -489,6 +489,11 @@ func (b *BlockChainAPI) Call(
 	blockOverrides *BlockOverrides,
 ) (hexutil.Bytes, error) {
 	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
+		return nil, err
+	}
+
+	err := args.Validate()
+	if err != nil {
 		return nil, err
 	}
 
@@ -630,6 +635,11 @@ func (b *BlockChainAPI) EstimateGas(
 	overrides *StateOverride,
 ) (hexutil.Uint64, error) {
 	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
+		return 0, err
+	}
+
+	err := args.Validate()
+	if err != nil {
 		return 0, err
 	}
 

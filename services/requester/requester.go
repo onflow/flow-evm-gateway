@@ -23,6 +23,7 @@ import (
 
 	errs "github.com/onflow/flow-evm-gateway/api/errors"
 	"github.com/onflow/flow-evm-gateway/config"
+	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/storage"
 )
 
@@ -155,6 +156,11 @@ func NewEVM(
 func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash, error) {
 	tx := &types.Transaction{}
 	if err := tx.UnmarshalBinary(data); err != nil {
+		return common.Hash{}, err
+	}
+
+	err := models.ValidateTransaction(tx)
+	if err != nil {
 		return common.Hash{}, err
 	}
 

@@ -22,26 +22,68 @@ import (
 // geth node has the data locally, but we don't in evm gateway, so we can not reproduce those values
 // and we need to store them
 type StorageReceipt struct {
-	Type              uint8
-	PostState         []byte
-	Status            uint64
-	CumulativeGasUsed uint64
+	Type              uint8  `json:"type,omitempty"`
+	PostState         []byte `json:"root"`
+	Status            uint64 `json:"status"`
+	CumulativeGasUsed uint64 `json:"cumulativeGasUsed"`
 	// todo we could skip bloom to optimize storage and dynamically recalculate it
-	Bloom             gethTypes.Bloom
-	Logs              []*gethTypes.Log
-	TxHash            common.Hash
-	ContractAddress   common.Address
-	GasUsed           uint64
-	EffectiveGasPrice *big.Int
-	BlobGasUsed       uint64
-	BlobGasPrice      *big.Int
-	BlockHash         common.Hash
-	BlockNumber       *big.Int
-	TransactionIndex  uint
+	Bloom             gethTypes.Bloom  `json:"logsBloom"`
+	Logs              []*gethTypes.Log `json:"logs"`
+	TxHash            common.Hash      `json:"transactionHash"`
+	ContractAddress   common.Address   `json:"contractAddress"`
+	GasUsed           uint64           `json:"gasUsed"`
+	EffectiveGasPrice *big.Int         `json:"effectiveGasPrice"`
+	BlobGasUsed       uint64           `json:"blobGasUsed,omitempty"`
+	BlobGasPrice      *big.Int         `json:"blobGasPrice,omitempty"`
+	BlockHash         common.Hash      `json:"blockHash,omitempty"`
+	BlockNumber       *big.Int         `json:"blockNumber,omitempty"`
+	TransactionIndex  uint             `json:"transactionIndex"`
+	RevertReason      []byte           `json:"revertReason"`
+}
+
+func (sr *StorageReceipt) ToGethReceipt() *gethTypes.Receipt {
+	return &gethTypes.Receipt{
+		Type:              sr.Type,
+		PostState:         sr.PostState,
+		Status:            sr.Status,
+		CumulativeGasUsed: sr.CumulativeGasUsed,
+		Bloom:             sr.Bloom,
+		Logs:              sr.Logs,
+		TxHash:            sr.TxHash,
+		ContractAddress:   sr.ContractAddress,
+		GasUsed:           sr.GasUsed,
+		EffectiveGasPrice: sr.EffectiveGasPrice,
+		BlobGasUsed:       sr.BlobGasUsed,
+		BlobGasPrice:      sr.BlobGasPrice,
+		BlockHash:         sr.BlockHash,
+		BlockNumber:       sr.BlockNumber,
+		TransactionIndex:  sr.TransactionIndex,
+	}
+}
+
+func NewStorageReceipt(receipt *gethTypes.Receipt) *StorageReceipt {
+	return &StorageReceipt{
+		Type:              receipt.Type,
+		PostState:         receipt.PostState,
+		Status:            receipt.Status,
+		CumulativeGasUsed: receipt.CumulativeGasUsed,
+		Bloom:             receipt.Bloom,
+		Logs:              receipt.Logs,
+		TxHash:            receipt.TxHash,
+		ContractAddress:   receipt.ContractAddress,
+		GasUsed:           receipt.GasUsed,
+		EffectiveGasPrice: receipt.EffectiveGasPrice,
+		BlobGasUsed:       receipt.BlobGasUsed,
+		BlobGasPrice:      receipt.BlobGasPrice,
+		BlockHash:         receipt.BlockHash,
+		BlockNumber:       receipt.BlockNumber,
+		TransactionIndex:  receipt.TransactionIndex,
+		RevertReason:      []byte{},
+	}
 }
 
 // decodeReceipt takes a cadence event for transaction executed and decodes it into the receipt.
-func decodeReceipt(event cadence.Event) (*gethTypes.Receipt, error) {
+func decodeReceipt(event cadence.Event) (*StorageReceipt, error) {
 	tx, err := types.DecodeTransactionEventPayload(event)
 	if err != nil {
 		return nil, fmt.Errorf("failed to cadence decode receipt: %w", err)
@@ -86,14 +128,23 @@ func decodeReceipt(event cadence.Event) (*gethTypes.Receipt, error) {
 
 	receipt.Bloom = gethTypes.CreateBloom([]*gethTypes.Receipt{receipt})
 
-	return receipt, nil
+	result := NewStorageReceipt(receipt)
+	if tx.ErrorCode == uint16(types.ExecutionErrCodeExecutionReverted) {
+		revert, err := hex.DecodeString(tx.ReturnedData)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode transaction return data: %w", err)
+		}
+		result.RevertReason = revert
+	}
+
+	return result, nil
 }
 
 // MarshalReceipt takes a receipt and its associated transaction,
 // and marshals the receipt to the proper structure needed by
 // eth_getTransactionReceipt.
 func MarshalReceipt(
-	receipt *gethTypes.Receipt,
+	receipt *StorageReceipt,
 	tx Transaction,
 ) (map[string]interface{}, error) {
 	from, err := tx.From()
@@ -140,6 +191,10 @@ func MarshalReceipt(
 	// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
 	if receipt.ContractAddress != (common.Address{}) {
 		fields["contractAddress"] = receipt.ContractAddress.Hex()
+	}
+
+	if len(receipt.RevertReason) > 0 {
+		fields["revertReason"] = hexutil.Bytes(receipt.RevertReason)
 	}
 
 	return fields, nil
