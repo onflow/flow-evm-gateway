@@ -409,7 +409,6 @@ func (r *rpcTest) getReceipt(hash string) (*types.Receipt, error) {
 
 func (r *rpcTest) sendRawTx(signed []byte) (common.Hash, error) {
 	rpcRes, err := r.request("eth_sendRawTransaction", fmt.Sprintf(`["0x%x"]`, signed))
-	fmt.Println("###", string(rpcRes), "err", err)
 	if err != nil {
 		return common.Hash{}, err
 	}
