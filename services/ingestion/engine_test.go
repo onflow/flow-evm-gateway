@@ -220,8 +220,8 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 
 		accounts := &storageMock.AccountIndexer{}
 		accounts.
-			On("Update", mock.AnythingOfType("models.TransactionCall"), mock.AnythingOfType("*types.Receipt")).
-			Return(func(tx models.Transaction, receipt *gethTypes.Receipt) error { return nil })
+			On("Update", mock.AnythingOfType("models.TransactionCall"), mock.AnythingOfType("*models.StorageReceipt")).
+			Return(func(tx models.Transaction, receipt *models.StorageReceipt) error { return nil })
 
 		eventsChan := make(chan models.BlockEvents)
 		subscriber := &mocks.EventSubscriber{}
@@ -278,8 +278,8 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			Once()
 
 		receipts.
-			On("Store", mock.AnythingOfType("*types.Receipt")).
-			Return(func(rcp *gethTypes.Receipt) error {
+			On("Store", mock.AnythingOfType("*models.StorageReceipt")).
+			Return(func(rcp *models.StorageReceipt) error {
 				assert.Len(t, rcp.Logs, len(result.Logs))
 				assert.Equal(t, result.DeployedContractAddress.ToCommon().String(), rcp.ContractAddress.String())
 				return nil
@@ -319,8 +319,8 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 
 		accounts := &storageMock.AccountIndexer{}
 		accounts.
-			On("Update", mock.AnythingOfType("models.TransactionCall"), mock.AnythingOfType("*types.Receipt")).
-			Return(func(tx models.Transaction, receipt *gethTypes.Receipt) error { return nil })
+			On("Update", mock.AnythingOfType("models.TransactionCall"), mock.AnythingOfType("*models.StorageReceipt")).
+			Return(func(tx models.Transaction, receipt *models.StorageReceipt) error { return nil })
 
 		eventsChan := make(chan models.BlockEvents)
 		subscriber := &mocks.EventSubscriber{}
@@ -372,8 +372,8 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			Once()
 
 		receipts.
-			On("Store", mock.AnythingOfType("*types.Receipt")).
-			Return(func(rcp *gethTypes.Receipt) error {
+			On("Store", mock.AnythingOfType("*models.StorageReceipt")).
+			Return(func(rcp *models.StorageReceipt) error {
 				require.True(t, blocksFirst)
 				return nil
 			}).
@@ -413,8 +413,8 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 
 		accounts := &storageMock.AccountIndexer{}
 		accounts.
-			On("Update", mock.Anything, mock.AnythingOfType("*types.Receipt")).
-			Return(func(t models.Transaction, r *gethTypes.Receipt) error { return nil })
+			On("Update", mock.Anything, mock.AnythingOfType("*models.StorageReceipt")).
+			Return(func(t models.Transaction, r *models.StorageReceipt) error { return nil })
 
 		eventsChan := make(chan models.BlockEvents)
 		subscriber := &mocks.EventSubscriber{}
@@ -492,8 +492,8 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 				Once()
 
 			receipts.
-				On("Store", mock.AnythingOfType("*types.Receipt")).
-				Return(func(rcp *gethTypes.Receipt) error { return nil }).
+				On("Store", mock.AnythingOfType("*models.StorageReceipt")).
+				Return(func(rcp *models.StorageReceipt) error { return nil }).
 				Once()
 
 			events = append(events, flow.Event{

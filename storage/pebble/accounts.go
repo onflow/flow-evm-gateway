@@ -11,7 +11,6 @@ import (
 	"github.com/onflow/flow-evm-gateway/storage"
 	errs "github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/onflow/go-ethereum/common"
-	gethTypes "github.com/onflow/go-ethereum/core/types"
 )
 
 var _ storage.AccountIndexer = &Accounts{}
@@ -30,7 +29,7 @@ func NewAccounts(db *Storage) *Accounts {
 
 func (a *Accounts) Update(
 	tx models.Transaction,
-	receipt *gethTypes.Receipt,
+	receipt *models.StorageReceipt,
 ) error {
 	a.mux.Lock()
 	defer a.mux.Unlock()

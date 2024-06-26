@@ -25,9 +25,9 @@ func NewBlock(height uint64) *types.Block {
 	}
 }
 
-func NewReceipt(height uint64, ID common.Hash) *gethTypes.Receipt {
+func NewReceipt(height uint64, ID common.Hash) *models.StorageReceipt {
 	txHash := common.HexToHash(fmt.Sprintf("0xff%d", height))
-	return &gethTypes.Receipt{
+	return &models.StorageReceipt{
 		PostState:         common.Hash{2}.Bytes(),
 		CumulativeGasUsed: 3,
 		Logs: []*gethTypes.Log{

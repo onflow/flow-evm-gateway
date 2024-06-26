@@ -6,7 +6,6 @@ import (
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go/fvm/evm/types"
-	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"golang.org/x/exp/slices"
 )
 
@@ -68,9 +67,9 @@ func (c *CadenceEvents) Blocks() ([]*types.Block, error) {
 // []transaction, nil - if transactions are found
 // nil, nil - if no transactions are found
 // nil, err - unexpected error
-func (c *CadenceEvents) Transactions() ([]Transaction, []*gethTypes.Receipt, error) {
+func (c *CadenceEvents) Transactions() ([]Transaction, []*StorageReceipt, error) {
 	txs := make([]Transaction, 0)
-	rcps := make([]*gethTypes.Receipt, 0)
+	rcps := make([]*StorageReceipt, 0)
 	for _, e := range c.events.Events {
 		if isTransactionExecutedEvent(e.Value) {
 			tx, err := decodeTransaction(e.Value)

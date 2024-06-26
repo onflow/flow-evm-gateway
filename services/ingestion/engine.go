@@ -7,7 +7,6 @@ import (
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go/engine"
 	"github.com/onflow/flow-go/fvm/evm/types"
-	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/rs/zerolog"
 
 	"github.com/onflow/flow-evm-gateway/models"
@@ -200,7 +199,7 @@ func (e *Engine) indexBlock(cadenceHeight uint64, cadenceID flow.Identifier, blo
 	return nil
 }
 
-func (e *Engine) indexTransaction(tx models.Transaction, receipt *gethTypes.Receipt) error {
+func (e *Engine) indexTransaction(tx models.Transaction, receipt *models.StorageReceipt) error {
 	if tx == nil || receipt == nil { // safety check shouldn't happen
 		return fmt.Errorf("can't process empty tx or receipt")
 	}

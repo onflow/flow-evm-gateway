@@ -34,6 +34,10 @@ func TestWeb3_E2E(t *testing.T) {
 		runWeb3Test(t, "eth_get_transaction_by_hash_test")
 	})
 
+	t.Run("store revertReason field in transaction receipts", func(t *testing.T) {
+		runWeb3Test(t, "eth_revert_reason_test")
+	})
+
 	t.Run("transfer Flow between EOA accounts", func(t *testing.T) {
 		runWeb3Test(t, "eth_transfer_between_eoa_accounts_test")
 	})
