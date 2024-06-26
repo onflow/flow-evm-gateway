@@ -487,6 +487,11 @@ func (b *BlockChainAPI) Call(
 		return nil, err
 	}
 
+	err := args.Validate()
+	if err != nil {
+		return nil, err
+	}
+
 	evmHeight, err := b.getBlockNumber(blockNumberOrHash)
 	if err != nil {
 		return handleError[hexutil.Bytes](b.logger, err)
@@ -625,6 +630,11 @@ func (b *BlockChainAPI) EstimateGas(
 	overrides *StateOverride,
 ) (hexutil.Uint64, error) {
 	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
+		return 0, err
+	}
+
+	err := args.Validate()
+	if err != nil {
 		return 0, err
 	}
 
