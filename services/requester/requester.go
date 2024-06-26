@@ -24,6 +24,7 @@ import (
 
 	errs "github.com/onflow/flow-evm-gateway/api/errors"
 	"github.com/onflow/flow-evm-gateway/config"
+	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/storage"
 )
 
@@ -152,6 +153,11 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 		return common.Hash{}, err
 	}
 
+	err := models.ValidateTransaction(tx)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
 	if tx.GasPrice().Cmp(e.config.GasPrice) < 0 {
 		return common.Hash{}, errs.NewErrGasPriceTooLow(e.config.GasPrice)
 	}
@@ -161,7 +167,6 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 		return common.Hash{}, err
 	}
 
-	// todo make sure the gas price is not bellow the configured gas price
 	script := e.replaceAddresses(runTxScript)
 	flowID, err := e.signAndSend(ctx, script, hexEncodedTx)
 	if err != nil {
