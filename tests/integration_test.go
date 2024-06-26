@@ -71,7 +71,7 @@ func Test_ConcurrentTransactionSubmission(t *testing.T) {
 		CreateCOAResource: true,
 		GasPrice:          new(big.Int).SetUint64(0),
 		LogLevel:          zerolog.DebugLevel,
-		LogWriter:         zerolog.NewConsoleWriter(),
+		LogWriter:         testLogWriter(),
 	}
 
 	// todo change this test to use ingestion and emulator directly so we can completely remove
@@ -207,7 +207,7 @@ func Test_CloudKMSConcurrentTransactionSubmission(t *testing.T) {
 		CreateCOAResource: true,
 		GasPrice:          new(big.Int).SetUint64(0),
 		LogLevel:          zerolog.DebugLevel,
-		LogWriter:         zerolog.NewConsoleWriter(),
+		LogWriter:         testLogWriter(),
 	}
 
 	// todo change this test to use ingestion and emulator directly so we can completely remove
