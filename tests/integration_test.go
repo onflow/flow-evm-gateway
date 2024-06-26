@@ -114,13 +114,16 @@ func Test_ConcurrentTransactionSubmission(t *testing.T) {
 		nonce += 1
 	}
 
-	time.Sleep(5 * time.Second) // wait for all txs to be executed
+	assert.Eventually(t, func() bool {
+		for _, h := range hashes {
+			rcp, err := rpcTester.getReceipt(h.String())
+			if err != nil || rcp == nil || uint64(1) != rcp.Status {
+				return false
+			}
+		}
 
-	for _, h := range hashes {
-		rcp, err := rpcTester.getReceipt(h.String())
-		require.NoError(t, err)
-		assert.Equal(t, uint64(1), rcp.Status)
-	}
+		return true
+	}, time.Second*30, time.Second*1, "all transactions were not executed")
 }
 
 func Test_CloudKMSConcurrentTransactionSubmission(t *testing.T) {
