@@ -56,6 +56,14 @@ const (
 	coaFundAmount     = 10.0
 )
 
+func testLogWriter() io.Writer {
+	if logOutput == "false" {
+		return zerolog.Nop()
+	}
+
+	return zerolog.NewConsoleWriter()
+}
+
 func startEmulator(createTestAccounts bool) (*server.EmulatorServer, error) {
 	pkey, err := crypto.DecodePrivateKeyHex(sigAlgo, servicePrivateKey)
 	if err != nil {
@@ -71,6 +79,7 @@ func startEmulator(createTestAccounts bool) (*server.EmulatorServer, error) {
 	if logOutput == "false" {
 		log = zerolog.Nop()
 	}
+
 	srv := server.NewEmulatorServer(&log, &server.Config{
 		ServicePrivateKey:      pkey,
 		ServiceKeySigAlgo:      sigAlgo,
@@ -140,15 +149,11 @@ func servicesSetup(t *testing.T) (emulator.Emulator, func()) {
 		CreateCOAResource: false,
 		GasPrice:          new(big.Int).SetUint64(0),
 		LogLevel:          zerolog.DebugLevel,
-		LogWriter:         zerolog.NewConsoleWriter(),
+		LogWriter:         testLogWriter(),
 		StreamTimeout:     time.Second * 30,
 		StreamLimit:       10,
 		RateLimit:         50,
 		WSEnabled:         true,
-	}
-
-	if logOutput == "false" {
-		cfg.LogWriter = zerolog.Nop()
 	}
 
 	go func() {
@@ -175,9 +180,13 @@ func executeTest(t *testing.T, testFile string) {
 	t.Run(testFile, func(t *testing.T) {
 		cmd := exec.Command(parts[0], parts[1:]...)
 		if cmd.Err != nil {
+			t.Log(cmd.Err.Error())
 			panic(cmd.Err)
 		}
+
 		out, err := cmd.CombinedOutput()
+		t.Log(string(out))
+
 		if err != nil {
 			var exitError *exec.ExitError
 			if errors.As(err, &exitError) {
@@ -188,7 +197,6 @@ func executeTest(t *testing.T, testFile string) {
 			}
 			require.Fail(t, err.Error())
 		}
-		t.Log(string(out))
 	})
 }
 
@@ -354,7 +362,6 @@ type rpcTest struct {
 // rpcRequest takes url, method (eg. "eth_getBlockByNumber") and params (eg. `["0x03"]` or `[]` if empty)
 func (r *rpcTest) request(method string, params string) (json.RawMessage, error) {
 	reqURL := fmt.Sprintf(`{"jsonrpc":"2.0","id":0,"method":"%s","params":%s}`, method, params)
-	fmt.Println("-> request: ", reqURL)
 	body := bytes.NewReader([]byte(reqURL))
 	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://%s", r.url), body)
 	if err != nil {
@@ -372,8 +379,6 @@ func (r *rpcTest) request(method string, params string) (json.RawMessage, error)
 	if err != nil {
 		return nil, err
 	}
-
-	fmt.Println("<- result: ", string(content))
 
 	type rpcResult struct {
 		Result json.RawMessage `json:"result"`
