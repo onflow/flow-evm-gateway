@@ -146,7 +146,7 @@ func NewEVM(
 			logger.Warn().Err(err).Msg("COA resource auto-creation failure")
 		}
 		if err := evm.client.SendTransaction(context.Background(), *tx); err != nil {
-			logger.Warn().Err(err).Msg("COA resource auto-creation failure")
+			logger.Warn().Err(err).Msg("failed to send COA resource auto-creation transaction")
 		}
 	}
 
