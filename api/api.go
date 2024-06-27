@@ -7,11 +7,13 @@ import (
 	"fmt"
 	"math/big"
 
+	evmEmulator "github.com/onflow/flow-go/fvm/evm/emulator"
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/go-ethereum/common"
 	"github.com/onflow/go-ethereum/common/hexutil"
 	"github.com/onflow/go-ethereum/common/math"
 	"github.com/onflow/go-ethereum/core/types"
+	"github.com/onflow/go-ethereum/crypto"
 	"github.com/onflow/go-ethereum/eth/filters"
 	"github.com/onflow/go-ethereum/rpc"
 	"github.com/rs/zerolog"
@@ -962,9 +964,13 @@ This is because a decision to not support this API was made either because we do
 ever or we don't support it at this phase.
 */
 
+var testKey, _ = crypto.HexToECDSA("6a0eb450085e825dd41cc3dd85e4166d4afbb0162488a3d811a0637fa7656abf")
+
 // Accounts returns the collection of accounts this node manages.
 func (b *BlockChainAPI) Accounts() []common.Address {
-	return []common.Address{}
+	return []common.Address{
+		crypto.PubkeyToAddress(testKey.PublicKey),
+	}
 }
 
 // Sign calculates an ECDSA signature for:
@@ -990,7 +996,30 @@ func (b *BlockChainAPI) SignTransaction(
 	ctx context.Context,
 	args TransactionArgs,
 ) (*SignTransactionResult, error) {
-	return nil, errs.ErrNotSupported
+
+	tx := types.NewTx(&types.LegacyTx{
+		Nonce:    uint64(*args.Nonce),
+		To:       args.To,
+		Value:    args.Value.ToInt(),
+		Gas:      uint64(*args.Gas),
+		GasPrice: args.GasPrice.ToInt(),
+		Data:     *args.Data,
+	})
+
+	signed, err := types.SignTx(tx, evmEmulator.GetDefaultSigner(), testKey)
+	if err != nil {
+		return nil, fmt.Errorf("error signing EVM transaction: %w", err)
+	}
+
+	raw, err := signed.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+
+	return &SignTransactionResult{
+		Raw: raw,
+		Tx:  tx,
+	}, nil
 }
 
 // SendTransaction creates a transaction for the given argument, sign it
@@ -999,7 +1028,12 @@ func (b *BlockChainAPI) SendTransaction(
 	ctx context.Context,
 	args TransactionArgs,
 ) (common.Hash, error) {
-	return common.Hash{}, errs.ErrNotSupported
+	signed, err := b.SignTransaction(ctx, args)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	return b.SendRawTransaction(ctx, signed.Raw)
 }
 
 // GetProof returns the Merkle-proof for a given account and optionally some storage keys.
