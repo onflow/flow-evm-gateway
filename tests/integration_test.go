@@ -100,12 +100,15 @@ func Test_ConcurrentTransactionSubmission(t *testing.T) {
 	for i := 0; i < totalTxs; i++ {
 		signed, signedHash, err := evmSign(big.NewInt(10), 21000, eoaKey, nonce, &testAddr, nil)
 		require.NoError(t, err)
-
-		hash, err := rpcTester.sendRawTx(signed)
-		require.NoError(t, err)
-		assert.NotNil(t, hash)
-		assert.Equal(t, signedHash.String(), hash.String())
 		hashes[i] = signedHash
+
+		// send raw transaction waits for transaction result and blocks, but since we don't have the result
+		// available until block is committed bellow we must continue without waiting, we will get all the
+		// transaction receipts later to confirm transactions have been successful, we only add a bit of delay
+		// to ensure order of transactions was correct, because there is no other way to proceed once transaction
+		// is submitted over network
+		go rpcTester.sendRawTx(signed)
+		time.Sleep(50 * time.Millisecond)
 
 		// execute commit block every 3 blocks so we make sure we should have conflicts with seq numbers if keys not rotated
 		if i%3 == 0 {
@@ -114,13 +117,16 @@ func Test_ConcurrentTransactionSubmission(t *testing.T) {
 		nonce += 1
 	}
 
-	time.Sleep(5 * time.Second) // wait for all txs to be executed
+	assert.Eventually(t, func() bool {
+		for _, h := range hashes {
+			rcp, err := rpcTester.getReceipt(h.String())
+			if err != nil || rcp == nil || uint64(1) != rcp.Status {
+				return false
+			}
+		}
 
-	for _, h := range hashes {
-		rcp, err := rpcTester.getReceipt(h.String())
-		require.NoError(t, err)
-		assert.Equal(t, uint64(1), rcp.Status)
-	}
+		return true
+	}, time.Second*30, time.Second*1, "all transactions were not executed")
 }
 
 func Test_CloudKMSConcurrentTransactionSubmission(t *testing.T) {

@@ -9,7 +9,6 @@ import (
 	"math"
 	"math/big"
 	"strings"
-	"time"
 
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go-sdk"
@@ -92,6 +91,7 @@ type EVM struct {
 	client *CrossSporkClient
 	config *config.Config
 	signer crypto.Signer
+	txPool *TxPool
 	logger zerolog.Logger
 	blocks storage.BlockIndexer
 }
@@ -131,17 +131,23 @@ func NewEVM(
 		signer: signer,
 		logger: logger,
 		blocks: blocks,
+		txPool: NewTxPool(client, logger),
 	}
 
 	// create COA on the account
 	if config.CreateCOAResource {
 		// we ignore errors for now since creation of already existing COA resource will fail, which is fine for now
-		id, err := evm.signAndSend(
+		tx, err := evm.buildTransaction(
 			context.Background(),
 			evm.replaceAddresses(createCOAScript),
 			cadence.UFix64(coaFundingBalance),
 		)
-		logger.Warn().Err(err).Str("id", id.String()).Msg("COA resource auto-creation status")
+		if err != nil {
+			logger.Warn().Err(err).Msg("COA resource auto-creation failure")
+		}
+		if err := evm.client.SendTransaction(context.Background(), *tx); err != nil {
+			logger.Warn().Err(err).Msg("failed to send COA resource auto-creation transaction")
+		}
 	}
 
 	return evm, nil
@@ -158,19 +164,31 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 		return common.Hash{}, err
 	}
 
+	// todo do further validation
+
+	from, err := types.Sender(types.LatestSignerForChainID(tx.ChainId()), tx)
+	if err != nil {
+		return common.Hash{}, fmt.Errorf("failed to derive the sender: %w", err)
+	}
+
 	if tx.GasPrice().Cmp(e.config.GasPrice) < 0 {
 		return common.Hash{}, errs.NewErrGasPriceTooLow(e.config.GasPrice)
 	}
 
-	hexEncodedTx, err := cadence.NewString(hex.EncodeToString(data))
+	txData := hex.EncodeToString(data)
+	hexEncodedTx, err := cadence.NewString(txData)
 	if err != nil {
 		return common.Hash{}, err
 	}
 
 	script := e.replaceAddresses(runTxScript)
-	flowID, err := e.signAndSend(ctx, script, hexEncodedTx)
+	flowTx, err := e.buildTransaction(ctx, script, hexEncodedTx)
 	if err != nil {
-		e.logger.Error().Err(err).Str("data", string(hexEncodedTx)).Msg("failed to send transaction")
+		e.logger.Error().Err(err).Str("data", txData).Msg("failed to build transaction")
+		return common.Hash{}, err
+	}
+
+	if err := e.txPool.Send(ctx, flowTx, tx); err != nil {
 		return common.Hash{}, err
 	}
 
@@ -179,20 +197,59 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 		to = tx.To().String()
 	}
 
-	from, err := types.Sender(types.LatestSignerForChainID(tx.ChainId()), tx)
-	if err != nil {
-		e.logger.Error().Err(err).Msg("failed to calculate sender")
-	}
-
 	e.logger.Info().
 		Str("evm-id", tx.Hash().Hex()).
-		Str("flow-id", flowID.Hex()).
+		Str("flow-id", flowTx.ID().Hex()).
 		Str("to", to).
 		Str("from", from.Hex()).
 		Str("value", tx.Value().String()).
 		Msg("raw transaction sent")
 
 	return tx.Hash(), nil
+}
+
+// buildTransaction creates a flow transaction from the provided script with the arguments
+// and signs it with the configured COA account.
+func (e *EVM) buildTransaction(ctx context.Context, script []byte, args ...cadence.Value) (*flow.Transaction, error) {
+	var (
+		g           = errgroup.Group{}
+		err1, err2  error
+		latestBlock *flow.Block
+		index       int
+		seqNum      uint64
+	)
+	// execute concurrently so we can speed up all the information we need for tx
+	g.Go(func() error {
+		latestBlock, err1 = e.client.GetLatestBlock(ctx, true)
+		return err1
+	})
+	g.Go(func() error {
+		index, seqNum, err2 = e.getSignerNetworkInfo(ctx)
+		return err2
+	})
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+
+	address := e.config.COAAddress
+	flowTx := flow.NewTransaction().
+		SetScript(script).
+		SetProposalKey(address, index, seqNum).
+		SetReferenceBlockID(latestBlock.ID).
+		SetPayer(address).
+		AddAuthorizer(address)
+
+	for _, arg := range args {
+		if err := flowTx.AddArgument(arg); err != nil {
+			return nil, fmt.Errorf("failed to add argument: %w", err)
+		}
+	}
+
+	if err := flowTx.SignEnvelope(address, index, e.signer); err != nil {
+		return nil, fmt.Errorf("failed to sign transaction envelope: %w", err)
+	}
+
+	return flowTx, nil
 }
 
 func (e *EVM) GetBalance(
@@ -556,94 +613,6 @@ func (e *EVM) executeScriptAtHeight(
 		e.replaceAddresses(script),
 		arguments,
 	)
-}
-
-// signAndSend creates a flow transaction from the provided script
-// with the arguments and signs it with the configured COA account
-// and then submits it to the network.
-func (e *EVM) signAndSend(
-	ctx context.Context,
-	script []byte,
-	args ...cadence.Value,
-) (flow.Identifier, error) {
-	var (
-		g           = errgroup.Group{}
-		err1, err2  error
-		latestBlock *flow.Block
-		index       int
-		seqNum      uint64
-	)
-	// execute concurrently so we can speed up all the information we need for tx
-	g.Go(func() error {
-		latestBlock, err1 = e.client.GetLatestBlock(ctx, true)
-		return err1
-	})
-	g.Go(func() error {
-		index, seqNum, err2 = e.getSignerNetworkInfo(ctx)
-		return err2
-	})
-	if err := g.Wait(); err != nil {
-		return flow.EmptyID, err
-	}
-
-	address := e.config.COAAddress
-	flowTx := flow.NewTransaction().
-		SetScript(script).
-		SetProposalKey(address, index, seqNum).
-		SetReferenceBlockID(latestBlock.ID).
-		SetPayer(address).
-		AddAuthorizer(address)
-
-	for _, arg := range args {
-		if err := flowTx.AddArgument(arg); err != nil {
-			return flow.EmptyID, fmt.Errorf("failed to add argument: %w", err)
-		}
-	}
-
-	if err := flowTx.SignEnvelope(address, index, e.signer); err != nil {
-		return flow.EmptyID, fmt.Errorf("failed to sign envelope: %w", err)
-	}
-
-	if err := e.client.SendTransaction(ctx, *flowTx); err != nil {
-		return flow.EmptyID, fmt.Errorf("failed to send transaction: %w", err)
-	}
-
-	// get transaction status after it is submitted
-	go func(id flow.Identifier) {
-		const fetchInterval = time.Millisecond * 500
-		const fetchTimeout = time.Second * 60
-
-		fetchTicker := time.NewTicker(fetchInterval)
-		timeoutTicker := time.NewTicker(fetchTimeout)
-
-		defer fetchTicker.Stop()
-		defer timeoutTicker.Stop()
-
-		for {
-			select {
-			case <-fetchTicker.C:
-				res, err := e.client.GetTransactionResult(context.Background(), id)
-				if err != nil {
-					e.logger.Error().Str("id", id.String()).Err(err).Msg("failed to get transaction result")
-					return
-				}
-				if res != nil && res.Status > flow.TransactionStatusPending {
-					e.logger.Info().
-						Str("status", res.Status.String()).
-						Str("id", id.String()).
-						Int("events", len(res.Events)).
-						Err(res.Error).
-						Msg("transaction result received")
-					return
-				}
-			case <-timeoutTicker.C:
-				e.logger.Error().Str("id", id.String()).Msg("could not get transaction result")
-				return
-			}
-		}
-	}(flowTx.ID())
-
-	return flowTx.ID(), nil
 }
 
 func addressToCadenceString(address common.Address) (cadence.String, error) {

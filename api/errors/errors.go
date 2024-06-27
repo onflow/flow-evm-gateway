@@ -17,19 +17,19 @@ var (
 	ErrRateLimit    = errors.New("limit of requests per second reached")
 )
 
-type ErrGasPriceTooLow struct {
+type GasPriceTooLowError struct {
 	GasPrice *big.Int
 }
 
-func (e *ErrGasPriceTooLow) Error() string {
+func (e *GasPriceTooLowError) Error() string {
 	return fmt.Sprintf(
 		"the minimum accepted gas price for transactions is: %d",
 		e.GasPrice,
 	)
 }
 
-func NewErrGasPriceTooLow(gasPrice *big.Int) *ErrGasPriceTooLow {
-	return &ErrGasPriceTooLow{
+func NewErrGasPriceTooLow(gasPrice *big.Int) *GasPriceTooLowError {
+	return &GasPriceTooLowError{
 		GasPrice: gasPrice,
 	}
 }

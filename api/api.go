@@ -181,12 +181,17 @@ func (b *BlockChainAPI) SendRawTransaction(
 
 	id, err := b.evm.SendRawTransaction(ctx, input)
 	if err != nil {
-		b.logger.Error().Err(err).Msg("failed to send raw transaction")
-		var errGasPriceTooLow *errs.ErrGasPriceTooLow
-		if errors.As(err, &errGasPriceTooLow) {
+		var errGasPriceTooLow *errs.GasPriceTooLowError
+
+		// handle typed errors
+		switch {
+		case errors.As(err, &errGasPriceTooLow):
 			return common.Hash{}, errGasPriceTooLow
+		case errors.Is(err, models.ErrInvalidEVMTransaction):
+			return common.Hash{}, err
+		default:
+			return common.Hash{}, errs.ErrInternal
 		}
-		return common.Hash{}, err
 	}
 
 	return id, nil
