@@ -997,13 +997,30 @@ func (b *BlockChainAPI) SignTransaction(
 	args TransactionArgs,
 ) (*SignTransactionResult, error) {
 
+	nonce := uint64(0)
+	if args.Nonce != nil {
+		nonce = uint64(*args.Nonce)
+	} else {
+		num := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
+		n, err := b.GetTransactionCount(ctx, *args.From, &num)
+		if err != nil {
+			return nil, err
+		}
+		nonce = uint64(*n)
+	}
+
+	var data []byte
+	if args.Data != nil {
+		data = *args.Data
+	}
+
 	tx := types.NewTx(&types.LegacyTx{
-		Nonce:    uint64(*args.Nonce),
+		Nonce:    nonce,
 		To:       args.To,
 		Value:    args.Value.ToInt(),
 		Gas:      uint64(*args.Gas),
 		GasPrice: args.GasPrice.ToInt(),
-		Data:     *args.Data,
+		Data:     data,
 	})
 
 	signed, err := types.SignTx(tx, evmEmulator.GetDefaultSigner(), testKey)
