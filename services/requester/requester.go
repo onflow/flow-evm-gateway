@@ -9,14 +9,17 @@ import (
 	"math"
 	"math/big"
 	"strings"
+	"time"
 
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/crypto"
+	"github.com/onflow/flow-go/fvm/evm/emulator"
 	"github.com/onflow/flow-go/fvm/evm/stdlib"
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/flow-go/fvm/systemcontracts"
 	"github.com/onflow/go-ethereum/common"
+	"github.com/onflow/go-ethereum/core/txpool"
 	"github.com/onflow/go-ethereum/core/types"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
@@ -159,12 +162,36 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 		return common.Hash{}, err
 	}
 
-	err := models.ValidateTransaction(tx)
-	if err != nil {
+	if err := models.ValidateTransaction(tx); err != nil {
 		return common.Hash{}, err
 	}
 
-	// todo do further validation
+	head := &types.Header{
+		Number:   big.NewInt(20_182_324),
+		Time:     uint64(time.Now().Unix()),
+		GasLimit: 30_000_000,
+	}
+	chainConfig := emulator.DefaultChainConfig
+	chainConfig.ChainID = e.config.EVMNetworkID
+	signer := types.MakeSigner(
+		chainConfig,
+		head.Number,
+		head.Time,
+	)
+	opts := &txpool.ValidationOptions{
+		Config: chainConfig,
+		Accept: 0 |
+			1<<types.LegacyTxType |
+			1<<types.AccessListTxType |
+			1<<types.DynamicFeeTxType |
+			1<<types.BlobTxType,
+		MaxSize: models.TxMaxSize,
+		MinTip:  new(big.Int),
+	}
+
+	if err := models.ValidateConsensusRules(tx, head, signer, opts); err != nil {
+		return common.Hash{}, err
+	}
 
 	from, err := types.Sender(types.LatestSignerForChainID(tx.ChainId()), tx)
 	if err != nil {
