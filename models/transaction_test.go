@@ -136,7 +136,7 @@ func Test_DecodeDirectCall(t *testing.T) {
 
 	assert.Equal(
 		t,
-		gethCommon.HexToHash("0xe090f3a66f269d436e4185551d790d923f53a2caabf475c18d60bf1f091813d9"),
+		gethCommon.HexToHash("0xb055748f36d6bbe99a7ab5e45202b5c095ceda985dec0cc2a8747fd88c80c8c9"),
 		txHash,
 	)
 	assert.Equal(t, big.NewInt(0), v)
@@ -243,7 +243,7 @@ func Test_UnmarshalTransaction(t *testing.T) {
 
 		assert.Equal(
 			t,
-			gethCommon.HexToHash("0xe090f3a66f269d436e4185551d790d923f53a2caabf475c18d60bf1f091813d9"),
+			gethCommon.HexToHash("0xb055748f36d6bbe99a7ab5e45202b5c095ceda985dec0cc2a8747fd88c80c8c9"),
 			txHash,
 		)
 		assert.Equal(t, big.NewInt(0), v)
