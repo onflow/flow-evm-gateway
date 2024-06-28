@@ -152,10 +152,7 @@ func MarshalReceipt(
 		return map[string]interface{}{}, err
 	}
 
-	txHash, err := tx.Hash()
-	if err != nil {
-		return map[string]interface{}{}, err
-	}
+	txHash := tx.Hash()
 
 	fields := map[string]interface{}{
 		"blockHash":         receipt.BlockHash,

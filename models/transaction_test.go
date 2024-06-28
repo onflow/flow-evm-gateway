@@ -31,8 +31,7 @@ func createTestEvent(t *testing.T, txBinary string) (cadence.Event, *types.Resul
 		directCall, err := types.DirectCallFromEncoded(txEncoded)
 		require.NoError(t, err)
 
-		txHash, err = directCall.Hash()
-		require.NoError(t, err)
+		txHash = directCall.Hash()
 
 		txType = types.DirectCallTxType
 	} else {
@@ -81,9 +80,10 @@ func Test_DecodeEVMTransaction(t *testing.T) {
 	require.NoError(t, err)
 	require.IsType(t, TransactionCall{}, decTx)
 
-	txHash, err := decTx.Hash()
-	require.NoError(t, err)
+	txHash := decTx.Hash()
+
 	v, r, s := decTx.RawSignatureValues()
+
 	from, err := decTx.From()
 	require.NoError(t, err)
 
@@ -126,9 +126,11 @@ func Test_DecodeDirectCall(t *testing.T) {
 	require.NoError(t, err)
 	require.IsType(t, DirectCall{}, decTx)
 
-	txHash, err := decTx.Hash()
+	txHash := decTx.Hash()
 	require.NoError(t, err)
+
 	v, r, s := decTx.RawSignatureValues()
+
 	from, err := decTx.From()
 	require.NoError(t, err)
 
@@ -178,9 +180,10 @@ func Test_UnmarshalTransaction(t *testing.T) {
 		require.NoError(t, err)
 		require.IsType(t, TransactionCall{}, decTx)
 
-		txHash, err := decTx.Hash()
-		require.NoError(t, err)
+		txHash := decTx.Hash()
+
 		v, r, s := decTx.RawSignatureValues()
+
 		from, err := decTx.From()
 		require.NoError(t, err)
 
@@ -231,9 +234,10 @@ func Test_UnmarshalTransaction(t *testing.T) {
 		require.NoError(t, err)
 		require.IsType(t, DirectCall{}, decTx)
 
-		txHash, err := decTx.Hash()
-		require.NoError(t, err)
+		txHash := decTx.Hash()
+
 		v, r, s := decTx.RawSignatureValues()
+
 		from, err := decTx.From()
 		require.NoError(t, err)
 

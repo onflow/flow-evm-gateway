@@ -268,11 +268,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		transactions.
 			On("Store", mock.AnythingOfType("models.TransactionCall")).
 			Return(func(tx models.Transaction) error {
-				transactionHash, err := transaction.Hash()
-				require.NoError(t, err)
-				txHash, err := tx.Hash()
-				require.NoError(t, err)
-				assert.Equal(t, transactionHash, txHash) // if hashes are equal tx is equal
+				assert.Equal(t, transaction.Hash(), tx.Hash()) // if hashes are equal tx is equal
 				return nil
 			}).
 			Once()
@@ -480,11 +476,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			transactions.
 				On("Store", mock.AnythingOfType("models.TransactionCall")).
 				Return(func(tx models.Transaction) error {
-					transactionHash, err := transaction.Hash()
-					require.NoError(t, err)
-					txHash, err := tx.Hash()
-					require.NoError(t, err)
-					assert.Equal(t, transactionHash, txHash) // if hashes are equal tx is equal
+					assert.Equal(t, transaction.Hash(), tx.Hash()) // if hashes are equal tx is equal
 					require.True(t, blockIndexedFirst)
 					txsStored++
 					return nil

@@ -236,11 +236,7 @@ func (b *BlockChainAPI) GetTransactionByHash(
 		return handleError[*Transaction](b.logger, err)
 	}
 
-	txHash, err := tx.Hash()
-	if err != nil {
-		b.logger.Error().Err(err).Any("tx", tx).Msg("failed to calculate tx hash")
-		return nil, errs.ErrInternal
-	}
+	txHash := tx.Hash()
 
 	rcp, err := b.receipts.GetByTransactionID(txHash)
 	if err != nil {

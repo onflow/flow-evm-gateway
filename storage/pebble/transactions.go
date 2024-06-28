@@ -3,9 +3,10 @@ package pebble
 import (
 	"sync"
 
+	"github.com/onflow/go-ethereum/common"
+
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/storage"
-	"github.com/onflow/go-ethereum/common"
 )
 
 var _ storage.TransactionIndexer = &Transactions{}
@@ -31,10 +32,7 @@ func (t *Transactions) Store(tx models.Transaction) error {
 		return err
 	}
 
-	txHash, err := tx.Hash()
-	if err != nil {
-		return err
-	}
+	txHash := tx.Hash()
 
 	return t.store.set(txIDKey, txHash.Bytes(), val, nil)
 }
