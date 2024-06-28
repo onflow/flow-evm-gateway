@@ -10,7 +10,22 @@ import (
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/go-ethereum/common"
+	"github.com/onflow/go-ethereum/core/txpool"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
+)
+
+const (
+	// txSlotSize is used to calculate how many data slots a single transaction
+	// takes up based on its size. The slots are used as DoS protection, ensuring
+	// that validating a new transaction remains a constant operation (in reality
+	// O(maxslots), where max slots are 4 currently).
+	TxSlotSize = 32 * 1024
+
+	// txMaxSize is the maximum size a single transaction can have. This field has
+	// non-trivial consequences: larger transactions are significantly harder and
+	// more expensive to propagate; larger transactions also take more resources
+	// to validate whether they fit into the pool or not.
+	TxMaxSize = 4 * TxSlotSize // 128KB
 )
 
 type Transaction interface {
@@ -256,4 +271,13 @@ func ValidateTransaction(tx *gethTypes.Transaction) error {
 	}
 
 	return nil
+}
+
+func ValidateConsensusRules(
+	tx *gethTypes.Transaction,
+	head *gethTypes.Header,
+	signer gethTypes.Signer,
+	opts *txpool.ValidationOptions,
+) error {
+	return txpool.ValidateTransaction(tx, head, signer, opts)
 }
