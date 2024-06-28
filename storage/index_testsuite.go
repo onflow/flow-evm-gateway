@@ -352,12 +352,12 @@ func (s *TransactionTestSuite) TestGetTransaction() {
 		err := s.TransactionIndexer.Store(tx)
 		s.Require().NoError(err)
 
-		txHash, err := tx.Hash()
-		s.Require().NoError(err)
+		txHash := tx.Hash()
+
 		retTx, err := s.TransactionIndexer.Get(txHash)
 		s.Require().NoError(err)
-		retTxHash, err := retTx.Hash()
-		s.Require().NoError(err)
+
+		retTxHash := retTx.Hash()
 		s.Require().Equal(txHash, retTxHash) // if hashes are equal the data must be equal
 
 		// allow same transaction overwrites
@@ -372,14 +372,13 @@ func (s *TransactionTestSuite) TestGetTransaction() {
 			s.Require().NoError(err)
 		}
 
-		txHash, err := tx.Hash()
-		s.Require().NoError(err)
+		txHash := tx.Hash()
+
 		t, err := s.TransactionIndexer.Get(txHash)
 		s.Require().NoError(err)
-		tHash, err := t.Hash()
-		s.Require().NoError(err)
+
+		tHash := t.Hash()
 		s.Require().Equal(txHash, tHash)
-		s.Require().NoError(err)
 	})
 
 	s.Run("non-existing transaction", func() {
@@ -414,8 +413,7 @@ func (a *AccountTestSuite) TestNonce() {
 			txCall, ok := tx.(models.TransactionCall)
 			a.Require().True(ok)
 
-			txHash, err := tx.Hash()
-			a.Require().NoError(err)
+			txHash := tx.Hash()
 
 			rcp := mocks.NewReceipt(uint64(i+5), txHash)
 			gethTx, err := types.SignTx(txCall.Transaction, evmEmulator.GetDefaultSigner(), key)
@@ -439,8 +437,7 @@ func (a *AccountTestSuite) TestNonce() {
 			txCall, ok := tx.(models.TransactionCall)
 			a.Require().True(ok)
 
-			txHash, err := tx.Hash()
-			a.Require().NoError(err)
+			txHash := tx.Hash()
 
 			rcp := mocks.NewReceipt(uint64(i+5), txHash)
 			gethTx, err := types.SignTx(txCall.Transaction, evmEmulator.GetDefaultSigner(), key)

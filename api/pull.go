@@ -457,12 +457,8 @@ func (api *PullAPI) getTransactions(latestHeight uint64, filter *transactionsFil
 				return nil, err
 			}
 
-			h, err := tx.Hash()
-			if err != nil {
-				continue
-			}
 			txs = append(txs, tx)
-			hashes = append(hashes, h)
+			hashes = append(hashes, tx.Hash())
 		}
 	}
 

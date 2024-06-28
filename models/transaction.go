@@ -14,8 +14,7 @@ import (
 )
 
 type Transaction interface {
-	// TODO(m-Peter): Remove the error return value once flow-go is updated
-	Hash() (common.Hash, error)
+	Hash() common.Hash
 	RawSignatureValues() (v *big.Int, r *big.Int, s *big.Int)
 	From() (common.Address, error)
 	To() *common.Address
@@ -41,7 +40,7 @@ type DirectCall struct {
 	*types.DirectCall
 }
 
-func (dc DirectCall) Hash() (common.Hash, error) {
+func (dc DirectCall) Hash() common.Hash {
 	return dc.DirectCall.Hash()
 }
 
@@ -132,8 +131,8 @@ type TransactionCall struct {
 	*gethTypes.Transaction
 }
 
-func (tc TransactionCall) Hash() (common.Hash, error) {
-	return tc.Transaction.Hash(), nil
+func (tc TransactionCall) Hash() common.Hash {
+	return tc.Transaction.Hash()
 }
 
 func (tc TransactionCall) From() (common.Address, error) {

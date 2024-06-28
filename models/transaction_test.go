@@ -31,8 +31,7 @@ func createTestEvent(t *testing.T, txBinary string) (cadence.Event, *types.Resul
 		directCall, err := types.DirectCallFromEncoded(txEncoded)
 		require.NoError(t, err)
 
-		txHash, err = directCall.Hash()
-		require.NoError(t, err)
+		txHash = directCall.Hash()
 
 		txType = types.DirectCallTxType
 	} else {
@@ -81,9 +80,10 @@ func Test_DecodeEVMTransaction(t *testing.T) {
 	require.NoError(t, err)
 	require.IsType(t, TransactionCall{}, decTx)
 
-	txHash, err := decTx.Hash()
-	require.NoError(t, err)
+	txHash := decTx.Hash()
+
 	v, r, s := decTx.RawSignatureValues()
+
 	from, err := decTx.From()
 	require.NoError(t, err)
 
@@ -126,15 +126,17 @@ func Test_DecodeDirectCall(t *testing.T) {
 	require.NoError(t, err)
 	require.IsType(t, DirectCall{}, decTx)
 
-	txHash, err := decTx.Hash()
+	txHash := decTx.Hash()
 	require.NoError(t, err)
+
 	v, r, s := decTx.RawSignatureValues()
+
 	from, err := decTx.From()
 	require.NoError(t, err)
 
 	assert.Equal(
 		t,
-		gethCommon.HexToHash("0xe090f3a66f269d436e4185551d790d923f53a2caabf475c18d60bf1f091813d9"),
+		gethCommon.HexToHash("0xb055748f36d6bbe99a7ab5e45202b5c095ceda985dec0cc2a8747fd88c80c8c9"),
 		txHash,
 	)
 	assert.Equal(t, big.NewInt(0), v)
@@ -178,9 +180,10 @@ func Test_UnmarshalTransaction(t *testing.T) {
 		require.NoError(t, err)
 		require.IsType(t, TransactionCall{}, decTx)
 
-		txHash, err := decTx.Hash()
-		require.NoError(t, err)
+		txHash := decTx.Hash()
+
 		v, r, s := decTx.RawSignatureValues()
+
 		from, err := decTx.From()
 		require.NoError(t, err)
 
@@ -231,15 +234,16 @@ func Test_UnmarshalTransaction(t *testing.T) {
 		require.NoError(t, err)
 		require.IsType(t, DirectCall{}, decTx)
 
-		txHash, err := decTx.Hash()
-		require.NoError(t, err)
+		txHash := decTx.Hash()
+
 		v, r, s := decTx.RawSignatureValues()
+
 		from, err := decTx.From()
 		require.NoError(t, err)
 
 		assert.Equal(
 			t,
-			gethCommon.HexToHash("0xe090f3a66f269d436e4185551d790d923f53a2caabf475c18d60bf1f091813d9"),
+			gethCommon.HexToHash("0xb055748f36d6bbe99a7ab5e45202b5c095ceda985dec0cc2a8747fd88c80c8c9"),
 			txHash,
 		)
 		assert.Equal(t, big.NewInt(0), v)

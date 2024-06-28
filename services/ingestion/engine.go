@@ -203,11 +203,8 @@ func (e *Engine) indexTransaction(tx models.Transaction, receipt *models.Storage
 	if tx == nil || receipt == nil { // safety check shouldn't happen
 		return fmt.Errorf("can't process empty tx or receipt")
 	}
-	// TODO(m-Peter): Remove the error return value once flow-go is updated
-	txHash, err := tx.Hash()
-	if err != nil {
-		return fmt.Errorf("failed to compute TX hash: %w", err)
-	}
+
+	txHash := tx.Hash()
 
 	e.log.Info().
 		Str("contract-address", receipt.ContractAddress.String()).

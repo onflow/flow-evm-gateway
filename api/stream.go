@@ -140,10 +140,7 @@ func (s *StreamAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) (*
 					return nil, fmt.Errorf("failed to get receipt with hash: %s at height: %d: %w", hash, height, err)
 				}
 
-				h, err := tx.Hash()
-				if err != nil {
-					return nil, fmt.Errorf("failed to compute tx hash: %w", err)
-				}
+				h := tx.Hash()
 
 				t, err := NewTransaction(tx, *rcp, *s.config)
 				if err != nil {

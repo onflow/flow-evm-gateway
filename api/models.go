@@ -171,10 +171,7 @@ func NewTransaction(
 	receipt models.StorageReceipt,
 	config config.Config,
 ) (*Transaction, error) {
-	txHash, err := tx.Hash()
-	if err != nil {
-		return nil, err
-	}
+	txHash := tx.Hash()
 
 	f, err := tx.From()
 	if err != nil {
