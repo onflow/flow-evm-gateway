@@ -2,8 +2,8 @@ name: "Build & Push EVM Gateway Image to Public Repo"
 
 on:
   push:
-    branches:
-      - main
+    tags:
+      - '*'
 
 env:
   DOCKER_IMAGE_URL: ${{ vars.REPO_DOCKER_IMAGE_URL }}:${{ github.sha }}
@@ -15,7 +15,10 @@ jobs:
       id-token: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Google auth
         id: auth
@@ -33,5 +36,5 @@ jobs:
       - name: Docker Auth
         run: |-
           gcloud auth configure-docker ${{ vars.GAR_LOCATION }}-docker.pkg.dev
-          docker build -t ${{ env.DOCKER_IMAGE_URL }} --file Dockerfile .
+          docker build -t ${{ env.DOCKER_IMAGE_URL }} --build-arg GATEWAY_VERSION=$(git describe --tags --abbrev=0 2>/dev/null) --file Dockerfile .
           docker push ${{ env.DOCKER_IMAGE_URL }}

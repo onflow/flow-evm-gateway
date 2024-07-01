@@ -2,6 +2,8 @@
 
 FROM golang:1.20.0 as app-builder
 
+ARG GATEWAY_VERSION="v0.1.0"
+
 # Build the app binary in /app
 WORKDIR /app
 
@@ -13,7 +15,7 @@ RUN go mod download
 RUN go mod verify
 
 # Build binary
-RUN CGO_ENABLED=1 go build -o bin ./cmd/main/main.go
+RUN CGO_ENABLED=1 go build -o bin -ldflags="-X github.com/onflow/flow-evm-gateway/api.Version=${GATEWAY_VERSION}" ./cmd/main/main.go
 RUN chmod a+x bin
 
 # RUN APP
