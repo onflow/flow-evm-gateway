@@ -85,13 +85,12 @@ func New(dir string, log zerolog.Logger) (*Storage, error) {
 func (s *Storage) set(keyCode byte, key []byte, value []byte, batch *pebble.Batch) error {
 	prefixedKey := makePrefix(keyCode, key)
 
-	var err error
 	if batch != nil {
-		err = batch.Set(prefixedKey, value, nil)
-	} else {
-		err = s.db.Set(prefixedKey, value, nil)
+		// set the value on batch and return, skip caching as the commit did not happen yet
+		return batch.Set(prefixedKey, value, nil)
 	}
-	if err != nil {
+
+	if err := s.db.Set(prefixedKey, value, nil); err != nil {
 		return err
 	}
 
@@ -102,10 +101,12 @@ func (s *Storage) set(keyCode byte, key []byte, value []byte, batch *pebble.Batc
 func (s *Storage) get(keyCode byte, key ...[]byte) ([]byte, error) {
 	prefixedKey := makePrefix(keyCode, key...)
 
+	// check if we have the value cached and return it
 	if val, ok := s.cache.Get(hex.EncodeToString(prefixedKey)); ok {
 		return val, nil
 	}
 
+	// if cache was a miss, then load the value from db
 	data, closer, err := s.db.Get(prefixedKey)
 	if err != nil {
 		if errors.Is(err, pebble.ErrNotFound) {
@@ -113,6 +114,9 @@ func (s *Storage) get(keyCode byte, key ...[]byte) ([]byte, error) {
 		}
 		return nil, err
 	}
+
+	// add the value to the cache
+	s.cache.Add(hex.EncodeToString(prefixedKey), data)
 
 	defer func(closer io.Closer) {
 		err = closer.Close()
