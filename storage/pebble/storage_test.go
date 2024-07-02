@@ -3,6 +3,8 @@ package pebble
 import (
 	"testing"
 
+	"github.com/cockroachdb/pebble"
+	"github.com/goccy/go-json"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/go-ethereum/common"
 	"github.com/rs/zerolog"
@@ -129,6 +131,53 @@ func TestAccount(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, nonce, decNonce)
 		assert.Equal(t, height, decHeight)
+	})
+}
+
+func TestBatch(t *testing.T) {
+	runDB("batch successfully stores", t, func(t *testing.T, db *Storage) {
+		blocks := NewBlocks(db)
+		trace := NewTraces(db)
+
+		batch := db.NewBatch()
+		defer func() {
+			require.NoError(t, batch.Close())
+		}()
+
+		height := uint64(5)
+		err := blocks.SetLatestCadenceHeight(height, batch)
+		require.NoError(t, err)
+
+		raw := json.RawMessage{0x2}
+		id := common.Hash{0x3}
+		err = trace.StoreTransaction(id, raw, batch)
+		require.NoError(t, err)
+
+		require.NoError(t, batch.Commit(pebble.Sync))
+
+		h, err := blocks.LatestCadenceHeight()
+		require.NoError(t, err)
+		require.Equal(t, height, h)
+
+		tt, err := trace.GetTransaction(id)
+		require.NoError(t, err)
+		require.Equal(t, raw, tt)
+	})
+
+	runDB("should not contain data without committing", t, func(t *testing.T, db *Storage) {
+		blocks := NewBlocks(db)
+
+		batch := db.NewBatch()
+		defer func() {
+			require.NoError(t, batch.Close())
+		}()
+
+		height := uint64(5)
+		err := blocks.SetLatestCadenceHeight(height, batch)
+		require.NoError(t, err)
+
+		_, err = blocks.LatestCadenceHeight()
+		require.ErrorIs(t, err, errors.ErrNotInitialized)
 	})
 }
 
