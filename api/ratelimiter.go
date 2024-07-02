@@ -3,7 +3,7 @@ package api
 import (
 	"context"
 
-	"github.com/onflow/go-ethereum/signer/core"
+	"github.com/onflow/go-ethereum/rpc"
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-limiter"
 
@@ -19,7 +19,7 @@ func rateLimit(ctx context.Context, limiter limiter.Store, logger zerolog.Logger
 	// don't change this to naive middleware handler, because it won't limit
 	// websocket requests.
 
-	remote := core.MetadataFromContext(ctx).Remote
+	remote := rpc.PeerInfoFromContext(ctx).RemoteAddr
 	if remote == "NA" {
 		return nil // if no client identifier disable limit
 	}
