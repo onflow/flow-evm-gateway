@@ -84,10 +84,10 @@ func (a *Accounts) getNonce(address common.Address) (uint64, uint64, error) {
 	return nonce, height, nil
 }
 
-func (a *Accounts) GetNonce(address *common.Address) (uint64, error) {
+func (a *Accounts) GetNonce(address common.Address) (uint64, error) {
 	a.mux.RLock()
 	defer a.mux.RUnlock()
-	nonce, _, err := a.getNonce(*address)
+	nonce, _, err := a.getNonce(address)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get nonce: %w", err)
 	}
@@ -95,7 +95,7 @@ func (a *Accounts) GetNonce(address *common.Address) (uint64, error) {
 	return nonce, nil
 }
 
-func (a *Accounts) GetBalance(address *common.Address) (*big.Int, error) {
+func (a *Accounts) GetBalance(address common.Address) (*big.Int, error) {
 	panic("not supported")
 }
 

@@ -403,7 +403,7 @@ func (a *AccountTestSuite) TestNonce() {
 		key, err := crypto.HexToECDSA(rawKey)
 		a.Require().NoError(err)
 
-		nonce, err := a.AccountIndexer.GetNonce(&from)
+		nonce, err := a.AccountIndexer.GetNonce(from)
 		a.Require().NoError(err)
 		a.Require().Equal(uint64(0), nonce)
 
@@ -424,7 +424,7 @@ func (a *AccountTestSuite) TestNonce() {
 			err = a.AccountIndexer.Update(tx, rcp)
 			a.Require().NoError(err)
 
-			nonce, err = a.AccountIndexer.GetNonce(&from)
+			nonce, err = a.AccountIndexer.GetNonce(from)
 			a.Require().NoError(err)
 			a.Require().Equal(uint64(i), nonce)
 		}
@@ -448,7 +448,7 @@ func (a *AccountTestSuite) TestNonce() {
 			err = a.AccountIndexer.Update(tx, rcp)
 			a.Require().NoError(err)
 
-			nonce, err = a.AccountIndexer.GetNonce(&from)
+			nonce, err = a.AccountIndexer.GetNonce(from)
 			a.Require().NoError(err)
 			a.Require().Equal(uint64(4), nonce) // always equal to latest nonce
 		}

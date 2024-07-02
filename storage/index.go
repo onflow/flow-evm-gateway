@@ -108,10 +108,10 @@ type AccountIndexer interface {
 
 	// GetNonce gets an account nonce. If no nonce was indexed it returns 0.
 	// todo add getting nonce at provided block height / hash
-	GetNonce(address *common.Address) (uint64, error)
+	GetNonce(address common.Address) (uint64, error)
 
 	// GetBalance gets an account balance. If no balance was indexed it returns 0.
-	GetBalance(address *common.Address) (*big.Int, error)
+	GetBalance(address common.Address) (*big.Int, error)
 }
 
 type TraceIndexer interface {
