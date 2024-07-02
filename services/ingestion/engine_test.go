@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/onflow/flow-evm-gateway/services/ingestion/mocks"
+	"github.com/onflow/flow-evm-gateway/storage/pebble"
 
 	"github.com/onflow/cadence"
 	"github.com/onflow/cadence/runtime/common"
@@ -32,6 +33,9 @@ func TestSerialBlockIngestion(t *testing.T) {
 		transactions := &storageMock.TransactionIndexer{}
 		latestHeight := uint64(10)
 
+		store, err := pebble.New("", zerolog.Nop())
+		require.NoError(t, err)
+
 		blocks := &storageMock.BlockIndexer{}
 		blocks.
 			On("LatestCadenceHeight").
@@ -56,6 +60,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 
 		engine := NewEventIngestionEngine(
 			subscriber,
+			store,
 			blocks,
 			receipts,
 			transactions,
@@ -109,6 +114,9 @@ func TestSerialBlockIngestion(t *testing.T) {
 		transactions := &storageMock.TransactionIndexer{}
 		latestHeight := uint64(10)
 
+		store, err := pebble.New("", zerolog.Nop())
+		require.NoError(t, err)
+
 		blocks := &storageMock.BlockIndexer{}
 		blocks.
 			On("LatestCadenceHeight").
@@ -132,6 +140,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 
 		engine := NewEventIngestionEngine(
 			subscriber,
+			store,
 			blocks,
 			receipts,
 			transactions,
@@ -203,6 +212,9 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		nextHeight := latestHeight + 1
 		blockID := flow.Identifier{0x01}
 
+		store, err := pebble.New("", zerolog.Nop())
+		require.NoError(t, err)
+
 		blocks := &storageMock.BlockIndexer{}
 		blocks.
 			On("LatestCadenceHeight").
@@ -238,6 +250,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 
 		engine := NewEventIngestionEngine(
 			subscriber,
+			store,
 			blocks,
 			receipts,
 			transactions,
@@ -304,6 +317,9 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		latestHeight := uint64(10)
 		nextHeight := latestHeight + 1
 
+		store, err := pebble.New("", zerolog.Nop())
+		require.NoError(t, err)
+
 		blocks := &storageMock.BlockIndexer{}
 		blocks.
 			On("LatestCadenceHeight").
@@ -333,6 +349,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 
 		engine := NewEventIngestionEngine(
 			subscriber,
+			store,
 			blocks,
 			receipts,
 			transactions,
@@ -399,6 +416,9 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		transactions := &storageMock.TransactionIndexer{}
 		latestCadenceHeight := uint64(0)
 
+		store, err := pebble.New("", zerolog.Nop())
+		require.NoError(t, err)
+
 		blocks := &storageMock.BlockIndexer{}
 		blocks.
 			On("LatestCadenceHeight").
@@ -424,6 +444,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 
 		engine := NewEventIngestionEngine(
 			subscriber,
+			store,
 			blocks,
 			receipts,
 			transactions,
