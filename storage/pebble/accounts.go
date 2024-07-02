@@ -7,10 +7,12 @@ import (
 	"math/big"
 	"sync"
 
+	"github.com/cockroachdb/pebble"
+	"github.com/onflow/go-ethereum/common"
+
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/storage"
 	errs "github.com/onflow/flow-evm-gateway/storage/errors"
-	"github.com/onflow/go-ethereum/common"
 )
 
 var _ storage.AccountIndexer = &Accounts{}
@@ -30,6 +32,7 @@ func NewAccounts(db *Storage) *Accounts {
 func (a *Accounts) Update(
 	tx models.Transaction,
 	receipt *models.StorageReceipt,
+	batch *pebble.Batch,
 ) error {
 	a.mux.Lock()
 	defer a.mux.Unlock()
@@ -54,7 +57,7 @@ func (a *Accounts) Update(
 	nonce += 1
 
 	data := encodeNonce(nonce, receipt.BlockNumber.Uint64())
-	err = a.store.set(accountNonceKey, from.Bytes(), data, nil)
+	err = a.store.set(accountNonceKey, from.Bytes(), data, batch)
 	if err != nil {
 		return err
 	}

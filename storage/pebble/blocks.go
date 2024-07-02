@@ -32,7 +32,12 @@ func NewBlocks(store *Storage) *Blocks {
 	}
 }
 
-func (b *Blocks) Store(cadenceHeight uint64, cadenceID flow.Identifier, block *types.Block) error {
+func (b *Blocks) Store(
+	cadenceHeight uint64,
+	cadenceID flow.Identifier,
+	block *types.Block,
+	batch *pebble.Batch,
+) error {
 	b.mux.Lock()
 	defer b.mux.Unlock()
 
@@ -45,9 +50,6 @@ func (b *Blocks) Store(cadenceHeight uint64, cadenceID flow.Identifier, block *t
 	if err != nil {
 		return err
 	}
-
-	batch := b.store.newBatch()
-	defer batch.Close()
 
 	cadenceHeightBytes := uint64Bytes(cadenceHeight)
 	evmHeightBytes := uint64Bytes(block.Height)
@@ -77,10 +79,6 @@ func (b *Blocks) Store(cadenceHeight uint64, cadenceID flow.Identifier, block *t
 
 	if err := b.store.set(latestEVMHeightKey, nil, evmHeightBytes, batch); err != nil {
 		return fmt.Errorf("failed to set latest evm height: %w", err)
-	}
-
-	if err := batch.Commit(pebble.Sync); err != nil {
-		return fmt.Errorf("failed to commit block: %w", err)
 	}
 
 	b.latestEVMHeightCache = block.Height
@@ -178,11 +176,11 @@ func (b *Blocks) LatestCadenceHeight() (uint64, error) {
 	return binary.BigEndian.Uint64(val), nil
 }
 
-func (b *Blocks) SetLatestCadenceHeight(height uint64) error {
+func (b *Blocks) SetLatestCadenceHeight(height uint64, batch *pebble.Batch) error {
 	b.mux.Lock()
 	defer b.mux.Unlock()
 
-	if err := b.store.set(latestCadenceHeightKey, nil, uint64Bytes(height), nil); err != nil {
+	if err := b.store.set(latestCadenceHeightKey, nil, uint64Bytes(height), batch); err != nil {
 		return fmt.Errorf("failed to store latest cadence height: %w", err)
 	}
 
@@ -206,7 +204,7 @@ func (b *Blocks) InitHeights(cadenceHeight uint64, cadenceID flow.Identifier) er
 	}
 
 	// we store genesis block because it isn't emitted over the network
-	if err := b.Store(cadenceHeight, cadenceID, types.GenesisBlock); err != nil {
+	if err := b.Store(cadenceHeight, cadenceID, types.GenesisBlock, nil); err != nil {
 		return fmt.Errorf("faield to set init genesis block: %w", err)
 	}
 
