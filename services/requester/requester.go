@@ -97,6 +97,10 @@ type EVM struct {
 	txPool *TxPool
 	logger zerolog.Logger
 	blocks storage.BlockIndexer
+
+	head              *types.Header
+	evmSigner         types.Signer
+	validationOptions *txpool.ValidationOptions
 }
 
 func NewEVM(
@@ -128,13 +132,38 @@ func NewEVM(
 		)
 	}
 
+	head := &types.Header{
+		Number:   big.NewInt(20_182_324),
+		Time:     uint64(time.Now().Unix()),
+		GasLimit: 30_000_000,
+	}
+	emulatorConfig := emulator.NewConfig(
+		emulator.WithChainID(config.EVMNetworkID),
+		emulator.WithBlockNumber(head.Number),
+		emulator.WithBlockTime(head.Time),
+	)
+	evmSigner := emulator.GetSigner(emulatorConfig)
+	validationOptions := &txpool.ValidationOptions{
+		Config: emulatorConfig.ChainConfig,
+		Accept: 0 |
+			1<<types.LegacyTxType |
+			1<<types.AccessListTxType |
+			1<<types.DynamicFeeTxType |
+			1<<types.BlobTxType,
+		MaxSize: models.TxMaxSize,
+		MinTip:  new(big.Int),
+	}
+
 	evm := &EVM{
-		client: client,
-		config: config,
-		signer: signer,
-		logger: logger,
-		blocks: blocks,
-		txPool: NewTxPool(client, logger),
+		client:            client,
+		config:            config,
+		signer:            signer,
+		logger:            logger,
+		blocks:            blocks,
+		txPool:            NewTxPool(client, logger),
+		head:              head,
+		evmSigner:         evmSigner,
+		validationOptions: validationOptions,
 	}
 
 	// create COA on the account
@@ -162,33 +191,7 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 		return common.Hash{}, err
 	}
 
-	if err := models.ValidateTransaction(tx); err != nil {
-		return common.Hash{}, err
-	}
-
-	head := &types.Header{
-		Number:   big.NewInt(20_182_324),
-		Time:     uint64(time.Now().Unix()),
-		GasLimit: 30_000_000,
-	}
-	emulatorConfig := emulator.NewConfig(
-		emulator.WithChainID(e.config.EVMNetworkID),
-		emulator.WithBlockNumber(head.Number),
-		emulator.WithBlockTime(head.Time),
-	)
-	signer := emulator.GetSigner(emulatorConfig)
-	opts := &txpool.ValidationOptions{
-		Config: emulatorConfig.ChainConfig,
-		Accept: 0 |
-			1<<types.LegacyTxType |
-			1<<types.AccessListTxType |
-			1<<types.DynamicFeeTxType |
-			1<<types.BlobTxType,
-		MaxSize: models.TxMaxSize,
-		MinTip:  new(big.Int),
-	}
-
-	if err := models.ValidateConsensusRules(tx, head, signer, opts); err != nil {
+	if err := models.ValidateTransaction(tx, e.head, e.evmSigner, e.validationOptions); err != nil {
 		return common.Hash{}, err
 	}
 

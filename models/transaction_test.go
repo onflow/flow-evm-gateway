@@ -399,9 +399,41 @@ func TestValidateTransaction(t *testing.T) {
 		},
 	}
 
+	head := &gethTypes.Header{
+		Number:   big.NewInt(20_182_324),
+		Time:     uint64(time.Now().Unix()),
+		GasLimit: 30_000_000,
+	}
+	emulatorConfig := emulator.NewConfig(
+		emulator.WithChainID(types.FlowEVMPreviewNetChainID),
+		emulator.WithBlockNumber(head.Number),
+		emulator.WithBlockTime(head.Time),
+	)
+	signer := emulator.GetSigner(emulatorConfig)
+	opts := &txpool.ValidationOptions{
+		Config: emulatorConfig.ChainConfig,
+		Accept: 0 |
+			1<<gethTypes.LegacyTxType |
+			1<<gethTypes.AccessListTxType |
+			1<<gethTypes.DynamicFeeTxType |
+			1<<gethTypes.BlobTxType,
+		MaxSize: TxMaxSize,
+		MinTip:  new(big.Int),
+	}
+
+	key, err := crypto.GenerateKey()
+	require.NoError(t, err)
+
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			err := ValidateTransaction(tc.tx)
+			tx, err := gethTypes.SignTx(
+				tc.tx,
+				signer,
+				key,
+			)
+			require.NoError(t, err)
+
+			err = ValidateTransaction(tx, head, signer, opts)
 			if tc.valid {
 				require.NoError(t, err)
 			} else {

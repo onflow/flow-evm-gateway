@@ -219,7 +219,12 @@ func UnmarshalTransaction(value []byte) (Transaction, error) {
 	return TransactionCall{Transaction: tx}, nil
 }
 
-func ValidateTransaction(tx *gethTypes.Transaction) error {
+func ValidateTransaction(
+	tx *gethTypes.Transaction,
+	head *gethTypes.Header,
+	signer gethTypes.Signer,
+	opts *txpool.ValidationOptions,
+) error {
 	txDataLen := len(tx.Data())
 
 	// Contract creation doesn't validate call data, handle first
@@ -268,6 +273,10 @@ func ValidateTransaction(tx *gethTypes.Transaction) error {
 				)
 			}
 		}
+	}
+
+	if err := txpool.ValidateTransaction(tx, head, signer, opts); err != nil {
+		return err
 	}
 
 	return nil
