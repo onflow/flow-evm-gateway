@@ -176,8 +176,8 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 		return fmt.Errorf("failed to commit indexed data: %w", err)
 	}
 
-	// emit events for each block, transaction and logs, only after we commit the data
-	for _ = range blocks {
+	// emit events for each block, transaction and logs, only after we successfully commit the data
+	for range blocks {
 		e.blocksBroadcaster.Publish()
 	}
 
