@@ -32,9 +32,9 @@ func TestReceipts(t *testing.T) {
 		bl := NewBlocks(db)
 		err := bl.InitHeights(config.EmulatorInitCadenceHeight, flow.Identifier{0x1})
 		require.NoError(t, err)
-		err = bl.Store(30, flow.Identifier{0x1}, mocks.NewBlock(10)) // update first and latest height
+		err = bl.Store(30, flow.Identifier{0x1}, mocks.NewBlock(10), nil) // update first and latest height
 		require.NoError(t, err)
-		err = bl.Store(30, flow.Identifier{0x1}, mocks.NewBlock(30)) // update latest
+		err = bl.Store(30, flow.Identifier{0x1}, mocks.NewBlock(30), nil) // update latest
 		require.NoError(t, err)
 
 		suite.Run(t, &storage.ReceiptTestSuite{ReceiptIndexer: NewReceipts(db)})
@@ -67,7 +67,7 @@ func TestBlock(t *testing.T) {
 		err := blocks.InitHeights(config.EmulatorInitCadenceHeight, flow.Identifier{0x1})
 		require.NoError(t, err)
 
-		err = blocks.Store(20, flow.Identifier{0x1}, bl)
+		err = blocks.Store(20, flow.Identifier{0x1}, bl, nil)
 		require.NoError(t, err)
 	})
 
@@ -81,7 +81,7 @@ func TestBlock(t *testing.T) {
 		err := blocks.InitHeights(config.EmulatorInitCadenceHeight, flow.Identifier{0x1})
 		require.NoError(t, err)
 
-		err = blocks.Store(cadenceHeight, cadenceID, bl)
+		err = blocks.Store(cadenceHeight, cadenceID, bl, nil)
 		require.NoError(t, err)
 
 		block, err := blocks.GetByHeight(height)
@@ -108,7 +108,7 @@ func TestBlock(t *testing.T) {
 		blocks := NewBlocks(db)
 		err := blocks.InitHeights(config.EmulatorInitCadenceHeight, flow.Identifier{0x1})
 		require.NoError(t, err)
-		_ = blocks.Store(2, flow.Identifier{0x1}, mocks.NewBlock(1)) // init
+		_ = blocks.Store(2, flow.Identifier{0x1}, mocks.NewBlock(1), nil) // init
 
 		bl, err := blocks.GetByHeight(11)
 		require.ErrorIs(t, err, errors.ErrNotFound)
