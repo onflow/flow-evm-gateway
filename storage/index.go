@@ -14,9 +14,10 @@ import (
 
 type BlockIndexer interface {
 	// Store provided EVM block with the matching Cadence height and Cadence Block ID.
+	// Batcher is required to batch multiple indexer operations, skipped if nil.
 	// Expected errors:
 	// - errors.Duplicate if the block already exists
-	Store(cadenceHeight uint64, cadenceID flow.Identifier, block *types.Block) error
+	Store(cadenceHeight uint64, cadenceID flow.Identifier, block *types.Block, batch Batcher) error
 
 	// GetByHeight returns an EVM block stored by EVM height.
 	// Expected errors:
@@ -44,7 +45,8 @@ type BlockIndexer interface {
 	LatestCadenceHeight() (uint64, error)
 
 	// SetLatestCadenceHeight sets the latest Cadence height.
-	SetLatestCadenceHeight(height uint64) error
+	// Batcher is required to batch multiple indexer operations, skipped if nil.
+	SetLatestCadenceHeight(height uint64, batch Batcher) error
 
 	// GetCadenceHeight returns the Cadence height that matches the
 	// provided EVM height. Each EVM block indexed contains a link
@@ -62,9 +64,10 @@ type BlockIndexer interface {
 
 type ReceiptIndexer interface {
 	// Store provided receipt.
+	// Batcher is required to batch multiple indexer operations, skipped if nil.
 	// Expected errors:
 	// - errors.Duplicate if the block already exists.
-	Store(receipt *models.StorageReceipt) error
+	Store(receipt *models.StorageReceipt, batch Batcher) error
 
 	// GetByTransactionID returns the receipt for the transaction ID.
 	// Expected errors:
@@ -86,9 +89,10 @@ type ReceiptIndexer interface {
 
 type TransactionIndexer interface {
 	// Store provided transaction.
+	// Batcher is required to batch multiple indexer operations, skipped if nil.
 	// Expected errors:
 	// - errors.Duplicate if the transaction with the ID already exists.
-	Store(tx models.Transaction) error
+	Store(tx models.Transaction, batch Batcher) error
 
 	// Get transaction by the ID.
 	// Expected errors:
@@ -98,7 +102,8 @@ type TransactionIndexer interface {
 
 type AccountIndexer interface {
 	// Update account with executed transactions.
-	Update(tx models.Transaction, receipt *models.StorageReceipt) error
+	// Batcher is required to batch multiple indexer operations, skipped if nil.
+	Update(tx models.Transaction, receipt *models.StorageReceipt, batch Batcher) error
 
 	// GetNonce gets an account nonce. If no nonce was indexed it returns 0.
 	// todo add getting nonce at provided block height / hash
@@ -110,7 +115,13 @@ type AccountIndexer interface {
 
 type TraceIndexer interface {
 	// StoreTransaction will index transaction trace by the transaction ID.
-	StoreTransaction(ID common.Hash, trace json.RawMessage) error
+	// Batcher is required to batch multiple indexer operations, skipped if nil.
+	StoreTransaction(ID common.Hash, trace json.RawMessage, batch Batcher) error
 	// GetTransaction will retrieve transaction trace by the transaction ID.
 	GetTransaction(ID common.Hash) (json.RawMessage, error)
+}
+
+type Batcher interface {
+	Commit() error
+	Close() error
 }
