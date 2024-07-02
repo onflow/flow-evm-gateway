@@ -601,7 +601,7 @@ func (b *BlockChainAPI) GetTransactionCount(
 		return handleError[*hexutil.Uint64](b.logger, err)
 	}
 
-	nonce, err := b.accounts.GetNonce(&address)
+	nonce, err := b.accounts.GetNonce(address)
 	if err != nil {
 		b.logger.Error().Err(err).Msg("get nonce failed")
 		return handleError[*hexutil.Uint64](b.logger, errs.ErrInternal)

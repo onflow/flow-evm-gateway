@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	pebbleDB "github.com/cockroachdb/pebble"
 	"github.com/onflow/flow-go-sdk"
 	broadcast "github.com/onflow/flow-go/engine"
 	"github.com/onflow/flow-go/fvm/evm/types"
@@ -73,8 +74,8 @@ func TestTraceIngestion(t *testing.T) {
 
 		stored := make(chan gethCommon.Hash, len(hashes))
 		trace.
-			On("StoreTransaction", mock.Anything, mock.Anything).
-			Return(func(ID gethCommon.Hash, trace json.RawMessage) error {
+			On("StoreTransaction", mock.Anything, mock.Anything, mock.Anything).
+			Return(func(ID gethCommon.Hash, trace json.RawMessage, _ *pebbleDB.Batch) error {
 				require.Equal(t, txTrace(ID), trace)
 				stored <- ID
 				return nil
@@ -172,8 +173,8 @@ func TestTraceIngestion(t *testing.T) {
 
 		stored := make(chan gethCommon.Hash, blockCount*txCount)
 		trace.
-			On("StoreTransaction", mock.Anything, mock.Anything).
-			Return(func(ID gethCommon.Hash, trace json.RawMessage) error {
+			On("StoreTransaction", mock.Anything, mock.Anything, mock.Anything).
+			Return(func(ID gethCommon.Hash, trace json.RawMessage, _ *pebbleDB.Batch) error {
 				require.Equal(t, txTrace(ID), trace)
 				stored <- ID
 				return nil

@@ -38,7 +38,7 @@ func NewReceipts(store *Storage) *Receipts {
 // - receipt transaction ID => block height bytes
 // - receipt block height => list of encoded receipts (1+ per block)
 // - receipt block height => list of bloom filters (1+ per block)
-func (r *Receipts) Store(receipt *models.StorageReceipt) error {
+func (r *Receipts) Store(receipt *models.StorageReceipt, batch *pebble.Batch) error {
 	r.mux.Lock()
 	defer r.mux.Unlock()
 
@@ -63,9 +63,6 @@ func (r *Receipts) Store(receipt *models.StorageReceipt) error {
 	receipts = append(receipts, receipt)
 	blooms = append(blooms, &receipt.Bloom)
 
-	batch := r.store.newBatch()
-	defer batch.Close()
-
 	val, err := rlp.EncodeToBytes(receipts)
 	if err != nil {
 		return err
@@ -88,10 +85,6 @@ func (r *Receipts) Store(receipt *models.StorageReceipt) error {
 
 	if err := r.store.set(bloomHeightKey, height, bloomVal, batch); err != nil {
 		return fmt.Errorf("failed to store bloom height: %w", err)
-	}
-
-	if err := batch.Commit(pebble.Sync); err != nil {
-		return fmt.Errorf("failed to commit receipt batch: %w", err)
 	}
 
 	return nil

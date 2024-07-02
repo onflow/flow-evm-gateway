@@ -6,7 +6,10 @@ import (
 	"math/big"
 	"testing"
 
+	pebbleDB "github.com/cockroachdb/pebble"
+
 	"github.com/onflow/flow-evm-gateway/services/ingestion/mocks"
+	"github.com/onflow/flow-evm-gateway/storage/pebble"
 
 	"github.com/onflow/cadence"
 	"github.com/onflow/cadence/runtime/common"
@@ -32,6 +35,9 @@ func TestSerialBlockIngestion(t *testing.T) {
 		transactions := &storageMock.TransactionIndexer{}
 		latestHeight := uint64(10)
 
+		store, err := pebble.New(t.TempDir(), zerolog.Nop())
+		require.NoError(t, err)
+
 		blocks := &storageMock.BlockIndexer{}
 		blocks.
 			On("LatestCadenceHeight").
@@ -56,6 +62,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 
 		engine := NewEventIngestionEngine(
 			subscriber,
+			store,
 			blocks,
 			receipts,
 			transactions,
@@ -81,8 +88,8 @@ func TestSerialBlockIngestion(t *testing.T) {
 			require.NoError(t, err)
 
 			blocks.
-				On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*types.Block")).
-				Return(func(h uint64, id flow.Identifier, storeBlock *types.Block) error {
+				On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*types.Block"), mock.Anything).
+				Return(func(h uint64, id flow.Identifier, storeBlock *types.Block, _ *pebbleDB.Batch) error {
 					assert.Equal(t, block, storeBlock)
 					assert.Equal(t, cadenceHeight, h)
 					storedCounter++
@@ -109,6 +116,9 @@ func TestSerialBlockIngestion(t *testing.T) {
 		transactions := &storageMock.TransactionIndexer{}
 		latestHeight := uint64(10)
 
+		store, err := pebble.New(t.TempDir(), zerolog.Nop())
+		require.NoError(t, err)
+
 		blocks := &storageMock.BlockIndexer{}
 		blocks.
 			On("LatestCadenceHeight").
@@ -132,6 +142,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 
 		engine := NewEventIngestionEngine(
 			subscriber,
+			store,
 			blocks,
 			receipts,
 			transactions,
@@ -157,8 +168,8 @@ func TestSerialBlockIngestion(t *testing.T) {
 		require.NoError(t, err)
 
 		blocks.
-			On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*types.Block")).
-			Return(func(h uint64, id flow.Identifier, storeBlock *types.Block) error {
+			On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*types.Block"), mock.Anything).
+			Return(func(h uint64, id flow.Identifier, storeBlock *types.Block, _ *pebbleDB.Batch) error {
 				assert.Equal(t, block, storeBlock)
 				assert.Equal(t, cadenceHeight, h)
 				return nil
@@ -203,6 +214,9 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		nextHeight := latestHeight + 1
 		blockID := flow.Identifier{0x01}
 
+		store, err := pebble.New(t.TempDir(), zerolog.Nop())
+		require.NoError(t, err)
+
 		blocks := &storageMock.BlockIndexer{}
 		blocks.
 			On("LatestCadenceHeight").
@@ -212,16 +226,16 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			Once() // make sure this isn't called multiple times
 
 		blocks.
-			On("SetLatestCadenceHeight", mock.AnythingOfType("uint64")).
-			Return(func(h uint64) error {
+			On("SetLatestCadenceHeight", mock.AnythingOfType("uint64"), mock.Anything).
+			Return(func(h uint64, _ *pebbleDB.Batch) error {
 				assert.Equal(t, nextHeight, h)
 				return nil
 			})
 
 		accounts := &storageMock.AccountIndexer{}
 		accounts.
-			On("Update", mock.AnythingOfType("models.TransactionCall"), mock.AnythingOfType("*models.StorageReceipt")).
-			Return(func(tx models.Transaction, receipt *models.StorageReceipt) error { return nil })
+			On("Update", mock.AnythingOfType("models.TransactionCall"), mock.AnythingOfType("*models.StorageReceipt"), mock.Anything).
+			Return(func(tx models.Transaction, receipt *models.StorageReceipt, _ *pebbleDB.Batch) error { return nil })
 
 		eventsChan := make(chan models.BlockEvents)
 		subscriber := &mocks.EventSubscriber{}
@@ -238,6 +252,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 
 		engine := NewEventIngestionEngine(
 			subscriber,
+			store,
 			blocks,
 			receipts,
 			transactions,
@@ -256,8 +271,8 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		}()
 
 		blocks.
-			On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*types.Block")).
-			Return(func(h uint64, id flow.Identifier, storeBlock *types.Block) error {
+			On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*types.Block"), mock.Anything).
+			Return(func(h uint64, id flow.Identifier, storeBlock *types.Block, _ *pebbleDB.Batch) error {
 				assert.Equal(t, block, storeBlock)
 				assert.Equal(t, blockID, id)
 				assert.Equal(t, nextHeight, h)
@@ -266,16 +281,16 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			Once()
 
 		transactions.
-			On("Store", mock.AnythingOfType("models.TransactionCall")).
-			Return(func(tx models.Transaction) error {
+			On("Store", mock.AnythingOfType("models.TransactionCall"), mock.Anything).
+			Return(func(tx models.Transaction, _ *pebbleDB.Batch) error {
 				assert.Equal(t, transaction.Hash(), tx.Hash()) // if hashes are equal tx is equal
 				return nil
 			}).
 			Once()
 
 		receipts.
-			On("Store", mock.AnythingOfType("*models.StorageReceipt")).
-			Return(func(rcp *models.StorageReceipt) error {
+			On("Store", mock.AnythingOfType("*models.StorageReceipt"), mock.Anything).
+			Return(func(rcp *models.StorageReceipt, _ *pebbleDB.Batch) error {
 				assert.Len(t, rcp.Logs, len(result.Logs))
 				assert.Equal(t, result.DeployedContractAddress.ToCommon().String(), rcp.ContractAddress.String())
 				return nil
@@ -304,6 +319,9 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		latestHeight := uint64(10)
 		nextHeight := latestHeight + 1
 
+		store, err := pebble.New(t.TempDir(), zerolog.Nop())
+		require.NoError(t, err)
+
 		blocks := &storageMock.BlockIndexer{}
 		blocks.
 			On("LatestCadenceHeight").
@@ -315,8 +333,8 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 
 		accounts := &storageMock.AccountIndexer{}
 		accounts.
-			On("Update", mock.AnythingOfType("models.TransactionCall"), mock.AnythingOfType("*models.StorageReceipt")).
-			Return(func(tx models.Transaction, receipt *models.StorageReceipt) error { return nil })
+			On("Update", mock.AnythingOfType("models.TransactionCall"), mock.AnythingOfType("*models.StorageReceipt"), mock.Anything).
+			Return(func(tx models.Transaction, receipt *models.StorageReceipt, _ *pebbleDB.Batch) error { return nil })
 
 		eventsChan := make(chan models.BlockEvents)
 		subscriber := &mocks.EventSubscriber{}
@@ -333,6 +351,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 
 		engine := NewEventIngestionEngine(
 			subscriber,
+			store,
 			blocks,
 			receipts,
 			transactions,
@@ -352,24 +371,24 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 
 		blocksFirst := false // flag indicating we stored block first
 		blocks.
-			On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*types.Block")).
-			Return(func(h uint64, id flow.Identifier, storeBlock *types.Block) error {
+			On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*types.Block"), mock.Anything).
+			Return(func(h uint64, id flow.Identifier, storeBlock *types.Block, _ *pebbleDB.Batch) error {
 				blocksFirst = true
 				return nil
 			}).
 			Once()
 
 		transactions.
-			On("Store", mock.AnythingOfType("models.TransactionCall")).
-			Return(func(tx models.Transaction) error {
+			On("Store", mock.AnythingOfType("models.TransactionCall"), mock.Anything).
+			Return(func(tx models.Transaction, _ *pebbleDB.Batch) error {
 				require.True(t, blocksFirst)
 				return nil
 			}).
 			Once()
 
 		receipts.
-			On("Store", mock.AnythingOfType("*models.StorageReceipt")).
-			Return(func(rcp *models.StorageReceipt) error {
+			On("Store", mock.AnythingOfType("*models.StorageReceipt"), mock.Anything).
+			Return(func(rcp *models.StorageReceipt, _ *pebbleDB.Batch) error {
 				require.True(t, blocksFirst)
 				return nil
 			}).
@@ -399,6 +418,9 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		transactions := &storageMock.TransactionIndexer{}
 		latestCadenceHeight := uint64(0)
 
+		store, err := pebble.New(t.TempDir(), zerolog.Nop())
+		require.NoError(t, err)
+
 		blocks := &storageMock.BlockIndexer{}
 		blocks.
 			On("LatestCadenceHeight").
@@ -409,8 +431,8 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 
 		accounts := &storageMock.AccountIndexer{}
 		accounts.
-			On("Update", mock.Anything, mock.AnythingOfType("*models.StorageReceipt")).
-			Return(func(t models.Transaction, r *models.StorageReceipt) error { return nil })
+			On("Update", mock.Anything, mock.AnythingOfType("*models.StorageReceipt"), mock.Anything).
+			Return(func(t models.Transaction, r *models.StorageReceipt, _ *pebbleDB.Batch) error { return nil })
 
 		eventsChan := make(chan models.BlockEvents)
 		subscriber := &mocks.EventSubscriber{}
@@ -424,6 +446,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 
 		engine := NewEventIngestionEngine(
 			subscriber,
+			store,
 			blocks,
 			receipts,
 			transactions,
@@ -453,8 +476,8 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 
 			// add new block for each height
 			blocks.
-				On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*types.Block")).
-				Return(func(h uint64, id flow.Identifier, storeBlock *types.Block) error {
+				On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*types.Block"), mock.Anything).
+				Return(func(h uint64, id flow.Identifier, storeBlock *types.Block, _ *pebbleDB.Batch) error {
 					assert.Equal(t, block, storeBlock)
 					assert.Equal(t, evmHeight, block.Height)
 					assert.Equal(t, latestCadenceHeight+1, h)
@@ -474,8 +497,8 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 
 			// add a single transaction for each block
 			transactions.
-				On("Store", mock.AnythingOfType("models.TransactionCall")).
-				Return(func(tx models.Transaction) error {
+				On("Store", mock.AnythingOfType("models.TransactionCall"), mock.Anything).
+				Return(func(tx models.Transaction, _ *pebbleDB.Batch) error {
 					assert.Equal(t, transaction.Hash(), tx.Hash()) // if hashes are equal tx is equal
 					require.True(t, blockIndexedFirst)
 					txsStored++
@@ -484,8 +507,8 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 				Once()
 
 			receipts.
-				On("Store", mock.AnythingOfType("*models.StorageReceipt")).
-				Return(func(rcp *models.StorageReceipt) error { return nil }).
+				On("Store", mock.AnythingOfType("*models.StorageReceipt"), mock.Anything).
+				Return(func(rcp *models.StorageReceipt, _ *pebbleDB.Batch) error { return nil }).
 				Once()
 
 			events = append(events, flow.Event{

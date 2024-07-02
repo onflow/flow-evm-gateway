@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/go-ethereum/common"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
+
+	"github.com/onflow/flow-evm-gateway/models"
 )
 
 func NewBlock(height uint64) *types.Block {

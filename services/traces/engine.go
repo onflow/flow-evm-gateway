@@ -112,7 +112,7 @@ func (e *Engine) indexBlockTraces(evmBlock *types.Block, cadenceBlockID flow.Ide
 					return retry.RetryableError(err)
 				}
 
-				return e.traces.StoreTransaction(h, trace)
+				return e.traces.StoreTransaction(h, trace, nil)
 			})
 
 			if err != nil {

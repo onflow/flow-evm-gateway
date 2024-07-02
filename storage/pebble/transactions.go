@@ -3,6 +3,7 @@ package pebble
 import (
 	"sync"
 
+	"github.com/cockroachdb/pebble"
 	"github.com/onflow/go-ethereum/common"
 
 	"github.com/onflow/flow-evm-gateway/models"
@@ -23,7 +24,7 @@ func NewTransactions(store *Storage) *Transactions {
 	}
 }
 
-func (t *Transactions) Store(tx models.Transaction) error {
+func (t *Transactions) Store(tx models.Transaction, batch *pebble.Batch) error {
 	t.mux.Lock()
 	defer t.mux.Unlock()
 
@@ -34,7 +35,7 @@ func (t *Transactions) Store(tx models.Transaction) error {
 
 	txHash := tx.Hash()
 
-	return t.store.set(txIDKey, txHash.Bytes(), val, nil)
+	return t.store.set(txIDKey, txHash.Bytes(), val, batch)
 }
 
 func (t *Transactions) Get(ID common.Hash) (models.Transaction, error) {
