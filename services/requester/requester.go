@@ -171,15 +171,14 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 		Time:     uint64(time.Now().Unix()),
 		GasLimit: 30_000_000,
 	}
-	chainConfig := emulator.DefaultChainConfig
-	chainConfig.ChainID = e.config.EVMNetworkID
-	signer := types.MakeSigner(
-		chainConfig,
-		head.Number,
-		head.Time,
+	emulatorConfig := emulator.NewConfig(
+		emulator.WithChainID(e.config.EVMNetworkID),
+		emulator.WithBlockNumber(head.Number),
+		emulator.WithBlockTime(head.Time),
 	)
+	signer := emulator.GetSigner(emulatorConfig)
 	opts := &txpool.ValidationOptions{
-		Config: chainConfig,
+		Config: emulatorConfig.ChainConfig,
 		Accept: 0 |
 			1<<types.LegacyTxType |
 			1<<types.AccessListTxType |
