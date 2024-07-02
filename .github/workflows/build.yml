@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - '*'
+  pull_request:
+    branches: [main]
 
 env:
   DOCKER_IMAGE_URL: ${{ vars.REPO_DOCKER_IMAGE_URL }}:${{ github.sha }}
@@ -37,4 +39,3 @@ jobs:
         run: |-
           gcloud auth configure-docker ${{ vars.GAR_LOCATION }}-docker.pkg.dev
           docker build -t ${{ env.DOCKER_IMAGE_URL }} --build-arg GATEWAY_VERSION=$(git describe --tags --abbrev=0 2>/dev/null) --file Dockerfile .
-          docker push ${{ env.DOCKER_IMAGE_URL }}
