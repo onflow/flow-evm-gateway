@@ -281,12 +281,3 @@ func ValidateTransaction(
 
 	return nil
 }
-
-func ValidateConsensusRules(
-	tx *gethTypes.Transaction,
-	head *gethTypes.Header,
-	signer gethTypes.Signer,
-	opts *txpool.ValidationOptions,
-) error {
-	return txpool.ValidateTransaction(tx, head, signer, opts)
-}

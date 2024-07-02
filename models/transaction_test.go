@@ -447,21 +447,27 @@ func TestValidateTransaction(t *testing.T) {
 
 func TestValidateConsensusRules(t *testing.T) {
 
-	chainConfig := emulator.DefaultChainConfig
-	signer := emulator.GetDefaultSigner()
+	head := &gethTypes.Header{
+		Number:   big.NewInt(20_182_324),
+		Time:     uint64(time.Now().Unix()),
+		GasLimit: 30_000_000,
+	}
+	emulatorConfig := emulator.NewConfig(
+		emulator.WithChainID(types.FlowEVMPreviewNetChainID),
+		emulator.WithBlockNumber(head.Number),
+		emulator.WithBlockTime(head.Time),
+	)
+	signer := emulator.GetSigner(emulatorConfig)
+	chainConfig := emulatorConfig.ChainConfig
 	opts := &txpool.ValidationOptions{
 		Config: chainConfig,
 		Accept: 0 |
 			1<<gethTypes.LegacyTxType |
 			1<<gethTypes.AccessListTxType |
-			1<<gethTypes.DynamicFeeTxType,
+			1<<gethTypes.DynamicFeeTxType |
+			1<<gethTypes.BlobTxType,
 		MaxSize: TxMaxSize,
 		MinTip:  new(big.Int),
-	}
-	head := &gethTypes.Header{
-		Number:   big.NewInt(20_182_324),
-		Time:     uint64(time.Now().Unix()),
-		GasLimit: 30_000_000,
 	}
 
 	key, err := crypto.GenerateKey()
@@ -480,7 +486,7 @@ func TestValidateConsensusRules(t *testing.T) {
 
 		tx := makeSignedTx(53_000, 0, key, signer)
 
-		err = ValidateConsensusRules(tx, head, signer, opts)
+		err = txpool.ValidateTransaction(tx, head, signer, opts)
 
 		require.Error(t, err)
 		assert.ErrorContains(
@@ -508,19 +514,19 @@ func TestValidateConsensusRules(t *testing.T) {
 		// Try adding a transaction with maximal allowed size
 		tx := makeSignedTx(gasLimit, dataSize, key, signer)
 
-		err = ValidateConsensusRules(tx, head, signer, opts)
+		err = txpool.ValidateTransaction(tx, head, signer, opts)
 		require.NoError(t, err)
 
 		// Try adding a transaction with random allowed size
 		tx = makeSignedTx(gasLimit, uint64(rand.Intn(int(dataSize))), key, signer)
 
-		err = ValidateConsensusRules(tx, head, signer, opts)
+		err = txpool.ValidateTransaction(tx, head, signer, opts)
 		require.NoError(t, err)
 
 		// Try adding a transaction of minimal not allowed size
 		tx = makeSignedTx(gasLimit, TxMaxSize, key, signer)
 
-		err = ValidateConsensusRules(tx, head, signer, opts)
+		err = txpool.ValidateTransaction(tx, head, signer, opts)
 
 		require.Error(t, err)
 		assert.ErrorContains(
@@ -533,7 +539,7 @@ func TestValidateConsensusRules(t *testing.T) {
 		txSize := dataSize + 1 + uint64(rand.Intn(10*TxMaxSize))
 		tx = makeSignedTx(gasLimit, txSize, key, signer)
 
-		err = ValidateConsensusRules(tx, head, signer, opts)
+		err = txpool.ValidateTransaction(tx, head, signer, opts)
 
 		require.Error(t, err)
 		assert.ErrorContains(
@@ -550,7 +556,7 @@ func TestValidateConsensusRules(t *testing.T) {
 
 		tx := dynamicFeeTx(100, big.NewInt(1), big.NewInt(2), key, signer)
 
-		err = ValidateConsensusRules(tx, head, signer, opts)
+		err = txpool.ValidateTransaction(tx, head, signer, opts)
 
 		require.Error(t, err)
 		assert.ErrorContains(
@@ -564,7 +570,7 @@ func TestValidateConsensusRules(t *testing.T) {
 		chainConfig.LondonBlock = big.NewInt(19_182_524)
 		head.Number = big.NewInt(18_182_324)
 
-		err = ValidateConsensusRules(tx, head, signer, opts)
+		err = txpool.ValidateTransaction(tx, head, signer, opts)
 
 		require.Error(t, err)
 		assert.ErrorContains(
@@ -604,7 +610,7 @@ func TestValidateConsensusRules(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		err = ValidateConsensusRules(tx, head, signer, opts)
+		err = txpool.ValidateTransaction(tx, head, signer, opts)
 
 		require.Error(t, err)
 		assert.ErrorContains(
@@ -631,7 +637,7 @@ func TestValidateConsensusRules(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		err = ValidateConsensusRules(tx, head, signer, opts)
+		err = txpool.ValidateTransaction(tx, head, signer, opts)
 
 		require.Error(t, err)
 		assert.ErrorContains(
@@ -645,7 +651,7 @@ func TestValidateConsensusRules(t *testing.T) {
 		head.GasLimit = 5_000_000
 		tx := makeSignedTx(7_500_000, 5_000, key, signer)
 
-		err = ValidateConsensusRules(tx, head, signer, opts)
+		err = txpool.ValidateTransaction(tx, head, signer, opts)
 
 		require.Error(t, err)
 		assert.ErrorContains(
@@ -664,7 +670,7 @@ func TestValidateConsensusRules(t *testing.T) {
 
 		tx := dynamicFeeTx(100, big.NewInt(1), veryBigNumber, key, signer)
 
-		err = ValidateConsensusRules(tx, head, signer, opts)
+		err = txpool.ValidateTransaction(tx, head, signer, opts)
 
 		require.Error(t, err)
 		assert.ErrorContains(
@@ -675,7 +681,7 @@ func TestValidateConsensusRules(t *testing.T) {
 
 		tx2 := dynamicFeeTx(100, veryBigNumber, big.NewInt(1), key, signer)
 
-		err = ValidateConsensusRules(tx2, head, signer, opts)
+		err = txpool.ValidateTransaction(tx2, head, signer, opts)
 
 		require.Error(t, err)
 		assert.ErrorContains(
@@ -688,7 +694,7 @@ func TestValidateConsensusRules(t *testing.T) {
 	t.Run("gas tip above gas fee cap", func(t *testing.T) {
 		tx := dynamicFeeTx(100, big.NewInt(1), big.NewInt(2), key, signer)
 
-		err = ValidateConsensusRules(tx, head, signer, opts)
+		err = txpool.ValidateTransaction(tx, head, signer, opts)
 
 		require.Error(t, err)
 		assert.ErrorContains(
@@ -701,7 +707,7 @@ func TestValidateConsensusRules(t *testing.T) {
 	t.Run("invalid sender", func(t *testing.T) {
 		tx := makeSignedTx(55_000, 5_000, key, signer)
 
-		err = ValidateConsensusRules(tx, head, gethTypes.FrontierSigner{}, opts)
+		err = txpool.ValidateTransaction(tx, head, gethTypes.FrontierSigner{}, opts)
 
 		require.Error(t, err)
 		assert.ErrorContains(
@@ -715,7 +721,7 @@ func TestValidateConsensusRules(t *testing.T) {
 		gasLimit := uint64(100)
 		tx := makeSignedTx(gasLimit, 0, key, signer)
 
-		err = ValidateConsensusRules(tx, head, signer, opts)
+		err = txpool.ValidateTransaction(tx, head, signer, opts)
 
 		require.Error(t, err)
 		assert.ErrorContains(
