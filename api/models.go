@@ -7,7 +7,6 @@ import (
 	"math/big"
 
 	errs "github.com/onflow/flow-evm-gateway/api/errors"
-	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/models"
 
 	"github.com/onflow/go-ethereum/common"
@@ -169,7 +168,7 @@ type Transaction struct {
 func NewTransaction(
 	tx models.Transaction,
 	receipt models.StorageReceipt,
-	config config.Config,
+	networkID *big.Int,
 ) (*Transaction, error) {
 	txHash := tx.Hash()
 
@@ -205,7 +204,8 @@ func NewTransaction(
 		BlockNumber:      (*hexutil.Big)(receipt.BlockNumber),
 		TransactionIndex: (*hexutil.Uint64)(&index),
 	}
-	chainID := config.EVMNetworkID
+
+	chainID := (*hexutil.Big)(networkID)
 
 	switch tx.Type() {
 	case types.LegacyTxType:
