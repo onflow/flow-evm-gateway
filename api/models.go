@@ -165,16 +165,31 @@ type Transaction struct {
 	YParity             *hexutil.Uint64          `json:"yParity,omitempty"`
 }
 
-func NewTransaction(
+func NewTransactionResult(
 	tx models.Transaction,
 	receipt models.StorageReceipt,
 	networkID *big.Int,
 ) (*Transaction, error) {
-	txHash := tx.Hash()
+	res, err := NewTransaction(tx, networkID)
+	if err != nil {
+		return nil, err
+	}
 
+	index := uint64(receipt.TransactionIndex)
+	res.TransactionIndex = (*hexutil.Uint64)(&index)
+	res.BlockHash = &receipt.BlockHash
+	res.BlockNumber = (*hexutil.Big)(receipt.BlockNumber)
+
+	return res, nil
+}
+
+func NewTransaction(
+	tx models.Transaction,
+	networkID *big.Int,
+) (*Transaction, error) {
 	f, err := tx.From()
 	if err != nil {
-		return nil, errs.ErrInternal
+		return nil, errors.Join(fmt.Errorf("failed to get from value: %w", err), errs.ErrInternal)
 	}
 	from := common.NewMixedcaseAddress(f)
 
@@ -185,25 +200,21 @@ func NewTransaction(
 	}
 
 	v, r, s := tx.RawSignatureValues()
-	index := uint64(receipt.TransactionIndex)
 
 	result := &Transaction{
-		Type:             hexutil.Uint64(tx.Type()),
-		From:             from,
-		Gas:              hexutil.Uint64(tx.Gas()),
-		GasPrice:         (*hexutil.Big)(tx.GasPrice()),
-		Hash:             txHash,
-		Input:            tx.Data(),
-		Nonce:            hexutil.Uint64(tx.Nonce()),
-		To:               to,
-		Value:            (*hexutil.Big)(tx.Value()),
-		V:                (*hexutil.Big)(v),
-		R:                (*hexutil.Big)(r),
-		S:                (*hexutil.Big)(s),
-		BlockHash:        &receipt.BlockHash,
-		BlockNumber:      (*hexutil.Big)(receipt.BlockNumber),
-		TransactionIndex: (*hexutil.Uint64)(&index),
-		ChainID:          (*hexutil.Big)(networkID),
+		Type:     hexutil.Uint64(tx.Type()),
+		From:     from,
+		Gas:      hexutil.Uint64(tx.Gas()),
+		GasPrice: (*hexutil.Big)(tx.GasPrice()),
+		Hash:     tx.Hash(),
+		Input:    tx.Data(),
+		Nonce:    hexutil.Uint64(tx.Nonce()),
+		To:       to,
+		Value:    (*hexutil.Big)(tx.Value()),
+		V:        (*hexutil.Big)(v),
+		R:        (*hexutil.Big)(r),
+		S:        (*hexutil.Big)(s),
+		ChainID:  (*hexutil.Big)(networkID),
 	}
 
 	if tx.Type() > types.LegacyTxType {
