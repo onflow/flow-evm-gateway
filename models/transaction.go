@@ -64,7 +64,7 @@ func (dc DirectCall) RawSignatureValues() (
 	r *big.Int,
 	s *big.Int,
 ) {
-	return big.NewInt(0), big.NewInt(0), big.NewInt(0)
+	return dc.Transaction().RawSignatureValues()
 }
 
 func (dc DirectCall) From() (common.Address, error) {
