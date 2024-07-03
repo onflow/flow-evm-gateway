@@ -203,41 +203,23 @@ func NewTransaction(
 		BlockHash:        &receipt.BlockHash,
 		BlockNumber:      (*hexutil.Big)(receipt.BlockNumber),
 		TransactionIndex: (*hexutil.Uint64)(&index),
+		ChainID:          (*hexutil.Big)(networkID),
 	}
 
-	chainID := (*hexutil.Big)(networkID)
+	if tx.Type() > types.LegacyTxType {
+		al := tx.AccessList()
+		yparity := hexutil.Uint64(v.Sign())
+		result.Accesses = &al
+		result.YParity = &yparity
+	}
 
-	switch tx.Type() {
-	case types.LegacyTxType:
-		result.ChainID = (*hexutil.Big)(chainID)
-	case types.AccessListTxType:
-		al := tx.AccessList()
-		yparity := hexutil.Uint64(v.Sign())
-		result.Accesses = &al
-		result.ChainID = (*hexutil.Big)(chainID)
-		result.YParity = &yparity
-	case types.DynamicFeeTxType:
-		al := tx.AccessList()
-		yparity := hexutil.Uint64(v.Sign())
-		result.Accesses = &al
-		result.ChainID = (*hexutil.Big)(chainID)
-		result.YParity = &yparity
+	if tx.Type() > types.AccessListTxType {
 		result.GasFeeCap = (*hexutil.Big)(tx.GasFeeCap())
 		result.GasTipCap = (*hexutil.Big)(tx.GasTipCap())
-		// Since BaseFee is `0`, this is the effective gas price
-		// the sender is willing to pay.
-		result.GasPrice = (*hexutil.Big)(tx.GasFeeCap())
-	case types.BlobTxType:
-		al := tx.AccessList()
-		yparity := hexutil.Uint64(v.Sign())
-		result.Accesses = &al
-		result.ChainID = (*hexutil.Big)(chainID)
-		result.YParity = &yparity
-		result.GasFeeCap = (*hexutil.Big)(tx.GasFeeCap())
-		result.GasTipCap = (*hexutil.Big)(tx.GasTipCap())
-		// Since BaseFee is `0`, this is the effective gas price
-		// the sender is willing to pay.
-		result.GasPrice = (*hexutil.Big)(tx.GasFeeCap())
+		result.GasPrice = (*hexutil.Big)(tx.GasFeeCap()) // Since BaseFee is `0`, this is the effective gas price the sender is willing to pay.
+	}
+
+	if tx.Type() > types.DynamicFeeTxType {
 		result.MaxFeePerBlobGas = (*hexutil.Big)(tx.BlobGasFeeCap())
 		result.BlobVersionedHashes = tx.BlobHashes()
 	}
