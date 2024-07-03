@@ -139,9 +139,9 @@ func Test_DecodeDirectCall(t *testing.T) {
 		gethCommon.HexToHash("0xb055748f36d6bbe99a7ab5e45202b5c095ceda985dec0cc2a8747fd88c80c8c9"),
 		txHash,
 	)
-	assert.Equal(t, big.NewInt(0), v)
-	assert.Equal(t, big.NewInt(0), r)
-	assert.Equal(t, big.NewInt(0), s)
+	assert.Equal(t, big.NewInt(255), v)
+	assert.Equal(t, new(big.Int).SetBytes(from.Bytes()), r)
+	assert.Equal(t, big.NewInt(1), s)
 	assert.Equal(
 		t,
 		gethCommon.HexToAddress("0x0000000000000000000000010000000000000000"),
@@ -246,9 +246,9 @@ func Test_UnmarshalTransaction(t *testing.T) {
 			gethCommon.HexToHash("0xb055748f36d6bbe99a7ab5e45202b5c095ceda985dec0cc2a8747fd88c80c8c9"),
 			txHash,
 		)
-		assert.Equal(t, big.NewInt(0), v)
-		assert.Equal(t, big.NewInt(0), r)
-		assert.Equal(t, big.NewInt(0), s)
+		assert.Equal(t, big.NewInt(255), v)
+		assert.Equal(t, new(big.Int).SetBytes(from.Bytes()), r)
+		assert.Equal(t, big.NewInt(1), s)
 		assert.Equal(
 			t,
 			gethCommon.HexToAddress("0x0000000000000000000000010000000000000000"),
