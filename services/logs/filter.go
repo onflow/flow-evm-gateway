@@ -50,7 +50,7 @@ func NewFilterCriteria(addresses []common.Address, topics [][]common.Hash) (*Fil
 // start and end block height. The start must be strictly smaller or equal than end value.
 type RangeFilter struct {
 	start, end *big.Int
-	criteria   FilterCriteria
+	criteria   *FilterCriteria
 	receipts   storage.ReceiptIndexer
 }
 
@@ -71,7 +71,7 @@ func NewRangeFilter(
 	return &RangeFilter{
 		start:    &start,
 		end:      &end,
-		criteria: criteria,
+		criteria: &criteria,
 		receipts: receipts,
 	}, nil
 }
@@ -100,7 +100,7 @@ func (r *RangeFilter) Match() ([]*gethTypes.Log, error) {
 
 		for _, receipt := range receipts {
 			for _, log := range receipt.Logs {
-				if exactMatch(log, r.criteria) {
+				if ExactMatch(log, r.criteria) {
 					logs = append(logs, log)
 				}
 			}
@@ -116,7 +116,7 @@ func (r *RangeFilter) Match() ([]*gethTypes.Log, error) {
 // by the provided block ID.
 type IDFilter struct {
 	id       common.Hash
-	criteria FilterCriteria
+	criteria *FilterCriteria
 	blocks   storage.BlockIndexer
 	receipts storage.ReceiptIndexer
 }
@@ -129,7 +129,7 @@ func NewIDFilter(
 ) *IDFilter {
 	return &IDFilter{
 		id:       id,
-		criteria: criteria,
+		criteria: &criteria,
 		blocks:   blocks,
 		receipts: receipts,
 	}
@@ -149,7 +149,7 @@ func (i *IDFilter) Match() ([]*gethTypes.Log, error) {
 	logs := make([]*gethTypes.Log, 0)
 	for _, receipt := range receipts {
 		for _, log := range receipt.Logs {
-			if exactMatch(log, i.criteria) {
+			if ExactMatch(log, i.criteria) {
 				logs = append(logs, log)
 			}
 		}
@@ -158,8 +158,8 @@ func (i *IDFilter) Match() ([]*gethTypes.Log, error) {
 	return logs, nil
 }
 
-// exactMatch checks the topic and address values of the log match the filter exactly.
-func exactMatch(log *gethTypes.Log, criteria FilterCriteria) bool {
+// ExactMatch checks the topic and address values of the log match the filter exactly.
+func ExactMatch(log *gethTypes.Log, criteria *FilterCriteria) bool {
 	// check criteria doesn't have more topics than the log, but it can have less due to wildcards
 	if len(criteria.Topics) > len(log.Topics) {
 		return false
@@ -189,7 +189,7 @@ func exactMatch(log *gethTypes.Log, criteria FilterCriteria) bool {
 // If true is returned we should further check against the exactMatch to really make sure the log is matched.
 //
 // source: https://github.com/ethereum/go-ethereum/blob/8d1db1601d3a9e4fd067558a49db6f0b879c9b48/eth/filters/filter.go#L395
-func bloomMatch(bloom gethTypes.Bloom, criteria FilterCriteria) bool {
+func bloomMatch(bloom gethTypes.Bloom, criteria *FilterCriteria) bool {
 	if len(criteria.Addresses) > 0 {
 		var included bool
 		for _, addr := range criteria.Addresses {
