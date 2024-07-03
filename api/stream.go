@@ -4,19 +4,22 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
 	"reflect"
 
 	"github.com/onflow/flow-go/engine"
 	"github.com/onflow/flow-go/engine/access/subscription"
+	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/go-ethereum/common"
 	"github.com/onflow/go-ethereum/common/hexutil"
+	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/onflow/go-ethereum/eth/filters"
 	"github.com/onflow/go-ethereum/rpc"
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-limiter"
 
-	errs "github.com/onflow/flow-evm-gateway/api/errors"
 	"github.com/onflow/flow-evm-gateway/config"
+	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/services/logs"
 	"github.com/onflow/flow-evm-gateway/storage"
 	storageErrs "github.com/onflow/flow-evm-gateway/storage/errors"
@@ -36,6 +39,7 @@ type StreamAPI struct {
 	transactionsBroadcaster *engine.Broadcaster
 	logsBroadcaster         *engine.Broadcaster
 	ratelimiter             limiter.Store
+	blockPublisher          *models.Publisher
 }
 
 func NewStreamAPI(
@@ -64,40 +68,32 @@ func NewStreamAPI(
 
 // NewHeads send a notification each time a new block is appended to the chain.
 func (s *StreamAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
-	sub, err := s.newSubscription(
-		ctx,
-		s.blocksBroadcaster,
-		func(ctx context.Context, height uint64) (interface{}, error) {
-			block, err := s.blocks.GetByHeight(height)
-			if err != nil {
-				if errors.Is(err, storageErrs.ErrNotFound) {
-					// make sure to wrap in not found error as the streamer expects it
-					return nil, errors.Join(subscription.ErrBlockNotReady, err)
-				}
-				return nil, fmt.Errorf("failed to get block at height: %d: %w", height, err)
+	return s.new(ctx, func(notifier *rpc.Notifier, sub *rpc.Subscription) func(any) error {
+		return func(data any) error {
+			block, ok := data.(*types.Block)
+			if !ok {
+				return fmt.Errorf("invalid data sent to block subscription")
 			}
 
 			h, err := block.Hash()
 			if err != nil {
-				return nil, errs.ErrInternal
+				return err
 			}
-			// todo there is a lot of missing data: https://docs.chainstack.com/reference/ethereum-native-subscribe-newheads
-			return Block{
-				Hash:         h,
-				Number:       hexutil.Uint64(block.Height),
-				ParentHash:   block.ParentBlockHash,
-				ReceiptsRoot: block.ReceiptRoot,
-				Transactions: block.TransactionHashes}, nil
-		},
-	)
-	l := s.logger.With().Str("subscription-id", string(sub.ID)).Logger()
-	if err != nil {
-		l.Error().Err(err).Msg("error creating a new heads subscription")
-		return nil, err
-	}
 
-	l.Info().Msg("new heads subscription created")
-	return sub, nil
+			return notifier.Notify(sub.ID, &Block{
+				Hash:          h,
+				Number:        hexutil.Uint64(block.Height),
+				ParentHash:    block.ParentBlockHash,
+				ReceiptsRoot:  block.ReceiptRoot,
+				Transactions:  block.TransactionHashes,
+				Uncles:        []common.Hash{},
+				GasLimit:      hexutil.Uint64(blockGasLimit),
+				Nonce:         gethTypes.BlockNonce{0x1},
+				Timestamp:     hexutil.Uint64(block.Timestamp),
+				BaseFeePerGas: hexutil.Big(*big.NewInt(0)),
+			})
+		}
+	})
 }
 
 // NewPendingTransactions creates a subscription that is triggered each time a
@@ -306,4 +302,45 @@ func sendData(notifier *rpc.Notifier, id rpc.ID, data any, l zerolog.Logger) {
 	if err := notifier.Notify(id, data); err != nil {
 		l.Err(err).Msg("failed to notify")
 	}
+}
+
+func (s *StreamAPI) new(
+	ctx context.Context,
+	callback func(notifier *rpc.Notifier, sub *rpc.Subscription) func(any) error,
+) (*rpc.Subscription, error) {
+	notifier, supported := rpc.NotifierFromContext(ctx)
+	if !supported {
+		return nil, rpc.ErrNotificationsUnsupported
+	}
+
+	rpcSub := notifier.CreateSubscription()
+
+	subs := models.NewSubscription(callback(notifier, rpcSub))
+
+	rpcSub.ID = rpc.ID(subs.ID().String())
+	l := s.logger.With().Str("subscription-id", subs.ID().String()).Logger()
+
+	s.blockPublisher.Subscribe(subs)
+
+	go func() {
+		defer s.blockPublisher.Unsubscribe(subs)
+
+		for {
+			select {
+			case err := <-subs.Error():
+				fmt.Println(err)
+				return
+			case err := <-rpcSub.Err():
+				l.Debug().Err(err).Msg("client unsubscribed")
+				return
+			case <-notifier.Closed():
+				l.Debug().Msg("client unsubscribed deprecated method")
+				return
+			}
+		}
+	}()
+
+	l.Info().Msg("new heads subscription created")
+
+	return rpcSub, nil
 }
