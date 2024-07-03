@@ -27,6 +27,7 @@ type Engine struct {
 	blocksBroadcaster       *engine.Broadcaster
 	transactionsBroadcaster *engine.Broadcaster
 	logsBroadcaster         *engine.Broadcaster
+	blocksPublisher         *models.Publisher
 }
 
 func NewEventIngestionEngine(
@@ -196,6 +197,7 @@ func (e *Engine) indexBlock(cadenceHeight uint64, cadenceID flow.Identifier, blo
 	}
 
 	e.blocksBroadcaster.Publish()
+	e.blocksPublisher.Publish(block)
 	return nil
 }
 
