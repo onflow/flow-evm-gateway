@@ -344,11 +344,17 @@ func startServer(
 		debugAPI = api.NewDebugAPI(trace, blocks, logger)
 	}
 
+	var walletAPI *api.WalletAPI
+	if cfg.WalletEnabled {
+		walletAPI = api.NewWalletAPI(cfg, blockchainAPI)
+	}
+
 	supportedAPIs := api.SupportedAPIs(
 		blockchainAPI,
 		streamAPI,
 		pullAPI,
 		debugAPI,
+		walletAPI,
 		cfg,
 	)
 

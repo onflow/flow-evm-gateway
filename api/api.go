@@ -33,6 +33,7 @@ func SupportedAPIs(
 	streamAPI *StreamAPI,
 	pullAPI *PullAPI,
 	debugAPI *DebugAPI,
+	walletAPI *WalletAPI,
 	config *config.Config,
 ) []rpc.API {
 	apis := []rpc.API{{
@@ -60,6 +61,13 @@ func SupportedAPIs(
 		apis = append(apis, rpc.API{
 			Namespace: "debug",
 			Service:   debugAPI,
+		})
+	}
+
+	if walletAPI != nil {
+		apis = append(apis, rpc.API{
+			Namespace: "eth",
+			Service:   walletAPI,
 		})
 	}
 
