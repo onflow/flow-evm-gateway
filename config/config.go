@@ -1,6 +1,7 @@
 package config
 
 import (
+	"crypto/ecdsa"
 	"flag"
 	"fmt"
 	"io"
@@ -16,6 +17,7 @@ import (
 	"github.com/onflow/flow-go/fvm/evm/types"
 	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/onflow/go-ethereum/common"
+	gethCrypto "github.com/onflow/go-ethereum/crypto"
 	"github.com/rs/zerolog"
 )
 
@@ -85,13 +87,37 @@ type Config struct {
 	TracesBucketName string
 	// TracesEnabled sets whether the node is supporting transaction traces.
 	TracesEnabled bool
+	// WalletEnabled sets whether wallet APIs are enabled
+	WalletEnabled bool
+	// WalletKey used for signing transactions
+	WalletKey *ecdsa.PrivateKey
 }
 
 func FromFlags() (*Config, error) {
 	cfg := &Config{}
-	var evmNetwork, coinbase, gas, coa, key, keysPath, flowNetwork, logLevel, logWriter, filterExpiry, accessSporkHosts, cloudKMSKeys, cloudKMSProjectID, cloudKMSLocationID, cloudKMSKeyRingID string
-	var streamTimeout int
-	var initHeight, forceStartHeight uint64
+	var (
+		evmNetwork,
+		coinbase,
+		gas,
+		coa,
+		key,
+		keysPath,
+		flowNetwork,
+		logLevel,
+		logWriter,
+		filterExpiry,
+		accessSporkHosts,
+		cloudKMSKeys,
+		cloudKMSProjectID,
+		cloudKMSLocationID,
+		cloudKMSKeyRingID,
+		walletKey string
+
+		streamTimeout int
+
+		initHeight,
+		forceStartHeight uint64
+	)
 
 	// parse from flags
 	flag.StringVar(&cfg.DatabaseDir, "database-dir", "./db", "Path to the directory for the database")
@@ -116,13 +142,14 @@ func FromFlags() (*Config, error) {
 	flag.StringVar(&cfg.AddressHeader, "address-header", "", "Address header that contains the client IP, this is useful when the server is behind a proxy that sets the source IP of the client. Leave empty if no proxy is used.")
 	flag.Uint64Var(&cfg.HeartbeatInterval, "heartbeat-interval", 100, "Heartbeat interval for AN event subscription")
 	flag.IntVar(&streamTimeout, "stream-timeout", 3, "Defines the timeout in seconds the server waits for the event to be sent to the client")
-	flag.Uint64Var(&forceStartHeight, "force-start-height", 0, "Force set starting Cadence height. This should only be used locally or for testing, never in production.")
+	flag.Uint64Var(&forceStartHeight, "force-start-height", 0, "Force set starting Cadence height. WARNING: This should only be used locally or for testing, never in production.")
 	flag.StringVar(&filterExpiry, "filter-expiry", "5m", "Filter defines the time it takes for an idle filter to expire")
 	flag.StringVar(&cfg.TracesBucketName, "traces-gcp-bucket", "", "GCP bucket name where transaction traces are stored")
 	flag.StringVar(&cloudKMSProjectID, "coa-cloud-kms-project-id", "", "The project ID containing the KMS keys, e.g. 'flow-evm-gateway'")
 	flag.StringVar(&cloudKMSLocationID, "coa-cloud-kms-location-id", "", "The location ID where the key ring is grouped into, e.g. 'global'")
 	flag.StringVar(&cloudKMSKeyRingID, "coa-cloud-kms-key-ring-id", "", "The key ring ID where the KMS keys exist, e.g. 'tx-signing'")
 	flag.StringVar(&cloudKMSKeys, "coa-cloud-kms-keys", "", `Names of the KMS keys and their versions as a comma separated list, e.g. "gw-key-6@1,gw-key-7@1,gw-key-8@1"`)
+	flag.StringVar(&walletKey, "wallet-api-key", "", "ECDSA private key used for wallet APIs. WARNING: This should only be used locally or for testing, never in production.")
 	flag.Parse()
 
 	if coinbase == "" {
@@ -261,6 +288,16 @@ func FromFlags() (*Config, error) {
 	}
 
 	cfg.TracesEnabled = cfg.TracesBucketName != ""
+
+	if walletKey != "" {
+		var k, err = gethCrypto.HexToECDSA(walletKey)
+		if err != nil {
+			return nil, fmt.Errorf("wrong private key for wallet API: %w", err)
+		}
+
+		cfg.WalletKey = k
+		cfg.WalletEnabled = true
+	}
 
 	// todo validate Config values
 	return cfg, nil
