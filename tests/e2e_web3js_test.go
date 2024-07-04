@@ -22,6 +22,10 @@ func TestWeb3_E2E(t *testing.T) {
 		runWeb3Test(t, "net_namespace_test")
 	})
 
+	t.Run("test eth_getStorageAt", func(t *testing.T) {
+		runWeb3Test(t, "eth_get_storage_at_test")
+	})
+
 	t.Run("read-only interactions", func(t *testing.T) {
 		runWeb3Test(t, "eth_non_interactive_test")
 	})

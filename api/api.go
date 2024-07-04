@@ -3,9 +3,11 @@ package api
 import (
 	"context"
 	_ "embed"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
+	"strings"
 
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/go-ethereum/common"
@@ -1018,10 +1020,49 @@ func (b *BlockChainAPI) GetProof(
 func (b *BlockChainAPI) GetStorageAt(
 	ctx context.Context,
 	address common.Address,
-	storageSlot string,
+	hexKey string,
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (hexutil.Bytes, error) {
-	return nil, errs.ErrNotSupported
+	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
+		return nil, err
+	}
+
+	evmHeight, err := b.getBlockNumber(blockNumberOrHash)
+	if err != nil {
+		return handleError[hexutil.Bytes](b.logger, err)
+	}
+
+	key, _, err := decodeHash(hexKey)
+	if err != nil {
+		return nil, fmt.Errorf("unable to decode storage key: %s", err)
+	}
+
+	code, err := b.evm.GetStorageAt(ctx, address, key[:], evmHeight)
+	if err != nil {
+		b.logger.Error().Err(err).Msg("failed to retrieve account storage at")
+		return handleError[hexutil.Bytes](b.logger, err)
+	}
+
+	return code, nil
+}
+
+// decodeHash parses a hex-encoded 32-byte hash. The input may optionally
+// be prefixed by 0x and can have a byte length up to 32.
+func decodeHash(s string) (h common.Hash, inputLength int, err error) {
+	if strings.HasPrefix(s, "0x") || strings.HasPrefix(s, "0X") {
+		s = s[2:]
+	}
+	if (len(s) & 1) > 0 {
+		s = "0" + s
+	}
+	b, err := hex.DecodeString(s)
+	if err != nil {
+		return common.Hash{}, 0, errors.New("hex string invalid")
+	}
+	if len(b) > 32 {
+		return common.Hash{}, len(b), errors.New("hex string too long, want at most 32 bytes")
+	}
+	return common.BytesToHash(b), len(b), nil
 }
 
 // CreateAccessList creates an EIP-2930 type AccessList for the given transaction.

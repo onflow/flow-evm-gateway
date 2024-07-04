@@ -6,9 +6,11 @@ contract Storage {
     error MyCustomError(uint value, string message);
     event Calculated(address indexed caller, int indexed numA, int indexed numB, int sum);
     uint256 number;
+    mapping(address => uint) balances;
 
     constructor() payable {
         number = 1337;
+        balances[msg.sender] = 100;
     }
 
     function store(uint256 num) public {

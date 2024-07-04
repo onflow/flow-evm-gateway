@@ -51,6 +51,9 @@ var (
 
 	//go:embed cadence/get_latest_evm_height.cdc
 	getLatestEVMHeight []byte
+
+	//go:embed cadence/get_storage_at.cdc
+	getStorageAtScript []byte
 )
 
 const minFlowBalance = 2
@@ -86,6 +89,8 @@ type Requester interface {
 
 	// GetLatestEVMHeight returns the latest EVM height of the network.
 	GetLatestEVMHeight(ctx context.Context) (uint64, error)
+
+	GetStorageAt(ctx context.Context, address common.Address, key []byte, evmHeight int64) ([]byte, error)
 }
 
 var _ Requester = &EVM{}
@@ -368,6 +373,49 @@ func (e *EVM) GetNonce(
 		Msg("get nonce executed")
 
 	return nonce, nil
+}
+
+func (e *EVM) GetStorageAt(
+	ctx context.Context,
+	address common.Address,
+	key []byte,
+	evmHeight int64,
+) ([]byte, error) {
+	hexEncodedAddress, err := addressToCadenceString(address)
+	if err != nil {
+		return []byte{}, err
+	}
+
+	hexEncodedKey, err := cadence.NewString(hex.EncodeToString(key))
+	if err != nil {
+		return nil, err
+	}
+
+	height, err := e.evmToCadenceHeight(evmHeight)
+	if err != nil {
+		return []byte{}, err
+	}
+
+	val, err := e.executeScriptAtHeight(
+		ctx,
+		getStorageAtScript,
+		height,
+		[]cadence.Value{hexEncodedAddress, hexEncodedKey},
+	)
+	if err != nil {
+		return []byte{}, fmt.Errorf("failed to get storage value: %w", err)
+	}
+	storageValue, ok := val.(cadence.Array)
+	if !ok {
+		return nil, fmt.Errorf("invalid input: unexpected type for data field")
+	}
+
+	convertedValue := make([]byte, len(storageValue.Values))
+	for i, value := range storageValue.Values {
+		convertedValue[i] = byte(value.(cadence.UInt8))
+	}
+
+	return convertedValue, nil
 }
 
 func (e *EVM) Call(
