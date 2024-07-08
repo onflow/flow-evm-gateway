@@ -42,7 +42,7 @@ func (a *Accounts) Update(
 		return err
 	}
 
-	nonce, height, err := a.getNonce(from)
+	nonce, height, err := a.getNonce(from, batch)
 	if err != nil {
 		return err
 	}
@@ -65,8 +65,14 @@ func (a *Accounts) Update(
 	return nil
 }
 
-func (a *Accounts) getNonce(address common.Address) (uint64, uint64, error) {
-	val, err := a.store.get(accountNonceKey, address.Bytes())
+func (a *Accounts) getNonce(address common.Address, batch *pebble.Batch) (uint64, uint64, error) {
+	var val []byte
+	var err error
+	if batch != nil {
+		val, err = a.store.batchGet(batch, accountNonceKey, address.Bytes())
+	} else {
+		val, err = a.store.get(accountNonceKey, address.Bytes())
+	}
 	if err != nil {
 		// if no nonce was yet saved for the account the nonce is 0
 		if errors.Is(err, errs.ErrNotFound) {
@@ -87,7 +93,7 @@ func (a *Accounts) getNonce(address common.Address) (uint64, uint64, error) {
 func (a *Accounts) GetNonce(address common.Address) (uint64, error) {
 	a.mux.RLock()
 	defer a.mux.RUnlock()
-	nonce, _, err := a.getNonce(address)
+	nonce, _, err := a.getNonce(address, nil)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get nonce: %w", err)
 	}
