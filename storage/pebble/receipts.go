@@ -46,13 +46,13 @@ func (r *Receipts) Store(receipt *models.StorageReceipt, batch *pebble.Batch) er
 	// and if found we must add to the list, because this method can be called multiple
 	// times when indexing a single EVM height, which can contain multiple receipts
 	blockHeight := receipt.BlockNumber.Bytes()
-	receipts, err := r.getByBlockHeight(blockHeight)
+	receipts, err := r.getByBlockHeight(blockHeight, batch)
 	if err != nil && !errors.Is(err, errs.ErrNotFound) { // anything but not found is failure
 		return fmt.Errorf("failed to store receipt to height, retrieve exisint receipt errror: %w", err)
 	}
 
 	// same goes for blooms
-	blooms, err := r.getBloomsByBlockHeight(blockHeight)
+	blooms, err := r.getBloomsByBlockHeight(blockHeight, batch)
 	if err != nil && !errors.Is(err, errs.ErrNotFound) {
 		return fmt.Errorf("failed to store receipt to height, retrieve existing blooms error: %w", err)
 	}
@@ -99,7 +99,7 @@ func (r *Receipts) GetByTransactionID(ID common.Hash) (*models.StorageReceipt, e
 		return nil, fmt.Errorf("failed to get receipt by tx ID: %w", err)
 	}
 
-	receipts, err := r.getByBlockHeight(height)
+	receipts, err := r.getByBlockHeight(height, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get receipt by height: %w", err)
 	}
@@ -117,11 +117,17 @@ func (r *Receipts) GetByBlockHeight(height *big.Int) ([]*models.StorageReceipt, 
 	r.mux.RLock()
 	defer r.mux.RUnlock()
 
-	return r.getByBlockHeight(height.Bytes())
+	return r.getByBlockHeight(height.Bytes(), nil)
 }
 
-func (r *Receipts) getByBlockHeight(height []byte) ([]*models.StorageReceipt, error) {
-	val, err := r.store.get(receiptHeightKey, height)
+func (r *Receipts) getByBlockHeight(height []byte, batch *pebble.Batch) ([]*models.StorageReceipt, error) {
+	var val []byte
+	var err error
+	if batch != nil {
+		val, err = r.store.batchGet(batch, receiptHeightKey, height)
+	} else {
+		val, err = r.store.get(receiptHeightKey, height)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -152,8 +158,14 @@ func (r *Receipts) getByBlockHeight(height []byte) ([]*models.StorageReceipt, er
 	return receipts, nil
 }
 
-func (r *Receipts) getBloomsByBlockHeight(height []byte) ([]*gethTypes.Bloom, error) {
-	val, err := r.store.get(bloomHeightKey, height)
+func (r *Receipts) getBloomsByBlockHeight(height []byte, batch *pebble.Batch) ([]*gethTypes.Bloom, error) {
+	var val []byte
+	var err error
+	if batch != nil {
+		val, err = r.store.batchGet(batch, bloomHeightKey, height)
+	} else {
+		val, err = r.store.get(bloomHeightKey, height)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to get bloom at height: %w", err)
 	}
