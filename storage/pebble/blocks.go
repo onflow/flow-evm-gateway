@@ -40,6 +40,8 @@ func (b *Blocks) Store(
 ) error {
 	b.mux.Lock()
 	defer b.mux.Unlock()
+	// dev note: please be careful if any store reads are added here,
+	// store.batchGet must be used instead and batch must be used
 
 	val, err := block.ToBytes()
 	if err != nil {
