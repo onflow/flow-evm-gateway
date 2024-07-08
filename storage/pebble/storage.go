@@ -128,6 +128,21 @@ func (s *Storage) get(keyCode byte, key ...[]byte) ([]byte, error) {
 	return data, nil
 }
 
+// batchGet loads the value from an indexed batch if data is found, else it loads the value from the storage.
+func (s *Storage) batchGet(batch *pebble.Batch, keyCode byte, key ...[]byte) ([]byte, error) {
+	if batch == nil || !batch.Indexed() {
+		return nil, fmt.Errorf("batch must not be nil and it must be indexed")
+	}
+
+	data, closer, err := batch.Get(makePrefix(keyCode, key...))
+	if err == nil {
+		_ = closer.Close()
+		return data, nil
+	}
+
+	return s.get(keyCode, key...)
+}
+
 func (s *Storage) NewBatch() *pebble.Batch {
-	return s.db.NewBatch()
+	return s.db.NewIndexedBatch()
 }
