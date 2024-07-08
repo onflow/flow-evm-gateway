@@ -2,16 +2,17 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	evmEmulator "github.com/onflow/flow-go/fvm/evm/emulator"
+	"github.com/onflow/go-ethereum/accounts"
 	"github.com/onflow/go-ethereum/common"
 	"github.com/onflow/go-ethereum/common/hexutil"
 	"github.com/onflow/go-ethereum/core/types"
 	"github.com/onflow/go-ethereum/crypto"
 	"github.com/onflow/go-ethereum/rpc"
 
-	errs "github.com/onflow/flow-evm-gateway/api/errors"
 	"github.com/onflow/flow-evm-gateway/config"
 )
 
@@ -47,7 +48,17 @@ func (w *WalletAPI) Sign(
 	addr common.Address,
 	data hexutil.Bytes,
 ) (hexutil.Bytes, error) {
-	return nil, errs.ErrNotSupported
+	// Transform the given message to the following format:
+	// keccak256("\x19Ethereum Signed Message:\n"${message length}${message})
+	hash := accounts.TextHash(data)
+	// Sign the hash using plain ECDSA operations
+	signature, err := crypto.Sign(hash, w.config.WalletKey)
+	if err == nil {
+		// Transform V from 0/1 to 27/28 according to the yellow paper
+		signature[64] += 27
+	}
+
+	return signature, err
 }
 
 // SignTransaction will sign the given transaction with the from account.
@@ -57,12 +68,25 @@ func (w *WalletAPI) SignTransaction(
 	ctx context.Context,
 	args TransactionArgs,
 ) (*SignTransactionResult, error) {
+	if args.Gas == nil {
+		return nil, errors.New("gas not specified")
+	}
+	if args.GasPrice == nil && (args.MaxPriorityFeePerGas == nil || args.MaxFeePerGas == nil) {
+		return nil, errors.New("missing gasPrice or maxFeePerGas/maxPriorityFeePerGas")
+	}
+
+	accounts, err := w.Accounts()
+	if err != nil {
+		return nil, err
+	}
+	from := accounts[0]
+
 	nonce := uint64(0)
 	if args.Nonce != nil {
 		nonce = uint64(*args.Nonce)
 	} else {
 		num := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
-		n, err := w.net.GetTransactionCount(ctx, *args.From, &num)
+		n, err := w.net.GetTransactionCount(ctx, from, &num)
 		if err != nil {
 			return nil, err
 		}
