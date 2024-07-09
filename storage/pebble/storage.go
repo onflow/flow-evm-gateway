@@ -1,22 +1,19 @@
 package pebble
 
 import (
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 
 	"github.com/cockroachdb/pebble"
-	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/rs/zerolog"
 
 	errs "github.com/onflow/flow-evm-gateway/storage/errors"
 )
 
 type Storage struct {
-	db    *pebble.DB
-	log   zerolog.Logger
-	cache *lru.TwoQueueCache[string, []byte]
+	db  *pebble.DB
+	log zerolog.Logger
 }
 
 // New creates a new storage instance using the provided dir location as the storage directory.
@@ -66,15 +63,9 @@ func New(dir string, log zerolog.Logger) (*Storage, error) {
 		return nil, fmt.Errorf("failed to open db: %w", err)
 	}
 
-	valueCache, err := lru.New2Q[string, []byte](128)
-	if err != nil {
-		return nil, err
-	}
-
 	return &Storage{
-		db:    db,
-		log:   log,
-		cache: valueCache,
+		db:  db,
+		log: log,
 	}, nil
 }
 
@@ -90,23 +81,12 @@ func (s *Storage) set(keyCode byte, key []byte, value []byte, batch *pebble.Batc
 		return batch.Set(prefixedKey, value, nil)
 	}
 
-	if err := s.db.Set(prefixedKey, value, nil); err != nil {
-		return err
-	}
-
-	s.cache.Add(hex.EncodeToString(prefixedKey), value)
-	return nil
+	return s.db.Set(prefixedKey, value, nil)
 }
 
 func (s *Storage) get(keyCode byte, key ...[]byte) ([]byte, error) {
 	prefixedKey := makePrefix(keyCode, key...)
 
-	// check if we have the value cached and return it
-	if val, ok := s.cache.Get(hex.EncodeToString(prefixedKey)); ok {
-		return val, nil
-	}
-
-	// if cache was a miss, then load the value from db
 	data, closer, err := s.db.Get(prefixedKey)
 	if err != nil {
 		if errors.Is(err, pebble.ErrNotFound) {
@@ -114,9 +94,6 @@ func (s *Storage) get(keyCode byte, key ...[]byte) ([]byte, error) {
 		}
 		return nil, err
 	}
-
-	// add the value to the cache
-	s.cache.Add(hex.EncodeToString(prefixedKey), data)
 
 	defer func(closer io.Closer) {
 		err = closer.Close()
