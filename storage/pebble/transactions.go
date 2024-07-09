@@ -1,7 +1,6 @@
 package pebble
 
 import (
-	"encoding/binary"
 	"sync"
 
 	"github.com/onflow/go-ethereum/common"
@@ -47,15 +46,5 @@ func (t *Transactions) Get(ID common.Hash) (models.Transaction, error) {
 		return nil, err
 	}
 
-	// TEMP: Remove this after PreviewNet is reset.
-	// Needed only for backwards compatibility with the
-	// direct call hash calculation breaking change.
-	heightVal, err := t.store.get(latestCadenceHeightKey)
-	if err != nil {
-		heightVal = []byte{0, 0, 0, 0, 0, 0, 0, 0}
-	}
-
-	cadenceHeight := binary.BigEndian.Uint64(heightVal)
-
-	return models.UnmarshalTransaction(val, cadenceHeight)
+	return models.UnmarshalTransaction(val)
 }

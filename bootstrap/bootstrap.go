@@ -94,9 +94,6 @@ func Start(ctx context.Context, cfg *config.Config) error {
 		logger.Info().Msg("database initialized with 0 evm and cadence heights")
 	}
 
-	// TEMP: Remove `DirectCallHashCalculationBlockHeightChange` after PreviewNet is reset
-	models.DirectCallHashCalculationBlockHeightChange = cfg.HashCalculationHeightChange
-
 	go func() {
 		err := startServer(
 			ctx,
