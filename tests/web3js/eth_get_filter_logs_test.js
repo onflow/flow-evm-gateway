@@ -31,11 +31,13 @@ it('create logs filter and call eth_getFilterLogs', async () => {
     gas: 1000000,
     gasPrice: 0
   })
+
   assert.equal(res.receipt.status, conf.successStatus)
 
   // check the matching items from the logs filter
   response = await helpers.callRPCMethod('eth_getFilterLogs', [filterID])
   assert.equal(200, response.status)
+  assert.isUndefined(response.body.error)
 
   let logs = response.body.result
   assert.isDefined(logs)
@@ -62,6 +64,7 @@ it('create logs filter and call eth_getFilterLogs', async () => {
   // from the above 2 contract function calls
   response = await helpers.callRPCMethod('eth_getFilterLogs', [filterID])
   assert.equal(200, response.status)
+  assert.isUndefined(response.body.error)
 
   logs = response.body.result
   assert.isDefined(logs)
