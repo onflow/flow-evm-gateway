@@ -77,7 +77,7 @@ func (s *Storage) set(keyCode byte, key []byte, value []byte, batch *pebble.Batc
 	prefixedKey := makePrefix(keyCode, key)
 
 	if batch != nil {
-		// set the value on batch and return, skip caching as the commit did not happen yet
+		// set the value on batch and return
 		return batch.Set(prefixedKey, value, nil)
 	}
 
