@@ -179,6 +179,36 @@ func TestBatch(t *testing.T) {
 		_, err = blocks.LatestCadenceHeight()
 		require.ErrorIs(t, err, errors.ErrNotInitialized)
 	})
+
+	runDB("multiple batch stores", t, func(t *testing.T, db *Storage) {
+		blocks := NewBlocks(db)
+
+		for i := 0; i < 5; i++ {
+			cadenceHeight := uint64(1 + i)
+			evmHeight := uint64(10 + i)
+			bl := mocks.NewBlock(evmHeight)
+
+			batch := db.NewBatch()
+
+			err := blocks.Store(cadenceHeight, flow.HexToID("0x1"), bl, batch)
+			require.NoError(t, err)
+
+			err = batch.Commit(pebble.Sync)
+			require.NoError(t, err)
+
+			dbBlock, err := blocks.GetByHeight(evmHeight)
+			require.NoError(t, err)
+			require.Equal(t, bl, dbBlock)
+
+			dbEVM, err := blocks.LatestEVMHeight()
+			require.NoError(t, err)
+			require.Equal(t, evmHeight, dbEVM)
+
+			dbCadence, err := blocks.LatestCadenceHeight()
+			require.NoError(t, err)
+			require.Equal(t, cadenceHeight, dbCadence)
+		}
+	})
 }
 
 func runDB(name string, t *testing.T, f func(t *testing.T, db *Storage)) {
