@@ -94,6 +94,9 @@ func Start(ctx context.Context, cfg *config.Config) error {
 		logger.Info().Msg("database initialized with 0 evm and cadence heights")
 	}
 
+	// TEMP: Remove `DirectCallHashCalculationBlockHeightChange` after PreviewNet is reset
+	models.DirectCallHashCalculationBlockHeightChange = cfg.HashCalculationHeightChange
+
 	go func() {
 		err := startServer(
 			ctx,
@@ -347,11 +350,17 @@ func startServer(
 		debugAPI = api.NewDebugAPI(trace, blocks, logger)
 	}
 
+	var walletAPI *api.WalletAPI
+	if cfg.WalletEnabled {
+		walletAPI = api.NewWalletAPI(cfg, blockchainAPI)
+	}
+
 	supportedAPIs := api.SupportedAPIs(
 		blockchainAPI,
 		streamAPI,
 		pullAPI,
 		debugAPI,
+		walletAPI,
 		cfg,
 	)
 

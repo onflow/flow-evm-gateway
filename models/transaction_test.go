@@ -1,16 +1,27 @@
 package models
 
 import (
+	"crypto/ecdsa"
+	crand "crypto/rand"
 	_ "embed"
 	"encoding/hex"
+	"fmt"
 	"math/big"
 	"testing"
+	"time"
+
+	"math/rand"
 
 	"github.com/onflow/cadence"
 	"github.com/onflow/cadence/runtime/common"
+	"github.com/onflow/flow-go/fvm/evm/emulator"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	gethCommon "github.com/onflow/go-ethereum/common"
+	"github.com/onflow/go-ethereum/core"
+	"github.com/onflow/go-ethereum/core/txpool"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
+	"github.com/onflow/go-ethereum/crypto"
+	"github.com/onflow/go-ethereum/params"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -176,7 +187,7 @@ func Test_UnmarshalTransaction(t *testing.T) {
 		encodedTx, err := tx.MarshalBinary()
 		require.NoError(t, err)
 
-		decTx, err := UnmarshalTransaction(encodedTx)
+		decTx, err := UnmarshalTransaction(encodedTx, DirectCallHashCalculationBlockHeightChange)
 		require.NoError(t, err)
 		require.IsType(t, TransactionCall{}, decTx)
 
@@ -230,7 +241,7 @@ func Test_UnmarshalTransaction(t *testing.T) {
 		encodedTx, err := tx.MarshalBinary()
 		require.NoError(t, err)
 
-		decTx, err := UnmarshalTransaction(encodedTx)
+		decTx, err := UnmarshalTransaction(encodedTx, DirectCallHashCalculationBlockHeightChange)
 		require.NoError(t, err)
 		require.IsType(t, DirectCall{}, decTx)
 
@@ -267,6 +278,66 @@ func Test_UnmarshalTransaction(t *testing.T) {
 		assert.Equal(t, big.NewInt(0), decTx.GasPrice())
 		assert.Equal(t, uint64(0), decTx.BlobGas())
 		assert.Equal(t, uint64(59), decTx.Size())
+	})
+
+	t.Run("with DirectCall hash calculation change", func(t *testing.T) {
+		t.Parallel()
+
+		DirectCallHashCalculationBlockHeightChange = 10
+
+		cdcEv, _ := createTestEvent(t, directCallBinary)
+
+		tx, err := decodeTransaction(cdcEv)
+		require.NoError(t, err)
+
+		encodedTx, err := tx.MarshalBinary()
+		require.NoError(t, err)
+
+		// blockHeight is greater than DirectCallHashCalculationBlockHeightChange
+		// which means we use the new hash calculation
+		decTx, err := UnmarshalTransaction(encodedTx, DirectCallHashCalculationBlockHeightChange+2)
+		require.NoError(t, err)
+		require.IsType(t, DirectCall{}, decTx)
+
+		v, r, s := decTx.RawSignatureValues()
+
+		from, err := decTx.From()
+		require.NoError(t, err)
+
+		newHash := decTx.Hash()
+
+		assert.Equal(
+			t,
+			gethCommon.HexToHash("0xb055748f36d6bbe99a7ab5e45202b5c095ceda985dec0cc2a8747fd88c80c8c9"),
+			newHash,
+		)
+		assert.Equal(t, big.NewInt(255), v)
+		assert.Equal(t, new(big.Int).SetBytes(from.Bytes()), r)
+		assert.Equal(t, big.NewInt(1), s)
+
+		// blockHeight is less than DirectCallHashCalculationBlockHeightChange
+		// which means we use the old hash calculation
+		decTx, err = UnmarshalTransaction(encodedTx, DirectCallHashCalculationBlockHeightChange-2)
+		require.NoError(t, err)
+		require.IsType(t, DirectCall{}, decTx)
+
+		v, r, s = decTx.RawSignatureValues()
+
+		from, err = decTx.From()
+		require.NoError(t, err)
+
+		oldHash := decTx.Hash()
+
+		assert.Equal(
+			t,
+			gethCommon.HexToHash("0xe090f3a66f269d436e4185551d790d923f53a2caabf475c18d60bf1f091813d9"),
+			oldHash,
+		)
+		assert.Equal(t, big.NewInt(255), v)
+		assert.Equal(t, new(big.Int).SetBytes(from.Bytes()), r)
+		assert.Equal(t, big.NewInt(1), s)
+
+		assert.NotEqual(t, newHash, oldHash)
 	})
 }
 
@@ -388,9 +459,41 @@ func TestValidateTransaction(t *testing.T) {
 		},
 	}
 
+	head := &gethTypes.Header{
+		Number:   big.NewInt(20_182_324),
+		Time:     uint64(time.Now().Unix()),
+		GasLimit: 30_000_000,
+	}
+	emulatorConfig := emulator.NewConfig(
+		emulator.WithChainID(types.FlowEVMPreviewNetChainID),
+		emulator.WithBlockNumber(head.Number),
+		emulator.WithBlockTime(head.Time),
+	)
+	signer := emulator.GetSigner(emulatorConfig)
+	opts := &txpool.ValidationOptions{
+		Config: emulatorConfig.ChainConfig,
+		Accept: 0 |
+			1<<gethTypes.LegacyTxType |
+			1<<gethTypes.AccessListTxType |
+			1<<gethTypes.DynamicFeeTxType |
+			1<<gethTypes.BlobTxType,
+		MaxSize: TxMaxSize,
+		MinTip:  new(big.Int),
+	}
+
+	key, err := crypto.GenerateKey()
+	require.NoError(t, err)
+
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			err := ValidateTransaction(tc.tx)
+			tx, err := gethTypes.SignTx(
+				tc.tx,
+				signer,
+				key,
+			)
+			require.NoError(t, err)
+
+			err = ValidateTransaction(tx, head, signer, opts)
 			if tc.valid {
 				require.NoError(t, err)
 			} else {
@@ -400,4 +503,351 @@ func TestValidateTransaction(t *testing.T) {
 		})
 	}
 
+}
+
+func TestValidateConsensusRules(t *testing.T) {
+
+	head := &gethTypes.Header{
+		Number:   big.NewInt(20_182_324),
+		Time:     uint64(time.Now().Unix()),
+		GasLimit: 30_000_000,
+	}
+	emulatorConfig := emulator.NewConfig(
+		emulator.WithChainID(types.FlowEVMPreviewNetChainID),
+		emulator.WithBlockNumber(head.Number),
+		emulator.WithBlockTime(head.Time),
+	)
+	signer := emulator.GetSigner(emulatorConfig)
+	chainConfig := emulatorConfig.ChainConfig
+	opts := &txpool.ValidationOptions{
+		Config: chainConfig,
+		Accept: 0 |
+			1<<gethTypes.LegacyTxType |
+			1<<gethTypes.AccessListTxType |
+			1<<gethTypes.DynamicFeeTxType |
+			1<<gethTypes.BlobTxType,
+		MaxSize: TxMaxSize,
+		MinTip:  new(big.Int),
+	}
+
+	key, err := crypto.GenerateKey()
+	require.NoError(t, err)
+
+	t.Run("not supported tx type", func(t *testing.T) {
+		// We do not accept `gethTypes.LegacyTx` in the options below
+		opts := &txpool.ValidationOptions{
+			Config: chainConfig,
+			Accept: 0 |
+				1<<gethTypes.AccessListTxType |
+				1<<gethTypes.DynamicFeeTxType,
+			MaxSize: TxMaxSize,
+			MinTip:  new(big.Int),
+		}
+
+		tx := makeSignedTx(53_000, 0, key, signer)
+
+		err = txpool.ValidateTransaction(tx, head, signer, opts)
+
+		require.Error(t, err)
+		assert.ErrorContains(
+			t,
+			err,
+			"transaction type not supported: tx type 0 not supported by this pool",
+		)
+	})
+
+	t.Run("tx size limits", func(t *testing.T) {
+		// Compute maximal data size for transactions (lower bound).
+		//
+		// It is assumed the fields in the transaction (except of the data) are:
+		//   - nonce     <= 32 bytes
+		//   - gasTip    <= 32 bytes
+		//   - gasLimit  <= 32 bytes
+		//   - recipient == 20 bytes
+		//   - value     <= 32 bytes
+		//   - signature == 65 bytes
+		// All those fields are summed up to at most 213 bytes.
+		baseSize := uint64(213)
+		dataSize := TxMaxSize - baseSize
+		gasLimit := uint64(2_500_000)
+
+		// Try adding a transaction with maximal allowed size
+		tx := makeSignedTx(gasLimit, dataSize, key, signer)
+
+		err = txpool.ValidateTransaction(tx, head, signer, opts)
+		require.NoError(t, err)
+
+		// Try adding a transaction with random allowed size
+		tx = makeSignedTx(gasLimit, uint64(rand.Intn(int(dataSize))), key, signer)
+
+		err = txpool.ValidateTransaction(tx, head, signer, opts)
+		require.NoError(t, err)
+
+		// Try adding a transaction of minimal not allowed size
+		tx = makeSignedTx(gasLimit, TxMaxSize, key, signer)
+
+		err = txpool.ValidateTransaction(tx, head, signer, opts)
+
+		require.Error(t, err)
+		assert.ErrorContains(
+			t,
+			err,
+			fmt.Sprintf("oversized data: transaction size %d, limit 131072", tx.Size()),
+		)
+
+		// Try adding a transaction of random not allowed size
+		txSize := dataSize + 1 + uint64(rand.Intn(10*TxMaxSize))
+		tx = makeSignedTx(gasLimit, txSize, key, signer)
+
+		err = txpool.ValidateTransaction(tx, head, signer, opts)
+
+		require.Error(t, err)
+		assert.ErrorContains(
+			t,
+			err,
+			fmt.Sprintf("oversized data: transaction size %d, limit 131072", tx.Size()),
+		)
+	})
+
+	t.Run("check only fork-enabled transactions are accepted", func(t *testing.T) {
+		// We are not yet in Berlin fork
+		chainConfig.BerlinBlock = big.NewInt(19_182_324)
+		head.Number = big.NewInt(18_182_324)
+
+		tx := dynamicFeeTx(100, big.NewInt(1), big.NewInt(2), key, signer)
+
+		err = txpool.ValidateTransaction(tx, head, signer, opts)
+
+		require.Error(t, err)
+		assert.ErrorContains(
+			t,
+			err,
+			"transaction type not supported: type 2 rejected, pool not yet in Berlin",
+		)
+
+		// We are in Berlin fork, but not in London
+		chainConfig.BerlinBlock = big.NewInt(17_182_324)
+		chainConfig.LondonBlock = big.NewInt(19_182_524)
+		head.Number = big.NewInt(18_182_324)
+
+		err = txpool.ValidateTransaction(tx, head, signer, opts)
+
+		require.Error(t, err)
+		assert.ErrorContains(
+			t,
+			err,
+			"transaction type not supported: type 2 rejected, pool not yet in London",
+		)
+
+		// TODO(m-Peter): Add assertions for BlobTxType
+
+		// Cleanup
+		chainConfig.BerlinBlock = big.NewInt(0)
+		chainConfig.LondonBlock = big.NewInt(0)
+		head.Number = big.NewInt(20_182_324)
+	})
+
+	t.Run("init code size exceeded", func(t *testing.T) {
+		dataLen := params.MaxInitCodeSize + 5_000
+		data := make([]byte, dataLen)
+		n, err := crand.Read(data)
+		require.Equal(t, n, dataLen)
+		require.NoError(t, err)
+
+		tx, err := gethTypes.SignTx(
+			gethTypes.NewTx(
+				&gethTypes.LegacyTx{
+					Nonce:    1,
+					To:       nil,
+					Value:    big.NewInt(0),
+					Gas:      7_500_000,
+					GasPrice: big.NewInt(0),
+					Data:     data,
+				},
+			),
+			signer,
+			key,
+		)
+		require.NoError(t, err)
+
+		err = txpool.ValidateTransaction(tx, head, signer, opts)
+
+		require.Error(t, err)
+		assert.ErrorContains(
+			t,
+			err,
+			"max initcode size exceeded: code size 54152, limit 49152",
+		)
+	})
+
+	t.Run("negative value", func(t *testing.T) {
+		tx, err := gethTypes.SignTx(
+			gethTypes.NewTx(
+				&gethTypes.LegacyTx{
+					Nonce:    1,
+					To:       nil,
+					Value:    big.NewInt(-1500),
+					Gas:      7_500_000,
+					GasPrice: big.NewInt(0),
+					Data:     []byte{},
+				},
+			),
+			signer,
+			key,
+		)
+		require.NoError(t, err)
+
+		err = txpool.ValidateTransaction(tx, head, signer, opts)
+
+		require.Error(t, err)
+		assert.ErrorContains(
+			t,
+			err,
+			txpool.ErrNegativeValue.Error(),
+		)
+	})
+
+	t.Run("tx gas limit higher than block gas limit", func(t *testing.T) {
+		head.GasLimit = 5_000_000
+		tx := makeSignedTx(7_500_000, 5_000, key, signer)
+
+		err = txpool.ValidateTransaction(tx, head, signer, opts)
+
+		require.Error(t, err)
+		assert.ErrorContains(
+			t,
+			err,
+			"exceeds block gas limit",
+		)
+
+		// Cleanup
+		head.GasLimit = 30_000_000
+	})
+
+	t.Run("very high fee values", func(t *testing.T) {
+		veryBigNumber := big.NewInt(1)
+		veryBigNumber.Lsh(veryBigNumber, 300)
+
+		tx := dynamicFeeTx(100, big.NewInt(1), veryBigNumber, key, signer)
+
+		err = txpool.ValidateTransaction(tx, head, signer, opts)
+
+		require.Error(t, err)
+		assert.ErrorContains(
+			t,
+			err,
+			core.ErrTipVeryHigh.Error(),
+		)
+
+		tx2 := dynamicFeeTx(100, veryBigNumber, big.NewInt(1), key, signer)
+
+		err = txpool.ValidateTransaction(tx2, head, signer, opts)
+
+		require.Error(t, err)
+		assert.ErrorContains(
+			t,
+			err,
+			core.ErrFeeCapVeryHigh.Error(),
+		)
+	})
+
+	t.Run("gas tip above gas fee cap", func(t *testing.T) {
+		tx := dynamicFeeTx(100, big.NewInt(1), big.NewInt(2), key, signer)
+
+		err = txpool.ValidateTransaction(tx, head, signer, opts)
+
+		require.Error(t, err)
+		assert.ErrorContains(
+			t,
+			err,
+			core.ErrTipAboveFeeCap.Error(),
+		)
+	})
+
+	t.Run("invalid sender", func(t *testing.T) {
+		tx := makeSignedTx(55_000, 5_000, key, signer)
+
+		err = txpool.ValidateTransaction(tx, head, gethTypes.FrontierSigner{}, opts)
+
+		require.Error(t, err)
+		assert.ErrorContains(
+			t,
+			err,
+			"invalid sender",
+		)
+	})
+
+	t.Run("intrinsic gas too low", func(t *testing.T) {
+		gasLimit := uint64(100)
+		tx := makeSignedTx(gasLimit, 0, key, signer)
+
+		err = txpool.ValidateTransaction(tx, head, signer, opts)
+
+		require.Error(t, err)
+		assert.ErrorContains(
+			t,
+			err,
+			fmt.Sprintf("%s: needed %v, allowed %v", core.ErrIntrinsicGas.Error(), 21_000, gasLimit),
+		)
+	})
+}
+
+func makeSignedTx(
+	gasLimit uint64,
+	dataBytes uint64,
+	key *ecdsa.PrivateKey,
+	signer gethTypes.Signer,
+) *gethTypes.Transaction {
+	data := make([]byte, dataBytes)
+	_, err := crand.Read(data)
+	if err != nil {
+		panic(err)
+	}
+
+	tx, err := gethTypes.SignTx(
+		gethTypes.NewTransaction(
+			0,
+			gethCommon.Address{},
+			big.NewInt(100),
+			gasLimit,
+			big.NewInt(150),
+			data,
+		),
+		signer,
+		key,
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	return tx
+}
+
+func dynamicFeeTx(
+	gasLimit uint64,
+	gasFeeCap *big.Int,
+	gasTipCap *big.Int,
+	key *ecdsa.PrivateKey,
+	signer gethTypes.Signer,
+) *gethTypes.Transaction {
+	tx, err := gethTypes.SignNewTx(
+		key,
+		signer,
+		&gethTypes.DynamicFeeTx{
+			ChainID:    emulator.DefaultChainConfig.ChainID,
+			Nonce:      0,
+			GasTipCap:  gasTipCap,
+			GasFeeCap:  gasFeeCap,
+			Gas:        gasLimit,
+			To:         nil,
+			Value:      big.NewInt(100),
+			Data:       []byte{},
+			AccessList: gethTypes.AccessList{},
+		},
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	return tx
 }
