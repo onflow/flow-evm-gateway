@@ -1,22 +1,19 @@
 package pebble
 
 import (
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 
 	"github.com/cockroachdb/pebble"
-	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/rs/zerolog"
 
 	errs "github.com/onflow/flow-evm-gateway/storage/errors"
 )
 
 type Storage struct {
-	db    *pebble.DB
-	log   zerolog.Logger
-	cache *lru.TwoQueueCache[string, []byte]
+	db  *pebble.DB
+	log zerolog.Logger
 }
 
 // New creates a new storage instance using the provided dir location as the storage directory.
@@ -66,15 +63,9 @@ func New(dir string, log zerolog.Logger) (*Storage, error) {
 		return nil, fmt.Errorf("failed to open db: %w", err)
 	}
 
-	valueCache, err := lru.New2Q[string, []byte](128)
-	if err != nil {
-		return nil, err
-	}
-
 	return &Storage{
-		db:    db,
-		log:   log,
-		cache: valueCache,
+		db:  db,
+		log: log,
 	}, nil
 }
 
@@ -85,26 +76,16 @@ func New(dir string, log zerolog.Logger) (*Storage, error) {
 func (s *Storage) set(keyCode byte, key []byte, value []byte, batch *pebble.Batch) error {
 	prefixedKey := makePrefix(keyCode, key)
 
-	var err error
 	if batch != nil {
-		err = batch.Set(prefixedKey, value, nil)
-	} else {
-		err = s.db.Set(prefixedKey, value, nil)
-	}
-	if err != nil {
-		return err
+		// set the value on batch and return
+		return batch.Set(prefixedKey, value, nil)
 	}
 
-	s.cache.Add(hex.EncodeToString(prefixedKey), value)
-	return nil
+	return s.db.Set(prefixedKey, value, nil)
 }
 
 func (s *Storage) get(keyCode byte, key ...[]byte) ([]byte, error) {
 	prefixedKey := makePrefix(keyCode, key...)
-
-	if val, ok := s.cache.Get(hex.EncodeToString(prefixedKey)); ok {
-		return val, nil
-	}
 
 	data, closer, err := s.db.Get(prefixedKey)
 	if err != nil {
@@ -124,6 +105,21 @@ func (s *Storage) get(keyCode byte, key ...[]byte) ([]byte, error) {
 	return data, nil
 }
 
-func (s *Storage) newBatch() *pebble.Batch {
-	return s.db.NewBatch()
+// batchGet loads the value from an indexed batch if data is found, else it loads the value from the storage.
+func (s *Storage) batchGet(batch *pebble.Batch, keyCode byte, key ...[]byte) ([]byte, error) {
+	if batch == nil || !batch.Indexed() {
+		return nil, fmt.Errorf("batch must not be nil and it must be indexed")
+	}
+
+	data, closer, err := batch.Get(makePrefix(keyCode, key...))
+	if err == nil {
+		_ = closer.Close()
+		return data, nil
+	}
+
+	return s.get(keyCode, key...)
+}
+
+func (s *Storage) NewBatch() *pebble.Batch {
+	return s.db.NewIndexedBatch()
 }

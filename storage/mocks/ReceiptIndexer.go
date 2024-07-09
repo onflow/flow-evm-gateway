@@ -10,6 +10,8 @@ import (
 
 	models "github.com/onflow/flow-evm-gateway/models"
 
+	pebble "github.com/cockroachdb/pebble"
+
 	types "github.com/onflow/go-ethereum/core/types"
 )
 
@@ -117,17 +119,17 @@ func (_m *ReceiptIndexer) GetByTransactionID(ID common.Hash) (*models.StorageRec
 	return r0, r1
 }
 
-// Store provides a mock function with given fields: receipt
-func (_m *ReceiptIndexer) Store(receipt *models.StorageReceipt) error {
-	ret := _m.Called(receipt)
+// Store provides a mock function with given fields: receipt, batch
+func (_m *ReceiptIndexer) Store(receipt *models.StorageReceipt, batch *pebble.Batch) error {
+	ret := _m.Called(receipt, batch)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Store")
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(*models.StorageReceipt) error); ok {
-		r0 = rf(receipt)
+	if rf, ok := ret.Get(0).(func(*models.StorageReceipt, *pebble.Batch) error); ok {
+		r0 = rf(receipt, batch)
 	} else {
 		r0 = ret.Error(0)
 	}

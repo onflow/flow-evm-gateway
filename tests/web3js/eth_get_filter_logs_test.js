@@ -20,8 +20,8 @@ it('create logs filter and call eth_getFilterLogs', async () => {
   let response = await helpers.callRPCMethod('eth_newFilter', [{ 'address': contractAddress }])
 
   assert.equal(200, response.status)
-  assert.isDefined(response.body['result'])
-  let filterID = response.body['result']
+  let filterID = response.body.result
+  assert.isDefined(filterID)
 
   // make contract function call that emits a log
   let res = await helpers.signAndSend({
@@ -31,15 +31,17 @@ it('create logs filter and call eth_getFilterLogs', async () => {
     gas: 1000000,
     gasPrice: 0
   })
+
   assert.equal(res.receipt.status, conf.successStatus)
 
   // check the matching items from the logs filter
   response = await helpers.callRPCMethod('eth_getFilterLogs', [filterID])
-
   assert.equal(200, response.status)
-  assert.equal(1, response.body['result'].length)
+  assert.isUndefined(response.body.error)
 
-  let logs = response.body['result']
+  let logs = response.body.result
+  assert.isDefined(logs)
+  assert.equal(1, logs.length)
   assert.equal(contractAddress.toLowerCase(), logs[0].address)
   assert.lengthOf(logs[0].topics, 4)
   assert.equal(
@@ -61,12 +63,12 @@ it('create logs filter and call eth_getFilterLogs', async () => {
   // check the matching items from the logs filter include both logs
   // from the above 2 contract function calls
   response = await helpers.callRPCMethod('eth_getFilterLogs', [filterID])
-
   assert.equal(200, response.status)
-  assert.equal(2, response.body['result'].length)
-  logs = response.body['result']
-  console.log()
+  assert.isUndefined(response.body.error)
 
+  logs = response.body.result
+  assert.isDefined(logs)
+  assert.equal(2, logs.length)
   assert.equal(contractAddress.toLowerCase(), logs[1].address)
   assert.lengthOf(logs[1].topics, 4)
   assert.equal(

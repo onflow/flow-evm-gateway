@@ -244,9 +244,7 @@ func (b *BlockChainAPI) GetTransactionByHash(
 		return handleError[*Transaction](b.logger, err)
 	}
 
-	txHash := tx.Hash()
-
-	rcp, err := b.receipts.GetByTransactionID(txHash)
+	rcp, err := b.receipts.GetByTransactionID(hash)
 	if err != nil {
 		return handleError[*Transaction](b.logger, err)
 	}
@@ -609,7 +607,7 @@ func (b *BlockChainAPI) GetTransactionCount(
 		return handleError[*hexutil.Uint64](b.logger, err)
 	}
 
-	nonce, err := b.accounts.GetNonce(&address)
+	nonce, err := b.accounts.GetNonce(address)
 	if err != nil {
 		b.logger.Error().Err(err).Msg("get nonce failed")
 		return handleError[*hexutil.Uint64](b.logger, errs.ErrInternal)
@@ -725,7 +723,7 @@ func (b *BlockChainAPI) fetchBlockTransactions(
 			return nil, err
 		}
 		if transaction == nil {
-			b.logger.Warn().
+			b.logger.Error().
 				Str("tx-hash", txHash.String()).
 				Uint64("evm-height", block.Height).
 				Msg("not found a transaction the block references")

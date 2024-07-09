@@ -29,7 +29,7 @@ func (b *BlockTestSuite) TestGet() {
 		height := uint64(1)
 		flowID := flow.Identifier{0x01}
 		block := mocks.NewBlock(height)
-		err := b.Blocks.Store(height+1, flowID, block)
+		err := b.Blocks.Store(height+1, flowID, block, nil)
 		b.Require().NoError(err)
 
 		ID, err := block.Hash()
@@ -62,17 +62,17 @@ func (b *BlockTestSuite) TestStore() {
 
 	b.Run("success", func() {
 		flowID := flow.Identifier{0x01}
-		err := b.Blocks.Store(2, flowID, block)
+		err := b.Blocks.Store(2, flowID, block, nil)
 		b.Require().NoError(err)
 
 		// we allow overwriting blocks to make the actions idempotent
-		err = b.Blocks.Store(2, flowID, block)
+		err = b.Blocks.Store(2, flowID, block, nil)
 		b.Require().NoError(err)
 	})
 
 	b.Run("store multiple blocks, and get one", func() {
 		for i := 0; i < 10; i++ {
-			err := b.Blocks.Store(uint64(i+5), flow.Identifier{byte(i)}, mocks.NewBlock(uint64(10+i)))
+			err := b.Blocks.Store(uint64(i+5), flow.Identifier{byte(i)}, mocks.NewBlock(uint64(10+i)), nil)
 			b.Require().NoError(err)
 		}
 
@@ -92,7 +92,7 @@ func (b *BlockTestSuite) TestHeights() {
 	b.Run("last EVM height", func() {
 		for i := 0; i < 5; i++ {
 			lastHeight := uint64(100 + i)
-			err := b.Blocks.Store(lastHeight+10, flow.Identifier{byte(i)}, mocks.NewBlock(lastHeight))
+			err := b.Blocks.Store(lastHeight+10, flow.Identifier{byte(i)}, mocks.NewBlock(lastHeight), nil)
 			b.Require().NoError(err)
 
 			last, err := b.Blocks.LatestEVMHeight()
@@ -112,7 +112,7 @@ func (b *BlockTestSuite) TestHeights() {
 
 		for i, evmHeight := range evmHeights {
 			blocks[i] = mocks.NewBlock(evmHeight)
-			err := b.Blocks.Store(uint64(i), cadenceIDs[i], blocks[i])
+			err := b.Blocks.Store(uint64(i), cadenceIDs[i], blocks[i], nil)
 			b.Require().NoError(err)
 		}
 
@@ -128,7 +128,7 @@ func (b *BlockTestSuite) TestHeights() {
 	b.Run("last Cadence height", func() {
 		for i := 0; i < 5; i++ {
 			lastHeight := uint64(100 + i)
-			err := b.Blocks.Store(lastHeight, flow.Identifier{byte(i)}, mocks.NewBlock(lastHeight-10))
+			err := b.Blocks.Store(lastHeight, flow.Identifier{byte(i)}, mocks.NewBlock(lastHeight-10), nil)
 			b.Require().NoError(err)
 
 			last, err := b.Blocks.LatestCadenceHeight()
@@ -141,7 +141,7 @@ func (b *BlockTestSuite) TestHeights() {
 		evmHeights := []uint64{10, 11, 12, 13}
 		cadenceHeights := []uint64{20, 24, 26, 27}
 		for i, evmHeight := range evmHeights {
-			err := b.Blocks.Store(cadenceHeights[i], flow.Identifier{byte(i)}, mocks.NewBlock(evmHeight))
+			err := b.Blocks.Store(cadenceHeights[i], flow.Identifier{byte(i)}, mocks.NewBlock(evmHeight), nil)
 			b.Require().NoError(err)
 		}
 
@@ -156,7 +156,7 @@ func (b *BlockTestSuite) TestHeights() {
 		evmHeights := []uint64{10, 11, 12, 13}
 		cadenceIDs := []flow.Identifier{{0x01}, {0x02}, {0x03}, {0x04}}
 		for i, evmHeight := range evmHeights {
-			err := b.Blocks.Store(uint64(i), cadenceIDs[i], mocks.NewBlock(evmHeight))
+			err := b.Blocks.Store(uint64(i), cadenceIDs[i], mocks.NewBlock(evmHeight), nil)
 			b.Require().NoError(err)
 		}
 
@@ -177,7 +177,7 @@ func (s *ReceiptTestSuite) TestStoreReceipt() {
 
 	s.Run("store receipt successfully", func() {
 		receipt := mocks.NewReceipt(1, common.HexToHash("0xf1"))
-		err := s.ReceiptIndexer.Store(receipt)
+		err := s.ReceiptIndexer.Store(receipt, nil)
 		s.Require().NoError(err)
 	})
 
@@ -190,7 +190,7 @@ func (s *ReceiptTestSuite) TestStoreReceipt() {
 		}
 
 		for _, r := range receipts {
-			err := s.ReceiptIndexer.Store(r)
+			err := s.ReceiptIndexer.Store(r, nil)
 			s.Require().NoError(err)
 		}
 
@@ -206,7 +206,7 @@ func (s *ReceiptTestSuite) TestStoreReceipt() {
 func (s *ReceiptTestSuite) TestGetReceiptByTransactionID() {
 	s.Run("existing transaction ID", func() {
 		receipt := mocks.NewReceipt(2, common.HexToHash("0xf2"))
-		err := s.ReceiptIndexer.Store(receipt)
+		err := s.ReceiptIndexer.Store(receipt, nil)
 		s.Require().NoError(err)
 
 		retReceipt, err := s.ReceiptIndexer.GetByTransactionID(receipt.TxHash)
@@ -225,10 +225,10 @@ func (s *ReceiptTestSuite) TestGetReceiptByTransactionID() {
 func (s *ReceiptTestSuite) TestGetReceiptByBlockHeight() {
 	s.Run("existing block height", func() {
 		receipt := mocks.NewReceipt(3, common.HexToHash("0x1"))
-		err := s.ReceiptIndexer.Store(receipt)
+		err := s.ReceiptIndexer.Store(receipt, nil)
 		s.Require().NoError(err)
 		// add one more receipt that shouldn't be retrieved
-		s.Require().NoError(s.ReceiptIndexer.Store(mocks.NewReceipt(4, common.HexToHash("0x2"))))
+		s.Require().NoError(s.ReceiptIndexer.Store(mocks.NewReceipt(4, common.HexToHash("0x2")), nil))
 
 		retReceipts, err := s.ReceiptIndexer.GetByBlockHeight(receipt.BlockNumber)
 		s.Require().NoError(err)
@@ -252,7 +252,7 @@ func (s *ReceiptTestSuite) TestBloomsForBlockRange() {
 		for i := start.Uint64(); i < end.Uint64(); i++ {
 			r := mocks.NewReceipt(i, common.HexToHash(fmt.Sprintf("0xf1%d", i)))
 			testBlooms = append(testBlooms, &r.Bloom)
-			err := s.ReceiptIndexer.Store(r)
+			err := s.ReceiptIndexer.Store(r, nil)
 			s.Require().NoError(err)
 		}
 
@@ -278,8 +278,8 @@ func (s *ReceiptTestSuite) TestBloomsForBlockRange() {
 		for i := start.Uint64(); i < end.Uint64(); i++ {
 			r1 := mocks.NewReceipt(i, common.HexToHash(fmt.Sprintf("0x%d", i)))
 			r2 := mocks.NewReceipt(i, common.HexToHash(fmt.Sprintf("0x%d", i)))
-			s.Require().NoError(s.ReceiptIndexer.Store(r1))
-			s.Require().NoError(s.ReceiptIndexer.Store(r2))
+			s.Require().NoError(s.ReceiptIndexer.Store(r1, nil))
+			s.Require().NoError(s.ReceiptIndexer.Store(r2, nil))
 			testBlooms = append(testBlooms, &r1.Bloom, &r2.Bloom)
 			testHeights = append(testHeights, big.NewInt(int64(i)))
 		}
@@ -341,7 +341,7 @@ func (s *TransactionTestSuite) TestStoreTransaction() {
 	tx := mocks.NewTransaction(0)
 
 	s.Run("store transaction successfully", func() {
-		err := s.TransactionIndexer.Store(tx)
+		err := s.TransactionIndexer.Store(tx, nil)
 		s.Require().NoError(err)
 	})
 }
@@ -349,7 +349,7 @@ func (s *TransactionTestSuite) TestStoreTransaction() {
 func (s *TransactionTestSuite) TestGetTransaction() {
 	s.Run("existing transaction", func() {
 		tx := mocks.NewTransaction(1)
-		err := s.TransactionIndexer.Store(tx)
+		err := s.TransactionIndexer.Store(tx, nil)
 		s.Require().NoError(err)
 
 		txHash := tx.Hash()
@@ -361,14 +361,14 @@ func (s *TransactionTestSuite) TestGetTransaction() {
 		s.Require().Equal(txHash, retTxHash) // if hashes are equal the data must be equal
 
 		// allow same transaction overwrites
-		s.Require().NoError(s.TransactionIndexer.Store(retTx))
+		s.Require().NoError(s.TransactionIndexer.Store(retTx, nil))
 	})
 
 	s.Run("store multiple transactions and get single", func() {
 		var tx models.Transaction
 		for i := 0; i < 10; i++ {
 			tx = mocks.NewTransaction(uint64(10 + i))
-			err := s.TransactionIndexer.Store(tx)
+			err := s.TransactionIndexer.Store(tx, nil)
 			s.Require().NoError(err)
 		}
 
@@ -403,7 +403,7 @@ func (a *AccountTestSuite) TestNonce() {
 		key, err := crypto.HexToECDSA(rawKey)
 		a.Require().NoError(err)
 
-		nonce, err := a.AccountIndexer.GetNonce(&from)
+		nonce, err := a.AccountIndexer.GetNonce(from)
 		a.Require().NoError(err)
 		a.Require().Equal(uint64(0), nonce)
 
@@ -421,10 +421,10 @@ func (a *AccountTestSuite) TestNonce() {
 
 			tx = models.TransactionCall{Transaction: gethTx}
 
-			err = a.AccountIndexer.Update(tx, rcp)
+			err = a.AccountIndexer.Update(tx, rcp, nil)
 			a.Require().NoError(err)
 
-			nonce, err = a.AccountIndexer.GetNonce(&from)
+			nonce, err = a.AccountIndexer.GetNonce(from)
 			a.Require().NoError(err)
 			a.Require().Equal(uint64(i), nonce)
 		}
@@ -445,10 +445,10 @@ func (a *AccountTestSuite) TestNonce() {
 
 			tx = models.TransactionCall{Transaction: gethTx}
 
-			err = a.AccountIndexer.Update(tx, rcp)
+			err = a.AccountIndexer.Update(tx, rcp, nil)
 			a.Require().NoError(err)
 
-			nonce, err = a.AccountIndexer.GetNonce(&from)
+			nonce, err = a.AccountIndexer.GetNonce(from)
 			a.Require().NoError(err)
 			a.Require().Equal(uint64(4), nonce) // always equal to latest nonce
 		}
@@ -464,7 +464,7 @@ func (s *TraceTestSuite) TestStore() {
 	s.Run("store new trace", func() {
 		id := common.Hash{0x01}
 		trace := json.RawMessage(`{ "test": "foo" }`)
-		err := s.TraceIndexer.StoreTransaction(id, trace)
+		err := s.TraceIndexer.StoreTransaction(id, trace, nil)
 		s.Require().NoError(err)
 	})
 
@@ -472,7 +472,7 @@ func (s *TraceTestSuite) TestStore() {
 		for i := 0; i < 2; i++ {
 			id := common.Hash{0x01}
 			trace := json.RawMessage(`{ "test": "foo" }`)
-			err := s.TraceIndexer.StoreTransaction(id, trace)
+			err := s.TraceIndexer.StoreTransaction(id, trace, nil)
 			s.Require().NoError(err)
 		}
 	})
@@ -483,7 +483,7 @@ func (s *TraceTestSuite) TestGet() {
 		id := common.Hash{0x01}
 		trace := json.RawMessage(`{ "test": "foo" }`)
 
-		err := s.TraceIndexer.StoreTransaction(id, trace)
+		err := s.TraceIndexer.StoreTransaction(id, trace, nil)
 		s.Require().NoError(err)
 
 		val, err := s.TraceIndexer.GetTransaction(id)

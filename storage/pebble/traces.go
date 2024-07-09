@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/cockroachdb/pebble"
 	"github.com/goccy/go-json"
 	"github.com/onflow/go-ethereum/common"
 
@@ -24,11 +25,11 @@ func NewTraces(store *Storage) *Traces {
 	}
 }
 
-func (t *Traces) StoreTransaction(ID common.Hash, trace json.RawMessage) error {
+func (t *Traces) StoreTransaction(ID common.Hash, trace json.RawMessage, batch *pebble.Batch) error {
 	t.mux.Lock()
 	defer t.mux.Unlock()
 
-	if err := t.store.set(traceTxIDKey, ID.Bytes(), trace, nil); err != nil {
+	if err := t.store.set(traceTxIDKey, ID.Bytes(), trace, batch); err != nil {
 		return fmt.Errorf("failed to store trace for transaction ID %s: %w", ID.String(), err)
 	}
 
