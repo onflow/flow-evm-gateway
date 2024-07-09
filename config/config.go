@@ -91,6 +91,8 @@ type Config struct {
 	WalletEnabled bool
 	// WalletKey used for signing transactions
 	WalletKey *ecdsa.PrivateKey
+	// TEMP: Remove `HashCalculationHeightChange` after PreviewNet is reset
+	HashCalculationHeightChange uint64
 }
 
 func FromFlags() (*Config, error) {
@@ -150,6 +152,9 @@ func FromFlags() (*Config, error) {
 	flag.StringVar(&cloudKMSKeyRingID, "coa-cloud-kms-key-ring-id", "", "The key ring ID where the KMS keys exist, e.g. 'tx-signing'")
 	flag.StringVar(&cloudKMSKeys, "coa-cloud-kms-keys", "", `Names of the KMS keys and their versions as a comma separated list, e.g. "gw-key-6@1,gw-key-7@1,gw-key-8@1"`)
 	flag.StringVar(&walletKey, "wallet-api-key", "", "ECDSA private key used for wallet APIs. WARNING: This should only be used locally or for testing, never in production.")
+	// TEMP: Only set this after the HCU containing the direct call
+	// hash calculation change has been successfully deployed.
+	flag.Uint64Var(&cfg.HashCalculationHeightChange, "hash-calc-height-change", 0, "Cadence height at which the direct call hash calculation changed")
 	flag.Parse()
 
 	if coinbase == "" {
