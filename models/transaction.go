@@ -53,10 +53,29 @@ var _ Transaction = &DirectCall{}
 
 type DirectCall struct {
 	*types.DirectCall
+	// TEMP: Remove `blockHeight` after PreviewNet is reset
+	blockHeight uint64
 }
 
+// TEMP: Remove `DirectCallHashCalculationBlockHeightChange` after PreviewNet is reset
+var DirectCallHashCalculationBlockHeightChange uint64 = 0
+
 func (dc DirectCall) Hash() common.Hash {
-	return dc.DirectCall.Hash()
+	// Use the NEW hash calculation
+	if dc.blockHeight >= DirectCallHashCalculationBlockHeightChange {
+		return dc.DirectCall.Hash()
+	}
+
+	// Use the OLD hash calculation
+	tx := gethTypes.NewTx(&gethTypes.LegacyTx{
+		GasPrice: big.NewInt(0),
+		Gas:      dc.GasLimit,
+		To:       dc.To(),
+		Value:    dc.Value(),
+		Data:     dc.Data(),
+		Nonce:    dc.Nonce(),
+	})
+	return tx.Hash()
 }
 
 func (dc DirectCall) RawSignatureValues() (
@@ -195,14 +214,15 @@ func decodeTransaction(event cadence.Event) (Transaction, error) {
 	return TransactionCall{Transaction: gethTx}, nil
 }
 
-func UnmarshalTransaction(value []byte) (Transaction, error) {
+func UnmarshalTransaction(value []byte, blockHeight uint64) (Transaction, error) {
 	if value[0] == types.DirectCallTxType {
 		directCall, err := types.DirectCallFromEncoded(value)
 		if err != nil {
 			return nil, fmt.Errorf("failed to rlp decode direct call: %w", err)
 		}
 
-		return DirectCall{DirectCall: directCall}, nil
+		// TEMP: Remove `blockHeight` after PreviewNet is reset
+		return DirectCall{DirectCall: directCall, blockHeight: blockHeight}, nil
 	}
 
 	tx := &gethTypes.Transaction{}

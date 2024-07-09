@@ -187,7 +187,7 @@ func Test_UnmarshalTransaction(t *testing.T) {
 		encodedTx, err := tx.MarshalBinary()
 		require.NoError(t, err)
 
-		decTx, err := UnmarshalTransaction(encodedTx)
+		decTx, err := UnmarshalTransaction(encodedTx, DirectCallHashCalculationBlockHeightChange)
 		require.NoError(t, err)
 		require.IsType(t, TransactionCall{}, decTx)
 
@@ -241,7 +241,7 @@ func Test_UnmarshalTransaction(t *testing.T) {
 		encodedTx, err := tx.MarshalBinary()
 		require.NoError(t, err)
 
-		decTx, err := UnmarshalTransaction(encodedTx)
+		decTx, err := UnmarshalTransaction(encodedTx, DirectCallHashCalculationBlockHeightChange)
 		require.NoError(t, err)
 		require.IsType(t, DirectCall{}, decTx)
 
@@ -278,6 +278,66 @@ func Test_UnmarshalTransaction(t *testing.T) {
 		assert.Equal(t, big.NewInt(0), decTx.GasPrice())
 		assert.Equal(t, uint64(0), decTx.BlobGas())
 		assert.Equal(t, uint64(59), decTx.Size())
+	})
+
+	t.Run("with DirectCall hash calculation change", func(t *testing.T) {
+		t.Parallel()
+
+		DirectCallHashCalculationBlockHeightChange = 10
+
+		cdcEv, _ := createTestEvent(t, directCallBinary)
+
+		tx, err := decodeTransaction(cdcEv)
+		require.NoError(t, err)
+
+		encodedTx, err := tx.MarshalBinary()
+		require.NoError(t, err)
+
+		// blockHeight is greater than DirectCallHashCalculationBlockHeightChange
+		// which means we use the new hash calculation
+		decTx, err := UnmarshalTransaction(encodedTx, DirectCallHashCalculationBlockHeightChange+2)
+		require.NoError(t, err)
+		require.IsType(t, DirectCall{}, decTx)
+
+		v, r, s := decTx.RawSignatureValues()
+
+		from, err := decTx.From()
+		require.NoError(t, err)
+
+		newHash := decTx.Hash()
+
+		assert.Equal(
+			t,
+			gethCommon.HexToHash("0xb055748f36d6bbe99a7ab5e45202b5c095ceda985dec0cc2a8747fd88c80c8c9"),
+			newHash,
+		)
+		assert.Equal(t, big.NewInt(255), v)
+		assert.Equal(t, new(big.Int).SetBytes(from.Bytes()), r)
+		assert.Equal(t, big.NewInt(1), s)
+
+		// blockHeight is less than DirectCallHashCalculationBlockHeightChange
+		// which means we use the old hash calculation
+		decTx, err = UnmarshalTransaction(encodedTx, DirectCallHashCalculationBlockHeightChange-2)
+		require.NoError(t, err)
+		require.IsType(t, DirectCall{}, decTx)
+
+		v, r, s = decTx.RawSignatureValues()
+
+		from, err = decTx.From()
+		require.NoError(t, err)
+
+		oldHash := decTx.Hash()
+
+		assert.Equal(
+			t,
+			gethCommon.HexToHash("0xe090f3a66f269d436e4185551d790d923f53a2caabf475c18d60bf1f091813d9"),
+			oldHash,
+		)
+		assert.Equal(t, big.NewInt(255), v)
+		assert.Equal(t, new(big.Int).SetBytes(from.Bytes()), r)
+		assert.Equal(t, big.NewInt(1), s)
+
+		assert.NotEqual(t, newHash, oldHash)
 	})
 }
 
