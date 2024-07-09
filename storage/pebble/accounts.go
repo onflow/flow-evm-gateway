@@ -57,12 +57,7 @@ func (a *Accounts) Update(
 	nonce += 1
 
 	data := encodeNonce(nonce, receipt.BlockNumber.Uint64())
-	err = a.store.set(accountNonceKey, from.Bytes(), data, batch)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return a.store.set(accountNonceKey, from.Bytes(), data, batch)
 }
 
 func (a *Accounts) getNonce(address common.Address, batch *pebble.Batch) (uint64, uint64, error) {
