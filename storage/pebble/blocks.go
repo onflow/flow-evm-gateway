@@ -19,16 +19,14 @@ import (
 var _ storage.BlockIndexer = &Blocks{}
 
 type Blocks struct {
-	store                *Storage
-	mux                  sync.RWMutex
-	latestEVMHeightCache uint64
+	store *Storage
+	mux   sync.RWMutex
 }
 
 func NewBlocks(store *Storage) *Blocks {
 	return &Blocks{
-		store:                store,
-		mux:                  sync.RWMutex{},
-		latestEVMHeightCache: 0,
+		store: store,
+		mux:   sync.RWMutex{},
 	}
 }
 
@@ -83,7 +81,6 @@ func (b *Blocks) Store(
 		return fmt.Errorf("failed to set latest evm height: %w", err)
 	}
 
-	b.latestEVMHeightCache = block.Height
 	return nil
 }
 
@@ -146,10 +143,6 @@ func (b *Blocks) LatestEVMHeight() (uint64, error) {
 }
 
 func (b *Blocks) latestEVMHeight() (uint64, error) {
-	if b.latestEVMHeightCache != 0 {
-		return b.latestEVMHeightCache, nil
-	}
-
 	val, err := b.store.get(latestEVMHeightKey)
 	if err != nil {
 		if errors.Is(err, errs.ErrNotFound) {
@@ -158,9 +151,7 @@ func (b *Blocks) latestEVMHeight() (uint64, error) {
 		return 0, fmt.Errorf("failed to get height: %w", err)
 	}
 
-	h := binary.BigEndian.Uint64(val)
-	b.latestEVMHeightCache = h
-	return h, nil
+	return binary.BigEndian.Uint64(val), nil
 }
 
 func (b *Blocks) LatestCadenceHeight() (uint64, error) {
