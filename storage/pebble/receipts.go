@@ -138,7 +138,12 @@ func (r *Receipts) getByBlockHeight(height []byte, batch *pebble.Batch) ([]*mode
 		// try to decode single receipt (breaking change migration)
 		var storeReceipt models.StorageReceipt
 		if err = rlp.DecodeBytes(val, &storeReceipt); err != nil {
-			return nil, err
+			gethReceipt := gethTypes.Receipt{}
+			if err = rlp.DecodeBytes(val, &gethReceipt); err != nil {
+				return nil, err
+			}
+
+			storeReceipt = *models.NewStorageReceipt(&gethReceipt)
 		}
 
 		receipts = []*models.StorageReceipt{&storeReceipt}
