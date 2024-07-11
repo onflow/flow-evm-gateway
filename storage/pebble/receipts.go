@@ -133,20 +133,34 @@ func (r *Receipts) getByBlockHeight(height []byte, batch *pebble.Batch) ([]*mode
 	}
 
 	var receipts []*models.StorageReceipt
-	if err = rlp.DecodeBytes(val, &receipts); err != nil {
+
+	var oldReceipts []*models.StorageReceiptV0
+	if err = rlp.DecodeBytes(val, &oldReceipts); err != nil {
 		// todo remove this after previewnet is reset
 		// try to decode single receipt (breaking change migration)
-		var storeReceipt models.StorageReceipt
-		if err = rlp.DecodeBytes(val, &storeReceipt); err != nil {
-			gethReceipt := gethTypes.Receipt{}
-			if err = rlp.DecodeBytes(val, &gethReceipt); err != nil {
+		var storeReceipt models.StorageReceiptV0
+		if err = rlp.DecodeBytes(val, &storeReceipt); err == nil {
+			oldReceipts = []*models.StorageReceiptV0{&storeReceipt}
+		} else {
+			oldReceipts = []*models.StorageReceiptV0{}
+		}
+	}
+
+	for _, rcp := range oldReceipts {
+		receipts = append(receipts, rcp.ToNewReceipt())
+	}
+
+	if len(oldReceipts) == 0 {
+		if err = rlp.DecodeBytes(val, &receipts); err != nil {
+			// todo remove this after previewnet is reset
+			// try to decode single receipt (breaking change migration)
+			var storeReceipt models.StorageReceipt
+			if err = rlp.DecodeBytes(val, &storeReceipt); err != nil {
 				return nil, err
 			}
 
-			storeReceipt = *models.NewStorageReceipt(&gethReceipt)
+			receipts = []*models.StorageReceipt{&storeReceipt}
 		}
-
-		receipts = []*models.StorageReceipt{&storeReceipt}
 	}
 
 	for _, rcp := range receipts {
