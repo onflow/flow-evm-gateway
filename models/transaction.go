@@ -184,7 +184,7 @@ func (tc TransactionCall) MarshalBinary() ([]byte, error) {
 // decodeTransaction takes a cadence event for transaction executed
 // and decodes it into a Transaction interface. The concrete type
 // will be either a TransactionCall or a DirectCall.
-func decodeTransaction(event cadence.Event, evmHeight uint64) (Transaction, error) {
+func decodeTransaction(event cadence.Event) (Transaction, error) {
 	tx, err := types.DecodeTransactionEventPayload(event)
 	if err != nil {
 		return nil, fmt.Errorf("failed to cadence decode transaction: %w", err)
@@ -203,7 +203,7 @@ func decodeTransaction(event cadence.Event, evmHeight uint64) (Transaction, erro
 			return nil, fmt.Errorf("failed to rlp decode direct call: %w", err)
 		}
 
-		return DirectCall{DirectCall: directCall, blockHeight: evmHeight}, nil
+		return DirectCall{DirectCall: directCall}, nil
 	}
 
 	gethTx := &gethTypes.Transaction{}

@@ -1,7 +1,7 @@
 package pebble
 
 import (
-	"math/big"
+	"encoding/binary"
 	"sync"
 
 	"github.com/cockroachdb/pebble"
@@ -48,13 +48,15 @@ func (t *Transactions) Get(ID common.Hash) (models.Transaction, error) {
 		return nil, err
 	}
 
-	var evmHeight uint64
-	height, err := t.store.get(receiptTxIDToHeightKey, ID.Bytes())
+	// TEMP: Remove this after PreviewNet is reset.
+	// Needed only for backwards compatibility with the
+	// direct call hash calculation breaking change.
+	heightVal, err := t.store.get(latestCadenceHeightKey)
 	if err != nil {
-		evmHeight = 0
-	} else {
-		evmHeight = big.NewInt(0).SetBytes(height).Uint64()
+		heightVal = []byte{0, 0, 0, 0, 0, 0, 0, 0}
 	}
 
-	return models.UnmarshalTransaction(val, evmHeight)
+	cadenceHeight := binary.BigEndian.Uint64(heightVal)
+
+	return models.UnmarshalTransaction(val, cadenceHeight)
 }
