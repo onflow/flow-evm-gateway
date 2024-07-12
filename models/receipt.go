@@ -142,7 +142,7 @@ func decodeReceipt(event cadence.Event) (*StorageReceipt, error) {
 		}
 	}
 
-	t, err := decodeTransaction(event)
+	t, err := decodeTransaction(event, tx.BlockHeight)
 	if err != nil {
 		return nil, err
 	}
