@@ -34,7 +34,6 @@ type StreamAPI struct {
 	transactionsPublisher *models.Publisher
 	logsPublisher         *models.Publisher
 	ratelimiter           limiter.Store
-	blockPublisher        *models.Publisher
 }
 
 func NewStreamAPI(
@@ -65,7 +64,7 @@ func NewStreamAPI(
 func (s *StreamAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
 	return s.newSubscription(
 		ctx,
-		s.blockPublisher,
+		s.blocksPublisher,
 		func(notifier *rpc.Notifier, sub *rpc.Subscription) func(any) error {
 			return func(data any) error {
 				block, ok := data.(*types.Block)
