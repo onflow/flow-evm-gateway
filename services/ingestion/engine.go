@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/onflow/flow-go-sdk"
-	"github.com/onflow/flow-go/engine"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/rs/zerolog"
 
@@ -16,18 +15,17 @@ import (
 var _ models.Engine = &Engine{}
 
 type Engine struct {
-	subscriber              EventSubscriber
-	blocks                  storage.BlockIndexer
-	receipts                storage.ReceiptIndexer
-	transactions            storage.TransactionIndexer
-	accounts                storage.AccountIndexer
-	log                     zerolog.Logger
-	evmLastHeight           *models.SequentialHeight
-	status                  *models.EngineStatus
-	blocksBroadcaster       *engine.Broadcaster
-	transactionsBroadcaster *engine.Broadcaster
-	logsBroadcaster         *engine.Broadcaster
-	blocksPublisher         *models.Publisher
+	subscriber            EventSubscriber
+	blocks                storage.BlockIndexer
+	receipts              storage.ReceiptIndexer
+	transactions          storage.TransactionIndexer
+	accounts              storage.AccountIndexer
+	log                   zerolog.Logger
+	evmLastHeight         *models.SequentialHeight
+	status                *models.EngineStatus
+	blocksPublisher       *models.Publisher
+	transactionsPublisher *models.Publisher
+	logsPublisher         *models.Publisher
 }
 
 func NewEventIngestionEngine(
@@ -36,24 +34,24 @@ func NewEventIngestionEngine(
 	receipts storage.ReceiptIndexer,
 	transactions storage.TransactionIndexer,
 	accounts storage.AccountIndexer,
-	blocksBroadcaster *engine.Broadcaster,
-	transactionsBroadcaster *engine.Broadcaster,
-	logsBroadcaster *engine.Broadcaster,
+	blocksPublisher *models.Publisher,
+	transactionsPublisher *models.Publisher,
+	logsPublisher *models.Publisher,
 	log zerolog.Logger,
 ) *Engine {
 	log = log.With().Str("component", "ingestion").Logger()
 
 	return &Engine{
-		subscriber:              subscriber,
-		blocks:                  blocks,
-		receipts:                receipts,
-		transactions:            transactions,
-		accounts:                accounts,
-		log:                     log,
-		status:                  models.NewEngineStatus(),
-		blocksBroadcaster:       blocksBroadcaster,
-		transactionsBroadcaster: transactionsBroadcaster,
-		logsBroadcaster:         logsBroadcaster,
+		subscriber:            subscriber,
+		blocks:                blocks,
+		receipts:              receipts,
+		transactions:          transactions,
+		accounts:              accounts,
+		log:                   log,
+		status:                models.NewEngineStatus(),
+		blocksPublisher:       blocksPublisher,
+		transactionsPublisher: transactionsPublisher,
+		logsPublisher:         logsPublisher,
 	}
 }
 
@@ -196,7 +194,6 @@ func (e *Engine) indexBlock(cadenceHeight uint64, cadenceID flow.Identifier, blo
 		return err
 	}
 
-	e.blocksBroadcaster.Publish()
 	e.blocksPublisher.Publish(block)
 	return nil
 }
@@ -229,11 +226,11 @@ func (e *Engine) indexTransaction(tx models.Transaction, receipt *models.Storage
 		return fmt.Errorf("failed to store receipt: %w", err)
 	}
 
-	e.transactionsBroadcaster.Publish()
+	e.transactionsPublisher.Publish(tx)
 
 	// only notify if we have new logs
 	if len(receipt.Logs) > 0 {
-		e.logsBroadcaster.Publish()
+		e.logsPublisher.Publish(receipt.Logs)
 	}
 
 	return nil
