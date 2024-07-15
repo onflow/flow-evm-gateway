@@ -151,13 +151,14 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 		return err
 	}
 	for _, block := range blocks {
-		if err := e.indexBlock(
+		err := e.indexBlock(
 			events.CadenceHeight(),
 			events.CadenceBlockID(),
 			block,
 			batch,
-		); err != nil {
-			return err
+		)
+		if err != nil {
+			return fmt.Errorf("failed to index block %d event: %w", block.Height, err)
 		}
 	}
 
@@ -167,12 +168,12 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 	}
 	for i, tx := range txs {
 		if err := e.indexTransaction(tx, receipts[i], batch); err != nil {
-			return err
+			return fmt.Errorf("failed to index transaction %s event: %w", tx.Hash().String(), err)
 		}
 	}
 
 	if err := batch.Commit(pebbleDB.Sync); err != nil {
-		return fmt.Errorf("failed to commit indexed data: %w", err)
+		return fmt.Errorf("failed to commit indexed data for Cadence block %d: %w", events.CadenceHeight(), err)
 	}
 
 	// emit events for each block, transaction and logs, only after we successfully commit the data
@@ -224,11 +225,7 @@ func (e *Engine) indexBlock(
 		Strs("tx-hashes", txHashes).
 		Msg("new evm block executed event")
 
-	if err := e.blocks.Store(cadenceHeight, cadenceID, block, batch); err != nil {
-		return err
-	}
-
-	return nil
+	return e.blocks.Store(cadenceHeight, cadenceID, block, batch)
 }
 
 func (e *Engine) indexTransaction(
