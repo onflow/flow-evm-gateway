@@ -6,18 +6,16 @@ import (
 	"github.com/google/uuid"
 )
 
-/*
-publisher 	-> publish(block1)
-			-> publish(block2)
-
-publisher	-> subscribe(subscriber1)
-
-subscriber1	-> notify()
-*/
-
 type Publisher struct {
 	mux         sync.Mutex
 	subscribers map[uuid.UUID]Subscriber
+}
+
+func NewPublisher() *Publisher {
+	return &Publisher{
+		mux:         sync.Mutex{},
+		subscribers: make(map[uuid.UUID]Subscriber),
+	}
 }
 
 func (p *Publisher) Publish(data any) {
