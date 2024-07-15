@@ -8,6 +8,8 @@ import (
 
 	mock "github.com/stretchr/testify/mock"
 
+	pebble "github.com/cockroachdb/pebble"
+
 	types "github.com/onflow/flow-go/fvm/evm/types"
 )
 
@@ -218,17 +220,17 @@ func (_m *BlockIndexer) LatestEVMHeight() (uint64, error) {
 	return r0, r1
 }
 
-// SetLatestCadenceHeight provides a mock function with given fields: height
-func (_m *BlockIndexer) SetLatestCadenceHeight(height uint64) error {
-	ret := _m.Called(height)
+// SetLatestCadenceHeight provides a mock function with given fields: height, batch
+func (_m *BlockIndexer) SetLatestCadenceHeight(height uint64, batch *pebble.Batch) error {
+	ret := _m.Called(height, batch)
 
 	if len(ret) == 0 {
 		panic("no return value specified for SetLatestCadenceHeight")
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(uint64) error); ok {
-		r0 = rf(height)
+	if rf, ok := ret.Get(0).(func(uint64, *pebble.Batch) error); ok {
+		r0 = rf(height, batch)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -236,17 +238,17 @@ func (_m *BlockIndexer) SetLatestCadenceHeight(height uint64) error {
 	return r0
 }
 
-// Store provides a mock function with given fields: cadenceHeight, cadenceID, block
-func (_m *BlockIndexer) Store(cadenceHeight uint64, cadenceID flow.Identifier, block *types.Block) error {
-	ret := _m.Called(cadenceHeight, cadenceID, block)
+// Store provides a mock function with given fields: cadenceHeight, cadenceID, block, batch
+func (_m *BlockIndexer) Store(cadenceHeight uint64, cadenceID flow.Identifier, block *types.Block, batch *pebble.Batch) error {
+	ret := _m.Called(cadenceHeight, cadenceID, block, batch)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Store")
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(uint64, flow.Identifier, *types.Block) error); ok {
-		r0 = rf(cadenceHeight, cadenceID, block)
+	if rf, ok := ret.Get(0).(func(uint64, flow.Identifier, *types.Block, *pebble.Batch) error); ok {
+		r0 = rf(cadenceHeight, cadenceID, block, batch)
 	} else {
 		r0 = ret.Error(0)
 	}

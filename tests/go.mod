@@ -4,12 +4,12 @@ go 1.22
 
 require (
 	github.com/goccy/go-json v0.10.2
-	github.com/onflow/cadence v1.0.0-preview.35
+	github.com/onflow/cadence v1.0.0-preview.36
 	github.com/onflow/crypto v0.25.1
 	github.com/onflow/flow-emulator v1.0.0-preview.33
 	github.com/onflow/flow-evm-gateway v0.0.0-20240201154855-4d4d3d3f19c7
-	github.com/onflow/flow-go v0.35.14-crescendo-preview.27.0.20240626210601-604590f19db9
-	github.com/onflow/flow-go-sdk v1.0.0-preview.37
+	github.com/onflow/flow-go v0.36.0
+	github.com/onflow/flow-go-sdk v1.0.0-preview.38
 	github.com/onflow/go-ethereum v1.13.4
 	github.com/rs/zerolog v1.31.0
 	github.com/stretchr/testify v1.9.0

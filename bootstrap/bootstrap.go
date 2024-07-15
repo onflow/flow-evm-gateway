@@ -30,16 +30,16 @@ func Start(ctx context.Context, cfg *config.Config) error {
 	logger = logger.Level(cfg.LogLevel)
 	logger.Info().Msg("starting up the EVM gateway")
 
-	pebbleDB, err := pebble.New(cfg.DatabaseDir, logger)
+	store, err := pebble.New(cfg.DatabaseDir, logger)
 	if err != nil {
 		return err
 	}
 
-	blocks := pebble.NewBlocks(pebbleDB)
-	transactions := pebble.NewTransactions(pebbleDB)
-	receipts := pebble.NewReceipts(pebbleDB)
-	accounts := pebble.NewAccounts(pebbleDB)
-	trace := pebble.NewTraces(pebbleDB)
+	blocks := pebble.NewBlocks(store)
+	transactions := pebble.NewTransactions(store)
+	receipts := pebble.NewReceipts(store)
+	accounts := pebble.NewAccounts(store)
+	trace := pebble.NewTraces(store)
 
 	blocksBroadcaster := broadcast.NewBroadcaster()
 	transactionsBroadcaster := broadcast.NewBroadcaster()
@@ -48,7 +48,7 @@ func Start(ctx context.Context, cfg *config.Config) error {
 	// this should only be used locally or for testing
 	if cfg.ForceStartCadenceHeight != 0 {
 		logger.Warn().Uint64("height", cfg.ForceStartCadenceHeight).Msg("force setting starting Cadence height!!!")
-		if err := blocks.SetLatestCadenceHeight(cfg.ForceStartCadenceHeight); err != nil {
+		if err := blocks.SetLatestCadenceHeight(cfg.ForceStartCadenceHeight, nil); err != nil {
 			return err
 		}
 	}
@@ -94,6 +94,9 @@ func Start(ctx context.Context, cfg *config.Config) error {
 		logger.Info().Msg("database initialized with 0 evm and cadence heights")
 	}
 
+	// TEMP: Remove `DirectCallHashCalculationBlockHeightChange` after PreviewNet is reset
+	models.DirectCallHashCalculationBlockHeightChange = cfg.HashCalculationHeightChange
+
 	go func() {
 		err := startServer(
 			ctx,
@@ -119,6 +122,7 @@ func Start(ctx context.Context, cfg *config.Config) error {
 		ctx,
 		cfg,
 		client,
+		store,
 		blocks,
 		transactions,
 		receipts,
@@ -140,6 +144,7 @@ func startIngestion(
 	ctx context.Context,
 	cfg *config.Config,
 	client *requester.CrossSporkClient,
+	store *pebble.Storage,
 	blocks storage.BlockIndexer,
 	transactions storage.TransactionIndexer,
 	receipts storage.ReceiptIndexer,
@@ -213,6 +218,7 @@ func startIngestion(
 
 	eventEngine := ingestion.NewEventIngestionEngine(
 		subscriber,
+		store,
 		blocks,
 		receipts,
 		transactions,
@@ -344,11 +350,17 @@ func startServer(
 		debugAPI = api.NewDebugAPI(trace, blocks, logger)
 	}
 
+	var walletAPI *api.WalletAPI
+	if cfg.WalletEnabled {
+		walletAPI = api.NewWalletAPI(cfg, blockchainAPI)
+	}
+
 	supportedAPIs := api.SupportedAPIs(
 		blockchainAPI,
 		streamAPI,
 		pullAPI,
 		debugAPI,
+		walletAPI,
 		cfg,
 	)
 

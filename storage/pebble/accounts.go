@@ -7,10 +7,12 @@ import (
 	"math/big"
 	"sync"
 
+	"github.com/cockroachdb/pebble"
+	"github.com/onflow/go-ethereum/common"
+
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/storage"
 	errs "github.com/onflow/flow-evm-gateway/storage/errors"
-	"github.com/onflow/go-ethereum/common"
 )
 
 var _ storage.AccountIndexer = &Accounts{}
@@ -30,6 +32,7 @@ func NewAccounts(db *Storage) *Accounts {
 func (a *Accounts) Update(
 	tx models.Transaction,
 	receipt *models.StorageReceipt,
+	batch *pebble.Batch,
 ) error {
 	a.mux.Lock()
 	defer a.mux.Unlock()
@@ -39,7 +42,7 @@ func (a *Accounts) Update(
 		return err
 	}
 
-	nonce, height, err := a.getNonce(from)
+	nonce, height, err := a.getNonce(from, batch)
 	if err != nil {
 		return err
 	}
@@ -54,16 +57,17 @@ func (a *Accounts) Update(
 	nonce += 1
 
 	data := encodeNonce(nonce, receipt.BlockNumber.Uint64())
-	err = a.store.set(accountNonceKey, from.Bytes(), data, nil)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return a.store.set(accountNonceKey, from.Bytes(), data, batch)
 }
 
-func (a *Accounts) getNonce(address common.Address) (uint64, uint64, error) {
-	val, err := a.store.get(accountNonceKey, address.Bytes())
+func (a *Accounts) getNonce(address common.Address, batch *pebble.Batch) (uint64, uint64, error) {
+	var val []byte
+	var err error
+	if batch != nil {
+		val, err = a.store.batchGet(batch, accountNonceKey, address.Bytes())
+	} else {
+		val, err = a.store.get(accountNonceKey, address.Bytes())
+	}
 	if err != nil {
 		// if no nonce was yet saved for the account the nonce is 0
 		if errors.Is(err, errs.ErrNotFound) {
@@ -81,10 +85,10 @@ func (a *Accounts) getNonce(address common.Address) (uint64, uint64, error) {
 	return nonce, height, nil
 }
 
-func (a *Accounts) GetNonce(address *common.Address) (uint64, error) {
+func (a *Accounts) GetNonce(address common.Address) (uint64, error) {
 	a.mux.RLock()
 	defer a.mux.RUnlock()
-	nonce, _, err := a.getNonce(*address)
+	nonce, _, err := a.getNonce(address, nil)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get nonce: %w", err)
 	}
@@ -92,7 +96,7 @@ func (a *Accounts) GetNonce(address *common.Address) (uint64, error) {
 	return nonce, nil
 }
 
-func (a *Accounts) GetBalance(address *common.Address) (*big.Int, error) {
+func (a *Accounts) GetBalance(address common.Address) (*big.Int, error) {
 	panic("not supported")
 }
 

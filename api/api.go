@@ -33,6 +33,7 @@ func SupportedAPIs(
 	streamAPI *StreamAPI,
 	pullAPI *PullAPI,
 	debugAPI *DebugAPI,
+	walletAPI *WalletAPI,
 	config *config.Config,
 ) []rpc.API {
 	apis := []rpc.API{{
@@ -60,6 +61,13 @@ func SupportedAPIs(
 		apis = append(apis, rpc.API{
 			Namespace: "debug",
 			Service:   debugAPI,
+		})
+	}
+
+	if walletAPI != nil {
+		apis = append(apis, rpc.API{
+			Namespace: "eth",
+			Service:   walletAPI,
 		})
 	}
 
@@ -236,9 +244,7 @@ func (b *BlockChainAPI) GetTransactionByHash(
 		return handleError[*Transaction](b.logger, err)
 	}
 
-	txHash := tx.Hash()
-
-	rcp, err := b.receipts.GetByTransactionID(txHash)
+	rcp, err := b.receipts.GetByTransactionID(hash)
 	if err != nil {
 		return handleError[*Transaction](b.logger, err)
 	}
@@ -601,7 +607,7 @@ func (b *BlockChainAPI) GetTransactionCount(
 		return handleError[*hexutil.Uint64](b.logger, err)
 	}
 
-	nonce, err := b.accounts.GetNonce(&address)
+	nonce, err := b.accounts.GetNonce(address)
 	if err != nil {
 		b.logger.Error().Err(err).Msg("get nonce failed")
 		return handleError[*hexutil.Uint64](b.logger, errs.ErrInternal)
@@ -717,7 +723,7 @@ func (b *BlockChainAPI) fetchBlockTransactions(
 			return nil, err
 		}
 		if transaction == nil {
-			b.logger.Warn().
+			b.logger.Error().
 				Str("tx-hash", txHash.String()).
 				Uint64("evm-height", block.Height).
 				Msg("not found a transaction the block references")
@@ -961,46 +967,6 @@ The API endpoints bellow return a non-supported error indicating the API request
 This is because a decision to not support this API was made either because we don't intend to support it
 ever or we don't support it at this phase.
 */
-
-// Accounts returns the collection of accounts this node manages.
-func (b *BlockChainAPI) Accounts() []common.Address {
-	return []common.Address{}
-}
-
-// Sign calculates an ECDSA signature for:
-// keccak256("\x19Ethereum Signed Message:\n" + len(message) + message).
-//
-// Note, the produced signature conforms to the secp256k1 curve R, S and V values,
-// where the V value will be 27 or 28 for legacy reasons.
-//
-// The account associated with addr must be unlocked.
-//
-// https://github.com/ethereum/wiki/wiki/JSON-RPC#eth_sign
-func (b *BlockChainAPI) Sign(
-	addr common.Address,
-	data hexutil.Bytes,
-) (hexutil.Bytes, error) {
-	return nil, errs.ErrNotSupported
-}
-
-// SignTransaction will sign the given transaction with the from account.
-// The node needs to have the private key of the account corresponding with
-// the given from address and it needs to be unlocked.
-func (b *BlockChainAPI) SignTransaction(
-	ctx context.Context,
-	args TransactionArgs,
-) (*SignTransactionResult, error) {
-	return nil, errs.ErrNotSupported
-}
-
-// SendTransaction creates a transaction for the given argument, sign it
-// and submit it to the transaction pool.
-func (b *BlockChainAPI) SendTransaction(
-	ctx context.Context,
-	args TransactionArgs,
-) (common.Hash, error) {
-	return common.Hash{}, errs.ErrNotSupported
-}
 
 // GetProof returns the Merkle-proof for a given account and optionally some storage keys.
 func (b *BlockChainAPI) GetProof(
