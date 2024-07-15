@@ -18,7 +18,7 @@ var _ models.Engine = &Engine{}
 
 type Engine struct {
 	subscriber            EventSubscriber
-	store                   *pebble.Storage
+	store                 *pebble.Storage
 	blocks                storage.BlockIndexer
 	receipts              storage.ReceiptIndexer
 	transactions          storage.TransactionIndexer
@@ -47,7 +47,7 @@ func NewEventIngestionEngine(
 
 	return &Engine{
 		subscriber:            subscriber,
-		store:                   store,
+		store:                 store,
 		blocks:                blocks,
 		receipts:              receipts,
 		transactions:          transactions,
@@ -176,14 +176,15 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 	}
 
 	// emit events for each block, transaction and logs, only after we successfully commit the data
-	for range blocks {
-		e.blocksBroadcaster.Publish()
+	for _, b := range blocks {
+		e.blocksPublisher.Publish(b)
 	}
 
-	for _, r := range receipts {
-		e.transactionsBroadcaster.Publish()
+	for i, r := range receipts {
+		e.transactionsPublisher.Publish(txs[i])
+
 		if len(r.Logs) > 0 {
-			e.logsBroadcaster.Publish()
+			e.logsPublisher.Publish(r.Logs)
 		}
 	}
 
