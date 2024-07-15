@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/onflow/flow-go/engine"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/go-ethereum/common"
 	"github.com/onflow/go-ethereum/common/hexutil"
@@ -26,16 +25,16 @@ import (
 const subscriptionBufferLimit = 1
 
 type StreamAPI struct {
-	logger                  zerolog.Logger
-	config                  *config.Config
-	blocks                  storage.BlockIndexer
-	transactions            storage.TransactionIndexer
-	receipts                storage.ReceiptIndexer
-	blocksBroadcaster       *engine.Broadcaster
-	transactionsBroadcaster *engine.Broadcaster
-	logsBroadcaster         *engine.Broadcaster
-	ratelimiter             limiter.Store
-	blockPublisher          *models.Publisher
+	logger                zerolog.Logger
+	config                *config.Config
+	blocks                storage.BlockIndexer
+	transactions          storage.TransactionIndexer
+	receipts              storage.ReceiptIndexer
+	blocksPublisher       *models.Publisher
+	transactionsPublisher *models.Publisher
+	logsPublisher         *models.Publisher
+	ratelimiter           limiter.Store
+	blockPublisher        *models.Publisher
 }
 
 func NewStreamAPI(
@@ -44,79 +43,87 @@ func NewStreamAPI(
 	blocks storage.BlockIndexer,
 	transactions storage.TransactionIndexer,
 	receipts storage.ReceiptIndexer,
-	blocksBroadcaster *engine.Broadcaster,
-	transactionsBroadcaster *engine.Broadcaster,
-	logsBroadcaster *engine.Broadcaster,
+	blocksPublisher *models.Publisher,
+	transactionsPublisher *models.Publisher,
+	logsPublisher *models.Publisher,
 	ratelimiter limiter.Store,
 ) *StreamAPI {
 	return &StreamAPI{
-		logger:                  logger,
-		config:                  config,
-		blocks:                  blocks,
-		transactions:            transactions,
-		receipts:                receipts,
-		blocksBroadcaster:       blocksBroadcaster,
-		transactionsBroadcaster: transactionsBroadcaster,
-		logsBroadcaster:         logsBroadcaster,
-		ratelimiter:             ratelimiter,
+		logger:                logger,
+		config:                config,
+		blocks:                blocks,
+		transactions:          transactions,
+		receipts:              receipts,
+		blocksPublisher:       blocksPublisher,
+		transactionsPublisher: transactionsPublisher,
+		logsPublisher:         logsPublisher,
+		ratelimiter:           ratelimiter,
 	}
 }
 
 // NewHeads send a notification each time a new block is appended to the chain.
 func (s *StreamAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
-	return s.newSubscription(ctx, func(notifier *rpc.Notifier, sub *rpc.Subscription) func(any) error {
-		return func(data any) error {
-			block, ok := data.(*types.Block)
-			if !ok {
-				return fmt.Errorf("invalid data sent to block subscription")
-			}
+	return s.newSubscription(
+		ctx,
+		s.blockPublisher,
+		func(notifier *rpc.Notifier, sub *rpc.Subscription) func(any) error {
+			return func(data any) error {
+				block, ok := data.(*types.Block)
+				if !ok {
+					return fmt.Errorf("invalid data sent to block subscription")
+				}
 
-			h, err := block.Hash()
-			if err != nil {
-				return err
-			}
+				h, err := block.Hash()
+				if err != nil {
+					return err
+				}
 
-			return notifier.Notify(sub.ID, &Block{
-				Hash:          h,
-				Number:        hexutil.Uint64(block.Height),
-				ParentHash:    block.ParentBlockHash,
-				ReceiptsRoot:  block.ReceiptRoot,
-				Transactions:  block.TransactionHashes,
-				Uncles:        []common.Hash{},
-				GasLimit:      hexutil.Uint64(blockGasLimit),
-				Nonce:         gethTypes.BlockNonce{0x1},
-				Timestamp:     hexutil.Uint64(block.Timestamp),
-				BaseFeePerGas: hexutil.Big(*big.NewInt(0)),
-			})
-		}
-	})
+				return notifier.Notify(sub.ID, &Block{
+					Hash:          h,
+					Number:        hexutil.Uint64(block.Height),
+					ParentHash:    block.ParentBlockHash,
+					ReceiptsRoot:  block.ReceiptRoot,
+					Transactions:  block.TransactionHashes,
+					Uncles:        []common.Hash{},
+					GasLimit:      hexutil.Uint64(blockGasLimit),
+					Nonce:         gethTypes.BlockNonce{0x1},
+					Timestamp:     hexutil.Uint64(block.Timestamp),
+					BaseFeePerGas: hexutil.Big(*big.NewInt(0)),
+				})
+			}
+		},
+	)
 }
 
 // NewPendingTransactions creates a subscription that is triggered each time a
 // transaction enters the transaction pool. If fullTx is true the full tx is
 // sent to the client, otherwise the hash is sent.
 func (s *StreamAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) (*rpc.Subscription, error) {
-	return s.newSubscription(ctx, func(notifier *rpc.Notifier, sub *rpc.Subscription) func(any) error {
-		return func(data any) error {
-			tx, ok := data.(models.Transaction)
-			if !ok {
-				return fmt.Errorf("invalid data sent to pending transaction subscription")
-			}
-
-			var res any
-			if fullTx != nil && *fullTx {
-				if r, err := NewTransaction(tx, s.config.EVMNetworkID); err != nil {
-					return err
-				} else {
-					res = r
+	return s.newSubscription(
+		ctx,
+		s.transactionsPublisher,
+		func(notifier *rpc.Notifier, sub *rpc.Subscription) func(any) error {
+			return func(data any) error {
+				tx, ok := data.(models.Transaction)
+				if !ok {
+					return fmt.Errorf("invalid data sent to pending transaction subscription")
 				}
-			} else {
-				res = tx.Hash()
-			}
 
-			return notifier.Notify(sub.ID, res)
-		}
-	})
+				var res any
+				if fullTx != nil && *fullTx {
+					if r, err := NewTransaction(tx, s.config.EVMNetworkID); err != nil {
+						return err
+					} else {
+						res = r
+					}
+				} else {
+					res = tx.Hash()
+				}
+
+				return notifier.Notify(sub.ID, res)
+			}
+		},
+	)
 }
 
 // Logs creates a subscription that fires for all new log that match the given filter criteria.
@@ -126,30 +133,35 @@ func (s *StreamAPI) Logs(ctx context.Context, criteria filters.FilterCriteria) (
 		return nil, fmt.Errorf("failed to crete log subscription filter: %w", err)
 	}
 
-	return s.newSubscription(ctx, func(notifier *rpc.Notifier, sub *rpc.Subscription) func(any) error {
-		return func(data any) error {
-			allLogs, ok := data.([]*gethTypes.Log)
-			if !ok {
-				return fmt.Errorf("invalid data sent to log subscription")
-			}
-
-			for _, log := range allLogs {
-				if !logs.ExactMatch(log, logCriteria) {
-					continue
+	return s.newSubscription(
+		ctx,
+		s.logsPublisher,
+		func(notifier *rpc.Notifier, sub *rpc.Subscription) func(any) error {
+			return func(data any) error {
+				allLogs, ok := data.([]*gethTypes.Log)
+				if !ok {
+					return fmt.Errorf("invalid data sent to log subscription")
 				}
 
-				if err := notifier.Notify(sub.ID, log); err != nil {
-					return err
-				}
-			}
+				for _, log := range allLogs {
+					if !logs.ExactMatch(log, logCriteria) {
+						continue
+					}
 
-			return nil
-		}
-	})
+					if err := notifier.Notify(sub.ID, log); err != nil {
+						return err
+					}
+				}
+
+				return nil
+			}
+		},
+	)
 }
 
 func (s *StreamAPI) newSubscription(
 	ctx context.Context,
+	publisher *models.Publisher,
 	callback func(notifier *rpc.Notifier, sub *rpc.Subscription) func(any) error,
 ) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
@@ -164,10 +176,10 @@ func (s *StreamAPI) newSubscription(
 	rpcSub.ID = rpc.ID(subs.ID().String())
 	l := s.logger.With().Str("subscription-id", subs.ID().String()).Logger()
 
-	s.blockPublisher.Subscribe(subs)
+	publisher.Subscribe(subs)
 
 	go func() {
-		defer s.blockPublisher.Unsubscribe(subs)
+		defer publisher.Unsubscribe(subs)
 
 		for {
 			select {
