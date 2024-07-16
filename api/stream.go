@@ -143,6 +143,8 @@ func (s *StreamAPI) Logs(ctx context.Context, criteria filters.FilterCriteria) (
 				}
 
 				for _, log := range allLogs {
+					// todo we could optimize this matching for cases where we have multiple subscriptions
+					// using the same filter criteria, we could only filter once and stream to all subscribers
 					if !logs.ExactMatch(log, logCriteria) {
 						continue
 					}
