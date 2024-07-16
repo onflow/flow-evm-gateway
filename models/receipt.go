@@ -129,19 +129,6 @@ func decodeReceipt(event cadence.Event) (*StorageReceipt, error) {
 		return nil, fmt.Errorf("failed to cadence decode receipt: %w", err)
 	}
 
-	encLogs, err := hex.DecodeString(tx.Logs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to hex decode receipt: %w", err)
-	}
-
-	var logs []*gethTypes.Log
-	if len(encLogs) > 0 {
-		err = rlp.Decode(bytes.NewReader(encLogs), &logs)
-		if err != nil {
-			return nil, fmt.Errorf("failed to rlp decode receipt: %w", err)
-		}
-	}
-
 	t, err := decodeTransaction(event, tx.BlockHeight)
 	if err != nil {
 		return nil, err
@@ -150,7 +137,6 @@ func decodeReceipt(event cadence.Event) (*StorageReceipt, error) {
 	receipt := &gethTypes.Receipt{
 		BlockNumber:       big.NewInt(int64(tx.BlockHeight)),
 		Type:              tx.TransactionType,
-		Logs:              logs,
 		TxHash:            common.HexToHash(tx.Hash),
 		ContractAddress:   common.HexToAddress(tx.ContractAddress),
 		GasUsed:           tx.GasConsumed,
@@ -158,6 +144,26 @@ func decodeReceipt(event cadence.Event) (*StorageReceipt, error) {
 		EffectiveGasPrice: t.GasPrice(),   // since there's no base fee we can always use gas price
 		TransactionIndex:  uint(tx.Index),
 		BlockHash:         common.HexToHash(tx.BlockHash),
+	}
+
+	encLogs, err := hex.DecodeString(tx.Logs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to hex decode receipt: %w", err)
+	}
+
+	if len(encLogs) > 0 {
+		err = rlp.Decode(bytes.NewReader(encLogs), &receipt.Logs)
+		if err != nil {
+			return nil, fmt.Errorf("failed to rlp decode receipt: %w", err)
+		}
+
+		// dynamically add missing log fields
+		for _, l := range receipt.Logs {
+			l.BlockHash = receipt.BlockHash
+			l.TxHash = receipt.TxHash
+			l.BlockNumber = receipt.BlockNumber.Uint64()
+			l.Index = receipt.TransactionIndex
+		}
 	}
 
 	if tx.ErrorCode == uint16(types.ErrCodeNoError) {
