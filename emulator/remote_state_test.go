@@ -25,6 +25,7 @@ func Test_E2E_Previewnet_RemoteLedger(t *testing.T) {
 	testAddress := types.NewAddressFromBytes(addrBytes).ToCommon()
 
 	stateDB, err := state.NewStateDB(ledger, previewnetStorage)
+	require.NoError(t, err)
 
 	assert.NotEmpty(t, stateDB.GetCode(testAddress))
 	assert.NotEmpty(t, stateDB.GetNonce(testAddress))
