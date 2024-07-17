@@ -72,17 +72,13 @@ func (c *CadenceEvents) Transactions() ([]Transaction, []*StorageReceipt, error)
 	rcps := make([]*StorageReceipt, 0)
 	for _, e := range c.events.Events {
 		if isTransactionExecutedEvent(e.Value) {
-			tx, err := decodeTransaction(e.Value)
-			if err != nil {
-				return nil, nil, err
-			}
-			rcp, err := decodeReceipt(e.Value)
+			tx, receipt, err := decodeTransactionEvent(e.Value)
 			if err != nil {
 				return nil, nil, err
 			}
 
 			txs = append(txs, tx)
-			rcps = append(rcps, rcp)
+			rcps = append(rcps, receipt)
 		}
 	}
 

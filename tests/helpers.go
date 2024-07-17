@@ -137,23 +137,24 @@ func servicesSetup(t *testing.T) (emulator.Emulator, func()) {
 
 	// default config
 	cfg := &config.Config{
-		DatabaseDir:       t.TempDir(),
-		AccessNodeHost:    "localhost:3569", // emulator
-		RPCPort:           8545,
-		RPCHost:           "127.0.0.1",
-		FlowNetworkID:     "flow-emulator",
-		EVMNetworkID:      evmTypes.FlowEVMPreviewNetChainID,
-		Coinbase:          common.HexToAddress(eoaTestAddress),
-		COAAddress:        service.Address,
-		COAKey:            service.PrivateKey,
-		CreateCOAResource: false,
-		GasPrice:          new(big.Int).SetUint64(0),
-		LogLevel:          zerolog.DebugLevel,
-		LogWriter:         testLogWriter(),
-		StreamTimeout:     time.Second * 30,
-		StreamLimit:       10,
-		RateLimit:         50,
-		WSEnabled:         true,
+		DatabaseDir:                 t.TempDir(),
+		AccessNodeHost:              "localhost:3569", // emulator
+		RPCPort:                     8545,
+		RPCHost:                     "127.0.0.1",
+		FlowNetworkID:               "flow-emulator",
+		EVMNetworkID:                evmTypes.FlowEVMPreviewNetChainID,
+		Coinbase:                    common.HexToAddress(eoaTestAddress),
+		COAAddress:                  service.Address,
+		COAKey:                      service.PrivateKey,
+		CreateCOAResource:           false,
+		GasPrice:                    new(big.Int).SetUint64(0),
+		LogLevel:                    zerolog.DebugLevel,
+		LogWriter:                   testLogWriter(),
+		StreamTimeout:               time.Second * 30,
+		StreamLimit:                 10,
+		RateLimit:                   50,
+		WSEnabled:                   true,
+		HashCalculationHeightChange: 0,
 	}
 
 	go func() {
@@ -172,7 +173,7 @@ func servicesSetup(t *testing.T) (emulator.Emulator, func()) {
 // and will report failure or success of the test.
 func executeTest(t *testing.T, testFile string) {
 	command := fmt.Sprintf(
-		"./web3js/node_modules/.bin/mocha ./web3js/%s.js --timeout 120s --retries 3",
+		"./web3js/node_modules/.bin/mocha ./web3js/%s.js --timeout 120s",
 		testFile,
 	)
 	parts := strings.Fields(command)

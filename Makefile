@@ -24,7 +24,7 @@ fix-lint:
 
 .PHONY: generate
 generate:
-	go get -d github.com/vektra/mockery/v2@v2.43.2
+	go install github.com/vektra/mockery/v2@v2.43.2
 	mockery --dir=storage --name=BlockIndexer --output=storage/mocks
 	mockery --dir=storage --name=ReceiptIndexer --output=storage/mocks
 	mockery --dir=storage --name=TransactionIndexer --output=storage/mocks

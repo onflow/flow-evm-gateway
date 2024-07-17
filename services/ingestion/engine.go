@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	pebbleDB "github.com/cockroachdb/pebble"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go/engine"
 	"github.com/onflow/flow-go/fvm/evm/types"
@@ -11,12 +12,14 @@ import (
 
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/storage"
+	"github.com/onflow/flow-evm-gateway/storage/pebble"
 )
 
 var _ models.Engine = &Engine{}
 
 type Engine struct {
 	subscriber              EventSubscriber
+	store                   *pebble.Storage
 	blocks                  storage.BlockIndexer
 	receipts                storage.ReceiptIndexer
 	transactions            storage.TransactionIndexer
@@ -31,6 +34,7 @@ type Engine struct {
 
 func NewEventIngestionEngine(
 	subscriber EventSubscriber,
+	store *pebble.Storage,
 	blocks storage.BlockIndexer,
 	receipts storage.ReceiptIndexer,
 	transactions storage.TransactionIndexer,
@@ -44,6 +48,7 @@ func NewEventIngestionEngine(
 
 	return &Engine{
 		subscriber:              subscriber,
+		store:                   store,
 		blocks:                  blocks,
 		receipts:                receipts,
 		transactions:            transactions,
@@ -132,11 +137,14 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 
 	// if heartbeat interval with no data still update the cadence height
 	if events.Empty() {
-		if err := e.blocks.SetLatestCadenceHeight(events.CadenceHeight()); err != nil {
+		if err := e.blocks.SetLatestCadenceHeight(events.CadenceHeight(), nil); err != nil {
 			return fmt.Errorf("failed to update to latest cadence height during events ingestion: %w", err)
 		}
 		return nil // nothing else to do this was heartbeat event with not event payloads
 	}
+
+	batch := e.store.NewBatch()
+	defer batch.Close()
 
 	// we first index evm blocks only then transactions if any present
 	blocks, err := events.Blocks()
@@ -144,7 +152,12 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 		return err
 	}
 	for _, block := range blocks {
-		if err := e.indexBlock(events.CadenceHeight(), events.CadenceBlockID(), block); err != nil {
+		if err := e.indexBlock(
+			events.CadenceHeight(),
+			events.CadenceBlockID(),
+			block,
+			batch,
+		); err != nil {
 			return err
 		}
 	}
@@ -154,15 +167,36 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 		return err
 	}
 	for i, tx := range txs {
-		if err := e.indexTransaction(tx, receipts[i]); err != nil {
+		if err := e.indexTransaction(tx, receipts[i], batch); err != nil {
 			return err
+		}
+	}
+
+	if err := batch.Commit(pebbleDB.Sync); err != nil {
+		return fmt.Errorf("failed to commit indexed data: %w", err)
+	}
+
+	// emit events for each block, transaction and logs, only after we successfully commit the data
+	for range blocks {
+		e.blocksBroadcaster.Publish()
+	}
+
+	for _, r := range receipts {
+		e.transactionsBroadcaster.Publish()
+		if len(r.Logs) > 0 {
+			e.logsBroadcaster.Publish()
 		}
 	}
 
 	return nil
 }
 
-func (e *Engine) indexBlock(cadenceHeight uint64, cadenceID flow.Identifier, block *types.Block) error {
+func (e *Engine) indexBlock(
+	cadenceHeight uint64,
+	cadenceID flow.Identifier,
+	block *types.Block,
+	batch *pebbleDB.Batch,
+) error {
 	if block == nil { // safety check shouldn't happen
 		return fmt.Errorf("can't process empty block")
 	}
@@ -190,48 +224,40 @@ func (e *Engine) indexBlock(cadenceHeight uint64, cadenceID flow.Identifier, blo
 		Strs("tx-hashes", txHashes).
 		Msg("new evm block executed event")
 
-	// todo should probably be batch in the same as bellow tx
-	if err := e.blocks.Store(cadenceHeight, cadenceID, block); err != nil {
+	if err := e.blocks.Store(cadenceHeight, cadenceID, block, batch); err != nil {
 		return err
 	}
 
-	e.blocksBroadcaster.Publish()
 	return nil
 }
 
-func (e *Engine) indexTransaction(tx models.Transaction, receipt *models.StorageReceipt) error {
+func (e *Engine) indexTransaction(
+	tx models.Transaction,
+	receipt *models.StorageReceipt,
+	batch *pebbleDB.Batch,
+) error {
 	if tx == nil || receipt == nil { // safety check shouldn't happen
 		return fmt.Errorf("can't process empty tx or receipt")
 	}
-
-	txHash := tx.Hash()
 
 	e.log.Info().
 		Str("contract-address", receipt.ContractAddress.String()).
 		Int("log-count", len(receipt.Logs)).
 		Uint64("evm-height", receipt.BlockNumber.Uint64()).
 		Uint("tx-index", receipt.TransactionIndex).
-		Str("tx-hash", txHash.String()).
+		Str("tx-hash", tx.Hash().String()).
 		Msg("ingesting new transaction executed event")
 
-	// todo think if we could introduce batching
-	if err := e.transactions.Store(tx); err != nil {
+	if err := e.transactions.Store(tx, batch); err != nil {
 		return fmt.Errorf("failed to store tx: %w", err)
 	}
 
-	if err := e.accounts.Update(tx, receipt); err != nil {
+	if err := e.accounts.Update(tx, receipt, batch); err != nil {
 		return fmt.Errorf("failed to update accounts: %w", err)
 	}
 
-	if err := e.receipts.Store(receipt); err != nil {
+	if err := e.receipts.Store(receipt, batch); err != nil {
 		return fmt.Errorf("failed to store receipt: %w", err)
-	}
-
-	e.transactionsBroadcaster.Publish()
-
-	// only notify if we have new logs
-	if len(receipt.Logs) > 0 {
-		e.logsBroadcaster.Publish()
 	}
 
 	return nil

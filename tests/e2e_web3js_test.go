@@ -18,7 +18,7 @@ func TestWeb3_E2E(t *testing.T) {
 		runWeb3Test(t, "setup_test")
 	})
 
-	t.Run("test net_* JSON-RPC endpoints", func(t *testing.T) {
+	t.Run("test net JSON-RPC endpoints", func(t *testing.T) {
 		runWeb3Test(t, "net_namespace_test")
 	})
 
@@ -30,7 +30,7 @@ func TestWeb3_E2E(t *testing.T) {
 		runWeb3Test(t, "eth_deploy_contract_and_interact_test")
 	})
 
-	t.Run("eth_getTransactionByHash", func(t *testing.T) {
+	t.Run("test fetch transaction", func(t *testing.T) {
 		runWeb3Test(t, "eth_get_transaction_by_hash_test")
 	})
 
@@ -46,7 +46,7 @@ func TestWeb3_E2E(t *testing.T) {
 		runWeb3Test(t, "eth_logs_filtering_test")
 	})
 
-	t.Run("eth_getFilterLogs", func(t *testing.T) {
+	t.Run("test get filter logs", func(t *testing.T) {
 		runWeb3Test(t, "eth_get_filter_logs_test")
 	})
 

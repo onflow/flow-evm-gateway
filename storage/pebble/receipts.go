@@ -38,7 +38,7 @@ func NewReceipts(store *Storage) *Receipts {
 // - receipt transaction ID => block height bytes
 // - receipt block height => list of encoded receipts (1+ per block)
 // - receipt block height => list of bloom filters (1+ per block)
-func (r *Receipts) Store(receipt *models.StorageReceipt) error {
+func (r *Receipts) Store(receipt *models.StorageReceipt, batch *pebble.Batch) error {
 	r.mux.Lock()
 	defer r.mux.Unlock()
 
@@ -46,13 +46,13 @@ func (r *Receipts) Store(receipt *models.StorageReceipt) error {
 	// and if found we must add to the list, because this method can be called multiple
 	// times when indexing a single EVM height, which can contain multiple receipts
 	blockHeight := receipt.BlockNumber.Bytes()
-	receipts, err := r.getByBlockHeight(blockHeight)
+	receipts, err := r.getByBlockHeight(blockHeight, batch)
 	if err != nil && !errors.Is(err, errs.ErrNotFound) { // anything but not found is failure
 		return fmt.Errorf("failed to store receipt to height, retrieve exisint receipt errror: %w", err)
 	}
 
 	// same goes for blooms
-	blooms, err := r.getBloomsByBlockHeight(blockHeight)
+	blooms, err := r.getBloomsByBlockHeight(blockHeight, batch)
 	if err != nil && !errors.Is(err, errs.ErrNotFound) {
 		return fmt.Errorf("failed to store receipt to height, retrieve existing blooms error: %w", err)
 	}
@@ -62,9 +62,6 @@ func (r *Receipts) Store(receipt *models.StorageReceipt) error {
 	// line will init an empty receipts slice with only the provided receipt
 	receipts = append(receipts, receipt)
 	blooms = append(blooms, &receipt.Bloom)
-
-	batch := r.store.newBatch()
-	defer batch.Close()
 
 	val, err := rlp.EncodeToBytes(receipts)
 	if err != nil {
@@ -90,10 +87,6 @@ func (r *Receipts) Store(receipt *models.StorageReceipt) error {
 		return fmt.Errorf("failed to store bloom height: %w", err)
 	}
 
-	if err := batch.Commit(pebble.Sync); err != nil {
-		return fmt.Errorf("failed to commit receipt batch: %w", err)
-	}
-
 	return nil
 }
 
@@ -106,7 +99,7 @@ func (r *Receipts) GetByTransactionID(ID common.Hash) (*models.StorageReceipt, e
 		return nil, fmt.Errorf("failed to get receipt by tx ID: %w", err)
 	}
 
-	receipts, err := r.getByBlockHeight(height)
+	receipts, err := r.getByBlockHeight(height, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get receipt by height: %w", err)
 	}
@@ -124,25 +117,50 @@ func (r *Receipts) GetByBlockHeight(height *big.Int) ([]*models.StorageReceipt, 
 	r.mux.RLock()
 	defer r.mux.RUnlock()
 
-	return r.getByBlockHeight(height.Bytes())
+	return r.getByBlockHeight(height.Bytes(), nil)
 }
 
-func (r *Receipts) getByBlockHeight(height []byte) ([]*models.StorageReceipt, error) {
-	val, err := r.store.get(receiptHeightKey, height)
+func (r *Receipts) getByBlockHeight(height []byte, batch *pebble.Batch) ([]*models.StorageReceipt, error) {
+	var val []byte
+	var err error
+	if batch != nil {
+		val, err = r.store.batchGet(batch, receiptHeightKey, height)
+	} else {
+		val, err = r.store.get(receiptHeightKey, height)
+	}
 	if err != nil {
 		return nil, err
 	}
 
 	var receipts []*models.StorageReceipt
-	if err = rlp.DecodeBytes(val, &receipts); err != nil {
+
+	var oldReceipts []*models.StorageReceiptV0
+	if err = rlp.DecodeBytes(val, &oldReceipts); err != nil {
 		// todo remove this after previewnet is reset
 		// try to decode single receipt (breaking change migration)
-		var storeReceipt models.StorageReceipt
-		if err = rlp.DecodeBytes(val, &storeReceipt); err != nil {
-			return nil, err
+		var storeReceipt models.StorageReceiptV0
+		if err = rlp.DecodeBytes(val, &storeReceipt); err == nil {
+			oldReceipts = []*models.StorageReceiptV0{&storeReceipt}
+		} else {
+			oldReceipts = []*models.StorageReceiptV0{}
 		}
+	}
 
-		receipts = []*models.StorageReceipt{&storeReceipt}
+	for _, rcp := range oldReceipts {
+		receipts = append(receipts, rcp.ToNewReceipt())
+	}
+
+	if len(oldReceipts) == 0 {
+		if err = rlp.DecodeBytes(val, &receipts); err != nil {
+			// todo remove this after previewnet is reset
+			// try to decode single receipt (breaking change migration)
+			var storeReceipt models.StorageReceipt
+			if err = rlp.DecodeBytes(val, &storeReceipt); err != nil {
+				return nil, err
+			}
+
+			receipts = []*models.StorageReceipt{&storeReceipt}
+		}
 	}
 
 	for _, rcp := range receipts {
@@ -159,8 +177,14 @@ func (r *Receipts) getByBlockHeight(height []byte) ([]*models.StorageReceipt, er
 	return receipts, nil
 }
 
-func (r *Receipts) getBloomsByBlockHeight(height []byte) ([]*gethTypes.Bloom, error) {
-	val, err := r.store.get(bloomHeightKey, height)
+func (r *Receipts) getBloomsByBlockHeight(height []byte, batch *pebble.Batch) ([]*gethTypes.Bloom, error) {
+	var val []byte
+	var err error
+	if batch != nil {
+		val, err = r.store.batchGet(batch, bloomHeightKey, height)
+	} else {
+		val, err = r.store.get(bloomHeightKey, height)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to get bloom at height: %w", err)
 	}
