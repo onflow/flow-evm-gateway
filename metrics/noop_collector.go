@@ -6,5 +6,5 @@ import (
 
 type NoopCollector struct{}
 
-func (c *NoopCollector) ApiErrorOccurred()                 {}
-func (c *NoopCollector) RequestTimeMeasured(time.Duration) {}
+func (c *NoopCollector) ApiErrorOccurred()             {}
+func (c *NoopCollector) RequestTimeMeasured(time.Time) {}

@@ -143,7 +143,7 @@ func (b *BlockChainAPI) GasPrice(ctx context.Context) (*hexutil.Big, error) {
 // BlockNumber returns the block number of the chain head.
 func (b *BlockChainAPI) BlockNumber(ctx context.Context) (hexutil.Uint64, error) {
 	start := time.Now()
-	defer b.collector.RequestTimeMeasured(time.Since(start))
+	defer b.collector.RequestTimeMeasured(start)
 
 	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
 		return 0, err

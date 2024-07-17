@@ -8,7 +8,7 @@ import (
 
 type Collector interface {
 	ApiErrorOccurred()
-	RequestTimeMeasured(duration time.Duration)
+	RequestTimeMeasured(start time.Time)
 }
 
 type DefaultCollector struct {
@@ -45,6 +45,7 @@ func (c *DefaultCollector) ApiErrorOccurred() {
 	c.apiErrors.Inc()
 }
 
-func (c *DefaultCollector) RequestTimeMeasured(duration time.Duration) {
+func (c *DefaultCollector) RequestTimeMeasured(start time.Time) {
+	duration := time.Since(start)
 	c.responseTime.Observe(float64(duration))
 }
