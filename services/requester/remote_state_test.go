@@ -1,4 +1,4 @@
-package emulator
+package requester
 
 import (
 	"context"
@@ -24,7 +24,7 @@ func Test_E2E_Previewnet_RemoteLedger(t *testing.T) {
 	require.NoError(t, err)
 	testAddress := types.NewAddressFromBytes(addrBytes).ToCommon()
 
-	stateDB, err := state.NewStateDB(ledger, previewnetStorage)
+	stateDB, err := state.NewStateDB(ledger, previewnetStorageAddress)
 
 	assert.NotEmpty(t, stateDB.GetCode(testAddress))
 	assert.NotEmpty(t, stateDB.GetNonce(testAddress))
@@ -50,7 +50,7 @@ func Benchmark_RemoteLedger_GetBalance(b *testing.B) {
 		ledger, err := newRemoteLedger(previewnetHost, cadenceHeight)
 		require.NoError(b, err)
 
-		stateDB, err := state.NewStateDB(ledger, previewnetStorage)
+		stateDB, err := state.NewStateDB(ledger, previewnetStorageAddress)
 		require.NoError(b, err)
 
 		addrBytes, err := hex.DecodeString("BC9985a24c0846cbEdd6249868020A84Df83Ea85")
