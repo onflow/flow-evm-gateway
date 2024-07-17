@@ -28,7 +28,7 @@ func Test_E2E_Previewnet_RemoteLedger(t *testing.T) {
 
 	assert.NotEmpty(t, stateDB.GetCode(testAddress))
 	assert.NotEmpty(t, stateDB.GetNonce(testAddress))
-	assert.NotEmpty(t, stateDB.GetBalance(testAddress))
+	assert.Empty(t, stateDB.GetBalance(testAddress))
 	assert.NotEmpty(t, stateDB.GetCodeSize(testAddress))
 	assert.NotEmpty(t, stateDB.GetState(testAddress, gethCommon.Hash{}))
 }
