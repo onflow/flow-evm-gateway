@@ -3,7 +3,6 @@ package emulator
 import (
 	"context"
 	"encoding/hex"
-	"fmt"
 	"testing"
 
 	"github.com/onflow/flow-go/fvm/evm/emulator/state"
@@ -35,22 +34,20 @@ func Test_E2E_Previewnet_RemoteLedger(t *testing.T) {
 }
 
 func Benchmark_RemoteLedger_GetBalance(b *testing.B) {
-	ledger, err := newPreviewnetLedger()
-	require.NoError(b, err)
-
-	stateDB, err := state.NewStateDB(ledger, previewnetStorage)
-
-	// we generate a big random list of addresses, so we avoid any caching in benchmarks
-	const count = 80
-	addresses := make([]gethCommon.Address, count)
-	for i := range addresses {
-		addrBytes, err := hex.DecodeString(fmt.Sprintf("BC9985a24c0846cbEdd6249868020A84Df83Ea%d", i+10))
-		require.NoError(b, err)
-		addresses[i] = types.NewAddressFromBytes(addrBytes).ToCommon()
-	}
-
+	// we have to include ledger creation since the loading of the collection
+	// will be done only once per height, all the subsequent requests for
+	// getting the balance will work on already loaded state and thus be fast
 	for i := 0; i < b.N; i++ {
-		assert.Empty(b, stateDB.GetBalance(addresses[b.N%count]))
+		ledger, err := newPreviewnetLedger()
+		require.NoError(b, err)
+
+		stateDB, err := state.NewStateDB(ledger, previewnetStorage)
+
+		addrBytes, err := hex.DecodeString("BC9985a24c0846cbEdd6249868020A84Df83Ea85")
+		require.NoError(b, err)
+		testAddress := types.NewAddressFromBytes(addrBytes).ToCommon()
+
+		assert.Empty(b, stateDB.GetBalance(testAddress))
 	}
 }
 
