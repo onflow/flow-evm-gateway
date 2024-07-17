@@ -9,6 +9,7 @@ import (
 	"github.com/onflow/go-ethereum/rpc"
 	"github.com/rs/zerolog"
 
+	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/storage"
 )
 
@@ -35,7 +36,7 @@ func (d *DebugAPI) TraceTransaction(
 ) (json.RawMessage, error) {
 	res, err := d.tracer.GetTransaction(hash)
 	if err != nil {
-		return handleError[json.RawMessage](d.logger, err)
+		return handleError[json.RawMessage](d.logger, &metrics.NoopCollector{}, err)
 	}
 	return res, nil
 }
@@ -47,7 +48,7 @@ func (d *DebugAPI) TraceBlockByNumber(
 ) ([]json.RawMessage, error) {
 	block, err := d.blocks.GetByHeight(uint64(number.Int64()))
 	if err != nil {
-		return handleError[[]json.RawMessage](d.logger, err)
+		return handleError[[]json.RawMessage](d.logger, &metrics.NoopCollector{}, err)
 	}
 
 	results := make([]json.RawMessage, len(block.TransactionHashes))
@@ -68,7 +69,7 @@ func (d *DebugAPI) TraceBlockByHash(
 ) ([]json.RawMessage, error) {
 	block, err := d.blocks.GetByID(hash)
 	if err != nil {
-		return handleError[[]json.RawMessage](d.logger, err)
+		return handleError[[]json.RawMessage](d.logger, &metrics.NoopCollector{}, err)
 	}
 
 	results := make([]json.RawMessage, len(block.TransactionHashes))

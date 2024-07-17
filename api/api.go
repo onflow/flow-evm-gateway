@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"time"
 
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/go-ethereum/common"
@@ -19,6 +20,7 @@ import (
 
 	errs "github.com/onflow/flow-evm-gateway/api/errors"
 	"github.com/onflow/flow-evm-gateway/config"
+	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/services/logs"
 	"github.com/onflow/flow-evm-gateway/services/requester"
@@ -84,6 +86,7 @@ type BlockChainAPI struct {
 	accounts              storage.AccountIndexer
 	indexingResumedHeight uint64
 	limiter               limiter.Store
+	collector             metrics.Collector
 }
 
 func NewBlockChainAPI(
@@ -95,6 +98,7 @@ func NewBlockChainAPI(
 	receipts storage.ReceiptIndexer,
 	accounts storage.AccountIndexer,
 	ratelimiter limiter.Store,
+	collector metrics.Collector,
 ) (*BlockChainAPI, error) {
 	// get the height from which the indexing resumed since the last restart, this is needed for syncing status.
 	indexingResumedHeight, err := blocks.LatestEVMHeight()
@@ -112,6 +116,7 @@ func NewBlockChainAPI(
 		accounts:              accounts,
 		indexingResumedHeight: indexingResumedHeight,
 		limiter:               ratelimiter,
+		collector:             collector,
 	}, nil
 }
 
@@ -137,13 +142,16 @@ func (b *BlockChainAPI) GasPrice(ctx context.Context) (*hexutil.Big, error) {
 
 // BlockNumber returns the block number of the chain head.
 func (b *BlockChainAPI) BlockNumber(ctx context.Context) (hexutil.Uint64, error) {
+	start := time.Now()
+	defer b.collector.RequestTimeMeasured(time.Since(start))
+
 	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
 		return 0, err
 	}
 
 	latestBlockHeight, err := b.blocks.LatestEVMHeight()
 	if err != nil {
-		return handleError[hexutil.Uint64](b.logger, err)
+		return handleError[hexutil.Uint64](b.logger, b.collector, err)
 	}
 
 	return hexutil.Uint64(latestBlockHeight), nil
@@ -219,12 +227,12 @@ func (b *BlockChainAPI) GetBalance(
 
 	evmHeight, err := b.getBlockNumber(blockNumberOrHash)
 	if err != nil {
-		return handleError[*hexutil.Big](b.logger, err)
+		return handleError[*hexutil.Big](b.logger, b.collector, err)
 	}
 
 	balance, err := b.evm.GetBalance(ctx, address, evmHeight)
 	if err != nil {
-		return handleError[*hexutil.Big](b.logger, err)
+		return handleError[*hexutil.Big](b.logger, b.collector, err)
 	}
 
 	return (*hexutil.Big)(balance), nil
@@ -241,14 +249,14 @@ func (b *BlockChainAPI) GetTransactionByHash(
 
 	tx, err := b.transactions.Get(hash)
 	if err != nil {
-		return handleError[*Transaction](b.logger, err)
+		return handleError[*Transaction](b.logger, b.collector, err)
 	}
 
 	txHash := tx.Hash()
 
 	rcp, err := b.receipts.GetByTransactionID(txHash)
 	if err != nil {
-		return handleError[*Transaction](b.logger, err)
+		return handleError[*Transaction](b.logger, b.collector, err)
 	}
 
 	return NewTransaction(tx, *rcp, *b.config)
@@ -266,7 +274,7 @@ func (b *BlockChainAPI) GetTransactionByBlockHashAndIndex(
 
 	block, err := b.blocks.GetByID(blockHash)
 	if err != nil {
-		return handleError[*Transaction](b.logger, err)
+		return handleError[*Transaction](b.logger, b.collector, err)
 	}
 
 	highestIndex := len(block.TransactionHashes) - 1
@@ -277,7 +285,7 @@ func (b *BlockChainAPI) GetTransactionByBlockHashAndIndex(
 	txHash := block.TransactionHashes[index]
 	tx, err := b.GetTransactionByHash(ctx, txHash)
 	if err != nil {
-		return handleError[*Transaction](b.logger, err)
+		return handleError[*Transaction](b.logger, b.collector, err)
 	}
 
 	return tx, nil
@@ -295,7 +303,7 @@ func (b *BlockChainAPI) GetTransactionByBlockNumberAndIndex(
 
 	block, err := b.blocks.GetByHeight(uint64(blockNumber))
 	if err != nil {
-		return handleError[*Transaction](b.logger, err)
+		return handleError[*Transaction](b.logger, b.collector, err)
 	}
 
 	if int(index) >= len(block.TransactionHashes) {
@@ -305,7 +313,7 @@ func (b *BlockChainAPI) GetTransactionByBlockNumberAndIndex(
 	txHash := block.TransactionHashes[index]
 	tx, err := b.GetTransactionByHash(ctx, txHash)
 	if err != nil {
-		return handleError[*Transaction](b.logger, err)
+		return handleError[*Transaction](b.logger, b.collector, err)
 	}
 
 	return tx, nil
@@ -322,17 +330,17 @@ func (b *BlockChainAPI) GetTransactionReceipt(
 
 	tx, err := b.transactions.Get(hash)
 	if err != nil {
-		return handleError[map[string]interface{}](b.logger, err)
+		return handleError[map[string]interface{}](b.logger, b.collector, err)
 	}
 
 	receipt, err := b.receipts.GetByTransactionID(hash)
 	if err != nil {
-		return handleError[map[string]interface{}](b.logger, err)
+		return handleError[map[string]interface{}](b.logger, b.collector, err)
 	}
 
 	txReceipt, err := models.MarshalReceipt(receipt, tx)
 	if err != nil {
-		return handleError[map[string]interface{}](b.logger, err)
+		return handleError[map[string]interface{}](b.logger, b.collector, err)
 	}
 
 	return txReceipt, nil
@@ -351,12 +359,12 @@ func (b *BlockChainAPI) GetBlockByHash(
 
 	block, err := b.blocks.GetByID(hash)
 	if err != nil {
-		return handleError[*Block](b.logger, err)
+		return handleError[*Block](b.logger, b.collector, err)
 	}
 
 	apiBlock, err := b.prepareBlockResponse(ctx, block, fullTx)
 	if err != nil {
-		return handleError[*Block](b.logger, err)
+		return handleError[*Block](b.logger, b.collector, err)
 	}
 
 	return apiBlock, nil
@@ -384,18 +392,18 @@ func (b *BlockChainAPI) GetBlockByNumber(
 	if blockNumber < 0 {
 		height, err = b.blocks.LatestEVMHeight()
 		if err != nil {
-			return handleError[*Block](b.logger, err)
+			return handleError[*Block](b.logger, b.collector, err)
 		}
 	}
 
 	block, err := b.blocks.GetByHeight(height)
 	if err != nil {
-		return handleError[*Block](b.logger, err)
+		return handleError[*Block](b.logger, b.collector, err)
 	}
 
 	apiBlock, err := b.prepareBlockResponse(ctx, block, fullTx)
 	if err != nil {
-		return handleError[*Block](b.logger, err)
+		return handleError[*Block](b.logger, b.collector, err)
 	}
 
 	return apiBlock, nil
@@ -425,14 +433,14 @@ func (b *BlockChainAPI) GetBlockReceipts(
 		)
 	}
 	if err != nil {
-		return handleError[[]*models.StorageReceipt](b.logger, err)
+		return handleError[[]*models.StorageReceipt](b.logger, b.collector, err)
 	}
 
 	receipts := make([]*models.StorageReceipt, len(block.TransactionHashes))
 	for i, hash := range block.TransactionHashes {
 		rcp, err := b.receipts.GetByTransactionID(hash)
 		if err != nil {
-			return handleError[[]*models.StorageReceipt](b.logger, err)
+			return handleError[[]*models.StorageReceipt](b.logger, b.collector, err)
 		}
 		receipts[i] = rcp
 	}
@@ -451,7 +459,7 @@ func (b *BlockChainAPI) GetBlockTransactionCountByHash(
 
 	block, err := b.blocks.GetByID(blockHash)
 	if err != nil {
-		return handleError[*hexutil.Uint](b.logger, err)
+		return handleError[*hexutil.Uint](b.logger, b.collector, err)
 	}
 
 	count := hexutil.Uint(len(block.TransactionHashes))
@@ -474,7 +482,7 @@ func (b *BlockChainAPI) GetBlockTransactionCountByNumber(
 
 	block, err := b.blocks.GetByHeight(uint64(blockNumber))
 	if err != nil {
-		return handleError[*hexutil.Uint](b.logger, err)
+		return handleError[*hexutil.Uint](b.logger, b.collector, err)
 	}
 
 	count := hexutil.Uint(len(block.TransactionHashes))
@@ -503,12 +511,12 @@ func (b *BlockChainAPI) Call(
 
 	evmHeight, err := b.getBlockNumber(blockNumberOrHash)
 	if err != nil {
-		return handleError[hexutil.Bytes](b.logger, err)
+		return handleError[hexutil.Bytes](b.logger, b.collector, err)
 	}
 
 	tx, err := encodeTxFromArgs(args)
 	if err != nil {
-		return handleError[hexutil.Bytes](b.logger, err)
+		return handleError[hexutil.Bytes](b.logger, b.collector, err)
 	}
 
 	// Default address in case user does not provide one
@@ -562,7 +570,7 @@ func (b *BlockChainAPI) GetLogs(
 
 	l, err := b.blocks.LatestEVMHeight()
 	if err != nil {
-		return handleError[[]*types.Log](b.logger, err)
+		return handleError[[]*types.Log](b.logger, b.collector, err)
 	}
 	latest := big.NewInt(int64(l))
 
@@ -576,12 +584,12 @@ func (b *BlockChainAPI) GetLogs(
 
 	f, err := logs.NewRangeFilter(*from, *to, filter, b.receipts)
 	if err != nil {
-		return handleError[[]*types.Log](b.logger, err)
+		return handleError[[]*types.Log](b.logger, b.collector, err)
 	}
 
 	res, err := f.Match()
 	if err != nil {
-		return handleError[[]*types.Log](b.logger, err)
+		return handleError[[]*types.Log](b.logger, b.collector, err)
 	}
 
 	return res, nil
@@ -600,19 +608,19 @@ func (b *BlockChainAPI) GetTransactionCount(
 
 	evmHeight, err := b.getBlockNumber(blockNumberOrHash)
 	if err != nil {
-		return handleError[*hexutil.Uint64](b.logger, err)
+		return handleError[*hexutil.Uint64](b.logger, b.collector, err)
 	}
 
 	networkNonce, err := b.evm.GetNonce(ctx, address, evmHeight)
 	if err != nil {
 		b.logger.Error().Err(err).Msg("get nonce on network failed")
-		return handleError[*hexutil.Uint64](b.logger, err)
+		return handleError[*hexutil.Uint64](b.logger, b.collector, err)
 	}
 
 	nonce, err := b.accounts.GetNonce(&address)
 	if err != nil {
 		b.logger.Error().Err(err).Msg("get nonce failed")
-		return handleError[*hexutil.Uint64](b.logger, errs.ErrInternal)
+		return handleError[*hexutil.Uint64](b.logger, b.collector, errs.ErrInternal)
 	}
 
 	// compare both until we gain confidence in db nonce tracking working correctly
@@ -680,13 +688,13 @@ func (b *BlockChainAPI) GetCode(
 
 	evmHeight, err := b.getBlockNumber(blockNumberOrHash)
 	if err != nil {
-		return handleError[hexutil.Bytes](b.logger, err)
+		return handleError[hexutil.Bytes](b.logger, b.collector, err)
 	}
 
 	code, err := b.evm.GetCode(ctx, address, evmHeight)
 	if err != nil {
 		b.logger.Error().Err(err).Msg("failed to retrieve account code")
-		return handleError[hexutil.Bytes](b.logger, err)
+		return handleError[hexutil.Bytes](b.logger, b.collector, err)
 	}
 
 	return code, nil
@@ -696,7 +704,9 @@ func (b *BlockChainAPI) GetCode(
 // it returns nil instead of an error since that is according to the API spec,
 // if the error is not of type ErrNotFound it will return the error and the generic
 // empty type.
-func handleError[T any](log zerolog.Logger, err error) (T, error) {
+func handleError[T any](log zerolog.Logger, collector metrics.Collector, err error) (T, error) {
+	collector.ApiErrorOccurred()
+
 	var zero T
 	switch {
 	// as per specification returning nil and nil for not found resources

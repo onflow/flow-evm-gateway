@@ -16,6 +16,7 @@ import (
 
 	"github.com/onflow/flow-evm-gateway/api"
 	"github.com/onflow/flow-evm-gateway/config"
+	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/services/ingestion"
 	"github.com/onflow/flow-evm-gateway/services/requester"
@@ -29,6 +30,8 @@ func Start(ctx context.Context, cfg *config.Config) error {
 	logger := zerolog.New(cfg.LogWriter).With().Timestamp().Logger()
 	logger = logger.Level(cfg.LogLevel)
 	logger.Info().Msg("starting up the EVM gateway")
+
+	metricsServer := metrics.NewServer(logger, 9091)
 
 	pebbleDB, err := pebble.New(cfg.DatabaseDir, logger)
 	if err != nil {
@@ -132,6 +135,8 @@ func Start(ctx context.Context, cfg *config.Config) error {
 	if err != nil {
 		return fmt.Errorf("failed to start event ingestion: %w", err)
 	}
+
+	<-metricsServer.Ready()
 
 	return nil
 }
@@ -304,6 +309,8 @@ func startServer(
 		return fmt.Errorf("failed to create rate limiter: %w", err)
 	}
 
+	metricsCollector := metrics.NewCollector()
+
 	blockchainAPI, err := api.NewBlockChainAPI(
 		logger,
 		cfg,
@@ -313,6 +320,7 @@ func startServer(
 		receipts,
 		accounts,
 		ratelimiter,
+		metricsCollector,
 	)
 	if err != nil {
 		return err

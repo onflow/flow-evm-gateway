@@ -6,3 +6,4 @@ flow.json
 flow*.json
 .idea
 /tests/web3js/node_modules
+metrics/data/
