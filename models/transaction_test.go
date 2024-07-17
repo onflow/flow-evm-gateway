@@ -87,7 +87,7 @@ func createTestEvent(t *testing.T, txBinary string) (cadence.Event, *types.Resul
 func Test_DecodeEVMTransaction(t *testing.T) {
 	cdcEv, _ := createTestEvent(t, evmTxBinary)
 
-	decTx, err := decodeTransaction(cdcEv, 10)
+	decTx, _, err := decodeTransactionEvent(cdcEv)
 	require.NoError(t, err)
 	require.IsType(t, TransactionCall{}, decTx)
 
@@ -133,7 +133,7 @@ func Test_DecodeEVMTransaction(t *testing.T) {
 func Test_DecodeDirectCall(t *testing.T) {
 	cdcEv, _ := createTestEvent(t, directCallBinary)
 
-	decTx, err := decodeTransaction(cdcEv, 10)
+	decTx, _, err := decodeTransactionEvent(cdcEv)
 	require.NoError(t, err)
 	require.IsType(t, DirectCall{}, decTx)
 
@@ -181,7 +181,7 @@ func Test_UnmarshalTransaction(t *testing.T) {
 
 		cdcEv, _ := createTestEvent(t, evmTxBinary)
 
-		tx, err := decodeTransaction(cdcEv, 10)
+		tx, _, err := decodeTransactionEvent(cdcEv)
 		require.NoError(t, err)
 
 		encodedTx, err := tx.MarshalBinary()
@@ -235,7 +235,7 @@ func Test_UnmarshalTransaction(t *testing.T) {
 
 		cdcEv, _ := createTestEvent(t, directCallBinary)
 
-		tx, err := decodeTransaction(cdcEv, 10)
+		tx, _, err := decodeTransactionEvent(cdcEv)
 		require.NoError(t, err)
 
 		encodedTx, err := tx.MarshalBinary()
@@ -287,7 +287,7 @@ func Test_UnmarshalTransaction(t *testing.T) {
 
 		cdcEv, _ := createTestEvent(t, directCallBinary)
 
-		tx, err := decodeTransaction(cdcEv, 10)
+		tx, _, err := decodeTransactionEvent(cdcEv)
 		require.NoError(t, err)
 
 		encodedTx, err := tx.MarshalBinary()
