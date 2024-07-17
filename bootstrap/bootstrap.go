@@ -315,7 +315,7 @@ func startServer(
 		return fmt.Errorf("failed to create rate limiter: %w", err)
 	}
 
-	metricsCollector := metrics.NewCollector()
+	metricsCollector := metrics.NewCollector(logger)
 
 	blockchainAPI, err := api.NewBlockChainAPI(
 		logger,

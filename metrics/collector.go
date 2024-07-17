@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/rs/zerolog"
 )
 
 type Collector interface {
@@ -16,7 +17,7 @@ type DefaultCollector struct {
 	responseTime prometheus.Histogram
 }
 
-func NewCollector() Collector {
+func NewCollector(logger zerolog.Logger) Collector {
 	apiErrors := prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "api_errors_total",
 		Help: "Total number of errors returned by the endpoint resolvers",
@@ -27,7 +28,10 @@ func NewCollector() Collector {
 		Help: "Duration of a request made to the endpoint resolver",
 	})
 
-	registerMetrics(apiErrors, responseTime)
+	if err := registerMetrics(logger, apiErrors, responseTime); err != nil {
+		logger.Info().Msg("Using noop collector as metric register failed")
+		return &NoopCollector{}
+	}
 
 	return &DefaultCollector{
 		apiErrors:    apiErrors,
@@ -35,10 +39,15 @@ func NewCollector() Collector {
 	}
 }
 
-func registerMetrics(metrics ...prometheus.Collector) {
+func registerMetrics(logger zerolog.Logger, metrics ...prometheus.Collector) error {
 	for _, m := range metrics {
-		prometheus.MustRegister(m)
+		if err := prometheus.Register(m); err != nil {
+			logger.Err(err).Msg("Failed to register metric")
+			return err
+		}
 	}
+
+	return nil
 }
 
 func (c *DefaultCollector) ApiErrorOccurred() {
