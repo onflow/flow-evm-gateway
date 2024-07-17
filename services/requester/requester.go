@@ -87,6 +87,9 @@ type Requester interface {
 
 	// GetLatestEVMHeight returns the latest EVM height of the network.
 	GetLatestEVMHeight(ctx context.Context) (uint64, error)
+
+	// GetStorageAt returns the storage from the state at the given address, key and block number.
+	GetStorageAt(ctx context.Context, address common.Address, hash common.Hash, evmHeight int64) (common.Hash, error)
 }
 
 var _ Requester = &EVM{}
