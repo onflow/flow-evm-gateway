@@ -15,6 +15,7 @@ import (
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/crypto"
 	"github.com/onflow/flow-go/fvm/evm/emulator"
+	"github.com/onflow/flow-go/fvm/evm/emulator/state"
 	"github.com/onflow/flow-go/fvm/evm/stdlib"
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/flow-go/fvm/systemcontracts"
@@ -368,6 +369,35 @@ func (e *EVM) GetNonce(
 		Msg("get nonce executed")
 
 	return nonce, nil
+}
+
+func (e *EVM) stateAt(evmHeight int64) (*state.StateDB, error) {
+	height, err := e.evmToCadenceHeight(evmHeight)
+	if err != nil {
+		return nil, err
+	}
+
+	ledger, err := newRemoteLedger(e.config.RPCHost, height)
+	if err != nil {
+		return nil, fmt.Errorf("could not create a remote ledger: %w", err)
+	}
+
+	return state.NewStateDB(ledger, previewnetStorageAddress)
+}
+
+func (e *EVM) GetStorageAt(
+	ctx context.Context,
+	address common.Address,
+	hash common.Hash,
+	evmHeight int64,
+) (common.Hash, error) {
+	stateDB, err := e.stateAt(evmHeight)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	result := stateDB.GetState(address, hash)
+	return result, stateDB.Error()
 }
 
 func (e *EVM) Call(
