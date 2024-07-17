@@ -33,15 +33,25 @@ func Test_E2E_Previewnet_RemoteLedger(t *testing.T) {
 	assert.NotEmpty(t, stateDB.GetState(testAddress, gethCommon.Hash{}))
 }
 
+/*
+Testing from local machine (bottleneck is network delay to previewnet AN)
+
+Benchmark_RemoteLedger_GetBalance-8   	       9	1144204361 ns/op
+*/
 func Benchmark_RemoteLedger_GetBalance(b *testing.B) {
+	const previewnetHost = "access-001.previewnet1.nodes.onflow.org:9000"
+	cadenceHeight, err := getPreviewnetLatestHeight(previewnetHost)
+	require.NoError(b, err)
+
 	// we have to include ledger creation since the loading of the collection
 	// will be done only once per height, all the subsequent requests for
 	// getting the balance will work on already loaded state and thus be fast
 	for i := 0; i < b.N; i++ {
-		ledger, err := newPreviewnetLedger()
+		ledger, err := newRemoteLedger(previewnetHost, cadenceHeight)
 		require.NoError(b, err)
 
 		stateDB, err := state.NewStateDB(ledger, previewnetStorage)
+		require.NoError(b, err)
 
 		addrBytes, err := hex.DecodeString("BC9985a24c0846cbEdd6249868020A84Df83Ea85")
 		require.NoError(b, err)
