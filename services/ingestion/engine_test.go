@@ -19,6 +19,8 @@ import (
 	"github.com/onflow/flow-go-sdk"
 	broadcast "github.com/onflow/flow-go/engine"
 	"github.com/onflow/flow-go/fvm/evm/types"
+	"github.com/onflow/flow-go/fvm/systemcontracts"
+	flowGo "github.com/onflow/flow-go/model/flow"
 	gethCommon "github.com/onflow/go-ethereum/common"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/rs/zerolog"
@@ -97,13 +99,16 @@ func TestSerialBlockIngestion(t *testing.T) {
 				}).
 				Once()
 
-			eventsChan <- models.NewBlockEvents(flow.BlockEvents{
-				Events: []flow.Event{{
-					Type:  string(blockEvent.Etype),
-					Value: blockCdc,
-				}},
-				Height: cadenceHeight,
-			})
+			eventsChan <- models.NewBlockEvents(
+				flow.BlockEvents{
+					Events: []flow.Event{{
+						Type:  string(blockEvent.Etype),
+						Value: blockCdc,
+					}},
+					Height: cadenceHeight,
+				},
+				models.DefaultEVMEventIdentifiers,
+			)
 		}
 
 		close(eventsChan)
@@ -177,13 +182,16 @@ func TestSerialBlockIngestion(t *testing.T) {
 			Once() // this should only be called for first valid block
 
 		eventsChan <- models.BlockEvents{
-			Events: models.NewCadenceEvents(flow.BlockEvents{
-				Events: []flow.Event{{
-					Type:  string(blockEvent.Etype),
-					Value: blockCdc,
-				}},
-				Height: cadenceHeight,
-			}),
+			Events: models.NewCadenceEvents(
+				flow.BlockEvents{
+					Events: []flow.Event{{
+						Type:  string(blockEvent.Etype),
+						Value: blockCdc,
+					}},
+					Height: cadenceHeight,
+				},
+				models.DefaultEVMEventIdentifiers,
+			),
 		}
 
 		// fail with next block height being incorrect
@@ -191,13 +199,16 @@ func TestSerialBlockIngestion(t *testing.T) {
 		require.NoError(t, err)
 
 		eventsChan <- models.BlockEvents{
-			Events: models.NewCadenceEvents(flow.BlockEvents{
-				Events: []flow.Event{{
-					Type:  string(blockEvent.Etype),
-					Value: blockCdc,
-				}},
-				Height: cadenceHeight + 1,
-			}),
+			Events: models.NewCadenceEvents(
+				flow.BlockEvents{
+					Events: []flow.Event{{
+						Type:  string(blockEvent.Etype),
+						Value: blockCdc,
+					}},
+					Height: cadenceHeight + 1,
+				},
+				models.DefaultEVMEventIdentifiers,
+			),
 		}
 
 		close(eventsChan)
@@ -297,17 +308,20 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			}).
 			Once()
 
-		eventsChan <- models.NewBlockEvents(flow.BlockEvents{
-			Events: []flow.Event{{
-				Type:  string(blockEvent.Etype),
-				Value: blockCdc,
-			}, {
-				Type:  string(txEvent.Etype),
-				Value: txCdc,
-			}},
-			Height:  nextHeight,
-			BlockID: blockID,
-		})
+		eventsChan <- models.NewBlockEvents(
+			flow.BlockEvents{
+				Events: []flow.Event{{
+					Type:  string(blockEvent.Etype),
+					Value: blockCdc,
+				}, {
+					Type:  string(txEvent.Etype),
+					Value: txCdc,
+				}},
+				Height:  nextHeight,
+				BlockID: blockID,
+			},
+			models.DefaultEVMEventIdentifiers,
+		)
 
 		close(eventsChan)
 		<-done
@@ -394,20 +408,23 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			}).
 			Once()
 
-		eventsChan <- models.NewBlockEvents(flow.BlockEvents{
-			Events: []flow.Event{
-				// first transaction
-				{
-					Type:  string(txEvent.Etype),
-					Value: txCdc,
-				},
-				// and then block (out-of-order)
-				{
-					Type:  string(blockEvent.Etype),
-					Value: blockCdc,
-				}},
-			Height: nextHeight,
-		})
+		eventsChan <- models.NewBlockEvents(
+			flow.BlockEvents{
+				Events: []flow.Event{
+					// first transaction
+					{
+						Type:  string(txEvent.Etype),
+						Value: txCdc,
+					},
+					// and then block (out-of-order)
+					{
+						Type:  string(blockEvent.Etype),
+						Value: blockCdc,
+					}},
+				Height: nextHeight,
+			},
+			models.DefaultEVMEventIdentifiers,
+		)
 
 		close(eventsChan)
 		<-done
@@ -523,10 +540,13 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		// and it will make the first block be swapped with second block out-of-order
 		events[1], events[2] = events[2], events[1]
 
-		eventsChan <- models.NewBlockEvents(flow.BlockEvents{
-			Events: events,
-			Height: latestCadenceHeight + 1,
-		})
+		eventsChan <- models.NewBlockEvents(
+			flow.BlockEvents{
+				Events: events,
+				Height: latestCadenceHeight + 1,
+			},
+			models.DefaultEVMEventIdentifiers,
+		)
 
 		close(eventsChan)
 		<-done
@@ -547,7 +567,10 @@ func newBlock(height uint64) (cadence.Event, *types.Block, *types.Event, error) 
 	}
 
 	blockEvent := types.NewBlockEvent(block)
-	location := common.NewAddressLocation(nil, common.Address{0x1}, string(types.EventTypeBlockExecuted))
+	address := common.Address(
+		systemcontracts.SystemContractsForChain(flowGo.Previewnet).EVMContract.Address,
+	)
+	location := common.NewAddressLocation(nil, address, string(types.EventTypeBlockExecuted))
 	blockCdc, err := blockEvent.Payload.ToCadence(location)
 
 	return blockCdc, block, blockEvent, err
@@ -587,7 +610,10 @@ func newTransaction() (cadence.Event, *types.Event, models.Transaction, *types.R
 		tx.Hash(),
 	)
 
-	location := common.NewAddressLocation(nil, common.Address{0x1}, string(types.EventTypeBlockExecuted))
+	address := common.Address(
+		systemcontracts.SystemContractsForChain(flowGo.Previewnet).EVMContract.Address,
+	)
+	location := common.NewAddressLocation(nil, address, string(types.EventTypeBlockExecuted))
 	cdcEv, err := ev.Payload.ToCadence(location)
 
 	return cdcEv, ev, models.TransactionCall{Transaction: tx}, res, err

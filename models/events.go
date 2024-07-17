@@ -1,36 +1,50 @@
 package models
 
 import (
-	"strings"
-
 	"github.com/onflow/cadence"
+	"github.com/onflow/cadence/runtime/common"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go/fvm/evm/types"
+	"github.com/onflow/flow-go/fvm/systemcontracts"
+	flowGo "github.com/onflow/flow-go/model/flow"
 	"golang.org/x/exp/slices"
 )
 
 // isBlockExecutedEvent checks whether the given event contains block executed data.
-func isBlockExecutedEvent(event cadence.Event) bool {
+func isBlockExecutedEvent(
+	event cadence.Event,
+	evmBlockExecutedEventID string,
+) bool {
 	if event.EventType == nil {
 		return false
 	}
-	return strings.Contains(event.EventType.ID(), string(types.EventTypeBlockExecuted))
+	return event.EventType.ID() == evmBlockExecutedEventID
 }
 
 // isTransactionExecutedEvent checks whether the given event contains transaction executed data.
-func isTransactionExecutedEvent(event cadence.Event) bool {
+func isTransactionExecutedEvent(
+	event cadence.Event,
+	evmTxExecutedEventID string,
+) bool {
 	if event.EventType == nil {
 		return false
 	}
-	return strings.Contains(event.EventType.ID(), string(types.EventTypeTransactionExecuted))
+	return event.EventType.ID() == evmTxExecutedEventID
 }
 
 type CadenceEvents struct {
-	events flow.BlockEvents
+	events      flow.BlockEvents
+	evmEventIDs EVMEventIdentifiers
 }
 
-func NewCadenceEvents(events flow.BlockEvents) *CadenceEvents {
-	return &CadenceEvents{events: events}
+func NewCadenceEvents(
+	events flow.BlockEvents,
+	evmEventIDs EVMEventIdentifiers,
+) *CadenceEvents {
+	return &CadenceEvents{
+		events:      events,
+		evmEventIDs: evmEventIDs,
+	}
 }
 
 // Blocks finds the block evm events and decodes it into the blocks slice,
@@ -43,7 +57,7 @@ func NewCadenceEvents(events flow.BlockEvents) *CadenceEvents {
 func (c *CadenceEvents) Blocks() ([]*types.Block, error) {
 	blocks := make([]*types.Block, 0)
 	for _, e := range c.events.Events {
-		if isBlockExecutedEvent(e.Value) {
+		if isBlockExecutedEvent(e.Value, c.evmEventIDs.BlockExecutedEventID) {
 			block, err := decodeBlock(e.Value)
 			if err != nil {
 				return nil, err
@@ -71,7 +85,7 @@ func (c *CadenceEvents) Transactions() ([]Transaction, []*StorageReceipt, error)
 	txs := make([]Transaction, 0)
 	rcps := make([]*StorageReceipt, 0)
 	for _, e := range c.events.Events {
-		if isTransactionExecutedEvent(e.Value) {
+		if isTransactionExecutedEvent(e.Value, c.evmEventIDs.TransactionExecutedEventID) {
 			tx, receipt, err := decodeTransactionEvent(e.Value)
 			if err != nil {
 				return nil, nil, err
@@ -115,9 +129,12 @@ type BlockEvents struct {
 	Err    error
 }
 
-func NewBlockEvents(events flow.BlockEvents) BlockEvents {
+func NewBlockEvents(
+	events flow.BlockEvents,
+	evmEventIDs EVMEventIdentifiers,
+) BlockEvents {
 	return BlockEvents{
-		Events: NewCadenceEvents(events),
+		Events: NewCadenceEvents(events, evmEventIDs),
 	}
 }
 
@@ -126,3 +143,33 @@ func NewBlockEventsError(err error) BlockEvents {
 		Err: err,
 	}
 }
+
+type EVMEventIdentifiers struct {
+	BlockExecutedEventID       string
+	TransactionExecutedEventID string
+}
+
+func NewEVMEventIdentifiers(chainID flowGo.ChainID) EVMEventIdentifiers {
+	evmAddress := common.Address(
+		systemcontracts.SystemContractsForChain(chainID).EVMContract.Address,
+	)
+
+	blockExecutedEventID := common.NewAddressLocation(
+		nil,
+		evmAddress,
+		string(types.EventTypeBlockExecuted),
+	).ID()
+
+	transactionExecutedEventID := common.NewAddressLocation(
+		nil,
+		evmAddress,
+		string(types.EventTypeTransactionExecuted),
+	).ID()
+
+	return EVMEventIdentifiers{
+		BlockExecutedEventID:       blockExecutedEventID,
+		TransactionExecutedEventID: transactionExecutedEventID,
+	}
+}
+
+var DefaultEVMEventIdentifiers = NewEVMEventIdentifiers(flowGo.Previewnet)

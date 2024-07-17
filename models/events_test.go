@@ -8,6 +8,8 @@ import (
 	"github.com/onflow/cadence/runtime/common"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go/fvm/evm/types"
+	"github.com/onflow/flow-go/fvm/systemcontracts"
+	flowGo "github.com/onflow/flow-go/model/flow"
 	gethCommon "github.com/onflow/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -56,7 +58,7 @@ func TestCadenceEvents_Block(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			c := NewCadenceEvents(tt.events)
+			c := NewCadenceEvents(tt.events, DefaultEVMEventIdentifiers)
 			blocks, err := c.Blocks()
 			require.NoError(t, err)
 
@@ -79,7 +81,10 @@ func newBlock(height uint64) (*types.Block, flow.Event, error) {
 	evmBlock := types.NewBlock(gethCommon.HexToHash("0x01"), height, uint64(1337), big.NewInt(100), gethCommon.HexToHash("0x02"), nil)
 	ev := types.NewBlockEvent(evmBlock)
 
-	location := common.NewAddressLocation(nil, common.Address{0x1}, string(types.EventTypeBlockExecuted))
+	address := common.Address(
+		systemcontracts.SystemContractsForChain(flowGo.Previewnet).EVMContract.Address,
+	)
+	location := common.NewAddressLocation(nil, address, string(types.EventTypeBlockExecuted))
 	cadenceEvent, err := ev.Payload.ToCadence(location)
 	if err != nil {
 		return nil, flow.Event{}, err

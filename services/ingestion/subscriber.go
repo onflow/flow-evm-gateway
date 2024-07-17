@@ -5,15 +5,11 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/onflow/cadence/runtime/common"
-
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/services/requester"
 
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access"
-	"github.com/onflow/flow-go/fvm/evm/types"
-	"github.com/onflow/flow-go/fvm/systemcontracts"
 	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/rs/zerolog"
 )
@@ -30,7 +26,7 @@ var _ EventSubscriber = &RPCSubscriber{}
 
 type RPCSubscriber struct {
 	client            *requester.CrossSporkClient
-	chain             flowGo.ChainID
+	evmEventIDs       models.EVMEventIdentifiers
 	heartbeatInterval uint64
 	logger            zerolog.Logger
 }
@@ -45,7 +41,7 @@ func NewRPCSubscriber(
 	return &RPCSubscriber{
 		client:            client,
 		heartbeatInterval: heartbeatInterval,
-		chain:             chainID,
+		evmEventIDs:       models.NewEVMEventIdentifiers(chainID),
 		logger:            logger,
 	}
 }
@@ -144,7 +140,7 @@ func (r *RPCSubscriber) subscribe(ctx context.Context, height uint64, opts ...ac
 					return
 				}
 
-				events <- models.NewBlockEvents(blockEvents)
+				events <- models.NewBlockEvents(blockEvents, r.evmEventIDs)
 
 			case err, ok := <-errs:
 				if !ok {
@@ -229,24 +225,10 @@ func (r *RPCSubscriber) backfill(ctx context.Context, height uint64) <-chan mode
 // A.{evm}.EVM.BlockExecuted and A.{evm}.EVM.TransactionExecuted,
 // where {evm} is EVM deployed contract address, which depends on the chain ID we configure.
 func (r *RPCSubscriber) blocksFilter() flow.EventFilter {
-	evmAddress := common.Address(systemcontracts.SystemContractsForChain(r.chain).EVMContract.Address)
-
-	blockExecutedEvent := common.NewAddressLocation(
-		nil,
-		evmAddress,
-		string(types.EventTypeBlockExecuted),
-	).ID()
-
-	transactionExecutedEvent := common.NewAddressLocation(
-		nil,
-		evmAddress,
-		string(types.EventTypeTransactionExecuted),
-	).ID()
-
 	return flow.EventFilter{
 		EventTypes: []string{
-			blockExecutedEvent,
-			transactionExecutedEvent,
+			r.evmEventIDs.BlockExecutedEventID,
+			r.evmEventIDs.TransactionExecutedEventID,
 		},
 	}
 }
