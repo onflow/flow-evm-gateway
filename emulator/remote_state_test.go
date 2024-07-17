@@ -1,50 +1,84 @@
 package emulator
 
 import (
+	"context"
 	"encoding/hex"
 	"fmt"
 	"testing"
 
 	"github.com/onflow/flow-go/fvm/evm/emulator/state"
 	"github.com/onflow/flow-go/fvm/evm/types"
-	"github.com/onflow/flow-go/model/flow"
+	"github.com/onflow/flow/protobuf/go/flow/access"
 	gethCommon "github.com/onflow/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
-func Test_GetCode(t *testing.T) {
-	ledger, err := newRemoteLedger("access-001.previewnet1.nodes.onflow.org:9000", uint64(0))
+func Test_E2E_Previewnet_RemoteLedger(t *testing.T) {
+	ledger, err := newPreviewnetLedger()
 	require.NoError(t, err)
 
-	emu := newEmulator(ledger)
-	view, err := emu.view()
-	require.NoError(t, err)
-
+	// this is a pre-established test account on previewnet
 	addrBytes, err := hex.DecodeString("BC9985a24c0846cbEdd6249868020A84Df83Ea85")
 	require.NoError(t, err)
-	address := types.NewAddressFromBytes(addrBytes)
+	testAddress := types.NewAddressFromBytes(addrBytes).ToCommon()
 
-	code, err := view.CodeOf(address)
-	require.NoError(t, err)
-	assert.NotEmpty(t, code)
-	fmt.Println(fmt.Sprintf("%x", code))
+	stateDB, err := state.NewStateDB(ledger, previewnetStorage)
 
-	balance, err := view.BalanceOf(address)
-	require.NoError(t, err)
-	assert.NotEmpty(t, balance)
+	assert.NotEmpty(t, stateDB.GetCode(testAddress))
+	assert.NotEmpty(t, stateDB.GetNonce(testAddress))
+	assert.NotEmpty(t, stateDB.GetBalance(testAddress))
+	assert.NotEmpty(t, stateDB.GetCodeSize(testAddress))
+	assert.NotEmpty(t, stateDB.GetState(testAddress, gethCommon.Hash{}))
+}
 
-	nonce, err := view.NonceOf(address)
-	require.NoError(t, err)
-	assert.NotEmpty(t, nonce)
+func Benchmark_RemoteLedger_GetBalance(b *testing.B) {
+	ledger, err := newPreviewnetLedger()
+	require.NoError(b, err)
 
-	storageAddress := flow.HexToAddress("0x4f6fd534ddd3fc5f")
-	stateDB, err := state.NewStateDB(ledger, storageAddress)
+	stateDB, err := state.NewStateDB(ledger, previewnetStorage)
 
-	code2 := stateDB.GetCode(address.ToCommon())
-	assert.NotEmpty(t, code2)
+	// we generate a big random list of addresses, so we avoid any caching in benchmarks
+	const count = 80
+	addresses := make([]gethCommon.Address, count)
+	for i := range addresses {
+		addrBytes, err := hex.DecodeString(fmt.Sprintf("BC9985a24c0846cbEdd6249868020A84Df83Ea%d", i+10))
+		require.NoError(b, err)
+		addresses[i] = types.NewAddressFromBytes(addrBytes).ToCommon()
+	}
 
-	hash := stateDB.GetState(address.ToCommon(), gethCommon.BytesToHash(address.Bytes()))
-	assert.NotEmpty(t, hash)
-	require.Equal(t, code, hash)
+	for i := 0; i < b.N; i++ {
+		assert.Empty(b, stateDB.GetBalance(addresses[b.N%count]))
+	}
+}
+
+func newPreviewnetLedger() (*remoteLedger, error) {
+	const previewnetHost = "access-001.previewnet1.nodes.onflow.org:9000"
+
+	cadenceHeight, err := getPreviewnetLatestHeight(previewnetHost)
+	if err != nil {
+		return nil, err
+	}
+
+	return newRemoteLedger(previewnetHost, cadenceHeight)
+}
+
+func getPreviewnetLatestHeight(host string) (uint64, error) {
+	conn, err := grpc.Dial(
+		host,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(1024*1024*1024)),
+	)
+	if err != nil {
+		return 0, err
+	}
+	client := access.NewAccessAPIClient(conn)
+	res, err := client.GetLatestBlockHeader(context.Background(), &access.GetLatestBlockHeaderRequest{IsSealed: true})
+	if err != nil {
+		return 0, err
+	}
+
+	return res.Block.Height, nil
 }
