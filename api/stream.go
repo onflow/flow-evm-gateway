@@ -20,10 +20,6 @@ import (
 	"github.com/onflow/flow-evm-gateway/storage"
 )
 
-// subscriptionBufferLimit is a constant that represents the buffer limit for subscriptions.
-// It defines the maximum number of events that can be buffered in a subscription channel
-const subscriptionBufferLimit = 1
-
 type StreamAPI struct {
 	logger                zerolog.Logger
 	config                *config.Config
