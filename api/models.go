@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"math/big"
 
 	errs "github.com/onflow/flow-evm-gateway/api/errors"
