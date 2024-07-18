@@ -380,7 +380,6 @@ func (e *EVM) stateAt(evmHeight int64) (*state.StateDB, error) {
 		return nil, err
 	}
 
-	fmt.Println("###", "cadence", height, "evm", evmHeight)
 	ledger, err := newRemoteLedger(e.config.AccessNodeHost, height)
 	if err != nil {
 		return nil, fmt.Errorf("could not create a remote ledger: %w", err)
