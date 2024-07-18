@@ -94,7 +94,7 @@ func (sr *StorageReceipt) ToGethReceipt() *gethTypes.Receipt {
 	}
 }
 
-func NewStorageReceipt(receipt *gethTypes.Receipt) *StorageReceipt {
+func NewStorageReceipt(receipt *gethTypes.Receipt, revertReason []byte) *StorageReceipt {
 	return &StorageReceipt{
 		Type:              receipt.Type,
 		PostState:         receipt.PostState,
@@ -111,7 +111,7 @@ func NewStorageReceipt(receipt *gethTypes.Receipt) *StorageReceipt {
 		BlockHash:         receipt.BlockHash,
 		BlockNumber:       receipt.BlockNumber,
 		TransactionIndex:  receipt.TransactionIndex,
-		RevertReason:      []byte{},
+		RevertReason:      revertReason,
 	}
 }
 
