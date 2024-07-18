@@ -190,24 +190,24 @@ func decodeTransactionEvent(
 ) (Transaction, *StorageReceipt, error) {
 	txEvent, err := types.DecodeTransactionEventPayload(event)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to Cadence decode transaction event: %w", err)
+		return nil, nil, fmt.Errorf("failed to Cadence decode transaction event [%s]: %w", event.String(), err)
 	}
 
 	encodedTx, err := hex.DecodeString(txEvent.Payload)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to hex-decode transaction payload: %w", err)
+		return nil, nil, fmt.Errorf("failed to hex decode transaction payload [%s]: %w", txEvent.Payload, err)
 	}
 
 	encodedLogs, err := hex.DecodeString(txEvent.Logs)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to hex decode receipt: %w", err)
+		return nil, nil, fmt.Errorf("failed to hex decode receipt [%s]: %w", txEvent.Logs, err)
 	}
 
 	var logs []*gethTypes.Log
 	if len(encodedLogs) > 0 {
 		err = rlp.Decode(bytes.NewReader(encodedLogs), &logs)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to RLP-decode receipt: %w", err)
+			return nil, nil, fmt.Errorf("failed to RLP-decode receipt [%x]: %w", encodedLogs, err)
 		}
 	}
 
@@ -235,7 +235,7 @@ func decodeTransactionEvent(
 	if txEvent.ErrorCode == uint16(types.ExecutionErrCodeExecutionReverted) {
 		revert, err := hex.DecodeString(txEvent.ReturnedData)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to hex-decode transaction return data: %w", err)
+			return nil, nil, fmt.Errorf("failed to hex-decode transaction return data [%s]: %w", txEvent.ReturnedData, err)
 		}
 		receipt.RevertReason = revert
 	}
@@ -246,7 +246,7 @@ func decodeTransactionEvent(
 	if txEvent.TransactionType == types.DirectCallTxType {
 		directCall, err := types.DirectCallFromEncoded(encodedTx)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to RLP-decode direct call: %w", err)
+			return nil, nil, fmt.Errorf("failed to RLP-decode direct call [%x]: %w", encodedTx, err)
 		}
 		evmHeight := receipt.BlockNumber.Uint64()
 
@@ -254,7 +254,7 @@ func decodeTransactionEvent(
 	} else {
 		gethTx := &gethTypes.Transaction{}
 		if err := gethTx.UnmarshalBinary(encodedTx); err != nil {
-			return nil, nil, fmt.Errorf("failed to RLP-decode transaction: %w", err)
+			return nil, nil, fmt.Errorf("failed to RLP-decode transaction [%x]: %w", encodedTx, err)
 		}
 		tx = TransactionCall{Transaction: gethTx}
 	}
@@ -269,7 +269,7 @@ func UnmarshalTransaction(value []byte, blockHeight uint64) (Transaction, error)
 	if value[0] == types.DirectCallTxType {
 		directCall, err := types.DirectCallFromEncoded(value)
 		if err != nil {
-			return nil, fmt.Errorf("failed to RLP-decode direct call: %w", err)
+			return nil, fmt.Errorf("failed to RLP-decode direct call [%x]: %w", value, err)
 		}
 
 		// TEMP: Remove `blockHeight` after PreviewNet is reset
@@ -284,7 +284,7 @@ func UnmarshalTransaction(value []byte, blockHeight uint64) (Transaction, error)
 			return TransactionCall{Transaction: tx}, nil
 		}
 
-		return nil, fmt.Errorf("failed to RLP-decode transaction: %w", err)
+		return nil, fmt.Errorf("failed to RLP-decode transaction [%x]: %w", value, err)
 	}
 
 	return TransactionCall{Transaction: tx}, nil

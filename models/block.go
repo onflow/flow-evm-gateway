@@ -22,7 +22,7 @@ var (
 func decodeBlock(event cadence.Event) (*types.Block, error) {
 	payload, err := types.DecodeBlockEventPayload(event)
 	if err != nil {
-		return nil, fmt.Errorf("failed to cadence decode block: %w", err)
+		return nil, fmt.Errorf("failed to cadence decode block [%s]: %w", event.String(), err)
 	}
 
 	hashes := make([]common.Hash, len(payload.TransactionHashes))
