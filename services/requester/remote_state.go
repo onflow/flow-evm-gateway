@@ -1,4 +1,4 @@
-package emulator
+package requester
 
 import (
 	"context"
@@ -15,7 +15,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-var previewnetStorage = flow.HexToAddress("0x4f6fd534ddd3fc5f")
+var previewnetStorageAddress = flow.HexToAddress("0x4f6fd534ddd3fc5f")
 
 var _ atree.Ledger = &remoteLedger{}
 
@@ -64,6 +64,7 @@ func (l *remoteLedger) GetValue(owner, key []byte) ([]byte, error) {
 	}
 
 	if response != nil && len(response.Values) > 0 {
+		// we only request one register so 0 index
 		return response.Values[0], nil
 	}
 
