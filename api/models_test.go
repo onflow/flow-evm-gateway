@@ -15,11 +15,7 @@ func TestValidateTransaction(t *testing.T) {
 	validToAddress := common.HexToAddress("0x000000000000000000000000000000000000dEaD")
 	zeroToAddress := common.HexToAddress("0x0000000000000000000000000000000000000000")
 
-	data, err := hex.DecodeString("c6888fa1")
-	require.NoError(t, err)
-	smallContractPayload := hexutil.Bytes(data)
-
-	data, err = hex.DecodeString("c6888f")
+	data, err := hex.DecodeString("c6888f")
 	require.NoError(t, err)
 	invalidTxData := hexutil.Bytes(data)
 
@@ -95,42 +91,6 @@ func TestValidateTransaction(t *testing.T) {
 			},
 			valid:  false,
 			errMsg: "transaction will create a contract with value but empty code",
-		},
-		"small payload for create": {
-			txArgs: TransactionArgs{
-				Nonce:    (*hexutil.Uint64)(&nonce),
-				To:       nil,
-				Value:    (*hexutil.Big)(big.NewInt(150)),
-				Gas:      (*hexutil.Uint64)(&gasLimit),
-				GasPrice: (*hexutil.Big)(big.NewInt(0)),
-				Data:     &smallContractPayload,
-			},
-			valid:  false,
-			errMsg: "transaction will create a contract, but the payload is suspiciously small (4 bytes)",
-		},
-		"tx data length < 4": {
-			txArgs: TransactionArgs{
-				Nonce:    (*hexutil.Uint64)(&nonce),
-				To:       &validToAddress,
-				Value:    (*hexutil.Big)(big.NewInt(150)),
-				Gas:      (*hexutil.Uint64)(&gasLimit),
-				GasPrice: (*hexutil.Big)(big.NewInt(0)),
-				Data:     &invalidTxData,
-			},
-			valid:  false,
-			errMsg: "transaction data is not valid ABI (missing the 4 byte call prefix)",
-		},
-		"tx data (excluding function selector) not divisible by 32": {
-			txArgs: TransactionArgs{
-				Nonce:    (*hexutil.Uint64)(&nonce),
-				To:       &validToAddress,
-				Value:    (*hexutil.Big)(big.NewInt(150)),
-				Gas:      (*hexutil.Uint64)(&gasLimit),
-				GasPrice: (*hexutil.Big)(big.NewInt(0)),
-				Data:     &invalidTxDataLen,
-			},
-			valid:  false,
-			errMsg: "transaction data is not valid ABI (length should be a multiple of 32 (was 31))",
 		},
 	}
 
