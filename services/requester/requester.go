@@ -380,7 +380,8 @@ func (e *EVM) stateAt(evmHeight int64) (*state.StateDB, error) {
 		return nil, err
 	}
 
-	ledger, err := newRemoteLedger(e.config.RPCHost, height)
+	fmt.Println("###", "cadence", height, "evm", evmHeight)
+	ledger, err := newRemoteLedger(e.config.AccessNodeHost, height)
 	if err != nil {
 		return nil, fmt.Errorf("could not create a remote ledger: %w", err)
 	}
@@ -394,6 +395,19 @@ func (e *EVM) GetStorageAt(
 	hash common.Hash,
 	evmHeight int64,
 ) (common.Hash, error) {
+	cadenceHeight, err := e.evmToCadenceHeight(evmHeight)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	if cadenceHeight == LatestBlockHeight {
+		h, err := e.client.GetLatestBlockHeader(ctx, true)
+		if err != nil {
+			return common.Hash{}, err
+		}
+		cadenceHeight = h.Height
+	}
+
 	stateDB, err := e.stateAt(evmHeight)
 	if err != nil {
 		return common.Hash{}, err
