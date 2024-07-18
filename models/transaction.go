@@ -12,6 +12,7 @@ import (
 	"github.com/onflow/go-ethereum/common"
 	"github.com/onflow/go-ethereum/core/txpool"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
+	"github.com/onflow/go-ethereum/rlp"
 )
 
 const (
@@ -181,44 +182,94 @@ func (tc TransactionCall) MarshalBinary() ([]byte, error) {
 	return append([]byte{tc.Type()}, encoded...), err
 }
 
-// decodeTransaction takes a cadence event for transaction executed
-// and decodes it into a Transaction interface. The concrete type
-// will be either a TransactionCall or a DirectCall.
-func decodeTransaction(event cadence.Event, evmHeight uint64) (Transaction, error) {
-	tx, err := types.DecodeTransactionEventPayload(event)
+// decodeTransactionEvent takes a cadence event for transaction executed
+// and decodes its payload into a Transaction interface and a StorageReceipt.
+// The concrete type will be either a TransactionCall or a DirectCall.
+func decodeTransactionEvent(
+	event cadence.Event,
+) (Transaction, *StorageReceipt, error) {
+	txEvent, err := types.DecodeTransactionEventPayload(event)
 	if err != nil {
-		return nil, fmt.Errorf("failed to cadence decode transaction: %w", err)
+		return nil, nil, fmt.Errorf("failed to Cadence decode transaction event: %w", err)
 	}
 
-	encodedTx, err := hex.DecodeString(tx.Payload)
+	encodedTx, err := hex.DecodeString(txEvent.Payload)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode transaction hex: %w", err)
+		return nil, nil, fmt.Errorf("failed to hex-decode transaction payload: %w", err)
 	}
 
-	// check if the transaction data is actually from a direct call,
+	encodedLogs, err := hex.DecodeString(txEvent.Logs)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to hex decode receipt: %w", err)
+	}
+
+	var logs []*gethTypes.Log
+	if len(encodedLogs) > 0 {
+		err = rlp.Decode(bytes.NewReader(encodedLogs), &logs)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to RLP-decode receipt: %w", err)
+		}
+	}
+
+	gethReceipt := &gethTypes.Receipt{
+		BlockNumber:       big.NewInt(int64(txEvent.BlockHeight)),
+		Type:              txEvent.TransactionType,
+		Logs:              logs,
+		TxHash:            common.HexToHash(txEvent.Hash),
+		ContractAddress:   common.HexToAddress(txEvent.ContractAddress),
+		GasUsed:           txEvent.GasConsumed,
+		CumulativeGasUsed: txEvent.GasConsumed, // todo use cumulative after added to the tx result
+		TransactionIndex:  uint(txEvent.Index),
+		BlockHash:         common.HexToHash(txEvent.BlockHash),
+	}
+
+	if txEvent.ErrorCode == uint16(types.ErrCodeNoError) {
+		gethReceipt.Status = gethTypes.ReceiptStatusSuccessful
+	} else {
+		gethReceipt.Status = gethTypes.ReceiptStatusFailed
+	}
+
+	gethReceipt.Bloom = gethTypes.CreateBloom([]*gethTypes.Receipt{gethReceipt})
+
+	receipt := NewStorageReceipt(gethReceipt)
+	if txEvent.ErrorCode == uint16(types.ExecutionErrCodeExecutionReverted) {
+		revert, err := hex.DecodeString(txEvent.ReturnedData)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to hex-decode transaction return data: %w", err)
+		}
+		receipt.RevertReason = revert
+	}
+
+	var tx Transaction
+	// check if the transaction payload is actually from a direct call,
 	// which is a special state transition in Flow EVM.
-	if tx.TransactionType == types.DirectCallTxType {
+	if txEvent.TransactionType == types.DirectCallTxType {
 		directCall, err := types.DirectCallFromEncoded(encodedTx)
 		if err != nil {
-			return nil, fmt.Errorf("failed to rlp decode direct call: %w", err)
+			return nil, nil, fmt.Errorf("failed to RLP-decode direct call: %w", err)
 		}
+		evmHeight := receipt.BlockNumber.Uint64()
 
-		return DirectCall{DirectCall: directCall, blockHeight: evmHeight}, nil
+		tx = DirectCall{DirectCall: directCall, blockHeight: evmHeight}
+	} else {
+		gethTx := &gethTypes.Transaction{}
+		if err := gethTx.UnmarshalBinary(encodedTx); err != nil {
+			return nil, nil, fmt.Errorf("failed to RLP-decode transaction: %w", err)
+		}
+		tx = TransactionCall{Transaction: gethTx}
 	}
 
-	gethTx := &gethTypes.Transaction{}
-	if err := gethTx.UnmarshalBinary(encodedTx); err != nil {
-		return nil, fmt.Errorf("failed to rlp decode transaction: %w", err)
-	}
+	// since there's no base fee we can always use gas price
+	receipt.EffectiveGasPrice = tx.GasPrice()
 
-	return TransactionCall{Transaction: gethTx}, nil
+	return tx, receipt, nil
 }
 
 func UnmarshalTransaction(value []byte, blockHeight uint64) (Transaction, error) {
 	if value[0] == types.DirectCallTxType {
 		directCall, err := types.DirectCallFromEncoded(value)
 		if err != nil {
-			return nil, fmt.Errorf("failed to rlp decode direct call: %w", err)
+			return nil, fmt.Errorf("failed to RLP-decode direct call: %w", err)
 		}
 
 		// TEMP: Remove `blockHeight` after PreviewNet is reset
@@ -233,7 +284,7 @@ func UnmarshalTransaction(value []byte, blockHeight uint64) (Transaction, error)
 			return TransactionCall{Transaction: tx}, nil
 		}
 
-		return nil, fmt.Errorf("failed to rlp decode transaction: %w", err)
+		return nil, fmt.Errorf("failed to RLP-decode transaction: %w", err)
 	}
 
 	return TransactionCall{Transaction: tx}, nil
@@ -260,38 +311,12 @@ func ValidateTransaction(
 			// No value submitted at least, critically Warn, but don't blow up
 			return errors.New("transaction will create a contract with empty code")
 		}
-
-		if txDataLen < 40 { // arbitrary heuristic limit
-			return fmt.Errorf(
-				"transaction will create a contract, but the payload is suspiciously small (%d bytes)",
-				txDataLen,
-			)
-		}
 	}
 
 	// Not a contract creation, validate as a plain transaction
 	if tx.To() != nil {
-		to := common.NewMixedcaseAddress(*tx.To())
-		if !to.ValidChecksum() {
-			return errors.New("invalid checksum on recipient address")
-		}
-
 		if bytes.Equal(tx.To().Bytes(), common.Address{}.Bytes()) {
 			return errors.New("transaction recipient is the zero address")
-		}
-
-		// If the data is not empty, validate that it has the 4byte prefix and the rest divisible by 32 bytes
-		if txDataLen > 0 {
-			if txDataLen < 4 {
-				return errors.New("transaction data is not valid ABI (missing the 4 byte call prefix)")
-			}
-
-			if n := txDataLen - 4; n%32 != 0 {
-				return fmt.Errorf(
-					"transaction data is not valid ABI (length should be a multiple of 32 (was %d))",
-					n,
-				)
-			}
 		}
 	}
 

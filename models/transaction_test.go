@@ -87,7 +87,7 @@ func createTestEvent(t *testing.T, txBinary string) (cadence.Event, *types.Resul
 func Test_DecodeEVMTransaction(t *testing.T) {
 	cdcEv, _ := createTestEvent(t, evmTxBinary)
 
-	decTx, err := decodeTransaction(cdcEv, 10)
+	decTx, _, err := decodeTransactionEvent(cdcEv)
 	require.NoError(t, err)
 	require.IsType(t, TransactionCall{}, decTx)
 
@@ -133,7 +133,7 @@ func Test_DecodeEVMTransaction(t *testing.T) {
 func Test_DecodeDirectCall(t *testing.T) {
 	cdcEv, _ := createTestEvent(t, directCallBinary)
 
-	decTx, err := decodeTransaction(cdcEv, 10)
+	decTx, _, err := decodeTransactionEvent(cdcEv)
 	require.NoError(t, err)
 	require.IsType(t, DirectCall{}, decTx)
 
@@ -181,7 +181,7 @@ func Test_UnmarshalTransaction(t *testing.T) {
 
 		cdcEv, _ := createTestEvent(t, evmTxBinary)
 
-		tx, err := decodeTransaction(cdcEv, 10)
+		tx, _, err := decodeTransactionEvent(cdcEv)
 		require.NoError(t, err)
 
 		encodedTx, err := tx.MarshalBinary()
@@ -235,7 +235,7 @@ func Test_UnmarshalTransaction(t *testing.T) {
 
 		cdcEv, _ := createTestEvent(t, directCallBinary)
 
-		tx, err := decodeTransaction(cdcEv, 10)
+		tx, _, err := decodeTransactionEvent(cdcEv)
 		require.NoError(t, err)
 
 		encodedTx, err := tx.MarshalBinary()
@@ -287,7 +287,7 @@ func Test_UnmarshalTransaction(t *testing.T) {
 
 		cdcEv, _ := createTestEvent(t, directCallBinary)
 
-		tx, err := decodeTransaction(cdcEv, 10)
+		tx, _, err := decodeTransactionEvent(cdcEv)
 		require.NoError(t, err)
 
 		encodedTx, err := tx.MarshalBinary()
@@ -344,15 +344,6 @@ func Test_UnmarshalTransaction(t *testing.T) {
 func TestValidateTransaction(t *testing.T) {
 	validToAddress := gethCommon.HexToAddress("0x000000000000000000000000000000000000dEaD")
 	zeroToAddress := gethCommon.HexToAddress("0x0000000000000000000000000000000000000000")
-
-	smallContractPayload, err := hex.DecodeString("c6888fa1")
-	require.NoError(t, err)
-
-	invalidTxData, err := hex.DecodeString("c6888f")
-	require.NoError(t, err)
-
-	invalidTxDataLen, err := hex.DecodeString("c6888fa1000000000000000000000000000000000000000000000000000000000000ab")
-	require.NoError(t, err)
 
 	tests := map[string]struct {
 		tx     *gethTypes.Transaction
@@ -414,48 +405,6 @@ func TestValidateTransaction(t *testing.T) {
 			),
 			valid:  false,
 			errMsg: "transaction will create a contract with value but empty code",
-		},
-		"small payload for create": {
-			tx: gethTypes.NewTx(
-				&gethTypes.LegacyTx{
-					Nonce:    1,
-					To:       nil,
-					Value:    big.NewInt(150),
-					Gas:      53_000,
-					GasPrice: big.NewInt(0),
-					Data:     smallContractPayload,
-				},
-			),
-			valid:  false,
-			errMsg: "transaction will create a contract, but the payload is suspiciously small (4 bytes)",
-		},
-		"tx data length < 4": {
-			tx: gethTypes.NewTx(
-				&gethTypes.LegacyTx{
-					Nonce:    1,
-					To:       &validToAddress,
-					Value:    big.NewInt(150),
-					Gas:      153_000,
-					GasPrice: big.NewInt(0),
-					Data:     invalidTxData,
-				},
-			),
-			valid:  false,
-			errMsg: "transaction data is not valid ABI (missing the 4 byte call prefix)",
-		},
-		"tx data (excluding function selector) not divisible by 32": {
-			tx: gethTypes.NewTx(
-				&gethTypes.LegacyTx{
-					Nonce:    1,
-					To:       &validToAddress,
-					Value:    big.NewInt(150),
-					Gas:      153_000,
-					GasPrice: big.NewInt(0),
-					Data:     invalidTxDataLen,
-				},
-			),
-			valid:  false,
-			errMsg: "transaction data is not valid ABI (length should be a multiple of 32 (was 31))",
 		},
 	}
 

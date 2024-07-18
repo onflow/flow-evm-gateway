@@ -1,18 +1,11 @@
 package models
 
 import (
-	"bytes"
-	"encoding/hex"
-	"fmt"
 	"math/big"
 
-	"github.com/onflow/flow-go/fvm/evm/types"
-
-	"github.com/onflow/cadence"
 	"github.com/onflow/go-ethereum/common"
 	"github.com/onflow/go-ethereum/common/hexutil"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
-	"github.com/onflow/go-ethereum/rlp"
 )
 
 // TEMP: Remove this type after PreviewNet is reset
@@ -120,70 +113,6 @@ func NewStorageReceipt(receipt *gethTypes.Receipt) *StorageReceipt {
 		TransactionIndex:  receipt.TransactionIndex,
 		RevertReason:      []byte{},
 	}
-}
-
-// decodeReceipt takes a cadence event for transaction executed and decodes it into the receipt.
-func decodeReceipt(event cadence.Event) (*StorageReceipt, error) {
-	tx, err := types.DecodeTransactionEventPayload(event)
-	if err != nil {
-		return nil, fmt.Errorf("failed to cadence decode receipt: %w", err)
-	}
-
-	t, err := decodeTransaction(event, tx.BlockHeight)
-	if err != nil {
-		return nil, err
-	}
-
-	receipt := &gethTypes.Receipt{
-		BlockNumber:       big.NewInt(int64(tx.BlockHeight)),
-		Type:              tx.TransactionType,
-		TxHash:            common.HexToHash(tx.Hash),
-		ContractAddress:   common.HexToAddress(tx.ContractAddress),
-		GasUsed:           tx.GasConsumed,
-		CumulativeGasUsed: tx.GasConsumed, // todo use cumulative after added to the tx result
-		EffectiveGasPrice: t.GasPrice(),   // since there's no base fee we can always use gas price
-		TransactionIndex:  uint(tx.Index),
-		BlockHash:         common.HexToHash(tx.BlockHash),
-	}
-
-	encLogs, err := hex.DecodeString(tx.Logs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to hex decode receipt: %w", err)
-	}
-
-	if len(encLogs) > 0 {
-		err = rlp.Decode(bytes.NewReader(encLogs), &receipt.Logs)
-		if err != nil {
-			return nil, fmt.Errorf("failed to rlp decode receipt: %w", err)
-		}
-
-		// dynamically add missing log fields
-		for _, l := range receipt.Logs {
-			l.BlockHash = receipt.BlockHash
-			l.TxHash = receipt.TxHash
-			l.BlockNumber = receipt.BlockNumber.Uint64()
-			l.Index = receipt.TransactionIndex
-		}
-	}
-
-	if tx.ErrorCode == uint16(types.ErrCodeNoError) {
-		receipt.Status = gethTypes.ReceiptStatusSuccessful
-	} else {
-		receipt.Status = gethTypes.ReceiptStatusFailed
-	}
-
-	receipt.Bloom = gethTypes.CreateBloom([]*gethTypes.Receipt{receipt})
-
-	result := NewStorageReceipt(receipt)
-	if tx.ErrorCode == uint16(types.ExecutionErrCodeExecutionReverted) {
-		revert, err := hex.DecodeString(tx.ReturnedData)
-		if err != nil {
-			return nil, fmt.Errorf("failed to decode transaction return data: %w", err)
-		}
-		result.RevertReason = revert
-	}
-
-	return result, nil
 }
 
 // MarshalReceipt takes a receipt and its associated transaction,
