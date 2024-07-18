@@ -64,6 +64,7 @@ func (l *remoteLedger) GetValue(owner, key []byte) ([]byte, error) {
 	}
 
 	if response != nil && len(response.Values) > 0 {
+		// we only request one register so 0 index
 		return response.Values[0], nil
 	}
 
