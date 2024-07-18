@@ -885,6 +885,10 @@ func (b *BlockChainAPI) GetStorageAt(
 	storageSlot string,
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (hexutil.Bytes, error) {
+	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
+		return nil, err
+	}
+
 	key, _, err := decodeHash(storageSlot)
 	if err != nil {
 		return handleError[hexutil.Bytes](b.logger, errors.Join(errs.ErrInvalid, err))
