@@ -9,12 +9,13 @@ import (
 
 type Collector interface {
 	ApiErrorOccurred()
-	RequestTimeMeasured(start time.Time)
+	MeasureRequestDuration(start time.Time, labels prometheus.Labels)
 }
 
 type DefaultCollector struct {
-	apiErrors    prometheus.Counter
-	responseTime prometheus.Histogram
+	// TODO: for now we cannot differentiate which api request failed number of times
+	apiErrorsCounter prometheus.Counter
+	requestDurations *prometheus.HistogramVec
 }
 
 func NewCollector(logger zerolog.Logger) Collector {
@@ -23,19 +24,22 @@ func NewCollector(logger zerolog.Logger) Collector {
 		Help: "Total number of errors returned by the endpoint resolvers",
 	})
 
-	responseTime := prometheus.NewHistogram(prometheus.HistogramOpts{
-		Name: "api_request_duration",
-		Help: "Duration of a request made to the endpoint resolver",
-	})
+	// TODO: Think of adding 'status_code'
+	requestDurations := prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "api_request_duration_seconds",
+		Help:    "Duration of requests made to the endpoint resolvers",
+		Buckets: prometheus.DefBuckets,
+	},
+		[]string{"resolver"})
 
-	if err := registerMetrics(logger, apiErrors, responseTime); err != nil {
+	if err := registerMetrics(logger, apiErrors, requestDurations); err != nil {
 		logger.Info().Msg("Using noop collector as metric register failed")
 		return &NoopCollector{}
 	}
 
 	return &DefaultCollector{
-		apiErrors:    apiErrors,
-		responseTime: responseTime,
+		apiErrorsCounter: apiErrors,
+		requestDurations: requestDurations,
 	}
 }
 
@@ -51,10 +55,10 @@ func registerMetrics(logger zerolog.Logger, metrics ...prometheus.Collector) err
 }
 
 func (c *DefaultCollector) ApiErrorOccurred() {
-	c.apiErrors.Inc()
+	c.apiErrorsCounter.Inc()
 }
 
-func (c *DefaultCollector) RequestTimeMeasured(start time.Time) {
+func (c *DefaultCollector) MeasureRequestDuration(start time.Time, labels prometheus.Labels) {
 	duration := time.Since(start)
-	c.responseTime.Observe(float64(duration))
+	c.requestDurations.With(labels).Observe(float64(duration))
 }
