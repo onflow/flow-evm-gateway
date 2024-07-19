@@ -248,7 +248,7 @@ func (e *EVM) buildTransaction(ctx context.Context, script []byte, args ...caden
 		g           = errgroup.Group{}
 		err1, err2  error
 		latestBlock *flow.Block
-		index       int
+		keyIndex    uint32
 		seqNum      uint64
 	)
 	// execute concurrently so we can speed up all the information we need for tx
@@ -257,7 +257,7 @@ func (e *EVM) buildTransaction(ctx context.Context, script []byte, args ...caden
 		return err1
 	})
 	g.Go(func() error {
-		index, seqNum, err2 = e.getSignerNetworkInfo(ctx)
+		keyIndex, seqNum, err2 = e.getSignerNetworkInfo(ctx)
 		return err2
 	})
 	if err := g.Wait(); err != nil {
@@ -267,7 +267,7 @@ func (e *EVM) buildTransaction(ctx context.Context, script []byte, args ...caden
 	address := e.config.COAAddress
 	flowTx := flow.NewTransaction().
 		SetScript(script).
-		SetProposalKey(address, index, seqNum).
+		SetProposalKey(address, keyIndex, seqNum).
 		SetReferenceBlockID(latestBlock.ID).
 		SetPayer(address).
 		AddAuthorizer(address)
@@ -278,7 +278,7 @@ func (e *EVM) buildTransaction(ctx context.Context, script []byte, args ...caden
 		}
 	}
 
-	if err := flowTx.SignEnvelope(address, index, e.signer); err != nil {
+	if err := flowTx.SignEnvelope(address, keyIndex, e.signer); err != nil {
 		return nil, fmt.Errorf("failed to sign transaction envelope: %w", err)
 	}
 
@@ -595,7 +595,7 @@ func (e *EVM) GetLatestEVMHeight(ctx context.Context) (uint64, error) {
 }
 
 // getSignerNetworkInfo loads the signer account from network and returns key index and sequence number
-func (e *EVM) getSignerNetworkInfo(ctx context.Context) (int, uint64, error) {
+func (e *EVM) getSignerNetworkInfo(ctx context.Context) (uint32, uint64, error) {
 	account, err := e.client.GetAccount(ctx, e.config.COAAddress)
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to get signer info account: %w", err)

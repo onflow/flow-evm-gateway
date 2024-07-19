@@ -2,7 +2,6 @@ package models
 
 import (
 	"bytes"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
@@ -193,26 +192,20 @@ func decodeTransactionEvent(
 		return nil, nil, fmt.Errorf("failed to Cadence decode transaction event [%s]: %w", event.String(), err)
 	}
 
-	encodedTx, err := hex.DecodeString(txEvent.Payload)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to hex decode transaction payload [%s]: %w", txEvent.Payload, err)
-	}
+	encodedTx := txEvent.Payload
 
 	gethReceipt := &gethTypes.Receipt{
 		BlockNumber:       big.NewInt(int64(txEvent.BlockHeight)),
 		Type:              txEvent.TransactionType,
-		TxHash:            common.HexToHash(txEvent.Hash),
+		TxHash:            txEvent.Hash,
 		ContractAddress:   common.HexToAddress(txEvent.ContractAddress),
 		GasUsed:           txEvent.GasConsumed,
 		CumulativeGasUsed: txEvent.GasConsumed, // todo use cumulative after added to the tx result
 		TransactionIndex:  uint(txEvent.Index),
-		BlockHash:         common.HexToHash(txEvent.BlockHash),
+		// TODO: BlockHash is not available in the event payload
 	}
 
-	encLogs, err := hex.DecodeString(txEvent.Logs)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to hex decode logs: %w", err)
-	}
+	encLogs := txEvent.Logs
 
 	if len(encLogs) > 0 {
 		err = rlp.Decode(bytes.NewReader(encLogs), &gethReceipt.Logs)
@@ -239,10 +232,7 @@ func decodeTransactionEvent(
 
 	var revertReason []byte
 	if txEvent.ErrorCode == uint16(types.ExecutionErrCodeExecutionReverted) {
-		revertReason, err = hex.DecodeString(txEvent.ReturnedData)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to hex-decode transaction return data [%s]: %w", txEvent.ReturnedData, err)
-		}
+		revertReason = txEvent.ReturnedData
 	}
 
 	receipt := NewStorageReceipt(gethReceipt, revertReason)

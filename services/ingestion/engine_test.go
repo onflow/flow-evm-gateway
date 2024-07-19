@@ -583,7 +583,6 @@ func newTransaction() (cadence.Event, *types.Event, models.Transaction, *types.R
 		res,
 		txEncoded,
 		1,
-		tx.Hash(),
 	)
 
 	location := common.NewAddressLocation(nil, common.Address{0x1}, string(types.EventTypeBlockExecuted))

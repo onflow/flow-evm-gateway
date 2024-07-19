@@ -6,7 +6,6 @@ import (
 
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go/fvm/evm/types"
-	"github.com/onflow/go-ethereum/common"
 )
 
 var (
@@ -25,18 +24,13 @@ func decodeBlock(event cadence.Event) (*types.Block, error) {
 		return nil, fmt.Errorf("failed to cadence decode block [%s]: %w", event.String(), err)
 	}
 
-	hashes := make([]common.Hash, len(payload.TransactionHashes))
-	for i, h := range payload.TransactionHashes {
-		hashes[i] = common.HexToHash(string(h))
-	}
-
 	return &types.Block{
-		ParentBlockHash:   common.HexToHash(payload.ParentBlockHash),
+		ParentBlockHash:   payload.ParentBlockHash,
 		Height:            payload.Height,
 		Timestamp:         payload.Timestamp,
 		TotalSupply:       payload.TotalSupply.Value,
-		ReceiptRoot:       common.HexToHash(payload.ReceiptRoot),
-		TransactionHashes: hashes,
+		ReceiptRoot:       payload.ReceiptRoot,
+		TransactionHashes: payload.TransactionHashes,
 		TotalGasUsed:      payload.TotalGasUsed,
 	}, nil
 }
