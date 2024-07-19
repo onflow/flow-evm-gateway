@@ -13,7 +13,7 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-var ErrOutOfRange = errors.New("height is out of range for provided spork clients")
+var ErrOutOfRange = errors.New("height is out of available range")
 
 type sporkClient struct {
 	firstHeight uint64
