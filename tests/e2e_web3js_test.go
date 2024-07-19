@@ -30,6 +30,10 @@ func TestWeb3_E2E(t *testing.T) {
 		runWeb3Test(t, "eth_deploy_contract_and_interact_test")
 	})
 
+	t.Run("deploy multicall3 contract and call methods", func(t *testing.T) {
+		runWeb3Test(t, "eth_multicall3_contract_test")
+	})
+
 	t.Run("test fetch transaction", func(t *testing.T) {
 		runWeb3Test(t, "eth_get_transaction_by_hash_test")
 	})
