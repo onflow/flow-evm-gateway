@@ -200,7 +200,7 @@ func decodeTransactionEvent(
 
 	encodedLogs, err := hex.DecodeString(txEvent.Logs)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to hex decode receipt [%s]: %w", txEvent.Logs, err)
+		return nil, nil, fmt.Errorf("failed to hex decode transaction logs [%s]: %w", txEvent.Logs, err)
 	}
 
 	var logs []*gethTypes.Log
