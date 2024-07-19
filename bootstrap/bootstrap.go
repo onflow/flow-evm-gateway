@@ -142,8 +142,9 @@ func Start(ctx context.Context, cfg *config.Config) error {
 	metricsServer, err := metrics.NewServer(logger, "./metrics/prometheus.yml")
 	if err != nil {
 		logger.Warn().Err(err).Msg("failed to start metrics server")
+	} else {
+		<-metricsServer.Ready()
 	}
-	<-metricsServer.Ready()
 
 	return nil
 }
