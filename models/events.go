@@ -89,8 +89,13 @@ func (c *CadenceEvents) Transactions() ([]Transaction, []*StorageReceipt, error)
 // If there are no evm block or transactions events this is a heartbeat
 // event that is broadcast in intervals.
 func (c *CadenceEvents) Empty() bool {
-	b, _ := c.Blocks()
-	return len(b) == 0
+	for _, e := range c.events.Events {
+		if isTransactionExecutedEvent(e.Value) || isBlockExecutedEvent(e.Value) {
+			return false
+		}
+	}
+
+	return true
 }
 
 // CadenceHeight returns the Flow Cadence height at which the events

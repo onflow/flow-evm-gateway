@@ -190,37 +190,43 @@ func decodeTransactionEvent(
 ) (Transaction, *StorageReceipt, error) {
 	txEvent, err := types.DecodeTransactionEventPayload(event)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to Cadence decode transaction event: %w", err)
+		return nil, nil, fmt.Errorf("failed to Cadence decode transaction event [%s]: %w", event.String(), err)
 	}
 
 	encodedTx, err := hex.DecodeString(txEvent.Payload)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to hex-decode transaction payload: %w", err)
-	}
-
-	encodedLogs, err := hex.DecodeString(txEvent.Logs)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to hex decode receipt: %w", err)
-	}
-
-	var logs []*gethTypes.Log
-	if len(encodedLogs) > 0 {
-		err = rlp.Decode(bytes.NewReader(encodedLogs), &logs)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to RLP-decode receipt: %w", err)
-		}
+		return nil, nil, fmt.Errorf("failed to hex decode transaction payload [%s]: %w", txEvent.Payload, err)
 	}
 
 	gethReceipt := &gethTypes.Receipt{
 		BlockNumber:       big.NewInt(int64(txEvent.BlockHeight)),
 		Type:              txEvent.TransactionType,
-		Logs:              logs,
 		TxHash:            common.HexToHash(txEvent.Hash),
 		ContractAddress:   common.HexToAddress(txEvent.ContractAddress),
 		GasUsed:           txEvent.GasConsumed,
 		CumulativeGasUsed: txEvent.GasConsumed, // todo use cumulative after added to the tx result
 		TransactionIndex:  uint(txEvent.Index),
 		BlockHash:         common.HexToHash(txEvent.BlockHash),
+	}
+
+	encLogs, err := hex.DecodeString(txEvent.Logs)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to hex decode logs: %w", err)
+	}
+
+	if len(encLogs) > 0 {
+		err = rlp.Decode(bytes.NewReader(encLogs), &gethReceipt.Logs)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to rlp decode logs: %w", err)
+		}
+
+		// dynamically add missing log fields
+		for _, l := range gethReceipt.Logs {
+			l.BlockHash = gethReceipt.BlockHash
+			l.TxHash = gethReceipt.TxHash
+			l.BlockNumber = gethReceipt.BlockNumber.Uint64()
+			l.Index = gethReceipt.TransactionIndex
+		}
 	}
 
 	if txEvent.ErrorCode == uint16(types.ErrCodeNoError) {
@@ -231,14 +237,15 @@ func decodeTransactionEvent(
 
 	gethReceipt.Bloom = gethTypes.CreateBloom([]*gethTypes.Receipt{gethReceipt})
 
-	receipt := NewStorageReceipt(gethReceipt)
+	var revertReason []byte
 	if txEvent.ErrorCode == uint16(types.ExecutionErrCodeExecutionReverted) {
-		revert, err := hex.DecodeString(txEvent.ReturnedData)
+		revertReason, err = hex.DecodeString(txEvent.ReturnedData)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to hex-decode transaction return data: %w", err)
+			return nil, nil, fmt.Errorf("failed to hex-decode transaction return data [%s]: %w", txEvent.ReturnedData, err)
 		}
-		receipt.RevertReason = revert
 	}
+
+	receipt := NewStorageReceipt(gethReceipt, revertReason)
 
 	var tx Transaction
 	// check if the transaction payload is actually from a direct call,
@@ -246,7 +253,7 @@ func decodeTransactionEvent(
 	if txEvent.TransactionType == types.DirectCallTxType {
 		directCall, err := types.DirectCallFromEncoded(encodedTx)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to RLP-decode direct call: %w", err)
+			return nil, nil, fmt.Errorf("failed to RLP-decode direct call [%x]: %w", encodedTx, err)
 		}
 		evmHeight := receipt.BlockNumber.Uint64()
 
@@ -254,7 +261,7 @@ func decodeTransactionEvent(
 	} else {
 		gethTx := &gethTypes.Transaction{}
 		if err := gethTx.UnmarshalBinary(encodedTx); err != nil {
-			return nil, nil, fmt.Errorf("failed to RLP-decode transaction: %w", err)
+			return nil, nil, fmt.Errorf("failed to RLP-decode transaction [%x]: %w", encodedTx, err)
 		}
 		tx = TransactionCall{Transaction: gethTx}
 	}
@@ -269,7 +276,7 @@ func UnmarshalTransaction(value []byte, blockHeight uint64) (Transaction, error)
 	if value[0] == types.DirectCallTxType {
 		directCall, err := types.DirectCallFromEncoded(value)
 		if err != nil {
-			return nil, fmt.Errorf("failed to RLP-decode direct call: %w", err)
+			return nil, fmt.Errorf("failed to RLP-decode direct call [%x]: %w", value, err)
 		}
 
 		// TEMP: Remove `blockHeight` after PreviewNet is reset
@@ -284,7 +291,7 @@ func UnmarshalTransaction(value []byte, blockHeight uint64) (Transaction, error)
 			return TransactionCall{Transaction: tx}, nil
 		}
 
-		return nil, fmt.Errorf("failed to RLP-decode transaction: %w", err)
+		return nil, fmt.Errorf("failed to RLP-decode transaction [%x]: %w", value, err)
 	}
 
 	return TransactionCall{Transaction: tx}, nil

@@ -4,6 +4,8 @@ const { assert } = require('chai')
 const { Web3 } = require("web3");
 
 it('streaming of blocks, transactions, logs using filters', async () => {
+    setTimeout(() => process.exit(1), 1000*120) // this is a failsafe if socket is kept open since test node process won't finish otherwise
+
     let deployed = await helpers.deployContract("storage")
     let contractAddress = deployed.receipt.contractAddress
 

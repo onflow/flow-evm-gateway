@@ -191,17 +191,7 @@ func (b *BlockChainAPI) SendRawTransaction(
 
 	id, err := b.evm.SendRawTransaction(ctx, input)
 	if err != nil {
-		var errGasPriceTooLow *errs.GasPriceTooLowError
-
-		// handle typed errors
-		switch {
-		case errors.As(err, &errGasPriceTooLow):
-			return common.Hash{}, errGasPriceTooLow
-		case errors.Is(err, models.ErrInvalidEVMTransaction):
-			return common.Hash{}, err
-		default:
-			return common.Hash{}, errs.ErrInternal
-		}
+		return handleError[common.Hash](b.logger, err)
 	}
 
 	return id, nil
@@ -251,7 +241,7 @@ func (b *BlockChainAPI) GetTransactionByHash(
 		return handleError[*Transaction](b.logger, err)
 	}
 
-	return NewTransaction(tx, *rcp, *b.config)
+	return NewTransactionResult(tx, *rcp, b.config.EVMNetworkID)
 }
 
 // GetTransactionByBlockHashAndIndex returns the transaction for the given block hash and index.
@@ -912,17 +902,25 @@ func (b *BlockChainAPI) GetStorageAt(
 // if the error is not of type ErrNotFound it will return the error and the generic
 // empty type.
 func handleError[T any](log zerolog.Logger, err error) (T, error) {
-	var zero T
+	var (
+		zero              T
+		errGasPriceTooLow *errs.GasPriceTooLowError
+	)
+
 	switch {
 	// as per specification returning nil and nil for not found resources
 	case errors.Is(err, storageErrs.ErrNotFound):
 		return zero, nil
 	case errors.Is(err, storageErrs.ErrInvalidRange):
 		return zero, err
+	case errors.Is(err, models.ErrInvalidEVMTransaction):
+		return zero, err
 	case errors.Is(err, requester.ErrOutOfRange):
-		return zero, fmt.Errorf("requested height is out of supported range")
+		return zero, err
 	case errors.Is(err, errs.ErrInvalid):
 		return zero, err
+	case errors.As(err, &errGasPriceTooLow):
+		return zero, errGasPriceTooLow
 	default:
 		log.Error().Err(err).Msg("api error")
 		return zero, errs.ErrInternal
