@@ -15,6 +15,7 @@ import (
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/crypto"
 	"github.com/onflow/flow-go/fvm/evm/emulator"
+	"github.com/onflow/flow-go/fvm/evm/emulator/state"
 	"github.com/onflow/flow-go/fvm/evm/stdlib"
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/flow-go/fvm/systemcontracts"
@@ -86,6 +87,9 @@ type Requester interface {
 
 	// GetLatestEVMHeight returns the latest EVM height of the network.
 	GetLatestEVMHeight(ctx context.Context) (uint64, error)
+
+	// GetStorageAt returns the storage from the state at the given address, key and block number.
+	GetStorageAt(ctx context.Context, address common.Address, hash common.Hash, evmHeight int64) (common.Hash, error)
 }
 
 var _ Requester = &EVM{}
@@ -368,6 +372,43 @@ func (e *EVM) GetNonce(
 		Msg("get nonce executed")
 
 	return nonce, nil
+}
+
+func (e *EVM) stateAt(evmHeight int64) (*state.StateDB, error) {
+	cadenceHeight, err := e.evmToCadenceHeight(evmHeight)
+	if err != nil {
+		return nil, err
+	}
+
+	if cadenceHeight == LatestBlockHeight {
+		h, err := e.client.GetLatestBlockHeader(context.Background(), true)
+		if err != nil {
+			return nil, err
+		}
+		cadenceHeight = h.Height
+	}
+
+	ledger, err := newRemoteLedger(e.config.AccessNodeHost, cadenceHeight)
+	if err != nil {
+		return nil, fmt.Errorf("could not create a remote ledger: %w", err)
+	}
+
+	return state.NewStateDB(ledger, previewnetStorageAddress)
+}
+
+func (e *EVM) GetStorageAt(
+	ctx context.Context,
+	address common.Address,
+	hash common.Hash,
+	evmHeight int64,
+) (common.Hash, error) {
+	stateDB, err := e.stateAt(evmHeight)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	result := stateDB.GetState(address, hash)
+	return result, stateDB.Error()
 }
 
 func (e *EVM) Call(

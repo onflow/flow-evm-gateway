@@ -3,9 +3,11 @@ package api
 import (
 	"context"
 	_ "embed"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
+	"strings"
 	"time"
 
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
@@ -766,30 +768,6 @@ func (b *BlockChainAPI) GetCode(
 	return code, nil
 }
 
-// handleError takes in an error and in case the error is of type ErrNotFound
-// it returns nil instead of an error since that is according to the API spec,
-// if the error is not of type ErrNotFound it will return the error and the generic
-// empty type.
-func handleError[T any](log zerolog.Logger, collector metrics.Collector, err error) (T, error) {
-	collector.ApiErrorOccurred()
-
-	var zero T
-	switch {
-	// as per specification returning nil and nil for not found resources
-	case errors.Is(err, storageErrs.ErrNotFound):
-		return zero, nil
-	case errors.Is(err, storageErrs.ErrInvalidRange):
-		return zero, err
-	case errors.Is(err, requester.ErrOutOfRange):
-		return zero, fmt.Errorf("requested height is out of supported range")
-	case errors.Is(err, errs.ErrInvalid):
-		return zero, err
-	default:
-		log.Error().Err(err).Msg("api error")
-		return zero, errs.ErrInternal
-	}
-}
-
 func (b *BlockChainAPI) fetchBlockTransactions(
 	ctx context.Context,
 	block *evmTypes.Block,
@@ -979,6 +957,80 @@ func (b *BlockChainAPI) FeeHistory(
 	}, nil
 }
 
+// GetStorageAt returns the storage from the state at the given address, key and
+// block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta block
+// numbers are also allowed.
+func (b *BlockChainAPI) GetStorageAt(
+	ctx context.Context,
+	address common.Address,
+	storageSlot string,
+	blockNumberOrHash *rpc.BlockNumberOrHash,
+) (hexutil.Bytes, error) {
+	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
+		return nil, err
+	}
+
+	key, _, err := decodeHash(storageSlot)
+	if err != nil {
+		return handleError[hexutil.Bytes](b.logger, b.collector, errors.Join(errs.ErrInvalid, err))
+	}
+
+	evmHeight, err := b.getBlockNumber(blockNumberOrHash)
+	if err != nil {
+		return handleError[hexutil.Bytes](b.logger, b.collector, err)
+	}
+
+	result, err := b.evm.GetStorageAt(ctx, address, key, evmHeight)
+	if err != nil {
+		return handleError[hexutil.Bytes](b.logger, b.collector, err)
+	}
+
+	return result[:], nil
+}
+
+// handleError takes in an error and in case the error is of type ErrNotFound
+// it returns nil instead of an error since that is according to the API spec,
+// if the error is not of type ErrNotFound it will return the error and the generic
+// empty type.
+func handleError[T any](log zerolog.Logger, collector metrics.Collector, err error) (T, error) {
+	collector.ApiErrorOccurred()
+
+	var zero T
+	switch {
+	// as per specification returning nil and nil for not found resources
+	case errors.Is(err, storageErrs.ErrNotFound):
+		return zero, nil
+	case errors.Is(err, storageErrs.ErrInvalidRange):
+		return zero, err
+	case errors.Is(err, requester.ErrOutOfRange):
+		return zero, fmt.Errorf("requested height is out of supported range")
+	case errors.Is(err, errs.ErrInvalid):
+		return zero, err
+	default:
+		log.Error().Err(err).Msg("api error")
+		return zero, errs.ErrInternal
+	}
+}
+
+// decodeHash parses a hex-encoded 32-byte hash. The input may optionally
+// be prefixed by 0x and can have a byte length up to 32.
+func decodeHash(s string) (h common.Hash, inputLength int, err error) {
+	if strings.HasPrefix(s, "0x") || strings.HasPrefix(s, "0X") {
+		s = s[2:]
+	}
+	if (len(s) & 1) > 0 {
+		s = "0" + s
+	}
+	b, err := hex.DecodeString(s)
+	if err != nil {
+		return common.Hash{}, 0, errors.New("hex string invalid")
+	}
+	if len(b) > 32 {
+		return common.Hash{}, len(b), errors.New("hex string too long, want at most 32 bytes")
+	}
+	return common.BytesToHash(b), len(b), nil
+}
+
 /*
 Static responses section
 
@@ -1081,21 +1133,6 @@ func (b *BlockChainAPI) GetProof(
 ) (*AccountResult, error) {
 	start := time.Now()
 	defer b.collector.MeasureRequestDuration(start, prometheus.Labels{"resolver": "GetProof"})
-
-	return nil, errs.ErrNotSupported
-}
-
-// GetStorageAt returns the storage from the state at the given address, key and
-// block number. The rpc.LatestBlockNumber and rpc.PendingBlockNumber meta block
-// numbers are also allowed.
-func (b *BlockChainAPI) GetStorageAt(
-	ctx context.Context,
-	address common.Address,
-	storageSlot string,
-	blockNumberOrHash *rpc.BlockNumberOrHash,
-) (hexutil.Bytes, error) {
-	start := time.Now()
-	defer b.collector.MeasureRequestDuration(start, prometheus.Labels{"resolver": "GetStorageAt"})
 
 	return nil, errs.ErrNotSupported
 }
