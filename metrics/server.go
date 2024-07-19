@@ -14,9 +14,8 @@ import (
 
 // Server is the http server that will be serving the /metrics request for prometheus
 type Server struct {
-	server     *http.Server
-	log        zerolog.Logger
-	configPath string
+	server *http.Server
+	log    zerolog.Logger
 }
 
 // NewServer creates a new server that will start on the specified port,
@@ -24,7 +23,7 @@ type Server struct {
 func NewServer(log zerolog.Logger, configPath string) (*Server, error) {
 	port, err := readPortFromConfigFile(configPath)
 	if err != nil {
-		log.Warn().Err(err).Msg("could not read port from prometheus config file")
+		log.Warn().Err(err).Msgf("could not read port from prometheus config file: %s", configPath)
 		return nil, err
 	}
 

@@ -25,7 +25,7 @@ type StaticConfig struct {
 func readPortFromConfigFile(name string) (uint, error) {
 	data, err := os.ReadFile(name)
 	if err != nil {
-		return 0, fmt.Errorf("could not read file %s: %w", name, err)
+		return 0, fmt.Errorf("could not read prometheus config file %s: %w", name, err)
 	}
 
 	var config PrometheusConfig
