@@ -22,11 +22,13 @@ import (
 	"github.com/onflow/go-ethereum/common"
 	"github.com/onflow/go-ethereum/core/txpool"
 	"github.com/onflow/go-ethereum/core/types"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
 
 	errs "github.com/onflow/flow-evm-gateway/api/errors"
 	"github.com/onflow/flow-evm-gateway/config"
+	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/storage"
 )
@@ -105,6 +107,8 @@ type EVM struct {
 	head              *types.Header
 	evmSigner         types.Signer
 	validationOptions *txpool.ValidationOptions
+
+	collector metrics.Collector
 }
 
 func NewEVM(
@@ -114,6 +118,7 @@ func NewEVM(
 	logger zerolog.Logger,
 	blocks storage.BlockIndexer,
 	txPool *TxPool,
+	collector metrics.Collector,
 ) (*EVM, error) {
 	logger = logger.With().Str("component", "requester").Logger()
 	// check that the address stores already created COA resource in the "evm" storage path.
@@ -169,6 +174,7 @@ func NewEVM(
 		head:              head,
 		evmSigner:         evmSigner,
 		validationOptions: validationOptions,
+		collector:         collector,
 	}
 
 	// create COA on the account
@@ -229,6 +235,7 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 	var to string
 	if tx.To() != nil {
 		to = tx.To().String()
+		e.collector.EvmAccountCalled(prometheus.Labels{"address": to})
 	}
 
 	e.logger.Info().

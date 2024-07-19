@@ -8,6 +8,7 @@ import (
 	"github.com/onflow/flow-go-sdk"
 	"github.com/rs/zerolog"
 
+	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
@@ -27,6 +28,7 @@ type Engine struct {
 	status          *models.EngineStatus
 	blocksPublisher *models.Publisher
 	logsPublisher   *models.Publisher
+	collector       metrics.Collector
 }
 
 func NewEventIngestionEngine(
@@ -39,6 +41,7 @@ func NewEventIngestionEngine(
 	blocksPublisher *models.Publisher,
 	logsPublisher *models.Publisher,
 	log zerolog.Logger,
+	collector metrics.Collector,
 ) *Engine {
 	log = log.With().Str("component", "ingestion").Logger()
 
@@ -53,6 +56,7 @@ func NewEventIngestionEngine(
 		status:          models.NewEngineStatus(),
 		blocksPublisher: blocksPublisher,
 		logsPublisher:   logsPublisher,
+		collector:       collector,
 	}
 }
 
