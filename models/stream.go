@@ -7,18 +7,21 @@ import (
 )
 
 type Publisher struct {
-	mux         sync.Mutex
+	mux         sync.RWMutex
 	subscribers map[uuid.UUID]Subscriber
 }
 
 func NewPublisher() *Publisher {
 	return &Publisher{
-		mux:         sync.Mutex{},
+		mux:         sync.RWMutex{},
 		subscribers: make(map[uuid.UUID]Subscriber),
 	}
 }
 
 func (p *Publisher) Publish(data any) {
+	p.mux.RLock()
+	defer p.mux.RUnlock()
+
 	for _, s := range p.subscribers {
 		s.Notify(data)
 	}
