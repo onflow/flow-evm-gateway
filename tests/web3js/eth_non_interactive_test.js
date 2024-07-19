@@ -126,6 +126,14 @@ it('get transaction', async () => {
     assert.equal(rcp.gasUsed, 21000n)
 })
 
+// it shouldn't fail, but return empty
+it('get not found values', async () => {
+    const nonExistingHeight = 9999999999
+
+    assert.isNull(await web3.eth.getBlock(nonExistingHeight))
+    assert.isNull(await web3.eth.getTransactionFromBlock(nonExistingHeight, 0))
+})
+
 it('get mining status', async () => {
     let mining = await web3.eth.isMining()
     assert.isFalse(mining)
