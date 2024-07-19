@@ -439,10 +439,10 @@ func (w *loggingResponseWriter) Write(data []byte) (int, error) {
 	// only set error level if error is present in response
 	if err != "" {
 		// don't error log known handled errors
-		if !strings.Contains(err, errs.ErrRateLimit.Error()) &&
-			!strings.Contains(err, errs.ErrInvalid.Error()) &&
-			!strings.Contains(err, errs.ErrInternal.Error()) &&
-			!strings.Contains(err, errs.ErrNotSupported.Error()) {
+		if !errorIs(err, errs.ErrRateLimit) &&
+			!errorIs(err, errs.ErrInvalid) &&
+			!errorIs(err, errs.ErrInternal) &&
+			!errorIs(err, errs.ErrNotSupported) {
 			l = w.logger.Error()
 		}
 	}
@@ -454,4 +454,8 @@ func (w *loggingResponseWriter) Write(data []byte) (int, error) {
 
 func (w *loggingResponseWriter) WriteHeader(statusCode int) {
 	w.ResponseWriter.WriteHeader(statusCode)
+}
+
+func errorIs(msg string, err error) bool {
+	return strings.Contains(msg, err.Error())
 }
