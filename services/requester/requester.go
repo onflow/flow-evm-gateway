@@ -453,7 +453,7 @@ func (e *EVM) Call(
 
 	evmResult, err := stdlib.ResultSummaryFromEVMResultValue(scriptResult)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode EVM result from call: %w", err)
+		return nil, fmt.Errorf("failed to decode EVM result from call [%s]: %w", scriptResult.String(), err)
 	}
 
 	if evmResult.ErrorCode != 0 {
@@ -677,12 +677,21 @@ func (e *EVM) executeScriptAtHeight(
 		)
 	}
 
-	return e.client.ExecuteScriptAtBlockHeight(
+	res, err := e.client.ExecuteScriptAtBlockHeight(
 		ctx,
 		height,
 		e.replaceAddresses(script),
 		arguments,
 	)
+	if err != nil {
+		// if snapshot doesn't exist on EN, the height at which script was executed is out
+		// of the boundaries the EN keeps state, so return out of range
+		if strings.Contains(err.Error(), "failed to create storage snapshot") {
+			return nil, ErrOutOfRange
+		}
+	}
+
+	return res, err
 }
 
 func addressToCadenceString(address common.Address) (cadence.String, error) {
@@ -699,7 +708,7 @@ func cadenceStringToBytes(value cadence.Value) ([]byte, error) {
 
 	code, err := hex.DecodeString(string(cdcString))
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode string to byte array: %w", err)
+		return nil, fmt.Errorf("failed to decode string to byte array [%s]: %w", cdcString, err)
 	}
 
 	return code, nil

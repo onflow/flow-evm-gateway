@@ -6,8 +6,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/onflow/flow-go-sdk"
-	"github.com/onflow/flow-go/engine"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	gethCommon "github.com/onflow/go-ethereum/common"
 	"github.com/rs/zerolog"
@@ -20,18 +20,17 @@ import (
 var _ models.Engine = &Engine{}
 
 type Engine struct {
-	logger            zerolog.Logger
-	status            *models.EngineStatus
-	blocksBroadcaster *engine.Broadcaster
-	blocks            storage.BlockIndexer
-	traces            storage.TraceIndexer
-	downloader        Downloader
-	currentHeight     *atomic.Uint64
+	logger          zerolog.Logger
+	status          *models.EngineStatus
+	blocksPublisher *models.Publisher
+	blocks          storage.BlockIndexer
+	traces          storage.TraceIndexer
+	downloader      Downloader
 }
 
 func NewTracesIngestionEngine(
 	initEVMHeight uint64,
-	blocksBroadcaster *engine.Broadcaster,
+	blocksPublisher *models.Publisher,
 	blocks storage.BlockIndexer,
 	traces storage.TraceIndexer,
 	downloader Downloader,
@@ -41,19 +40,18 @@ func NewTracesIngestionEngine(
 	height.Store(initEVMHeight)
 
 	return &Engine{
-		status:            models.NewEngineStatus(),
-		logger:            logger.With().Str("component", "trace-ingestion").Logger(),
-		currentHeight:     height,
-		blocksBroadcaster: blocksBroadcaster,
-		blocks:            blocks,
-		traces:            traces,
-		downloader:        downloader,
+		status:          models.NewEngineStatus(),
+		logger:          logger.With().Str("component", "trace-ingestion").Logger(),
+		blocksPublisher: blocksPublisher,
+		blocks:          blocks,
+		traces:          traces,
+		downloader:      downloader,
 	}
 }
 
 func (e *Engine) Run(ctx context.Context) error {
 	// subscribe to new blocks
-	e.blocksBroadcaster.Subscribe(e)
+	e.blocksPublisher.Subscribe(e)
 
 	e.status.MarkReady()
 	return nil
@@ -61,19 +59,16 @@ func (e *Engine) Run(ctx context.Context) error {
 
 // Notify is a handler that is being used to subscribe for new EVM block notifications.
 // This method should be non-blocking.
-func (e *Engine) Notify() {
-	// proceed indexing the next height
-	height := e.currentHeight.Add(1)
-
-	l := e.logger.With().Uint64("evm-height", height).Logger()
-
-	block, err := e.blocks.GetByHeight(height)
-	if err != nil {
-		l.Error().Err(err).Msg("failed to get block")
+func (e *Engine) Notify(data any) {
+	block, ok := data.(*types.Block)
+	if !ok {
+		e.logger.Error().Msg("invalid event type sent to trace ingestion")
 		return
 	}
 
-	cadenceID, err := e.blocks.GetCadenceID(height)
+	l := e.logger.With().Uint64("evm-height", block.Height).Logger()
+
+	cadenceID, err := e.blocks.GetCadenceID(block.Height)
 	if err != nil {
 		l.Error().Err(err).Msg("failed to get cadence block ID")
 		return
@@ -124,6 +119,18 @@ func (e *Engine) indexBlockTraces(evmBlock *types.Block, cadenceBlockID flow.Ide
 	}
 
 	wg.Wait()
+}
+
+// ID is required by the publisher interface and we return a random uuid since the
+// subscription will only happen once by this engine
+func (e *Engine) ID() uuid.UUID {
+	return uuid.New()
+}
+
+// Error is required by the publisher, and we just return a nil,
+// since the errors are handled gracefully in the indexBlockTraces
+func (e *Engine) Error() <-chan error {
+	return nil
 }
 
 func (e *Engine) Stop() {

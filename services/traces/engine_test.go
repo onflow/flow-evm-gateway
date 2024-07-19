@@ -11,13 +11,13 @@ import (
 
 	pebbleDB "github.com/cockroachdb/pebble"
 	"github.com/onflow/flow-go-sdk"
-	broadcast "github.com/onflow/flow-go/engine"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	gethCommon "github.com/onflow/go-ethereum/common"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/services/traces/mocks"
 	storageMock "github.com/onflow/flow-evm-gateway/storage/mocks"
 )
@@ -27,7 +27,7 @@ import (
 // downloaded and stored.
 func TestTraceIngestion(t *testing.T) {
 	t.Run("successful single block ingestion", func(t *testing.T) {
-		blockBroadcaster := broadcast.NewBroadcaster()
+		blockPublisher := models.NewPublisher()
 		blocks := &storageMock.BlockIndexer{}
 		trace := &storageMock.TraceIndexer{}
 		downloader := &mocks.Downloader{}
@@ -45,13 +45,13 @@ func TestTraceIngestion(t *testing.T) {
 		latestHeight := uint64(0)
 		blockID := flow.Identifier{0x09}
 		hashes := []gethCommon.Hash{{0x1}, {0x2}, {0x3}}
+		block := storageMock.NewBlock(latestHeight + 1)
+		block.TransactionHashes = hashes
 
 		blocks.
 			On("GetByHeight", mock.Anything).
 			Return(func(height uint64) (*types.Block, error) {
 				require.Equal(t, latestHeight+1, height) // make sure it gets next block
-				block := storageMock.NewBlock(height)
-				block.TransactionHashes = hashes
 				return block, nil
 			})
 
@@ -81,12 +81,12 @@ func TestTraceIngestion(t *testing.T) {
 				return nil
 			})
 
-		engine := NewTracesIngestionEngine(latestHeight, blockBroadcaster, blocks, trace, downloader, zerolog.Nop())
+		engine := NewTracesIngestionEngine(latestHeight, blockPublisher, blocks, trace, downloader, zerolog.Nop())
 
 		err := engine.Run(context.Background())
 		require.NoError(t, err)
 
-		blockBroadcaster.Publish()
+		blockPublisher.Publish(block)
 
 		// make sure stored was called as many times as block contained hashes
 		require.Eventuallyf(t, func() bool {
@@ -106,7 +106,7 @@ func TestTraceIngestion(t *testing.T) {
 	})
 
 	t.Run("successful multiple blocks ingestion", func(t *testing.T) {
-		blockBroadcaster := broadcast.NewBroadcaster()
+		blocksPublisher := models.NewPublisher()
 		blocks := &storageMock.BlockIndexer{}
 		trace := &storageMock.TraceIndexer{}
 		downloader := &mocks.Downloader{}
@@ -145,17 +145,9 @@ func TestTraceIngestion(t *testing.T) {
 		}
 
 		blocks.
-			On("GetByHeight", mock.Anything).
-			Return(func(height uint64) (*types.Block, error) {
-				latestHeight++
-				require.Equal(t, latestHeight, height) // make sure it gets next block
-				require.Less(t, int(height), len(mockBlocks))
-				return mockBlocks[height], nil
-			})
-
-		blocks.
 			On("GetCadenceID", mock.Anything).
 			Return(func(height uint64) (flow.Identifier, error) {
+				latestHeight++
 				require.Equal(t, latestHeight, height)
 				require.Less(t, int(height), len(mockCadenceIDs))
 				return mockCadenceIDs[height], nil
@@ -180,13 +172,13 @@ func TestTraceIngestion(t *testing.T) {
 				return nil
 			})
 
-		engine := NewTracesIngestionEngine(latestHeight, blockBroadcaster, blocks, trace, downloader, zerolog.Nop())
+		engine := NewTracesIngestionEngine(latestHeight, blocksPublisher, blocks, trace, downloader, zerolog.Nop())
 
 		err := engine.Run(context.Background())
 		require.NoError(t, err)
 
 		for i := 0; i < blockCount; i++ {
-			blockBroadcaster.Publish()
+			blocksPublisher.Publish(mockBlocks[i+1])
 			time.Sleep(time.Millisecond * 100) // simulate block delay
 		}
 
@@ -224,7 +216,7 @@ func TestTraceIngestion(t *testing.T) {
 	})
 
 	t.Run("failed download retries", func(t *testing.T) {
-		blockBroadcaster := broadcast.NewBroadcaster()
+		blockBroadcaster := models.NewPublisher()
 		blocks := &storageMock.BlockIndexer{}
 		downloader := &mocks.Downloader{}
 		trace := &storageMock.TraceIndexer{}
@@ -233,13 +225,13 @@ func TestTraceIngestion(t *testing.T) {
 		latestHeight := uint64(0)
 		blockID := flow.Identifier{0x09}
 		hashes := []gethCommon.Hash{{0x1}}
+		block := storageMock.NewBlock(latestHeight + 1)
+		block.TransactionHashes = hashes
 
 		blocks.
 			On("GetByHeight", mock.Anything).
 			Return(func(height uint64) (*types.Block, error) {
 				require.Equal(t, latestHeight+1, height) // make sure it gets next block
-				block := storageMock.NewBlock(height)
-				block.TransactionHashes = hashes
 				return block, nil
 			})
 
@@ -264,7 +256,7 @@ func TestTraceIngestion(t *testing.T) {
 		err := engine.Run(context.Background())
 		require.NoError(t, err)
 
-		blockBroadcaster.Publish()
+		blockBroadcaster.Publish(block)
 
 		// make sure stored was called as many times as block contained hashes
 		require.Eventuallyf(t, func() bool {
