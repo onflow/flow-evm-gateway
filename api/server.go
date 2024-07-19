@@ -435,10 +435,14 @@ func (w *loggingResponseWriter) Write(data []byte) (int, error) {
 
 	l := w.logger.Debug()
 
+	err := body["error"]
 	// only set error level if error is present in response
-	if body["error"] != "" {
-		// and it's not rate limit error, we want to downgrade them since they are common
-		if !strings.Contains(body["error"], errs.ErrRateLimit.Error()) {
+	if err != "" {
+		// don't error log known handled errors
+		if !strings.Contains(err, errs.ErrRateLimit.Error()) &&
+			!strings.Contains(err, errs.ErrInvalid.Error()) &&
+			!strings.Contains(err, errs.ErrInternal.Error()) &&
+			!strings.Contains(err, errs.ErrNotSupported.Error()) {
 			l = w.logger.Error()
 		}
 	}

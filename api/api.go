@@ -117,26 +117,6 @@ func NewBlockChainAPI(
 	}, nil
 }
 
-// ChainId is the EIP-155 replay-protection chain id for the current Ethereum chain config.
-//
-// Note, this method does not conform to EIP-695 because the configured chain ID is always
-// returned, regardless of the current head block. We used to return an error when the chain
-// wasn't synced up to a block where EIP-155 is enabled, but this behavior caused issues
-// in CL clients.
-func (b *BlockChainAPI) ChainId(ctx context.Context) (*hexutil.Big, error) {
-	return (*hexutil.Big)(b.config.EVMNetworkID), nil
-}
-
-// Coinbase is the address that mining rewards will be sent to (alias for Etherbase).
-func (b *BlockChainAPI) Coinbase(ctx context.Context) (common.Address, error) {
-	return b.config.Coinbase, nil
-}
-
-// GasPrice returns a suggestion for a gas price for legacy transactions.
-func (b *BlockChainAPI) GasPrice(ctx context.Context) (*hexutil.Big, error) {
-	return (*hexutil.Big)(b.config.GasPrice), nil
-}
-
 // BlockNumber returns the block number of the chain head.
 func (b *BlockChainAPI) BlockNumber(ctx context.Context) (hexutil.Uint64, error) {
 	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
@@ -164,12 +144,12 @@ func (b *BlockChainAPI) Syncing(ctx context.Context) (interface{}, error) {
 
 	currentBlock, err := b.blocks.LatestEVMHeight()
 	if err != nil {
-		return nil, err
+		return handleError[any](b.logger, err)
 	}
 
 	highestBlock, err := b.evm.GetLatestEVMHeight(context.Background())
 	if err != nil {
-		return nil, err
+		return handleError[any](b.logger, err)
 	}
 
 	return SyncStatus{
@@ -409,10 +389,10 @@ func (b *BlockChainAPI) GetBlockReceipts(
 	} else if numHash.BlockNumber != nil {
 		block, err = b.blocks.GetByHeight(uint64(numHash.BlockNumber.Int64()))
 	} else {
-		return nil, errors.Join(
+		return handleError[[]*models.StorageReceipt](b.logger, errors.Join(
 			errs.ErrInvalid,
 			fmt.Errorf("block number or hash not provided"),
-		)
+		))
 	}
 	if err != nil {
 		return handleError[[]*models.StorageReceipt](b.logger, err)
@@ -509,9 +489,7 @@ func (b *BlockChainAPI) Call(
 
 	res, err := b.evm.Call(ctx, tx, from, evmHeight)
 	if err != nil {
-		// we debug output this error because the execution error is related to user input
-		b.logger.Debug().Err(err).Msg("failed to execute call")
-		return nil, err
+		return handleError[hexutil.Bytes](b.logger, err)
 	}
 
 	return res, nil
@@ -595,13 +573,11 @@ func (b *BlockChainAPI) GetTransactionCount(
 
 	networkNonce, err := b.evm.GetNonce(ctx, address, evmHeight)
 	if err != nil {
-		b.logger.Error().Err(err).Msg("get nonce on network failed")
 		return handleError[*hexutil.Uint64](b.logger, err)
 	}
 
 	nonce, err := b.accounts.GetNonce(address)
 	if err != nil {
-		b.logger.Error().Err(err).Msg("get nonce failed")
 		return handleError[*hexutil.Uint64](b.logger, errs.ErrInternal)
 	}
 
@@ -650,8 +626,7 @@ func (b *BlockChainAPI) EstimateGas(
 
 	estimatedGas, err := b.evm.EstimateGas(ctx, tx, from)
 	if err != nil {
-		b.logger.Error().Err(err).Msg("failed to estimate gas")
-		return hexutil.Uint64(0), err
+		return handleError[hexutil.Uint64](b.logger, err)
 	}
 
 	return hexutil.Uint64(estimatedGas), nil
@@ -675,7 +650,6 @@ func (b *BlockChainAPI) GetCode(
 
 	code, err := b.evm.GetCode(ctx, address, evmHeight)
 	if err != nil {
-		b.logger.Error().Err(err).Msg("failed to retrieve account code")
 		return handleError[hexutil.Bytes](b.logger, err)
 	}
 
@@ -952,6 +926,26 @@ Static responses section
 The API endpoints bellow return a static response because the values are not relevant for Flow EVM implementation
 or because it doesn't make sense yet to implement more complex solution
 */
+
+// ChainId is the EIP-155 replay-protection chain id for the current Ethereum chain config.
+//
+// Note, this method does not conform to EIP-695 because the configured chain ID is always
+// returned, regardless of the current head block. We used to return an error when the chain
+// wasn't synced up to a block where EIP-155 is enabled, but this behavior caused issues
+// in CL clients.
+func (b *BlockChainAPI) ChainId(ctx context.Context) (*hexutil.Big, error) {
+	return (*hexutil.Big)(b.config.EVMNetworkID), nil
+}
+
+// Coinbase is the address that mining rewards will be sent to (alias for Etherbase).
+func (b *BlockChainAPI) Coinbase(ctx context.Context) (common.Address, error) {
+	return b.config.Coinbase, nil
+}
+
+// GasPrice returns a suggestion for a gas price for legacy transactions.
+func (b *BlockChainAPI) GasPrice(ctx context.Context) (*hexutil.Big, error) {
+	return (*hexutil.Big)(b.config.GasPrice), nil
+}
 
 // GetUncleCountByBlockHash returns number of uncles in the block for the given block hash
 func (b *BlockChainAPI) GetUncleCountByBlockHash(
