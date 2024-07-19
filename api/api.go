@@ -217,17 +217,7 @@ func (b *BlockChainAPI) SendRawTransaction(
 
 	id, err := b.evm.SendRawTransaction(ctx, input)
 	if err != nil {
-		b.collector.ApiErrorOccurred()
-
-		var errGasPriceTooLow *errs.GasPriceTooLowError
-		switch {
-		case errors.As(err, &errGasPriceTooLow):
-			return common.Hash{}, errGasPriceTooLow
-		case errors.Is(err, models.ErrInvalidEVMTransaction):
-			return common.Hash{}, err
-		default:
-			return common.Hash{}, errs.ErrInternal
-		}
+		return handleError[common.Hash](b.logger, b.collector, err)
 	}
 
 	return id, nil
@@ -995,17 +985,25 @@ func (b *BlockChainAPI) GetStorageAt(
 func handleError[T any](log zerolog.Logger, collector metrics.Collector, err error) (T, error) {
 	collector.ApiErrorOccurred()
 
-	var zero T
+	var (
+		zero              T
+		errGasPriceTooLow *errs.GasPriceTooLowError
+	)
+
 	switch {
 	// as per specification returning nil and nil for not found resources
 	case errors.Is(err, storageErrs.ErrNotFound):
 		return zero, nil
 	case errors.Is(err, storageErrs.ErrInvalidRange):
 		return zero, err
+	case errors.Is(err, models.ErrInvalidEVMTransaction):
+		return zero, err
 	case errors.Is(err, requester.ErrOutOfRange):
-		return zero, fmt.Errorf("requested height is out of supported range")
+		return zero, err
 	case errors.Is(err, errs.ErrInvalid):
 		return zero, err
+	case errors.As(err, &errGasPriceTooLow):
+		return zero, errGasPriceTooLow
 	default:
 		log.Error().Err(err).Msg("api error")
 		return zero, errs.ErrInternal
