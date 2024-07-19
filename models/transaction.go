@@ -207,7 +207,7 @@ func decodeTransactionEvent(
 	if len(encodedLogs) > 0 {
 		err = rlp.Decode(bytes.NewReader(encodedLogs), &logs)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to RLP-decode receipt [%x]: %w", encodedLogs, err)
+			return nil, nil, fmt.Errorf("failed to RLP-decode transaction logs [%x]: %w", encodedLogs, err)
 		}
 	}
 
