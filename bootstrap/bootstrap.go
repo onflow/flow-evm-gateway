@@ -31,8 +31,6 @@ func Start(ctx context.Context, cfg *config.Config) error {
 	logger = logger.Level(cfg.LogLevel)
 	logger.Info().Msg("starting up the EVM gateway")
 
-	metricsServer := metrics.NewServer(logger, 9091)
-
 	store, err := pebble.New(cfg.DatabaseDir, logger)
 	if err != nil {
 		return err
@@ -140,6 +138,11 @@ func Start(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("failed to start event ingestion: %w", err)
 	}
 
+	// TODO: it's better to put this path into Makefile rather than hardcoding it
+	metricsServer, err := metrics.NewServer(logger, "./metrics/prometheus.yml")
+	if err != nil {
+		logger.Warn().Err(err).Msg("failed to start metrics server")
+	}
 	<-metricsServer.Ready()
 
 	return nil
