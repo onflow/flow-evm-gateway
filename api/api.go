@@ -521,7 +521,7 @@ func (b *BlockChainAPI) Call(
 	blockOverrides *BlockOverrides,
 ) (hexutil.Bytes, error) {
 	l := b.logger.With().
-		Str("endpoint", "getBlockTransactionCountByNumber").
+		Str("endpoint", "call").
 		Str("args", fmt.Sprintf("%v", args)).
 		Str("numberHash", blockNumberOrHash.String()).
 		Logger()
