@@ -728,6 +728,7 @@ func (b *BlockChainAPI) prepareBlockResponse(
 		Nonce:         types.BlockNonce{0x1},
 		Timestamp:     hexutil.Uint64(block.Timestamp),
 		BaseFeePerGas: hexutil.Big(*big.NewInt(0)),
+		LogsBloom:     types.LogsBloom([]*types.Log{}),
 	}
 
 	// todo remove after previewnet, temp fix to mock some of the timestamps
