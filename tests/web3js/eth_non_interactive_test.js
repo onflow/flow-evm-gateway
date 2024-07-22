@@ -43,6 +43,19 @@ it('get block', async () => {
     assert.isNull(no)
 })
 
+it('get earliest/genesis block', async () => {
+    let block = await web3.eth.getBlock('earliest')
+
+    assert.notDeepEqual(block, {})
+    assert.equal(block.number, 0n)
+    assert.isString(block.hash)
+    assert.isString(block.parentHash)
+    assert.lengthOf(block.logsBloom, 514)
+    assert.isDefined(block.timestamp)
+    assert.isTrue(block.timestamp >= 1714090657n)
+    assert.isUndefined(block.transactions)
+})
+
 it('get block and transactions with COA interactions', async () => {
     // First 2 blocks are formed from COA deployment and fund.
     const blockNumbers = [1, 2]
