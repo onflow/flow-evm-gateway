@@ -99,23 +99,16 @@ func (s *StreamAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) (*
 		s.transactionsPublisher,
 		func(notifier *rpc.Notifier, sub *rpc.Subscription) func(any) error {
 			return func(data any) error {
-				tx, ok := data.(models.Transaction)
+				tx, ok := data.(*gethTypes.Transaction)
 				if !ok {
 					return fmt.Errorf("invalid data sent to pending transaction subscription")
 				}
 
-				var res any
 				if fullTx != nil && *fullTx {
-					if r, err := NewTransaction(tx, s.config.EVMNetworkID); err != nil {
-						return err
-					} else {
-						res = r
-					}
-				} else {
-					res = tx.Hash()
+					return notifier.Notify(sub.ID, tx)
 				}
 
-				return notifier.Notify(sub.ID, res)
+				return notifier.Notify(sub.ID, tx.Hash())
 			}
 		},
 	)
