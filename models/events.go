@@ -80,11 +80,12 @@ func (c *CadenceEvents) Transactions() ([]Transaction, []*StorageReceipt, error)
 				return nil, nil, err
 			}
 
-			if lastReceipt != nil && lastReceipt.BlockHash == receipt.BlockHash {
+			if lastReceipt != nil && lastReceipt.BlockNumber.Cmp(receipt.BlockNumber) == 0 {
 				cumulativeGasUsed += lastReceipt.GasUsed
 				receipt.CumulativeGasUsed = cumulativeGasUsed
 			} else {
 				cumulativeGasUsed = receipt.GasUsed
+				receipt.CumulativeGasUsed = cumulativeGasUsed
 			}
 
 			lastReceipt = receipt
