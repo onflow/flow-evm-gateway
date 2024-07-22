@@ -35,7 +35,7 @@ func (d *DebugAPI) TraceTransaction(
 ) (json.RawMessage, error) {
 	res, err := d.tracer.GetTransaction(hash)
 	if err != nil {
-		return handleError[json.RawMessage](d.logger, err)
+		return handleError[json.RawMessage](err, d.logger)
 	}
 	return res, nil
 }
@@ -47,7 +47,7 @@ func (d *DebugAPI) TraceBlockByNumber(
 ) ([]json.RawMessage, error) {
 	block, err := d.blocks.GetByHeight(uint64(number.Int64()))
 	if err != nil {
-		return handleError[[]json.RawMessage](d.logger, err)
+		return handleError[[]json.RawMessage](err, d.logger)
 	}
 
 	results := make([]json.RawMessage, len(block.TransactionHashes))
@@ -68,7 +68,7 @@ func (d *DebugAPI) TraceBlockByHash(
 ) ([]json.RawMessage, error) {
 	block, err := d.blocks.GetByID(hash)
 	if err != nil {
-		return handleError[[]json.RawMessage](d.logger, err)
+		return handleError[[]json.RawMessage](err, d.logger)
 	}
 
 	results := make([]json.RawMessage, len(block.TransactionHashes))
