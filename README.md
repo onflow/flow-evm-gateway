@@ -200,10 +200,10 @@ Listed below are the JSON-RPC namespaces and methods currently supported by the 
     * eth_getUncleByBlockNumberAndIndex
     * eth_maxPriorityFeePerGas
     * eth_syncing
+    * eth_getStorageAt
   * Unsupported but coming soon
     * eth_createAccessList
     * eth_getProof
-    * eth_getStorageAt
     * eth_accounts
     * eth_sign
     * eth_signTransaction
