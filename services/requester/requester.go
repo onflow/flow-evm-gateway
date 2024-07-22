@@ -113,6 +113,7 @@ func NewEVM(
 	signer crypto.Signer,
 	logger zerolog.Logger,
 	blocks storage.BlockIndexer,
+	txPool *TxPool,
 ) (*EVM, error) {
 	logger = logger.With().Str("component", "requester").Logger()
 	// check that the address stores already created COA resource in the "evm" storage path.
@@ -164,7 +165,7 @@ func NewEVM(
 		signer:            signer,
 		logger:            logger,
 		blocks:            blocks,
-		txPool:            NewTxPool(client, logger),
+		txPool:            txPool,
 		head:              head,
 		evmSigner:         evmSigner,
 		validationOptions: validationOptions,
