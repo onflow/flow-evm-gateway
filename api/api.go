@@ -975,12 +975,15 @@ func handleError[T any](err error, log zerolog.Logger) (T, error) {
 	var (
 		zero              T
 		errGasPriceTooLow *errs.GasPriceTooLowError
+		revertError       *errs.RevertError
 	)
 
 	switch {
 	// as per specification returning nil and nil for not found resources
 	case errors.Is(err, storageErrs.ErrNotFound):
 		return zero, nil
+	case errors.As(err, &revertError):
+		return zero, revertError
 	case errors.Is(err, storageErrs.ErrInvalidRange):
 		return zero, err
 	case errors.Is(err, models.ErrInvalidEVMTransaction):
