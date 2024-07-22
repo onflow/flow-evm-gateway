@@ -632,7 +632,7 @@ func (b *BlockChainAPI) GetTransactionCount(
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (*hexutil.Uint64, error) {
 	l := b.logger.With().
-		Str("endpoint", "GetTransactionCount").
+		Str("endpoint", "getTransactionCount").
 		Str("address", address.String()).
 		Str("hashNumber", blockNumberOrHash.String()).
 		Logger()
