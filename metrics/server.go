@@ -20,10 +20,10 @@ type Server struct {
 
 // NewServer creates a new server that will start on the specified port,
 // and responds to only the `/metrics` endpoint
-func NewServer(log zerolog.Logger, configPath string) (*Server, error) {
-	port, err := readPortFromConfigFile(configPath)
+func NewServer(log zerolog.Logger, prometheusConfigPath string) (*Server, error) {
+	port, err := readPortFromConfigFile(prometheusConfigPath)
 	if err != nil {
-		log.Warn().Err(err).Msgf("could not read port from prometheus config file: %s", configPath)
+		log.Warn().Err(err).Msgf("could not read port from prometheus config file: %s", prometheusConfigPath)
 		return nil, err
 	}
 

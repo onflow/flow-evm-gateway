@@ -30,7 +30,7 @@ func NewCollector(logger zerolog.Logger) Collector {
 		Help:    "Duration of requests made to the endpoint resolvers",
 		Buckets: prometheus.DefBuckets,
 	},
-		[]string{"resolver"})
+		[]string{"method"})
 
 	if err := registerMetrics(logger, apiErrors, requestDurations); err != nil {
 		logger.Info().Msg("Using noop collector as metric register failed")

@@ -98,6 +98,8 @@ func Start(ctx context.Context, cfg *config.Config) error {
 	// TEMP: Remove `DirectCallHashCalculationBlockHeightChange` after PreviewNet is reset
 	models.DirectCallHashCalculationBlockHeightChange = cfg.HashCalculationHeightChange
 
+	collector := metrics.NewCollector(logger)
+
 	go func() {
 		err := startServer(
 			ctx,
@@ -112,6 +114,7 @@ func Start(ctx context.Context, cfg *config.Config) error {
 			transactionsBroadcaster,
 			logsBroadcaster,
 			logger,
+			collector,
 		)
 		if err != nil {
 			logger.Error().Err(err).Msg("failed to start the API server")
@@ -138,8 +141,7 @@ func Start(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("failed to start event ingestion: %w", err)
 	}
 
-	// TODO: it's better to put this path into Makefile rather than hardcoding it
-	metricsServer, err := metrics.NewServer(logger, "./metrics/prometheus.yml")
+	metricsServer, err := metrics.NewServer(logger, cfg.PrometheusConfigFilePath)
 	if err != nil {
 		logger.Warn().Err(err).Msg("failed to start metrics server")
 	} else {
@@ -268,11 +270,12 @@ func startServer(
 	transactionsBroadcaster *broadcast.Broadcaster,
 	logsBroadcaster *broadcast.Broadcaster,
 	logger zerolog.Logger,
+	collector metrics.Collector,
 ) error {
 	l := logger.With().Str("component", "API").Logger()
 	l.Info().Msg("starting up RPC server")
 
-	srv := api.NewHTTPServer(l, cfg)
+	srv := api.NewHTTPServer(l, collector, cfg)
 
 	// create the signer based on either a single coa key being provided and using a simple in-memory
 	// signer, or multiple keys being provided and using signer with key-rotation mechanism.
@@ -319,8 +322,6 @@ func startServer(
 		return fmt.Errorf("failed to create rate limiter: %w", err)
 	}
 
-	metricsCollector := metrics.NewCollector(logger)
-
 	blockchainAPI, err := api.NewBlockChainAPI(
 		logger,
 		cfg,
@@ -330,7 +331,7 @@ func startServer(
 		receipts,
 		accounts,
 		ratelimiter,
-		metricsCollector,
+		collector,
 	)
 	if err != nil {
 		return err
@@ -359,7 +360,7 @@ func startServer(
 
 	var debugAPI *api.DebugAPI
 	if cfg.TracesEnabled {
-		debugAPI = api.NewDebugAPI(trace, blocks, logger)
+		debugAPI = api.NewDebugAPI(trace, blocks, logger, collector)
 	}
 
 	var walletAPI *api.WalletAPI

@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
-	"time"
 
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/go-ethereum/common"
@@ -17,7 +16,6 @@ import (
 	"github.com/onflow/go-ethereum/core/types"
 	"github.com/onflow/go-ethereum/eth/filters"
 	"github.com/onflow/go-ethereum/rpc"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-limiter"
 
@@ -130,33 +128,21 @@ func NewBlockChainAPI(
 // wasn't synced up to a block where EIP-155 is enabled, but this behavior caused issues
 // in CL clients.
 func (b *BlockChainAPI) ChainId(ctx context.Context) (*hexutil.Big, error) {
-	start := time.Now()
-	defer b.collector.MeasureRequestDuration(start, prometheus.Labels{"resolver": "ChainId"})
-
 	return (*hexutil.Big)(b.config.EVMNetworkID), nil
 }
 
 // Coinbase is the address that mining rewards will be sent to (alias for Etherbase).
 func (b *BlockChainAPI) Coinbase(ctx context.Context) (common.Address, error) {
-	start := time.Now()
-	defer b.collector.MeasureRequestDuration(start, prometheus.Labels{"resolver": "Coinbase"})
-
 	return b.config.Coinbase, nil
 }
 
 // GasPrice returns a suggestion for a gas price for legacy transactions.
 func (b *BlockChainAPI) GasPrice(ctx context.Context) (*hexutil.Big, error) {
-	start := time.Now()
-	defer b.collector.MeasureRequestDuration(start, prometheus.Labels{"resolver": "GasPrice"})
-
 	return (*hexutil.Big)(b.config.GasPrice), nil
 }
 
 // BlockNumber returns the block number of the chain head.
 func (b *BlockChainAPI) BlockNumber(ctx context.Context) (hexutil.Uint64, error) {
-	start := time.Now()
-	defer b.collector.MeasureRequestDuration(start, prometheus.Labels{"resolver": "BlockNumber"})
-
 	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
 		return 0, err
 	}
@@ -176,9 +162,6 @@ func (b *BlockChainAPI) BlockNumber(ctx context.Context) (hexutil.Uint64, error)
 // - currentBlock:  block number this node is currently importing
 // - highestBlock:  block number of the highest block header this node has received from peers
 func (b *BlockChainAPI) Syncing(ctx context.Context) (interface{}, error) {
-	start := time.Now()
-	defer b.collector.MeasureRequestDuration(start, prometheus.Labels{"resolver": "Syncing"})
-
 	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
 		return nil, err
 	}
@@ -208,9 +191,6 @@ func (b *BlockChainAPI) SendRawTransaction(
 	ctx context.Context,
 	input hexutil.Bytes,
 ) (common.Hash, error) {
-	start := time.Now()
-	defer b.collector.MeasureRequestDuration(start, prometheus.Labels{"resolver": "SendRawTransaction"})
-
 	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
 		return common.Hash{}, err
 	}
@@ -231,9 +211,6 @@ func (b *BlockChainAPI) GetBalance(
 	address common.Address,
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (*hexutil.Big, error) {
-	start := time.Now()
-	defer b.collector.MeasureRequestDuration(start, prometheus.Labels{"resolver": "GetBalance"})
-
 	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
 		return nil, err
 	}
@@ -256,9 +233,6 @@ func (b *BlockChainAPI) GetTransactionByHash(
 	ctx context.Context,
 	hash common.Hash,
 ) (*Transaction, error) {
-	start := time.Now()
-	defer b.collector.MeasureRequestDuration(start, prometheus.Labels{"resolver": "GetTransactionByHash"})
-
 	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
 		return nil, err
 	}
@@ -282,9 +256,6 @@ func (b *BlockChainAPI) GetTransactionByBlockHashAndIndex(
 	blockHash common.Hash,
 	index hexutil.Uint,
 ) (*Transaction, error) {
-	start := time.Now()
-	defer b.collector.MeasureRequestDuration(start, prometheus.Labels{"resolver": "GetTransactionByBlockHashAndIndex"})
-
 	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
 		return nil, err
 	}
@@ -314,9 +285,6 @@ func (b *BlockChainAPI) GetTransactionByBlockNumberAndIndex(
 	blockNumber rpc.BlockNumber,
 	index hexutil.Uint,
 ) (*Transaction, error) {
-	start := time.Now()
-	defer b.collector.MeasureRequestDuration(start, prometheus.Labels{"resolver": "GetTransactionByBlockNumberAndIndex"})
-
 	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
 		return nil, err
 	}
@@ -344,9 +312,6 @@ func (b *BlockChainAPI) GetTransactionReceipt(
 	ctx context.Context,
 	hash common.Hash,
 ) (map[string]interface{}, error) {
-	start := time.Now()
-	defer b.collector.MeasureRequestDuration(start, prometheus.Labels{"resolver": "GetTransactionReceipt"})
-
 	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
 		return nil, err
 	}
@@ -376,9 +341,6 @@ func (b *BlockChainAPI) GetBlockByHash(
 	hash common.Hash,
 	fullTx bool,
 ) (*Block, error) {
-	start := time.Now()
-	defer b.collector.MeasureRequestDuration(start, prometheus.Labels{"resolver": "GetBlockByHash"})
-
 	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
 		return nil, err
 	}
@@ -408,9 +370,6 @@ func (b *BlockChainAPI) GetBlockByNumber(
 	blockNumber rpc.BlockNumber,
 	fullTx bool,
 ) (*Block, error) {
-	start := time.Now()
-	defer b.collector.MeasureRequestDuration(start, prometheus.Labels{"resolver": "GetBlockByNumber"})
-
 	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
 		return nil, err
 	}
@@ -443,9 +402,6 @@ func (b *BlockChainAPI) GetBlockReceipts(
 	ctx context.Context,
 	numHash rpc.BlockNumberOrHash,
 ) ([]*models.StorageReceipt, error) {
-	start := time.Now()
-	defer b.collector.MeasureRequestDuration(start, prometheus.Labels{"resolver": "GetBlockReceipts"})
-
 	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
 		return nil, err
 	}
@@ -486,9 +442,6 @@ func (b *BlockChainAPI) GetBlockTransactionCountByHash(
 	ctx context.Context,
 	blockHash common.Hash,
 ) (*hexutil.Uint, error) {
-	start := time.Now()
-	defer b.collector.MeasureRequestDuration(start, prometheus.Labels{"resolver": "GetBlockTransactionCountByHash"})
-
 	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
 		return nil, err
 	}
@@ -507,9 +460,6 @@ func (b *BlockChainAPI) GetBlockTransactionCountByNumber(
 	ctx context.Context,
 	blockNumber rpc.BlockNumber,
 ) (*hexutil.Uint, error) {
-	start := time.Now()
-	defer b.collector.MeasureRequestDuration(start, prometheus.Labels{"resolver": "GetBlockTransactionCountByNumber"})
-
 	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
 		return nil, err
 	}
@@ -540,9 +490,6 @@ func (b *BlockChainAPI) Call(
 	overrides *StateOverride,
 	blockOverrides *BlockOverrides,
 ) (hexutil.Bytes, error) {
-	start := time.Now()
-	defer b.collector.MeasureRequestDuration(start, prometheus.Labels{"resolver": "Call"})
-
 	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
 		return nil, err
 	}
@@ -584,9 +531,6 @@ func (b *BlockChainAPI) GetLogs(
 	ctx context.Context,
 	criteria filters.FilterCriteria,
 ) ([]*types.Log, error) {
-	start := time.Now()
-	defer b.collector.MeasureRequestDuration(start, prometheus.Labels{"resolver": "GetLogs"})
-
 	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
 		return nil, err
 	}
@@ -649,9 +593,6 @@ func (b *BlockChainAPI) GetTransactionCount(
 	address common.Address,
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (*hexutil.Uint64, error) {
-	start := time.Now()
-	defer b.collector.MeasureRequestDuration(start, prometheus.Labels{"resolver": "GetTransactionCount"})
-
 	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
 		return nil, err
 	}
@@ -696,9 +637,6 @@ func (b *BlockChainAPI) EstimateGas(
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 	overrides *StateOverride,
 ) (hexutil.Uint64, error) {
-	start := time.Now()
-	defer b.collector.MeasureRequestDuration(start, prometheus.Labels{"resolver": "EstimateGas"})
-
 	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
 		return 0, err
 	}
@@ -737,9 +675,6 @@ func (b *BlockChainAPI) GetCode(
 	address common.Address,
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (hexutil.Bytes, error) {
-	start := time.Now()
-	defer b.collector.MeasureRequestDuration(start, prometheus.Labels{"resolver": "GetCode"})
-
 	if err := rateLimit(ctx, b.limiter, b.logger); err != nil {
 		return nil, err
 	}
@@ -881,9 +816,6 @@ func (b *BlockChainAPI) FeeHistory(
 	lastBlock rpc.BlockNumber,
 	rewardPercentiles []float64,
 ) (*FeeHistoryResult, error) {
-	start := time.Now()
-	defer b.collector.MeasureRequestDuration(start, prometheus.Labels{"resolver": "FeeHistory"})
-
 	if blockCount > maxFeeHistoryBlockCount {
 		b.collector.ApiErrorOccurred()
 		return nil, fmt.Errorf("block count has to be between 1 and 1024")
@@ -1041,9 +973,6 @@ func (b *BlockChainAPI) GetUncleCountByBlockHash(
 	ctx context.Context,
 	blockHash common.Hash,
 ) *hexutil.Uint {
-	start := time.Now()
-	defer b.collector.MeasureRequestDuration(start, prometheus.Labels{"resolver": "GetUncleCountByBlockHash"})
-
 	count := hexutil.Uint(0)
 	return &count
 }
@@ -1053,9 +982,6 @@ func (b *BlockChainAPI) GetUncleCountByBlockNumber(
 	ctx context.Context,
 	blockNumber rpc.BlockNumber,
 ) *hexutil.Uint {
-	start := time.Now()
-	defer b.collector.MeasureRequestDuration(start, prometheus.Labels{"resolver": "GetUncleCountByBlockNumber"})
-
 	count := hexutil.Uint(0)
 	return &count
 }
@@ -1066,9 +992,6 @@ func (b *BlockChainAPI) GetUncleByBlockHashAndIndex(
 	blockHash common.Hash,
 	index hexutil.Uint,
 ) (map[string]interface{}, error) {
-	start := time.Now()
-	defer b.collector.MeasureRequestDuration(start, prometheus.Labels{"resolver": "GetUncleByBlockHashAndIndex"})
-
 	return map[string]interface{}{}, nil
 }
 
@@ -1078,17 +1001,11 @@ func (b *BlockChainAPI) GetUncleByBlockNumberAndIndex(
 	blockNumber rpc.BlockNumber,
 	index hexutil.Uint,
 ) (map[string]interface{}, error) {
-	start := time.Now()
-	defer b.collector.MeasureRequestDuration(start, prometheus.Labels{"resolver": "GetUncleByBlockNumberAndIndex"})
-
 	return map[string]interface{}{}, nil
 }
 
 // MaxPriorityFeePerGas returns a suggestion for a gas tip cap for dynamic fee transactions.
 func (b *BlockChainAPI) MaxPriorityFeePerGas(ctx context.Context) (*hexutil.Big, error) {
-	start := time.Now()
-	defer b.collector.MeasureRequestDuration(start, prometheus.Labels{"resolver": "MaxPriorityFeePerGas"})
-
 	fee := hexutil.Big(*big.NewInt(1))
 	return &fee, nil
 }
@@ -1097,9 +1014,6 @@ func (b *BlockChainAPI) MaxPriorityFeePerGas(ctx context.Context) (*hexutil.Big,
 // This can only return true for proof-of-work networks and may
 // not be available in some clients since The Merge.
 func (b *BlockChainAPI) Mining() bool {
-	start := time.Now()
-	defer b.collector.MeasureRequestDuration(start, prometheus.Labels{"resolver": "Mining"})
-
 	return false
 }
 
@@ -1108,9 +1022,6 @@ func (b *BlockChainAPI) Mining() bool {
 // This can only return true for proof-of-work networks and
 // may not be available in some clients since The Merge.
 func (b *BlockChainAPI) Hashrate() hexutil.Uint64 {
-	start := time.Now()
-	defer b.collector.MeasureRequestDuration(start, prometheus.Labels{"resolver": "Hashrate"})
-
 	return hexutil.Uint64(0)
 }
 
@@ -1129,9 +1040,6 @@ func (b *BlockChainAPI) GetProof(
 	storageKeys []string,
 	blockNumberOrHash rpc.BlockNumberOrHash,
 ) (*AccountResult, error) {
-	start := time.Now()
-	defer b.collector.MeasureRequestDuration(start, prometheus.Labels{"resolver": "GetProof"})
-
 	return nil, errs.ErrNotSupported
 }
 
@@ -1142,8 +1050,5 @@ func (b *BlockChainAPI) CreateAccessList(
 	args TransactionArgs,
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (*AccessListResult, error) {
-	start := time.Now()
-	defer b.collector.MeasureRequestDuration(start, prometheus.Labels{"resolver": "CreateAccessList"})
-
 	return nil, errs.ErrNotSupported
 }

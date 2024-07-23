@@ -24,6 +24,7 @@ import (
 
 	errs "github.com/onflow/flow-evm-gateway/api/errors"
 	"github.com/onflow/flow-evm-gateway/config"
+	"github.com/onflow/flow-evm-gateway/metrics"
 )
 
 type rpcHandler struct {
@@ -50,6 +51,8 @@ type httpServer struct {
 	port     int
 
 	config *config.Config
+
+	collector metrics.Collector
 }
 
 const (
@@ -58,7 +61,7 @@ const (
 	batchResponseMaxSize = 5 * 1000 * 1000 // 5 MB
 )
 
-func NewHTTPServer(logger zerolog.Logger, cfg *config.Config) *httpServer {
+func NewHTTPServer(logger zerolog.Logger, collector metrics.Collector, cfg *config.Config) *httpServer {
 	gethLog.Root().SetHandler(gethLog.FuncHandler(func(r *gethLog.Record) error {
 		switch r.Lvl {
 		case gethLog.LvlInfo:
@@ -73,9 +76,10 @@ func NewHTTPServer(logger zerolog.Logger, cfg *config.Config) *httpServer {
 	}))
 
 	return &httpServer{
-		logger:   logger,
-		timeouts: rpc.DefaultHTTPTimeouts,
-		config:   cfg,
+		logger:    logger,
+		timeouts:  rpc.DefaultHTTPTimeouts,
+		config:    cfg,
+		collector: collector,
 	}
 }
 
@@ -177,8 +181,8 @@ func (h *httpServer) Start() error {
 		return nil // already running or not configured
 	}
 
-	// Initialize the server.
-	h.server = &http.Server{Handler: h}
+	// Initialize the server. Metrics handler is a middleware for gathering metrics   
+	h.server = &http.Server{Handler: metrics.NewHttpHandler(h, h.collector)}
 	if h.timeouts != (rpc.HTTPTimeouts{}) {
 		CheckTimeouts(h.logger, &h.timeouts)
 		h.server.ReadTimeout = h.timeouts.ReadTimeout
