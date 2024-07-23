@@ -5,6 +5,7 @@ import (
 
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go-sdk"
+	"github.com/onflow/flow-go/fvm/evm/events"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	"golang.org/x/exp/slices"
 )
@@ -14,7 +15,7 @@ func isBlockExecutedEvent(event cadence.Event) bool {
 	if event.EventType == nil {
 		return false
 	}
-	return strings.Contains(event.EventType.ID(), string(types.EventTypeBlockExecuted))
+	return strings.Contains(event.EventType.ID(), string(events.EventTypeBlockExecuted))
 }
 
 // isTransactionExecutedEvent checks whether the given event contains transaction executed data.
@@ -22,7 +23,7 @@ func isTransactionExecutedEvent(event cadence.Event) bool {
 	if event.EventType == nil {
 		return false
 	}
-	return strings.Contains(event.EventType.ID(), string(types.EventTypeTransactionExecuted))
+	return strings.Contains(event.EventType.ID(), string(events.EventTypeTransactionExecuted))
 }
 
 type CadenceEvents struct {
