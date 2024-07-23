@@ -142,29 +142,22 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 	batch := e.store.NewBatch()
 	defer batch.Close()
 
-	// we first index evm blocks only then transactions if any present
-	blocks, err := events.Blocks()
+	// we first index the block
+	err := e.indexBlock(
+		events.CadenceHeight(),
+		events.CadenceBlockID(),
+		events.Block(),
+		batch,
+	)
 	if err != nil {
-		return err
-	}
-	for _, block := range blocks {
-		err := e.indexBlock(
-			events.CadenceHeight(),
-			events.CadenceBlockID(),
-			block,
-			batch,
-		)
-		if err != nil {
-			return fmt.Errorf("failed to index block %d event: %w", block.Height, err)
-		}
+		return fmt.Errorf("failed to index block %d event: %w", events.Block().Height, err)
 	}
 
-	txs, receipts, err := events.Transactions()
-	if err != nil {
-		return err
-	}
-	for i, tx := range txs {
-		if err := e.indexTransaction(tx, receipts[i], batch); err != nil {
+	for i, tx := range events.Transactions() {
+		receipt := events.Receipts()[i]
+
+		err := e.indexTransaction(tx, receipt, batch)
+		if err != nil {
 			return fmt.Errorf("failed to index transaction %s event: %w", tx.Hash().String(), err)
 		}
 	}
@@ -173,12 +166,10 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 		return fmt.Errorf("failed to commit indexed data for Cadence block %d: %w", events.CadenceHeight(), err)
 	}
 
-	// emit events for each block, transaction and logs, only after we successfully commit the data
-	for _, b := range blocks {
-		e.blocksPublisher.Publish(b)
-	}
+	// emit block event and logs, only after we successfully commit the data
+	e.blocksPublisher.Publish(events.Block())
 
-	for _, r := range receipts {
+	for _, r := range events.Receipts() {
 		if len(r.Logs) > 0 {
 			e.logsPublisher.Publish(r.Logs)
 		}
