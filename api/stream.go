@@ -186,9 +186,6 @@ func (s *StreamAPI) newSubscription(
 			case err := <-rpcSub.Err():
 				l.Debug().Err(err).Msg("client unsubscribed")
 				return
-			case <-notifier.Closed():
-				l.Debug().Msg("client unsubscribed deprecated method")
-				return
 			}
 		}
 	}()

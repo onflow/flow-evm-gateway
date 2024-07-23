@@ -202,7 +202,6 @@ func decodeTransactionEvent(
 		GasUsed:           txEvent.GasConsumed,
 		CumulativeGasUsed: txEvent.GasConsumed, // todo use cumulative after added to the tx result
 		TransactionIndex:  uint(txEvent.Index),
-		// TODO: BlockHash is not available in the event payload
 	}
 
 	encLogs := txEvent.Logs

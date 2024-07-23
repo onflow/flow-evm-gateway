@@ -8,7 +8,7 @@ require (
 	github.com/onflow/crypto v0.25.1
 	github.com/onflow/flow-emulator v1.0.0-preview.35
 	github.com/onflow/flow-evm-gateway v0.0.0-20240201154855-4d4d3d3f19c7
-	github.com/onflow/flow-go v0.36.2-0.20240717214129-9ea6faeee3e7
+	github.com/onflow/flow-go v0.36.2
 	github.com/onflow/flow-go-sdk v1.0.0-preview.41
 	github.com/onflow/go-ethereum v1.14.7
 	github.com/rs/zerolog v1.31.0
@@ -146,8 +146,8 @@ require (
 	github.com/multiformats/go-varint v0.0.7 // indirect
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
 	github.com/onflow/atree v0.7.0-rc.2 // indirect
-	github.com/onflow/flow-core-contracts/lib/go/contracts v1.3.0 // indirect
-	github.com/onflow/flow-core-contracts/lib/go/templates v1.3.0 // indirect
+	github.com/onflow/flow-core-contracts/lib/go/contracts v1.3.1 // indirect
+	github.com/onflow/flow-core-contracts/lib/go/templates v1.3.1 // indirect
 	github.com/onflow/flow-ft/lib/go/contracts v1.0.0 // indirect
 	github.com/onflow/flow-ft/lib/go/templates v1.0.0 // indirect
 	github.com/onflow/flow-nft/lib/go/contracts v1.2.1 // indirect
@@ -240,3 +240,7 @@ require (
 )
 
 replace github.com/onflow/flow-evm-gateway => ../
+
+replace github.com/onflow/flow-emulator => ../../flow-emulator
+
+replace github.com/onflow/flow-go => ../../flow-go

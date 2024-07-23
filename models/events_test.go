@@ -76,7 +76,12 @@ func TestCadenceEvents_Block(t *testing.T) {
 }
 
 func newBlock(height uint64) (*types.Block, flow.Event, error) {
-	evmBlock := types.NewBlock(gethCommon.HexToHash("0x01"), height, uint64(1337), big.NewInt(100), gethCommon.HexToHash("0x02"), nil)
+	evmBlock := types.NewBlock(
+		gethCommon.HexToHash("0x01"),
+		height,
+		uint64(1337),
+		big.NewInt(100),
+	)
 	ev := types.NewBlockEvent(evmBlock)
 
 	location := common.NewAddressLocation(nil, common.Address{0x1}, string(types.EventTypeBlockExecuted))

@@ -47,7 +47,7 @@ func Test_ConcurrentTransactionSubmission(t *testing.T) {
 	time.Sleep(500 * time.Millisecond) // some time to startup
 
 	// create new account with keys used for key-rotation
-	keyCount := 5
+	keyCount := uint32(5)
 	createdAddr, keys, err := bootstrap.CreateMultiKeyAccount(
 		client,
 		keyCount,
@@ -94,10 +94,10 @@ func Test_ConcurrentTransactionSubmission(t *testing.T) {
 	// disable auto-mine so we can control delays
 	emu.DisableAutoMine()
 
-	totalTxs := keyCount*5 + 3
+	totalTxs := uint32(keyCount*5 + 3)
 	hashes := make([]common.Hash, totalTxs)
 	nonce := uint64(0)
-	for i := 0; i < totalTxs; i++ {
+	for i := uint32(0); i < totalTxs; i++ {
 		signed, signedHash, err := evmSign(big.NewInt(10), 21000, eoaKey, nonce, &testAddr, nil)
 		require.NoError(t, err)
 		hashes[i] = signedHash

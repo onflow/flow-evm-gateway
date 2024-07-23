@@ -12,8 +12,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -59,18 +61,15 @@ const (
 )
 
 func NewHTTPServer(logger zerolog.Logger, cfg *config.Config) *httpServer {
-	gethLog.Root().SetHandler(gethLog.FuncHandler(func(r *gethLog.Record) error {
-		switch r.Lvl {
-		case gethLog.LvlInfo:
-			logger.Info().Msg(r.Msg)
-		case gethLog.LvlError:
-			logger.Error().Str("trace", r.Call.String()).Msg(r.Msg)
-		default:
-			logger.Debug().Msg(r.Msg)
-		}
-
-		return nil
-	}))
+	gethLog.SetDefault(
+		gethLog.NewLogger(
+			gethLog.NewTerminalHandlerWithLevel(
+				os.Stderr,
+				slog.LevelError,
+				false,
+			),
+		),
+	)
 
 	return &httpServer{
 		logger:   logger,

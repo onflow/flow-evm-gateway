@@ -70,11 +70,25 @@ func (c *CadenceEvents) Blocks() ([]*types.Block, error) {
 func (c *CadenceEvents) Transactions() ([]Transaction, []*StorageReceipt, error) {
 	txs := make([]Transaction, 0)
 	rcps := make([]*StorageReceipt, 0)
+	blocks, err := c.Blocks()
+	if err != nil {
+		return nil, nil, err
+	}
+
 	for _, e := range c.events.Events {
 		if isTransactionExecutedEvent(e.Value) {
 			tx, receipt, err := decodeTransactionEvent(e.Value)
 			if err != nil {
 				return nil, nil, err
+			}
+			for _, block := range blocks {
+				if receipt.BlockNumber.Uint64() == block.Height {
+					blockHash, err := block.Hash()
+					if err != nil {
+						return nil, nil, err
+					}
+					receipt.BlockHash = blockHash
+				}
 			}
 
 			txs = append(txs, tx)

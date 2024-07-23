@@ -5,6 +5,7 @@ const web3 = conf.web3
 
 it('get chain ID', async () => {
     let chainID = await web3.eth.getChainId()
+
     assert.isDefined(chainID)
     assert.equal(chainID, 646n)
 })
@@ -28,31 +29,30 @@ it('get block', async () => {
     let txCount = await web3.eth.getBlockTransactionCount(conf.startBlockHeight)
     let uncleCount = await web3.eth.getBlockUncleCount(conf.startBlockHeight)
 
-    assert.equal(txCount, 1n)
+    assert.equal(txCount, 3n)
     assert.equal(uncleCount, 0n)
 
-    // get block transaction
-    let tx = await web3.eth.getTransactionFromBlock(conf.startBlockHeight, 0)
-    assert.isNotNull(tx)
-    assert.equal(tx.blockNumber, block.number)
-    assert.equal(tx.blockHash, block.hash)
-    assert.isString(tx.hash)
+    // get block transactions
+    for (const txIndex of [0, 1, 2]) {
+        let tx = await web3.eth.getTransactionFromBlock(conf.startBlockHeight, txIndex)
+        assert.isNotNull(tx)
+        assert.equal(tx.blockNumber, block.number)
+        assert.equal(tx.blockHash, block.hash)
+        assert.isString(tx.hash)
+    }
 
     // not existing transaction
-    let no = await web3.eth.getTransactionFromBlock(conf.startBlockHeight, 1)
+    let no = await web3.eth.getTransactionFromBlock(conf.startBlockHeight, 5)
     assert.isNull(no)
 })
 
 it('get block and transactions with COA interactions', async () => {
-    // First 2 blocks are formed from COA deployment and fund.
-    const blockNumbers = [1, 2]
+    let block = await web3.eth.getBlock(conf.startBlockHeight)
+    assert.notDeepEqual(block, {})
 
-    for (const blockNumber of blockNumbers) {
-        let block = await web3.eth.getBlock(blockNumber)
-        assert.notDeepEqual(block, {})
-
+    for (const txIndex of [0, 1]) {
         // get block transaction
-        let tx = await web3.eth.getTransactionFromBlock(block.number, 0)
+        let tx = await web3.eth.getTransactionFromBlock(block.number, txIndex)
         // Assert that the transaction type is `0`, the type of `LegacyTx`.
         assert.equal(tx.type, 0n)
 
@@ -63,12 +63,12 @@ it('get block and transactions with COA interactions', async () => {
     }
 
     // get block transaction
-    let tx = await web3.eth.getTransactionFromBlock(1n, 0)
+    let tx = await web3.eth.getTransactionFromBlock(2n, 0)
     assert.equal(tx.v, "0xff")
     assert.equal(tx.r, "0x0000000000000000000000000000000000000000000000020000000000000000")
     assert.equal(tx.s, "0x0000000000000000000000000000000000000000000000000000000000000004")
 
-    tx = await web3.eth.getTransactionFromBlock(2n, 0)
+    tx = await web3.eth.getTransactionFromBlock(2n, 1)
     assert.equal(tx.v, "0xff")
     assert.equal(tx.r, "0x0000000000000000000000000000000000000000000000010000000000000000")
     assert.equal(tx.s, "0x0000000000000000000000000000000000000000000000000000000000000001")
@@ -101,7 +101,7 @@ it('get gas price', async () => {
 })
 
 it('get transaction', async () => {
-    let blockTx = await web3.eth.getTransactionFromBlock(conf.startBlockHeight, 0)
+    let blockTx = await web3.eth.getTransactionFromBlock(conf.startBlockHeight, 2)
     assert.isNotNull(blockTx)
 
     let tx = await web3.eth.getTransaction(blockTx.hash)
@@ -136,7 +136,7 @@ it('get syncing status', async () => {
     assert.equal(height, conf.startBlockHeight)
 
     let syncInfo = await web3.eth.isSyncing()
-    // conf.startBlockHeight = 3n
+    // conf.startBlockHeight = 2n
     assert.equal(syncInfo.startingBlock, height)
     assert.equal(syncInfo.currentBlock, height)
     assert.equal(syncInfo.highestBlock, height)
@@ -185,7 +185,7 @@ it('can make batch requests', async () => {
 
     assert.deepEqual(
         results[0],
-        { jsonrpc: '2.0', id: 1, result: '0x3' }
+        { jsonrpc: '2.0', id: 1, result: '0x2' }
     )
     assert.deepEqual(
         results[1],
@@ -196,7 +196,7 @@ it('can make batch requests', async () => {
         {
             jsonrpc: '2.0',
             id: 3,
-            result: { startingBlock: '0x3', currentBlock: '0x3', highestBlock: '0x3' }
+            result: { startingBlock: '0x2', currentBlock: '0x2', highestBlock: '0x2' }
         }
     )
     assert.deepEqual(
@@ -205,7 +205,7 @@ it('can make batch requests', async () => {
     )
     assert.deepEqual(
         results[4],
-        { jsonrpc: '2.0', id: 5, result: '0x1' }
+        { jsonrpc: '2.0', id: 5, result: '0x3' }
     )
 
     // The maximum number of batch requests is 5,
@@ -233,9 +233,9 @@ it('get fee history', async () => {
         response,
         {
             oldestBlock: 1n,
-            reward: [['0x0'], ['0x0'], ['0x0']], // gas price is always 0 during testing
-            baseFeePerGas: [0n, 0n, 0n],
-            gasUsedRatio: [0.04684, 0.0014036666666666666, 0.0014]
+            reward: [['0x0'], ['0x0']], // gas price is always 0 during testing
+            baseFeePerGas: [0n, 0n],
+            gasUsedRatio: [0, 0.04964366666666667]
         }
     )
 })

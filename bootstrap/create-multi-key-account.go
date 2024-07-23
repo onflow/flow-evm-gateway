@@ -48,7 +48,7 @@ func RunCreateMultiKeyAccount() {
 		panic(err)
 	}
 
-	address, keys, err := CreateMultiKeyAccount(client, keyCount, payer, ftFlag, flowFlag, key)
+	address, keys, err := CreateMultiKeyAccount(client, uint32(keyCount), payer, ftFlag, flowFlag, key)
 	if err != nil {
 		panic(err)
 	}
@@ -66,7 +66,7 @@ CreateMultiKeyAccount is used to setup an account that can be used with key-rota
 */
 func CreateMultiKeyAccount(
 	client *grpc.Client,
-	keyCount int,
+	keyCount uint32,
 	payer flow.Address,
 	ftAddress string,
 	flowAddress string,
@@ -75,7 +75,7 @@ func CreateMultiKeyAccount(
 
 	privKeys := make([]*flow.AccountKey, keyCount)
 	pks := make([]crypto.PrivateKey, keyCount)
-	for i := 0; i < keyCount; i++ {
+	for i := uint32(0); i < keyCount; i++ {
 		seed := make([]byte, crypto.MinSeedLength)
 		_, err := rand.Read(seed)
 		if err != nil {
@@ -155,7 +155,7 @@ func CreateMultiKeyAccount(
 	}
 
 	var seq uint64
-	var index int
+	var index uint32
 	for _, k := range acc.Keys {
 		if k.PublicKey.Equals(key.PublicKey()) {
 			seq = k.SequenceNumber
@@ -216,7 +216,7 @@ func CreateMultiCloudKMSKeysAccount(
 		}
 
 		accountKeys[i] = &flow.AccountKey{
-			Index:     i,
+			Index:     uint32(i),
 			PublicKey: publicKey,
 			SigAlgo:   crypto.ECDSA_P256,
 			HashAlgo:  crypto.SHA2_256,
@@ -282,7 +282,7 @@ func CreateMultiCloudKMSKeysAccount(
 	}
 
 	var seq uint64
-	var index int
+	var index uint32
 	for _, k := range acc.Keys {
 		if k.PublicKey.Equals(key.PublicKey()) {
 			seq = k.SequenceNumber

@@ -70,12 +70,7 @@ func createTestEvent(t *testing.T, txBinary string) (cadence.Event, *types.Resul
 		TxHash: txHash,
 	}
 
-	ev := types.NewTransactionEvent(
-		res,
-		txEncoded,
-		1,
-		gethCommon.HexToHash("0x1"),
-	)
+	ev := types.NewTransactionEvent(res, txEncoded, 1)
 
 	location := common.NewAddressLocation(nil, common.Address{0x1}, string(types.EventTypeBlockExecuted))
 	cdcEv, err := ev.Payload.ToCadence(location)
@@ -736,7 +731,8 @@ func TestValidateConsensusRules(t *testing.T) {
 		assert.ErrorContains(
 			t,
 			err,
-			fmt.Sprintf("%s: needed %v, allowed %v", core.ErrIntrinsicGas.Error(), 21_000, gasLimit),
+			//fmt.Sprintf("%s: needed %v, allowed %v", core.ErrIntrinsicGas.Error(), 21_000, gasLimit),
+			fmt.Sprintf("%s: gas %v, minimum needed %v", core.ErrIntrinsicGas.Error(), gasLimit, 21_000),
 		)
 	})
 }
