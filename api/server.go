@@ -181,7 +181,7 @@ func (h *httpServer) Start() error {
 		return nil // already running or not configured
 	}
 
-	// Initialize the server. Metrics handler is a middleware for gathering metrics   
+	// Initialize the server. Metrics handler is a middleware for gathering metrics
 	h.server = &http.Server{Handler: metrics.NewHttpHandler(h, h.collector)}
 	if h.timeouts != (rpc.HTTPTimeouts{}) {
 		CheckTimeouts(h.logger, &h.timeouts)

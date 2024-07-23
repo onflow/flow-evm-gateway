@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -41,6 +42,7 @@ func extractMethod(w http.ResponseWriter, r *http.Request) (string, error) {
 		http.Error(w, errMsg, http.StatusBadRequest)
 		return "", err
 	}
+	r.Body = io.NopCloser(bytes.NewBuffer(body))
 
 	var requestBody struct {
 		Method string `json:"method"`
