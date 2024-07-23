@@ -9,19 +9,26 @@ import (
 
 type Collector interface {
 	ApiErrorOccurred()
+	TraceDownloadFailed()
 	MeasureRequestDuration(start time.Time, labels prometheus.Labels)
 }
 
 type DefaultCollector struct {
 	// TODO: for now we cannot differentiate which api request failed number of times
-	apiErrorsCounter prometheus.Counter
-	requestDurations *prometheus.HistogramVec
+	apiErrorsCounter          prometheus.Counter
+	traceDownloadErrorCounter prometheus.Counter
+	requestDurations          *prometheus.HistogramVec
 }
 
 func NewCollector(logger zerolog.Logger) Collector {
 	apiErrors := prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "api_errors_total",
 		Help: "Total number of errors returned by the endpoint resolvers",
+	})
+
+	traceDownloadErrorCounter := prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "trace_download_errors_total",
+		Help: "Total number of trace download errors",
 	})
 
 	// TODO: Think of adding 'status_code'
@@ -32,14 +39,16 @@ func NewCollector(logger zerolog.Logger) Collector {
 	},
 		[]string{"method"})
 
-	if err := registerMetrics(logger, apiErrors, requestDurations); err != nil {
-		logger.Info().Msg("Using noop collector as metric register failed")
-		return &NoopCollector{}
+	metrics := []prometheus.Collector{apiErrors, traceDownloadErrorCounter, requestDurations}
+	if err := registerMetrics(logger, metrics...); err != nil {
+		logger.Info().Msg("using noop collector as metric register failed")
+		return NewNoopCollector()
 	}
 
 	return &DefaultCollector{
-		apiErrorsCounter: apiErrors,
-		requestDurations: requestDurations,
+		apiErrorsCounter:          apiErrors,
+		traceDownloadErrorCounter: traceDownloadErrorCounter,
+		requestDurations:          requestDurations,
 	}
 }
 
@@ -56,6 +65,10 @@ func registerMetrics(logger zerolog.Logger, metrics ...prometheus.Collector) err
 
 func (c *DefaultCollector) ApiErrorOccurred() {
 	c.apiErrorsCounter.Inc()
+}
+
+func (c *DefaultCollector) TraceDownloadFailed() {
+	c.traceDownloadErrorCounter.Inc()
 }
 
 func (c *DefaultCollector) MeasureRequestDuration(start time.Time, labels prometheus.Labels) {

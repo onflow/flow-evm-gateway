@@ -8,5 +8,10 @@ import (
 
 type NoopCollector struct{}
 
+func NewNoopCollector() *NoopCollector {
+	return &NoopCollector{}
+}
+
 func (c *NoopCollector) ApiErrorOccurred()                                   {}
+func (c *NoopCollector) TraceDownloadFailed()                                {}
 func (c *NoopCollector) MeasureRequestDuration(time.Time, prometheus.Labels) {}
