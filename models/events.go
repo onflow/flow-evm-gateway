@@ -1,13 +1,12 @@
 package models
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go/fvm/evm/events"
-	"github.com/onflow/flow-go/fvm/evm/types"
-	"golang.org/x/exp/slices"
 )
 
 // isBlockExecutedEvent checks whether the given event contains block executed data.
@@ -26,90 +25,78 @@ func isTransactionExecutedEvent(event cadence.Event) bool {
 	return strings.Contains(event.EventType.ID(), string(events.EventTypeTransactionExecuted))
 }
 
+// CadenceEvents contains Flow emitted events containing one or zero evm block executed event,
+// and multiple or zero evm transaction events.
 type CadenceEvents struct {
-	events flow.BlockEvents
+	events       flow.BlockEvents  // Flow events for a specific flow block
+	block        *Block            // EVM block (at most one per Flow block)
+	transactions []Transaction     // transactions in the EVM block
+	receipts     []*StorageReceipt // receipts for transactions
 }
 
-func NewCadenceEvents(events flow.BlockEvents) *CadenceEvents {
-	return &CadenceEvents{events: events}
-}
+// NewCadenceEvents decodes the events into evm types.
+func NewCadenceEvents(events flow.BlockEvents) (*CadenceEvents, error) {
+	e := &CadenceEvents{events: events}
 
-// Blocks finds the block evm events and decodes it into the blocks slice,
-// if no block events are found nil slice is returned.
-//
-// Return values:
-// blocks, nil - if blocks are found
-// nil, nil - if no block are found
-// nil, err - unexpected error
-func (c *CadenceEvents) Blocks() ([]*types.Block, error) {
-	blocks := make([]*types.Block, 0)
-	for _, e := range c.events.Events {
-		if isBlockExecutedEvent(e.Value) {
-			block, err := decodeBlock(e.Value)
+	// decode and cache block and transactions
+	for _, event := range events.Events {
+		val := event.Value
+
+		if isBlockExecutedEvent(val) {
+			if e.block != nil { // safety check, we can only have 1 or 0 evm blocks per one flow block
+				return nil, fmt.Errorf("EVM block was already set for this Flow block, invalid event data")
+			}
+
+			block, err := decodeBlock(val)
 			if err != nil {
 				return nil, err
 			}
-			blocks = append(blocks, block)
+
+			e.block = block
+			continue
 		}
-	}
 
-	// make sure order of heights is ordered, this is safety check
-	slices.SortFunc(blocks, func(a, b *types.Block) int {
-		return int(a.Height - b.Height)
-	})
-
-	return blocks, nil
-}
-
-// Transactions finds all the transactions evm events and decodes them into transaction slice,
-// if no transactions is found nil is returned.
-//
-// Return values:
-// []transaction, nil - if transactions are found
-// nil, nil - if no transactions are found
-// nil, err - unexpected error
-func (c *CadenceEvents) Transactions() ([]Transaction, []*StorageReceipt, error) {
-	txs := make([]Transaction, 0)
-	rcps := make([]*StorageReceipt, 0)
-
-	cumulativeGasUsed := uint64(0)
-	var lastReceipt *StorageReceipt
-	for _, e := range c.events.Events {
-		if isTransactionExecutedEvent(e.Value) {
-			tx, receipt, err := decodeTransactionEvent(e.Value)
+		if isTransactionExecutedEvent(val) {
+			tx, receipt, err := decodeTransactionEvent(val)
 			if err != nil {
-				return nil, nil, err
+				return nil, err
 			}
 
-			if lastReceipt != nil && lastReceipt.BlockNumber.Cmp(receipt.BlockNumber) == 0 {
-				cumulativeGasUsed += lastReceipt.GasUsed
-				receipt.CumulativeGasUsed = cumulativeGasUsed
-			} else {
-				cumulativeGasUsed = receipt.GasUsed
-				receipt.CumulativeGasUsed = cumulativeGasUsed
-			}
-
-			lastReceipt = receipt
-
-			txs = append(txs, tx)
-			rcps = append(rcps, receipt)
+			e.transactions = append(e.transactions, tx)
+			e.receipts = append(e.receipts, receipt)
 		}
 	}
 
-	return txs, rcps, nil
+	// calculate dynamic values
+	cumulativeGasUsed := uint64(0)
+	for i, rcp := range e.receipts {
+		// add transaction hashes to the block
+		e.block.TransactionHashes = append(e.block.TransactionHashes, rcp.TxHash)
+		// calculate cumulative gas used up to that point
+		cumulativeGasUsed += rcp.GasUsed
+		rcp.CumulativeGasUsed = cumulativeGasUsed
+		// set the transaction index
+		rcp.TransactionIndex = uint(i)
+	}
+
+	return e, nil
 }
 
-// Empty checks if there are any evm block or transactions events.
-// If there are no evm block or transactions events this is a heartbeat
-// event that is broadcast in intervals.
-func (c *CadenceEvents) Empty() bool {
-	for _, e := range c.events.Events {
-		if isTransactionExecutedEvent(e.Value) || isBlockExecutedEvent(e.Value) {
-			return false
-		}
-	}
+// Block evm block. If event doesn't contain EVM block the return value is nil.
+func (c *CadenceEvents) Block() *Block {
+	return c.block
+}
 
-	return true
+// Transactions included in the EVM block, if event doesn't
+// contain EVM transactions the return value is nil.
+func (c *CadenceEvents) Transactions() []Transaction {
+	return c.transactions
+}
+
+// Empty checks if there is an EVM block included in the events.
+// If there are no evm block or transactions events this is a heartbeat event.
+func (c *CadenceEvents) Empty() bool {
+	return c.block == nil
 }
 
 // CadenceHeight returns the Flow Cadence height at which the events
@@ -135,8 +122,11 @@ type BlockEvents struct {
 }
 
 func NewBlockEvents(events flow.BlockEvents) BlockEvents {
+	blockEvents, err := NewCadenceEvents(events)
+
 	return BlockEvents{
-		Events: NewCadenceEvents(events),
+		Events: blockEvents,
+		Err:    err,
 	}
 }
 
