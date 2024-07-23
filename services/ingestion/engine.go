@@ -6,7 +6,6 @@ import (
 
 	pebbleDB "github.com/cockroachdb/pebble"
 	"github.com/onflow/flow-go-sdk"
-	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/rs/zerolog"
 
 	"github.com/onflow/flow-evm-gateway/models"
@@ -181,7 +180,7 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 func (e *Engine) indexBlock(
 	cadenceHeight uint64,
 	cadenceID flow.Identifier,
-	block *types.Block,
+	block *models.Block,
 	batch *pebbleDB.Batch,
 ) error {
 	if block == nil { // safety check shouldn't happen
