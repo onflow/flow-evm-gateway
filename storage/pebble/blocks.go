@@ -12,6 +12,7 @@ import (
 	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/go-ethereum/common"
 
+	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/storage"
 	errs "github.com/onflow/flow-evm-gateway/storage/errors"
 )
@@ -33,7 +34,7 @@ func NewBlocks(store *Storage) *Blocks {
 func (b *Blocks) Store(
 	cadenceHeight uint64,
 	cadenceID flow.Identifier,
-	block *types.Block,
+	block *models.Block,
 	batch *pebble.Batch,
 ) error {
 	b.mux.Lock()
@@ -197,7 +198,7 @@ func (b *Blocks) InitHeights(cadenceHeight uint64, cadenceID flow.Identifier) er
 	}
 
 	// we store genesis block because it isn't emitted over the network
-	if err := b.Store(cadenceHeight, cadenceID, types.GenesisBlock, nil); err != nil {
+	if err := b.Store(cadenceHeight, cadenceID, models.GenesisBlock, nil); err != nil {
 		return fmt.Errorf("faield to set init genesis block: %w", err)
 	}
 
