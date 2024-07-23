@@ -199,14 +199,13 @@ func decodeTransactionEvent(
 	}
 
 	gethReceipt := &gethTypes.Receipt{
-		BlockNumber:       big.NewInt(int64(txEvent.BlockHeight)),
-		Type:              txEvent.TransactionType,
-		TxHash:            common.HexToHash(txEvent.Hash),
-		ContractAddress:   common.HexToAddress(txEvent.ContractAddress),
-		GasUsed:           txEvent.GasConsumed,
-		CumulativeGasUsed: txEvent.GasConsumed, // todo use cumulative after added to the tx result
-		TransactionIndex:  uint(txEvent.Index),
-		BlockHash:         common.HexToHash(txEvent.BlockHash),
+		BlockNumber:      big.NewInt(int64(txEvent.BlockHeight)),
+		Type:             txEvent.TransactionType,
+		TxHash:           common.HexToHash(txEvent.Hash),
+		ContractAddress:  common.HexToAddress(txEvent.ContractAddress),
+		GasUsed:          txEvent.GasConsumed,
+		TransactionIndex: uint(txEvent.Index),
+		BlockHash:        common.HexToHash(txEvent.BlockHash),
 	}
 
 	encLogs, err := hex.DecodeString(txEvent.Logs)

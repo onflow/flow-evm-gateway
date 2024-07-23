@@ -18,6 +18,8 @@ it('deploy contract and interact', async() => {
     assert.equal(rcp.contractAddress, contractAddress)
     assert.equal(rcp.status, conf.successStatus)
     assert.isUndefined(rcp.to)
+    assert.equal(rcp.gasUsed, 338798n)
+    assert.equal(rcp.gasUsed, rcp.cumulativeGasUsed)
 
     // check if latest block contains the deploy results
     let latestHeight = await web3.eth.getBlockNumber()
