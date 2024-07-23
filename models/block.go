@@ -5,8 +5,8 @@ import (
 	"math/big"
 
 	"github.com/onflow/cadence"
+	"github.com/onflow/flow-go/fvm/evm/events"
 	"github.com/onflow/flow-go/fvm/evm/types"
-	"github.com/onflow/go-ethereum/common"
 )
 
 var (
@@ -20,23 +20,17 @@ var (
 // decodeBlock takes a cadence event that contains executed block payload and
 // decodes it into the Block type.
 func decodeBlock(event cadence.Event) (*types.Block, error) {
-	payload, err := types.DecodeBlockEventPayload(event)
+	payload, err := events.DecodeBlockEventPayload(event)
 	if err != nil {
 		return nil, fmt.Errorf("failed to cadence decode block [%s]: %w", event.String(), err)
 	}
 
-	hashes := make([]common.Hash, len(payload.TransactionHashes))
-	for i, h := range payload.TransactionHashes {
-		hashes[i] = common.HexToHash(string(h))
-	}
-
 	return &types.Block{
-		ParentBlockHash:   common.HexToHash(payload.ParentBlockHash),
-		Height:            payload.Height,
-		Timestamp:         payload.Timestamp,
-		TotalSupply:       payload.TotalSupply.Value,
-		ReceiptRoot:       common.HexToHash(payload.ReceiptRoot),
-		TransactionHashes: hashes,
-		TotalGasUsed:      payload.TotalGasUsed,
+		ParentBlockHash: payload.ParentBlockHash,
+		Height:          payload.Height,
+		Timestamp:       payload.Timestamp,
+		TotalSupply:     payload.TotalSupply.Value,
+		ReceiptRoot:     payload.ReceiptRoot,
+		TotalGasUsed:    payload.TotalGasUsed,
 	}, nil
 }
