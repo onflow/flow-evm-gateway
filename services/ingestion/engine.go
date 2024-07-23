@@ -207,17 +207,13 @@ func (e *Engine) indexBlock(
 	}
 
 	blockHash, _ := block.Hash()
-	txHashes := make([]string, len(block.TransactionHashes))
-	for i, t := range block.TransactionHashes {
-		txHashes[i] = t.Hex()
-	}
 	e.log.Info().
 		Str("hash", blockHash.Hex()).
 		Uint64("evm-height", block.Height).
 		Uint64("cadence-height", cadenceHeight).
 		Str("cadence-id", cadenceID.String()).
 		Str("parent-hash", block.ParentBlockHash.String()).
-		Strs("tx-hashes", txHashes).
+		Str("tx-hashes-root", block.TransactionHashRoot.String()).
 		Msg("new evm block executed event")
 
 	return e.blocks.Store(cadenceHeight, cadenceID, block, batch)
