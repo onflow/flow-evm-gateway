@@ -70,12 +70,25 @@ func (c *CadenceEvents) Blocks() ([]*types.Block, error) {
 func (c *CadenceEvents) Transactions() ([]Transaction, []*StorageReceipt, error) {
 	txs := make([]Transaction, 0)
 	rcps := make([]*StorageReceipt, 0)
+
+	cumulativeGasUsed := uint64(0)
+	var lastReceipt *StorageReceipt
 	for _, e := range c.events.Events {
 		if isTransactionExecutedEvent(e.Value) {
 			tx, receipt, err := decodeTransactionEvent(e.Value)
 			if err != nil {
 				return nil, nil, err
 			}
+
+			if lastReceipt != nil && lastReceipt.BlockNumber.Cmp(receipt.BlockNumber) == 0 {
+				cumulativeGasUsed += lastReceipt.GasUsed
+				receipt.CumulativeGasUsed = cumulativeGasUsed
+			} else {
+				cumulativeGasUsed = receipt.GasUsed
+				receipt.CumulativeGasUsed = cumulativeGasUsed
+			}
+
+			lastReceipt = receipt
 
 			txs = append(txs, tx)
 			rcps = append(rcps, receipt)

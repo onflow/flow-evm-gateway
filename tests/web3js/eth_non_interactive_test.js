@@ -73,6 +73,12 @@ it('get block and transactions with COA interactions', async () => {
         let receipt = await web3.eth.getTransactionReceipt(tx.hash)
         // Assert that the transaction type from receipt is `0`, the type of `LegacyTx`.
         assert.equal(receipt.type, 0n)
+        if (receipt.contractAddress != null) {
+            assert.equal(receipt.gasUsed, 702600n)
+        } else {
+            assert.equal(receipt.gasUsed, 21055n)
+        }
+        assert.equal(receipt.gasUsed, receipt.cumulativeGasUsed)
     }
 
     // get block transaction
@@ -133,10 +139,10 @@ it('get transaction', async () => {
     assert.equal(rcp.blockNumber, conf.startBlockHeight)
     assert.equal(rcp.from, tx.from)
     assert.equal(rcp.to, tx.to)
-    assert.equal(rcp.cumulativeGasUsed, 21000n) // todo check
+    assert.equal(rcp.gasUsed, 21000n)
+    assert.equal(rcp.gasUsed, rcp.cumulativeGasUsed)
     assert.equal(rcp.transactionHash, tx.hash)
     assert.equal(rcp.status, conf.successStatus)
-    assert.equal(rcp.gasUsed, 21000n)
 })
 
 // it shouldn't fail, but return empty
