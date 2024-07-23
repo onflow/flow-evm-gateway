@@ -68,7 +68,6 @@ func TestSerialBlockIngestion(t *testing.T) {
 			accounts,
 			models.NewPublisher(),
 			models.NewPublisher(),
-			models.NewPublisher(),
 			zerolog.Nop(),
 		)
 
@@ -146,7 +145,6 @@ func TestSerialBlockIngestion(t *testing.T) {
 			receipts,
 			transactions,
 			accounts,
-			models.NewPublisher(),
 			models.NewPublisher(),
 			models.NewPublisher(),
 			zerolog.Nop(),
@@ -258,7 +256,6 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			accounts,
 			models.NewPublisher(),
 			models.NewPublisher(),
-			models.NewPublisher(),
 			zerolog.Nop(),
 		)
 
@@ -357,7 +354,6 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			accounts,
 			models.NewPublisher(),
 			models.NewPublisher(),
-			models.NewPublisher(),
 			zerolog.Nop(),
 		)
 
@@ -450,7 +446,6 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			receipts,
 			transactions,
 			accounts,
-			models.NewPublisher(),
 			models.NewPublisher(),
 			models.NewPublisher(),
 			zerolog.Nop(),

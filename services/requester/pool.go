@@ -25,18 +25,23 @@ const (
 // and after submitted based on different strategies.
 
 type TxPool struct {
-	logger zerolog.Logger
-	client *CrossSporkClient
-	pool   *sync.Map
-	// todo add a broadcaster for pending transaction streaming
+	logger      zerolog.Logger
+	client      *CrossSporkClient
+	pool        *sync.Map
+	txPublisher *models.Publisher
 	// todo add methods to inspect transaction pool state
 }
 
-func NewTxPool(client *CrossSporkClient, logger zerolog.Logger) *TxPool {
+func NewTxPool(
+	client *CrossSporkClient,
+	transactionsPublisher *models.Publisher,
+	logger zerolog.Logger,
+) *TxPool {
 	return &TxPool{
-		logger: logger.With().Str("component", "tx-pool").Logger(),
-		client: client,
-		pool:   &sync.Map{},
+		logger:      logger.With().Str("component", "tx-pool").Logger(),
+		client:      client,
+		txPublisher: transactionsPublisher,
+		pool:        &sync.Map{},
 	}
 }
 
@@ -49,6 +54,8 @@ func (t *TxPool) Send(
 	flowTx *flow.Transaction,
 	evmTx *gethTypes.Transaction,
 ) error {
+	t.txPublisher.Publish(evmTx) // publish pending transaction event
+
 	if err := t.client.SendTransaction(ctx, *flowTx); err != nil {
 		return err
 	}
