@@ -182,7 +182,7 @@ func (h *httpServer) Start() error {
 	}
 
 	// Initialize the server. Metrics handler is a middleware for gathering metrics
-	h.server = &http.Server{Handler: metrics.NewHttpHandler(h, h.collector)}
+	h.server = &http.Server{Handler: metrics.NewHttpHandler(h, h.collector, h.logger)}
 	if h.timeouts != (rpc.HTTPTimeouts{}) {
 		CheckTimeouts(h.logger, &h.timeouts)
 		h.server.ReadTimeout = h.timeouts.ReadTimeout

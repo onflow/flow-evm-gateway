@@ -9,38 +9,44 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/rs/zerolog"
 )
 
+// HttpHandler is a thin middleware for gathering metrics about http request.
+// It makes no decision about error handling. If one occurred, we log it and
+// pass request on to the underlying handler to make a decision
 type HttpHandler struct {
 	handler   http.Handler
 	collector Collector
+	logger    zerolog.Logger
 }
 
-func NewHttpHandler(handler http.Handler, collector Collector) *HttpHandler {
+func NewHttpHandler(handler http.Handler, collector Collector, logger zerolog.Logger) *HttpHandler {
 	return &HttpHandler{
 		handler:   handler,
 		collector: collector,
+		logger:    logger,
 	}
 }
 
 func (h *HttpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	start := time.Now()
+	var start time.Time
 
-	method, err := extractMethod(w, r)
+	method, err := extractMethod(r)
 	if err != nil {
-		return
+		h.logger.Info().Err(err).Msg("No metrics will be collected. Error extracting method: ")
+	} else {
+		start = time.Now()
+		defer h.collector.MeasureRequestDuration(start, prometheus.Labels{"method": method})
 	}
 
-	defer h.collector.MeasureRequestDuration(start, prometheus.Labels{"method": method})
 	h.handler.ServeHTTP(w, r)
 }
 
-func extractMethod(w http.ResponseWriter, r *http.Request) (string, error) {
+func extractMethod(r *http.Request) (string, error) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		errMsg := fmt.Sprintf("error reading request body: %s", err)
-		http.Error(w, errMsg, http.StatusBadRequest)
-		return "", err
+		return "", fmt.Errorf("error reading request body: %s", err)
 	}
 	r.Body = io.NopCloser(bytes.NewBuffer(body))
 
@@ -48,9 +54,7 @@ func extractMethod(w http.ResponseWriter, r *http.Request) (string, error) {
 		Method string `json:"method"`
 	}
 	if err := json.Unmarshal(body, &requestBody); err != nil {
-		errMsg := fmt.Sprintf("error extracting method from body: %s", err)
-		http.Error(w, errMsg, http.StatusBadRequest)
-		return "", err
+		return "", fmt.Errorf("error extracting method from body: %s", err)
 	}
 
 	return requestBody.Method, nil
