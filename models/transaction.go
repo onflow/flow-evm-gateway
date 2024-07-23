@@ -198,29 +198,35 @@ func decodeTransactionEvent(
 		return nil, nil, fmt.Errorf("failed to hex decode transaction payload [%s]: %w", txEvent.Payload, err)
 	}
 
-	encodedLogs, err := hex.DecodeString(txEvent.Logs)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to hex decode transaction logs [%s]: %w", txEvent.Logs, err)
-	}
-
-	var logs []*gethTypes.Log
-	if len(encodedLogs) > 0 {
-		err = rlp.Decode(bytes.NewReader(encodedLogs), &logs)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to RLP-decode transaction logs [%x]: %w", encodedLogs, err)
-		}
-	}
-
 	gethReceipt := &gethTypes.Receipt{
 		BlockNumber:       big.NewInt(int64(txEvent.BlockHeight)),
 		Type:              txEvent.TransactionType,
-		Logs:              logs,
 		TxHash:            common.HexToHash(txEvent.Hash),
 		ContractAddress:   common.HexToAddress(txEvent.ContractAddress),
 		GasUsed:           txEvent.GasConsumed,
 		CumulativeGasUsed: txEvent.GasConsumed, // todo use cumulative after added to the tx result
 		TransactionIndex:  uint(txEvent.Index),
 		BlockHash:         common.HexToHash(txEvent.BlockHash),
+	}
+
+	encLogs, err := hex.DecodeString(txEvent.Logs)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to hex decode logs: %w", err)
+	}
+
+	if len(encLogs) > 0 {
+		err = rlp.Decode(bytes.NewReader(encLogs), &gethReceipt.Logs)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to rlp decode logs: %w", err)
+		}
+
+		// dynamically add missing log fields
+		for _, l := range gethReceipt.Logs {
+			l.BlockHash = gethReceipt.BlockHash
+			l.TxHash = gethReceipt.TxHash
+			l.BlockNumber = gethReceipt.BlockNumber.Uint64()
+			l.Index = gethReceipt.TransactionIndex
+		}
 	}
 
 	if txEvent.ErrorCode == uint16(types.ErrCodeNoError) {
@@ -231,14 +237,15 @@ func decodeTransactionEvent(
 
 	gethReceipt.Bloom = gethTypes.CreateBloom([]*gethTypes.Receipt{gethReceipt})
 
-	receipt := NewStorageReceipt(gethReceipt)
+	var revertReason []byte
 	if txEvent.ErrorCode == uint16(types.ExecutionErrCodeExecutionReverted) {
-		revert, err := hex.DecodeString(txEvent.ReturnedData)
+		revertReason, err = hex.DecodeString(txEvent.ReturnedData)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to hex-decode transaction return data [%s]: %w", txEvent.ReturnedData, err)
 		}
-		receipt.RevertReason = revert
 	}
+
+	receipt := NewStorageReceipt(gethReceipt, revertReason)
 
 	var tx Transaction
 	// check if the transaction payload is actually from a direct call,

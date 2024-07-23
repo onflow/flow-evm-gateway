@@ -6,7 +6,6 @@ import (
 
 	pebbleDB "github.com/cockroachdb/pebble"
 	"github.com/onflow/flow-go-sdk"
-	"github.com/onflow/flow-go/engine"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/rs/zerolog"
 
@@ -18,18 +17,18 @@ import (
 var _ models.Engine = &Engine{}
 
 type Engine struct {
-	subscriber              EventSubscriber
-	store                   *pebble.Storage
-	blocks                  storage.BlockIndexer
-	receipts                storage.ReceiptIndexer
-	transactions            storage.TransactionIndexer
-	accounts                storage.AccountIndexer
-	log                     zerolog.Logger
-	evmLastHeight           *models.SequentialHeight
-	status                  *models.EngineStatus
-	blocksBroadcaster       *engine.Broadcaster
-	transactionsBroadcaster *engine.Broadcaster
-	logsBroadcaster         *engine.Broadcaster
+	subscriber            EventSubscriber
+	store                 *pebble.Storage
+	blocks                storage.BlockIndexer
+	receipts              storage.ReceiptIndexer
+	transactions          storage.TransactionIndexer
+	accounts              storage.AccountIndexer
+	log                   zerolog.Logger
+	evmLastHeight         *models.SequentialHeight
+	status                *models.EngineStatus
+	blocksPublisher       *models.Publisher
+	transactionsPublisher *models.Publisher
+	logsPublisher         *models.Publisher
 }
 
 func NewEventIngestionEngine(
@@ -39,25 +38,25 @@ func NewEventIngestionEngine(
 	receipts storage.ReceiptIndexer,
 	transactions storage.TransactionIndexer,
 	accounts storage.AccountIndexer,
-	blocksBroadcaster *engine.Broadcaster,
-	transactionsBroadcaster *engine.Broadcaster,
-	logsBroadcaster *engine.Broadcaster,
+	blocksPublisher *models.Publisher,
+	transactionsPublisher *models.Publisher,
+	logsPublisher *models.Publisher,
 	log zerolog.Logger,
 ) *Engine {
 	log = log.With().Str("component", "ingestion").Logger()
 
 	return &Engine{
-		subscriber:              subscriber,
-		store:                   store,
-		blocks:                  blocks,
-		receipts:                receipts,
-		transactions:            transactions,
-		accounts:                accounts,
-		log:                     log,
-		status:                  models.NewEngineStatus(),
-		blocksBroadcaster:       blocksBroadcaster,
-		transactionsBroadcaster: transactionsBroadcaster,
-		logsBroadcaster:         logsBroadcaster,
+		subscriber:            subscriber,
+		store:                 store,
+		blocks:                blocks,
+		receipts:              receipts,
+		transactions:          transactions,
+		accounts:              accounts,
+		log:                   log,
+		status:                models.NewEngineStatus(),
+		blocksPublisher:       blocksPublisher,
+		transactionsPublisher: transactionsPublisher,
+		logsPublisher:         logsPublisher,
 	}
 }
 
@@ -152,13 +151,14 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 		return err
 	}
 	for _, block := range blocks {
-		if err := e.indexBlock(
+		err := e.indexBlock(
 			events.CadenceHeight(),
 			events.CadenceBlockID(),
 			block,
 			batch,
-		); err != nil {
-			return err
+		)
+		if err != nil {
+			return fmt.Errorf("failed to index block %d event: %w", block.Height, err)
 		}
 	}
 
@@ -168,23 +168,24 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 	}
 	for i, tx := range txs {
 		if err := e.indexTransaction(tx, receipts[i], batch); err != nil {
-			return err
+			return fmt.Errorf("failed to index transaction %s event: %w", tx.Hash().String(), err)
 		}
 	}
 
 	if err := batch.Commit(pebbleDB.Sync); err != nil {
-		return fmt.Errorf("failed to commit indexed data: %w", err)
+		return fmt.Errorf("failed to commit indexed data for Cadence block %d: %w", events.CadenceHeight(), err)
 	}
 
 	// emit events for each block, transaction and logs, only after we successfully commit the data
-	for range blocks {
-		e.blocksBroadcaster.Publish()
+	for _, b := range blocks {
+		e.blocksPublisher.Publish(b)
 	}
 
-	for _, r := range receipts {
-		e.transactionsBroadcaster.Publish()
+	for i, r := range receipts {
+		e.transactionsPublisher.Publish(txs[i])
+
 		if len(r.Logs) > 0 {
-			e.logsBroadcaster.Publish()
+			e.logsPublisher.Publish(r.Logs)
 		}
 	}
 
@@ -224,11 +225,7 @@ func (e *Engine) indexBlock(
 		Strs("tx-hashes", txHashes).
 		Msg("new evm block executed event")
 
-	if err := e.blocks.Store(cadenceHeight, cadenceID, block, batch); err != nil {
-		return err
-	}
-
-	return nil
+	return e.blocks.Store(cadenceHeight, cadenceID, block, batch)
 }
 
 func (e *Engine) indexTransaction(

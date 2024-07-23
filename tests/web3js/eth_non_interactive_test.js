@@ -43,6 +43,19 @@ it('get block', async () => {
     assert.isNull(no)
 })
 
+it('get earliest/genesis block', async () => {
+    let block = await web3.eth.getBlock('earliest')
+
+    assert.notDeepEqual(block, {})
+    assert.equal(block.number, 0n)
+    assert.isString(block.hash)
+    assert.isString(block.parentHash)
+    assert.lengthOf(block.logsBloom, 514)
+    assert.isDefined(block.timestamp)
+    assert.isTrue(block.timestamp >= 1714090657n)
+    assert.isUndefined(block.transactions)
+})
+
 it('get block and transactions with COA interactions', async () => {
     // First 2 blocks are formed from COA deployment and fund.
     const blockNumbers = [1, 2]
@@ -124,6 +137,14 @@ it('get transaction', async () => {
     assert.equal(rcp.transactionHash, tx.hash)
     assert.equal(rcp.status, conf.successStatus)
     assert.equal(rcp.gasUsed, 21000n)
+})
+
+// it shouldn't fail, but return empty
+it('get not found values', async () => {
+    const nonExistingHeight = 9999999999
+
+    assert.isNull(await web3.eth.getBlock(nonExistingHeight))
+    assert.isNull(await web3.eth.getTransactionFromBlock(nonExistingHeight, 0))
 })
 
 it('get mining status', async () => {

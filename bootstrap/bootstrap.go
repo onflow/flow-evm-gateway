@@ -10,7 +10,6 @@ import (
 	"github.com/onflow/flow-go-sdk/access"
 	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/onflow/flow-go-sdk/crypto"
-	broadcast "github.com/onflow/flow-go/engine"
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-limiter/memorystore"
 
@@ -42,9 +41,9 @@ func Start(ctx context.Context, cfg *config.Config) error {
 	accounts := pebble.NewAccounts(store)
 	trace := pebble.NewTraces(store)
 
-	blocksBroadcaster := broadcast.NewBroadcaster()
-	transactionsBroadcaster := broadcast.NewBroadcaster()
-	logsBroadcaster := broadcast.NewBroadcaster()
+	blocksPublisher := models.NewPublisher()
+	transactionsPublisher := models.NewPublisher()
+	logsPublisher := models.NewPublisher()
 
 	// this should only be used locally or for testing
 	if cfg.ForceStartCadenceHeight != 0 {
@@ -110,9 +109,9 @@ func Start(ctx context.Context, cfg *config.Config) error {
 			receipts,
 			accounts,
 			trace,
-			blocksBroadcaster,
-			transactionsBroadcaster,
-			logsBroadcaster,
+			blocksPublisher,
+			transactionsPublisher,
+			logsPublisher,
 			logger,
 			collector,
 		)
@@ -132,9 +131,9 @@ func Start(ctx context.Context, cfg *config.Config) error {
 		receipts,
 		accounts,
 		trace,
-		blocksBroadcaster,
-		transactionsBroadcaster,
-		logsBroadcaster,
+		blocksPublisher,
+		transactionsPublisher,
+		logsPublisher,
 		logger,
 	)
 	if err != nil {
@@ -161,9 +160,9 @@ func startIngestion(
 	receipts storage.ReceiptIndexer,
 	accounts storage.AccountIndexer,
 	trace storage.TraceIndexer,
-	blocksBroadcaster *broadcast.Broadcaster,
-	transactionsBroadcaster *broadcast.Broadcaster,
-	logsBroadcaster *broadcast.Broadcaster,
+	blocksPublisher *models.Publisher,
+	transactionsPublisher *models.Publisher,
+	logsPublisher *models.Publisher,
 	logger zerolog.Logger,
 ) error {
 	logger.Info().Msg("starting up event ingestion")
@@ -209,7 +208,7 @@ func startIngestion(
 		}
 		tracesEngine := traces.NewTracesIngestionEngine(
 			initHeight,
-			blocksBroadcaster,
+			blocksPublisher,
 			blocks,
 			trace,
 			downloader,
@@ -234,9 +233,9 @@ func startIngestion(
 		receipts,
 		transactions,
 		accounts,
-		blocksBroadcaster,
-		transactionsBroadcaster,
-		logsBroadcaster,
+		blocksPublisher,
+		transactionsPublisher,
+		logsPublisher,
 		logger,
 	)
 	const retries = 15
@@ -266,9 +265,9 @@ func startServer(
 	receipts storage.ReceiptIndexer,
 	accounts storage.AccountIndexer,
 	trace storage.TraceIndexer,
-	blocksBroadcaster *broadcast.Broadcaster,
-	transactionsBroadcaster *broadcast.Broadcaster,
-	logsBroadcaster *broadcast.Broadcaster,
+	blocksPublisher *models.Publisher,
+	transactionsPublisher *models.Publisher,
+	logsPublisher *models.Publisher,
 	logger zerolog.Logger,
 	collector metrics.Collector,
 ) error {
@@ -343,9 +342,9 @@ func startServer(
 		blocks,
 		transactions,
 		receipts,
-		blocksBroadcaster,
-		transactionsBroadcaster,
-		logsBroadcaster,
+		blocksPublisher,
+		transactionsPublisher,
+		logsPublisher,
 		ratelimiter,
 	)
 

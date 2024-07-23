@@ -17,7 +17,6 @@ import (
 	"github.com/onflow/flow-evm-gateway/models"
 
 	"github.com/onflow/flow-go-sdk"
-	broadcast "github.com/onflow/flow-go/engine"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	gethCommon "github.com/onflow/go-ethereum/common"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
@@ -67,9 +66,9 @@ func TestSerialBlockIngestion(t *testing.T) {
 			receipts,
 			transactions,
 			accounts,
-			broadcast.NewBroadcaster(),
-			broadcast.NewBroadcaster(),
-			broadcast.NewBroadcaster(),
+			models.NewPublisher(),
+			models.NewPublisher(),
+			models.NewPublisher(),
 			zerolog.Nop(),
 		)
 
@@ -147,9 +146,9 @@ func TestSerialBlockIngestion(t *testing.T) {
 			receipts,
 			transactions,
 			accounts,
-			broadcast.NewBroadcaster(),
-			broadcast.NewBroadcaster(),
-			broadcast.NewBroadcaster(),
+			models.NewPublisher(),
+			models.NewPublisher(),
+			models.NewPublisher(),
 			zerolog.Nop(),
 		)
 
@@ -158,7 +157,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 		go func() {
 			err := engine.Run(context.Background())
 			assert.ErrorIs(t, err, models.ErrInvalidHeight)
-			assert.EqualError(t, err, "invalid block height, expected 11, got 20: invalid height")
+			assert.EqualError(t, err, "failed to index block 20 event: invalid block height, expected 11, got 20: invalid height")
 			close(waitErr)
 		}()
 
@@ -257,9 +256,9 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			receipts,
 			transactions,
 			accounts,
-			broadcast.NewBroadcaster(),
-			broadcast.NewBroadcaster(),
-			broadcast.NewBroadcaster(),
+			models.NewPublisher(),
+			models.NewPublisher(),
+			models.NewPublisher(),
 			zerolog.Nop(),
 		)
 
@@ -356,9 +355,9 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			receipts,
 			transactions,
 			accounts,
-			broadcast.NewBroadcaster(),
-			broadcast.NewBroadcaster(),
-			broadcast.NewBroadcaster(),
+			models.NewPublisher(),
+			models.NewPublisher(),
+			models.NewPublisher(),
 			zerolog.Nop(),
 		)
 
@@ -451,9 +450,9 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			receipts,
 			transactions,
 			accounts,
-			broadcast.NewBroadcaster(),
-			broadcast.NewBroadcaster(),
-			broadcast.NewBroadcaster(),
+			models.NewPublisher(),
+			models.NewPublisher(),
+			models.NewPublisher(),
 			zerolog.Nop(),
 		)
 
