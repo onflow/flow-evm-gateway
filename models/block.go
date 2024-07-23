@@ -18,6 +18,8 @@ var (
 	EarliestBlockNumber  = big.NewInt(0)
 )
 
+var GenesisBlock = &Block{Block: types.GenesisBlock}
+
 type Block struct {
 	*types.Block
 	TransactionHashes []gethCommon.Hash
