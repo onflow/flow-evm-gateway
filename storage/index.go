@@ -6,7 +6,6 @@ import (
 	"github.com/cockroachdb/pebble"
 	"github.com/goccy/go-json"
 	"github.com/onflow/flow-go-sdk"
-	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/go-ethereum/common"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 
@@ -18,17 +17,17 @@ type BlockIndexer interface {
 	// Batch is required to batch multiple indexer operations, skipped if nil.
 	// Expected errors:
 	// - errors.Duplicate if the block already exists
-	Store(cadenceHeight uint64, cadenceID flow.Identifier, block *types.Block, batch *pebble.Batch) error
+	Store(cadenceHeight uint64, cadenceID flow.Identifier, block *models.Block, batch *pebble.Batch) error
 
 	// GetByHeight returns an EVM block stored by EVM height.
 	// Expected errors:
 	// - errors.NotFound if the block is not found
-	GetByHeight(height uint64) (*types.Block, error)
+	GetByHeight(height uint64) (*models.Block, error)
 
 	// GetByID returns an EVM block stored by ID.
 	// Expected errors:
 	// - errors.NotFound if the block is not found
-	GetByID(ID common.Hash) (*types.Block, error)
+	GetByID(ID common.Hash) (*models.Block, error)
 
 	// GetHeightByID returns the EVM block height for the given ID.
 	// Expected errors:
