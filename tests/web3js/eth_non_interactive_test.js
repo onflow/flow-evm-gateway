@@ -55,6 +55,7 @@ it('get block and transactions with COA interactions', async () => {
         let tx = await web3.eth.getTransactionFromBlock(block.number, txIndex)
         // Assert that the transaction type is `0`, the type of `LegacyTx`.
         assert.equal(tx.type, 0n)
+        assert.equal(tx.transactionIndex, txIndex)
 
         // get transaction receipt
         let receipt = await web3.eth.getTransactionReceipt(tx.hash)
@@ -112,7 +113,7 @@ it('get transaction', async () => {
     assert.isNotEmpty(tx.from)
     assert.isNotEmpty(tx.r)
     assert.isNotEmpty(tx.s)
-    assert.equal(tx.transactionIndex, 0)
+    assert.equal(tx.transactionIndex, 2)
 
     let rcp = await web3.eth.getTransactionReceipt(tx.hash)
     assert.isNotEmpty(rcp)
