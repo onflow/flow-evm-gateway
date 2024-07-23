@@ -67,6 +67,11 @@ func NewCadenceEvents(events flow.BlockEvents) (*CadenceEvents, error) {
 		}
 	}
 
+	// safety check, we can't have an empty block with transactions
+	if e.block == nil && len(e.transactions) > 0 {
+		return nil, fmt.Errorf("EVM block can not be nil if transactions are present, invalid event data")
+	}
+
 	// calculate dynamic values
 	cumulativeGasUsed := uint64(0)
 	for i, rcp := range e.receipts {
@@ -91,6 +96,12 @@ func (c *CadenceEvents) Block() *Block {
 // contain EVM transactions the return value is nil.
 func (c *CadenceEvents) Transactions() []Transaction {
 	return c.transactions
+}
+
+// Receipts included in the EVM block, if event doesn't
+// contain EVM transactions the return value is nil.
+func (c *CadenceEvents) Receipts() []*StorageReceipt {
+	return c.receipts
 }
 
 // Empty checks if there is an EVM block included in the events.
