@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"time"
@@ -36,7 +37,8 @@ func (h *HttpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func extractMethod(w http.ResponseWriter, r *http.Request) (string, error) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		http.Error(w, "Error reading request body", http.StatusBadRequest)
+		errMsg := fmt.Sprintf("error reading request body: %s", err)
+		http.Error(w, errMsg, http.StatusBadRequest)
 		return "", err
 	}
 
@@ -44,7 +46,8 @@ func extractMethod(w http.ResponseWriter, r *http.Request) (string, error) {
 		Method string `json:"method"`
 	}
 	if err := json.Unmarshal(body, &requestBody); err != nil {
-		http.Error(w, "Error extracting method field from body", http.StatusBadRequest)
+		errMsg := fmt.Sprintf("error extracting method from body: %s", err)
+		http.Error(w, errMsg, http.StatusBadRequest)
 		return "", err
 	}
 
