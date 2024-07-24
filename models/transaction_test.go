@@ -734,7 +734,7 @@ func TestValidateConsensusRules(t *testing.T) {
 		assert.ErrorContains(
 			t,
 			err,
-			fmt.Sprintf("%s: needed %v, allowed %v", core.ErrIntrinsicGas.Error(), 21_000, gasLimit),
+			fmt.Sprintf("%s: gas %v, minimum needed %v", core.ErrIntrinsicGas.Error(), gasLimit, 21_000),
 		)
 	})
 }
