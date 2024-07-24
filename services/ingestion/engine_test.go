@@ -7,12 +7,13 @@ import (
 	"testing"
 
 	pebbleDB "github.com/cockroachdb/pebble"
+	"github.com/onflow/flow-go/fvm/evm/events"
+	flowGo "github.com/onflow/flow-go/model/flow"
 
 	"github.com/onflow/flow-evm-gateway/services/ingestion/mocks"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
 
 	"github.com/onflow/cadence"
-	"github.com/onflow/cadence/runtime/common"
 
 	"github.com/onflow/flow-evm-gateway/models"
 
@@ -173,28 +174,34 @@ func TestSerialBlockIngestion(t *testing.T) {
 			}).
 			Once() // this should only be called for first valid block
 
+		cadenceEvents, err := models.NewCadenceEvents(flow.BlockEvents{
+			Events: []flow.Event{{
+				Type:  string(blockEvent.Etype),
+				Value: blockCdc,
+			}},
+			Height: cadenceHeight,
+		})
+		require.NoError(t, err)
+
 		eventsChan <- models.BlockEvents{
-			Events: models.NewCadenceEvents(flow.BlockEvents{
-				Events: []flow.Event{{
-					Type:  string(blockEvent.Etype),
-					Value: blockCdc,
-				}},
-				Height: cadenceHeight,
-			}),
+			Events: cadenceEvents,
 		}
 
 		// fail with next block height being incorrect
 		blockCdc, _, blockEvent, err = newBlock(latestHeight + 10) // not sequential next block height
 		require.NoError(t, err)
 
+		cadenceEvents, err = models.NewCadenceEvents(flow.BlockEvents{
+			Events: []flow.Event{{
+				Type:  string(blockEvent.Etype),
+				Value: blockCdc,
+			}},
+			Height: cadenceHeight + 1,
+		})
+		require.NoError(t, err)
+
 		eventsChan <- models.BlockEvents{
-			Events: models.NewCadenceEvents(flow.BlockEvents{
-				Events: []flow.Event{{
-					Type:  string(blockEvent.Etype),
-					Value: blockCdc,
-				}},
-				Height: cadenceHeight + 1,
-			}),
+			Events: cadenceEvents,
 		}
 
 		close(eventsChan)
@@ -529,25 +536,26 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 	})
 }
 
-func newBlock(height uint64) (cadence.Event, *types.Block, *types.Event, error) {
-	block := &types.Block{
+func newBlock(height uint64) (cadence.Event, *models.Block, *events.Event, error) {
+	gethBlock := &types.Block{
 		ParentBlockHash: gethCommon.HexToHash("0x1"),
 		Height:          height,
 		TotalSupply:     big.NewInt(100),
 		ReceiptRoot:     gethCommon.HexToHash("0x2"),
+	}
+	block := &models.Block{
+		Block: gethBlock,
 		TransactionHashes: []gethCommon.Hash{
 			gethCommon.HexToHash("0xf1"),
 		},
 	}
 
-	blockEvent := types.NewBlockEvent(block)
-	location := common.NewAddressLocation(nil, common.Address{0x1}, string(types.EventTypeBlockExecuted))
-	blockCdc, err := blockEvent.Payload.ToCadence(location)
-
+	blockEvent := events.NewBlockEvent(gethBlock)
+	blockCdc, err := blockEvent.Payload.ToCadence(flowGo.Previewnet)
 	return blockCdc, block, blockEvent, err
 }
 
-func newTransaction() (cadence.Event, *types.Event, models.Transaction, *types.Result, error) {
+func newTransaction() (cadence.Event, *events.Event, models.Transaction, *types.Result, error) {
 	res := &types.Result{
 		VMError:                 nil,
 		TxType:                  1,
@@ -574,15 +582,12 @@ func newTransaction() (cadence.Event, *types.Event, models.Transaction, *types.R
 		return cadence.Event{}, nil, nil, nil, err
 	}
 
-	ev := types.NewTransactionEvent(
+	ev := events.NewTransactionEvent(
 		res,
 		txEncoded,
 		1,
-		tx.Hash(),
 	)
 
-	location := common.NewAddressLocation(nil, common.Address{0x1}, string(types.EventTypeBlockExecuted))
-	cdcEv, err := ev.Payload.ToCadence(location)
-
+	cdcEv, err := ev.Payload.ToCadence(flowGo.Previewnet)
 	return cdcEv, ev, models.TransactionCall{Transaction: tx}, res, err
 }
