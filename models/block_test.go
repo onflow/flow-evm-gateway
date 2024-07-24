@@ -30,7 +30,7 @@ func Test_DecodeBlockExecutedEvent(t *testing.T) {
 	decBlock, err := decodeBlockEvent(encEv)
 	require.NoError(t, err)
 
-	assert.Equal(t, block.Block, gethBlock)
+	assert.Equal(t, decBlock, block)
 	h1, err := block.Hash()
 	require.NoError(t, err)
 	h2, err := decBlock.Hash()
