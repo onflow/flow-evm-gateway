@@ -10,6 +10,7 @@ import (
 	"github.com/onflow/flow-go/fvm/evm/types"
 	flowGo "github.com/onflow/flow-go/model/flow"
 	gethCommon "github.com/onflow/go-ethereum/common"
+	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -17,7 +18,7 @@ import (
 func TestCadenceEvents_Block(t *testing.T) {
 	invalid := cadence.String("invalid")
 
-	b0, e0, err := newBlock(0)
+	b0, e0, err := newBlock(0, nil)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -62,9 +63,120 @@ func TestCadenceEvents_Block(t *testing.T) {
 	}
 }
 
-func newBlock(height uint64) (*Block, flow.Event, error) {
+func Test_EventDecoding(t *testing.T) {
+	cadenceHeight := uint64(1)
+	txCount := 10
+	txEvents := make([]flow.Event, txCount)
+	txs := make([]Transaction, txCount)
+	hashes := make([]gethCommon.Hash, txCount)
+	results := make([]*types.Result, txCount)
+
+	blockEvents := flow.BlockEvents{
+		BlockID: flow.Identifier{0x1},
+		Height:  cadenceHeight,
+	}
+
+	// generate txs
+	for i := 0; i < txCount; i++ {
+		var err error
+		txs[i], results[i], txEvents[i], err = newTransaction(uint64(i))
+		require.NoError(t, err)
+		hashes[i] = txs[i].Hash()
+		blockEvents.Events = append(blockEvents.Events, txEvents[i])
+	}
+
+	// generate single block
+	block, blockEvent, err := newBlock(1, hashes)
+	blockEvents.Events = append(blockEvents.Events, blockEvent)
+
+	cadenceEvents, err := NewCadenceEvents(blockEvents)
+	require.NoError(t, err)
+
+	assert.Equal(t, block, cadenceEvents.Block())
+	assert.False(t, cadenceEvents.Empty())
+	assert.Equal(t, cadenceHeight, cadenceEvents.CadenceHeight())
+	assert.Equal(t, cadenceEvents.Block().TransactionHashes, hashes)
+
+	require.Equal(t, txCount+1, cadenceEvents.Length()) // +1 is for block event
+	require.Equal(t, txCount, len(cadenceEvents.Receipts()))
+	require.Equal(t, txCount, len(cadenceEvents.Transactions()))
+
+	cumulative := uint64(1)
+	for i := 0; i < txCount; i++ {
+		tx := cadenceEvents.Transactions()[i]
+		rcp := cadenceEvents.Receipts()[i]
+		blockHash, err := block.Hash()
+		require.NoError(t, err)
+		resRcp := results[i].Receipt(0)
+
+		assert.Equal(t, txs[i].Hash(), tx.Hash())
+		assert.Equal(t, txs[i].To(), tx.To())
+		assert.Equal(t, blockHash, rcp.BlockHash)
+		assert.Equal(t, block.Height, rcp.BlockNumber.Uint64())
+		assert.Equal(t, resRcp.Status, rcp.Status)
+		assert.Equal(t, cumulative, rcp.CumulativeGasUsed)
+		assert.Equal(t, tx.Hash(), rcp.TxHash)
+		assert.Equal(t, uint(i), rcp.TransactionIndex)
+
+		for _, l := range rcp.Logs {
+			assert.Equal(t, tx.Hash(), l.TxHash)
+			assert.Equal(t, block.Height, l.BlockNumber)
+			assert.Equal(t, rcp.TransactionIndex, l.Index)
+		}
+
+		cumulative += uint64(1) // we make each tx use 1 gas, so cumulative just adds 1
+	}
+}
+
+func newTransaction(nonce uint64) (Transaction, *types.Result, flow.Event, error) {
+	tx := gethTypes.NewTransaction(nonce, gethCommon.HexToAddress("0x1"), big.NewInt(10), uint64(100), big.NewInt(123), nil)
+	res := &types.Result{
+		VMError:                 nil,
+		TxType:                  tx.Type(),
+		GasConsumed:             1,
+		DeployedContractAddress: &types.Address{0x5, 0x6, 0x7},
+		ReturnedData:            []byte{0x55},
+		Logs: []*gethTypes.Log{{
+			Address: gethCommon.Address{0x1, 0x2},
+			Topics:  []gethCommon.Hash{{0x5, 0x6}, {0x7, 0x8}},
+		}, {
+			Address: gethCommon.Address{0x3, 0x5},
+			Topics:  []gethCommon.Hash{{0x2, 0x66}, {0x7, 0x1}},
+		}},
+		TxHash: tx.Hash(),
+	}
+
+	txEncoded, err := tx.MarshalBinary()
+	if err != nil {
+		return nil, nil, flow.Event{}, err
+	}
+
+	ev := events.NewTransactionEvent(
+		res,
+		txEncoded,
+		1,
+	)
+
+	cdcEv, err := ev.Payload.ToCadence(flowGo.Previewnet)
+	if err != nil {
+		return nil, nil, flow.Event{}, err
+	}
+
+	flowEvent := flow.Event{
+		Type:  string(ev.Etype),
+		Value: cdcEv,
+	}
+
+	return TransactionCall{Transaction: tx}, res, flowEvent, err
+}
+
+func newBlock(height uint64, hashes []gethCommon.Hash) (*Block, flow.Event, error) {
 	gethBlock := types.NewBlock(gethCommon.HexToHash("0x01"), height, uint64(1337), big.NewInt(100))
-	evmBlock := &Block{Block: gethBlock}
+	evmBlock := &Block{
+		Block:             gethBlock,
+		TransactionHashes: hashes,
+	}
+
 	ev := events.NewBlockEvent(gethBlock)
 
 	cadenceEvent, err := ev.Payload.ToCadence(flowGo.Previewnet)
