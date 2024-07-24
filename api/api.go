@@ -681,7 +681,6 @@ func (b *BlockChainAPI) EstimateGas(
 	l := b.logger.With().
 		Str("endpoint", "estimateGas").
 		Str("args", fmt.Sprintf("%v", args)).
-		Str("hashNumber", blockNumberOrHash.String()).
 		Logger()
 
 	if err := rateLimit(ctx, b.limiter, l); err != nil {
