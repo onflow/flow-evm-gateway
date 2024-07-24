@@ -9,7 +9,6 @@ import (
 	"math/big"
 	"strings"
 
-	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/go-ethereum/common"
 	"github.com/onflow/go-ethereum/common/hexutil"
 	"github.com/onflow/go-ethereum/common/math"
@@ -429,7 +428,7 @@ func (b *BlockChainAPI) GetBlockReceipts(
 	}
 
 	var (
-		block *evmTypes.Block
+		block *models.Block
 		err   error
 	)
 	if numHash.BlockHash != nil {
@@ -861,7 +860,7 @@ func (b *BlockChainAPI) GetStorageAt(
 
 func (b *BlockChainAPI) fetchBlockTransactions(
 	ctx context.Context,
-	block *evmTypes.Block,
+	block *models.Block,
 ) ([]*Transaction, error) {
 	transactions := make([]*Transaction, 0)
 	for _, txHash := range block.TransactionHashes {
@@ -885,7 +884,7 @@ func (b *BlockChainAPI) fetchBlockTransactions(
 
 func (b *BlockChainAPI) prepareBlockResponse(
 	ctx context.Context,
-	block *evmTypes.Block,
+	block *models.Block,
 	fullTx bool,
 ) (*Block, error) {
 	h, err := block.Hash()
