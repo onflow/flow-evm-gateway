@@ -5,10 +5,8 @@ import (
 	"math/big"
 
 	"github.com/goccy/go-json"
-	evmEmulator "github.com/onflow/flow-go/fvm/evm/emulator"
-	goTypes "github.com/onflow/flow-go/fvm/evm/types"
-
 	"github.com/onflow/flow-go-sdk"
+	evmEmulator "github.com/onflow/flow-go/fvm/evm/emulator"
 	"github.com/onflow/go-ethereum/common"
 	"github.com/onflow/go-ethereum/core/types"
 	"github.com/onflow/go-ethereum/crypto"
@@ -108,7 +106,7 @@ func (b *BlockTestSuite) TestHeights() {
 	b.Run("get height by ID", func() {
 		evmHeights := []uint64{10, 11, 12, 13}
 		cadenceIDs := []flow.Identifier{{0x01}, {0x02}, {0x03}, {0x04}}
-		blocks := make([]*goTypes.Block, 4)
+		blocks := make([]*models.Block, 4)
 
 		for i, evmHeight := range evmHeights {
 			blocks[i] = mocks.NewBlock(evmHeight)
