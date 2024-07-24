@@ -4,22 +4,28 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/onflow/flow-evm-gateway/models"
-	"github.com/onflow/flow-evm-gateway/storage"
-	"github.com/onflow/flow-evm-gateway/storage/errors"
-	"github.com/onflow/flow-evm-gateway/storage/mocks"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/go-ethereum/common"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/onflow/flow-evm-gateway/models"
+	"github.com/onflow/flow-evm-gateway/storage"
+	"github.com/onflow/flow-evm-gateway/storage/errors"
+	"github.com/onflow/flow-evm-gateway/storage/mocks"
 )
 
-var blocks = []*types.Block{
-	{Height: 0}, {Height: 1}, {Height: 2}, {Height: 3}, {Height: 4}, {Height: 5},
+var blocks = []*models.Block{
+	{Block: &types.Block{Height: 0}},
+	{Block: &types.Block{Height: 1}},
+	{Block: &types.Block{Height: 2}},
+	{Block: &types.Block{Height: 3}},
+	{Block: &types.Block{Height: 4}},
+	{Block: &types.Block{Height: 5}},
 }
 
-func mustHash(b *types.Block) common.Hash {
+func mustHash(b *models.Block) common.Hash {
 	h, err := b.Hash()
 	if err != nil {
 		panic(err)
@@ -91,7 +97,7 @@ func blockStorage() storage.BlockIndexer {
 	blockStorage := &mocks.BlockIndexer{}
 	blockStorage.
 		On("GetByID", mock.AnythingOfType("common.Hash")).
-		Return(func(id common.Hash) (*types.Block, error) {
+		Return(func(id common.Hash) (*models.Block, error) {
 			for _, b := range blocks {
 				if mustHash(b).Cmp(id) == 0 {
 					return b, nil
