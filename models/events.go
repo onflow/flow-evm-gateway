@@ -41,6 +41,11 @@ func NewCadenceEvents(events flow.BlockEvents) (*CadenceEvents, error) {
 		return nil, err
 	}
 
+	// if cadence event is empty don't calculate any dynamic values
+	if e.Empty() {
+		return e, nil
+	}
+
 	// calculate dynamic values
 	cumulativeGasUsed := uint64(0)
 	blockHash, err := e.block.Hash()
