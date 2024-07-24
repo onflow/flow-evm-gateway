@@ -23,7 +23,7 @@ var GenesisBlock = &Block{Block: types.GenesisBlock}
 
 func NewBlockFromBytes(data []byte) (*Block, error) {
 	var b *Block
-	return b, rlp.DecodeBytes(data, b)
+	return b, rlp.DecodeBytes(data, &b)
 }
 
 type Block struct {
