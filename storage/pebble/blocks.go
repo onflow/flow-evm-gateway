@@ -9,7 +9,6 @@ import (
 	"github.com/cockroachdb/pebble"
 	"github.com/onflow/flow-go-sdk"
 
-	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/go-ethereum/common"
 
 	"github.com/onflow/flow-evm-gateway/models"
@@ -85,7 +84,7 @@ func (b *Blocks) Store(
 	return nil
 }
 
-func (b *Blocks) GetByHeight(height uint64) (*types.Block, error) {
+func (b *Blocks) GetByHeight(height uint64) (*models.Block, error) {
 	b.mux.RLock()
 	defer b.mux.RUnlock()
 
@@ -107,7 +106,7 @@ func (b *Blocks) GetByHeight(height uint64) (*types.Block, error) {
 	return blk, nil
 }
 
-func (b *Blocks) GetByID(ID common.Hash) (*types.Block, error) {
+func (b *Blocks) GetByID(ID common.Hash) (*models.Block, error) {
 	b.mux.RLock()
 	defer b.mux.RUnlock()
 
@@ -229,11 +228,11 @@ func (b *Blocks) GetCadenceID(evmHeight uint64) (flow.Identifier, error) {
 	return flow.BytesToID(val), nil
 }
 
-func (b *Blocks) getBlock(keyCode byte, key []byte) (*types.Block, error) {
+func (b *Blocks) getBlock(keyCode byte, key []byte) (*models.Block, error) {
 	data, err := b.store.get(keyCode, key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get block: %w", err)
 	}
 
-	return types.NewBlockFromBytes(data)
+	return models.NewBlockFromBytes(data)
 }

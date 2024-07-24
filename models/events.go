@@ -47,7 +47,7 @@ func NewCadenceEvents(events flow.BlockEvents) (*CadenceEvents, error) {
 				return nil, fmt.Errorf("EVM block was already set for this Flow block, invalid event data")
 			}
 
-			block, err := decodeBlock(val)
+			block, err := decodeBlockEvent(val)
 			if err != nil {
 				return nil, err
 			}
@@ -74,6 +74,11 @@ func NewCadenceEvents(events flow.BlockEvents) (*CadenceEvents, error) {
 
 	// calculate dynamic values
 	cumulativeGasUsed := uint64(0)
+	blockHash, err := e.block.Hash()
+	if err != nil {
+		return nil, err
+	}
+
 	for i, rcp := range e.receipts {
 		// add transaction hashes to the block
 		e.block.TransactionHashes = append(e.block.TransactionHashes, rcp.TxHash)
@@ -82,6 +87,14 @@ func NewCadenceEvents(events flow.BlockEvents) (*CadenceEvents, error) {
 		rcp.CumulativeGasUsed = cumulativeGasUsed
 		// set the transaction index
 		rcp.TransactionIndex = uint(i)
+		// set calculate block hash
+		rcp.BlockHash = blockHash
+		// dynamically add missing log fields
+		for _, l := range rcp.Logs {
+			l.TxHash = rcp.TxHash
+			l.BlockNumber = rcp.BlockNumber.Uint64()
+			l.Index = rcp.TransactionIndex
+		}
 	}
 
 	return e, nil

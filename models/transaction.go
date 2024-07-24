@@ -205,14 +205,6 @@ func decodeTransactionEvent(event cadence.Event) (Transaction, *StorageReceipt, 
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to rlp decode logs: %w", err)
 		}
-
-		// dynamically add missing log fields
-		for _, l := range gethReceipt.Logs {
-			l.BlockHash = gethReceipt.BlockHash
-			l.TxHash = gethReceipt.TxHash
-			l.BlockNumber = gethReceipt.BlockNumber.Uint64()
-			l.Index = gethReceipt.TransactionIndex
-		}
 	}
 
 	if txEvent.ErrorCode == uint16(types.ErrCodeNoError) {
