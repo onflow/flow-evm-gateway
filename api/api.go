@@ -193,7 +193,6 @@ func (b *BlockChainAPI) GetBalance(
 	l := b.logger.With().
 		Str("endpoint", "getBalance").
 		Str("address", address.String()).
-		Str("blockNumberOrHash", blockNumberOrHash.String()).
 		Logger()
 
 	if err := rateLimit(ctx, b.limiter, l); err != nil {
@@ -523,7 +522,6 @@ func (b *BlockChainAPI) Call(
 	l := b.logger.With().
 		Str("endpoint", "call").
 		Str("args", fmt.Sprintf("%v", args)).
-		Str("numberHash", blockNumberOrHash.String()).
 		Logger()
 
 	if err := rateLimit(ctx, b.limiter, l); err != nil {
@@ -634,7 +632,6 @@ func (b *BlockChainAPI) GetTransactionCount(
 	l := b.logger.With().
 		Str("endpoint", "getTransactionCount").
 		Str("address", address.String()).
-		Str("hashNumber", blockNumberOrHash.String()).
 		Logger()
 
 	if err := rateLimit(ctx, b.limiter, l); err != nil {
@@ -681,7 +678,6 @@ func (b *BlockChainAPI) EstimateGas(
 	l := b.logger.With().
 		Str("endpoint", "estimateGas").
 		Str("args", fmt.Sprintf("%v", args)).
-		Str("hashNumber", blockNumberOrHash.String()).
 		Logger()
 
 	if err := rateLimit(ctx, b.limiter, l); err != nil {
@@ -722,7 +718,6 @@ func (b *BlockChainAPI) GetCode(
 	l := b.logger.With().
 		Str("endpoint", "getCode").
 		Str("address", address.String()).
-		Str("hashNumber", blockNumberOrHash.String()).
 		Logger()
 
 	if err := rateLimit(ctx, b.limiter, l); err != nil {
