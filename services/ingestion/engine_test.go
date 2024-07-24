@@ -87,8 +87,8 @@ func TestSerialBlockIngestion(t *testing.T) {
 			require.NoError(t, err)
 
 			blocks.
-				On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*types.Block"), mock.Anything).
-				Return(func(h uint64, id flow.Identifier, storeBlock *types.Block, _ *pebbleDB.Batch) error {
+				On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*models.Block"), mock.Anything).
+				Return(func(h uint64, id flow.Identifier, storeBlock *models.Block, _ *pebbleDB.Batch) error {
 					assert.Equal(t, block, storeBlock)
 					assert.Equal(t, cadenceHeight, h)
 					storedCounter++
@@ -166,8 +166,8 @@ func TestSerialBlockIngestion(t *testing.T) {
 		require.NoError(t, err)
 
 		blocks.
-			On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*types.Block"), mock.Anything).
-			Return(func(h uint64, id flow.Identifier, storeBlock *types.Block, _ *pebbleDB.Batch) error {
+			On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*models.Block"), mock.Anything).
+			Return(func(h uint64, id flow.Identifier, storeBlock *models.Block, _ *pebbleDB.Batch) error {
 				assert.Equal(t, block, storeBlock)
 				assert.Equal(t, cadenceHeight, h)
 				return nil
@@ -274,8 +274,8 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		}()
 
 		blocks.
-			On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*types.Block"), mock.Anything).
-			Return(func(h uint64, id flow.Identifier, storeBlock *types.Block, _ *pebbleDB.Batch) error {
+			On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*models.Block"), mock.Anything).
+			Return(func(h uint64, id flow.Identifier, storeBlock *models.Block, _ *pebbleDB.Batch) error {
 				assert.Equal(t, block, storeBlock)
 				assert.Equal(t, blockID, id)
 				assert.Equal(t, nextHeight, h)
@@ -373,8 +373,8 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 
 		blocksFirst := false // flag indicating we stored block first
 		blocks.
-			On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*types.Block"), mock.Anything).
-			Return(func(h uint64, id flow.Identifier, storeBlock *types.Block, _ *pebbleDB.Batch) error {
+			On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*models.Block"), mock.Anything).
+			Return(func(h uint64, id flow.Identifier, storeBlock *models.Block, _ *pebbleDB.Batch) error {
 				blocksFirst = true
 				return nil
 			}).
@@ -477,8 +477,8 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 
 			// add new block for each height
 			blocks.
-				On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*types.Block"), mock.Anything).
-				Return(func(h uint64, id flow.Identifier, storeBlock *types.Block, _ *pebbleDB.Batch) error {
+				On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*models.Block"), mock.Anything).
+				Return(func(h uint64, id flow.Identifier, storeBlock *models.Block, _ *pebbleDB.Batch) error {
 					assert.Equal(t, block, storeBlock)
 					assert.Equal(t, evmHeight, block.Height)
 					assert.Equal(t, latestCadenceHeight+1, h)
