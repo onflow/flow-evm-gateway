@@ -6,13 +6,13 @@ import (
 	"fmt"
 
 	"github.com/onflow/cadence/runtime/common"
+	"github.com/onflow/flow-go/fvm/evm/events"
 
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/services/requester"
 
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access"
-	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/flow-go/fvm/systemcontracts"
 	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/rs/zerolog"
@@ -234,13 +234,13 @@ func (r *RPCSubscriber) blocksFilter() flow.EventFilter {
 	blockExecutedEvent := common.NewAddressLocation(
 		nil,
 		evmAddress,
-		string(types.EventTypeBlockExecuted),
+		string(events.EventTypeBlockExecuted),
 	).ID()
 
 	transactionExecutedEvent := common.NewAddressLocation(
 		nil,
 		evmAddress,
-		string(types.EventTypeTransactionExecuted),
+		string(events.EventTypeTransactionExecuted),
 	).ID()
 
 	return flow.EventFilter{
