@@ -36,6 +36,42 @@ type CadenceEvents struct {
 
 // NewCadenceEvents decodes the events into evm types.
 func NewCadenceEvents(events flow.BlockEvents) (*CadenceEvents, error) {
+	e, err := decodeCadenceEvents(events)
+	if err != nil {
+		return nil, err
+	}
+
+	// calculate dynamic values
+	cumulativeGasUsed := uint64(0)
+	blockHash, err := e.block.Hash()
+	if err != nil {
+		return nil, err
+	}
+
+	for i, rcp := range e.receipts {
+		// add transaction hashes to the block
+		e.block.TransactionHashes = append(e.block.TransactionHashes, rcp.TxHash)
+		// calculate cumulative gas used up to that point
+		cumulativeGasUsed += rcp.GasUsed
+		rcp.CumulativeGasUsed = cumulativeGasUsed
+		// set the transaction index
+		rcp.TransactionIndex = uint(i)
+		// set calculate block hash
+		rcp.BlockHash = blockHash
+		// dynamically add missing log fields
+		for _, l := range rcp.Logs {
+			l.TxHash = rcp.TxHash
+			l.BlockNumber = rcp.BlockNumber.Uint64()
+			l.Index = rcp.TransactionIndex
+		}
+	}
+
+	return e, nil
+}
+
+// decodeCadenceEvents accepts Flow Cadence event and decodes it into CadenceEvents
+// collection. It also performs safety checks on the provided event data.
+func decodeCadenceEvents(events flow.BlockEvents) (*CadenceEvents, error) {
 	e := &CadenceEvents{events: events}
 
 	// decode and cache block and transactions
@@ -70,31 +106,6 @@ func NewCadenceEvents(events flow.BlockEvents) (*CadenceEvents, error) {
 	// safety check, we can't have an empty block with transactions
 	if e.block == nil && len(e.transactions) > 0 {
 		return nil, fmt.Errorf("EVM block can not be nil if transactions are present, invalid event data")
-	}
-
-	// calculate dynamic values
-	cumulativeGasUsed := uint64(0)
-	blockHash, err := e.block.Hash()
-	if err != nil {
-		return nil, err
-	}
-
-	for i, rcp := range e.receipts {
-		// add transaction hashes to the block
-		e.block.TransactionHashes = append(e.block.TransactionHashes, rcp.TxHash)
-		// calculate cumulative gas used up to that point
-		cumulativeGasUsed += rcp.GasUsed
-		rcp.CumulativeGasUsed = cumulativeGasUsed
-		// set the transaction index
-		rcp.TransactionIndex = uint(i)
-		// set calculate block hash
-		rcp.BlockHash = blockHash
-		// dynamically add missing log fields
-		for _, l := range rcp.Logs {
-			l.TxHash = rcp.TxHash
-			l.BlockNumber = rcp.BlockNumber.Uint64()
-			l.Index = rcp.TransactionIndex
-		}
 	}
 
 	return e, nil
