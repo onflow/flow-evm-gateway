@@ -45,12 +45,13 @@ func decodeBlockEvent(event cadence.Event) (*Block, error) {
 
 	return &Block{
 		Block: &types.Block{
-			ParentBlockHash: payload.ParentBlockHash,
-			Height:          payload.Height,
-			Timestamp:       payload.Timestamp,
-			TotalSupply:     payload.TotalSupply.Value,
-			ReceiptRoot:     payload.ReceiptRoot,
-			TotalGasUsed:    payload.TotalGasUsed,
+			ParentBlockHash:     payload.ParentBlockHash,
+			Height:              payload.Height,
+			Timestamp:           payload.Timestamp,
+			TotalSupply:         payload.TotalSupply.Value,
+			ReceiptRoot:         payload.ReceiptRoot,
+			TransactionHashRoot: payload.TransactionHashRoot,
+			TotalGasUsed:        payload.TotalGasUsed,
 		},
 	}, nil
 }
