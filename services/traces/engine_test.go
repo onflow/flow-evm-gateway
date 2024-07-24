@@ -11,7 +11,6 @@ import (
 
 	pebbleDB "github.com/cockroachdb/pebble"
 	"github.com/onflow/flow-go-sdk"
-	"github.com/onflow/flow-go/fvm/evm/types"
 	gethCommon "github.com/onflow/go-ethereum/common"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/mock"
@@ -50,7 +49,7 @@ func TestTraceIngestion(t *testing.T) {
 
 		blocks.
 			On("GetByHeight", mock.Anything).
-			Return(func(height uint64) (*types.Block, error) {
+			Return(func(height uint64) (*models.Block, error) {
 				require.Equal(t, latestHeight+1, height) // make sure it gets next block
 				return block, nil
 			})
@@ -127,7 +126,7 @@ func TestTraceIngestion(t *testing.T) {
 		const txCount = 50
 
 		// generate mock blocks, each with mock transactions
-		mockBlocks := make([]*types.Block, blockCount+1)
+		mockBlocks := make([]*models.Block, blockCount+1)
 		mockCadenceIDs := make([]flow.Identifier, blockCount+1)
 
 		for i := range mockBlocks {
@@ -230,7 +229,7 @@ func TestTraceIngestion(t *testing.T) {
 
 		blocks.
 			On("GetByHeight", mock.Anything).
-			Return(func(height uint64) (*types.Block, error) {
+			Return(func(height uint64) (*models.Block, error) {
 				require.Equal(t, latestHeight+1, height) // make sure it gets next block
 				return block, nil
 			})
