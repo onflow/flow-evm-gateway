@@ -60,3 +60,28 @@ func Test_Hash(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, hash, h.String())
 }
+
+func Test_EncodingDecoding(t *testing.T) {
+	block := &Block{
+		Block: &types.Block{
+			ParentBlockHash:     gethCommon.HexToHash("0x1"),
+			Height:              100,
+			TotalSupply:         big.NewInt(100),
+			ReceiptRoot:         gethCommon.HexToHash("0x2"),
+			TransactionHashRoot: gethCommon.HexToHash("0x3"),
+			TotalGasUsed:        uint64(30),
+		},
+		TransactionHashes: []gethCommon.Hash{
+			gethCommon.HexToHash("0x55"),
+			gethCommon.HexToHash("0x66"),
+		},
+	}
+
+	bytes, err := block.ToBytes()
+	require.NoError(t, err)
+
+	blockDec, err := NewBlockFromBytes(bytes)
+	require.NoError(t, err)
+
+	assert.Equal(t, block, blockDec)
+}
