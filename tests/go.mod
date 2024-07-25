@@ -6,7 +6,7 @@ require (
 	github.com/goccy/go-json v0.10.2
 	github.com/onflow/cadence v1.0.0-preview.39
 	github.com/onflow/crypto v0.25.1
-	github.com/onflow/flow-emulator v1.0.0-preview.36
+	github.com/onflow/flow-emulator v1.0.0-preview.35.0.20240725141711-547155b39eb9
 	github.com/onflow/flow-evm-gateway v0.0.0-20240201154855-4d4d3d3f19c7
 	github.com/onflow/flow-go v0.36.4
 	github.com/onflow/flow-go-sdk v1.0.0-preview.42
