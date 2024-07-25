@@ -171,8 +171,3 @@ func MarshalReceipt(
 
 	return fields, nil
 }
-
-type BloomsHeight struct {
-	Blooms []*gethTypes.Bloom
-	Height *big.Int
-}

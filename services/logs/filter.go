@@ -77,21 +77,23 @@ func NewRangeFilter(
 }
 
 func (r *RangeFilter) Match() ([]*gethTypes.Log, error) {
-	bloomsHeight, err := r.receipts.BloomsForBlockRange(r.start, r.end)
+	blooms, heights, err := r.receipts.BloomsForBlockRange(r.start, r.end)
 	if err != nil {
 		return nil, err
 	}
 
+	if len(blooms) != len(heights) {
+		return nil, fmt.Errorf("bloom values don't match height values") // this should never happen
+	}
+
 	logs := make([]*gethTypes.Log, 0)
-	for _, bloomHeight := range bloomsHeight {
-		for _, bloom := range bloomHeight.Blooms {
-			if !bloomMatch(*bloom, r.criteria) {
-				continue
-			}
+	for i, bloom := range blooms {
+		if !bloomMatch(*bloom, r.criteria) {
+			continue
 		}
 
 		// todo do this concurrently
-		receipts, err := r.receipts.GetByBlockHeight(bloomHeight.Height)
+		receipts, err := r.receipts.GetByBlockHeight(heights[i])
 		if err != nil {
 			return nil, err
 		}
