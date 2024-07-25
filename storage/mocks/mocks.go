@@ -18,11 +18,10 @@ func NewBlock(height uint64) *types.Block {
 	}
 
 	return &types.Block{
-		ParentBlockHash:   parent,
-		Height:            height,
-		TotalSupply:       big.NewInt(1000),
-		ReceiptRoot:       common.HexToHash(fmt.Sprintf("0x1337%d", height)),
-		TransactionHashes: make([]common.Hash, 0),
+		ParentBlockHash: parent,
+		Height:          height,
+		TotalSupply:     big.NewInt(1000),
+		ReceiptRoot:     common.HexToHash(fmt.Sprintf("0x1337%d", height)),
 	}
 }
 

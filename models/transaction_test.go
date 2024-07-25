@@ -13,9 +13,10 @@ import (
 	"math/rand"
 
 	"github.com/onflow/cadence"
-	"github.com/onflow/cadence/runtime/common"
 	"github.com/onflow/flow-go/fvm/evm/emulator"
+	"github.com/onflow/flow-go/fvm/evm/events"
 	"github.com/onflow/flow-go/fvm/evm/types"
+	flow2 "github.com/onflow/flow-go/model/flow"
 	gethCommon "github.com/onflow/go-ethereum/common"
 	"github.com/onflow/go-ethereum/core"
 	"github.com/onflow/go-ethereum/core/txpool"
@@ -70,10 +71,9 @@ func createTestEvent(t *testing.T, txBinary string) (cadence.Event, *types.Resul
 		TxHash: txHash,
 	}
 
-	ev := types.NewTransactionEvent(res, txEncoded, 1)
+	ev := events.NewTransactionEvent(res, txEncoded, 1)
 
-	location := common.NewAddressLocation(nil, common.Address{0x1}, string(types.EventTypeBlockExecuted))
-	cdcEv, err := ev.Payload.ToCadence(location)
+	cdcEv, err := ev.Payload.ToCadence(flow2.Emulator)
 	require.NoError(t, err)
 
 	return cdcEv, res

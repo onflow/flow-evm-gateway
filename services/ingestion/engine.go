@@ -17,18 +17,17 @@ import (
 var _ models.Engine = &Engine{}
 
 type Engine struct {
-	subscriber            EventSubscriber
-	store                 *pebble.Storage
-	blocks                storage.BlockIndexer
-	receipts              storage.ReceiptIndexer
-	transactions          storage.TransactionIndexer
-	accounts              storage.AccountIndexer
-	log                   zerolog.Logger
-	evmLastHeight         *models.SequentialHeight
-	status                *models.EngineStatus
-	blocksPublisher       *models.Publisher
-	transactionsPublisher *models.Publisher
-	logsPublisher         *models.Publisher
+	subscriber      EventSubscriber
+	store           *pebble.Storage
+	blocks          storage.BlockIndexer
+	receipts        storage.ReceiptIndexer
+	transactions    storage.TransactionIndexer
+	accounts        storage.AccountIndexer
+	log             zerolog.Logger
+	evmLastHeight   *models.SequentialHeight
+	status          *models.EngineStatus
+	blocksPublisher *models.Publisher
+	logsPublisher   *models.Publisher
 }
 
 func NewEventIngestionEngine(
@@ -39,24 +38,22 @@ func NewEventIngestionEngine(
 	transactions storage.TransactionIndexer,
 	accounts storage.AccountIndexer,
 	blocksPublisher *models.Publisher,
-	transactionsPublisher *models.Publisher,
 	logsPublisher *models.Publisher,
 	log zerolog.Logger,
 ) *Engine {
 	log = log.With().Str("component", "ingestion").Logger()
 
 	return &Engine{
-		subscriber:            subscriber,
-		store:                 store,
-		blocks:                blocks,
-		receipts:              receipts,
-		transactions:          transactions,
-		accounts:              accounts,
-		log:                   log,
-		status:                models.NewEngineStatus(),
-		blocksPublisher:       blocksPublisher,
-		transactionsPublisher: transactionsPublisher,
-		logsPublisher:         logsPublisher,
+		subscriber:      subscriber,
+		store:           store,
+		blocks:          blocks,
+		receipts:        receipts,
+		transactions:    transactions,
+		accounts:        accounts,
+		log:             log,
+		status:          models.NewEngineStatus(),
+		blocksPublisher: blocksPublisher,
+		logsPublisher:   logsPublisher,
 	}
 }
 
@@ -181,9 +178,7 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 		e.blocksPublisher.Publish(b)
 	}
 
-	for i, r := range receipts {
-		e.transactionsPublisher.Publish(txs[i])
-
+	for _, r := range receipts {
 		if len(r.Logs) > 0 {
 			e.logsPublisher.Publish(r.Logs)
 		}
@@ -212,17 +207,14 @@ func (e *Engine) indexBlock(
 	}
 
 	blockHash, _ := block.Hash()
-	txHashes := make([]string, len(block.TransactionHashes))
-	for i, t := range block.TransactionHashes {
-		txHashes[i] = t.Hex()
-	}
+
 	e.log.Info().
 		Str("hash", blockHash.Hex()).
 		Uint64("evm-height", block.Height).
 		Uint64("cadence-height", cadenceHeight).
 		Str("cadence-id", cadenceID.String()).
 		Str("parent-hash", block.ParentBlockHash.String()).
-		Strs("tx-hashes", txHashes).
+		Str("tx-hash-root", block.TransactionHashRoot.Hex()).
 		Msg("new evm block executed event")
 
 	return e.blocks.Store(cadenceHeight, cadenceID, block, batch)

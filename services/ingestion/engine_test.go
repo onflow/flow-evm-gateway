@@ -7,12 +7,13 @@ import (
 	"testing"
 
 	pebbleDB "github.com/cockroachdb/pebble"
+	"github.com/onflow/flow-go/fvm/evm/events"
+	flow2 "github.com/onflow/flow-go/model/flow"
 
 	"github.com/onflow/flow-evm-gateway/services/ingestion/mocks"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
 
 	"github.com/onflow/cadence"
-	"github.com/onflow/cadence/runtime/common"
 
 	"github.com/onflow/flow-evm-gateway/models"
 
@@ -66,7 +67,6 @@ func TestSerialBlockIngestion(t *testing.T) {
 			receipts,
 			transactions,
 			accounts,
-			models.NewPublisher(),
 			models.NewPublisher(),
 			models.NewPublisher(),
 			zerolog.Nop(),
@@ -146,7 +146,6 @@ func TestSerialBlockIngestion(t *testing.T) {
 			receipts,
 			transactions,
 			accounts,
-			models.NewPublisher(),
 			models.NewPublisher(),
 			models.NewPublisher(),
 			zerolog.Nop(),
@@ -258,7 +257,6 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			accounts,
 			models.NewPublisher(),
 			models.NewPublisher(),
-			models.NewPublisher(),
 			zerolog.Nop(),
 		)
 
@@ -357,7 +355,6 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			accounts,
 			models.NewPublisher(),
 			models.NewPublisher(),
-			models.NewPublisher(),
 			zerolog.Nop(),
 		)
 
@@ -452,7 +449,6 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			accounts,
 			models.NewPublisher(),
 			models.NewPublisher(),
-			models.NewPublisher(),
 			zerolog.Nop(),
 		)
 
@@ -534,25 +530,22 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 	})
 }
 
-func newBlock(height uint64) (cadence.Event, *types.Block, *types.Event, error) {
+func newBlock(height uint64) (cadence.Event, *types.Block, *events.Event, error) {
 	block := &types.Block{
-		ParentBlockHash: gethCommon.HexToHash("0x1"),
-		Height:          height,
-		TotalSupply:     big.NewInt(100),
-		ReceiptRoot:     gethCommon.HexToHash("0x2"),
-		TransactionHashes: []gethCommon.Hash{
-			gethCommon.HexToHash("0xf1"),
-		},
+		ParentBlockHash:     gethCommon.HexToHash("0x1"),
+		Height:              height,
+		TotalSupply:         big.NewInt(100),
+		ReceiptRoot:         gethCommon.HexToHash("0x2"),
+		TransactionHashRoot: gethCommon.HexToHash("0xf1"),
 	}
 
-	blockEvent := types.NewBlockEvent(block)
-	location := common.NewAddressLocation(nil, common.Address{0x1}, string(types.EventTypeBlockExecuted))
-	blockCdc, err := blockEvent.Payload.ToCadence(location)
+	blockEvent := events.NewBlockEvent(block)
+	blockCdc, err := blockEvent.Payload.ToCadence(flow2.Emulator)
 
 	return blockCdc, block, blockEvent, err
 }
 
-func newTransaction() (cadence.Event, *types.Event, models.Transaction, *types.Result, error) {
+func newTransaction() (cadence.Event, *events.Event, models.Transaction, *types.Result, error) {
 	res := &types.Result{
 		VMError:                 nil,
 		TxType:                  1,
@@ -579,14 +572,13 @@ func newTransaction() (cadence.Event, *types.Event, models.Transaction, *types.R
 		return cadence.Event{}, nil, nil, nil, err
 	}
 
-	ev := types.NewTransactionEvent(
+	ev := events.NewTransactionEvent(
 		res,
 		txEncoded,
 		1,
 	)
 
-	location := common.NewAddressLocation(nil, common.Address{0x1}, string(types.EventTypeBlockExecuted))
-	cdcEv, err := ev.Payload.ToCadence(location)
+	cdcEv, err := ev.Payload.ToCadence(flow2.Emulator)
 
 	return cdcEv, ev, models.TransactionCall{Transaction: tx}, res, err
 }

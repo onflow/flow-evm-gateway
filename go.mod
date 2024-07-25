@@ -8,9 +8,9 @@ require (
 	github.com/goccy/go-json v0.10.2
 	github.com/google/uuid v1.6.0
 	github.com/onflow/atree v0.7.0-rc.2
-	github.com/onflow/cadence v1.0.0-preview.38
-	github.com/onflow/flow-go v0.36.2-0.20240717214129-9ea6faeee3e7
-	github.com/onflow/flow-go-sdk v1.0.0-preview.41
+	github.com/onflow/cadence v1.0.0-preview.39
+	github.com/onflow/flow-go v0.36.4-0.20240724205438-14f9fddeda2b
+	github.com/onflow/flow-go-sdk v1.0.0-preview.42
 	github.com/onflow/flow/protobuf/go/flow v0.4.5
 	github.com/onflow/go-ethereum v1.14.7
 	github.com/rs/cors v1.8.0
@@ -133,8 +133,8 @@ require (
 	github.com/multiformats/go-varint v0.0.7 // indirect
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
 	github.com/onflow/crypto v0.25.1 // indirect
-	github.com/onflow/flow-core-contracts/lib/go/contracts v1.3.0 // indirect
-	github.com/onflow/flow-core-contracts/lib/go/templates v1.3.0 // indirect
+	github.com/onflow/flow-core-contracts/lib/go/contracts v1.3.1 // indirect
+	github.com/onflow/flow-core-contracts/lib/go/templates v1.3.1 // indirect
 	github.com/onflow/flow-ft/lib/go/contracts v1.0.0 // indirect
 	github.com/onflow/flow-ft/lib/go/templates v1.0.0 // indirect
 	github.com/onflow/flow-nft/lib/go/contracts v1.2.1 // indirect

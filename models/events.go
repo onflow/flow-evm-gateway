@@ -5,6 +5,7 @@ import (
 
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go-sdk"
+	"github.com/onflow/flow-go/fvm/evm/events"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	"golang.org/x/exp/slices"
 )
@@ -14,7 +15,7 @@ func isBlockExecutedEvent(event cadence.Event) bool {
 	if event.EventType == nil {
 		return false
 	}
-	return strings.Contains(event.EventType.ID(), string(types.EventTypeBlockExecuted))
+	return strings.Contains(event.EventType.ID(), string(events.EventTypeBlockExecuted))
 }
 
 // isTransactionExecutedEvent checks whether the given event contains transaction executed data.
@@ -22,7 +23,7 @@ func isTransactionExecutedEvent(event cadence.Event) bool {
 	if event.EventType == nil {
 		return false
 	}
-	return strings.Contains(event.EventType.ID(), string(types.EventTypeTransactionExecuted))
+	return strings.Contains(event.EventType.ID(), string(events.EventTypeTransactionExecuted))
 }
 
 type CadenceEvents struct {
@@ -70,11 +71,14 @@ func (c *CadenceEvents) Blocks() ([]*types.Block, error) {
 func (c *CadenceEvents) Transactions() ([]Transaction, []*StorageReceipt, error) {
 	txs := make([]Transaction, 0)
 	rcps := make([]*StorageReceipt, 0)
+
 	blocks, err := c.Blocks()
 	if err != nil {
 		return nil, nil, err
 	}
 
+	cumulativeGasUsed := uint64(0)
+	var lastReceipt *StorageReceipt
 	for _, e := range c.events.Events {
 		if isTransactionExecutedEvent(e.Value) {
 			tx, receipt, err := decodeTransactionEvent(e.Value)
@@ -90,6 +94,16 @@ func (c *CadenceEvents) Transactions() ([]Transaction, []*StorageReceipt, error)
 					receipt.BlockHash = blockHash
 				}
 			}
+
+			if lastReceipt != nil && lastReceipt.BlockNumber.Cmp(receipt.BlockNumber) == 0 {
+				cumulativeGasUsed += lastReceipt.GasUsed
+				receipt.CumulativeGasUsed = cumulativeGasUsed
+			} else {
+				cumulativeGasUsed = receipt.GasUsed
+				receipt.CumulativeGasUsed = cumulativeGasUsed
+			}
+
+			lastReceipt = receipt
 
 			txs = append(txs, tx)
 			rcps = append(rcps, receipt)
