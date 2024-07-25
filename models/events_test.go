@@ -87,6 +87,7 @@ func Test_EventDecoding(t *testing.T) {
 
 	// generate single block
 	block, blockEvent, err := newBlock(1, hashes)
+	require.NoError(t, err)
 	blockEvents.Events = append(blockEvents.Events, blockEvent)
 
 	cadenceEvents, err := NewCadenceEvents(blockEvents)

@@ -245,9 +245,7 @@ func (r *Receipts) BloomsForBlockRange(start, end *big.Int) ([]*models.BloomsHei
 		}
 	}()
 
-	blooms := make([]*gethTypes.Bloom, 0)
-	heights := make([]*big.Int, 0)
-	result := make([]*models.BloomsHeight, 0)
+	bloomsHeights := make([]*models.BloomsHeight, 0)
 
 	for iterator.First(); iterator.Valid(); iterator.Next() {
 		val, err := iterator.ValueAndErr()
@@ -263,15 +261,13 @@ func (r *Receipts) BloomsForBlockRange(start, end *big.Int) ([]*models.BloomsHei
 		h := stripPrefix(iterator.Key())
 		height := new(big.Int).SetBytes(h)
 
-		blooms = append(blooms, bloomsHeight...)
-		heights = append(heights, height)
-		result = append(result, &models.BloomsHeight{
+		bloomsHeights = append(bloomsHeights, &models.BloomsHeight{
 			Blooms: bloomsHeight,
 			Height: height,
 		})
 	}
 
-	return result, nil
+	return bloomsHeights, nil
 }
 
 func (r *Receipts) getLast() (uint64, error) {
