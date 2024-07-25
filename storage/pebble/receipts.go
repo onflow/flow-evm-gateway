@@ -197,22 +197,22 @@ func (r *Receipts) getBloomsByBlockHeight(height []byte, batch *pebble.Batch) ([
 	return blooms, nil
 }
 
-func (r *Receipts) BloomsForBlockRange(start, end *big.Int) ([]*gethTypes.Bloom, []*big.Int, error) {
+func (r *Receipts) BloomsForBlockRange(start, end *big.Int) ([]*models.BloomsHeight, error) {
 	r.mux.RLock()
 	defer r.mux.RUnlock()
 
 	if start.Cmp(end) > 0 {
-		return nil, nil, fmt.Errorf("start is bigger than end: %w", errs.ErrInvalidRange)
+		return nil, fmt.Errorf("start is bigger than end: %w", errs.ErrInvalidRange)
 	}
 
 	// make sure the first and last height are within indexed values
 	last, err := r.getLast()
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed getting first and last height: %w", err)
+		return nil, fmt.Errorf("failed getting first and last height: %w", err)
 	}
 
 	if start.Uint64() > last {
-		return nil, nil, fmt.Errorf(
+		return nil, fmt.Errorf(
 			"start value %d is not within the indexed range of [0 - %d]: %w",
 			start,
 			last,
@@ -221,7 +221,7 @@ func (r *Receipts) BloomsForBlockRange(start, end *big.Int) ([]*gethTypes.Bloom,
 	}
 
 	if end.Uint64() > last {
-		return nil, nil, fmt.Errorf(
+		return nil, fmt.Errorf(
 			"end value %d is not within the indexed range of [0 - %d]: %w",
 			end,
 			last,
@@ -236,7 +236,7 @@ func (r *Receipts) BloomsForBlockRange(start, end *big.Int) ([]*gethTypes.Bloom,
 		UpperBound: makePrefix(bloomHeightKey, endInclusive.Bytes()), // exclusive
 	})
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	defer func() {
 		err := iterator.Close()
@@ -245,28 +245,29 @@ func (r *Receipts) BloomsForBlockRange(start, end *big.Int) ([]*gethTypes.Bloom,
 		}
 	}()
 
-	blooms := make([]*gethTypes.Bloom, 0)
-	heights := make([]*big.Int, 0)
+	bloomsHeights := make([]*models.BloomsHeight, 0)
 
 	for iterator.First(); iterator.Valid(); iterator.Next() {
 		val, err := iterator.ValueAndErr()
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 
 		var bloomsHeight []*gethTypes.Bloom
 		if err := rlp.DecodeBytes(val, &bloomsHeight); err != nil {
-			return nil, nil, fmt.Errorf("failed to decode blooms: %w", err)
+			return nil, fmt.Errorf("failed to decode blooms: %w", err)
 		}
 
 		h := stripPrefix(iterator.Key())
 		height := new(big.Int).SetBytes(h)
 
-		blooms = append(blooms, bloomsHeight...)
-		heights = append(heights, height)
+		bloomsHeights = append(bloomsHeights, &models.BloomsHeight{
+			Blooms: bloomsHeight,
+			Height: height,
+		})
 	}
 
-	return blooms, heights, nil
+	return bloomsHeights, nil
 }
 
 func (r *Receipts) getLast() (uint64, error) {

@@ -7,7 +7,6 @@ import (
 	"github.com/goccy/go-json"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/go-ethereum/common"
-	gethTypes "github.com/onflow/go-ethereum/core/types"
 
 	"github.com/onflow/flow-evm-gateway/models"
 )
@@ -84,7 +83,7 @@ type ReceiptIndexer interface {
 	// inclusive start and end block height.
 	// Expected errors:
 	// - errors.InvalidRange if the block by the height was not indexed or if the end and start values are invalid.
-	BloomsForBlockRange(start, end *big.Int) ([]*gethTypes.Bloom, []*big.Int, error)
+	BloomsForBlockRange(start, end *big.Int) ([]*models.BloomsHeight, error)
 }
 
 type TransactionIndexer interface {

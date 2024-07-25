@@ -4,12 +4,12 @@ go 1.22
 
 require (
 	github.com/goccy/go-json v0.10.2
-	github.com/onflow/cadence v1.0.0-preview.38
+	github.com/onflow/cadence v1.0.0-preview.39
 	github.com/onflow/crypto v0.25.1
-	github.com/onflow/flow-emulator v1.0.0-preview.35.0.20240723143120-d2b220e499c4
+	github.com/onflow/flow-emulator v1.0.0-preview.36
 	github.com/onflow/flow-evm-gateway v0.0.0-20240201154855-4d4d3d3f19c7
-	github.com/onflow/flow-go v0.36.3-0.20240723132958-6ce4c85fdbcb
-	github.com/onflow/flow-go-sdk v1.0.0-preview.41
+	github.com/onflow/flow-go v0.36.4-0.20240724205438-14f9fddeda2b
+	github.com/onflow/flow-go-sdk v1.0.0-preview.42
 	github.com/onflow/go-ethereum v1.14.7
 	github.com/rs/zerolog v1.31.0
 	github.com/stretchr/testify v1.9.0
@@ -170,6 +170,8 @@ require (
 	github.com/rivo/uniseg v0.4.4 // indirect
 	github.com/rogpeppe/go-internal v1.10.0 // indirect
 	github.com/rs/cors v1.8.0 // indirect
+	github.com/samber/lo v1.39.0 // indirect
+	github.com/samber/slog-zerolog v1.0.0 // indirect
 	github.com/schollz/progressbar/v3 v3.13.1 // indirect
 	github.com/sethvargo/go-limiter v1.0.0 // indirect
 	github.com/sethvargo/go-retry v0.2.3 // indirect

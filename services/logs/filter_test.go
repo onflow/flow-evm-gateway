@@ -135,18 +135,21 @@ func receiptStorage() storage.ReceiptIndexer {
 
 	receiptStorage.
 		On("BloomsForBlockRange", mock.AnythingOfType("*big.Int"), mock.AnythingOfType("*big.Int")).
-		Return(func(start, end *big.Int) ([]*gethTypes.Bloom, []*big.Int, error) {
+		Return(func(start, end *big.Int) ([]*models.BloomsHeight, error) {
 			blooms := make([]*gethTypes.Bloom, 0)
-			heights := make([]*big.Int, 0)
+			bloomsHeight := make([]*models.BloomsHeight, 0)
 
 			for _, r := range receipts {
 				if r.BlockNumber.Cmp(start) >= 0 && r.BlockNumber.Cmp(end) <= 0 {
 					blooms = append(blooms, &r.Bloom)
-					heights = append(heights, r.BlockNumber)
+					bloomsHeight = append(bloomsHeight, &models.BloomsHeight{
+						Blooms: blooms,
+						Height: r.BlockNumber,
+					})
 				}
 			}
 
-			return blooms, heights, nil
+			return bloomsHeight, nil
 		})
 
 	return receiptStorage
