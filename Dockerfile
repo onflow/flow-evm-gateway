@@ -1,6 +1,6 @@
 # BUILD BIN
 
-FROM golang:1.20.0 as app-builder
+FROM golang:1.22.0 as app-builder
 
 ARG GATEWAY_VERSION="v0.1.0"
 
