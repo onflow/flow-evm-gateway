@@ -6,7 +6,7 @@ require (
 	github.com/goccy/go-json v0.10.2
 	github.com/onflow/cadence v1.0.0-preview.39
 	github.com/onflow/crypto v0.25.1
-	github.com/onflow/flow-emulator v0.62.1
+	github.com/onflow/flow-emulator v1.0.0-preview.35.0.20240725141711-547155b39eb9
 	github.com/onflow/flow-evm-gateway v0.0.0-20240201154855-4d4d3d3f19c7
 	github.com/onflow/flow-go v0.36.4
 	github.com/onflow/flow-go-sdk v1.0.0-preview.42
@@ -132,6 +132,7 @@ require (
 	github.com/mattn/go-runewidth v0.0.15 // indirect
 	github.com/matttproud/golang_protobuf_extensions/v2 v2.0.0 // indirect
 	github.com/minio/sha256-simd v1.0.1 // indirect
+	github.com/mitchellh/colorstring v0.0.0-20190213212951-d06e56a500db // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/mmcloughlin/addchain v0.4.0 // indirect
 	github.com/mr-tron/base58 v1.2.0 // indirect
@@ -152,7 +153,6 @@ require (
 	github.com/onflow/flow-nft/lib/go/contracts v1.2.1 // indirect
 	github.com/onflow/flow-nft/lib/go/templates v1.2.0 // indirect
 	github.com/onflow/flow/protobuf/go/flow v0.4.5 // indirect
-	github.com/onflow/nft-storefront/lib/go/contracts v1.0.0 // indirect
 	github.com/onflow/sdks v0.6.0-preview.1 // indirect
 	github.com/onflow/wal v1.0.2 // indirect
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58 // indirect
@@ -172,6 +172,7 @@ require (
 	github.com/rs/cors v1.8.0 // indirect
 	github.com/samber/lo v1.39.0 // indirect
 	github.com/samber/slog-zerolog v1.0.0 // indirect
+	github.com/schollz/progressbar/v3 v3.13.1 // indirect
 	github.com/sethvargo/go-limiter v1.0.0 // indirect
 	github.com/sethvargo/go-retry v0.2.3 // indirect
 	github.com/shirou/gopsutil v3.21.4-0.20210419000835-c7a38de76ee5+incompatible // indirect
@@ -217,6 +218,7 @@ require (
 	golang.org/x/oauth2 v0.17.0 // indirect
 	golang.org/x/sync v0.7.0 // indirect
 	golang.org/x/sys v0.20.0 // indirect
+	golang.org/x/term v0.19.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
 	golang.org/x/xerrors v0.0.0-20231012003039-104605ab7028 // indirect
