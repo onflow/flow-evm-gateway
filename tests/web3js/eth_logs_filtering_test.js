@@ -76,7 +76,6 @@ it('emit logs and retrieve them using different filters', async() => {
     })
     assert.lengthOf(events, 0)
 
-    /*  todo fails but shouldn't
     // filter by value A being 1 or -1
     events = await deployed.contract.getPastEvents('Calculated', {
         filter: { numA: [-1, 1] },
@@ -86,8 +85,4 @@ it('emit logs and retrieve them using different filters', async() => {
     assert.lengthOf(events, 2)
     assert.equal(events[0].returnValues.numB, 2)
     assert.equal(events[1].returnValues.numB, -2)
-
-    // todo compose more complex topic filters using OR and AND logic
-    */
-
 })
