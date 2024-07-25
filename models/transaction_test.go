@@ -7,15 +7,15 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"math/rand"
 	"testing"
 	"time"
 
-	"math/rand"
-
 	"github.com/onflow/cadence"
-	"github.com/onflow/cadence/runtime/common"
 	"github.com/onflow/flow-go/fvm/evm/emulator"
+	"github.com/onflow/flow-go/fvm/evm/events"
 	"github.com/onflow/flow-go/fvm/evm/types"
+	flowGo "github.com/onflow/flow-go/model/flow"
 	gethCommon "github.com/onflow/go-ethereum/common"
 	"github.com/onflow/go-ethereum/core"
 	"github.com/onflow/go-ethereum/core/txpool"
@@ -70,15 +70,13 @@ func createTestEvent(t *testing.T, txBinary string) (cadence.Event, *types.Resul
 		TxHash: txHash,
 	}
 
-	ev := types.NewTransactionEvent(
+	ev := events.NewTransactionEvent(
 		res,
 		txEncoded,
 		1,
-		gethCommon.HexToHash("0x1"),
 	)
 
-	location := common.NewAddressLocation(nil, common.Address{0x1}, string(types.EventTypeBlockExecuted))
-	cdcEv, err := ev.Payload.ToCadence(location)
+	cdcEv, err := ev.Payload.ToCadence(flowGo.Previewnet)
 	require.NoError(t, err)
 
 	return cdcEv, res
@@ -736,7 +734,7 @@ func TestValidateConsensusRules(t *testing.T) {
 		assert.ErrorContains(
 			t,
 			err,
-			fmt.Sprintf("%s: needed %v, allowed %v", core.ErrIntrinsicGas.Error(), 21_000, gasLimit),
+			fmt.Sprintf("%s: gas %v, minimum needed %v", core.ErrIntrinsicGas.Error(), gasLimit, 21_000),
 		)
 	})
 }

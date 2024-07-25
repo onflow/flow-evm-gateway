@@ -11,17 +11,19 @@ import (
 	"github.com/onflow/flow-evm-gateway/models"
 )
 
-func NewBlock(height uint64) *types.Block {
+func NewBlock(height uint64) *models.Block {
 	parent := common.HexToHash(fmt.Sprintf("0x0%d", height-1))
 	if height == 0 {
 		parent = common.Hash{}
 	}
 
-	return &types.Block{
-		ParentBlockHash:   parent,
-		Height:            height,
-		TotalSupply:       big.NewInt(1000),
-		ReceiptRoot:       common.HexToHash(fmt.Sprintf("0x1337%d", height)),
+	return &models.Block{
+		Block: &types.Block{
+			ParentBlockHash: parent,
+			Height:          height,
+			TotalSupply:     big.NewInt(1000),
+			ReceiptRoot:     common.HexToHash(fmt.Sprintf("0x1337%d", height)),
+		},
 		TransactionHashes: make([]common.Hash, 0),
 	}
 }

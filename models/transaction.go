@@ -2,12 +2,12 @@ package models
 
 import (
 	"bytes"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/onflow/cadence"
+	"github.com/onflow/flow-go/fvm/evm/events"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/go-ethereum/common"
 	"github.com/onflow/go-ethereum/core/txpool"
@@ -16,13 +16,13 @@ import (
 )
 
 const (
-	// txSlotSize is used to calculate how many data slots a single transaction
+	// TxSlotSize is used to calculate how many data slots a single transaction
 	// takes up based on its size. The slots are used as DoS protection, ensuring
 	// that validating a new transaction remains a constant operation (in reality
 	// O(maxslots), where max slots are 4 currently).
 	TxSlotSize = 32 * 1024
 
-	// txMaxSize is the maximum size a single transaction can have. This field has
+	// TxMaxSize is the maximum size a single transaction can have. This field has
 	// non-trivial consequences: larger transactions are significantly harder and
 	// more expensive to propagate; larger transactions also take more resources
 	// to validate whether they fit into the pool or not.
@@ -185,46 +185,25 @@ func (tc TransactionCall) MarshalBinary() ([]byte, error) {
 // decodeTransactionEvent takes a cadence event for transaction executed
 // and decodes its payload into a Transaction interface and a StorageReceipt.
 // The concrete type will be either a TransactionCall or a DirectCall.
-func decodeTransactionEvent(
-	event cadence.Event,
-) (Transaction, *StorageReceipt, error) {
-	txEvent, err := types.DecodeTransactionEventPayload(event)
+func decodeTransactionEvent(event cadence.Event) (Transaction, *StorageReceipt, error) {
+	txEvent, err := events.DecodeTransactionEventPayload(event)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to Cadence decode transaction event [%s]: %w", event.String(), err)
-	}
-
-	encodedTx, err := hex.DecodeString(txEvent.Payload)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to hex decode transaction payload [%s]: %w", txEvent.Payload, err)
 	}
 
 	gethReceipt := &gethTypes.Receipt{
 		BlockNumber:      big.NewInt(int64(txEvent.BlockHeight)),
 		Type:             txEvent.TransactionType,
-		TxHash:           common.HexToHash(txEvent.Hash),
+		TxHash:           txEvent.Hash,
 		ContractAddress:  common.HexToAddress(txEvent.ContractAddress),
 		GasUsed:          txEvent.GasConsumed,
 		TransactionIndex: uint(txEvent.Index),
-		BlockHash:        common.HexToHash(txEvent.BlockHash),
 	}
 
-	encLogs, err := hex.DecodeString(txEvent.Logs)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to hex decode logs: %w", err)
-	}
-
-	if len(encLogs) > 0 {
-		err = rlp.Decode(bytes.NewReader(encLogs), &gethReceipt.Logs)
+	if len(txEvent.Logs) > 0 {
+		err = rlp.Decode(bytes.NewReader(txEvent.Logs), &gethReceipt.Logs)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to rlp decode logs: %w", err)
-		}
-
-		// dynamically add missing log fields
-		for _, l := range gethReceipt.Logs {
-			l.BlockHash = gethReceipt.BlockHash
-			l.TxHash = gethReceipt.TxHash
-			l.BlockNumber = gethReceipt.BlockNumber.Uint64()
-			l.Index = gethReceipt.TransactionIndex
 		}
 	}
 
@@ -238,10 +217,7 @@ func decodeTransactionEvent(
 
 	var revertReason []byte
 	if txEvent.ErrorCode == uint16(types.ExecutionErrCodeExecutionReverted) {
-		revertReason, err = hex.DecodeString(txEvent.ReturnedData)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to hex-decode transaction return data [%s]: %w", txEvent.ReturnedData, err)
-		}
+		revertReason = txEvent.ReturnedData
 	}
 
 	receipt := NewStorageReceipt(gethReceipt, revertReason)
@@ -250,17 +226,17 @@ func decodeTransactionEvent(
 	// check if the transaction payload is actually from a direct call,
 	// which is a special state transition in Flow EVM.
 	if txEvent.TransactionType == types.DirectCallTxType {
-		directCall, err := types.DirectCallFromEncoded(encodedTx)
+		directCall, err := types.DirectCallFromEncoded(txEvent.Payload)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to RLP-decode direct call [%x]: %w", encodedTx, err)
+			return nil, nil, fmt.Errorf("failed to RLP-decode direct call [%x]: %w", txEvent.Payload, err)
 		}
 		evmHeight := receipt.BlockNumber.Uint64()
 
 		tx = DirectCall{DirectCall: directCall, blockHeight: evmHeight}
 	} else {
 		gethTx := &gethTypes.Transaction{}
-		if err := gethTx.UnmarshalBinary(encodedTx); err != nil {
-			return nil, nil, fmt.Errorf("failed to RLP-decode transaction [%x]: %w", encodedTx, err)
+		if err := gethTx.UnmarshalBinary(txEvent.Payload); err != nil {
+			return nil, nil, fmt.Errorf("failed to RLP-decode transaction [%x]: %w", txEvent.Payload, err)
 		}
 		tx = TransactionCall{Transaction: gethTx}
 	}

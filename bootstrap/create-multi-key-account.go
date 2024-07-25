@@ -89,7 +89,7 @@ func CreateMultiKeyAccount(
 
 		pks[i] = pk
 		privKeys[i] = &flow.AccountKey{
-			Index:     i,
+			Index:     uint32(i),
 			PublicKey: pk.PublicKey(),
 			SigAlgo:   crypto.ECDSA_P256,
 			HashAlgo:  crypto.SHA3_256,
@@ -155,7 +155,7 @@ func CreateMultiKeyAccount(
 	}
 
 	var seq uint64
-	var index int
+	var index uint32
 	for _, k := range acc.Keys {
 		if k.PublicKey.Equals(key.PublicKey()) {
 			seq = k.SequenceNumber
@@ -216,7 +216,7 @@ func CreateMultiCloudKMSKeysAccount(
 		}
 
 		accountKeys[i] = &flow.AccountKey{
-			Index:     i,
+			Index:     uint32(i),
 			PublicKey: publicKey,
 			SigAlgo:   crypto.ECDSA_P256,
 			HashAlgo:  crypto.SHA2_256,
@@ -282,7 +282,7 @@ func CreateMultiCloudKMSKeysAccount(
 	}
 
 	var seq uint64
-	var index int
+	var index uint32
 	for _, k := range acc.Keys {
 		if k.PublicKey.Equals(key.PublicKey()) {
 			seq = k.SequenceNumber
