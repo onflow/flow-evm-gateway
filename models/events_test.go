@@ -103,6 +103,7 @@ func Test_EventDecoding(t *testing.T) {
 	require.Equal(t, txCount, len(cadenceEvents.Transactions()))
 
 	cumulative := uint64(1)
+	logIndex := uint(0)
 	for i := 0; i < txCount; i++ {
 		tx := cadenceEvents.Transactions()[i]
 		rcp := cadenceEvents.Receipts()[i]
@@ -122,7 +123,9 @@ func Test_EventDecoding(t *testing.T) {
 		for _, l := range rcp.Logs {
 			assert.Equal(t, tx.Hash(), l.TxHash)
 			assert.Equal(t, block.Height, l.BlockNumber)
-			assert.Equal(t, rcp.TransactionIndex, l.Index)
+			assert.Equal(t, rcp.TransactionIndex, l.TxIndex)
+			assert.Equal(t, logIndex, l.Index)
+			logIndex++
 		}
 
 		cumulative += uint64(1) // we make each tx use 1 gas, so cumulative just adds 1
