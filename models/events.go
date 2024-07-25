@@ -53,6 +53,7 @@ func NewCadenceEvents(events flow.BlockEvents) (*CadenceEvents, error) {
 		return nil, err
 	}
 
+	logIndex := uint(0) // todo revisit if we can reconstruct it simply like this
 	for i, rcp := range e.receipts {
 		// add transaction hashes to the block
 		e.block.TransactionHashes = append(e.block.TransactionHashes, rcp.TxHash)
@@ -65,9 +66,13 @@ func NewCadenceEvents(events flow.BlockEvents) (*CadenceEvents, error) {
 		rcp.BlockHash = blockHash
 		// dynamically add missing log fields
 		for _, l := range rcp.Logs {
-			l.TxHash = rcp.TxHash
 			l.BlockNumber = rcp.BlockNumber.Uint64()
-			l.Index = rcp.TransactionIndex
+			l.BlockHash = rcp.BlockHash
+			l.TxHash = rcp.TxHash
+			l.TxIndex = rcp.TransactionIndex
+			l.Index = logIndex
+			l.Removed = false
+			logIndex++
 		}
 	}
 
