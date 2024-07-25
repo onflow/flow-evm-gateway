@@ -107,7 +107,7 @@ func Test_EventDecoding(t *testing.T) {
 		rcp := cadenceEvents.Receipts()[i]
 		blockHash, err := block.Hash()
 		require.NoError(t, err)
-		resRcp := results[i].Receipt(0)
+		resRcp := results[i].Receipt()
 
 		assert.Equal(t, txs[i].Hash(), tx.Hash())
 		assert.Equal(t, txs[i].To(), tx.To())

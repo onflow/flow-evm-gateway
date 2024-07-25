@@ -43,7 +43,7 @@ it('store revertReason field in transaction receipts', async () => {
 
     let latestHeight = await web3.eth.getBlockNumber()
     let block = await web3.eth.getBlock(latestHeight)
-    assert.equal(block.number, 5n)
+    assert.equal(block.number, 4n)
 
     let revertedTx = await web3.eth.getTransactionFromBlock(latestHeight, 0)
     // Give some time to the engine to ingest the latest transaction
@@ -77,7 +77,7 @@ it('store revertReason field in transaction receipts', async () => {
 
     latestHeight = await web3.eth.getBlockNumber()
     block = await web3.eth.getBlock(latestHeight)
-    assert.equal(block.number, 6n)
+    assert.equal(block.number, 5n)
 
     revertedTx = await web3.eth.getTransactionFromBlock(latestHeight, 0)
     // Give some time to the engine to ingest the latest transaction

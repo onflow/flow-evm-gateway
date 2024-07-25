@@ -8,13 +8,14 @@ require (
 	github.com/goccy/go-json v0.10.2
 	github.com/google/uuid v1.6.0
 	github.com/onflow/atree v0.7.0-rc.2
-	github.com/onflow/cadence v1.0.0-preview.38
-	github.com/onflow/flow-go v0.36.3-0.20240723132958-6ce4c85fdbcb
-	github.com/onflow/flow-go-sdk v1.0.0-preview.41
+	github.com/onflow/cadence v1.0.0-preview.39
+	github.com/onflow/flow-go v0.36.4-0.20240724205438-14f9fddeda2b
+	github.com/onflow/flow-go-sdk v1.0.0-preview.42
 	github.com/onflow/flow/protobuf/go/flow v0.4.5
 	github.com/onflow/go-ethereum v1.14.7
 	github.com/rs/cors v1.8.0
 	github.com/rs/zerolog v1.31.0
+	github.com/samber/slog-zerolog v1.0.0
 	github.com/sethvargo/go-limiter v1.0.0
 	github.com/sethvargo/go-retry v0.2.3
 	github.com/stretchr/testify v1.9.0
@@ -155,7 +156,6 @@ require (
 	github.com/rivo/uniseg v0.4.4 // indirect
 	github.com/rogpeppe/go-internal v1.10.0 // indirect
 	github.com/samber/lo v1.39.0 // indirect
-	github.com/samber/slog-zerolog v1.0.0 // indirect
 	github.com/shirou/gopsutil v3.21.4-0.20210419000835-c7a38de76ee5+incompatible // indirect
 	github.com/slok/go-http-metrics v0.10.0 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
