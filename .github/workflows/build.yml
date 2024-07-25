@@ -36,5 +36,5 @@ jobs:
       - name: Docker Auth
         run: |-
           gcloud auth configure-docker ${{ vars.GAR_LOCATION }}-docker.pkg.dev
-          docker build -t ${{ env.DOCKER_IMAGE_URL }} --build-arg GATEWAY_VERSION=$(git describe --tags --abbrev=0 2>/dev/null) --file Dockerfile .
+          docker build -t ${{ env.DOCKER_IMAGE_URL }} --build-arg GATEWAY_VERSION="v0.25.0" --file Dockerfile .
           docker push ${{ env.DOCKER_IMAGE_URL }}
