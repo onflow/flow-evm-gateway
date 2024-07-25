@@ -3,6 +3,7 @@ package requester
 import (
 	"context"
 	"encoding/hex"
+	"os"
 	"testing"
 
 	"github.com/onflow/flow-go/fvm/evm/emulator/state"
@@ -16,7 +17,12 @@ import (
 )
 
 func Test_E2E_Previewnet_RemoteLedger(t *testing.T) {
-	ledger, err := newPreviewnetLedger()
+	executionAPI := os.Getenv("E2E_EXECUTION_API") // "access-001.previewnet1.nodes.onflow.org:9000"
+	if executionAPI == "" {
+		t.Skip()
+	}
+
+	ledger, err := newPreviewnetLedger(executionAPI)
 	require.NoError(t, err)
 
 	// this is a pre-established test account on previewnet
@@ -40,15 +46,19 @@ Testing from local machine (bottleneck is network delay to previewnet AN)
 Benchmark_RemoteLedger_GetBalance-8   	       9	1144204361 ns/op
 */
 func Benchmark_RemoteLedger_GetBalance(b *testing.B) {
-	const previewnetHost = "access-001.previewnet1.nodes.onflow.org:9000"
-	cadenceHeight, err := getPreviewnetLatestHeight(previewnetHost)
+	executionAPI := os.Getenv("E2E_EXECUTION_API") // "access-001.previewnet1.nodes.onflow.org:9000"
+	if executionAPI == "" {
+		b.Skip()
+	}
+
+	cadenceHeight, err := getPreviewnetLatestHeight(executionAPI)
 	require.NoError(b, err)
 
 	// we have to include ledger creation since the loading of the collection
 	// will be done only once per height, all the subsequent requests for
 	// getting the balance will work on already loaded state and thus be fast
 	for i := 0; i < b.N; i++ {
-		ledger, err := newRemoteLedger(previewnetHost, cadenceHeight)
+		ledger, err := newRemoteLedger(executionAPI, cadenceHeight)
 		require.NoError(b, err)
 
 		stateDB, err := state.NewStateDB(ledger, previewnetStorageAddress)
@@ -62,15 +72,13 @@ func Benchmark_RemoteLedger_GetBalance(b *testing.B) {
 	}
 }
 
-func newPreviewnetLedger() (*remoteLedger, error) {
-	const previewnetHost = "access-001.previewnet1.nodes.onflow.org:9000"
-
-	cadenceHeight, err := getPreviewnetLatestHeight(previewnetHost)
+func newPreviewnetLedger(host string) (*remoteLedger, error) {
+	cadenceHeight, err := getPreviewnetLatestHeight(host)
 	if err != nil {
 		return nil, err
 	}
 
-	return newRemoteLedger(previewnetHost, cadenceHeight)
+	return newRemoteLedger(host, cadenceHeight)
 }
 
 func getPreviewnetLatestHeight(host string) (uint64, error) {
