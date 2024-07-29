@@ -883,7 +883,6 @@ func (b *BlockChainAPI) prepareBlockResponse(
 	fullTx bool,
 ) (*Block, error) {
 	h, err := block.Hash()
-	fmt.Println("### HASH", h)
 	if err != nil {
 		b.logger.Error().Err(err).Msg("failed to calculate hash for block by number")
 		return nil, errs.ErrInternal
