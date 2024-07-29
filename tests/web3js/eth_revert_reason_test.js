@@ -28,7 +28,7 @@ it('store revertReason field in transaction receipts', async () => {
         to: contractAddress,
         data: callAssertError,
         gas: 1_000_000,
-        gasPrice: 0
+        gasPrice: conf.minGasPrice
     }
     let signedTx = await conf.eoa.signTransaction(assertErrorTx)
 
@@ -65,7 +65,7 @@ it('store revertReason field in transaction receipts', async () => {
         to: contractAddress,
         data: callCustomError,
         gas: 1_000_000,
-        gasPrice: 0
+        gasPrice: conf.minGasPrice
     }
     signedTx = await conf.eoa.signTransaction(customErrorTx)
 
@@ -92,4 +92,4 @@ it('store revertReason field in transaction receipts', async () => {
         '0x9195785a00000000000000000000000000000000000000000000000000000000000000050000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000001056616c756520697320746f6f206c6f7700000000000000000000000000000000'
     )
 
-}).timeout(20 * 1000)
+})

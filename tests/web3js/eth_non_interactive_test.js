@@ -119,7 +119,7 @@ it('get coinbase', async () => {
 
 it('get gas price', async () => {
     let gasPrice = await web3.eth.getGasPrice()
-    assert.equal(gasPrice, 0n) // 0 by default in tests
+    assert.equal(gasPrice, conf.minGasPrice)
 })
 
 it('get transaction', async () => {
@@ -263,7 +263,7 @@ it('get fee history', async () => {
         response,
         {
             oldestBlock: 1n,
-            reward: [['0x0'], ['0x0']], // gas price is always 0 during testing
+            reward: [['0x96'], ['0x96']], // gas price is 150 during testing
             baseFeePerGas: [0n, 0n],
             gasUsedRatio: [0, 0.04964366666666667]
         }

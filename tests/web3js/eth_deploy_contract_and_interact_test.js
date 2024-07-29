@@ -54,7 +54,7 @@ it('deploy contract and interact', async () => {
         to: contractAddress,
         data: updateData,
         value: '0',
-        gasPrice: '0',
+        gasPrice: conf.minGasPrice,
     })
     assert.equal(res.receipt.status, conf.successStatus)
 
@@ -71,7 +71,7 @@ it('deploy contract and interact', async () => {
         to: contractAddress,
         data: updateData,
         value: '0',
-        gasPrice: '0',
+        gasPrice: conf.minGasPrice,
     })
     assert.equal(res.receipt.status, conf.successStatus)
 
@@ -95,8 +95,8 @@ it('deploy contract and interact', async () => {
         from: conf.eoa.address,
         to: contractAddress,
         data: deployed.contract.methods.sum(100, 200).encodeABI(),
-        gas: 1000000,
-        gasPrice: 0
+        gas: 1_000_000,
+        gasPrice: conf.minGasPrice
     })
     assert.equal(res.receipt.status, conf.successStatus)
 
@@ -113,7 +113,7 @@ it('deploy contract and interact', async () => {
             to: contractAddress,
             data: callCustomError,
             gas: 1_000_000,
-            gasPrice: 0
+            gasPrice: conf.minGasPrice
         })
     } catch (error) {
         assert.equal(error.reason, 'execution reverted')
@@ -148,7 +148,7 @@ it('deploy contract and interact', async () => {
             to: contractAddress,
             data: callAssertError,
             gas: 1_000_000,
-            gasPrice: 0
+            gasPrice: conf.minGasPrice
         })
     } catch (error) {
         assert.equal(error.reason, 'execution reverted: Assert Error Message')
@@ -183,7 +183,7 @@ it('deploy contract and interact', async () => {
             to: contractAddress,
             data: callCustomError,
             gas: 1_000_000,
-            gasPrice: 0
+            gasPrice: conf.minGasPrice
         })
     } catch (error) {
         assert.equal(error.innerError.message, 'execution reverted')
@@ -201,7 +201,7 @@ it('deploy contract and interact', async () => {
             to: contractAddress,
             data: callAssertError,
             gas: 1_000_000,
-            gasPrice: 0
+            gasPrice: conf.minGasPrice
         })
     } catch (error) {
         assert.equal(error.innerError.message, 'execution reverted: Assert Error Message')

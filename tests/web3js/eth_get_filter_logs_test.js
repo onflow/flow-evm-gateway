@@ -28,8 +28,8 @@ it('create logs filter and call eth_getFilterLogs', async () => {
     from: conf.eoa.address,
     to: contractAddress,
     data: deployed.contract.methods.sum(15, 20).encodeABI(),
-    gas: 1000000,
-    gasPrice: 0
+    gas: 1_000_000,
+    gasPrice: conf.minGasPrice
   })
 
   assert.equal(res.receipt.status, conf.successStatus)
@@ -54,8 +54,8 @@ it('create logs filter and call eth_getFilterLogs', async () => {
     from: conf.eoa.address,
     to: contractAddress,
     data: deployed.contract.methods.sum(30, 20).encodeABI(),
-    gas: 1000000,
-    gasPrice: 0
+    gas: 1_000_000,
+    gasPrice: conf.minGasPrice
   })
 
   assert.equal(res.receipt.status, conf.successStatus)
