@@ -27,26 +27,15 @@ func NewBlockFromBytes(data []byte) (*Block, error) {
 	err := rlp.DecodeBytes(data, &b)
 	if err != nil {
 		// todo temp remove this after previewnet is deprecated
-		var bV0360 *blockV0360
-		if err := rlp.DecodeBytes(data, &bV0360); err != nil {
-			return nil, fmt.Errorf("failed to decode block [%x]: %w", data, err)
+		pastBlock := decodeBlockBreakingChanges(data)
+		if pastBlock == nil {
+			return nil, err
 		}
-		b = &Block{
-			Block: &types.Block{
-				ParentBlockHash:     bV0360.ParentBlockHash,
-				Height:              bV0360.Height,
-				Timestamp:           bV0360.Timestamp,
-				TotalSupply:         bV0360.TotalSupply,
-				ReceiptRoot:         bV0360.ReceiptRoot,
-				TransactionHashRoot: gethCommon.Hash{},
-				TotalGasUsed:        bV0360.TotalGasUsed,
-			},
-			TransactionHashes: bV0360.TransactionHashes,
-		}
-		h, err := bV0360.Hash()
+		h, err := pastBlockHash(pastBlock)
 		if err != nil {
-			return nil, fmt.Errorf("failed to calculate backward compatible hash for block: %w", err)
+			return nil, err
 		}
+		b = pastBlock
 		b.hash = &h
 	}
 
@@ -93,32 +82,183 @@ func decodeBlockEvent(event cadence.Event) (*Block, error) {
 	}, nil
 }
 
-// TODO temp remove after previewnet is deprecated
-// this is an older format for the block, that contains transaction hashes
-type blockV0360 struct {
-	// the hash of the parent block
+// todo past decoding of blocks, moved from flow-go, remove after previewnet is deprecated
+
+type blockV0 struct {
 	ParentBlockHash gethCommon.Hash
-	// Height returns the height of this block
-	Height uint64
-	// Timestamp is a Unix timestamp in seconds at which the block was created
-	// Note that this value must be provided from the FVM Block
-	Timestamp uint64
-	// holds the total amount of the native token deposited in the evm side. (in attoflow)
-	TotalSupply *big.Int
-	// ReceiptRoot returns the root hash of the receipts emitted in this block
-	// Note that this value won't be unique to each block, for example for the
-	// case of empty trie of receipts or a single receipt with no logs and failed state
-	// the same receipt root would be reported for block.
-	ReceiptRoot gethCommon.Hash
-
-	// transaction hashes
-	TransactionHashes []gethCommon.Hash
-
-	// stores gas used by all transactions included in the block.
-	TotalGasUsed uint64
+	Height          uint64
+	UUIDIndex       uint64
+	TotalSupply     uint64
+	StateRoot       gethCommon.Hash
+	ReceiptRoot     gethCommon.Hash
 }
 
-func (b *blockV0360) Hash() (gethCommon.Hash, error) {
+// adds TransactionHashes
+
+type blockV1 struct {
+	ParentBlockHash   gethCommon.Hash
+	Height            uint64
+	UUIDIndex         uint64
+	TotalSupply       uint64
+	StateRoot         gethCommon.Hash
+	ReceiptRoot       gethCommon.Hash
+	TransactionHashes []gethCommon.Hash
+}
+
+// removes UUIDIndex
+
+type blockV2 struct {
+	ParentBlockHash   gethCommon.Hash
+	Height            uint64
+	TotalSupply       uint64
+	StateRoot         gethCommon.Hash
+	ReceiptRoot       gethCommon.Hash
+	TransactionHashes []gethCommon.Hash
+}
+
+// removes state root
+
+type blockV3 struct {
+	ParentBlockHash   gethCommon.Hash
+	Height            uint64
+	TotalSupply       uint64
+	ReceiptRoot       gethCommon.Hash
+	TransactionHashes []gethCommon.Hash
+}
+
+// change total supply type
+
+type blockV4 struct {
+	ParentBlockHash   gethCommon.Hash
+	Height            uint64
+	TotalSupply       *big.Int
+	ReceiptRoot       gethCommon.Hash
+	TransactionHashes []gethCommon.Hash
+}
+
+// adds timestamp
+
+type blockV5 struct {
+	ParentBlockHash   gethCommon.Hash
+	Height            uint64
+	Timestamp         uint64
+	TotalSupply       *big.Int
+	ReceiptRoot       gethCommon.Hash
+	TransactionHashes []gethCommon.Hash
+}
+
+// adds total gas used
+
+type blockV6 struct {
+	ParentBlockHash   gethCommon.Hash
+	Height            uint64
+	Timestamp         uint64
+	TotalSupply       *big.Int
+	ReceiptRoot       gethCommon.Hash
+	TransactionHashes []gethCommon.Hash
+	TotalGasUsed      uint64
+}
+
+func pastBlockHash(b any) (gethCommon.Hash, error) {
 	data, err := rlp.EncodeToBytes(b)
 	return gethCrypto.Keccak256Hash(data), err
+}
+
+// decodeBlockBreakingChanges will try to decode the bytes into all
+// previous versions of block type, if it succeeds it will return the
+// migrated block, otherwise it will return nil.
+func decodeBlockBreakingChanges(encoded []byte) *Block {
+	b0 := &blockV0{}
+	if err := rlp.DecodeBytes(encoded, b0); err == nil {
+		return &Block{
+			Block: &types.Block{
+				ParentBlockHash: b0.ParentBlockHash,
+				Height:          b0.Height,
+				ReceiptRoot:     b0.ReceiptRoot,
+				TotalSupply:     big.NewInt(int64(b0.TotalSupply)),
+			},
+		}
+	}
+
+	b1 := &blockV1{}
+	if err := rlp.DecodeBytes(encoded, b1); err == nil {
+		return &Block{
+			Block: &types.Block{
+				ParentBlockHash: b1.ParentBlockHash,
+				Height:          b1.Height,
+				TotalSupply:     big.NewInt(int64(b1.TotalSupply)),
+				ReceiptRoot:     b1.ReceiptRoot,
+			},
+			TransactionHashes: b1.TransactionHashes,
+		}
+	}
+
+	b2 := &blockV2{}
+	if err := rlp.DecodeBytes(encoded, b2); err == nil {
+		return &Block{
+			Block: &types.Block{
+				ParentBlockHash: b2.ParentBlockHash,
+				Height:          b2.Height,
+				TotalSupply:     big.NewInt(int64(b2.TotalSupply)),
+				ReceiptRoot:     b2.ReceiptRoot,
+			},
+			TransactionHashes: b2.TransactionHashes,
+		}
+	}
+
+	b3 := &blockV3{}
+	if err := rlp.DecodeBytes(encoded, b3); err == nil {
+		return &Block{
+			Block: &types.Block{
+				ParentBlockHash: b3.ParentBlockHash,
+				Height:          b3.Height,
+				TotalSupply:     big.NewInt(int64(b3.TotalSupply)),
+				ReceiptRoot:     b3.ReceiptRoot,
+			},
+			TransactionHashes: b3.TransactionHashes,
+		}
+	}
+
+	b4 := &blockV4{}
+	if err := rlp.DecodeBytes(encoded, b4); err == nil {
+		return &Block{
+			Block: &types.Block{
+				ParentBlockHash: b4.ParentBlockHash,
+				Height:          b4.Height,
+				TotalSupply:     b4.TotalSupply,
+				ReceiptRoot:     b4.ReceiptRoot,
+			},
+			TransactionHashes: b4.TransactionHashes,
+		}
+	}
+
+	b5 := &blockV5{}
+	if err := rlp.DecodeBytes(encoded, b5); err == nil {
+		return &Block{
+			Block: &types.Block{
+				ParentBlockHash: b5.ParentBlockHash,
+				Height:          b5.Height,
+				Timestamp:       b5.Timestamp,
+				TotalSupply:     b5.TotalSupply,
+				ReceiptRoot:     b5.ReceiptRoot,
+			},
+			TransactionHashes: b5.TransactionHashes,
+		}
+	}
+
+	b6 := &blockV6{}
+	if err := rlp.DecodeBytes(encoded, b6); err == nil {
+		return &Block{
+			Block: &types.Block{
+				ParentBlockHash: b5.ParentBlockHash,
+				Height:          b5.Height,
+				Timestamp:       b5.Timestamp,
+				TotalSupply:     b5.TotalSupply,
+				ReceiptRoot:     b5.ReceiptRoot,
+			},
+			TransactionHashes: b6.TransactionHashes,
+		}
+	}
+
+	return nil
 }
