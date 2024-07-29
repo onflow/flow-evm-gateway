@@ -88,6 +88,10 @@ func (s *Storage) get(keyCode byte, key ...[]byte) ([]byte, error) {
 	prefixedKey := makePrefix(keyCode, key...)
 
 	data, closer, err := s.db.Get(prefixedKey)
+	// temp workaround to a weird bug where the data changes after returned
+	cp := make([]byte, len(data))
+	copy(cp, data)
+
 	if err != nil {
 		if errors.Is(err, pebble.ErrNotFound) {
 			return nil, errs.ErrNotFound
@@ -102,7 +106,7 @@ func (s *Storage) get(keyCode byte, key ...[]byte) ([]byte, error) {
 		}
 	}(closer)
 
-	return data, nil
+	return cp, nil
 }
 
 // batchGet loads the value from an indexed batch if data is found, else it loads the value from the storage.
