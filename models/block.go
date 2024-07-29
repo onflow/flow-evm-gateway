@@ -250,11 +250,12 @@ func decodeBlockBreakingChanges(encoded []byte) *Block {
 	if err := rlp.DecodeBytes(encoded, b6); err == nil {
 		return &Block{
 			Block: &types.Block{
-				ParentBlockHash: b5.ParentBlockHash,
-				Height:          b5.Height,
-				Timestamp:       b5.Timestamp,
-				TotalSupply:     b5.TotalSupply,
-				ReceiptRoot:     b5.ReceiptRoot,
+				ParentBlockHash: b6.ParentBlockHash,
+				Height:          b6.Height,
+				Timestamp:       b6.Timestamp,
+				TotalSupply:     b6.TotalSupply,
+				ReceiptRoot:     b6.ReceiptRoot,
+				TotalGasUsed:    b6.TotalGasUsed,
 			},
 			TransactionHashes: b6.TransactionHashes,
 		}
