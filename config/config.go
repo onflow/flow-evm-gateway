@@ -93,6 +93,8 @@ type Config struct {
 	WalletKey *ecdsa.PrivateKey
 	// TEMP: Remove `HashCalculationHeightChange` after PreviewNet is reset
 	HashCalculationHeightChange uint64
+	// PrometheusConfigFilePath is a path to a prometheus config file
+	PrometheusConfigFilePath string
 }
 
 func FromFlags() (*Config, error) {
@@ -155,6 +157,7 @@ func FromFlags() (*Config, error) {
 	// TEMP: Only set this after the HCU containing the direct call
 	// hash calculation change has been successfully deployed.
 	flag.Uint64Var(&cfg.HashCalculationHeightChange, "hash-calc-height-change", 0, "Cadence height at which the direct call hash calculation changed")
+	flag.StringVar(&cfg.PrometheusConfigFilePath, "prometheus-config-file-path", "./metrics/prometheus.yml", "Path to the prometheus config file")
 	flag.Parse()
 
 	if coinbase == "" {

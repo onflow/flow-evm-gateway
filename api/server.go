@@ -26,6 +26,7 @@ import (
 
 	errs "github.com/onflow/flow-evm-gateway/api/errors"
 	"github.com/onflow/flow-evm-gateway/config"
+	"github.com/onflow/flow-evm-gateway/metrics"
 )
 
 type rpcHandler struct {
@@ -51,7 +52,8 @@ type httpServer struct {
 	host     string
 	port     int
 
-	config *config.Config
+	config    *config.Config
+	collector metrics.Collector
 }
 
 const (
@@ -60,14 +62,15 @@ const (
 	batchResponseMaxSize = 5 * 1000 * 1000 // 5 MB
 )
 
-func NewHTTPServer(logger zerolog.Logger, cfg *config.Config) *httpServer {
+func NewHTTPServer(logger zerolog.Logger, collector metrics.Collector, cfg *config.Config) *httpServer {
 	zeroSlog := slogzerolog.Option{Logger: &logger}.NewZerologHandler()
 	gethLog.SetDefault(gethLog.NewLogger(slog.New(zeroSlog).Handler()))
 
 	return &httpServer{
-		logger:   logger,
-		timeouts: rpc.DefaultHTTPTimeouts,
-		config:   cfg,
+		logger:    logger,
+		timeouts:  rpc.DefaultHTTPTimeouts,
+		config:    cfg,
+		collector: collector,
 	}
 }
 
