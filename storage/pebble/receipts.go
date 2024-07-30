@@ -1,6 +1,7 @@
 package pebble
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -254,6 +255,12 @@ func (r *Receipts) BloomsForBlockRange(start, end *big.Int) ([]*models.BloomsHei
 		}
 
 		var bloomsHeight []*gethTypes.Bloom
+
+		// if empty skip it, workaround for empty blooms stored, todo investigate why we store empty blooms
+		if bytes.Equal(val, make([]byte, len(val))) {
+			continue
+		}
+
 		if err := rlp.DecodeBytes(val, &bloomsHeight); err != nil {
 			return nil, fmt.Errorf("failed to decode blooms: %w", err)
 		}
