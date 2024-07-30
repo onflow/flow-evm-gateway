@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"strings"
@@ -21,6 +22,7 @@ import (
 	"github.com/onflow/go-ethereum/rpc"
 	"github.com/rs/cors"
 	"github.com/rs/zerolog"
+	slogzerolog "github.com/samber/slog-zerolog"
 
 	errs "github.com/onflow/flow-evm-gateway/api/errors"
 	"github.com/onflow/flow-evm-gateway/config"
@@ -50,8 +52,7 @@ type httpServer struct {
 	host     string
 	port     int
 
-	config *config.Config
-
+	config    *config.Config
 	collector metrics.Collector
 }
 
@@ -62,18 +63,8 @@ const (
 )
 
 func NewHTTPServer(logger zerolog.Logger, collector metrics.Collector, cfg *config.Config) *httpServer {
-	gethLog.Root().SetHandler(gethLog.FuncHandler(func(r *gethLog.Record) error {
-		switch r.Lvl {
-		case gethLog.LvlInfo:
-			logger.Info().Msg(r.Msg)
-		case gethLog.LvlError:
-			logger.Error().Str("trace", r.Call.String()).Msg(r.Msg)
-		default:
-			logger.Debug().Msg(r.Msg)
-		}
-
-		return nil
-	}))
+	zeroSlog := slogzerolog.Option{Logger: &logger}.NewZerologHandler()
+	gethLog.SetDefault(gethLog.NewLogger(slog.New(zeroSlog).Handler()))
 
 	return &httpServer{
 		logger:    logger,
@@ -181,8 +172,8 @@ func (h *httpServer) Start() error {
 		return nil // already running or not configured
 	}
 
-	// Initialize the server. Metrics handler is a middleware for gathering metrics
-	h.server = &http.Server{Handler: metrics.NewHttpHandler(h, h.collector, h.logger)}
+	// Initialize the server.
+	h.server = &http.Server{Handler: h}
 	if h.timeouts != (rpc.HTTPTimeouts{}) {
 		CheckTimeouts(h.logger, &h.timeouts)
 		h.server.ReadTimeout = h.timeouts.ReadTimeout

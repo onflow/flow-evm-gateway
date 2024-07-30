@@ -9,7 +9,6 @@ import (
 	"math/big"
 	"strings"
 
-	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/go-ethereum/common"
 	"github.com/onflow/go-ethereum/common/hexutil"
 	"github.com/onflow/go-ethereum/common/math"
@@ -151,9 +150,13 @@ func (b *BlockChainAPI) Syncing(ctx context.Context) (interface{}, error) {
 		return handleError[any](err, b.logger, b.collector)
 	}
 
-	highestBlock, err := b.evm.GetLatestEVMHeight(context.Background())
+	highestBlock, err := b.evm.GetLatestEVMHeight(ctx)
 	if err != nil {
 		return handleError[any](err, b.logger, b.collector)
+	}
+
+	if currentBlock == highestBlock {
+		return false, nil
 	}
 
 	return SyncStatus{
@@ -197,7 +200,6 @@ func (b *BlockChainAPI) GetBalance(
 	l := b.logger.With().
 		Str("endpoint", "getBalance").
 		Str("address", address.String()).
-		Str("blockNumberOrHash", blockNumberOrHash.String()).
 		Logger()
 
 	if err := rateLimit(ctx, b.limiter, l); err != nil {
@@ -433,7 +435,7 @@ func (b *BlockChainAPI) GetBlockReceipts(
 	}
 
 	var (
-		block *evmTypes.Block
+		block *models.Block
 		err   error
 	)
 	if numHash.BlockHash != nil {
@@ -528,7 +530,6 @@ func (b *BlockChainAPI) Call(
 	l := b.logger.With().
 		Str("endpoint", "call").
 		Str("args", fmt.Sprintf("%v", args)).
-		Str("numberHash", blockNumberOrHash.String()).
 		Logger()
 
 	if err := rateLimit(ctx, b.limiter, l); err != nil {
@@ -537,7 +538,7 @@ func (b *BlockChainAPI) Call(
 
 	err := args.Validate()
 	if err != nil {
-		return nil, err
+		return handleError[hexutil.Bytes](err, l, b.collector)
 	}
 
 	evmHeight, err := b.getBlockNumber(blockNumberOrHash)
@@ -639,7 +640,6 @@ func (b *BlockChainAPI) GetTransactionCount(
 	l := b.logger.With().
 		Str("endpoint", "getTransactionCount").
 		Str("address", address.String()).
-		Str("hashNumber", blockNumberOrHash.String()).
 		Logger()
 
 	if err := rateLimit(ctx, b.limiter, l); err != nil {
@@ -686,7 +686,6 @@ func (b *BlockChainAPI) EstimateGas(
 	l := b.logger.With().
 		Str("endpoint", "estimateGas").
 		Str("args", fmt.Sprintf("%v", args)).
-		Str("hashNumber", blockNumberOrHash.String()).
 		Logger()
 
 	if err := rateLimit(ctx, b.limiter, l); err != nil {
@@ -695,8 +694,7 @@ func (b *BlockChainAPI) EstimateGas(
 
 	err := args.Validate()
 	if err != nil {
-		b.collector.ApiErrorOccurred()
-		return 0, err
+		return handleError[hexutil.Uint64](err, l, b.collector)
 	}
 
 	tx, err := encodeTxFromArgs(args)
@@ -728,7 +726,6 @@ func (b *BlockChainAPI) GetCode(
 	l := b.logger.With().
 		Str("endpoint", "getCode").
 		Str("address", address.String()).
-		Str("hashNumber", blockNumberOrHash.String()).
 		Logger()
 
 	if err := rateLimit(ctx, b.limiter, l); err != nil {
@@ -867,7 +864,7 @@ func (b *BlockChainAPI) GetStorageAt(
 
 func (b *BlockChainAPI) fetchBlockTransactions(
 	ctx context.Context,
-	block *evmTypes.Block,
+	block *models.Block,
 ) ([]*Transaction, error) {
 	transactions := make([]*Transaction, 0)
 	for _, txHash := range block.TransactionHashes {
@@ -891,7 +888,7 @@ func (b *BlockChainAPI) fetchBlockTransactions(
 
 func (b *BlockChainAPI) prepareBlockResponse(
 	ctx context.Context,
-	block *evmTypes.Block,
+	block *models.Block,
 	fullTx bool,
 ) (*Block, error) {
 	h, err := block.Hash()

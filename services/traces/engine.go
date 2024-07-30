@@ -8,7 +8,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/onflow/flow-go-sdk"
-	"github.com/onflow/flow-go/fvm/evm/types"
 	gethCommon "github.com/onflow/go-ethereum/common"
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-retry"
@@ -60,7 +59,7 @@ func (e *Engine) Run(ctx context.Context) error {
 // Notify is a handler that is being used to subscribe for new EVM block notifications.
 // This method should be non-blocking.
 func (e *Engine) Notify(data any) {
-	block, ok := data.(*types.Block)
+	block, ok := data.(*models.Block)
 	if !ok {
 		e.logger.Error().Msg("invalid event type sent to trace ingestion")
 		return
@@ -78,7 +77,7 @@ func (e *Engine) Notify(data any) {
 }
 
 // indexBlockTraces iterates the block transaction hashes and tries to download the traces
-func (e *Engine) indexBlockTraces(evmBlock *types.Block, cadenceBlockID flow.Identifier) {
+func (e *Engine) indexBlockTraces(evmBlock *models.Block, cadenceBlockID flow.Identifier) {
 	ctx, cancel := context.WithTimeout(context.Background(), downloadTimeout)
 	defer cancel()
 

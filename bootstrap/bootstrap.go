@@ -234,7 +234,6 @@ func startIngestion(
 		transactions,
 		accounts,
 		blocksPublisher,
-		transactionsPublisher,
 		logsPublisher,
 		logger,
 	)
@@ -298,12 +297,16 @@ func startServer(
 		return fmt.Errorf("failed to create a COA signer: %w", err)
 	}
 
+	// create transaction pool
+	txPool := requester.NewTxPool(client, transactionsPublisher, logger)
+
 	evm, err := requester.NewEVM(
 		client,
 		cfg,
 		signer,
 		logger,
 		blocks,
+		txPool,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create EVM requester: %w", err)

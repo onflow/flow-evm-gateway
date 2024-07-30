@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/go-ethereum/common"
 	"github.com/onflow/go-ethereum/common/hexutil"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
@@ -63,7 +62,7 @@ func (s *StreamAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
 		s.blocksPublisher,
 		func(notifier *rpc.Notifier, sub *rpc.Subscription) func(any) error {
 			return func(data any) error {
-				block, ok := data.(*types.Block)
+				block, ok := data.(*models.Block)
 				if !ok {
 					return fmt.Errorf("invalid data sent to block subscription")
 				}
@@ -99,23 +98,16 @@ func (s *StreamAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) (*
 		s.transactionsPublisher,
 		func(notifier *rpc.Notifier, sub *rpc.Subscription) func(any) error {
 			return func(data any) error {
-				tx, ok := data.(models.Transaction)
+				tx, ok := data.(*gethTypes.Transaction)
 				if !ok {
 					return fmt.Errorf("invalid data sent to pending transaction subscription")
 				}
 
-				var res any
 				if fullTx != nil && *fullTx {
-					if r, err := NewTransaction(tx, s.config.EVMNetworkID); err != nil {
-						return err
-					} else {
-						res = r
-					}
-				} else {
-					res = tx.Hash()
+					return notifier.Notify(sub.ID, tx)
 				}
 
-				return notifier.Notify(sub.ID, res)
+				return notifier.Notify(sub.ID, tx.Hash())
 			}
 		},
 	)
@@ -185,9 +177,6 @@ func (s *StreamAPI) newSubscription(
 				return
 			case err := <-rpcSub.Err():
 				l.Debug().Err(err).Msg("client unsubscribed")
-				return
-			case <-notifier.Closed():
-				l.Debug().Msg("client unsubscribed deprecated method")
 				return
 			}
 		}

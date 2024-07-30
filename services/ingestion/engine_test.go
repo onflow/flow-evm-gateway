@@ -7,12 +7,13 @@ import (
 	"testing"
 
 	pebbleDB "github.com/cockroachdb/pebble"
+	"github.com/onflow/flow-go/fvm/evm/events"
+	flowGo "github.com/onflow/flow-go/model/flow"
 
 	"github.com/onflow/flow-evm-gateway/services/ingestion/mocks"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
 
 	"github.com/onflow/cadence"
-	"github.com/onflow/cadence/runtime/common"
 
 	"github.com/onflow/flow-evm-gateway/models"
 
@@ -68,7 +69,6 @@ func TestSerialBlockIngestion(t *testing.T) {
 			accounts,
 			models.NewPublisher(),
 			models.NewPublisher(),
-			models.NewPublisher(),
 			zerolog.Nop(),
 		)
 
@@ -83,12 +83,12 @@ func TestSerialBlockIngestion(t *testing.T) {
 		runs := uint64(20)
 		for i := latestHeight + 1; i < latestHeight+runs; i++ {
 			cadenceHeight := i + 10
-			blockCdc, block, blockEvent, err := newBlock(i)
+			blockCdc, block, blockEvent, err := newBlock(i, nil)
 			require.NoError(t, err)
 
 			blocks.
-				On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*types.Block"), mock.Anything).
-				Return(func(h uint64, id flow.Identifier, storeBlock *types.Block, _ *pebbleDB.Batch) error {
+				On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*models.Block"), mock.Anything).
+				Return(func(h uint64, id flow.Identifier, storeBlock *models.Block, _ *pebbleDB.Batch) error {
 					assert.Equal(t, block, storeBlock)
 					assert.Equal(t, cadenceHeight, h)
 					storedCounter++
@@ -148,7 +148,6 @@ func TestSerialBlockIngestion(t *testing.T) {
 			accounts,
 			models.NewPublisher(),
 			models.NewPublisher(),
-			models.NewPublisher(),
 			zerolog.Nop(),
 		)
 
@@ -162,41 +161,47 @@ func TestSerialBlockIngestion(t *testing.T) {
 		}()
 
 		// first create one successful block event
-		blockCdc, block, blockEvent, err := newBlock(latestHeight + 1)
+		blockCdc, block, blockEvent, err := newBlock(latestHeight+1, nil)
 		cadenceHeight := latestHeight + 10
 		require.NoError(t, err)
 
 		blocks.
-			On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*types.Block"), mock.Anything).
-			Return(func(h uint64, id flow.Identifier, storeBlock *types.Block, _ *pebbleDB.Batch) error {
+			On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*models.Block"), mock.Anything).
+			Return(func(h uint64, id flow.Identifier, storeBlock *models.Block, _ *pebbleDB.Batch) error {
 				assert.Equal(t, block, storeBlock)
 				assert.Equal(t, cadenceHeight, h)
 				return nil
 			}).
 			Once() // this should only be called for first valid block
 
-		eventsChan <- models.BlockEvents{
-			Events: models.NewCadenceEvents(flow.BlockEvents{
-				Events: []flow.Event{{
-					Type:  string(blockEvent.Etype),
-					Value: blockCdc,
-				}},
-				Height: cadenceHeight,
-			}),
-		}
-
-		// fail with next block height being incorrect
-		blockCdc, _, blockEvent, err = newBlock(latestHeight + 10) // not sequential next block height
+		cadenceEvents, err := models.NewCadenceEvents(flow.BlockEvents{
+			Events: []flow.Event{{
+				Type:  string(blockEvent.Etype),
+				Value: blockCdc,
+			}},
+			Height: cadenceHeight,
+		})
 		require.NoError(t, err)
 
 		eventsChan <- models.BlockEvents{
-			Events: models.NewCadenceEvents(flow.BlockEvents{
-				Events: []flow.Event{{
-					Type:  string(blockEvent.Etype),
-					Value: blockCdc,
-				}},
-				Height: cadenceHeight + 1,
-			}),
+			Events: cadenceEvents,
+		}
+
+		// fail with next block height being incorrect
+		blockCdc, _, blockEvent, err = newBlock(latestHeight+10, nil) // not sequential next block height
+		require.NoError(t, err)
+
+		cadenceEvents, err = models.NewCadenceEvents(flow.BlockEvents{
+			Events: []flow.Event{{
+				Type:  string(blockEvent.Etype),
+				Value: blockCdc,
+			}},
+			Height: cadenceHeight + 1,
+		})
+		require.NoError(t, err)
+
+		eventsChan <- models.BlockEvents{
+			Events: cadenceEvents,
 		}
 
 		close(eventsChan)
@@ -246,7 +251,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 
 		txCdc, txEvent, transaction, result, err := newTransaction()
 		require.NoError(t, err)
-		blockCdc, block, blockEvent, err := newBlock(nextHeight)
+		blockCdc, block, blockEvent, err := newBlock(nextHeight, []gethCommon.Hash{result.TxHash})
 		require.NoError(t, err)
 
 		engine := NewEventIngestionEngine(
@@ -256,7 +261,6 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			receipts,
 			transactions,
 			accounts,
-			models.NewPublisher(),
 			models.NewPublisher(),
 			models.NewPublisher(),
 			zerolog.Nop(),
@@ -270,8 +274,8 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		}()
 
 		blocks.
-			On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*types.Block"), mock.Anything).
-			Return(func(h uint64, id flow.Identifier, storeBlock *types.Block, _ *pebbleDB.Batch) error {
+			On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*models.Block"), mock.Anything).
+			Return(func(h uint64, id flow.Identifier, storeBlock *models.Block, _ *pebbleDB.Batch) error {
 				assert.Equal(t, block, storeBlock)
 				assert.Equal(t, blockID, id)
 				assert.Equal(t, nextHeight, h)
@@ -343,9 +347,9 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 				return eventsChan
 			})
 
-		txCdc, txEvent, _, _, err := newTransaction()
+		txCdc, txEvent, _, res, err := newTransaction()
 		require.NoError(t, err)
-		blockCdc, _, blockEvent, err := newBlock(nextHeight)
+		blockCdc, _, blockEvent, err := newBlock(nextHeight, []gethCommon.Hash{res.TxHash})
 		require.NoError(t, err)
 
 		engine := NewEventIngestionEngine(
@@ -355,7 +359,6 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			receipts,
 			transactions,
 			accounts,
-			models.NewPublisher(),
 			models.NewPublisher(),
 			models.NewPublisher(),
 			zerolog.Nop(),
@@ -370,8 +373,8 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 
 		blocksFirst := false // flag indicating we stored block first
 		blocks.
-			On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*types.Block"), mock.Anything).
-			Return(func(h uint64, id flow.Identifier, storeBlock *types.Block, _ *pebbleDB.Batch) error {
+			On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*models.Block"), mock.Anything).
+			Return(func(h uint64, id flow.Identifier, storeBlock *models.Block, _ *pebbleDB.Batch) error {
 				blocksFirst = true
 				return nil
 			}).
@@ -412,7 +415,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		<-done
 	})
 
-	t.Run("ingest multiple blocks and transactions in same block event, even if out-of-order", func(t *testing.T) {
+	t.Run("ingest block and multiple transactions in same block event, even if out-of-order", func(t *testing.T) {
 		receipts := &storageMock.ReceiptIndexer{}
 		transactions := &storageMock.TransactionIndexer{}
 		latestCadenceHeight := uint64(0)
@@ -452,7 +455,6 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			accounts,
 			models.NewPublisher(),
 			models.NewPublisher(),
-			models.NewPublisher(),
 			zerolog.Nop(),
 		)
 
@@ -463,35 +465,15 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			close(done)
 		}()
 
-		blocksStored := 0
+		events := make([]flow.Event, 0)
+		blockIndexedFirst := false
 		txsStored := 0
 		eventCount := 5
-		blockIndexedFirst := false
-		events := make([]flow.Event, 0)
+		txHashes := make([]gethCommon.Hash, eventCount)
+
 		for i := 0; i < eventCount; i++ {
-			evmHeight := uint64(i)
-			blockCdc, block, blockEvent, err := newBlock(evmHeight)
-			require.NoError(t, err)
-
-			// add new block for each height
-			blocks.
-				On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*types.Block"), mock.Anything).
-				Return(func(h uint64, id flow.Identifier, storeBlock *types.Block, _ *pebbleDB.Batch) error {
-					assert.Equal(t, block, storeBlock)
-					assert.Equal(t, evmHeight, block.Height)
-					assert.Equal(t, latestCadenceHeight+1, h)
-					blockIndexedFirst = true
-					blocksStored++
-					return nil
-				}).
-				Once()
-
-			events = append(events, flow.Event{
-				Type:  string(blockEvent.Etype),
-				Value: blockCdc,
-			})
-
-			txCdc, txEvent, transaction, _, err := newTransaction()
+			txCdc, txEvent, transaction, res, err := newTransaction()
+			txHashes[i] = res.TxHash
 			require.NoError(t, err)
 
 			// add a single transaction for each block
@@ -516,6 +498,28 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			})
 		}
 
+		blocksStored := 0
+		evmHeight := uint64(0)
+		blockCdc, block, blockEvent, err := newBlock(evmHeight, txHashes)
+		require.NoError(t, err)
+
+		blocks.
+			On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*models.Block"), mock.Anything).
+			Return(func(h uint64, id flow.Identifier, storeBlock *models.Block, _ *pebbleDB.Batch) error {
+				assert.Equal(t, block, storeBlock)
+				assert.Equal(t, evmHeight, block.Height)
+				assert.Equal(t, latestCadenceHeight+1, h)
+				blockIndexedFirst = true
+				blocksStored++
+				return nil
+			}).
+			Once()
+
+		events = append(events, flow.Event{
+			Type:  string(blockEvent.Etype),
+			Value: blockCdc,
+		})
+
 		// this messes up order of events to test if we still process events in-order
 		// it will make transaction event first and then block event
 		events[0], events[1] = events[1], events[0]
@@ -530,29 +534,28 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		close(eventsChan)
 		<-done
 		assert.Equal(t, eventCount, txsStored)
-		assert.Equal(t, eventCount, blocksStored)
+		assert.Equal(t, 1, blocksStored)
 	})
 }
 
-func newBlock(height uint64) (cadence.Event, *types.Block, *types.Event, error) {
-	block := &types.Block{
+func newBlock(height uint64, txHashes []gethCommon.Hash) (cadence.Event, *models.Block, *events.Event, error) {
+	gethBlock := &types.Block{
 		ParentBlockHash: gethCommon.HexToHash("0x1"),
 		Height:          height,
 		TotalSupply:     big.NewInt(100),
 		ReceiptRoot:     gethCommon.HexToHash("0x2"),
-		TransactionHashes: []gethCommon.Hash{
-			gethCommon.HexToHash("0xf1"),
-		},
+	}
+	block := &models.Block{
+		Block:             gethBlock,
+		TransactionHashes: txHashes,
 	}
 
-	blockEvent := types.NewBlockEvent(block)
-	location := common.NewAddressLocation(nil, common.Address{0x1}, string(types.EventTypeBlockExecuted))
-	blockCdc, err := blockEvent.Payload.ToCadence(location)
-
+	blockEvent := events.NewBlockEvent(gethBlock)
+	blockCdc, err := blockEvent.Payload.ToCadence(flowGo.Previewnet)
 	return blockCdc, block, blockEvent, err
 }
 
-func newTransaction() (cadence.Event, *types.Event, models.Transaction, *types.Result, error) {
+func newTransaction() (cadence.Event, *events.Event, models.Transaction, *types.Result, error) {
 	res := &types.Result{
 		VMError:                 nil,
 		TxType:                  1,
@@ -566,6 +569,7 @@ func newTransaction() (cadence.Event, *types.Event, models.Transaction, *types.R
 			Address: gethCommon.Address{0x3, 0x5},
 			Topics:  []gethCommon.Hash{{0x2, 0x66}, {0x7, 0x1}},
 		}},
+		TxHash: gethCommon.HexToHash("0x33"),
 	}
 
 	txEncoded, err := hex.DecodeString("f9015880808301e8488080b901086060604052341561000f57600080fd5b60eb8061001d6000396000f300606060405260043610603f576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff168063c6888fa1146044575b600080fd5b3415604e57600080fd5b606260048080359060200190919050506078565b6040518082815260200191505060405180910390f35b60007f24abdb5865df5079dcc5ac590ff6f01d5c16edbc5fab4e195d9febd1114503da600783026040518082815260200191505060405180910390a16007820290509190505600a165627a7a7230582040383f19d9f65246752244189b02f56e8d0980ed44e7a56c0b200458caad20bb002982052fa09c05a7389284dc02b356ec7dee8a023c5efd3a9d844fa3c481882684b0640866a057e96d0a71a857ed509bb2b7333e78b2408574b8cc7f51238f25c58812662653")
@@ -579,15 +583,12 @@ func newTransaction() (cadence.Event, *types.Event, models.Transaction, *types.R
 		return cadence.Event{}, nil, nil, nil, err
 	}
 
-	ev := types.NewTransactionEvent(
+	ev := events.NewTransactionEvent(
 		res,
 		txEncoded,
 		1,
-		tx.Hash(),
 	)
 
-	location := common.NewAddressLocation(nil, common.Address{0x1}, string(types.EventTypeBlockExecuted))
-	cdcEv, err := ev.Payload.ToCadence(location)
-
+	cdcEv, err := ev.Payload.ToCadence(flowGo.Previewnet)
 	return cdcEv, ev, models.TransactionCall{Transaction: tx}, res, err
 }

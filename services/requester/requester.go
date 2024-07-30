@@ -113,6 +113,7 @@ func NewEVM(
 	signer crypto.Signer,
 	logger zerolog.Logger,
 	blocks storage.BlockIndexer,
+	txPool *TxPool,
 ) (*EVM, error) {
 	logger = logger.With().Str("component", "requester").Logger()
 	// check that the address stores already created COA resource in the "evm" storage path.
@@ -164,7 +165,7 @@ func NewEVM(
 		signer:            signer,
 		logger:            logger,
 		blocks:            blocks,
-		txPool:            NewTxPool(client, logger),
+		txPool:            txPool,
 		head:              head,
 		evmSigner:         evmSigner,
 		validationOptions: validationOptions,
@@ -248,7 +249,7 @@ func (e *EVM) buildTransaction(ctx context.Context, script []byte, args ...caden
 		g           = errgroup.Group{}
 		err1, err2  error
 		latestBlock *flow.Block
-		index       int
+		index       uint32
 		seqNum      uint64
 	)
 	// execute concurrently so we can speed up all the information we need for tx
@@ -595,7 +596,7 @@ func (e *EVM) GetLatestEVMHeight(ctx context.Context) (uint64, error) {
 }
 
 // getSignerNetworkInfo loads the signer account from network and returns key index and sequence number
-func (e *EVM) getSignerNetworkInfo(ctx context.Context) (int, uint64, error) {
+func (e *EVM) getSignerNetworkInfo(ctx context.Context) (uint32, uint64, error) {
 	account, err := e.client.GetAccount(ctx, e.config.COAAddress)
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to get signer info account: %w", err)

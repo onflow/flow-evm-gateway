@@ -3,7 +3,7 @@ const conf = require('./config')
 const helpers = require('./helpers')
 const web3 = conf.web3
 
-it('deploy contract and interact', async() => {
+it('deploy contract and interact', async () => {
     let deployed = await helpers.deployContract("storage")
     let contractAddress = deployed.receipt.contractAddress
 
@@ -18,6 +18,8 @@ it('deploy contract and interact', async() => {
     assert.equal(rcp.contractAddress, contractAddress)
     assert.equal(rcp.status, conf.successStatus)
     assert.isUndefined(rcp.to)
+    assert.equal(rcp.gasUsed, 338798n)
+    assert.equal(rcp.gasUsed, rcp.cumulativeGasUsed)
 
     // check if latest block contains the deploy results
     let latestHeight = await web3.eth.getBlockNumber()
@@ -41,7 +43,7 @@ it('deploy contract and interact', async() => {
     // get the default deployed value on contract
     const initValue = 1337
     let callRetrieve = await deployed.contract.methods.retrieve().encodeABI()
-    result = await web3.eth.call({to: contractAddress, data: callRetrieve}, "latest")
+    result = await web3.eth.call({ to: contractAddress, data: callRetrieve }, "latest")
     assert.equal(result, initValue)
 
     // set the value on the contract, to its current value
@@ -57,7 +59,7 @@ it('deploy contract and interact', async() => {
     assert.equal(res.receipt.status, conf.successStatus)
 
     // check the new value on contract
-    result = await web3.eth.call({to: contractAddress, data: callRetrieve}, "latest")
+    result = await web3.eth.call({ to: contractAddress, data: callRetrieve }, "latest")
     assert.equal(result, initValue)
 
     // update the value on the contract
@@ -74,7 +76,7 @@ it('deploy contract and interact', async() => {
     assert.equal(res.receipt.status, conf.successStatus)
 
     // check the new value on contract
-    result = await web3.eth.call({to: contractAddress, data: callRetrieve}, "latest")
+    result = await web3.eth.call({ to: contractAddress, data: callRetrieve }, "latest")
     assert.equal(result, newValue)
 
     // make sure receipts and txs are indexed
@@ -85,7 +87,7 @@ it('deploy contract and interact', async() => {
     assert.equal(updateTx.data, updateData)
 
     // check that call can handle specific block heights
-    result = await web3.eth.call({to: contractAddress, data: callRetrieve}, latestHeight - 1n)
+    result = await web3.eth.call({ to: contractAddress, data: callRetrieve }, latestHeight - 1n)
     assert.equal(result, initValue)
 
     // submit a transaction that emits logs
@@ -125,14 +127,14 @@ it('deploy contract and interact', async() => {
     // check that revert reason for custom error is correctly returned for contract call
     // and it is properly ABI decoded.
     try {
-        result = await deployed.contract.methods.customError().call({from: conf.eoa.address})
+        result = await deployed.contract.methods.customError().call({ from: conf.eoa.address })
     } catch (err) {
         let error = err.innerError
         assert.equal(
             error.data,
             '0x9195785a00000000000000000000000000000000000000000000000000000000000000050000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000001056616c756520697320746f6f206c6f7700000000000000000000000000000000'
         )
-        assert.equal(error.errorName,'MyCustomError')
+        assert.equal(error.errorName, 'MyCustomError')
         assert.equal(error.errorSignature, 'MyCustomError(uint256,string)')
         assert.equal(error.errorArgs.value, 5n)
         assert.equal(error.errorArgs.message, 'Value is too low')
@@ -160,7 +162,7 @@ it('deploy contract and interact', async() => {
     // check that assertion error is correctly returned for contract call
     // and it is properly ABI decoded.
     try {
-        result = await deployed.contract.methods.assertError().call({from: conf.eoa.address})
+        result = await deployed.contract.methods.assertError().call({ from: conf.eoa.address })
     } catch (err) {
         let error = err.innerError
         assert.equal(
