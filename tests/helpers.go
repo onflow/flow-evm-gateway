@@ -156,6 +156,7 @@ func servicesSetup(t *testing.T) (emulator.Emulator, func()) {
 		WSEnabled:                   true,
 		HashCalculationHeightChange: 0,
 		PrometheusConfigFilePath:    "./metrics/prometheus.yml",
+		StorageSizeUpdateInterval:   time.Second * 10,
 	}
 
 	go func() {
