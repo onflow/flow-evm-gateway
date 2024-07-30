@@ -705,7 +705,17 @@ func (b *BlockChainAPI) EstimateGas(
 		from = *args.From
 	}
 
-	estimatedGas, err := b.evm.EstimateGas(ctx, tx, from)
+	if blockNumberOrHash == nil {
+		latest := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
+		blockNumberOrHash = &latest
+	}
+
+	evmHeight, err := b.getBlockNumber(blockNumberOrHash)
+	if err != nil {
+		return handleError[hexutil.Uint64](err, l)
+	}
+
+	estimatedGas, err := b.evm.EstimateGas(ctx, tx, from, evmHeight)
 	if err != nil {
 		return handleError[hexutil.Uint64](err, l)
 	}
