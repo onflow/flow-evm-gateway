@@ -73,10 +73,10 @@ type Requester interface {
 	// useful to execute and retrieve values.
 	Call(ctx context.Context, data []byte, from common.Address, evmHeight int64) ([]byte, error)
 
-	// EstimateGas executes the given signed transaction data on the state.
+	// EstimateGas executes the given signed transaction data on the state for the given EVM block height.
 	// Note, this function doesn't make any changes in the state/blockchain and is
 	// useful to executed and retrieve the gas consumption and possible failures.
-	EstimateGas(ctx context.Context, data []byte, from common.Address) (uint64, error)
+	EstimateGas(ctx context.Context, data []byte, from common.Address, evmHeight int64) (uint64, error)
 
 	// GetNonce gets nonce from the network at the given EVM block height.
 	GetNonce(ctx context.Context, address common.Address, evmHeight int64) (uint64, error)
@@ -479,6 +479,7 @@ func (e *EVM) EstimateGas(
 	ctx context.Context,
 	data []byte,
 	from common.Address,
+	evmHeight int64,
 ) (uint64, error) {
 	hexEncodedTx, err := cadence.NewString(hex.EncodeToString(data))
 	if err != nil {
@@ -490,9 +491,15 @@ func (e *EVM) EstimateGas(
 		return 0, err
 	}
 
-	scriptResult, err := e.client.ExecuteScriptAtLatestBlock(
+	height, err := e.evmToCadenceHeight(evmHeight)
+	if err != nil {
+		return 0, err
+	}
+
+	scriptResult, err := e.executeScriptAtHeight(
 		ctx,
-		e.replaceAddresses(dryRunScript),
+		dryRunScript,
+		height,
 		[]cadence.Value{hexEncodedTx, hexEncodedAddress},
 	)
 	if err != nil {

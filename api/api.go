@@ -14,6 +14,7 @@ import (
 	"github.com/onflow/go-ethereum/common/math"
 	"github.com/onflow/go-ethereum/core/types"
 	"github.com/onflow/go-ethereum/eth/filters"
+	"github.com/onflow/go-ethereum/rlp"
 	"github.com/onflow/go-ethereum/rpc"
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-limiter"
@@ -28,6 +29,8 @@ import (
 )
 
 const maxFeeHistoryBlockCount = 1024
+
+var latestBlockNumberOrHash = rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
 
 func SupportedAPIs(
 	blockChainAPI *BlockChainAPI,
@@ -146,9 +149,13 @@ func (b *BlockChainAPI) Syncing(ctx context.Context) (interface{}, error) {
 		return handleError[any](err, b.logger)
 	}
 
-	highestBlock, err := b.evm.GetLatestEVMHeight(context.Background())
+	highestBlock, err := b.evm.GetLatestEVMHeight(ctx)
 	if err != nil {
 		return handleError[any](err, b.logger)
+	}
+
+	if currentBlock == highestBlock {
+		return false, nil
 	}
 
 	return SyncStatus{
@@ -187,7 +194,7 @@ func (b *BlockChainAPI) SendRawTransaction(
 func (b *BlockChainAPI) GetBalance(
 	ctx context.Context,
 	address common.Address,
-	blockNumberOrHash *rpc.BlockNumberOrHash,
+	blockNumberOrHash rpc.BlockNumberOrHash,
 ) (*hexutil.Big, error) {
 	l := b.logger.With().
 		Str("endpoint", "getBalance").
@@ -198,7 +205,7 @@ func (b *BlockChainAPI) GetBalance(
 		return nil, err
 	}
 
-	evmHeight, err := b.getBlockNumber(blockNumberOrHash)
+	evmHeight, err := b.getBlockNumber(&blockNumberOrHash)
 	if err != nil {
 		return handleError[*hexutil.Big](err, l)
 	}
@@ -400,6 +407,19 @@ func (b *BlockChainAPI) GetBlockByNumber(
 	}
 
 	block, err := b.blocks.GetByHeight(height)
+
+	// TEMP(m-Peter): Remove after PreviewNet
+	// This is a workaround to make available the Genesis Block.
+	if block == nil && blockNumber == rpc.EarliestBlockNumber {
+		block = models.GenesisBlock
+		apiBlock, err := b.prepareBlockResponse(ctx, block, fullTx)
+		if err != nil {
+			return handleError[*Block](err, l)
+		}
+
+		return apiBlock, nil
+	}
+
 	if err != nil {
 		return handleError[*Block](err, l)
 	}
@@ -532,6 +552,11 @@ func (b *BlockChainAPI) Call(
 		return nil, err
 	}
 
+	// Default to "latest" block tag
+	if blockNumberOrHash == nil {
+		blockNumberOrHash = &latestBlockNumberOrHash
+	}
+
 	evmHeight, err := b.getBlockNumber(blockNumberOrHash)
 	if err != nil {
 		return handleError[hexutil.Bytes](err, l)
@@ -626,7 +651,7 @@ func (b *BlockChainAPI) GetLogs(
 func (b *BlockChainAPI) GetTransactionCount(
 	ctx context.Context,
 	address common.Address,
-	blockNumberOrHash *rpc.BlockNumberOrHash,
+	blockNumberOrHash rpc.BlockNumberOrHash,
 ) (*hexutil.Uint64, error) {
 	l := b.logger.With().
 		Str("endpoint", "getTransactionCount").
@@ -637,7 +662,7 @@ func (b *BlockChainAPI) GetTransactionCount(
 		return nil, err
 	}
 
-	evmHeight, err := b.getBlockNumber(blockNumberOrHash)
+	evmHeight, err := b.getBlockNumber(&blockNumberOrHash)
 	if err != nil {
 		return handleError[*hexutil.Uint64](err, l)
 	}
@@ -699,7 +724,16 @@ func (b *BlockChainAPI) EstimateGas(
 		from = *args.From
 	}
 
-	estimatedGas, err := b.evm.EstimateGas(ctx, tx, from)
+	if blockNumberOrHash == nil {
+		blockNumberOrHash = &latestBlockNumberOrHash
+	}
+
+	evmHeight, err := b.getBlockNumber(blockNumberOrHash)
+	if err != nil {
+		return handleError[hexutil.Uint64](err, l)
+	}
+
+	estimatedGas, err := b.evm.EstimateGas(ctx, tx, from, evmHeight)
 	if err != nil {
 		return handleError[hexutil.Uint64](err, l)
 	}
@@ -712,7 +746,7 @@ func (b *BlockChainAPI) EstimateGas(
 func (b *BlockChainAPI) GetCode(
 	ctx context.Context,
 	address common.Address,
-	blockNumberOrHash *rpc.BlockNumberOrHash,
+	blockNumberOrHash rpc.BlockNumberOrHash,
 ) (hexutil.Bytes, error) {
 	l := b.logger.With().
 		Str("endpoint", "getCode").
@@ -723,7 +757,7 @@ func (b *BlockChainAPI) GetCode(
 		return nil, err
 	}
 
-	evmHeight, err := b.getBlockNumber(blockNumberOrHash)
+	evmHeight, err := b.getBlockNumber(&blockNumberOrHash)
 	if err != nil {
 		return handleError[hexutil.Bytes](err, l)
 	}
@@ -824,7 +858,7 @@ func (b *BlockChainAPI) GetStorageAt(
 	ctx context.Context,
 	address common.Address,
 	storageSlot string,
-	blockNumberOrHash *rpc.BlockNumberOrHash,
+	blockNumberOrHash rpc.BlockNumberOrHash,
 ) (hexutil.Bytes, error) {
 	l := b.logger.With().
 		Str("endpoint", "getStorageAt").
@@ -840,7 +874,7 @@ func (b *BlockChainAPI) GetStorageAt(
 		return handleError[hexutil.Bytes](errors.Join(errs.ErrInvalid, err), l)
 	}
 
-	evmHeight, err := b.getBlockNumber(blockNumberOrHash)
+	evmHeight, err := b.getBlockNumber(&blockNumberOrHash)
 	if err != nil {
 		return handleError[hexutil.Bytes](err, l)
 	}
@@ -889,17 +923,18 @@ func (b *BlockChainAPI) prepareBlockResponse(
 	}
 
 	blockResponse := &Block{
-		Hash:          h,
-		Number:        hexutil.Uint64(block.Height),
-		ParentHash:    block.ParentBlockHash,
-		ReceiptsRoot:  block.ReceiptRoot,
-		Transactions:  block.TransactionHashes,
-		Uncles:        []common.Hash{},
-		GasLimit:      hexutil.Uint64(blockGasLimit),
-		Nonce:         types.BlockNonce{0x1},
-		Timestamp:     hexutil.Uint64(block.Timestamp),
-		BaseFeePerGas: hexutil.Big(*big.NewInt(0)),
-		LogsBloom:     types.LogsBloom([]*types.Log{}),
+		Hash:             h,
+		Number:           hexutil.Uint64(block.Height),
+		ParentHash:       block.ParentBlockHash,
+		ReceiptsRoot:     block.ReceiptRoot,
+		TransactionsRoot: block.TransactionHashRoot,
+		Transactions:     block.TransactionHashes,
+		Uncles:           []common.Hash{},
+		GasLimit:         hexutil.Uint64(blockGasLimit),
+		Nonce:            types.BlockNonce{0x1},
+		Timestamp:        hexutil.Uint64(block.Timestamp),
+		BaseFeePerGas:    hexutil.Big(*big.NewInt(0)),
+		LogsBloom:        types.LogsBloom([]*types.Log{}),
 	}
 
 	// todo remove after previewnet, temp fix to mock some of the timestamps
@@ -914,10 +949,17 @@ func (b *BlockChainAPI) prepareBlockResponse(
 		blockResponse.Timestamp = hexutil.Uint64(timestamp)
 	}
 
+	blockBytes, err := block.ToBytes()
+	if err != nil {
+		return nil, err
+	}
+	blockSize := rlp.ListSize(uint64(len(blockBytes)))
+
 	transactions, err := b.fetchBlockTransactions(ctx, block)
 	if err != nil {
 		return nil, err
 	}
+
 	if len(transactions) > 0 {
 		totalGasUsed := hexutil.Uint64(0)
 		logs := make([]*types.Log, 0)
@@ -928,11 +970,13 @@ func (b *BlockChainAPI) prepareBlockResponse(
 			}
 			totalGasUsed += tx.Gas
 			logs = append(logs, txReceipt.Logs...)
+			blockSize += tx.Size()
 		}
 		blockResponse.GasUsed = totalGasUsed
 		// TODO(m-Peter): Consider if its worthwhile to move this in storage.
 		blockResponse.LogsBloom = types.LogsBloom(logs)
 	}
+	blockResponse.Size = hexutil.Uint64(rlp.ListSize(blockSize))
 
 	if fullTx {
 		blockResponse.Transactions = transactions

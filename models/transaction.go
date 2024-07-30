@@ -149,7 +149,7 @@ func (dc DirectCall) Size() uint64 {
 	if err != nil {
 		return 0
 	}
-	return uint64(len(encoded))
+	return rlp.ListSize(uint64(len(encoded)))
 }
 
 func (dc DirectCall) AccessList() gethTypes.AccessList {

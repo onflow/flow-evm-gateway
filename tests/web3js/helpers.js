@@ -25,7 +25,7 @@ async function deployContract(name) {
     from: conf.eoa.address,
     data: data,
     value: '0',
-    gasPrice: '0',
+    gasPrice: conf.minGasPrice,
   })
 
   let receipt = await web3.eth.sendSignedTransaction(signed.rawTransaction)
