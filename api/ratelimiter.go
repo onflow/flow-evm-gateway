@@ -3,11 +3,11 @@ package api
 import (
 	"context"
 
-	"github.com/onflow/go-ethereum/rpc"
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-limiter"
 
 	errs "github.com/onflow/flow-evm-gateway/api/errors"
+	"github.com/onflow/go-ethereum/rpc"
 )
 
 // rateLimit will limit requests with the provider limiter, in case the limit
@@ -20,7 +20,7 @@ func rateLimit(ctx context.Context, limiter limiter.Store, logger zerolog.Logger
 	// websocket requests.
 
 	remote := rpc.PeerInfoFromContext(ctx).RemoteAddr
-	if remote == "NA" {
+	if remote == "" {
 		return nil // if no client identifier disable limit
 	}
 
