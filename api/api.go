@@ -187,7 +187,7 @@ func (b *BlockChainAPI) SendRawTransaction(
 func (b *BlockChainAPI) GetBalance(
 	ctx context.Context,
 	address common.Address,
-	blockNumberOrHash *rpc.BlockNumberOrHash,
+	blockNumberOrHash rpc.BlockNumberOrHash,
 ) (*hexutil.Big, error) {
 	l := b.logger.With().
 		Str("endpoint", "getBalance").
@@ -198,7 +198,7 @@ func (b *BlockChainAPI) GetBalance(
 		return nil, err
 	}
 
-	evmHeight, err := b.getBlockNumber(blockNumberOrHash)
+	evmHeight, err := b.getBlockNumber(&blockNumberOrHash)
 	if err != nil {
 		return handleError[*hexutil.Big](err, l)
 	}
@@ -532,6 +532,12 @@ func (b *BlockChainAPI) Call(
 		return nil, err
 	}
 
+	// Default to "latest" block tag
+	if blockNumberOrHash == nil {
+		latest := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
+		blockNumberOrHash = &latest
+	}
+
 	evmHeight, err := b.getBlockNumber(blockNumberOrHash)
 	if err != nil {
 		return handleError[hexutil.Bytes](err, l)
@@ -626,7 +632,7 @@ func (b *BlockChainAPI) GetLogs(
 func (b *BlockChainAPI) GetTransactionCount(
 	ctx context.Context,
 	address common.Address,
-	blockNumberOrHash *rpc.BlockNumberOrHash,
+	blockNumberOrHash rpc.BlockNumberOrHash,
 ) (*hexutil.Uint64, error) {
 	l := b.logger.With().
 		Str("endpoint", "getTransactionCount").
@@ -637,7 +643,7 @@ func (b *BlockChainAPI) GetTransactionCount(
 		return nil, err
 	}
 
-	evmHeight, err := b.getBlockNumber(blockNumberOrHash)
+	evmHeight, err := b.getBlockNumber(&blockNumberOrHash)
 	if err != nil {
 		return handleError[*hexutil.Uint64](err, l)
 	}
@@ -712,7 +718,7 @@ func (b *BlockChainAPI) EstimateGas(
 func (b *BlockChainAPI) GetCode(
 	ctx context.Context,
 	address common.Address,
-	blockNumberOrHash *rpc.BlockNumberOrHash,
+	blockNumberOrHash rpc.BlockNumberOrHash,
 ) (hexutil.Bytes, error) {
 	l := b.logger.With().
 		Str("endpoint", "getCode").
@@ -723,7 +729,7 @@ func (b *BlockChainAPI) GetCode(
 		return nil, err
 	}
 
-	evmHeight, err := b.getBlockNumber(blockNumberOrHash)
+	evmHeight, err := b.getBlockNumber(&blockNumberOrHash)
 	if err != nil {
 		return handleError[hexutil.Bytes](err, l)
 	}
@@ -824,7 +830,7 @@ func (b *BlockChainAPI) GetStorageAt(
 	ctx context.Context,
 	address common.Address,
 	storageSlot string,
-	blockNumberOrHash *rpc.BlockNumberOrHash,
+	blockNumberOrHash rpc.BlockNumberOrHash,
 ) (hexutil.Bytes, error) {
 	l := b.logger.With().
 		Str("endpoint", "getStorageAt").
@@ -840,7 +846,7 @@ func (b *BlockChainAPI) GetStorageAt(
 		return handleError[hexutil.Bytes](errors.Join(errs.ErrInvalid, err), l)
 	}
 
-	evmHeight, err := b.getBlockNumber(blockNumberOrHash)
+	evmHeight, err := b.getBlockNumber(&blockNumberOrHash)
 	if err != nil {
 		return handleError[hexutil.Bytes](err, l)
 	}
