@@ -86,7 +86,7 @@ func (w *WalletAPI) SignTransaction(
 		nonce = uint64(*args.Nonce)
 	} else {
 		num := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
-		n, err := w.net.GetTransactionCount(ctx, from, &num)
+		n, err := w.net.GetTransactionCount(ctx, from, num)
 		if err != nil {
 			return nil, err
 		}
