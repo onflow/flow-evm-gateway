@@ -418,7 +418,7 @@ func (b *BlockChainAPI) GetBlockByNumber(
 		block = models.GenesisBlock
 		apiBlock, err := b.prepareBlockResponse(ctx, block, fullTx)
 		if err != nil {
-			return handleError[*Block](err, l)
+			return handleError[*Block](err, l, b.collector)
 		}
 
 		return apiBlock, nil
@@ -735,7 +735,7 @@ func (b *BlockChainAPI) EstimateGas(
 
 	evmHeight, err := b.getBlockNumber(blockNumberOrHash)
 	if err != nil {
-		return handleError[hexutil.Uint64](err, l)
+		return handleError[hexutil.Uint64](err, l, b.collector)
 	}
 
 	estimatedGas, err := b.evm.EstimateGas(ctx, tx, from, evmHeight)
