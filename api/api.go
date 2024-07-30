@@ -147,9 +147,13 @@ func (b *BlockChainAPI) Syncing(ctx context.Context) (interface{}, error) {
 		return handleError[any](err, b.logger)
 	}
 
-	highestBlock, err := b.evm.GetLatestEVMHeight(context.Background())
+	highestBlock, err := b.evm.GetLatestEVMHeight(ctx)
 	if err != nil {
 		return handleError[any](err, b.logger)
+	}
+
+	if currentBlock == highestBlock {
+		return false, nil
 	}
 
 	return SyncStatus{
