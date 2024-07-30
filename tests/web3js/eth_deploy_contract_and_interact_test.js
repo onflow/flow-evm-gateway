@@ -211,4 +211,28 @@ it('deploy contract and interact', async () => {
         )
     }
 
+    let gasEstimate = await web3.eth.estimateGas(
+        {
+            from: conf.eoa.address,
+            to: contractAddress,
+            data: deployed.contract.methods.sum(100, 200).encodeABI(),
+            gas: 1_000_000,
+            gasPrice: 0
+        },
+        '0x1'
+    )
+    assert.equal(gasEstimate, 23977n)
+
+    gasEstimate = await web3.eth.estimateGas(
+        {
+            from: conf.eoa.address,
+            to: contractAddress,
+            data: deployed.contract.methods.sum(100, 200).encodeABI(),
+            gas: 1_000_000,
+            gasPrice: 0
+        },
+        'latest'
+    )
+    assert.equal(gasEstimate, 27374n)
+
 })

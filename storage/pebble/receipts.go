@@ -256,13 +256,17 @@ func (r *Receipts) BloomsForBlockRange(start, end *big.Int) ([]*models.BloomsHei
 
 		var bloomsHeight []*gethTypes.Bloom
 
-		// if empty skip it, workaround for empty blooms stored, todo investigate why we store empty blooms
+		// todo remove after previewnet is deprecated
+		// temp workaround if empty skip it, investigate why we stored empty blooms
 		if bytes.Equal(val, make([]byte, len(val))) {
 			continue
 		}
 
 		if err := rlp.DecodeBytes(val, &bloomsHeight); err != nil {
-			return nil, fmt.Errorf("failed to decode blooms: %w", err)
+			// todo remove after previewnet is deprecated
+			// temp workaround if stored only as a single bloom
+			bloomHeight := gethTypes.BytesToBloom(val)
+			bloomsHeight = []*gethTypes.Bloom{&bloomHeight}
 		}
 
 		h := stripPrefix(iterator.Key())
