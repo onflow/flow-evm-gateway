@@ -29,6 +29,8 @@ import (
 
 const maxFeeHistoryBlockCount = 1024
 
+var latestBlockNumberOrHash = rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
+
 func SupportedAPIs(
 	blockChainAPI *BlockChainAPI,
 	streamAPI *StreamAPI,
@@ -534,8 +536,7 @@ func (b *BlockChainAPI) Call(
 
 	// Default to "latest" block tag
 	if blockNumberOrHash == nil {
-		latest := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
-		blockNumberOrHash = &latest
+		blockNumberOrHash = &latestBlockNumberOrHash
 	}
 
 	evmHeight, err := b.getBlockNumber(blockNumberOrHash)
@@ -706,8 +707,7 @@ func (b *BlockChainAPI) EstimateGas(
 	}
 
 	if blockNumberOrHash == nil {
-		latest := rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
-		blockNumberOrHash = &latest
+		blockNumberOrHash = &latestBlockNumberOrHash
 	}
 
 	evmHeight, err := b.getBlockNumber(blockNumberOrHash)
