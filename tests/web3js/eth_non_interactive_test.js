@@ -21,6 +21,7 @@ it('get block', async () => {
     assert.lengthOf(block.logsBloom, 514)
     assert.isDefined(block.timestamp)
     assert.isTrue(block.timestamp >= 1714413860n)
+    assert.equal(block.size, 3960n)
 
     let blockHash = await web3.eth.getBlock(block.hash)
     assert.deepEqual(block, blockHash)

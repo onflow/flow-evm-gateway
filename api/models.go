@@ -139,6 +139,12 @@ type Transaction struct {
 	R                   *hexutil.Big             `json:"r"`
 	S                   *hexutil.Big             `json:"s"`
 	YParity             *hexutil.Uint64          `json:"yParity,omitempty"`
+
+	size uint64
+}
+
+func (tx *Transaction) Size() uint64 {
+	return tx.size
 }
 
 func NewTransactionResult(
@@ -191,6 +197,7 @@ func NewTransaction(
 		R:        (*hexutil.Big)(r),
 		S:        (*hexutil.Big)(s),
 		ChainID:  (*hexutil.Big)(networkID),
+		size:     tx.Size(),
 	}
 
 	if tx.Type() > types.LegacyTxType {
