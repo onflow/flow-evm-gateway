@@ -21,6 +21,11 @@ it('get block', async () => {
     assert.lengthOf(block.logsBloom, 514)
     assert.isDefined(block.timestamp)
     assert.isTrue(block.timestamp >= 1714413860n)
+    assert.notEqual(
+        block.transactionsRoot,
+        '0x0000000000000000000000000000000000000000000000000000000000000000'
+    )
+    assert.equal(block.size, 3960n)
 
     let blockHash = await web3.eth.getBlock(block.hash)
     assert.deepEqual(block, blockHash)
@@ -119,7 +124,7 @@ it('get coinbase', async () => {
 
 it('get gas price', async () => {
     let gasPrice = await web3.eth.getGasPrice()
-    assert.equal(gasPrice, 0n) // 0 by default in tests
+    assert.equal(gasPrice, conf.minGasPrice)
 })
 
 it('get transaction', async () => {
@@ -162,14 +167,8 @@ it('get mining status', async () => {
 })
 
 it('get syncing status', async () => {
-    let height = await web3.eth.getBlockNumber()
-    assert.equal(height, conf.startBlockHeight)
-
-    let syncInfo = await web3.eth.isSyncing()
-    // conf.startBlockHeight = 2n
-    assert.equal(syncInfo.startingBlock, height)
-    assert.equal(syncInfo.currentBlock, height)
-    assert.equal(syncInfo.highestBlock, height)
+    let isSyncing = await web3.eth.isSyncing()
+    assert.isFalse(isSyncing)
 })
 
 it('can make batch requests', async () => {
@@ -226,7 +225,7 @@ it('can make batch requests', async () => {
         {
             jsonrpc: '2.0',
             id: 3,
-            result: { startingBlock: '0x2', currentBlock: '0x2', highestBlock: '0x2' }
+            result: false
         }
     )
     assert.deepEqual(
@@ -263,7 +262,7 @@ it('get fee history', async () => {
         response,
         {
             oldestBlock: 1n,
-            reward: [['0x0'], ['0x0']], // gas price is always 0 during testing
+            reward: [['0x96'], ['0x96']], // gas price is 150 during testing
             baseFeePerGas: [0n, 0n],
             gasUsedRatio: [0, 0.04964366666666667]
         }

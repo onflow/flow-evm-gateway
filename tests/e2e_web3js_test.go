@@ -26,6 +26,10 @@ func TestWeb3_E2E(t *testing.T) {
 		runWeb3Test(t, "eth_non_interactive_test")
 	})
 
+	t.Run("retrieve syncing status", func(t *testing.T) {
+		runWeb3Test(t, "eth_syncing_status_test")
+	})
+
 	t.Run("deploy contract and call methods", func(t *testing.T) {
 		runWeb3Test(t, "eth_deploy_contract_and_interact_test")
 	})

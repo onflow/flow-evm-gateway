@@ -23,8 +23,8 @@ it('emit logs and retrieve them using different filters', async() => {
             from: conf.eoa.address,
             to: contractAddress,
             data: deployed.contract.methods.sum(A, B).encodeABI(),
-            gas: 1000000,
-            gasPrice: 0
+            gas: 1_000_000,
+            gasPrice: conf.minGasPrice
         })
         assert.equal(res.receipt.status, conf.successStatus)
 
