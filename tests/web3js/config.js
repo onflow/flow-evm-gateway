@@ -8,5 +8,6 @@ module.exports = {
     fundedAmount: 5.0,
     startBlockHeight: 2n, // start block height after setup accounts
     serviceEOA: "0xfacf71692421039876a5bb4f10ef7a439d8ef61e", // configured account as gw service
-    successStatus: 1n
+    successStatus: 1n,
+    minGasPrice: 150n
 }
