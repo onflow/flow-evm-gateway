@@ -979,8 +979,6 @@ func (b *BlockChainAPI) getBlockNumber(blockNumberOrHash *rpc.BlockNumberOrHash)
 // if the error is not of type ErrNotFound it will return the error and the generic
 // empty type.
 func handleError[T any](err error, log zerolog.Logger, collector metrics.Collector) (T, error) {
-	collector.ApiErrorOccurred()
-
 	var (
 		zero              T
 		errGasPriceTooLow *errs.GasPriceTooLowError
@@ -1004,6 +1002,7 @@ func handleError[T any](err error, log zerolog.Logger, collector metrics.Collect
 	case errors.As(err, &errGasPriceTooLow):
 		return zero, errGasPriceTooLow
 	default:
+		collector.ApiErrorOccurred()
 		log.Error().Err(err).Msg("api error")
 		return zero, errs.ErrInternal
 	}

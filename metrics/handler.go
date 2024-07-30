@@ -34,7 +34,7 @@ func (h *HttpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	method, err := extractMethod(r)
 	if err != nil {
-		h.logger.Info().Err(err).Msg("no metrics will be collected. error extracting method: ")
+		h.logger.Debug().Err(err).Msg("no metrics will be collected. error extracting method: ")
 	} else {
 		start = time.Now()
 		defer h.collector.MeasureRequestDuration(start, prometheus.Labels{"method": method})
