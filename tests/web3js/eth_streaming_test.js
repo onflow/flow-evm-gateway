@@ -4,7 +4,7 @@ const { assert } = require('chai')
 const { Web3 } = require("web3");
 
 it('streaming of blocks, transactions, logs using filters', async () => {
-    setTimeout(() => process.exit(1), 1000*120) // this is a failsafe if socket is kept open since test node process won't finish otherwise
+    setTimeout(() => process.exit(1), 1000 * 120) // this is a failsafe if socket is kept open since test node process won't finish otherwise
 
     let deployed = await helpers.deployContract("storage")
     let contractAddress = deployed.receipt.contractAddress
@@ -89,8 +89,8 @@ it('streaming of blocks, transactions, logs using filters', async () => {
             from: conf.eoa.address,
             to: contractAddress,
             data: deployed.contract.methods.sum(A, B).encodeABI(),
-            gas: 1000000,
-            gasPrice: 0
+            gas: 1_000_000,
+            gasPrice: conf.minGasPrice
         })
         assert.equal(res.receipt.status, conf.successStatus)
         sentHashes.push(res.receipt.transactionHash) // add sent hash

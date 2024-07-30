@@ -1,7 +1,7 @@
 const helpers = require("./helpers");
-const {Web3} = require("web3");
+const { Web3 } = require("web3");
 const conf = require("./config");
-const {assert} = require("chai");
+const { assert } = require("chai");
 const storageABI = require('../fixtures/storageABI.json')
 
 async function assertFilterLogs(subscription, expectedLogs) {
@@ -62,7 +62,7 @@ async function assertFilterLogs(subscription, expectedLogs) {
     })
 }
 
-it('streaming of logs using filters', async() => {
+it('streaming of logs using filters', async () => {
     let contractDeployment = await helpers.deployContract("storage")
     let contractAddress = contractDeployment.receipt.contractAddress
 
@@ -92,30 +92,30 @@ it('streaming of logs using filters', async() => {
 
     let allTests = [
         // stream all events
-        assertFilterLogs(calculatedEvent({ }), testValues),
+        assertFilterLogs(calculatedEvent({}), testValues),
         // stream only one event that has numA set to -1
         assertFilterLogs(
-            calculatedEvent({ filter: {numA: -1} }),
+            calculatedEvent({ filter: { numA: -1 } }),
             testValues.filter(v => v.numA === -1)
         ),
         // stream only events that have numB set to 200
         assertFilterLogs(
-            calculatedEvent({ filter: {numB: 200} }),
+            calculatedEvent({ filter: { numB: 200 } }),
             testValues.filter(v => v.numB === 200)
         ),
         // stream events that have numA set to 10 and numB set to 200
         assertFilterLogs(
-            calculatedEvent({ filter: {numA: repeatA, numB: 200} }),
+            calculatedEvent({ filter: { numA: repeatA, numB: 200 } }),
             testValues.filter(v => v.numB === 200 && v.numA === repeatA)
         ),
         // stream only events that have numA value set to 10
         assertFilterLogs(
-            calculatedEvent({ filter: {numA: repeatA} }),
+            calculatedEvent({ filter: { numA: repeatA } }),
             testValues.filter(v => v.numA === repeatA)
         ),
         // stream events that have numB 200 OR 300 value
         assertFilterLogs(
-            calculatedEvent({ filter: {numB: [200, 300]} }),
+            calculatedEvent({ filter: { numB: [200, 300] } }),
             testValues.filter(v => v.numB === 200 || v.numB === 300)
         ),
 
@@ -125,7 +125,7 @@ it('streaming of logs using filters', async() => {
         assertFilterLogs(
             await rawSubscribe({}),
             testValues.concat(testValues)
-         ),
+        ),
 
         // return all values by only a single contract
         assertFilterLogs(
@@ -150,8 +150,8 @@ it('streaming of logs using filters', async() => {
             from: conf.eoa.address,
             to: contractAddress,
             data: storageContract.methods.sum(numA, numB).encodeABI(),
-            gas: 1000000,
-            gasPrice: 0
+            gas: 1_000_000,
+            gasPrice: conf.minGasPrice
         })
         assert.equal(res.receipt.status, conf.successStatus)
     }
@@ -161,8 +161,8 @@ it('streaming of logs using filters', async() => {
             from: conf.eoa.address,
             to: contractAddress2,
             data: storageContract2.methods.sum(numA, numB).encodeABI(),
-            gas: 1000000,
-            gasPrice: 0
+            gas: 1_000_000,
+            gasPrice: conf.minGasPrice
         })
         assert.equal(res.receipt.status, conf.successStatus)
     }

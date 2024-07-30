@@ -899,17 +899,18 @@ func (b *BlockChainAPI) prepareBlockResponse(
 	}
 
 	blockResponse := &Block{
-		Hash:          h,
-		Number:        hexutil.Uint64(block.Height),
-		ParentHash:    block.ParentBlockHash,
-		ReceiptsRoot:  block.ReceiptRoot,
-		Transactions:  block.TransactionHashes,
-		Uncles:        []common.Hash{},
-		GasLimit:      hexutil.Uint64(blockGasLimit),
-		Nonce:         types.BlockNonce{0x1},
-		Timestamp:     hexutil.Uint64(block.Timestamp),
-		BaseFeePerGas: hexutil.Big(*big.NewInt(0)),
-		LogsBloom:     types.LogsBloom([]*types.Log{}),
+		Hash:             h,
+		Number:           hexutil.Uint64(block.Height),
+		ParentHash:       block.ParentBlockHash,
+		ReceiptsRoot:     block.ReceiptRoot,
+		TransactionsRoot: block.TransactionHashRoot,
+		Transactions:     block.TransactionHashes,
+		Uncles:           []common.Hash{},
+		GasLimit:         hexutil.Uint64(blockGasLimit),
+		Nonce:            types.BlockNonce{0x1},
+		Timestamp:        hexutil.Uint64(block.Timestamp),
+		BaseFeePerGas:    hexutil.Big(*big.NewInt(0)),
+		LogsBloom:        types.LogsBloom([]*types.Log{}),
 	}
 
 	// todo remove after previewnet, temp fix to mock some of the timestamps

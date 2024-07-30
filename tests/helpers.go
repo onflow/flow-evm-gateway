@@ -147,7 +147,7 @@ func servicesSetup(t *testing.T) (emulator.Emulator, func()) {
 		COAAddress:                  service.Address,
 		COAKey:                      service.PrivateKey,
 		CreateCOAResource:           false,
-		GasPrice:                    new(big.Int).SetUint64(0),
+		GasPrice:                    new(big.Int).SetUint64(150),
 		LogLevel:                    zerolog.DebugLevel,
 		LogWriter:                   testLogWriter(),
 		StreamTimeout:               time.Second * 30,
