@@ -25,6 +25,7 @@ it('get block', async () => {
         block.transactionsRoot,
         '0x0000000000000000000000000000000000000000000000000000000000000000'
     )
+    assert.equal(block.size, 3960n)
 
     let blockHash = await web3.eth.getBlock(block.hash)
     assert.deepEqual(block, blockHash)
@@ -166,14 +167,8 @@ it('get mining status', async () => {
 })
 
 it('get syncing status', async () => {
-    let height = await web3.eth.getBlockNumber()
-    assert.equal(height, conf.startBlockHeight)
-
-    let syncInfo = await web3.eth.isSyncing()
-    // conf.startBlockHeight = 2n
-    assert.equal(syncInfo.startingBlock, height)
-    assert.equal(syncInfo.currentBlock, height)
-    assert.equal(syncInfo.highestBlock, height)
+    let isSyncing = await web3.eth.isSyncing()
+    assert.isFalse(isSyncing)
 })
 
 it('can make batch requests', async () => {
@@ -230,7 +225,7 @@ it('can make batch requests', async () => {
         {
             jsonrpc: '2.0',
             id: 3,
-            result: { startingBlock: '0x2', currentBlock: '0x2', highestBlock: '0x2' }
+            result: false
         }
     )
     assert.deepEqual(
