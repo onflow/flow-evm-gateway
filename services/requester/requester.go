@@ -308,7 +308,7 @@ func (e *EVM) GetBalance(
 		[]cadence.Value{hexEncodedAddress},
 	)
 	if err != nil {
-		if !errors.Is(err, ErrOutOfRange) {
+		if !errors.Is(err, errs.ErrOutOfRange) {
 			e.logger.Error().
 				Err(err).
 				Str("address", address.String()).
@@ -349,7 +349,7 @@ func (e *EVM) GetNonce(
 		[]cadence.Value{hexEncodedAddress},
 	)
 	if err != nil {
-		if !errors.Is(err, ErrOutOfRange) {
+		if !errors.Is(err, errs.ErrOutOfRange) {
 			e.logger.Error().Err(err).
 				Str("address", address.String()).
 				Int64("evm-height", evmHeight).
@@ -440,7 +440,7 @@ func (e *EVM) Call(
 		[]cadence.Value{hexEncodedTx, hexEncodedAddress},
 	)
 	if err != nil {
-		if !errors.Is(err, ErrOutOfRange) {
+		if !errors.Is(err, errs.ErrOutOfRange) {
 			e.logger.Error().
 				Err(err).
 				Uint64("cadence-height", height).
@@ -535,7 +535,7 @@ func (e *EVM) GetCode(
 		[]cadence.Value{hexEncodedAddress},
 	)
 	if err != nil {
-		if !errors.Is(err, ErrOutOfRange) {
+		if !errors.Is(err, errs.ErrOutOfRange) {
 			e.logger.Error().
 				Err(err).
 				Uint64("cadence-height", height).
@@ -681,7 +681,7 @@ func (e *EVM) executeScriptAtHeight(
 		// if snapshot doesn't exist on EN, the height at which script was executed is out
 		// of the boundaries the EN keeps state, so return out of range
 		if strings.Contains(err.Error(), "failed to create storage snapshot") {
-			return nil, ErrOutOfRange
+			return nil, errs.ErrOutOfRange
 		}
 	}
 

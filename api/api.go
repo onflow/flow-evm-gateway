@@ -1019,10 +1019,6 @@ func handleError[T any](err error, log zerolog.Logger) (T, error) {
 	// as per specification returning nil and nil for not found resources
 	case errors.Is(err, errs.ErrNotFound):
 		return zero, nil
-	case errors.Is(err, errs.ErrInvalidRange):
-		return zero, err
-	case errors.Is(err, requester.ErrOutOfRange):
-		return zero, err
 	case errors.Is(err, errs.ErrInvalid):
 		return zero, err
 	case errors.Is(err, errs.ErrFailedTransaction):

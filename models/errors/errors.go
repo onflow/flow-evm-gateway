@@ -37,7 +37,9 @@ var (
 	// ErrDuplicate indicates that the entity can not be stored due to an already existing same entity.
 	ErrDuplicate = errors.New("entity duplicate")
 	// ErrInvalidRange indicates that the block range provided as start and end height is invalid.
-	ErrInvalidRange = errors.New("invalid block height range")
+	ErrInvalidRange = errors.Join(ErrInvalid, errors.New("invalid block height range"))
+	// ErrOutOfRange indicates the requested height is out of available range
+	ErrOutOfRange = errors.Join(ErrInvalid, errors.New("height is out of available range"))
 )
 
 func FailedTransaction(reason string) error {
