@@ -13,6 +13,7 @@ import (
 	"github.com/sethvargo/go-retry"
 
 	"github.com/onflow/flow-evm-gateway/models"
+	errs "github.com/onflow/flow-evm-gateway/models/errors"
 )
 
 const (
@@ -105,5 +106,5 @@ func parseInvalidError(err error) (error, bool) {
 		return nil, false
 	}
 
-	return fmt.Errorf("%w: %s", models.ErrInvalidEVMTransaction, matches[1]), true
+	return errs.FailedTransaction(matches[1]), true
 }

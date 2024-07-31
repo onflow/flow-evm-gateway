@@ -1022,8 +1022,6 @@ func handleError[T any](err error, log zerolog.Logger) (T, error) {
 		return zero, nil
 	case errors.Is(err, storageErrs.ErrInvalidRange):
 		return zero, err
-	case errors.Is(err, models.ErrInvalidEVMTransaction):
-		return zero, err
 	case errors.Is(err, requester.ErrOutOfRange):
 		return zero, err
 	case errors.Is(err, errs.ErrInvalid):
