@@ -16,7 +16,7 @@ type Collector interface {
 type DefaultCollector struct {
 	// TODO: for now we cannot differentiate which api request failed number of times
 	apiErrorsCounter prometheus.Counter
-	evmBlockHeight   prometheus.Gauge
+	evmBlockHeight   prometheus.Counter
 	requestDurations *prometheus.HistogramVec
 }
 
@@ -26,7 +26,7 @@ func NewCollector(logger zerolog.Logger) Collector {
 		Help: "Total number of errors returned by the endpoint resolvers",
 	})
 
-	evmBlockHeight := prometheus.NewGauge(prometheus.GaugeOpts{
+	evmBlockHeight := prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "evm_block_height",
 		Help: "Current EVM block height",
 	})
