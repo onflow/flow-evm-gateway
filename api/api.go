@@ -25,7 +25,6 @@ import (
 	"github.com/onflow/flow-evm-gateway/services/logs"
 	"github.com/onflow/flow-evm-gateway/services/requester"
 	"github.com/onflow/flow-evm-gateway/storage"
-	storageErrs "github.com/onflow/flow-evm-gateway/storage/errors"
 )
 
 const maxFeeHistoryBlockCount = 1024
@@ -1018,9 +1017,9 @@ func handleError[T any](err error, log zerolog.Logger) (T, error) {
 
 	switch {
 	// as per specification returning nil and nil for not found resources
-	case errors.Is(err, storageErrs.ErrNotFound):
+	case errors.Is(err, errs.ErrNotFound):
 		return zero, nil
-	case errors.Is(err, storageErrs.ErrInvalidRange):
+	case errors.Is(err, errs.ErrInvalidRange):
 		return zero, err
 	case errors.Is(err, requester.ErrOutOfRange):
 		return zero, err
