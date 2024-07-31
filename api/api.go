@@ -1011,18 +1011,12 @@ func (b *BlockChainAPI) getBlockNumber(blockNumberOrHash *rpc.BlockNumberOrHash)
 // if the error is not of type ErrNotFound it will return the error and the generic
 // empty type.
 func handleError[T any](err error, log zerolog.Logger) (T, error) {
-	var (
-		zero              T
-		errGasPriceTooLow *errs.GasPriceTooLowError
-		revertError       *errs.RevertError
-	)
+	var zero T
 
 	switch {
 	// as per specification returning nil and nil for not found resources
 	case errors.Is(err, storageErrs.ErrNotFound):
 		return zero, nil
-	case errors.As(err, &revertError):
-		return zero, revertError
 	case errors.Is(err, storageErrs.ErrInvalidRange):
 		return zero, err
 	case errors.Is(err, models.ErrInvalidEVMTransaction):
@@ -1031,8 +1025,8 @@ func handleError[T any](err error, log zerolog.Logger) (T, error) {
 		return zero, err
 	case errors.Is(err, errs.ErrInvalid):
 		return zero, err
-	case errors.As(err, &errGasPriceTooLow):
-		return zero, errGasPriceTooLow
+	case errors.Is(err, errs.ErrFailedTransaction):
+		return zero, err
 	default:
 		log.Error().Err(err).Msg("api error")
 		return zero, errs.ErrInternal
