@@ -9,7 +9,6 @@ import (
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"github.com/syndtr/goleveldb/leveldb/errors"
 
 	"github.com/onflow/flow-evm-gateway/models"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
@@ -128,7 +127,7 @@ func receiptStorage() storage.ReceiptIndexer {
 			}
 
 			if len(rcps) == 0 {
-				return nil, errors.ErrNotFound
+				return nil, errs.ErrNotFound
 			}
 
 			return rcps, nil
