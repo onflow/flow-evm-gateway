@@ -206,7 +206,7 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 	}
 
 	if tx.GasPrice().Cmp(e.config.GasPrice) < 0 {
-		return common.Hash{}, errs.NewErrGasPriceTooLow(e.config.GasPrice)
+		return common.Hash{}, errs.TransactionGasPriceTooLow(e.config.GasPrice)
 	}
 
 	txData := hex.EncodeToString(data)
@@ -452,16 +452,9 @@ func (e *EVM) Call(
 		return nil, fmt.Errorf("failed to execute script: %w", err)
 	}
 
-	evmResult, err := stdlib.ResultSummaryFromEVMResultValue(scriptResult)
+	evmResult, err := parseResult(scriptResult)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode EVM result from call [%s]: %w", scriptResult.String(), err)
-	}
-
-	if evmResult.ErrorCode != 0 {
-		if evmResult.ErrorCode == evmTypes.ExecutionErrCodeExecutionReverted {
-			return nil, errs.NewRevertError(evmResult.ReturnedData)
-		}
-		return nil, evmTypes.ErrorFromCode(evmResult.ErrorCode)
+		return nil, err
 	}
 
 	result := evmResult.ReturnedData
@@ -506,16 +499,9 @@ func (e *EVM) EstimateGas(
 		return 0, fmt.Errorf("failed to execute script: %w", err)
 	}
 
-	evmResult, err := stdlib.ResultSummaryFromEVMResultValue(scriptResult)
+	evmResult, err := parseResult(scriptResult)
 	if err != nil {
-		return 0, fmt.Errorf("failed to decode EVM result from gas estimation: %w", err)
-	}
-
-	if evmResult.ErrorCode != 0 {
-		if evmResult.ErrorCode == evmTypes.ExecutionErrCodeExecutionReverted {
-			return 0, models.NewInvalidEVMTransaction(errs.NewRevertError(evmResult.ReturnedData))
-		}
-		return 0, models.NewInvalidEVMTransaction(evmTypes.ErrorFromCode(evmResult.ErrorCode))
+		return 0, err
 	}
 
 	gasConsumed := evmResult.GasConsumed
@@ -731,9 +717,9 @@ func parseResult(res cadence.Value) (*evmTypes.ResultSummary, error) {
 
 	if result.ErrorCode != 0 {
 		if result.ErrorCode == evmTypes.ExecutionErrCodeExecutionReverted {
-			return nil, models.NewInvalidEVMTransaction(errs.NewRevertError(result.ReturnedData))
+			return nil, errs.RevertedTransaction(result.ReturnedData)
 		}
-		return nil, models.NewInvalidEVMTransaction(errors.New(result.ErrorMessage))
+		return nil, errs.FailedTransaction(result.ErrorMessage)
 	}
 
 	return result, err
