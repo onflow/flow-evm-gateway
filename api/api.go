@@ -1011,7 +1011,10 @@ func (b *BlockChainAPI) getBlockNumber(blockNumberOrHash *rpc.BlockNumberOrHash)
 // if the error is not of type ErrNotFound it will return the error and the generic
 // empty type.
 func handleError[T any](err error, log zerolog.Logger) (T, error) {
-	var zero T
+	var (
+		zero        T
+		revertedErr *errs.RevertError
+	)
 
 	switch {
 	// as per specification returning nil and nil for not found resources
@@ -1027,6 +1030,8 @@ func handleError[T any](err error, log zerolog.Logger) (T, error) {
 		return zero, err
 	case errors.Is(err, errs.ErrFailedTransaction):
 		return zero, err
+	case errors.As(err, &revertedErr):
+		return zero, revertedErr
 	default:
 		log.Error().Err(err).Msg("api error")
 		return zero, errs.ErrInternal

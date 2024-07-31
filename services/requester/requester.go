@@ -717,7 +717,7 @@ func parseResult(res cadence.Value) (*evmTypes.ResultSummary, error) {
 
 	if result.ErrorCode != 0 {
 		if result.ErrorCode == evmTypes.ExecutionErrCodeExecutionReverted {
-			return nil, errs.RevertedTransaction(result.ReturnedData)
+			return nil, errs.NewRevertError(result.ReturnedData)
 		}
 		return nil, errs.FailedTransaction(result.ErrorMessage)
 	}

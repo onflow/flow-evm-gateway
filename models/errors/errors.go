@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/onflow/go-ethereum/accounts/abi"
+	"github.com/onflow/go-ethereum/common/hexutil"
 	gethVM "github.com/onflow/go-ethereum/core/vm"
 )
 
@@ -22,9 +23,8 @@ var (
 
 	// Transaction errors
 
-	ErrFailedTransaction   = errors.New("failed transaction")
-	ErrInvalidTransaction  = errors.Join(ErrFailedTransaction, errors.New("invalid"))
-	ErrRevertedTransaction = errors.Join(ErrFailedTransaction, errors.New("reverted"))
+	ErrFailedTransaction  = errors.New("failed transaction")
+	ErrInvalidTransaction = errors.Join(ErrFailedTransaction, errors.New("invalid"))
 )
 
 func FailedTransaction(reason string) error {
@@ -42,13 +42,34 @@ func TransactionGasPriceTooLow(gasPrice *big.Int) error {
 	))
 }
 
-func RevertedTransaction(reason []byte) error {
+// RevertError is an API error that encompasses an EVM revert with JSON error
+// code and a binary data blob.
+type RevertError struct {
+	error
+	Reason string // revert reason hex encoded
+}
+
+// ErrorCode returns the JSON error code for a revert.
+// See: https://github.com/ethereum/wiki/wiki/JSON-RPC-Error-Codes-Improvement-Proposal
+func (e *RevertError) ErrorCode() int {
+	return 3
+}
+
+// ErrorData returns the hex encoded revert reason.
+func (e *RevertError) ErrorData() interface{} {
+	return e.Reason
+}
+
+// NewRevertError creates a revertError instance with the provided revert data.
+func NewRevertError(revert []byte) *RevertError {
 	err := gethVM.ErrExecutionReverted
 
-	r, errUnpack := abi.UnpackRevert(reason)
+	reason, errUnpack := abi.UnpackRevert(revert)
 	if errUnpack == nil {
-		err = fmt.Errorf("%w: %v", gethVM.ErrExecutionReverted, r)
+		err = fmt.Errorf("%w: %v", gethVM.ErrExecutionReverted, reason)
 	}
-
-	return errors.Join(ErrRevertedTransaction, err)
+	return &RevertError{
+		error:  err,
+		Reason: hexutil.Encode(revert),
+	}
 }
