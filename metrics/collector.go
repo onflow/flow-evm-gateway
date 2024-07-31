@@ -9,7 +9,7 @@ import (
 
 type Collector interface {
 	ApiErrorOccurred()
-	ServerPanicked(message string)
+	ServerPanicked(err error)
 	MeasureRequestDuration(start time.Time, labels prometheus.Labels)
 }
 
@@ -27,9 +27,9 @@ func NewCollector(logger zerolog.Logger) Collector {
 	})
 
 	serverPanicsCounters := prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "server_panics_total",
+		Name: "api_server_panics_total",
 		Help: "Total number of panics handled by server",
-	}, []string{"message"})
+	}, []string{"error"})
 
 	// TODO: Think of adding 'status_code'
 	requestDurations := prometheus.NewHistogramVec(prometheus.HistogramOpts{
@@ -66,8 +66,8 @@ func (c *DefaultCollector) ApiErrorOccurred() {
 	c.apiErrorsCounter.Inc()
 }
 
-func (c *DefaultCollector) ServerPanicked(message string) {
-	c.serverPanicsCounters.With(prometheus.Labels{"message": message}).Inc()
+func (c *DefaultCollector) ServerPanicked(err error) {
+	c.serverPanicsCounters.With(prometheus.Labels{"error": err.Error()}).Inc()
 }
 
 func (c *DefaultCollector) MeasureRequestDuration(start time.Time, labels prometheus.Labels) {

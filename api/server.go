@@ -409,7 +409,7 @@ func recoverHandler(logger zerolog.Logger, collector metrics.Collector, h http.H
 				}
 
 				logger.Error().Err(err).Msg("panic in the http server")
-				collector.ServerPanicked(err.Error())
+				collector.ServerPanicked(err)
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 			}
 		}()
