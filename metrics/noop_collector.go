@@ -9,4 +9,5 @@ import (
 type NoopCollector struct{}
 
 func (c *NoopCollector) ApiErrorOccurred()                                   {}
+func (c *NoopCollector) ServerPanicked()                                     {}
 func (c *NoopCollector) MeasureRequestDuration(time.Time, prometheus.Labels) {}
