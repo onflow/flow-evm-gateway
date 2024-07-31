@@ -18,8 +18,10 @@ var (
 
 	// General errors
 
-	ErrInternal = errors.New("internal error")
-	ErrInvalid  = errors.New("invalid")
+	ErrInternal     = errors.New("internal error")
+	ErrInvalid      = errors.New("invalid")
+	ErrRecoverable  = errors.New("recoverable")
+	ErrDisconnected = Recoverable(errors.New("disconnected"))
 
 	// Transaction errors
 
@@ -53,8 +55,14 @@ func TransactionGasPriceTooLow(gasPrice *big.Int) error {
 	))
 }
 
+func Recoverable(err error) error {
+	return errors.Join(ErrRecoverable, err)
+}
+
 // RevertError is an API error that encompasses an EVM revert with JSON error
 // code and a binary data blob.
+// We need this custom error type defined because the Geth server implementation
+// expects this type when serialising the error API response.
 type RevertError struct {
 	error
 	Reason string // revert reason hex encoded
