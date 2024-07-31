@@ -31,3 +31,7 @@ func (r RecoverableError) Error() string {
 func IsRecoverableError(err error) bool {
 	return errors.As(err, &RecoverableError{})
 }
+
+func NewInvalidEVMTransaction(err error) error {
+	return errors.Join(ErrInvalidEVMTransaction, err)
+}
