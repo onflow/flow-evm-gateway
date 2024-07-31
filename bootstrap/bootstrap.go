@@ -382,6 +382,10 @@ func startServer(
 		cfg,
 	)
 
+	// Start ingestion index health tracker
+	tracker := metrics.NewIngestionIndexHealthTracker(logger, collector, evm, cfg.IngestionIndexHealthMaxDifference, cfg.IngestionIndexHealthUpdateInterval)
+	tracker.Start(ctx)
+
 	if err := srv.EnableRPC(supportedAPIs); err != nil {
 		return err
 	}

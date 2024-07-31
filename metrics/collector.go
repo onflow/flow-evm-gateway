@@ -4,20 +4,24 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 	"github.com/rs/zerolog"
 )
 
 type Collector interface {
 	ApiErrorOccurred()
 	EvmBlockIndexed()
+	EvmBlockIndex() (uint64, error)
+	IngestionIndexHealthUpdated(healthy bool)
 	MeasureRequestDuration(start time.Time, labels prometheus.Labels)
 }
 
 type DefaultCollector struct {
 	// TODO: for now we cannot differentiate which api request failed number of times
-	apiErrorsCounter prometheus.Counter
-	evmBlockHeight   prometheus.Counter
-	requestDurations *prometheus.HistogramVec
+	apiErrorsCounter     prometheus.Counter
+	evmBlockHeight       prometheus.Counter
+	ingestionIndexHealth prometheus.Gauge
+	requestDurations     *prometheus.HistogramVec
 }
 
 func NewCollector(logger zerolog.Logger) Collector {
@@ -31,6 +35,11 @@ func NewCollector(logger zerolog.Logger) Collector {
 		Help: "Current EVM block height",
 	})
 
+	ingestionIndexHealth := prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "ingestion_index_health",
+		Help: "Indicates if the ingestion index is healthy",
+	})
+
 	// TODO: Think of adding 'status_code'
 	requestDurations := prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "api_request_duration_seconds",
@@ -39,15 +48,16 @@ func NewCollector(logger zerolog.Logger) Collector {
 	},
 		[]string{"method"})
 
-	if err := registerMetrics(logger, apiErrors, evmBlockHeight, requestDurations); err != nil {
+	if err := registerMetrics(logger, apiErrors, evmBlockHeight, ingestionIndexHealth, requestDurations); err != nil {
 		logger.Info().Msg("using noop collector as metric register failed")
 		return &NoopCollector{}
 	}
 
 	return &DefaultCollector{
-		apiErrorsCounter: apiErrors,
-		evmBlockHeight:   evmBlockHeight,
-		requestDurations: requestDurations,
+		apiErrorsCounter:     apiErrors,
+		evmBlockHeight:       evmBlockHeight,
+		ingestionIndexHealth: ingestionIndexHealth,
+		requestDurations:     requestDurations,
 	}
 }
 
@@ -68,6 +78,23 @@ func (c *DefaultCollector) ApiErrorOccurred() {
 
 func (c *DefaultCollector) EvmBlockIndexed() {
 	c.evmBlockHeight.Inc()
+}
+
+func (c *DefaultCollector) EvmBlockIndex() (uint64, error) {
+	height := &dto.Metric{}
+	if err := c.evmBlockHeight.Write(height); err != nil {
+		return 0, err
+	}
+
+	return uint64(height.Counter.GetValue()), nil
+}
+
+func (c *DefaultCollector) IngestionIndexHealthUpdated(healthy bool) {
+	if healthy {
+		c.ingestionIndexHealth.Set(1)
+	} else {
+		c.ingestionIndexHealth.Set(0)
+	}
 }
 
 func (c *DefaultCollector) MeasureRequestDuration(start time.Time, labels prometheus.Labels) {

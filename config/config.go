@@ -95,6 +95,11 @@ type Config struct {
 	HashCalculationHeightChange uint64
 	// PrometheusConfigFilePath is a path to a prometheus config file
 	PrometheusConfigFilePath string
+	// IngestionIndexHealthMaxDifference is the maximum allowed gap between indexed and expected block heights.
+	// The index is considered unhealthy if the actual difference exceeds this value.
+	IngestionIndexHealthMaxDifference uint64
+	// IngestionIndexHealthUpdateInterval is a time period in which we update ingestion index health counter
+	IngestionIndexHealthUpdateInterval time.Duration
 }
 
 func FromFlags() (*Config, error) {
@@ -117,7 +122,8 @@ func FromFlags() (*Config, error) {
 		cloudKMSKeyRingID,
 		walletKey string
 
-		streamTimeout int
+		streamTimeout,
+		ingestionIndexHealthUpdateInterval int
 
 		initHeight,
 		forceStartHeight uint64
@@ -158,6 +164,8 @@ func FromFlags() (*Config, error) {
 	// hash calculation change has been successfully deployed.
 	flag.Uint64Var(&cfg.HashCalculationHeightChange, "hash-calc-height-change", 0, "Cadence height at which the direct call hash calculation changed")
 	flag.StringVar(&cfg.PrometheusConfigFilePath, "prometheus-config-file-path", "./metrics/prometheus.yml", "Path to the prometheus config file")
+	flag.Uint64Var(&cfg.IngestionIndexHealthMaxDifference, "ingestion-index-health-max-difference", 50, "Maximum allowed gap between indexed and expected block heights")
+	flag.IntVar(&ingestionIndexHealthUpdateInterval, "ingestion-index-health-update-interval", 15, "Time period in seconds in which we update ingestion index health")
 	flag.Parse()
 
 	if coinbase == "" {
@@ -279,6 +287,7 @@ func FromFlags() (*Config, error) {
 	}
 
 	cfg.StreamTimeout = time.Second * time.Duration(streamTimeout)
+	cfg.IngestionIndexHealthUpdateInterval = time.Second * time.Duration(ingestionIndexHealthUpdateInterval)
 
 	exp, err := time.ParseDuration(filterExpiry)
 	if err != nil {
