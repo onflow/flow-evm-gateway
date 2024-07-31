@@ -6,11 +6,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/onflow/flow-evm-gateway/models/mocks"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+
+	errs "github.com/onflow/flow-evm-gateway/models/errors"
+	"github.com/onflow/flow-evm-gateway/models/mocks"
 )
 
 func Test_RestartableEngine(t *testing.T) {
@@ -61,13 +63,13 @@ func Test_RestartableEngine(t *testing.T) {
 				// make sure time diff increases with each retry
 				assert.True(t, prevDiff < curDiff)
 				prevDiff = curDiff
-				return ErrDisconnected
+				return errs.ErrDisconnected
 			}).
 			Times(int(retries))
 
 		r := NewRestartableEngine(mockEngine, retries, zerolog.New(zerolog.NewTestWriter(t)))
 		err := r.Run(context.Background())
-		require.EqualError(t, ErrDisconnected, err.Error())
+		require.EqualError(t, errs.ErrDisconnected, err.Error())
 	})
 
 	t.Run("should restart when recoverable error is returned but then return nil after error is no longer returned", func(t *testing.T) {
@@ -83,7 +85,7 @@ func Test_RestartableEngine(t *testing.T) {
 					}).
 					Once()
 
-				return ErrDisconnected
+				return errs.ErrDisconnected
 			}).
 			Once()
 

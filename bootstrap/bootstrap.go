@@ -16,11 +16,11 @@ import (
 	"github.com/onflow/flow-evm-gateway/api"
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/models"
+	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/services/ingestion"
 	"github.com/onflow/flow-evm-gateway/services/requester"
 	"github.com/onflow/flow-evm-gateway/services/traces"
 	"github.com/onflow/flow-evm-gateway/storage"
-	storageErrs "github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
 )
 
@@ -80,7 +80,7 @@ func Start(ctx context.Context, cfg *config.Config) error {
 	}
 
 	// if database is not initialized require init height
-	if _, err := blocks.LatestCadenceHeight(); errors.Is(err, storageErrs.ErrNotInitialized) {
+	if _, err := blocks.LatestCadenceHeight(); errors.Is(err, errs.ErrNotInitialized) {
 		cadenceHeight := cfg.InitCadenceHeight
 		cadenceBlock, err := client.GetBlockHeaderByHeight(ctx, cadenceHeight)
 		if err != nil {

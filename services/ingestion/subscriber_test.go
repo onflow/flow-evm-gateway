@@ -6,7 +6,7 @@ import (
 
 	"github.com/onflow/flow-go-sdk/access"
 
-	"github.com/onflow/flow-evm-gateway/models"
+	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/services/requester"
 	"github.com/onflow/flow-evm-gateway/services/testutils"
 
@@ -44,7 +44,7 @@ func Test_Subscribing(t *testing.T) {
 
 	for ev := range events {
 		if prevHeight == endHeight {
-			require.ErrorIs(t, ev.Err, models.ErrDisconnected)
+			require.ErrorIs(t, ev.Err, errs.ErrDisconnected)
 			break
 		}
 

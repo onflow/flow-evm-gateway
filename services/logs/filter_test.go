@@ -9,10 +9,11 @@ import (
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	"github.com/syndtr/goleveldb/leveldb/errors"
 
 	"github.com/onflow/flow-evm-gateway/models"
+	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/storage"
-	"github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/onflow/flow-evm-gateway/storage/mocks"
 )
 
@@ -103,7 +104,7 @@ func blockStorage() storage.BlockIndexer {
 					return b, nil
 				}
 			}
-			return nil, errors.ErrNotFound
+			return nil, errs.ErrNotFound
 		})
 
 	return blockStorage
