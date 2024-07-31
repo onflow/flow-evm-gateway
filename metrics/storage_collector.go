@@ -10,7 +10,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
-type StorageCollector struct {
+type StorageSizeCollector struct {
 	storageDir  string
 	storageSize prometheus.Gauge
 	//TODO: think of adding error metric indicating we couldn't update the db size
@@ -18,7 +18,7 @@ type StorageCollector struct {
 	logger   zerolog.Logger
 }
 
-func NewStorageCollector(logger zerolog.Logger, storageDir string, interval time.Duration) (*StorageCollector, error) {
+func NewStorageSizeCollector(logger zerolog.Logger, storageDir string, interval time.Duration) (*StorageSizeCollector, error) {
 	storageSize := prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "storage_size_bytes",
@@ -30,7 +30,7 @@ func NewStorageCollector(logger zerolog.Logger, storageDir string, interval time
 		return nil, err
 	}
 
-	return &StorageCollector{
+	return &StorageSizeCollector{
 		storageDir:  storageDir,
 		storageSize: storageSize,
 		interval:    interval,
@@ -38,7 +38,7 @@ func NewStorageCollector(logger zerolog.Logger, storageDir string, interval time
 	}, nil
 }
 
-func (c *StorageCollector) Start(ctx context.Context) {
+func (c *StorageSizeCollector) Start(ctx context.Context) {
 	go func() {
 		ticker := time.NewTicker(c.interval)
 		defer ticker.Stop()
@@ -55,7 +55,7 @@ func (c *StorageCollector) Start(ctx context.Context) {
 	}()
 }
 
-func (c *StorageCollector) updateStorageSize() {
+func (c *StorageSizeCollector) updateStorageSize() {
 	size, err := getFolderSize(c.storageDir)
 	if err != nil {
 		c.logger.Err(err).Msg("failed to get storage size. storage size metric will not be updated")
