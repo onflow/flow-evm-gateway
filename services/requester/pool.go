@@ -77,14 +77,14 @@ func (t *TxPool) Send(
 		}
 
 		if res.Error != nil {
+			if err, ok := parseInvalidError(res.Error); ok {
+				return err
+			}
+
 			t.logger.Error().Err(res.Error).
 				Str("flow-id", flowTx.ID().String()).
 				Str("evm-id", evmTx.Hash().Hex()).
 				Msg("flow transaction error")
-
-			if err, ok := parseInvalidError(res.Error); ok {
-				return err
-			}
 
 			// hide specific cause since it's an implementation issue
 			return fmt.Errorf("failed to submit flow evm transaction %s", evmTx.Hash())
