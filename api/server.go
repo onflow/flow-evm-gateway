@@ -263,7 +263,7 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		logger:         h.logger,
 	}
 
-	rpc := recoverHandler(h.logger, h.httpHandler)
+	rpc := recoverHandler(h.logger, h.collector, h.httpHandler)
 	if rpc != nil {
 		if checkPath(r, "") {
 			rpc.ServeHTTP(logW, r)
@@ -395,7 +395,7 @@ func corsHandler(srv http.Handler, allowedOrigins []string) http.Handler {
 }
 
 // recoverHandler adds a wrapper to handle panics
-func recoverHandler(logger zerolog.Logger, h http.Handler) http.Handler {
+func recoverHandler(logger zerolog.Logger, collector metrics.Collector, h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			r := recover()
@@ -409,6 +409,7 @@ func recoverHandler(logger zerolog.Logger, h http.Handler) http.Handler {
 				}
 
 				logger.Error().Err(err).Msg("panic in the http server")
+				collector.ServerPanicked(err)
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 			}
 		}()
