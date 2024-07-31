@@ -710,7 +710,7 @@ func (b *BlockChainAPI) EstimateGas(
 
 	err := args.Validate()
 	if err != nil {
-		return 0, err
+		return 0, errors.Join(err, errs.ErrInvalid)
 	}
 
 	tx, err := encodeTxFromArgs(args)
