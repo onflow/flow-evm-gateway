@@ -24,8 +24,8 @@ import (
 	"github.com/rs/zerolog"
 	slogzerolog "github.com/samber/slog-zerolog"
 
-	errs "github.com/onflow/flow-evm-gateway/api/errors"
 	"github.com/onflow/flow-evm-gateway/config"
+	errs "github.com/onflow/flow-evm-gateway/models/errors"
 )
 
 type rpcHandler struct {

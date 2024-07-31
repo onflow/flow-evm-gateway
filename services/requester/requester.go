@@ -25,9 +25,9 @@ import (
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
 
-	errs "github.com/onflow/flow-evm-gateway/api/errors"
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/models"
+	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/storage"
 )
 
@@ -513,9 +513,9 @@ func (e *EVM) EstimateGas(
 
 	if evmResult.ErrorCode != 0 {
 		if evmResult.ErrorCode == evmTypes.ExecutionErrCodeExecutionReverted {
-			return 0, errs.NewRevertError(evmResult.ReturnedData)
+			return 0, models.NewInvalidEVMTransaction(errs.NewRevertError(evmResult.ReturnedData))
 		}
-		return 0, evmTypes.ErrorFromCode(evmResult.ErrorCode)
+		return 0, models.NewInvalidEVMTransaction(evmTypes.ErrorFromCode(evmResult.ErrorCode))
 	}
 
 	gasConsumed := evmResult.GasConsumed
@@ -720,4 +720,21 @@ func cadenceStringToBytes(value cadence.Value) ([]byte, error) {
 	}
 
 	return code, nil
+}
+
+// handleResult
+func parseResult(res cadence.Value) (*evmTypes.ResultSummary, error) {
+	result, err := stdlib.ResultSummaryFromEVMResultValue(res)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode EVM result: %w", err)
+	}
+
+	if result.ErrorCode != 0 {
+		if result.ErrorCode == evmTypes.ExecutionErrCodeExecutionReverted {
+			return nil, models.NewInvalidEVMTransaction(errs.NewRevertError(result.ReturnedData))
+		}
+		return nil, models.NewInvalidEVMTransaction(errors.New(result.ErrorMessage))
+	}
+
+	return result, err
 }
