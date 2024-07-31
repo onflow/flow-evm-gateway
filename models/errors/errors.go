@@ -6,62 +6,49 @@ import (
 	"math/big"
 
 	"github.com/onflow/go-ethereum/accounts/abi"
-	"github.com/onflow/go-ethereum/common/hexutil"
 	gethVM "github.com/onflow/go-ethereum/core/vm"
 )
 
 var (
+	// API specific errors
+
 	ErrNotSupported = errors.New("endpoint is not supported")
-	ErrInvalid      = errors.New("invalid request")
-	ErrInternal     = errors.New("internal error")
 	ErrRateLimit    = errors.New("limit of requests per second reached")
+
+	// General errors
+
+	ErrInternal = errors.New("internal error")
+	ErrInvalid  = errors.New("invalid")
+
+	// Transaction errors
+
+	ErrFailedTransaction   = errors.New("failed transaction")
+	ErrInvalidTransaction  = errors.Join(ErrFailedTransaction, errors.New("invalid"))
+	ErrRevertedTransaction = errors.Join(ErrFailedTransaction, errors.New("reverted"))
 )
 
-type GasPriceTooLowError struct {
-	GasPrice *big.Int
+func FailedTransaction(err error) error {
+	return errors.Join(ErrFailedTransaction, err)
 }
 
-func (e *GasPriceTooLowError) Error() string {
-	return fmt.Sprintf(
+func InvalidTransaction(err error) error {
+	return errors.Join(ErrInvalidTransaction, err)
+}
+
+func TransactionGasPriceTooLow(gasPrice *big.Int) error {
+	return InvalidTransaction(fmt.Errorf(
 		"the minimum accepted gas price for transactions is: %d",
-		e.GasPrice,
-	)
+		gasPrice,
+	))
 }
 
-func NewErrGasPriceTooLow(gasPrice *big.Int) *GasPriceTooLowError {
-	return &GasPriceTooLowError{
-		GasPrice: gasPrice,
-	}
-}
-
-// RevertError is an API error that encompasses an EVM revert with JSON error
-// code and a binary data blob.
-type RevertError struct {
-	error
-	Reason string // revert reason hex encoded
-}
-
-// ErrorCode returns the JSON error code for a revert.
-// See: https://github.com/ethereum/wiki/wiki/JSON-RPC-Error-Codes-Improvement-Proposal
-func (e *RevertError) ErrorCode() int {
-	return 3
-}
-
-// ErrorData returns the hex encoded revert reason.
-func (e *RevertError) ErrorData() interface{} {
-	return e.Reason
-}
-
-// NewRevertError creates a revertError instance with the provided revert data.
-func NewRevertError(revert []byte) *RevertError {
+func RevertedTransaction(reason []byte) error {
 	err := gethVM.ErrExecutionReverted
 
-	reason, errUnpack := abi.UnpackRevert(revert)
+	r, errUnpack := abi.UnpackRevert(reason)
 	if errUnpack == nil {
-		err = fmt.Errorf("%w: %v", gethVM.ErrExecutionReverted, reason)
+		err = fmt.Errorf("%w: %v", gethVM.ErrExecutionReverted, r)
 	}
-	return &RevertError{
-		error:  err,
-		Reason: hexutil.Encode(revert),
-	}
+
+	return errors.Join(ErrRevertedTransaction, err)
 }
