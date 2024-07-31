@@ -35,7 +35,7 @@ func Start(ctx context.Context, cfg *config.Config) error {
 		return err
 	}
 
-	storageCollector, err := metrics.NewStorageCollector(logger, store, cfg.DatabaseDir, cfg.StorageSizeUpdateInterval)
+	storageCollector, err := metrics.NewStorageCollector(logger, cfg.DatabaseDir, cfg.StorageSizeUpdateInterval)
 	if err != nil {
 		logger.Error().Err(err).Msg("failed to create storage collector")
 	}

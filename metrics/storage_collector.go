@@ -8,12 +8,9 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
-
-	"github.com/onflow/flow-evm-gateway/storage/pebble"
 )
 
 type StorageCollector struct {
-	storage     *pebble.Storage
 	storageDir  string
 	storageSize prometheus.Gauge
 	//TODO: think of adding error metric indicating we couldn't update the db size
@@ -21,7 +18,7 @@ type StorageCollector struct {
 	logger   zerolog.Logger
 }
 
-func NewStorageCollector(logger zerolog.Logger, storage *pebble.Storage, storageDir string, interval time.Duration) (*StorageCollector, error) {
+func NewStorageCollector(logger zerolog.Logger, storageDir string, interval time.Duration) (*StorageCollector, error) {
 	storageSize := prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "storage_size_bytes",
@@ -34,7 +31,6 @@ func NewStorageCollector(logger zerolog.Logger, storage *pebble.Storage, storage
 	}
 
 	return &StorageCollector{
-		storage:     storage,
 		storageDir:  storageDir,
 		storageSize: storageSize,
 		interval:    interval,
