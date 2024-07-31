@@ -6,8 +6,9 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-limiter"
 
-	errs "github.com/onflow/flow-evm-gateway/api/errors"
 	"github.com/onflow/go-ethereum/rpc"
+
+	errs "github.com/onflow/flow-evm-gateway/models/errors"
 )
 
 // rateLimit will limit requests with the provider limiter, in case the limit

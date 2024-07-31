@@ -11,8 +11,8 @@ import (
 	"github.com/onflow/go-ethereum/common"
 
 	"github.com/onflow/flow-evm-gateway/models"
+	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/storage"
-	errs "github.com/onflow/flow-evm-gateway/storage/errors"
 )
 
 var _ storage.AccountIndexer = &Accounts{}

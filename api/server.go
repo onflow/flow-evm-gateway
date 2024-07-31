@@ -24,9 +24,9 @@ import (
 	"github.com/rs/zerolog"
 	slogzerolog "github.com/samber/slog-zerolog"
 
-	errs "github.com/onflow/flow-evm-gateway/api/errors"
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/metrics"
+	errs "github.com/onflow/flow-evm-gateway/models/errors"
 )
 
 type rpcHandler struct {
@@ -437,7 +437,7 @@ func (w *loggingResponseWriter) Write(data []byte) (int, error) {
 		// don't error log known handled errors
 		if !errorIs(err, errs.ErrRateLimit) &&
 			!errorIs(err, errs.ErrInvalid) &&
-			!errorIs(err, errs.ErrInternal) &&
+			!errorIs(err, errs.ErrFailedTransaction) &&
 			!errorIs(err, errs.ErrNotSupported) {
 			l = w.logger.Error()
 		}

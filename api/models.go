@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"math/big"
 
-	errs "github.com/onflow/flow-evm-gateway/api/errors"
 	"github.com/onflow/flow-evm-gateway/models"
+	errs "github.com/onflow/flow-evm-gateway/models/errors"
 
 	"github.com/onflow/go-ethereum/common"
 	"github.com/onflow/go-ethereum/common/hexutil"
@@ -40,7 +40,9 @@ type TransactionArgs struct {
 func (txArgs TransactionArgs) Validate() error {
 	// Prevent accidental erroneous usage of both 'input' and 'data' (show stopper)
 	if txArgs.Data != nil && txArgs.Input != nil && !bytes.Equal(*txArgs.Data, *txArgs.Input) {
-		return errors.New(`ambiguous request: both "data" and "input" are set and are not identical`)
+		return errs.InvalidTransaction(
+			errors.New(`ambiguous request: both "data" and "input" are set and are not identical`),
+		)
 	}
 
 	// Place data on 'data'
@@ -62,11 +64,13 @@ func (txArgs TransactionArgs) Validate() error {
 		if txDataLen == 0 {
 			// Prevent sending ether into black hole (show stopper)
 			if txArgs.Value.ToInt().Cmp(big.NewInt(0)) > 0 {
-				return errors.New("transaction will create a contract with value but empty code")
+				return errs.InvalidTransaction(
+					errors.New("transaction will create a contract with value but empty code"),
+				)
 			}
 
 			// No value submitted at least, critically Warn, but don't blow up
-			return errors.New("transaction will create a contract with empty code")
+			return errs.InvalidTransaction(errors.New("transaction will create a contract with empty code"))
 		}
 	}
 
@@ -75,7 +79,7 @@ func (txArgs TransactionArgs) Validate() error {
 		to := common.NewMixedcaseAddress(*txArgs.To)
 
 		if bytes.Equal(to.Address().Bytes(), common.Address{}.Bytes()) {
-			return errors.New("transaction recipient is the zero address")
+			return errs.InvalidTransaction(errors.New("transaction recipient is the zero address"))
 		}
 	}
 
