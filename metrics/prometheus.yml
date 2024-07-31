@@ -1,0 +1,6 @@
+scrape_configs:
+  - job_name: flow-evm-gateway
+    scrape_interval: 30s
+    static_configs:
+      - targets:
+          - localhost:9091
