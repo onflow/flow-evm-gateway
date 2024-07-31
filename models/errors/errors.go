@@ -27,8 +27,8 @@ var (
 	ErrRevertedTransaction = errors.Join(ErrFailedTransaction, errors.New("reverted"))
 )
 
-func FailedTransaction(err error) error {
-	return errors.Join(ErrFailedTransaction, err)
+func FailedTransaction(reason string) error {
+	return errors.Join(ErrFailedTransaction, errors.New(reason))
 }
 
 func InvalidTransaction(err error) error {
