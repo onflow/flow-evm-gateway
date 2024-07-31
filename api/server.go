@@ -433,7 +433,7 @@ func (w *loggingResponseWriter) Write(data []byte) (int, error) {
 		// don't error log known handled errors
 		if !errorIs(err, errs.ErrRateLimit) &&
 			!errorIs(err, errs.ErrInvalid) &&
-			!errorIs(err, errs.ErrInternal) &&
+			!errorIs(err, errs.ErrFailedTransaction) &&
 			!errorIs(err, errs.ErrNotSupported) {
 			l = w.logger.Error()
 		}
