@@ -34,7 +34,7 @@ it('emit logs and retrieve them using different filters', async() => {
         const events = await deployed.contract.getPastEvents('Calculated', {
             filter: { numA: A, numB: B },
             fromBlock: conf.startBlockHeight,
-            toBlock: latest, // todo 'latest' special value doesn't seem to work
+            toBlock: latest,
         })
 
         // Assert that the event is found and the result is correct

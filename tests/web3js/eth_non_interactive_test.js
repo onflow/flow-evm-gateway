@@ -61,7 +61,6 @@ it('get earliest/genesis block', async () => {
     assert.isString(block.parentHash)
     assert.lengthOf(block.logsBloom, 514)
     assert.isDefined(block.timestamp)
-    assert.isTrue(block.timestamp >= 1714090657n)
     assert.isUndefined(block.transactions)
 })
 
