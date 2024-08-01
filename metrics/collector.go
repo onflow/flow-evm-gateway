@@ -10,6 +10,7 @@ import (
 type Collector interface {
 	ApiErrorOccurred()
 	TraceDownloadFailed()
+	ServerPanicked(err error)
 	MeasureRequestDuration(start time.Time, labels prometheus.Labels)
 }
 
@@ -17,6 +18,7 @@ type DefaultCollector struct {
 	// TODO: for now we cannot differentiate which api request failed number of times
 	apiErrorsCounter          prometheus.Counter
 	traceDownloadErrorCounter prometheus.Counter
+	serverPanicsCounters      *prometheus.CounterVec
 	requestDurations          *prometheus.HistogramVec
 }
 
@@ -31,6 +33,11 @@ func NewCollector(logger zerolog.Logger) Collector {
 		Help: "Total number of trace download errors",
 	})
 
+	serverPanicsCounters := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "api_server_panics_total",
+		Help: "Total number of panics handled by server",
+	}, []string{"error"})
+
 	// TODO: Think of adding 'status_code'
 	requestDurations := prometheus.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "api_request_duration_seconds",
@@ -39,7 +46,7 @@ func NewCollector(logger zerolog.Logger) Collector {
 	},
 		[]string{"method"})
 
-	metrics := []prometheus.Collector{apiErrors, traceDownloadErrorCounter, requestDurations}
+	metrics := []prometheus.Collector{apiErrors, traceDownloadErrorCounter, serverPanicsCounters, requestDurations}
 	if err := registerMetrics(logger, metrics...); err != nil {
 		logger.Info().Msg("using noop collector as metric register failed")
 		return NewNoopCollector()
@@ -48,6 +55,7 @@ func NewCollector(logger zerolog.Logger) Collector {
 	return &DefaultCollector{
 		apiErrorsCounter:          apiErrors,
 		traceDownloadErrorCounter: traceDownloadErrorCounter,
+		serverPanicsCounters:      serverPanicsCounters,
 		requestDurations:          requestDurations,
 	}
 }
@@ -69,6 +77,10 @@ func (c *DefaultCollector) ApiErrorOccurred() {
 
 func (c *DefaultCollector) TraceDownloadFailed() {
 	c.traceDownloadErrorCounter.Inc()
+}
+
+func (c *DefaultCollector) ServerPanicked(err error) {
+	c.serverPanicsCounters.With(prometheus.Labels{"error": err.Error()}).Inc()
 }
 
 func (c *DefaultCollector) MeasureRequestDuration(start time.Time, labels prometheus.Labels) {

@@ -9,6 +9,7 @@ import (
 	"github.com/onflow/flow-go/fvm/evm/events"
 
 	"github.com/onflow/flow-evm-gateway/models"
+	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/services/requester"
 
 	"github.com/onflow/flow-go-sdk"
@@ -116,7 +117,7 @@ func (r *RPCSubscriber) subscribe(ctx context.Context, height uint64, opts ...ac
 		return events
 	}
 
-	evs, errs, err := r.client.SubscribeEventsByBlockHeight(ctx, height, r.blocksFilter(), opts...)
+	evs, errChan, err := r.client.SubscribeEventsByBlockHeight(ctx, height, r.blocksFilter(), opts...)
 	if err != nil {
 		events <- models.NewBlockEventsError(fmt.Errorf("failed to subscribe to events by block height: %w", err))
 		return events
@@ -136,7 +137,7 @@ func (r *RPCSubscriber) subscribe(ctx context.Context, height uint64, opts ...ac
 			case blockEvents, ok := <-evs:
 				if !ok {
 					var err error
-					err = models.ErrDisconnected
+					err = errs.ErrDisconnected
 					if ctx.Err() != nil {
 						err = ctx.Err()
 					}
@@ -146,10 +147,10 @@ func (r *RPCSubscriber) subscribe(ctx context.Context, height uint64, opts ...ac
 
 				events <- models.NewBlockEvents(blockEvents)
 
-			case err, ok := <-errs:
+			case err, ok := <-errChan:
 				if !ok {
 					var err error
-					err = models.ErrDisconnected
+					err = errs.ErrDisconnected
 					if ctx.Err() != nil {
 						err = ctx.Err()
 					}
@@ -157,7 +158,7 @@ func (r *RPCSubscriber) subscribe(ctx context.Context, height uint64, opts ...ac
 					return
 				}
 
-				events <- models.NewBlockEventsError(errors.Join(err, models.ErrDisconnected))
+				events <- models.NewBlockEventsError(errors.Join(err, errs.ErrDisconnected))
 				return
 			}
 		}

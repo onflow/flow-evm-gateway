@@ -13,6 +13,7 @@ import (
 	"github.com/sethvargo/go-retry"
 
 	"github.com/onflow/flow-evm-gateway/models"
+	errs "github.com/onflow/flow-evm-gateway/models/errors"
 )
 
 const (
@@ -77,14 +78,14 @@ func (t *TxPool) Send(
 		}
 
 		if res.Error != nil {
+			if err, ok := parseInvalidError(res.Error); ok {
+				return err
+			}
+
 			t.logger.Error().Err(res.Error).
 				Str("flow-id", flowTx.ID().String()).
 				Str("evm-id", evmTx.Hash().Hex()).
 				Msg("flow transaction error")
-
-			if err, ok := parseInvalidError(res.Error); ok {
-				return err
-			}
 
 			// hide specific cause since it's an implementation issue
 			return fmt.Errorf("failed to submit flow evm transaction %s", evmTx.Hash())
@@ -105,5 +106,5 @@ func parseInvalidError(err error) (error, bool) {
 		return nil, false
 	}
 
-	return fmt.Errorf("%w: %s", models.ErrInvalidEVMTransaction, matches[1]), true
+	return errs.FailedTransaction(matches[1]), true
 }

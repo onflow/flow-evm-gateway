@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	"github.com/onflow/flow-evm-gateway/models"
-	"github.com/onflow/flow-evm-gateway/storage/errors"
+	"github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/storage/mocks"
 )
 
