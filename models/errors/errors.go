@@ -26,7 +26,7 @@ var (
 	// Transaction errors
 
 	ErrFailedTransaction  = errors.New("failed transaction")
-	ErrInvalidTransaction = errors.Join(ErrFailedTransaction, errors.New("invalid"))
+	ErrInvalidTransaction = fmt.Errorf("%w: %w", ErrFailedTransaction, errors.New("invalid"))
 
 	// Storage errors
 
@@ -37,17 +37,17 @@ var (
 	// ErrDuplicate indicates that the entity can not be stored due to an already existing same entity.
 	ErrDuplicate = errors.New("entity duplicate")
 	// ErrInvalidRange indicates that the block range provided as start and end height is invalid.
-	ErrInvalidRange = errors.Join(ErrInvalid, errors.New("invalid block height range"))
+	ErrInvalidRange = fmt.Errorf("%w: %w", ErrInvalid, errors.New("invalid block height range"))
 	// ErrOutOfRange indicates the requested height is out of available range
-	ErrOutOfRange = errors.Join(ErrInvalid, errors.New("height is out of available range"))
+	ErrOutOfRange = fmt.Errorf("%w: %w", ErrInvalid, errors.New("height is out of available range"))
 )
 
 func FailedTransaction(reason string) error {
-	return errors.Join(ErrFailedTransaction, errors.New(reason))
+	return fmt.Errorf("%w: %w", ErrFailedTransaction, errors.New(reason))
 }
 
 func InvalidTransaction(err error) error {
-	return errors.Join(ErrInvalidTransaction, err)
+	return fmt.Errorf("%w: %w", ErrInvalidTransaction, err)
 }
 
 func TransactionGasPriceTooLow(gasPrice *big.Int) error {
@@ -58,7 +58,7 @@ func TransactionGasPriceTooLow(gasPrice *big.Int) error {
 }
 
 func Recoverable(err error) error {
-	return errors.Join(ErrRecoverable, err)
+	return fmt.Errorf("%w: %w", ErrRecoverable, err)
 }
 
 // RevertError is an API error that encompasses an EVM revert with JSON error
