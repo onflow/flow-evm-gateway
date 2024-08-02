@@ -7,58 +7,78 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/rs/zerolog"
+
+	"github.com/onflow/flow-evm-gateway/models"
 )
 
 type StorageSizeCollector struct {
+	//TODO: think of adding error metric indicating we couldn't update the db size
 	storageDir  string
 	storageSize prometheus.Gauge
-	//TODO: think of adding error metric indicating we couldn't update the db size
-	interval time.Duration
-	logger   zerolog.Logger
+	interval    time.Duration
+	logger      zerolog.Logger
+	ctx         context.Context
+	cancel      context.CancelFunc
+	ready       chan struct{}
 }
 
-func NewStorageSizeCollector(logger zerolog.Logger, storageDir string, interval time.Duration) (*StorageSizeCollector, error) {
-	storageSize := prometheus.NewGauge(
+type StorageSizeCollectorOpts struct {
+	Logger     zerolog.Logger
+	StorageDir string
+	Interval   time.Duration
+}
+
+func NewRestartableStorageSizeCollector(opts StorageSizeCollectorOpts, retries uint) models.Engine {
+	engine := NewStorageSizeCollector(opts)
+	return models.NewRestartableEngine(engine, retries, opts.Logger)
+}
+
+func NewStorageSizeCollector(opts StorageSizeCollectorOpts) *StorageSizeCollector {
+	storageSize := promauto.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "storage_size_bytes",
 			Help: "Estimated disk usage of storage in bytes",
 		})
 
-	if err := prometheus.Register(storageSize); err != nil {
-		logger.Err(err).Msg("failed to register metric")
-		return nil, err
-	}
-
 	return &StorageSizeCollector{
-		storageDir:  storageDir,
+		storageDir:  opts.StorageDir,
 		storageSize: storageSize,
-		interval:    interval,
-		logger:      logger,
-	}, nil
+		interval:    opts.Interval,
+		logger:      opts.Logger,
+		ready:       make(chan struct{}),
+	}
 }
 
-func (c *StorageSizeCollector) Start(ctx context.Context) {
+func (c *StorageSizeCollector) Run(ctx context.Context) error {
+	c.ctx, c.cancel = context.WithCancel(ctx)
+
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
-				c.logger.Warn().Msg("recovered from panic in storage collector")
+				c.logger.Warn().Msg("recovered from panic in storage size collector")
 			}
 		}()
 
 		ticker := time.NewTicker(c.interval)
 		defer ticker.Stop()
 
+		c.ready <- struct{}{}
+		c.logger.Info().Msg("starting storage size collector")
+
 		for {
 			select {
-			case <-ctx.Done():
-				c.logger.Info().Msg("shutting down storage collector")
+			case <-c.ctx.Done():
+				c.logger.Info().Msg("shutting down storage size collector")
 				return
 			case <-ticker.C:
 				c.updateStorageSize()
 			}
 		}
 	}()
+
+	return nil
 }
 
 func (c *StorageSizeCollector) updateStorageSize() {
@@ -88,4 +108,16 @@ func getFolderSize(path string) (int64, error) {
 		return nil
 	})
 	return size, err
+}
+
+func (c *StorageSizeCollector) Stop() {
+	c.cancel()
+}
+
+func (c *StorageSizeCollector) Ready() <-chan struct{} {
+	return c.ready
+}
+
+func (c *StorageSizeCollector) Done() <-chan struct{} {
+	return c.ctx.Done()
 }

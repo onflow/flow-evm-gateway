@@ -35,12 +35,19 @@ func Start(ctx context.Context, cfg *config.Config) error {
 		return err
 	}
 
-	storageSizeCollector, err := metrics.NewStorageSizeCollector(logger, cfg.DatabaseDir, cfg.StorageSizeUpdateInterval)
-	if err != nil {
-		logger.Error().Err(err).Msg("failed to create storage size collector. its metrics will be disabled")
-	} else {
-		storageSizeCollector.Start(ctx)
+	options := metrics.StorageSizeCollectorOpts{
+		Logger:     logger,
+		StorageDir: cfg.DatabaseDir,
+		Interval:   cfg.StorageSizeUpdateInterval,
 	}
+	storageSizeCollector := metrics.NewRestartableStorageSizeCollector(options, 7)
+
+	err = storageSizeCollector.Run(ctx)
+	if err != nil {
+		logger.Error().Err(err).Msg("failed to start storage size collector")
+		panic(err)
+	}
+	<-storageSizeCollector.Ready()
 
 	blocks := pebble.NewBlocks(store)
 	transactions := pebble.NewTransactions(store)
