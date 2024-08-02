@@ -174,6 +174,10 @@ func (b *BlockChainAPI) SendRawTransaction(
 	ctx context.Context,
 	input hexutil.Bytes,
 ) (common.Hash, error) {
+	if b.config.IndexOnly {
+		return common.Hash{}, errs.ErrNotSupported
+	}
+
 	l := b.logger.With().
 		Str("endpoint", "sendRawTransaction").
 		Str("input", input.String()).
