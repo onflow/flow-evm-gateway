@@ -26,34 +26,34 @@ type DefaultCollector struct {
 	requestDurations          *prometheus.HistogramVec
 }
 
-func NewCollector() Collector {
-	apiErrors := promauto.NewCounter(prometheus.CounterOpts{
+func NewCollector(factory promauto.Factory) Collector {
+	apiErrors := factory.NewCounter(prometheus.CounterOpts{
 		Name: "api_errors_total",
 		Help: "Total number of errors returned by the endpoint resolvers",
 	})
 
-	traceDownloadErrorCounter := promauto.NewCounter(prometheus.CounterOpts{
+	traceDownloadErrorCounter := factory.NewCounter(prometheus.CounterOpts{
 		Name: "trace_download_errors_total",
 		Help: "Total number of trace download errors",
 	})
 
-	serverPanicsCounters := promauto.NewCounterVec(prometheus.CounterOpts{
+	serverPanicsCounters := factory.NewCounterVec(prometheus.CounterOpts{
 		Name: "api_server_panics_total",
 		Help: "Total number of panics handled by server",
 	}, []string{"error"})
 
-	evmBlockHeight := promauto.NewGauge(prometheus.GaugeOpts{
+	evmBlockHeight := factory.NewGauge(prometheus.GaugeOpts{
 		Name: "evm_block_height",
 		Help: "Current EVM block height",
 	})
 
-	evmAccountCallCounters := promauto.NewCounterVec(prometheus.CounterOpts{
+	evmAccountCallCounters := factory.NewCounterVec(prometheus.CounterOpts{
 		Name: "evm_account_calls_total",
 		Help: "Total number of calls to specific evm account",
 	}, []string{"address"})
 
 	// TODO: Think of adding 'status_code'
-	requestDurations := promauto.NewHistogramVec(prometheus.HistogramOpts{
+	requestDurations := factory.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "api_request_duration_seconds",
 		Help:    "Duration of requests made to the endpoint resolvers",
 		Buckets: prometheus.DefBuckets,

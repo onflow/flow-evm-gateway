@@ -173,7 +173,8 @@ func (h *httpServer) Start() error {
 	}
 
 	// Initialize the server.
-	h.server = &http.Server{Handler: h}
+	metricsWrapperHandler := metrics.NewHttpHandler(h, h.collector, h.logger)
+	h.server = &http.Server{Handler: metricsWrapperHandler}
 	if h.timeouts != (rpc.HTTPTimeouts{}) {
 		CheckTimeouts(h.logger, &h.timeouts)
 		h.server.ReadTimeout = h.timeouts.ReadTimeout

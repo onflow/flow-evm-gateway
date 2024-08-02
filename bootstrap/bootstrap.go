@@ -10,6 +10,8 @@ import (
 	"github.com/onflow/flow-go-sdk/access"
 	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/onflow/flow-go-sdk/crypto"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-limiter/memorystore"
 
@@ -111,7 +113,9 @@ func Start(ctx context.Context, cfg *config.Config) error {
 	// TEMP: Remove `DirectCallHashCalculationBlockHeightChange` after PreviewNet is reset
 	models.DirectCallHashCalculationBlockHeightChange = cfg.HashCalculationHeightChange
 
-	collector := metrics.NewCollector()
+	reg := prometheus.NewRegistry()
+	factory := promauto.With(reg)
+	collector := metrics.NewCollector(factory)
 
 	go func() {
 		err := startServer(
