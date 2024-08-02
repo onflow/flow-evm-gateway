@@ -40,6 +40,12 @@ func NewStorageSizeCollector(logger zerolog.Logger, storageDir string, interval 
 
 func (c *StorageSizeCollector) Start(ctx context.Context) {
 	go func() {
+		defer func() {
+			if err := recover(); err != nil {
+				c.logger.Warn().Msg("recovered from panic in storage collector")
+			}
+		}()
+
 		ticker := time.NewTicker(c.interval)
 		defer ticker.Stop()
 

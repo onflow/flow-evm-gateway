@@ -161,7 +161,7 @@ func FromFlags() (*Config, error) {
 	// hash calculation change has been successfully deployed.
 	flag.Uint64Var(&cfg.HashCalculationHeightChange, "hash-calc-height-change", 0, "Cadence height at which the direct call hash calculation changed")
 	flag.StringVar(&cfg.PrometheusConfigFilePath, "prometheus-config-file-path", "./metrics/prometheus.yml", "Path to the prometheus config file")
-	flag.IntVar(&storageSizeUpdateInterval, "storage-size-update-interval", 15, "Defines the interval in seconds in which storage size metric will be gathered")
+	flag.IntVar(&storageSizeUpdateInterval, "storage-size-update-interval", 15*60, "Defines the interval in seconds in which storage size metric will be gathered")
 	flag.Parse()
 
 	if coinbase == "" {
