@@ -111,7 +111,7 @@ func Start(ctx context.Context, cfg *config.Config) error {
 	// TEMP: Remove `DirectCallHashCalculationBlockHeightChange` after PreviewNet is reset
 	models.DirectCallHashCalculationBlockHeightChange = cfg.HashCalculationHeightChange
 
-	collector := metrics.NewCollector(logger)
+	collector := metrics.NewCollector()
 
 	go func() {
 		err := startServer(
