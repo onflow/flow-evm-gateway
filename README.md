@@ -64,6 +64,7 @@ docker build -t onflow/flow-evm-gateway .
 docker run -d -p 127.0.0.1:8545:8545 onflow/flow-evm-gateway
 ```
 
+**Verify**
 To verify the service is up and running:
 
 ```bash
@@ -79,6 +80,23 @@ it should return:
   "result": "0x2"
 }
 ```
+
+# Building
+
+We suggest using the docker images we build for you during our CD process. The images can be found at `onflow/flow-evm-gateway`.
+
+**Manual Build**
+If you decide to build the binaries yourself you can do so by running:
+
+```
+go build -o evm-gateway cmd/main/main.go
+```
+
+The binary can then be run using the correct flags (see the table below or the example in the "running" section).
+```
+./evm-gateway {flags}
+```
+
 
 ## Configuration Flags
 
@@ -119,14 +137,6 @@ The application can be configured using the following flags at runtime:
 | `prometheus-config-file-path`| `./metrics/prometheus.yml`      | Path to the Prometheus configuration file                                                                                                                            |
 | `index-only`                 | `false`                         | Run in index-only mode, allowing state queries and indexing but no transaction sending                                                                               |
 
-## Getting Started
-
-To start using EVM Gateway, ensure you have the required dependencies installed and then run the application with your desired configuration flags. For example:
-
-```bash
-./evm-gateway --rpc-host "127.0.0.1" --rpc-port 3000 --database-dir "/path/to/database"
-````
-For more detailed information on configuration and deployment, refer to the Configuration and Deployment sections.
 
 # EVM Gateway Endpoints
 
