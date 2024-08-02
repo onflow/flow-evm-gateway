@@ -221,7 +221,7 @@ func TestTraceIngestion(t *testing.T) {
 		downloader := &mocks.Downloader{}
 		trace := &storageMock.TraceIndexer{}
 		logger := zerolog.New(zerolog.NewTestWriter(t))
-		collector := metrics.NewCollector()
+		collector := metrics.NewNoopCollector()
 
 		latestHeight := uint64(0)
 		blockID := flow.Identifier{0x09}
