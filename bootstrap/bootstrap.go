@@ -215,6 +215,7 @@ func startIngestion(
 			trace,
 			downloader,
 			logger,
+			collector,
 		)
 
 		go func() {
@@ -310,6 +311,7 @@ func startServer(
 		logger,
 		blocks,
 		txPool,
+		collector,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create EVM requester: %w", err)
