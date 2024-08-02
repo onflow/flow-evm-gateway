@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/onflow/flow-evm-gateway/models"
+	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/storage"
-	"github.com/onflow/flow-evm-gateway/storage/errors"
 	"github.com/onflow/flow-evm-gateway/storage/mocks"
 )
 
@@ -103,7 +103,7 @@ func blockStorage() storage.BlockIndexer {
 					return b, nil
 				}
 			}
-			return nil, errors.ErrNotFound
+			return nil, errs.ErrNotFound
 		})
 
 	return blockStorage
@@ -127,7 +127,7 @@ func receiptStorage() storage.ReceiptIndexer {
 			}
 
 			if len(rcps) == 0 {
-				return nil, errors.ErrNotFound
+				return nil, errs.ErrNotFound
 			}
 
 			return rcps, nil
