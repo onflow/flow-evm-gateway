@@ -37,7 +37,10 @@ func Start(ctx context.Context, cfg *config.Config) error {
 		return err
 	}
 
+	reg := prometheus.NewRegistry()
+	factory := promauto.With(reg)
 	options := metrics.StorageSizeCollectorOpts{
+		Factory:    factory,
 		Logger:     logger,
 		StorageDir: cfg.DatabaseDir,
 		Interval:   cfg.StorageSizeUpdateInterval,
@@ -113,8 +116,6 @@ func Start(ctx context.Context, cfg *config.Config) error {
 	// TEMP: Remove `DirectCallHashCalculationBlockHeightChange` after PreviewNet is reset
 	models.DirectCallHashCalculationBlockHeightChange = cfg.HashCalculationHeightChange
 
-	reg := prometheus.NewRegistry()
-	factory := promauto.With(reg)
 	collector := metrics.NewCollector(factory)
 
 	go func() {

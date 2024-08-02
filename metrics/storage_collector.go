@@ -25,6 +25,7 @@ type StorageSizeCollector struct {
 }
 
 type StorageSizeCollectorOpts struct {
+	Factory    promauto.Factory
 	Logger     zerolog.Logger
 	StorageDir string
 	Interval   time.Duration
@@ -36,7 +37,7 @@ func NewRestartableStorageSizeCollector(opts StorageSizeCollectorOpts, retries u
 }
 
 func NewStorageSizeCollector(opts StorageSizeCollectorOpts) *StorageSizeCollector {
-	storageSize := promauto.NewGauge(
+	storageSize := opts.Factory.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "storage_size_bytes",
 			Help: "Estimated disk usage of storage in bytes",
