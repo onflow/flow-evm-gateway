@@ -40,6 +40,17 @@ The binary can then be run using the correct flags (see the table below or the e
 # Running
 Operating an EVM Gateway is straightforward. It can either be deployed locally alongside the Flow emulator or configured to connect with any active Flow networks supporting EVM. Given that the EVM Gateway depends solely on [Access Node APIs](https://developers.flow.com/networks/node-ops/access-onchain-data/access-nodes/accessing-data/access-api), it is compatible with any networks offering this API access.
 
+**Example Configuration for Previewnet**
+```
+./evm-gateway
+--access-node-grpc-host https://previewnet.evm.nodes.onflow.org \
+--flow-network-id flow-previewnet \
+--coinbase {EVM-account} \
+--coa-address {funded Flow account address} \
+--coa-key-file {file containing private keys for coa-address, KMS should be used on live networks} \
+--coa-resource-create 
+```
+
 ### Running Locally
 **Start Emulator**
 
