@@ -171,7 +171,7 @@ The EVM Gateway implements APIs according to the Ethereum specification: https:/
     * debug_traceBlockByNumber
     * debug_traceBlockByHash
  
-**Unsuported APIs**
+**Unsupported APIs**
 - Wallet APIs: we don't officially support wallet APIs (eth_accounts, eth_sign, eth_signTransaction, eth_sendTransaction) due to security
   concerns that come with managing the keys on production environments, however, it is possible to configure the gateway to allow these
   methods for local development by using a special flag `--wallet-api-key`. 
