@@ -163,20 +163,19 @@ EVM Gateway has public RPC endpoints available for the following environments:
 
 
 # JSON-RPC API
-The EVM Gateway implements APIs acording to the Ethereum specification: https://ethereum.org/en/developers/docs/apis/json-rpc/#json-rpc-methods
+The EVM Gateway implements APIs according to the Ethereum specification: https://ethereum.org/en/developers/docs/apis/json-rpc/#json-rpc-methods
 
 **Additional APIs**
-Beside the APIs from the specification we support some additional APIs:
-- Tracing APIs allow you to fetch execution traces
+- Tracing APIs allows you to fetch execution traces
     * debug_traceTransaction
     * debug_traceBlockByNumber
     * debug_traceBlockByHash
  
 **Unsuported APIs**
-- Wallet APIs: we don't officialy support wallet APIs (eth_accounts, eth_sign, eth_signTransaction, eth_sendTransaction) due to security
-  concerns that come with managing the keys on production environments, however it is possible to configure the gateway to allow these
+- Wallet APIs: we don't officially support wallet APIs (eth_accounts, eth_sign, eth_signTransaction, eth_sendTransaction) due to security
+  concerns that come with managing the keys on production environments, however, it is possible to configure the gateway to allow these
   methods for local development by using a special flag `--wallet-api-key`. 
-- Proof API: we don't support obtaining proofs yet, Flow piggy-backs on the Flow consensus and hence the Flow proofs can be used to verify
+- Proof API: we don't support obtaining proofs yet, Flow piggy-backs on the Flow consensus, and hence the Flow proofs can be used to verify
   and trust the EVM environment. We intend to add access to EVM proofs in the future.
 - Access Lists: we don't yet support creating access lists as they don't affect the fees we charge. We might support this in the future
   to optimize fees, but it currently is not part of our priorities. 
