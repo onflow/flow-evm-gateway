@@ -8,7 +8,7 @@ import (
 	"github.com/cockroachdb/pebble"
 	"github.com/rs/zerolog"
 
-	errs "github.com/onflow/flow-evm-gateway/storage/errors"
+	errs "github.com/onflow/flow-evm-gateway/models/errors"
 )
 
 type Storage struct {

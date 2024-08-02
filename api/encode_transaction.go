@@ -6,7 +6,7 @@ import (
 
 	"github.com/onflow/go-ethereum/core/types"
 
-	errs "github.com/onflow/flow-evm-gateway/api/errors"
+	errs "github.com/onflow/flow-evm-gateway/models/errors"
 )
 
 const blockGasLimit uint64 = 15_000_000

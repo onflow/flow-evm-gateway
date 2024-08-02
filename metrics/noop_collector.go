@@ -13,5 +13,6 @@ func NewNoopCollector() *NoopCollector {
 }
 
 func (c *NoopCollector) ApiErrorOccurred()                                   {}
+func (c *NoopCollector) ServerPanicked(error)                                {}
 func (c *NoopCollector) EvmBlockHeightUpdated(uint64)                        {}
 func (c *NoopCollector) MeasureRequestDuration(time.Time, prometheus.Labels) {}

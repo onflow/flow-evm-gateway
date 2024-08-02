@@ -2,7 +2,6 @@ package requester
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/onflow/cadence"
@@ -11,9 +10,9 @@ import (
 	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/rs/zerolog"
 	"golang.org/x/exp/slices"
-)
 
-var ErrOutOfRange = errors.New("height is out of available range")
+	errs "github.com/onflow/flow-evm-gateway/models/errors"
+)
 
 type sporkClient struct {
 	firstHeight uint64
@@ -149,7 +148,7 @@ func (c *CrossSporkClient) getClientForHeight(height uint64) (access.Client, err
 
 	client := c.sporkClients.get(height)
 	if client == nil {
-		return nil, ErrOutOfRange
+		return nil, errs.ErrOutOfRange
 	}
 
 	c.logger.Debug().
