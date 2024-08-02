@@ -155,7 +155,6 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 	if err != nil {
 		return fmt.Errorf("failed to index block %d event: %w", events.Block().Height, err)
 	}
-	e.collector.EvmBlockIndexed()
 
 	for i, tx := range events.Transactions() {
 		receipt := events.Receipts()[i]
@@ -179,6 +178,7 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 		}
 	}
 
+	e.collector.EvmBlockHeightUpdated(events.CadenceHeight())
 	return nil
 }
 

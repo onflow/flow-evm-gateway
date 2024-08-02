@@ -9,14 +9,14 @@ import (
 
 type Collector interface {
 	ApiErrorOccurred()
-	EvmBlockIndexed()
+	EvmBlockHeightUpdated(height uint64)
 	MeasureRequestDuration(start time.Time, labels prometheus.Labels)
 }
 
 type DefaultCollector struct {
 	// TODO: for now we cannot differentiate which api request failed number of times
 	apiErrorsCounter prometheus.Counter
-	evmBlockHeight   prometheus.Counter
+	evmBlockHeight   prometheus.Gauge
 	requestDurations *prometheus.HistogramVec
 }
 
@@ -26,7 +26,7 @@ func NewCollector(logger zerolog.Logger) Collector {
 		Help: "Total number of errors returned by the endpoint resolvers",
 	})
 
-	evmBlockHeight := prometheus.NewCounter(prometheus.CounterOpts{
+	evmBlockHeight := prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "evm_block_height",
 		Help: "Current EVM block height",
 	})
@@ -66,8 +66,8 @@ func (c *DefaultCollector) ApiErrorOccurred() {
 	c.apiErrorsCounter.Inc()
 }
 
-func (c *DefaultCollector) EvmBlockIndexed() {
-	c.evmBlockHeight.Inc()
+func (c *DefaultCollector) EvmBlockHeightUpdated(height uint64) {
+	c.evmBlockHeight.Set(float64(height))
 }
 
 func (c *DefaultCollector) MeasureRequestDuration(start time.Time, labels prometheus.Labels) {
