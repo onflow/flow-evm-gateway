@@ -19,13 +19,31 @@ The basic design of the EVM Gateway consists of a couple of components:
 - Flow Requester: this component knows how to submit transactions to Flow AN to change the EVM state. What happens behind the scenes is that EVM gateway will receive an EVM transaction payload, which will get wrapped in a Cadence transaction that calls EVM contract with that payload and then the EVM core will execute the transaction and change the state.
 - JSON RPC API: this is the client API component that implements all the API according to the JSON RPC API specification.
 
+
+# Building
+
+We suggest using the docker images we build for you during our CD process. The images can be found at `onflow/flow-evm-gateway`.
+
+**Manual Build**
+
+If you decide to build the binaries yourself you can do so by running:
+
+```
+go build -o evm-gateway cmd/main/main.go
+```
+
+The binary can then be run using the correct flags (see the table below or the example in the "running" section).
+```
+./evm-gateway {flags}
+```
+
 # Running
 Operating an EVM Gateway is straightforward. It can either be deployed locally alongside the Flow emulator or configured to connect with any active Flow networks supporting EVM. Given that the EVM Gateway depends solely on [Access Node APIs](https://developers.flow.com/networks/node-ops/access-onchain-data/access-nodes/accessing-data/access-api), it is compatible with any networks offering this API access.
 
 ### Running Locally
 **Start Emulator**
 
-In order to run the gateway locally you need to start the emulator with EVM enabled:
+To run the gateway locally you need to start the emulator with EVM enabled:
 ```
 flow emulator --evm-enabled
 ```
@@ -42,13 +60,13 @@ go run cmd/main/main.go \
   --gas-price 0
 ```
 
-Note that the gateway will be starting from the latest emulator block, so if emulator is run before and transactions happen in the meantime, the gateway will not fetch those historical blocks & transactions.
+Note that the gateway will be starting from the latest emulator block, so if the emulator is run before and transactions happen in the meantime, the gateway will not fetch those historical blocks & transactions.
 This will be improved soon.
 
-_In this example we use `coa-address` value set to service account of the emulator, same as `coa-key`. 
+_In this example we use `coa-address` value set to the service account of the emulator, the same as `coa-key`. 
 This account will by default be funded with Flow which is a requirement. For `coinbase` we can 
-use whichever valid EVM address. It's not really useful for local running beside collecting fees. We provide also the 
-`coa-resource-create` to auto-create resources needed on start-up on the `coa` account in order to operate gateway. 
+use whichever valid EVM address. It's not really useful for local running besides collecting fees. We also allow for the 
+`coa-resource-create` to auto-create resources needed on start-up on the `coa` account in order to operate the gateway. 
 `gas-price` is set at 0 so we don't have to fund EOA accounts. We can set it higher but keep in mind you will then 
 need funded accounts for interacting with EVM._
 
@@ -80,23 +98,6 @@ it should return:
   "result": "0x2"
 }
 ```
-
-# Building
-
-We suggest using the docker images we build for you during our CD process. The images can be found at `onflow/flow-evm-gateway`.
-
-**Manual Build**
-If you decide to build the binaries yourself you can do so by running:
-
-```
-go build -o evm-gateway cmd/main/main.go
-```
-
-The binary can then be run using the correct flags (see the table below or the example in the "running" section).
-```
-./evm-gateway {flags}
-```
-
 
 ## Configuration Flags
 
