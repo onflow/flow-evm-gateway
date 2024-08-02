@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/services/traces/mocks"
 	storageMock "github.com/onflow/flow-evm-gateway/storage/mocks"
@@ -80,7 +81,7 @@ func TestTraceIngestion(t *testing.T) {
 				return nil
 			})
 
-		engine := NewTracesIngestionEngine(latestHeight, blockPublisher, blocks, trace, downloader, zerolog.Nop())
+		engine := NewTracesIngestionEngine(latestHeight, blockPublisher, blocks, trace, downloader, zerolog.Nop(), metrics.NewNoopCollector())
 
 		err := engine.Run(context.Background())
 		require.NoError(t, err)
@@ -171,7 +172,7 @@ func TestTraceIngestion(t *testing.T) {
 				return nil
 			})
 
-		engine := NewTracesIngestionEngine(latestHeight, blocksPublisher, blocks, trace, downloader, zerolog.Nop())
+		engine := NewTracesIngestionEngine(latestHeight, blocksPublisher, blocks, trace, downloader, zerolog.Nop(), metrics.NewNoopCollector())
 
 		err := engine.Run(context.Background())
 		require.NoError(t, err)
@@ -220,6 +221,7 @@ func TestTraceIngestion(t *testing.T) {
 		downloader := &mocks.Downloader{}
 		trace := &storageMock.TraceIndexer{}
 		logger := zerolog.New(zerolog.NewTestWriter(t))
+		collector := metrics.NewCollector(logger)
 
 		latestHeight := uint64(0)
 		blockID := flow.Identifier{0x09}
@@ -250,7 +252,7 @@ func TestTraceIngestion(t *testing.T) {
 				return nil, fmt.Errorf("failed download")
 			})
 
-		engine := NewTracesIngestionEngine(latestHeight, blockBroadcaster, blocks, trace, downloader, logger)
+		engine := NewTracesIngestionEngine(latestHeight, blockBroadcaster, blocks, trace, downloader, logger, collector)
 
 		err := engine.Run(context.Background())
 		require.NoError(t, err)

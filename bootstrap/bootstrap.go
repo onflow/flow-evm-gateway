@@ -215,6 +215,7 @@ func startIngestion(
 			trace,
 			downloader,
 			logger,
+			collector,
 		)
 
 		go func() {
