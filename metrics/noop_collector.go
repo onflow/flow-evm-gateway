@@ -15,4 +15,5 @@ func NewNoopCollector() *NoopCollector {
 func (c *NoopCollector) ApiErrorOccurred()                                   {}
 func (c *NoopCollector) TraceDownloadFailed()                                {}
 func (c *NoopCollector) ServerPanicked(error)                                {}
+func (c *NoopCollector) EvmAccountCalled(string)                             {}
 func (c *NoopCollector) MeasureRequestDuration(time.Time, prometheus.Labels) {}

@@ -239,6 +239,7 @@ func startIngestion(
 		blocksPublisher,
 		logsPublisher,
 		logger,
+		collector,
 	)
 	const retries = 15
 	restartableEventEngine := models.NewRestartableEngine(eventEngine, retries, logger)
@@ -310,6 +311,7 @@ func startServer(
 		logger,
 		blocks,
 		txPool,
+		collector,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create EVM requester: %w", err)
