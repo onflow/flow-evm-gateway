@@ -161,203 +161,26 @@ EVM Gateway has public RPC endpoints available for the following environments:
 | Currency Symbol | FLOW                                   |
 | Block Explorer  | https://flowdiver.io                   |
 
-# Supported namespaces and methods
 
-Listed below are the JSON-RPC namespaces and methods currently supported by the EVM Gateway:
+# JSON-RPC API
+The EVM Gateway implements APIs acording to the Ethereum specification: https://ethereum.org/en/developers/docs/apis/json-rpc/#json-rpc-methods
 
-* `eth`
-  * Supported 
-    * eth_chainId
-    * eth_blockNumber
-    * eth_coinbase
-    * eth_getLogs
-    * eth_getTransactionCount
-    * eth_getTransactionReceipt
-    * eth_getBlockByNumber
-    * eth_call
-    * eth_sendRawTransaction
-    * eth_getTransactionByHash
-    * eth_getCode
-    * eth_gasPrice 
-    * eth_feeHistory
-    * eth_getBalance
-    * eth_estimateGas
-    * eth_getTransactionByBlockNumberAndIndex
-    * eth_getTransactionByBlockHashAndIndex
-    * eth_getBlockByHash
-    * eth_getBlockReceipts
-    * eth_getBlockTransactionCountByHash
-    * eth_getBlockTransactionCountByNumber
-    * eth_newFilter
-    * eth_uninstallFilter
-    * eth_getFilterChanges
-    * eth_getFilterLogs
-    * eth_newBlockFilter
-    * eth_newPendingTransactionFilter
-    * eth_getUncleCountByBlockHash 
-    * eth_getUncleCountByBlockNumber
-    * eth_getUncleByBlockHashAndIndex
-    * eth_getUncleByBlockNumberAndIndex
-    * eth_maxPriorityFeePerGas
-    * eth_syncing
-    * eth_getStorageAt
-  * Unsupported but coming soon
-    * eth_createAccessList
-    * eth_getProof
-    * eth_accounts
-    * eth_sign
-    * eth_signTransaction
-    * eth_sendTransaction
-* `web3`
-  * Supported
-    * web3_clientVersion
-    * web_sha3
-* `net`
-  * Supported
-    * net_listening
-    * net_peerCount
-    * net_version
-* `debug`
-  * Supported
+**Additional APIs**
+Beside the APIs from the specification we support some additional APIs:
+- Tracing APIs allow you to fetch execution traces
     * debug_traceTransaction
     * debug_traceBlockByNumber
     * debug_traceBlockByHash
+ 
+**Unsuported APIs**
+- Wallet APIs: we don't officialy support wallet APIs (eth_accounts, eth_sign, eth_signTransaction, eth_sendTransaction) due to security
+  concerns that come with managing the keys on production environments, however it is possible to configure the gateway to allow these
+  methods for local development by using a special flag `--wallet-api-key`. 
+- Proof API: we don't support obtaining proofs yet, Flow piggy-backs on the Flow consensus and hence the Flow proofs can be used to verify
+  and trust the EVM environment. We intend to add access to EVM proofs in the future.
+- Access Lists: we don't yet support creating access lists as they don't affect the fees we charge. We might support this in the future
+  to optimize fees, but it currently is not part of our priorities. 
 
-We also plan to add support for the `admin` namespace in the near future.
-
-# Example queries
-
-Following is a list of pre-made JSON-RPC API calls, using `curl`:
-
-## eth_sendRawTransaction
-
-Deploy a smart contract:
-
-```bash
-curl -XPOST 'localhost:8545' --header 'Content-Type: application/json' --data-raw '{"jsonrpc":"2.0","method":"eth_sendRawTransaction","params":["0xb9015f02f9015b82029a80808083124f808080b901086060604052341561000f57600080fd5b60eb8061001d6000396000f300606060405260043610603f576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff168063c6888fa1146044575b600080fd5b3415604e57600080fd5b606260048080359060200190919050506078565b6040518082815260200191505060405180910390f35b60007f24abdb5865df5079dcc5ac590ff6f01d5c16edbc5fab4e195d9febd1114503da600783026040518082815260200191505060405180910390a16007820290509190505600a165627a7a7230582040383f19d9f65246752244189b02f56e8d0980ed44e7a56c0b200458caad20bb0029c001a0c0dfc8ed68e5e2522006ac4dc7b1c0c783328311b3e860658be1bab16728ed98a048ef3ec7ff2f13ebda39f01526254e3c7ab64feb0c574703555dba316b6a88e3"],"id":1}'
-```
-
-Run some smart contract function calls:
-
-```bash
-curl -XPOST 'localhost:8545' --header 'Content-Type: application/json' --data-raw '{"jsonrpc":"2.0","method":"eth_sendRawTransaction","params":["0xb88c02f88982029a01808083124f809499466ed2e37b892a2ee3e9cd55a98b68f5735db280a4c6888fa10000000000000000000000000000000000000000000000000000000000000006c001a0f84168f821b427dc158c4d8083bdc4b43e178cf0977a2c5eefbcbedcc4e351b0a066a747a38c6c266b9dc2136523cef04395918de37773db63d574aabde59c12eb"],"id":2}'
-```
-
-```bash
-curl -XPOST 'localhost:8545' --header 'Content-Type: application/json' --data-raw '{"jsonrpc":"2.0","method":"eth_sendRawTransaction","params":["0xb88c02f88982029a02808083124f809499466ed2e37b892a2ee3e9cd55a98b68f5735db280a4c6888fa10000000000000000000000000000000000000000000000000000000000000007c080a0409f5baa7622655f76f7f67c1bd8cc4cdd5a8e64fab881d78c47d9d73e907befa04981b65452d66beeb80527f3e8d3d0bf18aa21cfbd9a0c5ee749192d43d72d95"],"id":3}'
-```
-
-## eth_call
-
-Make a read-only smart contract function call:
-
-```bash
-curl -XPOST 'localhost:8545' --header 'Content-Type: application/json' --data-raw '{"jsonrpc":"2.0","method":"eth_call","params":[{"from":"0x658bdf435d810c91414ec09147daa6db62406379","to":"0x99466ed2e37b892a2ee3e9cd55a98b68f5735db2","gas":"0x76c0","gasPrice":"0x9184e72a000","value":"0x0","input":"0xc6888fa10000000000000000000000000000000000000000000000000000000000000006"}],"id":4}'
-```
-
-## eth_getLogs
-
-Retrieve EVM logs based on a topic:
-
-```bash
-curl -XPOST 'localhost:8545' --header 'Content-Type: application/json' --data-raw '{"jsonrpc":"2.0","method":"eth_getLogs","params":[{"topics":["0x24abdb5865df5079dcc5ac590ff6f01d5c16edbc5fab4e195d9febd1114503da"]}],"id":5}'
-```
-
-## eth_getTransactionCount
-
-Retrieve the nonce (transaction count) of an EVM address:
-
-```bash
-curl -XPOST 'localhost:8545' --header 'Content-Type: application/json' --data-raw '{"jsonrpc":"2.0","method":"eth_getTransactionCount","params":["0x658Bdf435d810C91414eC09147DAA6DB62406379","latest"],"id":6}'
-```
-
-## eth_getBlockByNumber
-
-Retrieve block info given its number:
-
-```bash
-curl -XPOST 'localhost:8545' --header 'Content-Type: application/json' --data-raw '{"jsonrpc":"2.0","method":"eth_getBlockByNumber","params":["0x3",false],"id":7}'
-```
-
-## eth_getBlockByHash
-
-Retrieve block info given its hash:
-
-```bash
-curl -XPOST 'localhost:8545' --header 'Content-Type: application/json' --data-raw '{"jsonrpc":"2.0","method":"eth_getBlockByHash","params":["0xf0cb48c7561fb6cab8b065b12bf4cf966a6840b41db81055bf4cd98d2354228f",false],"id":8}'
-```
-
-## eth_getTransactionReceipt
-
-Retrieve the transaction receipt given its hash:
-
-```bash
-curl -XPOST 'localhost:8545' --header 'Content-Type: application/json' --data-raw '{"jsonrpc":"2.0","method":"eth_getTransactionReceipt","params":["0xaae4530246e61ae58479824ab0863f99ca50414d27aec0c269ae6a7cfc4c7f5b"],"id":9}'
-```
-
-## eth_getTransactionByHash
-
-Retrieve transaction info given its hash:
-
-```bash
-curl -XPOST 'localhost:8545' --header 'Content-Type: application/json' --data-raw '{"jsonrpc":"2.0","method":"eth_getTransactionByHash","params":["0xaae4530246e61ae58479824ab0863f99ca50414d27aec0c269ae6a7cfc4c7f5b"],"id":10}'
-```
-
-## eth_getBalance
-
-Retrieve the balance of an EVM address:
-
-```bash
-curl -XPOST 'localhost:8545' --header 'Content-Type: application/json' --data-raw '{"jsonrpc":"2.0","method":"eth_getBalance","params":["0x000000000000000000000002f239b1ccbbaa9977","latest"],"id":11}'
-```
-
-## eth_getBlockTransactionCountByHash
-
-Retrieve the number of transactions in a block, given its hash:
-
-```bash
-curl -XPOST 'localhost:8545' --header 'Content-Type: application/json' --data-raw '{"jsonrpc":"2.0","method":"eth_getBlockTransactionCountByHash","params":["0xb47d74ea64221eb941490bdc0c9a404dacd0a8573379a45c992ac60ee3e83c3c"],"id":12}'
-```
-
-## eth_getBlockTransactionCountByNumber
-
-Retrieve the number of transactions in a block, given its number:
-
-```bash
-curl -XPOST 'localhost:8545' --header 'Content-Type: application/json' --data-raw '{"jsonrpc":"2.0","method":"eth_getBlockTransactionCountByNumber","params":["0x2"],"id":13}'
-```
-
-## eth_getTransactionByBlockHashAndIndex
-
-Retrieve transaction info given its block hash and index
-
-```bash
-curl -XPOST 'localhost:8545' --header 'Content-Type: application/json' --data-raw '{"jsonrpc":"2.0","method":"eth_getTransactionByBlockHashAndIndex","params":["0xb47d74ea64221eb941490bdc0c9a404dacd0a8573379a45c992ac60ee3e83c3c","0x0"],"id":14}'
-```
-
-## eth_getTransactionByBlockNumberAndIndex
-
-Retrieve transaction info given its block number and index
-
-```bash
-curl -XPOST 'localhost:8545' --header 'Content-Type: application/json' --data-raw '{"jsonrpc":"2.0","method":"eth_getTransactionByBlockNumberAndIndex","params":["0x3","0x0"],"id":15}'
-```
-
-## eth_getBlockReceipts
-
-Retrieve all the transaction receipts given a block number
-
-```bash
-curl -XPOST 'localhost:8545' --header 'Content-Type: application/json' --data-raw '{"jsonrpc":"2.0","method":"eth_getBlockReceipts","params":["0x3"],"id":16}'
-```
-
-## eth_blockNumber
-
-Retrieve the latest block number
-
-```bash
-curl -XPOST 'localhost:8545' --header 'Content-Type: application/json' --data-raw '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":17}'
-```
 
 # Contributing
 We welcome contributions from the community! Please read our [Contributing Guide](./CONTRIBUTING.md) for information on how to get involved.
