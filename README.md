@@ -138,6 +138,9 @@ The application can be configured using the following flags at runtime:
 | `prometheus-config-file-path`| `./metrics/prometheus.yml`      | Path to the Prometheus configuration file                                                                                                                            |
 | `index-only`                 | `false`                         | Run in index-only mode, allowing state queries and indexing but no transaction sending                                                                               |
 
+# Deploying
+Deploying the EVM Gateway node comes with some prerequisites as well as expectations and they are best explained in the WIP document: https://flowfoundation.notion.site/EVM-Gateway-Deployment-3c41da6710af40acbaf971e22ce0a9fd
+
 
 # EVM Gateway Endpoints
 
