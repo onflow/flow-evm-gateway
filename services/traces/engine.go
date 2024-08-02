@@ -12,6 +12,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-retry"
 
+	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/storage"
 )
@@ -25,6 +26,7 @@ type Engine struct {
 	blocks          storage.BlockIndexer
 	traces          storage.TraceIndexer
 	downloader      Downloader
+	collector       metrics.Collector
 }
 
 func NewTracesIngestionEngine(
@@ -34,6 +36,7 @@ func NewTracesIngestionEngine(
 	traces storage.TraceIndexer,
 	downloader Downloader,
 	logger zerolog.Logger,
+	collector metrics.Collector,
 ) *Engine {
 	height := &atomic.Uint64{}
 	height.Store(initEVMHeight)
@@ -45,6 +48,7 @@ func NewTracesIngestionEngine(
 		blocks:          blocks,
 		traces:          traces,
 		downloader:      downloader,
+		collector:       collector,
 	}
 }
 
@@ -110,6 +114,7 @@ func (e *Engine) indexBlockTraces(evmBlock *models.Block, cadenceBlockID flow.Id
 			})
 
 			if err != nil {
+				e.collector.TraceDownloadFailed()
 				l.Error().Err(err).Msg("failed to download trace")
 				return
 			}

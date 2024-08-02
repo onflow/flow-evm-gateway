@@ -142,6 +142,7 @@ func Start(ctx context.Context, cfg *config.Config) error {
 		transactionsPublisher,
 		logsPublisher,
 		logger,
+		collector,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to start event ingestion: %w", err)
@@ -171,6 +172,7 @@ func startIngestion(
 	transactionsPublisher *models.Publisher,
 	logsPublisher *models.Publisher,
 	logger zerolog.Logger,
+	collector metrics.Collector,
 ) error {
 	logger.Info().Msg("starting up event ingestion")
 
@@ -220,6 +222,7 @@ func startIngestion(
 			trace,
 			downloader,
 			logger,
+			collector,
 		)
 
 		go func() {
@@ -243,6 +246,7 @@ func startIngestion(
 		blocksPublisher,
 		logsPublisher,
 		logger,
+		collector,
 	)
 	const retries = 15
 	restartableEventEngine := models.NewRestartableEngine(eventEngine, retries, logger)
@@ -314,6 +318,7 @@ func startServer(
 		logger,
 		blocks,
 		txPool,
+		collector,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create EVM requester: %w", err)

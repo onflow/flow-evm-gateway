@@ -97,6 +97,8 @@ type Config struct {
 	PrometheusConfigFilePath string
 	// StorageSizeUpdateInterval is a period in which we update a storage size metric
 	StorageSizeUpdateInterval time.Duration
+	// IndexOnly configures the gateway to not accept any transactions but only queries of the state
+	IndexOnly bool
 }
 
 func FromFlags() (*Config, error) {
@@ -162,6 +164,7 @@ func FromFlags() (*Config, error) {
 	flag.Uint64Var(&cfg.HashCalculationHeightChange, "hash-calc-height-change", 0, "Cadence height at which the direct call hash calculation changed")
 	flag.StringVar(&cfg.PrometheusConfigFilePath, "prometheus-config-file-path", "./metrics/prometheus.yml", "Path to the prometheus config file")
 	flag.IntVar(&storageSizeUpdateInterval, "storage-size-update-interval", 15*60, "Defines the interval in seconds in which storage size metric will be gathered")
+	flag.BoolVar(&cfg.IndexOnly, "index-only", false, "Run the gateway in index-only mode which only allows querying the state and indexing, but disallows sending transactions.")
 	flag.Parse()
 
 	if coinbase == "" {
