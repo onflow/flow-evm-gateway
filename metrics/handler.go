@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
 )
 
@@ -37,7 +36,7 @@ func (h *HttpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		h.logger.Debug().Err(err).Msg("no metrics will be collected. error extracting method: ")
 	} else {
 		start = time.Now()
-		defer h.collector.MeasureRequestDuration(start, prometheus.Labels{"method": method})
+		defer h.collector.MeasureRequestDuration(start, method)
 	}
 
 	h.handler.ServeHTTP(w, r)

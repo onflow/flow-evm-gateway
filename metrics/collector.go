@@ -13,7 +13,7 @@ type Collector interface {
 	ServerPanicked(err error)
 	EvmBlockHeightUpdated(height uint64)
 	EvmAccountCalled(address string)
-	MeasureRequestDuration(start time.Time, labels prometheus.Labels)
+	MeasureRequestDuration(start time.Time, method string)
 }
 
 type DefaultCollector struct {
@@ -90,7 +90,7 @@ func (c *DefaultCollector) EvmAccountCalled(address string) {
 
 }
 
-func (c *DefaultCollector) MeasureRequestDuration(start time.Time, labels prometheus.Labels) {
+func (c *DefaultCollector) MeasureRequestDuration(start time.Time, method string) {
 	duration := time.Since(start)
-	c.requestDurations.With(labels).Observe(float64(duration))
+	c.requestDurations.With(prometheus.Labels{"method": method}).Observe(float64(duration))
 }
