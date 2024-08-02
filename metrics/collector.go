@@ -9,21 +9,28 @@ import (
 
 type Collector interface {
 	ApiErrorOccurred()
+	TraceDownloadFailed()
 	ServerPanicked(err error)
 	MeasureRequestDuration(start time.Time, labels prometheus.Labels)
 }
 
 type DefaultCollector struct {
 	// TODO: for now we cannot differentiate which api request failed number of times
-	apiErrorsCounter     prometheus.Counter
-	serverPanicsCounters *prometheus.CounterVec
-	requestDurations     *prometheus.HistogramVec
+	apiErrorsCounter          prometheus.Counter
+	traceDownloadErrorCounter prometheus.Counter
+	serverPanicsCounters      *prometheus.CounterVec
+	requestDurations          *prometheus.HistogramVec
 }
 
 func NewCollector(logger zerolog.Logger) Collector {
 	apiErrors := prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "api_errors_total",
 		Help: "Total number of errors returned by the endpoint resolvers",
+	})
+
+	traceDownloadErrorCounter := prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "trace_download_errors_total",
+		Help: "Total number of trace download errors",
 	})
 
 	serverPanicsCounters := prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -39,15 +46,17 @@ func NewCollector(logger zerolog.Logger) Collector {
 	},
 		[]string{"method"})
 
-	if err := registerMetrics(logger, apiErrors, serverPanicsCounters, requestDurations); err != nil {
-		logger.Info().Msg("Using noop collector as metric register failed")
-		return &NoopCollector{}
+	metrics := []prometheus.Collector{apiErrors, traceDownloadErrorCounter, serverPanicsCounters, requestDurations}
+	if err := registerMetrics(logger, metrics...); err != nil {
+		logger.Info().Msg("using noop collector as metric register failed")
+		return NewNoopCollector()
 	}
 
 	return &DefaultCollector{
-		apiErrorsCounter:     apiErrors,
-		serverPanicsCounters: serverPanicsCounters,
-		requestDurations:     requestDurations,
+		apiErrorsCounter:          apiErrors,
+		traceDownloadErrorCounter: traceDownloadErrorCounter,
+		serverPanicsCounters:      serverPanicsCounters,
+		requestDurations:          requestDurations,
 	}
 }
 
@@ -64,6 +73,10 @@ func registerMetrics(logger zerolog.Logger, metrics ...prometheus.Collector) err
 
 func (c *DefaultCollector) ApiErrorOccurred() {
 	c.apiErrorsCounter.Inc()
+}
+
+func (c *DefaultCollector) TraceDownloadFailed() {
+	c.traceDownloadErrorCounter.Inc()
 }
 
 func (c *DefaultCollector) ServerPanicked(err error) {
