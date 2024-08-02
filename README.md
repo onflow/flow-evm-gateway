@@ -90,27 +90,40 @@ it should return:
 
 The application can be configured using the following flags at runtime:
 
-| Flag                        | Default Value    | Description                                                                                                                                     |
-|-----------------------------|------------------|-------------------------------------------------------------------------------------------------------------------------------------------------|
-| `--database-dir`            | `./db`           | Path to the directory for the database.                                                                                                         |
-| `--rpc-host`                | `localhost`      | Host for the JSON RPC API server.                                                                                                               |
-| `--rpc-port`                | `8545`           | Port for the JSON RPC API server.                                                                                                               |
-| `--ws-enabled`              | `false`          | Enable websocket support.                                                                                                                       |
-| `--access-node-grpc-host`   | `localhost:3569` | Host to the current spork Flow access node (AN) gRPC API.                                                                                       |
-| `--access-node-spork-hosts` |                  | Previous spork AN hosts, defined following the schema: `{latest height}@{host}` as comma separated list (e.g. `"200@host-1.com,300@host2.com"`) |
-| `--evm-network-id`          | `testnet`        | EVM network ID (options: `testnet`, `mainnet`).                                                                                                 |
-| `--flow-network-id`         | `emulator`       | Flow network ID (options: `emulator`, `previewnet`).                                                                                            |
-| `--coinbase`                | (required)       | Coinbase address to use for fee collection.                                                                                                     |
-| `--init-cadence-height`     | 0                | Define the Cadence block height at which to start the indexing.                                                                                 |
-| `--gas-price`               | `1`              | Static gas price used for EVM transactions.                                                                                                     |
-| `--coa-address`             | (required)       | Flow address that holds COA account used for submitting transactions.                                                                           |
-| `--coa-key`                 | (required)       | *WARNING*: Do not use this flag in production! Private key value for the COA address used for submitting transactions.                          |
-| `--coa-key-file`            |                  | File path that contains JSON array of COA keys used in key-rotation mechanism, this is exclusive with `coa-key` flag.                           |
-| `--coa-resource-create`     | `false`          | Auto-create the COA resource in the Flow COA account provided if one doesn't exist.                                                             |
-| `--log-level`               | `debug`          | Define verbosity of the log output ('debug', 'info', 'error')                                                                                   |
-| `--stream-limit`            | 10               | Rate-limits the events sent to the client within one second                                                                                     |
-| `--stream-timeout`          | 3sec             | Defines the timeout in seconds the server waits for the event to be sent to the client                                                          |
-| `--filter-expiry`           | `5m`             | Filter defines the time it takes for an idle filter to expire                                                                                   |
+| Flag                         | Default Value                   | Description                                                                                                                                                          |
+|------------------------------|---------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `database-dir`               | `./db`                          | Path to the directory for the database                                                                                                                               |
+| `rpc-host`                   | `""`                            | Host for the RPC API server                                                                                                                                          |
+| `rpc-port`                   | `8545`                          | Port for the RPC API server                                                                                                                                          |
+| `ws-enabled`                 | `false`                         | Enable websocket connections                                                                                                                                         |
+| `access-node-grpc-host`      | `localhost:3569`                | Host to the flow access node gRPC API                                                                                                                                |
+| `access-node-spork-hosts`    | `""`                            | Previous spork AN hosts, defined as a comma-separated list (e.g. `"host-1.com,host2.com"`)                                                                             |
+| `evm-network-id`             | `previewnet`                    | EVM network ID (options: `previewnet`, `testnet`, `mainnet`)                                                                                                         |
+| `flow-network-id`            | `flow-emulator`                 | Flow network ID (options: `flow-emulator`, `flow-previewnet`, `flow-testnet`)                                                                                       |
+| `coinbase`                   | `""`                            | Coinbase address to use for fee collection                                                                                                                           |
+| `init-cadence-height`        | `0`                             | Cadence block height to start indexing; avoid using on a new network                                                                                                 |
+| `gas-price`                  | `1`                             | Static gas price for EVM transactions                                                                                                                                |
+| `coa-address`                | `""`                            | Flow address holding COA account for submitting transactions                                                                                                         |
+| `coa-key`                    | `""`                            | Private key for the COA address used for transactions                                                                                                                |
+| `coa-key-file`               | `""`                            | Path to a JSON file of COA keys for key-rotation (exclusive with `coa-key` flag)                                                                                     |
+| `coa-resource-create`        | `false`                         | Auto-create the COA resource if it doesn't exist in the Flow COA account                                                                                             |
+| `coa-cloud-kms-project-id`   | `""`                            | Project ID for KMS keys (e.g. `flow-evm-gateway`)                                                                                                                    |
+| `coa-cloud-kms-location-id`  | `""`                            | Location ID for KMS key ring (e.g. 'global')                                                                                                                         |
+| `coa-cloud-kms-key-ring-id`  | `""`                            | Key ring ID for KMS keys (e.g. 'tx-signing')                                                                                                                         |
+| `coa-cloud-kms-keys`         | `""`                            | KMS keys and versions, comma-separated (e.g. `"gw-key-6@1,gw-key-7@1"`)                                                                                                |
+| `log-level`                  | `debug`                         | Log verbosity level (`debug`, `info`, `warn`, `error`, `fatal`, `panic`)                                                                                             |
+| `log-writer`                 | `stderr`                        | Output method for logs (`stderr`, `console`)                                                                                                                         |
+| `stream-limit`               | `10`                            | Rate-limit for client events sent per second                                                                                                                         |
+| `rate-limit`                 | `50`                            | Requests per second limit for clients over any protocol (ws/http)                                                                                                    |
+| `address-header`             | `""`                            | Header for client IP when server is behind a proxy                                                                                                                   |
+| `heartbeat-interval`         | `100`                           | Interval for AN event subscription heartbeats                                                                                                                        |
+| `stream-timeout`             | `3`                             | Timeout in seconds for sending events to clients                                                                                                                     |
+| `force-start-height`         | `0`                             | Force-set starting Cadence height (local/testing use only)                                                                                                           |
+| `wallet-api-key`             | `""`                            | ECDSA private key for wallet APIs (local/testing use only)                                                                                                           |
+| `filter-expiry`              | `5m`                            | Expiry time for idle filters                                                                                                                                         |
+| `traces-gcp-bucket`          | `""`                            | GCP bucket name for transaction traces                                                                                                                               |
+| `prometheus-config-file-path`| `./metrics/prometheus.yml`      | Path to the Prometheus configuration file                                                                                                                            |
+| `index-only`                 | `false`                         | Run in index-only mode, allowing state queries and indexing but no transaction sending                                                                               |
 
 ## Getting Started
 
