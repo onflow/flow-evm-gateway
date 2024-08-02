@@ -22,14 +22,13 @@ import (
 	"github.com/onflow/go-ethereum/common"
 	"github.com/onflow/go-ethereum/core/txpool"
 	"github.com/onflow/go-ethereum/core/types"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
 
-	errs "github.com/onflow/flow-evm-gateway/api/errors"
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/models"
+	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/storage"
 )
 
@@ -212,7 +211,7 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 	}
 
 	if tx.GasPrice().Cmp(e.config.GasPrice) < 0 {
-		return common.Hash{}, errs.NewErrGasPriceTooLow(e.config.GasPrice)
+		return common.Hash{}, errs.TransactionGasPriceTooLow(e.config.GasPrice)
 	}
 
 	txData := hex.EncodeToString(data)
@@ -235,7 +234,7 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 	var to string
 	if tx.To() != nil {
 		to = tx.To().String()
-		e.collector.EvmAccountCalled(prometheus.Labels{"address": to})
+		e.collector.EvmAccountCalled(to)
 	}
 
 	e.logger.Info().
@@ -315,7 +314,7 @@ func (e *EVM) GetBalance(
 		[]cadence.Value{hexEncodedAddress},
 	)
 	if err != nil {
-		if !errors.Is(err, ErrOutOfRange) {
+		if !errors.Is(err, errs.ErrOutOfRange) {
 			e.logger.Error().
 				Err(err).
 				Str("address", address.String()).
@@ -356,7 +355,7 @@ func (e *EVM) GetNonce(
 		[]cadence.Value{hexEncodedAddress},
 	)
 	if err != nil {
-		if !errors.Is(err, ErrOutOfRange) {
+		if !errors.Is(err, errs.ErrOutOfRange) {
 			e.logger.Error().Err(err).
 				Str("address", address.String()).
 				Int64("evm-height", evmHeight).
@@ -447,7 +446,7 @@ func (e *EVM) Call(
 		[]cadence.Value{hexEncodedTx, hexEncodedAddress},
 	)
 	if err != nil {
-		if !errors.Is(err, ErrOutOfRange) {
+		if !errors.Is(err, errs.ErrOutOfRange) {
 			e.logger.Error().
 				Err(err).
 				Uint64("cadence-height", height).
@@ -459,16 +458,9 @@ func (e *EVM) Call(
 		return nil, fmt.Errorf("failed to execute script: %w", err)
 	}
 
-	evmResult, err := stdlib.ResultSummaryFromEVMResultValue(scriptResult)
+	evmResult, err := parseResult(scriptResult)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode EVM result from call [%s]: %w", scriptResult.String(), err)
-	}
-
-	if evmResult.ErrorCode != 0 {
-		if evmResult.ErrorCode == evmTypes.ExecutionErrCodeExecutionReverted {
-			return nil, errs.NewRevertError(evmResult.ReturnedData)
-		}
-		return nil, evmTypes.ErrorFromCode(evmResult.ErrorCode)
+		return nil, err
 	}
 
 	result := evmResult.ReturnedData
@@ -513,16 +505,9 @@ func (e *EVM) EstimateGas(
 		return 0, fmt.Errorf("failed to execute script: %w", err)
 	}
 
-	evmResult, err := stdlib.ResultSummaryFromEVMResultValue(scriptResult)
+	evmResult, err := parseResult(scriptResult)
 	if err != nil {
-		return 0, fmt.Errorf("failed to decode EVM result from gas estimation: %w", err)
-	}
-
-	if evmResult.ErrorCode != 0 {
-		if evmResult.ErrorCode == evmTypes.ExecutionErrCodeExecutionReverted {
-			return 0, errs.NewRevertError(evmResult.ReturnedData)
-		}
-		return 0, evmTypes.ErrorFromCode(evmResult.ErrorCode)
+		return 0, err
 	}
 
 	gasConsumed := evmResult.GasConsumed
@@ -556,7 +541,7 @@ func (e *EVM) GetCode(
 		[]cadence.Value{hexEncodedAddress},
 	)
 	if err != nil {
-		if !errors.Is(err, ErrOutOfRange) {
+		if !errors.Is(err, errs.ErrOutOfRange) {
 			e.logger.Error().
 				Err(err).
 				Uint64("cadence-height", height).
@@ -702,7 +687,7 @@ func (e *EVM) executeScriptAtHeight(
 		// if snapshot doesn't exist on EN, the height at which script was executed is out
 		// of the boundaries the EN keeps state, so return out of range
 		if strings.Contains(err.Error(), "failed to create storage snapshot") {
-			return nil, ErrOutOfRange
+			return nil, errs.ErrOutOfRange
 		}
 	}
 
@@ -727,4 +712,21 @@ func cadenceStringToBytes(value cadence.Value) ([]byte, error) {
 	}
 
 	return code, nil
+}
+
+// handleResult
+func parseResult(res cadence.Value) (*evmTypes.ResultSummary, error) {
+	result, err := stdlib.ResultSummaryFromEVMResultValue(res)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode EVM result: %w", err)
+	}
+
+	if result.ErrorCode != 0 {
+		if result.ErrorCode == evmTypes.ExecutionErrCodeExecutionReverted {
+			return nil, errs.NewRevertError(result.ReturnedData)
+		}
+		return nil, errs.FailedTransaction(result.ErrorMessage)
+	}
+
+	return result, err
 }

@@ -9,7 +9,7 @@ import (
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"golang.org/x/exp/slices"
 
-	errs "github.com/onflow/flow-evm-gateway/api/errors"
+	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/storage"
 )
 

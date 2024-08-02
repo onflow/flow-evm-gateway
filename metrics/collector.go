@@ -9,13 +9,15 @@ import (
 
 type Collector interface {
 	ApiErrorOccurred()
-	EvmAccountCalled(labels prometheus.Labels)
+	ServerPanicked(err error)
+	EvmAccountCalled(address string)
 	MeasureRequestDuration(start time.Time, labels prometheus.Labels)
 }
 
 type DefaultCollector struct {
 	// TODO: for now we cannot differentiate which api request failed number of times
 	apiErrorsCounter       prometheus.Counter
+	serverPanicsCounters   *prometheus.CounterVec
 	evmAccountCallCounters *prometheus.CounterVec
 	requestDurations       *prometheus.HistogramVec
 }
@@ -25,6 +27,11 @@ func NewCollector(logger zerolog.Logger) Collector {
 		Name: "api_errors_total",
 		Help: "Total number of errors returned by the endpoint resolvers",
 	})
+
+	serverPanicsCounters := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "api_server_panics_total",
+		Help: "Total number of panics handled by server",
+	}, []string{"error"})
 
 	evmAccountCallCounters := prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: "evm_account_calls_total",
@@ -39,13 +46,14 @@ func NewCollector(logger zerolog.Logger) Collector {
 	},
 		[]string{"method"})
 
-	if err := registerMetrics(logger, apiErrors, evmAccountCallCounters, requestDurations); err != nil {
+	if err := registerMetrics(logger, apiErrors, serverPanicsCounters, evmAccountCallCounters, requestDurations); err != nil {
 		logger.Info().Msg("Using noop collector as metric register failed")
-		return &NoopCollector{}
+		return NewNoopCollector()
 	}
 
 	return &DefaultCollector{
 		apiErrorsCounter:       apiErrors,
+		serverPanicsCounters:   serverPanicsCounters,
 		evmAccountCallCounters: evmAccountCallCounters,
 		requestDurations:       requestDurations,
 	}
@@ -66,8 +74,12 @@ func (c *DefaultCollector) ApiErrorOccurred() {
 	c.apiErrorsCounter.Inc()
 }
 
-func (c *DefaultCollector) EvmAccountCalled(labels prometheus.Labels) {
-	c.evmAccountCallCounters.With(labels).Inc()
+func (c *DefaultCollector) ServerPanicked(err error) {
+	c.serverPanicsCounters.With(prometheus.Labels{"error": err.Error()}).Inc()
+}
+
+func (c *DefaultCollector) EvmAccountCalled(address string) {
+	c.evmAccountCallCounters.With(prometheus.Labels{"address": address}).Inc()
 }
 
 func (c *DefaultCollector) MeasureRequestDuration(start time.Time, labels prometheus.Labels) {

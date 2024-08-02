@@ -19,14 +19,13 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-limiter"
 
-	errs "github.com/onflow/flow-evm-gateway/api/errors"
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/models"
+	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/services/logs"
 	"github.com/onflow/flow-evm-gateway/services/requester"
 	"github.com/onflow/flow-evm-gateway/storage"
-	storageErrs "github.com/onflow/flow-evm-gateway/storage/errors"
 )
 
 const maxFeeHistoryBlockCount = 1024
@@ -1017,27 +1016,20 @@ func (b *BlockChainAPI) getBlockNumber(blockNumberOrHash *rpc.BlockNumberOrHash)
 // empty type.
 func handleError[T any](err error, log zerolog.Logger, collector metrics.Collector) (T, error) {
 	var (
-		zero              T
-		errGasPriceTooLow *errs.GasPriceTooLowError
-		revertError       *errs.RevertError
+		zero        T
+		revertedErr *errs.RevertError
 	)
 
 	switch {
 	// as per specification returning nil and nil for not found resources
-	case errors.Is(err, storageErrs.ErrNotFound):
+	case errors.Is(err, errs.ErrNotFound):
 		return zero, nil
-	case errors.As(err, &revertError):
-		return zero, revertError
-	case errors.Is(err, storageErrs.ErrInvalidRange):
-		return zero, err
-	case errors.Is(err, models.ErrInvalidEVMTransaction):
-		return zero, err
-	case errors.Is(err, requester.ErrOutOfRange):
-		return zero, err
 	case errors.Is(err, errs.ErrInvalid):
 		return zero, err
-	case errors.As(err, &errGasPriceTooLow):
-		return zero, errGasPriceTooLow
+	case errors.Is(err, errs.ErrFailedTransaction):
+		return zero, err
+	case errors.As(err, &revertedErr):
+		return zero, revertedErr
 	default:
 		collector.ApiErrorOccurred()
 		log.Error().Err(err).Msg("api error")

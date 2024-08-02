@@ -2,9 +2,13 @@ package models
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"github.com/rs/zerolog"
 	"time"
+
+	"github.com/rs/zerolog"
+
+	errs "github.com/onflow/flow-evm-gateway/models/errors"
 )
 
 // Engine defines a processing unit
@@ -85,7 +89,7 @@ func (r *RestartableEngine) Run(ctx context.Context) error {
 			// don't restart if no error is returned, normal after stop procedure is done
 			return nil
 		}
-		if !IsRecoverableError(err) {
+		if !errors.Is(err, errs.ErrRecoverable) {
 			r.logger.Error().Err(err).Msg("received unrecoverable error")
 			// if error is not recoverable just die
 			return err
