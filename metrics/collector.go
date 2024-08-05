@@ -11,7 +11,7 @@ import (
 type Collector interface {
 	ApiErrorOccurred()
 	TraceDownloadFailed()
-	ServerPanicked(err error)
+	ServerPanicked(reason string)
 	EVMHeightIndexed(height uint64)
 	EVMAccountInteraction(address string)
 	MeasureRequestDuration(start time.Time, method string)
@@ -43,7 +43,7 @@ func NewCollector(logger zerolog.Logger) Collector {
 	serverPanicsCounters := prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: prefixedName("api_server_panics_total"),
 		Help: "Total number of panics in the API server",
-	}, []string{"error"})
+	}, []string{"reason"})
 
 	evmBlockHeight := prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: prefixedName("evm_block_height"),
@@ -104,8 +104,8 @@ func (c *DefaultCollector) TraceDownloadFailed() {
 	c.traceDownloadErrorCounter.Inc()
 }
 
-func (c *DefaultCollector) ServerPanicked(err error) {
-	c.serverPanicsCounters.With(prometheus.Labels{"error": err.Error()}).Inc()
+func (c *DefaultCollector) ServerPanicked(reason string) {
+	c.serverPanicsCounters.With(prometheus.Labels{"reason": reason}).Inc()
 }
 
 func (c *DefaultCollector) EVMHeightIndexed(height uint64) {
