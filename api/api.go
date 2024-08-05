@@ -259,7 +259,7 @@ func (b *BlockChainAPI) GetTransactionByBlockHashAndIndex(
 	index hexutil.Uint,
 ) (*Transaction, error) {
 	l := b.logger.With().
-		Str("endpoint", "getTransactionByHashAndIndex").
+		Str("endpoint", "getTransactionByBlockHashAndIndex").
 		Str("hash", blockHash.String()).
 		Str("index", index.String()).
 		Logger()
@@ -287,7 +287,8 @@ func (b *BlockChainAPI) GetTransactionByBlockHashAndIndex(
 	return tx, nil
 }
 
-// GetTransactionByBlockNumberAndIndex returns the transaction for the given block number and index.
+// GetTransactionByBlockNumberAndIndex returns the transaction
+// for the given block number and index.
 func (b *BlockChainAPI) GetTransactionByBlockNumberAndIndex(
 	ctx context.Context,
 	blockNumber rpc.BlockNumber,
@@ -301,6 +302,14 @@ func (b *BlockChainAPI) GetTransactionByBlockNumberAndIndex(
 
 	if err := rateLimit(ctx, b.limiter, l); err != nil {
 		return nil, err
+	}
+
+	if blockNumber < rpc.EarliestBlockNumber {
+		latestBlockNumber, err := b.blocks.LatestEVMHeight()
+		if err != nil {
+			return handleError[*Transaction](err, l, b.collector)
+		}
+		blockNumber = rpc.BlockNumber(latestBlockNumber)
 	}
 
 	block, err := b.blocks.GetByHeight(uint64(blockNumber))
@@ -483,7 +492,8 @@ func (b *BlockChainAPI) GetBlockReceipts(
 	return receipts, nil
 }
 
-// GetBlockTransactionCountByHash returns the number of transactions in the block with the given hash.
+// GetBlockTransactionCountByHash returns the number of transactions
+// in the block with the given hash.
 func (b *BlockChainAPI) GetBlockTransactionCountByHash(
 	ctx context.Context,
 	blockHash common.Hash,
@@ -506,7 +516,8 @@ func (b *BlockChainAPI) GetBlockTransactionCountByHash(
 	return &count, nil
 }
 
-// GetBlockTransactionCountByNumber returns the number of transactions in the block with the given block number.
+// GetBlockTransactionCountByNumber returns the number of transactions
+// in the block with the given block number.
 func (b *BlockChainAPI) GetBlockTransactionCountByNumber(
 	ctx context.Context,
 	blockNumber rpc.BlockNumber,
@@ -521,9 +532,11 @@ func (b *BlockChainAPI) GetBlockTransactionCountByNumber(
 	}
 
 	if blockNumber < rpc.EarliestBlockNumber {
-		// todo handle block number for negative special values in all APIs
-		b.collector.ApiErrorOccurred()
-		return nil, errs.ErrNotSupported
+		latestBlockNumber, err := b.blocks.LatestEVMHeight()
+		if err != nil {
+			return handleError[*hexutil.Uint](err, l, b.collector)
+		}
+		blockNumber = rpc.BlockNumber(latestBlockNumber)
 	}
 
 	block, err := b.blocks.GetByHeight(uint64(blockNumber))
