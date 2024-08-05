@@ -623,9 +623,17 @@ func (b *BlockChainAPI) GetLogs(
 
 	// if filter provided specific block ID
 	if criteria.BlockHash != nil {
-		return logs.
-			NewIDFilter(*criteria.BlockHash, filter, b.blocks, b.receipts).
-			Match()
+		f, err := logs.NewIDFilter(*criteria.BlockHash, filter, b.blocks, b.receipts)
+		if err != nil {
+			return handleError[[]*types.Log](err, l, b.collector)
+		}
+
+		res, err := f.Match()
+		if err != nil {
+			return handleError[[]*types.Log](err, l, b.collector)
+		}
+
+		return res, nil
 	}
 
 	// otherwise we use the block range as the filter
