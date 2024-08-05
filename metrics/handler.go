@@ -20,6 +20,14 @@ type HttpHandler struct {
 	logger    zerolog.Logger
 }
 
+func NewMetricsHandler(handler http.Handler, collector Collector, log zerolog.Logger) *HttpHandler {
+	return &HttpHandler{
+		handler:   handler,
+		collector: collector,
+		logger:    log,
+	}
+}
+
 func (h *HttpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var start time.Time
 

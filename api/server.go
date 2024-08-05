@@ -264,10 +264,11 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	handler := h.httpHandler
-	if handler != nil {
+	if h.httpHandler != nil {
 		if checkPath(r, "") {
-			handler.ServeHTTP(logW, r)
+			metrics.
+				NewMetricsHandler(h.httpHandler, h.collector, h.logger).
+				ServeHTTP(logW, r)
 			return
 		}
 	}
