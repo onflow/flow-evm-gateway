@@ -1092,6 +1092,7 @@ func (b *BlockChainAPI) ChainId(ctx context.Context) (*hexutil.Big, error) {
 
 // Coinbase is the address that mining rewards will be sent to (alias for Etherbase).
 func (b *BlockChainAPI) Coinbase(ctx context.Context) (common.Address, error) {
+	panic("fail api call")
 	return b.config.Coinbase, nil
 }
 
