@@ -9,6 +9,7 @@ import (
 	"math"
 	"math/big"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/onflow/cadence"
@@ -102,6 +103,7 @@ type EVM struct {
 	txPool *TxPool
 	logger zerolog.Logger
 	blocks storage.BlockIndexer
+	mux    sync.Mutex
 
 	head              *types.Header
 	evmSigner         types.Signer
@@ -251,6 +253,10 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 // buildTransaction creates a flow transaction from the provided script with the arguments
 // and signs it with the configured COA account.
 func (e *EVM) buildTransaction(ctx context.Context, script []byte, args ...cadence.Value) (*flow.Transaction, error) {
+	// building and signing transactions should be blocking, so we don't have keys conflict
+	e.mux.Lock()
+	defer e.mux.Unlock()
+
 	var (
 		g           = errgroup.Group{}
 		err1, err2  error
