@@ -432,7 +432,13 @@ func (w *responseHandler) Write(data []byte) (int, error) {
 		return w.ResponseWriter.Write(data)
 	}
 
-	l := w.log.Debug()
+	// create a default debug logger
+	s, _ := message.Params.MarshalJSON()
+	l := w.log.With().
+		Str("method", message.Method).
+		Str("params", string(s)).
+		Logger()
+	log := l.Debug()
 
 	// handle possible error
 	if message.Error != nil {
@@ -451,13 +457,14 @@ func (w *responseHandler) Write(data []byte) (int, error) {
 				!errorIs(errMsg, errs.ErrFailedTransaction) &&
 				!errorIs(errMsg, errs.ErrNotSupported) {
 				// set logging level to error
-				l = w.log.Error()
+				log = l.Error().Err(errors.New(errMsg))
 			}
 		}
 	}
 
 	// log all responses
-	l.Fields(message.Result).Msg("API response")
+	r, _ := message.Result.MarshalJSON()
+	log.Str("result", string(r)).Msg("API response")
 
 	return w.ResponseWriter.Write(data)
 }
