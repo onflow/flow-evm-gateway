@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -11,10 +12,12 @@ type Collector interface {
 	ApiErrorOccurred()
 	TraceDownloadFailed()
 	ServerPanicked(err error)
-	EvmBlockHeightUpdated(height uint64)
-	EvmAccountCalled(address string)
-	MeasureRequestDuration(start time.Time, labels prometheus.Labels)
+	EVMHeightIndexed(height uint64)
+	EVMAccountInteraction(address string)
+	MeasureRequestDuration(start time.Time, method string)
 }
+
+var _ Collector = &DefaultCollector{}
 
 type DefaultCollector struct {
 	// TODO: for now we cannot differentiate which api request failed number of times
@@ -28,41 +31,48 @@ type DefaultCollector struct {
 
 func NewCollector(logger zerolog.Logger) Collector {
 	apiErrors := prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "api_errors_total",
-		Help: "Total number of errors returned by the endpoint resolvers",
+		Name: prefixedName("api_errors_total"),
+		Help: "Total number of API errors",
 	})
 
 	traceDownloadErrorCounter := prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "trace_download_errors_total",
+		Name: prefixedName("trace_download_errors_total"),
 		Help: "Total number of trace download errors",
 	})
 
 	serverPanicsCounters := prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "api_server_panics_total",
-		Help: "Total number of panics handled by server",
+		Name: prefixedName("api_server_panics_total"),
+		Help: "Total number of panics in the API server",
 	}, []string{"error"})
 
 	evmBlockHeight := prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "evm_block_height",
+		Name: prefixedName("evm_block_height"),
 		Help: "Current EVM block height",
 	})
 
 	evmAccountCallCounters := prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: "evm_account_calls_total",
-		Help: "Total number of calls to specific evm account",
+		Name: prefixedName("evm_account_interactions_total"),
+		Help: "Total number of account interactions",
 	}, []string{"address"})
 
 	// TODO: Think of adding 'status_code'
 	requestDurations := prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name:    "api_request_duration_seconds",
-		Help:    "Duration of requests made to the endpoint resolvers",
+		Name:    prefixedName("api_request_duration_seconds"),
+		Help:    "Duration of the request made a specific API endpoint",
 		Buckets: prometheus.DefBuckets,
 	}, []string{"method"})
 
-	metrics := []prometheus.Collector{apiErrors, traceDownloadErrorCounter, serverPanicsCounters, evmBlockHeight, evmAccountCallCounters, requestDurations}
+	metrics := []prometheus.Collector{
+		apiErrors,
+		traceDownloadErrorCounter,
+		serverPanicsCounters,
+		evmBlockHeight,
+		evmAccountCallCounters,
+		requestDurations,
+	}
 	if err := registerMetrics(logger, metrics...); err != nil {
 		logger.Info().Msg("using noop collector as metric register failed")
-		return NewNoopCollector()
+		return NopCollector
 	}
 
 	return &DefaultCollector{
@@ -98,16 +108,21 @@ func (c *DefaultCollector) ServerPanicked(err error) {
 	c.serverPanicsCounters.With(prometheus.Labels{"error": err.Error()}).Inc()
 }
 
-func (c *DefaultCollector) EvmBlockHeightUpdated(height uint64) {
+func (c *DefaultCollector) EVMHeightIndexed(height uint64) {
 	c.evmBlockHeight.Set(float64(height))
 }
 
-func (c *DefaultCollector) EvmAccountCalled(address string) {
+func (c *DefaultCollector) EVMAccountInteraction(address string) {
 	c.evmAccountCallCounters.With(prometheus.Labels{"address": address}).Inc()
 
 }
 
-func (c *DefaultCollector) MeasureRequestDuration(start time.Time, labels prometheus.Labels) {
-	duration := time.Since(start)
-	c.requestDurations.With(labels).Observe(float64(duration))
+func (c *DefaultCollector) MeasureRequestDuration(start time.Time, method string) {
+	c.requestDurations.
+		With(prometheus.Labels{"method": method}).
+		Observe(float64(time.Since(start)))
+}
+
+func prefixedName(name string) string {
+	return fmt.Sprintf("evm_gateway_%s", name)
 }
