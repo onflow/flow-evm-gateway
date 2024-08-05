@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
 )
 
@@ -21,29 +20,27 @@ type HttpHandler struct {
 	logger    zerolog.Logger
 }
 
-func NewHttpHandler(handler http.Handler, collector Collector, logger zerolog.Logger) *HttpHandler {
-	return &HttpHandler{
-		handler:   handler,
-		collector: collector,
-		logger:    logger,
-	}
-}
-
 func (h *HttpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var start time.Time
 
-	method, err := extractMethod(r)
+	method, err := extractMethod(r, h.logger)
 	if err != nil {
-		h.logger.Debug().Err(err).Msg("no metrics will be collected. error extracting method: ")
+		h.logger.Debug().Err(err).Msg("error extracting method")
 	} else {
 		start = time.Now()
-		defer h.collector.MeasureRequestDuration(start, prometheus.Labels{"method": method})
+		defer h.collector.MeasureRequestDuration(start, method)
 	}
 
 	h.handler.ServeHTTP(w, r)
 }
 
-func extractMethod(r *http.Request) (string, error) {
+func extractMethod(r *http.Request, logger zerolog.Logger) (string, error) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			logger.Error().Msgf("failed to extract method: %v", r)
+		}
+	}()
+
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		return "", fmt.Errorf("error reading request body: %s", err)
