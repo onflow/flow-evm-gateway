@@ -251,22 +251,24 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		r.Body.Close()
 	}
 
+	// additional response handling
+	logW := &responseHandler{
+		ResponseWriter: w,
+		log:            h.logger,
+		metrics:        h.collector,
+	}
+
 	ws := h.wsHandler
 	if ws != nil && isWebSocket(r) {
-		ws.ServeHTTP(w, r)
+		ws.ServeHTTP(logW, r)
 		return
 	}
 
-	// enable logging responses
-	logW := &loggingResponseWriter{
-		ResponseWriter: w,
-		logger:         h.logger,
-	}
-
-	rpc := recoverHandler(h.logger, h.collector, h.httpHandler)
-	if rpc != nil {
+	if h.httpHandler != nil {
 		if checkPath(r, "") {
-			rpc.ServeHTTP(logW, r)
+			metrics.
+				NewMetricsHandler(h.httpHandler, h.collector, h.logger).
+				ServeHTTP(logW, r)
 			return
 		}
 	}
@@ -394,61 +396,81 @@ func corsHandler(srv http.Handler, allowedOrigins []string) http.Handler {
 	return c.Handler(srv)
 }
 
-// recoverHandler adds a wrapper to handle panics
-func recoverHandler(logger zerolog.Logger, collector metrics.Collector, h http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer func() {
-			r := recover()
-			if r != nil {
-				var err error
-				switch t := r.(type) {
-				case string:
-					err = errors.New(t)
-				case error:
-					err = t
-				}
+var _ http.ResponseWriter = &responseHandler{}
 
-				logger.Error().Err(err).Msg("panic in the http server")
-				collector.ServerPanicked(err)
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-			}
-		}()
-		h.ServeHTTP(w, r)
-	})
-}
-
-var _ http.ResponseWriter = &loggingResponseWriter{}
-
-type loggingResponseWriter struct {
+// responseHandler handles server responses.
+// Since we reuse go-ethereum server implementation we don't have access to handler logic,
+// so we rely on parsing responses and triggering actions to add our logic.
+// todo we should replace go-ethereum server implementation with our own so we have more control
+type responseHandler struct {
 	http.ResponseWriter
-	logger zerolog.Logger
+	log     zerolog.Logger
+	metrics metrics.Collector
 }
 
-func (w *loggingResponseWriter) Write(data []byte) (int, error) {
-	body := make(map[string]string)
-	_ = json.Unmarshal(data, &body)
-	delete(body, "jsonrpc")
+const errCodePanic = -32603
 
-	l := w.logger.Debug()
+type jsonError struct {
+	Code    int         `json:"code"`
+	Message string      `json:"message"`
+	Data    interface{} `json:"data,omitempty"`
+}
 
-	err := body["error"]
-	// only set error level if error is present in response
-	if err != "" {
-		// don't error log known handled errors
-		if !errorIs(err, errs.ErrRateLimit) &&
-			!errorIs(err, errs.ErrInvalid) &&
-			!errorIs(err, errs.ErrFailedTransaction) &&
-			!errorIs(err, errs.ErrNotSupported) {
-			l = w.logger.Error()
+type jsonMessage struct {
+	Version string          `json:"jsonrpc,omitempty"`
+	ID      json.RawMessage `json:"id,omitempty"`
+	Method  string          `json:"method,omitempty"`
+	Params  json.RawMessage `json:"params,omitempty"`
+	Error   *jsonError      `json:"error,omitempty"`
+	Result  json.RawMessage `json:"result,omitempty"`
+}
+
+func (w *responseHandler) Write(data []byte) (int, error) {
+	var message *jsonMessage
+	err := json.Unmarshal(data, &message)
+	// if we couldn't parse response just return it as fallback
+	if err != nil {
+		return w.ResponseWriter.Write(data)
+	}
+
+	// create a default debug logger
+	s, _ := message.Params.MarshalJSON()
+	l := w.log.With().
+		Str("method", message.Method).
+		Str("params", string(s)).
+		Logger()
+	log := l.Debug()
+
+	// handle possible error
+	if message.Error != nil {
+		errMsg := message.Error.Message
+		switch message.Error.Code {
+		case errCodePanic:
+			w.metrics.ServerPanicked(errMsg)
+		default:
+			if errMsg == "" {
+				break
+			}
+
+			// don't error log known handled errors
+			if !errorIs(errMsg, errs.ErrRateLimit) &&
+				!errorIs(errMsg, errs.ErrInvalid) &&
+				!errorIs(errMsg, errs.ErrFailedTransaction) &&
+				!errorIs(errMsg, errs.ErrNotSupported) {
+				// set logging level to error
+				log = l.Error().Err(errors.New(errMsg))
+			}
 		}
 	}
 
-	l.Fields(body).Msg("API response")
+	// log all responses
+	r, _ := message.Result.MarshalJSON()
+	log.Str("result", string(r)).Msg("API response")
 
 	return w.ResponseWriter.Write(data)
 }
 
-func (w *loggingResponseWriter) WriteHeader(statusCode int) {
+func (w *responseHandler) WriteHeader(statusCode int) {
 	w.ResponseWriter.WriteHeader(statusCode)
 }
 
