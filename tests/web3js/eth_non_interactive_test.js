@@ -52,6 +52,57 @@ it('get block', async () => {
     assert.isNull(no)
 })
 
+it('should get block transaction count', async () => {
+    // call endpoint with block number
+    let txCount = await web3.eth.getBlockTransactionCount(conf.startBlockHeight)
+    assert.equal(txCount, 3n)
+
+    // call endpoint with block hash
+    let block = await web3.eth.getBlock(conf.startBlockHeight)
+    txCount = await web3.eth.getBlockTransactionCount(block.hash)
+    assert.equal(txCount, 3n)
+
+    // call endpoint with 'earliest'
+    txCount = await web3.eth.getBlockTransactionCount('earliest')
+    assert.equal(txCount, 0n)
+
+    // call endpoint with 'latest'
+    txCount = await web3.eth.getBlockTransactionCount('latest')
+    assert.equal(txCount, 3n)
+})
+
+it('should get transactions from block', async () => {
+    // call endpoint with block number
+    for (const txIndex of [0, 1, 2]) {
+        let tx = await web3.eth.getTransactionFromBlock(conf.startBlockHeight, txIndex)
+        assert.isNotNull(tx)
+        assert.equal(tx.blockNumber, conf.startBlockHeight)
+        assert.equal(tx.transactionIndex, txIndex)
+    }
+
+    // call endpoint with block hash
+    let block = await web3.eth.getBlock(conf.startBlockHeight)
+    for (const txIndex of [0, 1, 2]) {
+        let tx = await web3.eth.getTransactionFromBlock(block.hash, txIndex)
+        assert.isNotNull(tx)
+        assert.equal(tx.blockHash, block.hash)
+        assert.equal(tx.transactionIndex, txIndex)
+    }
+
+    // call endpoint with 'earliest'
+    let tx = await web3.eth.getTransactionFromBlock('earliest', 0)
+    assert.isNull(tx)
+
+    // call endpoint with 'latest'
+    for (const txIndex of [0, 1, 2]) {
+        let tx = await web3.eth.getTransactionFromBlock('latest', txIndex)
+        assert.isNotNull(tx)
+        assert.equal(tx.blockNumber, conf.startBlockHeight)
+        assert.equal(tx.blockHash, block.hash)
+        assert.equal(tx.transactionIndex, txIndex)
+    }
+})
+
 it('get earliest/genesis block', async () => {
     let block = await web3.eth.getBlock('earliest')
 
