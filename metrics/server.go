@@ -1,10 +1,12 @@
 package metrics
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
 	"net/http"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog"
@@ -54,4 +56,13 @@ func (s *Server) Start() (<-chan struct{}, error) {
 	}()
 
 	return ready, nil
+}
+
+func (s *Server) Stop() {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := s.server.Shutdown(ctx); err != nil {
+		s.log.Err(err).Msg("error shutting down metrics server")
+	}
 }
