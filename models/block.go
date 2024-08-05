@@ -20,7 +20,10 @@ var (
 	EarliestBlockNumber  = big.NewInt(0)
 )
 
-var GenesisBlock = &Block{Block: types.GenesisBlock}
+var GenesisBlock = &Block{
+	Block:             types.GenesisBlock,
+	TransactionHashes: []gethCommon.Hash{},
+}
 
 func NewBlockFromBytes(data []byte) (*Block, error) {
 	var b *Block
