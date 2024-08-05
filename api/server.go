@@ -260,7 +260,7 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	ws := h.wsHandler
 	if ws != nil && isWebSocket(r) {
-		ws.ServeHTTP(logW, r)
+		ws.ServeHTTP(w, r)
 		return
 	}
 
