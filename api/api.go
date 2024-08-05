@@ -259,7 +259,7 @@ func (b *BlockChainAPI) GetTransactionByBlockHashAndIndex(
 	index hexutil.Uint,
 ) (*Transaction, error) {
 	l := b.logger.With().
-		Str("endpoint", "getTransactionByHashAndIndex").
+		Str("endpoint", "getTransactionByBlockHashAndIndex").
 		Str("hash", blockHash.String()).
 		Str("index", index.String()).
 		Logger()
