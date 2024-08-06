@@ -236,7 +236,7 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 	var to string
 	if tx.To() != nil {
 		to = tx.To().String()
-		e.collector.EvmAccountCalled(to)
+		e.collector.EVMAccountInteraction(to)
 	}
 
 	e.logger.Info().

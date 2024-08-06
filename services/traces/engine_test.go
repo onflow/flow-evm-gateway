@@ -81,7 +81,7 @@ func TestTraceIngestion(t *testing.T) {
 				return nil
 			})
 
-		engine := NewTracesIngestionEngine(latestHeight, blockPublisher, blocks, trace, downloader, zerolog.Nop(), metrics.NewNoopCollector())
+		engine := NewTracesIngestionEngine(latestHeight, blockPublisher, blocks, trace, downloader, zerolog.Nop(), metrics.NopCollector)
 
 		err := engine.Run(context.Background())
 		require.NoError(t, err)
@@ -172,7 +172,7 @@ func TestTraceIngestion(t *testing.T) {
 				return nil
 			})
 
-		engine := NewTracesIngestionEngine(latestHeight, blocksPublisher, blocks, trace, downloader, zerolog.Nop(), metrics.NewNoopCollector())
+		engine := NewTracesIngestionEngine(latestHeight, blocksPublisher, blocks, trace, downloader, zerolog.Nop(), metrics.NopCollector)
 
 		err := engine.Run(context.Background())
 		require.NoError(t, err)
@@ -221,7 +221,7 @@ func TestTraceIngestion(t *testing.T) {
 		downloader := &mocks.Downloader{}
 		trace := &storageMock.TraceIndexer{}
 		logger := zerolog.New(zerolog.NewTestWriter(t))
-		collector := metrics.NewCollector(logger)
+		collector := metrics.NopCollector
 
 		latestHeight := uint64(0)
 		blockID := flow.Identifier{0x09}
