@@ -91,8 +91,10 @@ type Config struct {
 	WalletEnabled bool
 	// WalletKey used for signing transactions
 	WalletKey *ecdsa.PrivateKey
-	// PrometheusConfigFilePath is a path to a prometheus config file
-	PrometheusConfigFilePath string
+	// MetricsPort defines the port the metric server will listen to
+	MetricsPort int
+	// IndexOnly configures the gateway to not accept any transactions but only queries of the state
+	IndexOnly bool
 }
 
 func FromFlags() (*Config, error) {
@@ -152,7 +154,8 @@ func FromFlags() (*Config, error) {
 	flag.StringVar(&cloudKMSKeyRingID, "coa-cloud-kms-key-ring-id", "", "The key ring ID where the KMS keys exist, e.g. 'tx-signing'")
 	flag.StringVar(&cloudKMSKeys, "coa-cloud-kms-keys", "", `Names of the KMS keys and their versions as a comma separated list, e.g. "gw-key-6@1,gw-key-7@1,gw-key-8@1"`)
 	flag.StringVar(&walletKey, "wallet-api-key", "", "ECDSA private key used for wallet APIs. WARNING: This should only be used locally or for testing, never in production.")
-	flag.StringVar(&cfg.PrometheusConfigFilePath, "prometheus-config-file-path", "./metrics/prometheus.yml", "Path to the prometheus config file")
+	flag.IntVar(&cfg.MetricsPort, "metrics-port", 8080, "Port for the metrics server")
+	flag.BoolVar(&cfg.IndexOnly, "index-only", false, "Run the gateway in index-only mode which only allows querying the state and indexing, but disallows sending transactions.")
 	flag.Parse()
 
 	if coinbase == "" {

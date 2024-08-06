@@ -3,8 +3,8 @@ const conf = require('./config')
 const helpers = require('./helpers')
 const web3 = conf.web3
 
-it('emit logs and retrieve them using different filters', async() => {
-    setTimeout(() => process.exit(1), 19*1000) // hack if the ws connection is not closed
+it('emit logs and retrieve them using different filters', async () => {
+    setTimeout(() => process.exit(1), 19 * 1000) // hack if the ws connection is not closed
 
     let deployed = await helpers.deployContract("storage")
     let contractAddress = deployed.receipt.contractAddress
@@ -28,13 +28,11 @@ it('emit logs and retrieve them using different filters', async() => {
         })
         assert.equal(res.receipt.status, conf.successStatus)
 
-        let latest = await web3.eth.getBlockNumber()
-
         // filter each event just emitted by both A and B matching the exact event
         const events = await deployed.contract.getPastEvents('Calculated', {
             filter: { numA: A, numB: B },
             fromBlock: conf.startBlockHeight,
-            toBlock: latest,
+            toBlock: 'latest'
         })
 
         // Assert that the event is found and the result is correct
@@ -42,16 +40,15 @@ it('emit logs and retrieve them using different filters', async() => {
         assert.equal(events[0].returnValues.sum, (A + B).toString())
     }
 
-    let latest = await web3.eth.getBlockNumber()
-
     // filter events by A value equal to 10 which should equal to 3 events with different B values
     let events = await deployed.contract.getPastEvents('Calculated', {
         filter: { numA: repeatA },
-        fromBlock: conf.startBlockHeight,
-        toBlock: latest,
+        fromBlock: 'earliest',
+        toBlock: 'latest',
     })
 
     assert.lengthOf(events, 3)
+
     // this filters the test values by A = 10 and makes sure the response logs are expected
     testValues
         .filter(v => v.A == repeatA)
@@ -64,8 +61,8 @@ it('emit logs and retrieve them using different filters', async() => {
 
     // make sure all events are returned
     events = await deployed.contract.getPastEvents({
-        fromBlock: conf.startBlockHeight,
-        toBlock: latest,
+        fromBlock: 'earliest',
+        toBlock: 'latest',
     })
     assert.lengthOf(events, testValues.length)
 
@@ -79,8 +76,8 @@ it('emit logs and retrieve them using different filters', async() => {
     // filter by value A being 1 or -1
     events = await deployed.contract.getPastEvents('Calculated', {
         filter: { numA: [-1, 1] },
-        fromBlock: conf.startBlockHeight,
-        toBlock: latest,
+        fromBlock: 'earliest',
+        toBlock: 'latest',
     })
     assert.lengthOf(events, 2)
     assert.equal(events[0].returnValues.numB, 2)

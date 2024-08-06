@@ -10,6 +10,7 @@ import (
 	"github.com/onflow/flow-go/fvm/evm/events"
 	flowGo "github.com/onflow/flow-go/model/flow"
 
+	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/services/ingestion/mocks"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
 
@@ -70,6 +71,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 			models.NewPublisher(),
 			models.NewPublisher(),
 			zerolog.Nop(),
+			metrics.NopCollector,
 		)
 
 		done := make(chan struct{})
@@ -149,6 +151,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 			models.NewPublisher(),
 			models.NewPublisher(),
 			zerolog.Nop(),
+			metrics.NopCollector,
 		)
 
 		waitErr := make(chan struct{})
@@ -264,6 +267,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			models.NewPublisher(),
 			models.NewPublisher(),
 			zerolog.Nop(),
+			metrics.NopCollector,
 		)
 
 		done := make(chan struct{})
@@ -362,6 +366,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			models.NewPublisher(),
 			models.NewPublisher(),
 			zerolog.Nop(),
+			metrics.NopCollector,
 		)
 
 		done := make(chan struct{})
@@ -456,6 +461,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			models.NewPublisher(),
 			models.NewPublisher(),
 			zerolog.Nop(),
+			metrics.NopCollector,
 		)
 
 		done := make(chan struct{})
