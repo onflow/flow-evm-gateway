@@ -223,6 +223,7 @@ func TestIDFilter(t *testing.T) {
 		id:   mustHash(blocks[0]),
 		criteria: FilterCriteria{
 			Addresses: []common.Address{logs[0].Address},
+			Topics:    [][]common.Hash{},
 		},
 		expectLogs: logs[:2],
 	}, {
