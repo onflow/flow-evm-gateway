@@ -59,6 +59,10 @@ func NewRangeFilter(
 	criteria FilterCriteria,
 	receipts storage.ReceiptIndexer,
 ) (*RangeFilter, error) {
+	if len(criteria.Topics) > maxTopics {
+		return nil, fmt.Errorf("max topics exceeded, only %d allowed", maxTopics)
+	}
+
 	// check if both start and end don't have special values (negative values representing last block etc.)
 	// if so, make sure that beginning number is not bigger than end
 	if start.Cmp(big.NewInt(0)) > 0 && end.Cmp(big.NewInt(0)) > 0 && start.Cmp(&end) > 0 {
@@ -124,13 +128,17 @@ func NewIDFilter(
 	criteria FilterCriteria,
 	blocks storage.BlockIndexer,
 	receipts storage.ReceiptIndexer,
-) *IDFilter {
+) (*IDFilter, error) {
+	if len(criteria.Topics) > maxTopics {
+		return nil, fmt.Errorf("max topics exceeded, only %d allowed", maxTopics)
+	}
+
 	return &IDFilter{
 		id:       id,
 		criteria: &criteria,
 		blocks:   blocks,
 		receipts: receipts,
-	}
+	}, nil
 }
 
 func (i *IDFilter) Match() ([]*gethTypes.Log, error) {
