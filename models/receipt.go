@@ -8,46 +8,6 @@ import (
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 )
 
-// TEMP: Remove this type after PreviewNet is reset
-type StorageReceiptV0 struct {
-	Type              uint8
-	PostState         []byte
-	Status            uint64
-	CumulativeGasUsed uint64
-	Bloom             gethTypes.Bloom
-	Logs              []*gethTypes.Log
-	TxHash            common.Hash
-	ContractAddress   common.Address
-	GasUsed           uint64
-	EffectiveGasPrice *big.Int
-	BlobGasUsed       uint64
-	BlobGasPrice      *big.Int
-	BlockHash         common.Hash
-	BlockNumber       *big.Int
-	TransactionIndex  uint
-}
-
-func (sr *StorageReceiptV0) ToNewReceipt() *StorageReceipt {
-	return &StorageReceipt{
-		Type:              sr.Type,
-		PostState:         sr.PostState,
-		Status:            sr.Status,
-		CumulativeGasUsed: sr.CumulativeGasUsed,
-		Bloom:             sr.Bloom,
-		Logs:              sr.Logs,
-		TxHash:            sr.TxHash,
-		ContractAddress:   sr.ContractAddress,
-		GasUsed:           sr.GasUsed,
-		EffectiveGasPrice: sr.EffectiveGasPrice,
-		BlobGasUsed:       sr.BlobGasUsed,
-		BlobGasPrice:      sr.BlobGasPrice,
-		BlockHash:         sr.BlockHash,
-		BlockNumber:       sr.BlockNumber,
-		TransactionIndex:  sr.TransactionIndex,
-		RevertReason:      []byte{},
-	}
-}
-
 // StorageReceipt is a receipt representation for storage.
 //
 // This struct copies the geth.Receipt type found here: https://github.com/ethereum/go-ethereum/blob/9bbb9df18549d6f81c3d1f4fc6c65f71bc92490d/core/types/receipt.go#L52

@@ -414,7 +414,6 @@ func (b *BlockChainAPI) GetBlockByNumber(
 
 	height := uint64(blockNumber)
 	var err error
-	// todo for now we treat all special blocks as latest, think which special statuses we can even support on Flow
 	if blockNumber < 0 {
 		height, err = b.blocks.LatestEVMHeight()
 		if err != nil {
@@ -964,18 +963,6 @@ func (b *BlockChainAPI) prepareBlockResponse(
 		Timestamp:        hexutil.Uint64(block.Timestamp),
 		BaseFeePerGas:    hexutil.Big(*big.NewInt(0)),
 		LogsBloom:        types.LogsBloom([]*types.Log{}),
-	}
-
-	// todo remove after previewnet, temp fix to mock some of the timestamps
-	if block.Timestamp == 0 {
-		first := uint64(1715189257)
-		blockTime := uint64(200)
-		firstRecordedTimestampBlock := uint64(5493)
-
-		diff := firstRecordedTimestampBlock - block.Height
-		timestamp := first - blockTime*diff
-
-		blockResponse.Timestamp = hexutil.Uint64(timestamp)
 	}
 
 	blockBytes, err := block.ToBytes()

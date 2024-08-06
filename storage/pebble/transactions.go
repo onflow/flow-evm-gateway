@@ -1,7 +1,6 @@
 package pebble
 
 import (
-	"math/big"
 	"sync"
 
 	"github.com/cockroachdb/pebble"
@@ -48,13 +47,5 @@ func (t *Transactions) Get(ID common.Hash) (models.Transaction, error) {
 		return nil, err
 	}
 
-	var evmHeight uint64
-	height, err := t.store.get(receiptTxIDToHeightKey, ID.Bytes())
-	if err != nil {
-		evmHeight = 0
-	} else {
-		evmHeight = big.NewInt(0).SetBytes(height).Uint64()
-	}
-
-	return models.UnmarshalTransaction(val, evmHeight)
+	return models.UnmarshalTransaction(val)
 }
