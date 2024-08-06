@@ -141,13 +141,6 @@ func Start(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("failed to start event ingestion: %w", err)
 	}
 
-	metricsServer, err := metrics.NewServer(logger, cfg.PrometheusConfigFilePath)
-	if err != nil {
-		logger.Warn().Err(err).Msg("failed to start metrics server")
-	} else {
-		<-metricsServer.Ready()
-	}
-
 	return nil
 }
 
@@ -404,9 +397,17 @@ func startServer(
 
 	logger.Info().Msgf("server Started: %s", srv.ListenAddr())
 
+	metricsServer := metrics.NewServer(logger, cfg.MetricsPort)
+	started, err := metricsServer.Start()
+	if err != nil {
+		return fmt.Errorf("failed to start metrics server: %w", err)
+	}
+	<-started
+
 	<-ctx.Done()
 	logger.Info().Msg("shutting down API server")
 	srv.Stop()
+	metricsServer.Stop()
 
 	return nil
 }

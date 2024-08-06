@@ -155,7 +155,7 @@ func servicesSetup(t *testing.T) (emulator.Emulator, func()) {
 		RateLimit:                   50,
 		WSEnabled:                   true,
 		HashCalculationHeightChange: 0,
-		PrometheusConfigFilePath:    "./metrics/prometheus.yml",
+		MetricsPort:                 8443,
 	}
 
 	go func() {

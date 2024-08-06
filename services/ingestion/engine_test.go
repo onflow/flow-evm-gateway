@@ -71,7 +71,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 			models.NewPublisher(),
 			models.NewPublisher(),
 			zerolog.Nop(),
-			metrics.NewNoopCollector(),
+			metrics.NopCollector,
 		)
 
 		done := make(chan struct{})
@@ -151,7 +151,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 			models.NewPublisher(),
 			models.NewPublisher(),
 			zerolog.Nop(),
-			metrics.NewNoopCollector(),
+			metrics.NopCollector,
 		)
 
 		waitErr := make(chan struct{})
@@ -267,7 +267,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			models.NewPublisher(),
 			models.NewPublisher(),
 			zerolog.Nop(),
-			metrics.NewNoopCollector(),
+			metrics.NopCollector,
 		)
 
 		done := make(chan struct{})
@@ -366,7 +366,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			models.NewPublisher(),
 			models.NewPublisher(),
 			zerolog.Nop(),
-			metrics.NewNoopCollector(),
+			metrics.NopCollector,
 		)
 
 		done := make(chan struct{})
@@ -461,7 +461,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			models.NewPublisher(),
 			models.NewPublisher(),
 			zerolog.Nop(),
-			metrics.NewNoopCollector(),
+			metrics.NopCollector,
 		)
 
 		done := make(chan struct{})

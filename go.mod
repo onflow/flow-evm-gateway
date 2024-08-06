@@ -24,7 +24,6 @@ require (
 	golang.org/x/sync v0.7.0
 	google.golang.org/api v0.162.0
 	google.golang.org/grpc v1.63.2
-	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -208,6 +207,7 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240227224415-6ceb2ff114de // indirect
 	google.golang.org/protobuf v1.33.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 	lukechampine.com/blake3 v1.2.1 // indirect
 	rsc.io/tmplfunc v0.0.3 // indirect
 )

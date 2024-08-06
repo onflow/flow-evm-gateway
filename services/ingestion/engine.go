@@ -178,7 +178,7 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 		}
 	}
 
-	e.collector.EvmBlockHeightUpdated(events.CadenceHeight())
+	e.collector.EVMHeightIndexed(events.CadenceHeight())
 	return nil
 }
 

@@ -93,8 +93,8 @@ type Config struct {
 	WalletKey *ecdsa.PrivateKey
 	// TEMP: Remove `HashCalculationHeightChange` after PreviewNet is reset
 	HashCalculationHeightChange uint64
-	// PrometheusConfigFilePath is a path to a prometheus config file
-	PrometheusConfigFilePath string
+	// MetricsPort defines the port the metric server will listen to
+	MetricsPort int
 	// IndexOnly configures the gateway to not accept any transactions but only queries of the state
 	IndexOnly bool
 }
@@ -159,7 +159,7 @@ func FromFlags() (*Config, error) {
 	// TEMP: Only set this after the HCU containing the direct call
 	// hash calculation change has been successfully deployed.
 	flag.Uint64Var(&cfg.HashCalculationHeightChange, "hash-calc-height-change", 0, "Cadence height at which the direct call hash calculation changed")
-	flag.StringVar(&cfg.PrometheusConfigFilePath, "prometheus-config-file-path", "./metrics/prometheus.yml", "Path to the prometheus config file")
+	flag.IntVar(&cfg.MetricsPort, "metrics-port", 8080, "Port for the metrics server")
 	flag.BoolVar(&cfg.IndexOnly, "index-only", false, "Run the gateway in index-only mode which only allows querying the state and indexing, but disallows sending transactions.")
 	flag.Parse()
 
