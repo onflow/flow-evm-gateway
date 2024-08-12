@@ -295,7 +295,7 @@ func startServer(
 	}
 
 	// create transaction pool
-	txPool := requester.NewTxPool(client, transactionsPublisher, logger)
+	txPool := requester.NewTxPool(client, transactionsPublisher, logger, collector)
 
 	evm, err := requester.NewEVM(
 		client,

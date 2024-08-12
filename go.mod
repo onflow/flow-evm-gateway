@@ -4,13 +4,14 @@ go 1.22
 
 require (
 	cloud.google.com/go/storage v1.36.0
+	github.com/aws/aws-sdk-go-v2 v1.27.0
 	github.com/cockroachdb/pebble v1.1.1
 	github.com/goccy/go-json v0.10.2
 	github.com/google/uuid v1.6.0
-	github.com/onflow/atree v0.7.0-rc.2
-	github.com/onflow/cadence v1.0.0-preview.39
+	github.com/onflow/atree v0.8.0-rc.5
+	github.com/onflow/cadence v1.0.0-preview.44
 	github.com/onflow/flow-go v0.36.4
-	github.com/onflow/flow-go-sdk v1.0.0-preview.42
+	github.com/onflow/flow-go-sdk v1.0.0-preview.47
 	github.com/onflow/flow/protobuf/go/flow v0.4.5
 	github.com/onflow/go-ethereum v1.14.7
 	github.com/prometheus/client_golang v1.18.0
@@ -37,6 +38,7 @@ require (
 	github.com/SaveTheRbtz/mph v0.1.1-0.20240117162131-4166ec7869bc // indirect
 	github.com/StackExchange/wmi v1.2.1 // indirect
 	github.com/VictoriaMetrics/fastcache v1.12.2 // indirect
+	github.com/aws/smithy-go v1.20.2 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bits-and-blooms/bitset v1.10.0 // indirect
 	github.com/btcsuite/btcd/btcec/v2 v2.2.1 // indirect
@@ -208,6 +210,8 @@ require (
 	google.golang.org/protobuf v1.33.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	lukechampine.com/blake3 v1.2.1 // indirect
+	lukechampine.com/blake3 v1.3.0 // indirect
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
+
+replace github.com/onflow/flow-go v0.36.4 => github.com/The-K-R-O-K/flow-go v0.35.15-crescendo-preview.28-atree-inlining.0.20240812142541-3dcd3ce6d5b6

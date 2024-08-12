@@ -159,7 +159,7 @@ func FromFlags() (*Config, error) {
 	// TEMP: Only set this after the HCU containing the direct call
 	// hash calculation change has been successfully deployed.
 	flag.Uint64Var(&cfg.HashCalculationHeightChange, "hash-calc-height-change", 0, "Cadence height at which the direct call hash calculation changed")
-	flag.IntVar(&cfg.MetricsPort, "metrics-port", 8080, "Port for the metrics server")
+	flag.IntVar(&cfg.MetricsPort, "metrics-port", 8081, "Port for the metrics server")
 	flag.BoolVar(&cfg.IndexOnly, "index-only", false, "Run the gateway in index-only mode which only allows querying the state and indexing, but disallows sending transactions.")
 	flag.Parse()
 

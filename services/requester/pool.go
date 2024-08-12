@@ -12,6 +12,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-retry"
 
+	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/models"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
 )
@@ -30,6 +31,7 @@ type TxPool struct {
 	client      *CrossSporkClient
 	pool        *sync.Map
 	txPublisher *models.Publisher
+	collector   metrics.Collector
 	// todo add methods to inspect transaction pool state
 }
 
@@ -37,12 +39,14 @@ func NewTxPool(
 	client *CrossSporkClient,
 	transactionsPublisher *models.Publisher,
 	logger zerolog.Logger,
+	collector metrics.Collector,
 ) *TxPool {
 	return &TxPool{
 		logger:      logger.With().Str("component", "tx-pool").Logger(),
 		client:      client,
 		txPublisher: transactionsPublisher,
 		pool:        &sync.Map{},
+		collector:   collector,
 	}
 }
 
@@ -67,7 +71,8 @@ func (t *TxPool) Send(
 
 	backoff := retry.WithMaxDuration(time.Minute*3, retry.NewFibonacci(time.Millisecond*100))
 
-	return retry.Do(ctx, backoff, func(ctx context.Context) error {
+	var txRes flow.TransactionResult
+	err := retry.Do(ctx, backoff, func(ctx context.Context) error {
 		res, err := t.client.GetTransactionResult(ctx, flowTx.ID())
 		if err != nil {
 			return fmt.Errorf("failed to retrieve flow transaction result %s: %w", flowTx.ID(), err)
@@ -91,8 +96,12 @@ func (t *TxPool) Send(
 			return fmt.Errorf("failed to submit flow evm transaction %s", evmTx.Hash())
 		}
 
+		txRes = *res
 		return nil
 	})
+
+	t.collector.FlowFeesCollected(flowTx.Payer, txRes.Events)
+	return err
 }
 
 // this will extract the evm specific error from the Flow transaction error message

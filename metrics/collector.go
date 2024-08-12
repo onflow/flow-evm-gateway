@@ -2,8 +2,14 @@ package metrics
 
 import (
 	"fmt"
+	"math/big"
+	"strings"
 	"time"
 
+	sdk "github.com/onflow/flow-go-sdk"
+	"github.com/onflow/flow-go/fvm/evm/events"
+	"github.com/onflow/flow-go/model/flow"
+	"github.com/onflow/go-ethereum/common"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
 )
@@ -15,18 +21,22 @@ type Collector interface {
 	EVMHeightIndexed(height uint64)
 	EVMAccountInteraction(address string)
 	MeasureRequestDuration(start time.Time, method string)
+	EVMFeesCollected(from common.Address, gasUsed uint64, gasPrice *big.Int)
+	FlowFeesCollected(from sdk.Address, txEvents []sdk.Event)
 }
 
 var _ Collector = &DefaultCollector{}
 
 type DefaultCollector struct {
-	// TODO: for now we cannot differentiate which api request failed number of times
+	logger                    zerolog.Logger
 	apiErrorsCounter          prometheus.Counter
 	traceDownloadErrorCounter prometheus.Counter
 	serverPanicsCounters      *prometheus.CounterVec
 	evmBlockHeight            prometheus.Gauge
 	evmAccountCallCounters    *prometheus.CounterVec
 	requestDurations          *prometheus.HistogramVec
+	evmFees                   *prometheus.GaugeVec
+	flowFees                  *prometheus.GaugeVec
 }
 
 func NewCollector(logger zerolog.Logger) Collector {
@@ -62,6 +72,20 @@ func NewCollector(logger zerolog.Logger) Collector {
 		Buckets: prometheus.DefBuckets,
 	}, []string{"method"})
 
+	evmFees := prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: prefixedName("evm_fees_total"),
+			Help: "The total amount of fees collected on EVM side in gas",
+		}, []string{"account"},
+	)
+
+	flowFees := prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: prefixedName("flow_fees_total"),
+			Help: "The total amount of fees collected on Flow side in FLOW",
+		}, []string{"account"},
+	)
+
 	metrics := []prometheus.Collector{
 		apiErrors,
 		traceDownloadErrorCounter,
@@ -69,19 +93,25 @@ func NewCollector(logger zerolog.Logger) Collector {
 		evmBlockHeight,
 		evmAccountCallCounters,
 		requestDurations,
+		evmFees,
+		flowFees,
 	}
+
 	if err := registerMetrics(logger, metrics...); err != nil {
 		logger.Info().Msg("using noop collector as metric register failed")
 		return NopCollector
 	}
 
 	return &DefaultCollector{
+		logger:                    logger,
 		apiErrorsCounter:          apiErrors,
 		traceDownloadErrorCounter: traceDownloadErrorCounter,
 		serverPanicsCounters:      serverPanicsCounters,
 		evmBlockHeight:            evmBlockHeight,
 		evmAccountCallCounters:    evmAccountCallCounters,
 		requestDurations:          requestDurations,
+		evmFees:                   evmFees,
+		flowFees:                  flowFees,
 	}
 }
 
@@ -123,6 +153,48 @@ func (c *DefaultCollector) MeasureRequestDuration(start time.Time, method string
 		Observe(float64(time.Since(start)))
 }
 
+func (c *DefaultCollector) EVMFeesCollected(from common.Address, gasUsed uint64, gasPrice *big.Int) {
+	gasUsedBigInt := new(big.Int).SetUint64(gasUsed)
+	gasBigInt := new(big.Int).Mul(gasUsedBigInt, gasPrice)
+
+	gasFloat64, accuracy := gasBigInt.Float64()
+	if accuracy != big.Exact {
+		c.logger.Warn().Msg("precision lost when converting gas price to float64 in metrics collector")
+		return
+	}
+
+	gas := float64(gasUsed) * gasFloat64
+	c.evmFees.With(prometheus.Labels{"account": from.String()}).Add(gas)
+}
+
+func (c *DefaultCollector) FlowFeesCollected(from sdk.Address, txEvents []sdk.Event) {
+	feesDeducted, err := findEvent(events.EventTypeFlowFeesDeducted, txEvents)
+	if err != nil {
+		c.logger.Debug().Err(err).Msg("fees metric will not be collected as appropriate event was not found")
+		return
+	}
+
+	feesDeductedPayload, err := events.DecodeFlowFeesDeductedEventPayload(feesDeducted.Value)
+	if err != nil {
+		c.logger.Debug().Err(err).Msg("failed to decode fees deducted payload")
+		return
+	}
+
+	c.flowFees.
+		With(prometheus.Labels{"account": from.String()}).
+		Add(float64(feesDeductedPayload.Amount))
+}
+
 func prefixedName(name string) string {
 	return fmt.Sprintf("evm_gateway_%s", name)
+}
+
+func findEvent(eventType flow.EventType, events []sdk.Event) (sdk.Event, error) {
+	for _, event := range events {
+		if strings.Contains(event.Type, string(eventType)) {
+			return event, nil
+		}
+	}
+
+	return sdk.Event{}, fmt.Errorf("no event with type %s found", eventType)
 }
