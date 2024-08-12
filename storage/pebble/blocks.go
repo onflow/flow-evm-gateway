@@ -68,6 +68,11 @@ func (b *Blocks) Store(
 		return fmt.Errorf("failed to store evm to cadence height: %w", err)
 	}
 
+	// set mapping of cadence block height to evm height
+	if err := b.store.set(cadenceHeightToEVMHeightKey, cadenceHeightBytes, evmHeightBytes, batch); err != nil {
+		return fmt.Errorf("failed to store evm to cadence height: %w", err)
+	}
+
 	// set mapping of evm height to cadence block id
 	if err := b.store.set(evmHeightToCadenceIDKey, evmHeightBytes, cadenceID.Bytes(), batch); err != nil {
 		return fmt.Errorf("failed to store evm to cadence id: %w", err)

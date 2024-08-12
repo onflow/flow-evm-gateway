@@ -48,7 +48,7 @@ func Start(ctx context.Context, cfg *config.Config) error {
 	// this should only be used locally or for testing
 	if cfg.ForceStartCadenceHeight != 0 {
 		logger.Warn().Uint64("height", cfg.ForceStartCadenceHeight).Msg("force setting starting Cadence height!!!")
-		if err := blocks.SetLatestCadenceHeight(cfg.ForceStartCadenceHeight, nil); err != nil {
+		if err := store.ResetAtHeight(cfg.ForceStartCadenceHeight); err != nil {
 			return err
 		}
 	}

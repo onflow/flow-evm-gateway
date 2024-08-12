@@ -1,6 +1,7 @@
 package pebble
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -126,4 +127,147 @@ func (s *Storage) batchGet(batch *pebble.Batch, keyCode byte, key ...[]byte) ([]
 
 func (s *Storage) NewBatch() *pebble.Batch {
 	return s.db.NewIndexedBatch()
+}
+
+// Delete all DB entries after the given height, setting this as the latest
+// indexed height.
+func (s *Storage) ResetAtHeight(cadenceHeight uint64) error {
+	// convert the given cadenceHeight to its EVM height
+	val, err := s.get(cadenceHeightToEVMHeightKey, uint64Bytes(cadenceHeight))
+	if err != nil {
+		return err
+	}
+	evmHeight := binary.BigEndian.Uint64(val)
+
+	blocks := NewBlocks(s)
+	receipts := NewReceipts(s)
+
+	currentCadenceHeight := cadenceHeight
+	currentEVMHeight := evmHeight
+
+	latestEVMHeight, err := blocks.LatestEVMHeight()
+	if err != nil {
+		return err
+	}
+
+	// fetch blocks and delete their transactions/receipts and other keys
+	for currentEVMHeight <= latestEVMHeight {
+		block, err := blocks.GetByHeight(currentEVMHeight)
+		if err != nil {
+			return err
+		}
+
+		// delete all transactions of the block
+		txHashes := block.TransactionHashes
+		for _, txHash := range txHashes {
+			// t.store.set(txIDKey, txHash.Bytes(), val, batch)
+			txKey := makePrefix(txIDKey, txHash.Bytes())
+			err := s.db.Delete(txKey, nil)
+			if err != nil {
+				return err
+			}
+			fmt.Println("Deleted TX: ", txHash)
+
+			// delete all traces of the block
+			// t.store.set(traceTxIDKey, ID.Bytes(), trace, batch)
+			traceKey := makePrefix(traceTxIDKey, txHash.Bytes())
+			err = s.db.Delete(traceKey, nil)
+			if err != nil {
+				return err
+			}
+			fmt.Println("Deleted Trace: ", txHash)
+
+			// we cannot delete the nonce for each account, because of
+			// a.store.set(accountNonceKey, from.Bytes(), data, batch)
+			// we do not know the `from`, in order to construct the
+			// prefixed key.
+
+			// r.store.set(receiptTxIDToHeightKey, receipt.TxHash.Bytes(), height, batch)
+			receipt, err := receipts.GetByTransactionID(txHash)
+			if err != nil {
+				return err
+			}
+			fmt.Println("Deleted Receipt: ", txHash)
+
+			receiptKey := makePrefix(receiptTxIDToHeightKey, receipt.TxHash.Bytes())
+			err = s.db.Delete(receiptKey, nil)
+			if err != nil {
+				return err
+			}
+			fmt.Println("Deleted receiptKey: ", receiptKey)
+
+			// r.store.set(receiptHeightKey, height, val, batch)
+			height := receipt.BlockNumber.Bytes()
+			err = s.db.Delete(makePrefix(receiptHeightKey, height), nil)
+			if err != nil {
+				return err
+			}
+			fmt.Println("Deleted receipt height: ", receipt.BlockNumber.Uint64())
+
+			// r.store.set(bloomHeightKey, height, bloomVal, batch)
+			err = s.db.Delete(makePrefix(bloomHeightKey, height), nil)
+			if err != nil {
+				return err
+			}
+			fmt.Println("Deleted receipt blooms: ", receipt.BlockNumber.Uint64())
+		}
+
+		cadenceHeightBytes := uint64Bytes(currentCadenceHeight)
+		evmHeightBytes := uint64Bytes(block.Height)
+
+		// b.store.set(blockHeightKey, evmHeightBytes, val, batch)
+		err = s.db.Delete(makePrefix(blockHeightKey, evmHeightBytes), nil)
+		if err != nil {
+			return err
+		}
+
+		id, err := block.Hash()
+		if err != nil {
+			return err
+		}
+
+		// b.store.set(blockIDToHeightKey, id.Bytes(), evmHeightBytes, batch)
+		err = s.db.Delete(makePrefix(blockIDToHeightKey, id.Bytes()), nil)
+		if err != nil {
+			return err
+		}
+
+		// b.store.set(evmHeightToCadenceHeightKey, evmHeightBytes, cadenceHeightBytes, batch)
+		err = s.db.Delete(makePrefix(evmHeightToCadenceHeightKey, evmHeightBytes), nil)
+		if err != nil {
+			return err
+		}
+
+		// b.store.set(cadenceHeightToEVMHeightKey, cadenceHeightBytes, evmHeightBytes, batch)
+		err = s.db.Delete(makePrefix(cadenceHeightToEVMHeightKey, cadenceHeightBytes), nil)
+		if err != nil {
+			return err
+		}
+
+		// b.store.set(evmHeightToCadenceIDKey, evmHeightBytes, cadenceID.Bytes(), batch)
+		err = s.db.Delete(makePrefix(evmHeightToCadenceIDKey, evmHeightBytes), nil)
+		if err != nil {
+			return err
+		}
+
+		fmt.Println("Deleted EVM Height: ", currentEVMHeight)
+		fmt.Println("Deleted Cadence Height: ", currentCadenceHeight)
+		currentEVMHeight += 1
+		currentCadenceHeight += 1
+	}
+
+	err = s.set(latestCadenceHeightKey, nil, uint64Bytes(cadenceHeight), nil)
+	if err != nil {
+		return err
+	}
+
+	err = s.set(latestEVMHeightKey, nil, uint64Bytes(evmHeight), nil)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("Set Latest EVM Height: ", evmHeight)
+	fmt.Println("Set Latest Cadence Height: ", cadenceHeight)
+
+	return nil
 }
