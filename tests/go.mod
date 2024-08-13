@@ -242,3 +242,5 @@ require (
 )
 
 replace github.com/onflow/flow-evm-gateway => ../
+
+replace github.com/onflow/flow-go v0.36.4 => github.com/The-K-R-O-K/flow-go v0.35.15-crescendo-preview.28-atree-inlining.0.20240812142541-3dcd3ce6d5b6
