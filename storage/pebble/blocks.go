@@ -8,6 +8,7 @@ import (
 
 	"github.com/cockroachdb/pebble"
 	"github.com/onflow/flow-go-sdk"
+	flowGo "github.com/onflow/flow-go/model/flow"
 
 	"github.com/onflow/go-ethereum/common"
 
@@ -19,14 +20,16 @@ import (
 var _ storage.BlockIndexer = &Blocks{}
 
 type Blocks struct {
-	store *Storage
-	mux   sync.RWMutex
+	store   *Storage
+	mux     sync.RWMutex
+	chainID flowGo.ChainID
 }
 
-func NewBlocks(store *Storage) *Blocks {
+func NewBlocks(store *Storage, chainID flowGo.ChainID) *Blocks {
 	return &Blocks{
-		store: store,
-		mux:   sync.RWMutex{},
+		store:   store,
+		chainID: chainID,
+		mux:     sync.RWMutex{},
 	}
 }
 
@@ -197,7 +200,8 @@ func (b *Blocks) InitHeights(cadenceHeight uint64, cadenceID flow.Identifier) er
 	}
 
 	// we store genesis block because it isn't emitted over the network
-	if err := b.Store(cadenceHeight, cadenceID, models.GenesisBlock, nil); err != nil {
+	genesisBlock := models.GenesisBlock(b.chainID)
+	if err := b.Store(cadenceHeight, cadenceID, genesisBlock, nil); err != nil {
 		return fmt.Errorf("faield to set init genesis block: %w", err)
 	}
 

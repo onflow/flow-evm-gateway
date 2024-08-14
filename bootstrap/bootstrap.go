@@ -35,7 +35,7 @@ func Start(ctx context.Context, cfg *config.Config) error {
 		return err
 	}
 
-	blocks := pebble.NewBlocks(store)
+	blocks := pebble.NewBlocks(store, cfg.FlowNetworkID)
 	transactions := pebble.NewTransactions(store)
 	receipts := pebble.NewReceipts(store)
 	accounts := pebble.NewAccounts(store)

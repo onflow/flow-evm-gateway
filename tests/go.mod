@@ -4,12 +4,12 @@ go 1.22
 
 require (
 	github.com/goccy/go-json v0.10.2
-	github.com/onflow/cadence v1.0.0-preview.44
+	github.com/onflow/cadence v1.0.0-preview.48
 	github.com/onflow/crypto v0.25.1
-	github.com/onflow/flow-emulator v1.0.0-preview.35.0.20240725141711-547155b39eb9
+	github.com/onflow/flow-emulator v1.0.0-preview.39
 	github.com/onflow/flow-evm-gateway v0.0.0-20240201154855-4d4d3d3f19c7
-	github.com/onflow/flow-go v0.36.4
-	github.com/onflow/flow-go-sdk v1.0.0-preview.47
+	github.com/onflow/flow-go v0.37.1
+	github.com/onflow/flow-go-sdk v1.0.0-preview.50
 	github.com/onflow/go-ethereum v1.14.7
 	github.com/rs/zerolog v1.31.0
 	github.com/stretchr/testify v1.9.0
@@ -243,4 +243,4 @@ require (
 
 replace github.com/onflow/flow-evm-gateway => ../
 
-replace github.com/onflow/flow-go v0.36.4 => github.com/The-K-R-O-K/flow-go v0.35.15-crescendo-preview.28-atree-inlining.0.20240812142541-3dcd3ce6d5b6
+replace github.com/onflow/flow-go v0.37.1 => github.com/The-K-R-O-K/flow-go v0.35.15-crescendo-preview.28-atree-inlining.0.20240812142541-3dcd3ce6d5b6

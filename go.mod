@@ -8,9 +8,9 @@ require (
 	github.com/goccy/go-json v0.10.2
 	github.com/google/uuid v1.6.0
 	github.com/onflow/atree v0.8.0-rc.5
-	github.com/onflow/cadence v1.0.0-preview.44
-	github.com/onflow/flow-go v0.36.4
-	github.com/onflow/flow-go-sdk v1.0.0-preview.47
+	github.com/onflow/cadence v1.0.0-preview.48
+	github.com/onflow/flow-go v0.37.1
+	github.com/onflow/flow-go-sdk v1.0.0-preview.50
 	github.com/onflow/flow/protobuf/go/flow v0.4.5
 	github.com/onflow/go-ethereum v1.14.7
 	github.com/prometheus/client_golang v1.18.0
@@ -212,4 +212,4 @@ require (
 	rsc.io/tmplfunc v0.0.3 // indirect
 )
 
-replace github.com/onflow/flow-go v0.36.4 => github.com/The-K-R-O-K/flow-go v0.35.15-crescendo-preview.28-atree-inlining.0.20240812142541-3dcd3ce6d5b6
+replace github.com/onflow/flow-go v0.37.1 => github.com/The-K-R-O-K/flow-go v0.35.15-crescendo-preview.28-atree-inlining.0.20240812142541-3dcd3ce6d5b6
