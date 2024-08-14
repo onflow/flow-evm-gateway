@@ -426,7 +426,7 @@ func (b *BlockChainAPI) GetBlockByNumber(
 	// TEMP(m-Peter): Remove after PreviewNet
 	// This is a workaround to make available the Genesis Block.
 	if block == nil && blockNumber == rpc.EarliestBlockNumber {
-		block = models.GenesisBlock
+		block = models.GenesisBlock(b.config.FlowNetworkID)
 		apiBlock, err := b.prepareBlockResponse(ctx, block, fullTx)
 		if err != nil {
 			return handleError[*Block](err, l, b.collector)

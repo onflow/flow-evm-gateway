@@ -173,16 +173,16 @@ EVM Gateway has public RPC endpoints available for the following environments:
 | RPC Endpoint    | https://previewnet.evm.nodes.onflow.org|
 | Chain ID        | 646                                    |
 | Currency Symbol | FLOW                                   |
-| Block Explorer  | https://previewnet.flowdiver.io        |
+| Block Explorer  | https://evm.flowscan.io                |
 
 | Name            | Value                                  |
 |-----------------|----------------------------------------|
 | Network Name    | Testnet                                |
 | Description     | The public RPC URL for Flow Testnet    |
 | RPC Endpoint    | https://testnet.evm.nodes.onflow.org   |
-| Chain ID        | Coming Soon                            |
+| Chain ID        | 545                                    |
 | Currency Symbol | FLOW                                   |
-| Block Explorer  | https://testnet.flowdiver.io           |
+| Block Explorer  | https://evm-testnet.flowscan.io        |
 
 | Name            | Value                                  |
 |-----------------|----------------------------------------|

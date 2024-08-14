@@ -35,7 +35,7 @@ func Start(ctx context.Context, cfg *config.Config) error {
 		return err
 	}
 
-	blocks := pebble.NewBlocks(store)
+	blocks := pebble.NewBlocks(store, cfg.FlowNetworkID)
 	transactions := pebble.NewTransactions(store)
 	receipts := pebble.NewReceipts(store)
 	accounts := pebble.NewAccounts(store)
@@ -129,7 +129,6 @@ func Start(ctx context.Context, cfg *config.Config) error {
 		accounts,
 		trace,
 		blocksPublisher,
-		transactionsPublisher,
 		logsPublisher,
 		logger,
 		collector,
@@ -152,7 +151,6 @@ func startIngestion(
 	accounts storage.AccountIndexer,
 	trace storage.TraceIndexer,
 	blocksPublisher *models.Publisher,
-	transactionsPublisher *models.Publisher,
 	logsPublisher *models.Publisher,
 	logger zerolog.Logger,
 	collector metrics.Collector,

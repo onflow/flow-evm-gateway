@@ -214,6 +214,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 }
 
 func TestBlockAndTransactionIngestion(t *testing.T) {
+
 	t.Run("successfully ingest transaction and block", func(t *testing.T) {
 		receipts := &storageMock.ReceiptIndexer{}
 		transactions := &storageMock.TransactionIndexer{}
@@ -296,8 +297,12 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			Once()
 
 		receipts.
-			On("Store", mock.AnythingOfType("*models.StorageReceipt"), mock.Anything).
-			Return(func(rcp *models.StorageReceipt, _ *pebbleDB.Batch) error {
+			On("Store", mock.AnythingOfType("[]*models.StorageReceipt"), mock.AnythingOfType("uint64"), mock.Anything).
+			Return(func(receipts []*models.StorageReceipt, evmHeight uint64, _ *pebbleDB.Batch) error {
+				assert.Len(t, receipts, 1)
+				rcp := receipts[0]
+
+				assert.Equal(t, nextHeight, evmHeight)
 				assert.Len(t, rcp.Logs, len(result.Logs))
 				assert.Equal(t, result.DeployedContractAddress.ToCommon().String(), rcp.ContractAddress.String())
 				return nil
@@ -394,8 +399,8 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			Once()
 
 		receipts.
-			On("Store", mock.AnythingOfType("*models.StorageReceipt"), mock.Anything).
-			Return(func(rcp *models.StorageReceipt, _ *pebbleDB.Batch) error {
+			On("Store", mock.AnythingOfType("[]*models.StorageReceipt"), mock.AnythingOfType("uint64"), mock.Anything).
+			Return(func(receipts []*models.StorageReceipt, evmHeight uint64, _ *pebbleDB.Batch) error {
 				require.True(t, blocksFirst)
 				return nil
 			}).
@@ -494,8 +499,8 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 				Once()
 
 			receipts.
-				On("Store", mock.AnythingOfType("*models.StorageReceipt"), mock.Anything).
-				Return(func(rcp *models.StorageReceipt, _ *pebbleDB.Batch) error { return nil }).
+				On("Store", mock.AnythingOfType("[]*models.StorageReceipt"), mock.AnythingOfType("uint64"), mock.Anything).
+				Return(func(receipts []*models.StorageReceipt, evmHeight uint64, _ *pebbleDB.Batch) error { return nil }).
 				Once()
 
 			events = append(events, flow.Event{

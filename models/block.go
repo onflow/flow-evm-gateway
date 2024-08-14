@@ -7,6 +7,7 @@ import (
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go/fvm/evm/events"
 	"github.com/onflow/flow-go/fvm/evm/types"
+	"github.com/onflow/flow-go/model/flow"
 	gethCommon "github.com/onflow/go-ethereum/common"
 	"github.com/onflow/go-ethereum/rlp"
 )
@@ -16,9 +17,11 @@ var (
 	EarliestBlockNumber = big.NewInt(0)
 )
 
-var GenesisBlock = &Block{
-	Block:             types.GenesisBlock,
-	TransactionHashes: []gethCommon.Hash{},
+func GenesisBlock(chainID flow.ChainID) *Block {
+	return &Block{
+		Block:             types.GenesisBlock(chainID),
+		TransactionHashes: []gethCommon.Hash{},
+	}
 }
 
 func NewBlockFromBytes(data []byte) (*Block, error) {

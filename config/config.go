@@ -154,7 +154,7 @@ func FromFlags() (*Config, error) {
 	flag.StringVar(&cloudKMSKeyRingID, "coa-cloud-kms-key-ring-id", "", "The key ring ID where the KMS keys exist, e.g. 'tx-signing'")
 	flag.StringVar(&cloudKMSKeys, "coa-cloud-kms-keys", "", `Names of the KMS keys and their versions as a comma separated list, e.g. "gw-key-6@1,gw-key-7@1,gw-key-8@1"`)
 	flag.StringVar(&walletKey, "wallet-api-key", "", "ECDSA private key used for wallet APIs. WARNING: This should only be used locally or for testing, never in production.")
-	flag.IntVar(&cfg.MetricsPort, "metrics-port", 8080, "Port for the metrics server")
+	flag.IntVar(&cfg.MetricsPort, "metrics-port", 9091, "Port for the metrics server")
 	flag.BoolVar(&cfg.IndexOnly, "index-only", false, "Run the gateway in index-only mode which only allows querying the state and indexing, but disallows sending transactions.")
 	flag.Parse()
 
