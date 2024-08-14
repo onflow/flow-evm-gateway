@@ -23,6 +23,7 @@ import (
 	"github.com/rs/cors"
 	"github.com/rs/zerolog"
 	slogzerolog "github.com/samber/slog-zerolog"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/metrics"
@@ -54,6 +55,7 @@ type httpServer struct {
 
 	config    *config.Config
 	collector metrics.Collector
+	tracer    trace.Tracer
 }
 
 const (
@@ -62,7 +64,7 @@ const (
 	batchResponseMaxSize = 5 * 1000 * 1000 // 5 MB
 )
 
-func NewHTTPServer(logger zerolog.Logger, collector metrics.Collector, cfg *config.Config) *httpServer {
+func NewHTTPServer(logger zerolog.Logger, collector metrics.Collector, tracer trace.Tracer, cfg *config.Config) *httpServer {
 	zeroSlog := slogzerolog.Option{Logger: &logger}.NewZerologHandler()
 	gethLog.SetDefault(gethLog.NewLogger(slog.New(zeroSlog).Handler()))
 
@@ -71,6 +73,7 @@ func NewHTTPServer(logger zerolog.Logger, collector metrics.Collector, cfg *conf
 		timeouts:  rpc.DefaultHTTPTimeouts,
 		config:    cfg,
 		collector: collector,
+		tracer:    tracer,
 	}
 }
 

@@ -18,6 +18,8 @@ import (
 	"github.com/onflow/go-ethereum/rpc"
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-limiter"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/metrics"
@@ -89,6 +91,7 @@ type BlockChainAPI struct {
 	indexingResumedHeight uint64
 	limiter               limiter.Store
 	collector             metrics.Collector
+	tracer                trace.Tracer
 }
 
 func NewBlockChainAPI(
@@ -101,6 +104,7 @@ func NewBlockChainAPI(
 	accounts storage.AccountIndexer,
 	ratelimiter limiter.Store,
 	collector metrics.Collector,
+	tracer trace.Tracer,
 ) (*BlockChainAPI, error) {
 	// get the height from which the indexing resumed since the last restart, this is needed for syncing status.
 	indexingResumedHeight, err := blocks.LatestEVMHeight()
@@ -119,6 +123,7 @@ func NewBlockChainAPI(
 		indexingResumedHeight: indexingResumedHeight,
 		limiter:               ratelimiter,
 		collector:             collector,
+		tracer:                tracer,
 	}, nil
 }
 
@@ -174,8 +179,13 @@ func (b *BlockChainAPI) SendRawTransaction(
 	ctx context.Context,
 	input hexutil.Bytes,
 ) (common.Hash, error) {
+	ctx, span := b.tracer.Start(ctx, "BlockChainAPI.SendRawTransaction()")
+	defer span.End()
+
 	if b.config.IndexOnly {
-		return common.Hash{}, errs.ErrNotSupported
+		err := errs.ErrNotSupported
+		span.SetStatus(codes.Error, err.Error())
+		return common.Hash{}, err
 	}
 
 	l := b.logger.With().
@@ -184,12 +194,14 @@ func (b *BlockChainAPI) SendRawTransaction(
 		Logger()
 
 	if err := rateLimit(ctx, b.limiter, l); err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		return common.Hash{}, err
 	}
 
 	id, err := b.evm.SendRawTransaction(ctx, input)
 	if err != nil {
-		return handleError[common.Hash](err, l, b.collector)
+		_, err = handleError[common.Hash](err, l, b.collector)
+		span.SetStatus(codes.Error, err.Error())
 	}
 
 	return id, nil

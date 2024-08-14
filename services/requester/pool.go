@@ -11,6 +11,8 @@ import (
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-retry"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/onflow/flow-evm-gateway/models"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
@@ -30,6 +32,7 @@ type TxPool struct {
 	client      *CrossSporkClient
 	pool        *sync.Map
 	txPublisher *models.Publisher
+	tracer      trace.Tracer
 	// todo add methods to inspect transaction pool state
 }
 
@@ -37,12 +40,14 @@ func NewTxPool(
 	client *CrossSporkClient,
 	transactionsPublisher *models.Publisher,
 	logger zerolog.Logger,
+	tracer trace.Tracer,
 ) *TxPool {
 	return &TxPool{
 		logger:      logger.With().Str("component", "tx-pool").Logger(),
 		client:      client,
 		txPublisher: transactionsPublisher,
 		pool:        &sync.Map{},
+		tracer:      tracer,
 	}
 }
 
@@ -55,30 +60,71 @@ func (t *TxPool) Send(
 	flowTx *flow.Transaction,
 	evmTx *gethTypes.Transaction,
 ) error {
-	t.txPublisher.Publish(evmTx) // publish pending transaction event
+	ctx, span := t.tracer.Start(ctx, "TxPool.Send()")
+	defer span.End()
 
-	if err := t.client.SendTransaction(ctx, *flowTx); err != nil {
+	t.publishTransaction(ctx, evmTx)
+
+	if err := t.sendTransaction(ctx, flowTx); err != nil {
 		return err
 	}
 
-	// add to pool and delete after transaction is sealed or errored out
+	if err := t.storeTransaction(ctx, evmTx); err != nil {
+		return err
+	}
+
+	return t.retryGetTransactionResult(ctx, flowTx, evmTx)
+}
+
+func (t *TxPool) sendTransaction(ctx context.Context, flowTx *flow.Transaction) error {
+	ctx, span := t.tracer.Start(ctx, "client.sendTransaction()")
+	defer span.End()
+
+	if err := t.client.SendTransaction(ctx, *flowTx); err != nil {
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
+
+	return nil
+}
+
+func (t *TxPool) publishTransaction(ctx context.Context, evmTx *gethTypes.Transaction) {
+	ctx, span := t.tracer.Start(ctx, "txPublisher.publishTransaction()")
+	defer span.End()
+	t.txPublisher.Publish(evmTx) // publish pending transaction event
+}
+
+func (t *TxPool) storeTransaction(ctx context.Context, evmTx *gethTypes.Transaction) error {
+	ctx, span := t.tracer.Start(ctx, "pool.storeTransaction()")
+	defer span.End()
+
 	t.pool.Store(evmTx.Hash(), evmTx)
 	defer t.pool.Delete(evmTx.Hash())
 
+	return nil
+}
+
+func (t *TxPool) retryGetTransactionResult(ctx context.Context, flowTx *flow.Transaction, evmTx *gethTypes.Transaction) error {
 	backoff := retry.WithMaxDuration(time.Minute*3, retry.NewFibonacci(time.Millisecond*100))
 
 	return retry.Do(ctx, backoff, func(ctx context.Context) error {
+		ctx, span := t.tracer.Start(ctx, "(retryable) client.GetTransactionResult()")
+		defer span.End()
+
 		res, err := t.client.GetTransactionResult(ctx, flowTx.ID())
 		if err != nil {
-			return fmt.Errorf("failed to retrieve flow transaction result %s: %w", flowTx.ID(), err)
+			err = fmt.Errorf("failed to retrieve flow transaction result %s: %w", flowTx.ID(), err)
+			span.SetStatus(codes.Error, err.Error())
+			return err
 		}
-		// retry until transaction is sealed
+
 		if res.Status < flow.TransactionStatusSealed {
 			return retry.RetryableError(fmt.Errorf("transaction not sealed"))
 		}
 
 		if res.Error != nil {
 			if err, ok := parseInvalidError(res.Error); ok {
+				span.SetStatus(codes.Error, err.Error())
 				return err
 			}
 
@@ -87,8 +133,9 @@ func (t *TxPool) Send(
 				Str("evm-id", evmTx.Hash().Hex()).
 				Msg("flow transaction error")
 
-			// hide specific cause since it's an implementation issue
-			return fmt.Errorf("failed to submit flow evm transaction %s", evmTx.Hash())
+			err = fmt.Errorf("failed to submit flow evm transaction %s", evmTx.Hash())
+			span.SetStatus(codes.Error, err.Error())
+			return err
 		}
 
 		return nil

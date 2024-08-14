@@ -24,6 +24,8 @@ import (
 	"github.com/onflow/go-ethereum/core/txpool"
 	"github.com/onflow/go-ethereum/core/types"
 	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/onflow/flow-evm-gateway/config"
@@ -110,6 +112,7 @@ type EVM struct {
 	validationOptions *txpool.ValidationOptions
 
 	collector metrics.Collector
+	tracer    trace.Tracer
 }
 
 func NewEVM(
@@ -120,6 +123,7 @@ func NewEVM(
 	blocks storage.BlockIndexer,
 	txPool *TxPool,
 	collector metrics.Collector,
+	tracer trace.Tracer,
 ) (*EVM, error) {
 	logger = logger.With().Str("component", "requester").Logger()
 	// check that the address stores already created COA resource in the "evm" storage path.
@@ -176,6 +180,7 @@ func NewEVM(
 		evmSigner:         evmSigner,
 		validationOptions: validationOptions,
 		collector:         collector,
+		tracer:            tracer,
 	}
 
 	// create COA on the account
@@ -198,27 +203,37 @@ func NewEVM(
 }
 
 func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash, error) {
+	ctx, span := e.tracer.Start(ctx, "EVM.SendRawTransaction()")
+	defer span.End()
+
 	tx := &types.Transaction{}
 	if err := tx.UnmarshalBinary(data); err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		return common.Hash{}, err
 	}
 
 	if err := models.ValidateTransaction(tx, e.head, e.evmSigner, e.validationOptions); err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		return common.Hash{}, err
 	}
 
 	from, err := types.Sender(types.LatestSignerForChainID(tx.ChainId()), tx)
 	if err != nil {
-		return common.Hash{}, fmt.Errorf("failed to derive the sender: %w", err)
+		err = fmt.Errorf("failed to derive the sender: %w", err)
+		span.SetStatus(codes.Error, err.Error())
+		return common.Hash{}, err
 	}
 
 	if tx.GasPrice().Cmp(e.config.GasPrice) < 0 {
-		return common.Hash{}, errs.TransactionGasPriceTooLow(e.config.GasPrice)
+		err := errs.TransactionGasPriceTooLow(e.config.GasPrice)
+		span.SetStatus(codes.Error, err.Error())
+		return common.Hash{}, err
 	}
 
 	txData := hex.EncodeToString(data)
 	hexEncodedTx, err := cadence.NewString(txData)
 	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		return common.Hash{}, err
 	}
 
@@ -226,10 +241,12 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 	flowTx, err := e.buildTransaction(ctx, script, hexEncodedTx)
 	if err != nil {
 		e.logger.Error().Err(err).Str("data", txData).Msg("failed to build transaction")
+		span.SetStatus(codes.Error, err.Error())
 		return common.Hash{}, err
 	}
 
 	if err := e.txPool.Send(ctx, flowTx, tx); err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		return common.Hash{}, err
 	}
 
@@ -253,6 +270,9 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 // buildTransaction creates a flow transaction from the provided script with the arguments
 // and signs it with the configured COA account.
 func (e *EVM) buildTransaction(ctx context.Context, script []byte, args ...cadence.Value) (*flow.Transaction, error) {
+	ctx, span := e.tracer.Start(ctx, "EVM.buildTransaction()")
+	defer span.End()
+
 	// building and signing transactions should be blocking, so we don't have keys conflict
 	e.mux.Lock()
 	defer e.mux.Unlock()
@@ -264,16 +284,22 @@ func (e *EVM) buildTransaction(ctx context.Context, script []byte, args ...caden
 		index       uint32
 		seqNum      uint64
 	)
+
 	// execute concurrently so we can speed up all the information we need for tx
 	g.Go(func() error {
+		ctx, span := e.tracer.Start(ctx, "client.GetLatestBlock() goroutine")
+		defer span.End()
 		latestBlock, err1 = e.client.GetLatestBlock(ctx, true)
 		return err1
 	})
 	g.Go(func() error {
+		ctx, span := e.tracer.Start(ctx, "client.getSignerNetworkInfo() goroutine")
+		defer span.End()
 		index, seqNum, err2 = e.getSignerNetworkInfo(ctx)
 		return err2
 	})
 	if err := g.Wait(); err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
 
@@ -287,12 +313,16 @@ func (e *EVM) buildTransaction(ctx context.Context, script []byte, args ...caden
 
 	for _, arg := range args {
 		if err := flowTx.AddArgument(arg); err != nil {
-			return nil, fmt.Errorf("failed to add argument: %w", err)
+			err = fmt.Errorf("failed to add argument: %w", err)
+			span.SetStatus(codes.Error, err.Error())
+			return nil, err
 		}
 	}
 
 	if err := flowTx.SignEnvelope(address, index, e.signer); err != nil {
-		return nil, fmt.Errorf("failed to sign transaction envelope: %w", err)
+		err = fmt.Errorf("failed to sign transaction envelope: %w", err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
 	}
 
 	return flowTx, nil

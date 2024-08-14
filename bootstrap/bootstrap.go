@@ -12,6 +12,8 @@ import (
 	"github.com/onflow/flow-go-sdk/crypto"
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-limiter/memorystore"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/onflow/flow-evm-gateway/api"
 	"github.com/onflow/flow-evm-gateway/config"
@@ -23,6 +25,7 @@ import (
 	"github.com/onflow/flow-evm-gateway/services/traces"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
+	tr "github.com/onflow/flow-evm-gateway/traces"
 )
 
 func Start(ctx context.Context, cfg *config.Config) error {
@@ -99,6 +102,13 @@ func Start(ctx context.Context, cfg *config.Config) error {
 
 	collector := metrics.NewCollector(logger)
 
+	err = tr.RegisterTraceProvider(ctx, logger, 4318)
+	if err != nil {
+		logger.Error().Err(err).Msg("failed to register trace provider")
+		return err
+	}
+	tracer := otel.Tracer("evm-gateway-tracer")
+
 	go func() {
 		err := startServer(
 			ctx,
@@ -114,6 +124,7 @@ func Start(ctx context.Context, cfg *config.Config) error {
 			logsPublisher,
 			logger,
 			collector,
+			tracer,
 		)
 		if err != nil {
 			logger.Error().Err(err).Msg("failed to start the API server")
@@ -266,11 +277,12 @@ func startServer(
 	logsPublisher *models.Publisher,
 	logger zerolog.Logger,
 	collector metrics.Collector,
+	tracer trace.Tracer,
 ) error {
 	l := logger.With().Str("component", "API").Logger()
 	l.Info().Msg("starting up RPC server")
 
-	srv := api.NewHTTPServer(l, collector, cfg)
+	srv := api.NewHTTPServer(l, collector, tracer, cfg)
 
 	// create the signer based on either a single coa key being provided and using a simple in-memory
 	// signer, or multiple keys being provided and using signer with key-rotation mechanism.
@@ -295,7 +307,7 @@ func startServer(
 	}
 
 	// create transaction pool
-	txPool := requester.NewTxPool(client, transactionsPublisher, logger)
+	txPool := requester.NewTxPool(client, transactionsPublisher, logger, tracer)
 
 	evm, err := requester.NewEVM(
 		client,
@@ -305,6 +317,7 @@ func startServer(
 		blocks,
 		txPool,
 		collector,
+		tracer,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create EVM requester: %w", err)
@@ -332,6 +345,7 @@ func startServer(
 		accounts,
 		ratelimiter,
 		collector,
+		tracer,
 	)
 	if err != nil {
 		return err
