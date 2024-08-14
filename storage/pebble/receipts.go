@@ -1,7 +1,6 @@
 package pebble
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"math/big"
@@ -127,34 +126,8 @@ func (r *Receipts) getByBlockHeight(height []byte, batch *pebble.Batch) ([]*mode
 	}
 
 	var receipts []*models.StorageReceipt
-
-	var oldReceipts []*models.StorageReceiptV0
-	if err = rlp.DecodeBytes(val, &oldReceipts); err != nil {
-		// todo remove this after previewnet is reset
-		// try to decode single receipt (breaking change migration)
-		var storeReceipt models.StorageReceiptV0
-		if err = rlp.DecodeBytes(val, &storeReceipt); err == nil {
-			oldReceipts = []*models.StorageReceiptV0{&storeReceipt}
-		} else {
-			oldReceipts = []*models.StorageReceiptV0{}
-		}
-	}
-
-	for _, rcp := range oldReceipts {
-		receipts = append(receipts, rcp.ToNewReceipt())
-	}
-
-	if len(oldReceipts) == 0 {
-		if err = rlp.DecodeBytes(val, &receipts); err != nil {
-			// todo remove this after previewnet is reset
-			// try to decode single receipt (breaking change migration)
-			var storeReceipt models.StorageReceipt
-			if err = rlp.DecodeBytes(val, &storeReceipt); err != nil {
-				return nil, err
-			}
-
-			receipts = []*models.StorageReceipt{&storeReceipt}
-		}
+	if err = rlp.DecodeBytes(val, &receipts); err != nil {
+		return nil, fmt.Errorf("failed to RLP-decode block receipt [%x]: %w", val, err)
 	}
 
 	for _, rcp := range receipts {
@@ -228,18 +201,8 @@ func (r *Receipts) BloomsForBlockRange(start, end *big.Int) ([]*models.BloomsHei
 		}
 
 		var bloomsHeight []*gethTypes.Bloom
-
-		// todo remove after previewnet is deprecated
-		// temp workaround if empty skip it, investigate why we stored empty blooms
-		if bytes.Equal(val, make([]byte, len(val))) {
-			continue
-		}
-
 		if err := rlp.DecodeBytes(val, &bloomsHeight); err != nil {
-			// todo remove after previewnet is deprecated
-			// temp workaround if stored only as a single bloom
-			bloomHeight := gethTypes.BytesToBloom(val)
-			bloomsHeight = []*gethTypes.Bloom{&bloomHeight}
+			return nil, fmt.Errorf("failed to RLP-decode blooms for range [%x]: %w", val, err)
 		}
 
 		h := stripPrefix(iterator.Key())
