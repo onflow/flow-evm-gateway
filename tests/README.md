@@ -57,5 +57,7 @@ Make sure that you are in the `flow-evm-gateway/tests/live-networks` directory a
 following commands:
 
 ```bash
-RPC_HOST="previewnet" USER_PRIVATE_KEY="0xMyPrivateKey" npm run test"
+npm install
+
+RPC_HOST="previewnet" USER_PRIVATE_KEY="0xMyPrivateKey" npm run test
 ```
