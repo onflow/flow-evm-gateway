@@ -47,7 +47,6 @@ func (r *Receipts) Store(
 	defer r.mux.Unlock()
 
 	blooms := []*gethTypes.Bloom{}
-	var height []byte
 
 	for _, receipt := range receipts {
 		if receipt.BlockNumber.Uint64() != evmHeight {
@@ -55,7 +54,7 @@ func (r *Receipts) Store(
 		}
 
 		blooms = append(blooms, &receipt.Bloom)
-		height = receipt.BlockNumber.Bytes()
+		height := receipt.BlockNumber.Bytes()
 
 		if err := r.store.set(receiptTxIDToHeightKey, receipt.TxHash.Bytes(), height, batch); err != nil {
 			return fmt.Errorf("failed to store receipt tx height: %w", err)
@@ -67,7 +66,7 @@ func (r *Receipts) Store(
 		return err
 	}
 
-	height = big.NewInt(int64(evmHeight)).Bytes()
+	height := big.NewInt(int64(evmHeight)).Bytes()
 
 	if err := r.store.set(receiptHeightKey, height, val, batch); err != nil {
 		return fmt.Errorf("failed to store receipt height: %w", err)
