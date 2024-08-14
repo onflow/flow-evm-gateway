@@ -6,6 +6,7 @@ import (
 	"github.com/cockroachdb/pebble"
 	"github.com/goccy/go-json"
 	"github.com/onflow/flow-go-sdk"
+	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/onflow/go-ethereum/common"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -21,7 +22,7 @@ import (
 // tests that make sure the implementation conform to the interface expected behaviour
 func TestBlocks(t *testing.T) {
 	runDB("blocks", t, func(t *testing.T, db *Storage) {
-		bl := NewBlocks(db)
+		bl := NewBlocks(db, flowGo.Emulator)
 		err := bl.InitHeights(config.EmulatorInitCadenceHeight, flow.Identifier{0x1})
 		require.NoError(t, err)
 		suite.Run(t, &storage.BlockTestSuite{Blocks: bl})
@@ -31,7 +32,7 @@ func TestBlocks(t *testing.T) {
 func TestReceipts(t *testing.T) {
 	runDB("receipts", t, func(t *testing.T, db *Storage) {
 		// prepare the blocks database since they track heights which are used in receipts as well
-		bl := NewBlocks(db)
+		bl := NewBlocks(db, flowGo.Emulator)
 		err := bl.InitHeights(config.EmulatorInitCadenceHeight, flow.Identifier{0x1})
 		require.NoError(t, err)
 		err = bl.Store(30, flow.Identifier{0x1}, mocks.NewBlock(10), nil) // update first and latest height
@@ -65,7 +66,7 @@ func TestBlock(t *testing.T) {
 
 	runDB("store block", t, func(t *testing.T, db *Storage) {
 		bl := mocks.NewBlock(10)
-		blocks := NewBlocks(db)
+		blocks := NewBlocks(db, flowGo.Emulator)
 		err := blocks.InitHeights(config.EmulatorInitCadenceHeight, flow.Identifier{0x1})
 		require.NoError(t, err)
 
@@ -79,7 +80,7 @@ func TestBlock(t *testing.T) {
 		cadenceHeight := uint64(20)
 		bl := mocks.NewBlock(height)
 
-		blocks := NewBlocks(db)
+		blocks := NewBlocks(db, flowGo.Emulator)
 		err := blocks.InitHeights(config.EmulatorInitCadenceHeight, flow.Identifier{0x1})
 		require.NoError(t, err)
 
@@ -107,7 +108,7 @@ func TestBlock(t *testing.T) {
 	})
 
 	runDB("get not found block error", t, func(t *testing.T, db *Storage) {
-		blocks := NewBlocks(db)
+		blocks := NewBlocks(db, flowGo.Emulator)
 		err := blocks.InitHeights(config.EmulatorInitCadenceHeight, flow.Identifier{0x1})
 		require.NoError(t, err)
 		_ = blocks.Store(2, flow.Identifier{0x1}, mocks.NewBlock(1), nil) // init
@@ -136,7 +137,7 @@ func TestAccount(t *testing.T) {
 
 func TestBatch(t *testing.T) {
 	runDB("batch successfully stores", t, func(t *testing.T, db *Storage) {
-		blocks := NewBlocks(db)
+		blocks := NewBlocks(db, flowGo.Emulator)
 		trace := NewTraces(db)
 
 		batch := db.NewBatch()
@@ -165,7 +166,7 @@ func TestBatch(t *testing.T) {
 	})
 
 	runDB("should not contain data without committing", t, func(t *testing.T, db *Storage) {
-		blocks := NewBlocks(db)
+		blocks := NewBlocks(db, flowGo.Emulator)
 
 		batch := db.NewBatch()
 		defer func() {
@@ -181,7 +182,7 @@ func TestBatch(t *testing.T) {
 	})
 
 	runDB("multiple batch stores", t, func(t *testing.T, db *Storage) {
-		blocks := NewBlocks(db)
+		blocks := NewBlocks(db, flowGo.Emulator)
 
 		for i := 0; i < 5; i++ {
 			cadenceHeight := uint64(1 + i)
