@@ -83,14 +83,12 @@ describe('Ethereum Contract Deployment and Interaction Tests', function () {
 
         let deployedAddress
         let storage
+        let lastBlock
 
         before(async function () {
             deployedAddress = await deployContract()
             assert.ok(deployedAddress.length > 0, "Contract should be deployed and return an address")
             storage = new web3.eth.Contract(storageABI, deployedAddress)
-
-            console.log("user", userAccount.address)
-            console.log("contract", deployedAddress)
         })
 
         it('Should retrieve the value from the Store contract', async function () {
@@ -106,9 +104,8 @@ describe('Ethereum Contract Deployment and Interaction Tests', function () {
                 to: deployedAddress,
                 data: storage.methods.store(newValue).encodeABI(),
                 value: '0',
-                gasPrice: '0',
+                gasPrice: '10',
             })
-
             let result = await web3.eth.sendSignedTransaction(signed.rawTransaction)
             assert.ok(result.transactionHash)
         })
@@ -119,9 +116,9 @@ describe('Ethereum Contract Deployment and Interaction Tests', function () {
             assert.strictEqual(parseInt(result), newValue, "Retrieve call should return the new value stored");
         })
 
-        let lastBlock = await web3.eth.getBlockNumber()
-
         it('Should get all past events that match the contract', async function () {
+            lastBlock = await web3.eth.getBlockNumber()
+
             // try to filter events by the value stored, which is an indexed value in the event and can be defined as a topic
             let events = await storage.getPastEvents("NewStore", {
                 fromBlock: initBlock,
@@ -133,10 +130,12 @@ describe('Ethereum Contract Deployment and Interaction Tests', function () {
                 ]
             })
 
-            assert.equal(events[0].returnValues["0"], newValue, "the event value should match the new value")
+            assert.equal(events[0].returnValues.value, newValue, "the event value should match the new value")
         })
 
         it('Should not match events with non-matching filter', async function () {
+            lastBlock = await web3.eth.getBlockNumber()
+
             let events = await storage.getPastEvents("NewStore", {
                 fromBlock: initBlock,
                 toBlock: lastBlock,
@@ -147,7 +146,7 @@ describe('Ethereum Contract Deployment and Interaction Tests', function () {
                 ]
             })
 
-            assert.equal(len(events), 0, "should not get any events")
+            assert.equal(events.length, 0, "should not get any events")
         })
 
         // todo get the trace for transaction
