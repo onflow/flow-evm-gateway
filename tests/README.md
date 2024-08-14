@@ -50,3 +50,12 @@ Files in the `fixtures` folder can be produced by using a `solc` compiler or sim
 using [remix](https://remix.ethereum.org/) online IDE. You can simply paste the `test.sol`, 
 change it the way you see fit and compile, which will produce ABI JSON and compiled binary. 
 You then replace contents of `test-abi.json` with new ABI and `test.bin` with the compiled binary.
+
+### Running live network tests
+
+Make sure that you are in the `flow-evm-gateway/tests/live-networks` directory and run the
+following commands:
+
+```bash
+RPC_HOST="previewnet" USER_PRIVATE_KEY="0xMyPrivateKey" npm run test"
+```
