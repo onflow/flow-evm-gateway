@@ -4,12 +4,12 @@ go 1.22
 
 require (
 	github.com/goccy/go-json v0.10.2
-	github.com/onflow/cadence v1.0.0-preview.39
+	github.com/onflow/cadence v1.0.0-preview.48
 	github.com/onflow/crypto v0.25.1
-	github.com/onflow/flow-emulator v1.0.0-preview.35.0.20240725141711-547155b39eb9
+	github.com/onflow/flow-emulator v1.0.0-preview.39
 	github.com/onflow/flow-evm-gateway v0.0.0-20240201154855-4d4d3d3f19c7
-	github.com/onflow/flow-go v0.36.4
-	github.com/onflow/flow-go-sdk v1.0.0-preview.42
+	github.com/onflow/flow-go v0.37.1
+	github.com/onflow/flow-go-sdk v1.0.0-preview.50
 	github.com/onflow/go-ethereum v1.14.7
 	github.com/rs/zerolog v1.31.0
 	github.com/stretchr/testify v1.9.0
@@ -145,7 +145,7 @@ require (
 	github.com/multiformats/go-multistream v0.5.0 // indirect
 	github.com/multiformats/go-varint v0.0.7 // indirect
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
-	github.com/onflow/atree v0.7.0-rc.2 // indirect
+	github.com/onflow/atree v0.8.0-rc.5 // indirect
 	github.com/onflow/flow-core-contracts/lib/go/contracts v1.3.1 // indirect
 	github.com/onflow/flow-core-contracts/lib/go/templates v1.3.1 // indirect
 	github.com/onflow/flow-ft/lib/go/contracts v1.0.0 // indirect
@@ -232,7 +232,7 @@ require (
 	google.golang.org/protobuf v1.33.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	lukechampine.com/blake3 v1.2.1 // indirect
+	lukechampine.com/blake3 v1.3.0 // indirect
 	modernc.org/libc v1.37.6 // indirect
 	modernc.org/mathutil v1.6.0 // indirect
 	modernc.org/memory v1.7.2 // indirect

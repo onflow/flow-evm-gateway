@@ -80,6 +80,6 @@ func (l *remoteLedger) SetValue(owner, key, value []byte) (err error) {
 	panic("read only")
 }
 
-func (l *remoteLedger) AllocateStorageIndex(owner []byte) (atree.StorageIndex, error) {
+func (l *remoteLedger) AllocateSlabIndex(owner []byte) (atree.SlabIndex, error) {
 	panic("read only")
 }
