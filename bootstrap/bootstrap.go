@@ -94,7 +94,7 @@ func Start(ctx context.Context, cfg *config.Config) error {
 		logger.Info().Msg("database initialized with 0 evm and cadence heights")
 	}
 
-	collector := metrics.NewCollector(logger)
+	collector := metrics.NewCollector()
 
 	go func() {
 		err := startServer(
@@ -299,7 +299,6 @@ func startServer(
 		logger,
 		blocks,
 		txPool,
-		collector,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create EVM requester: %w", err)

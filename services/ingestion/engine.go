@@ -163,6 +163,7 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 		if err != nil {
 			return fmt.Errorf("failed to index transaction %s event: %w", tx.Hash().String(), err)
 		}
+		e.collector.EVMAccountInteraction(tx.To())
 	}
 
 	err = e.indexReceipts(events.Receipts(), events.Block(), batch)

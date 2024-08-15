@@ -27,7 +27,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/onflow/flow-evm-gateway/config"
-	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/models"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/storage"
@@ -108,8 +107,6 @@ type EVM struct {
 	head              *types.Header
 	evmSigner         types.Signer
 	validationOptions *txpool.ValidationOptions
-
-	collector metrics.Collector
 }
 
 func NewEVM(
@@ -119,7 +116,6 @@ func NewEVM(
 	logger zerolog.Logger,
 	blocks storage.BlockIndexer,
 	txPool *TxPool,
-	collector metrics.Collector,
 ) (*EVM, error) {
 	logger = logger.With().Str("component", "requester").Logger()
 	// check that the address stores already created COA resource in the "evm" storage path.
@@ -175,7 +171,6 @@ func NewEVM(
 		head:              head,
 		evmSigner:         evmSigner,
 		validationOptions: validationOptions,
-		collector:         collector,
 	}
 
 	// create COA on the account
@@ -236,7 +231,6 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 	var to string
 	if tx.To() != nil {
 		to = tx.To().String()
-		e.collector.EVMAccountInteraction(to)
 	}
 
 	e.logger.Info().
