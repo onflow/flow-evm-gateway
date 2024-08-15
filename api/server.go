@@ -62,9 +62,16 @@ const (
 	batchResponseMaxSize = 5 * 1000 * 1000 // 5 MB
 )
 
-func NewHTTPServer(logger zerolog.Logger, collector metrics.Collector, cfg *config.Config) *httpServer {
-	zeroSlog := slogzerolog.Option{Logger: &logger}.NewZerologHandler()
-	gethLog.SetDefault(gethLog.NewLogger(slog.New(zeroSlog).Handler()))
+func NewHTTPServer(
+	logger zerolog.Logger,
+	collector metrics.Collector,
+	cfg *config.Config,
+) *httpServer {
+	zeroSlog := slogzerolog.Option{
+		Logger: &logger,
+		Level:  slog.LevelError,
+	}.NewZerologHandler()
+	gethLog.SetDefault(gethLog.NewLogger(zeroSlog))
 
 	return &httpServer{
 		logger:    logger,
