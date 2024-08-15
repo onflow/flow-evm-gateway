@@ -157,7 +157,7 @@ describe('Ethereum Contract Deployment and Interaction Tests', function() {
 
             let stored = await web3.eth.getStorageAt(deployedAddress, slot)
             const value = web3.utils.hexToNumberString(stored);
-            console.log('Stored number value:', value);
+            assert.equal(value, newValue)
         })
 
         // todo get the trace for transaction
