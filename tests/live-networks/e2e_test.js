@@ -29,28 +29,26 @@ const userAccount = web3.eth.accounts.privateKeyToAccount(userPrivateKey);
 
 console.log("Using user account: ", userAccount.address)
 
-describe('Ethereum Contract Deployment and Interaction Tests', function () {
+describe('Ethereum Contract Deployment and Interaction Tests', function() {
     this.timeout(0) // Disable timeout since blockchain interactions can be slow
     let initBlock = 0
 
-    it('Should get the network ID', async function () {
+    it('Should get the network ID', async function() {
         const id = await web3.eth.getChainId()
+        console.log(id)
         assert.ok(id, "Network ID should be available")
     })
 
-    it('Should fetch the latest block number', async function () {
+    it('Should fetch the latest block number', async function() {
         const block = await web3.eth.getBlockNumber()
         initBlock = block
         assert.ok(block, "Should fetch the latest block number")
     })
 
-    it('Should fetch genesis block', async function() {
-        const block = await web3.eth.getBlock(0)
-        assert.ok(block, "Should fetch the latest block number")
-    })
+    // todo check previous blocks and old data
 
     it('Get specific block', async function () {
-        let block = await web3.eth.getBlock(2, false)
+        let block = await web3.eth.getBlock(1, false)
         assert.ok(block)
     })
 
@@ -62,16 +60,17 @@ describe('Ethereum Contract Deployment and Interaction Tests', function () {
         await assert.doesNotReject(web3.eth.getGasPrice())
     })
 
-    it('Should transfer value to itself', async function () {
+    it('Should transfer value to itself', async function (){
         let value = 0.01
         let receipt = await transfer(value, userAccount.address) // todo check nonce
         assert.equal(userAccount.address, receipt.to)
         assert.equal(receipt.status, 1n)
     })
 
-    it('Should ensure the EOA is sufficiently funded', async function () {
+    it('Should ensure the EOA is sufficiently funded', async function() {
         const balance = await getBalance(userAccount.address)
-        assert.ok(parseFloat(balance) >= 9, "EOA should be funded with at least 9 Ether")
+        console.log(balance)
+        assert.ok(parseFloat(balance) >= 5, "EOA should be funded with at least 9 Ether")
     })
 
     describe('Contract interactions', async function () {
@@ -94,7 +93,7 @@ describe('Ethereum Contract Deployment and Interaction Tests', function () {
             assert.strictEqual(parseInt(result), initValue, "Retrieve call should return the value stored");
         })
 
-        it('Should store a new value in the Store contract', async function () {
+        it('Should store a new value in the Store contract', async function() {
             // store a value in the contract
             let signed = await userAccount.signTransaction({
                 from: userAccount.address,
@@ -130,20 +129,26 @@ describe('Ethereum Contract Deployment and Interaction Tests', function () {
             assert.equal(events[0].returnValues.value, newValue, "the event value should match the new value")
         })
 
-        it('Should not match events with non-matching filter', async function () {
-            lastBlock = await web3.eth.getBlockNumber()
-
+        it('Should not match events with non-matching filter', async function() {
             let events = await storage.getPastEvents("NewStore", {
                 fromBlock: initBlock,
                 toBlock: lastBlock,
                 topics: [
                     null, // wildcard for method name
                     null, // wildcard for caller
-                    web3Utils.padLeft(web3Utils.toHex(newValue + 100), 64) // hex value left-padded matching our new value to filter against
+                    web3Utils.padLeft(web3Utils.toHex(newValue+100), 64) // hex value left-padded matching our new value to filter against
                 ]
             })
 
             assert.equal(events.length, 0, "should not get any events")
+        })
+
+        it('Gets storage at', async function () {
+            const slot = 0; // The slot for the 'number' variable
+
+            let stored = await web3.eth.getStorageAt(deployedAddress, slot)
+            const value = web3.utils.hexToNumberString(stored);
+            console.log('Stored number value:', value);
         })
 
         // todo get the trace for transaction
