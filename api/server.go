@@ -470,9 +470,12 @@ func (w *responseHandler) Write(data []byte) (int, error) {
 		}
 	}
 
-	// log all responses
-	r, _ := message.Result.MarshalJSON()
-	log.Str("result", string(r)).Msg("API response")
+	// log all response results of successful requests,
+	// as errors are logged with error log level.
+	if message.Error == nil {
+		r, _ := message.Result.MarshalJSON()
+		log.Str("result", string(r)).Msg("API response")
+	}
 
 	return w.ResponseWriter.Write(data)
 }
