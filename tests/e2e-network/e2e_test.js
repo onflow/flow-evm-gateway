@@ -43,7 +43,6 @@ describe('Ethereum Contract Deployment and Interaction Tests', function() {
 
     it('Should get the network ID', async function() {
         const id = await web3.eth.getChainId()
-        console.log(id)
         assert.ok(id, "Network ID should be available")
     })
 
@@ -80,7 +79,6 @@ describe('Ethereum Contract Deployment and Interaction Tests', function() {
 
     it('Should ensure the EOA is sufficiently funded', async function() {
         const balance = await getBalance(userAccount.address)
-        console.log(balance)
         assert.ok(parseFloat(balance) >= 5, "EOA should be funded with at least 9 Ether")
     })
 
@@ -177,7 +175,7 @@ describe('EVM Gateway load tests', function () {
         let txs = []
 
         for (let i = 0; i < batch; i++) {
-            console.log("sending ", i)
+            console.log("sending request ", i)
             txs.push(transfer(value, userAccount.address, nonce + BigInt(i)))
             await new Promise(res => setTimeout(() => res(), 100))
         }
@@ -225,6 +223,5 @@ async function transfer(amount, to, nonce) {
     }
 
     let signed = await userAccount.signTransaction(tx)
-    console.log(signed.transactionHash)
     return web3.eth.sendSignedTransaction(signed.rawTransaction)
 }
