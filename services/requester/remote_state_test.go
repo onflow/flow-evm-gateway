@@ -6,8 +6,10 @@ import (
 	"os"
 	"testing"
 
+	"github.com/onflow/flow-go/fvm/evm"
 	"github.com/onflow/flow-go/fvm/evm/emulator/state"
 	"github.com/onflow/flow-go/fvm/evm/types"
+	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/onflow/flow/protobuf/go/flow/access"
 	gethCommon "github.com/onflow/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
@@ -15,6 +17,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
+
+var previewnetStorageAddress = evm.StorageAccountAddress(flowGo.Previewnet)
 
 func Test_E2E_Previewnet_RemoteLedger(t *testing.T) {
 	executionAPI := os.Getenv("E2E_EXECUTION_API") // "access-001.previewnet1.nodes.onflow.org:9000"
