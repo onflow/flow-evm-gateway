@@ -7,7 +7,8 @@ const storageABI = require("./storageABI.json");
 let endpoints = {
     local: "http://localhost:8545",
     previewnet: "https://previewnet.evm.nodes.onflow.org",
-    migrationnet: "https://evm-001.migrationtestnet1.nodes.onflow.org"
+    migrationnet: "https://evm-001.migrationtestnet1.nodes.onflow.org",
+    testnet: "https://testnet.evm.nodes.onflow.org"
 }
 
 let rpcHost = process.env.RPC_HOST;
@@ -25,6 +26,8 @@ if (userPrivateKey == "") {
 }
 
 const userAccount = web3.eth.accounts.privateKeyToAccount(userPrivateKey);
+
+console.log("Using user account: ", userAccount.address)
 
 describe('Ethereum Contract Deployment and Interaction Tests', function () {
     this.timeout(0) // Disable timeout since blockchain interactions can be slow
@@ -45,7 +48,6 @@ describe('Ethereum Contract Deployment and Interaction Tests', function () {
 
     it('Get specific block', async function () {
         let block = await web3.eth.getBlock(2, false)
-        console.log(block)
         assert.ok(block)
     })
 
