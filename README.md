@@ -159,24 +159,6 @@ EVM Gateway has public RPC endpoints available for the following environments:
 
 | Name            | Value                                  |
 |-----------------|----------------------------------------|
-| Network Name    | Migrationnet                             |
-| Description     | The public RPC URL for Flow Migrationnet |
-| RPC Endpoint    | https://evm-001.migrationtestnet1.nodes.onflow.org|
-| Chain ID        | 646                                    |
-| Currency Symbol | FLOW                                   |
-| Block Explorer  | /        |
-
-| Name            | Value                                  |
-|-----------------|----------------------------------------|
-| Network Name    | Previewnet                             |
-| Description     | The public RPC URL for Flow Previewnet |
-| RPC Endpoint    | https://previewnet.evm.nodes.onflow.org|
-| Chain ID        | 646                                    |
-| Currency Symbol | FLOW                                   |
-| Block Explorer  | https://evm.flowscan.io                |
-
-| Name            | Value                                  |
-|-----------------|----------------------------------------|
 | Network Name    | Testnet                                |
 | Description     | The public RPC URL for Flow Testnet    |
 | RPC Endpoint    | https://testnet.evm.nodes.onflow.org   |
@@ -191,7 +173,7 @@ EVM Gateway has public RPC endpoints available for the following environments:
 | RPC Endpoint    | https://mainnet.evm.nodes.onflow.org   |
 | Chain ID        | 747                                    |
 | Currency Symbol | FLOW                                   |
-| Block Explorer  | https://flowdiver.io                   |
+| Block Explorer  | https://evm.flowscan.io                |
 
 
 # JSON-RPC API
