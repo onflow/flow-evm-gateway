@@ -170,6 +170,11 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 		}
 	}
 
+	err = e.indexReceipts(events.Receipts(), events.Block(), batch)
+	if err != nil {
+		return fmt.Errorf("failed to index receipts for block %d event: %w", events.Block().Height, err)
+	}
+
 	if err := batch.Commit(pebbleDB.Sync); err != nil {
 		return fmt.Errorf("failed to commit indexed data for Cadence block %d: %w", events.CadenceHeight(), err)
 	}
@@ -244,7 +249,23 @@ func (e *Engine) indexTransaction(
 		return fmt.Errorf("failed to update accounts: %w", err)
 	}
 
-	if err := e.receipts.Store(receipt, batch); err != nil {
+	return nil
+}
+
+func (e *Engine) indexReceipts(
+	receipts []*models.StorageReceipt,
+	block *models.Block,
+	batch *pebbleDB.Batch,
+) error {
+	if block == nil { // safety check shouldn't happen
+		return fmt.Errorf("can't process empty block")
+	}
+
+	if receipts == nil {
+		return nil
+	}
+
+	if err := e.receipts.Store(receipts, block.Height, batch); err != nil {
 		return fmt.Errorf("failed to store receipt: %w", err)
 	}
 

@@ -1,0 +1,10 @@
+{
+  "dependencies": {
+    "mocha": "^10.3.0",
+    "web3": "^4.3.0",
+    "web3-utils": "^4.2.0"
+  },
+  "scripts": {
+    "test": "mocha e2e_test.js"
+  }
+}

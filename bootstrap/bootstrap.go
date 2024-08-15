@@ -94,9 +94,6 @@ func Start(ctx context.Context, cfg *config.Config) error {
 		logger.Info().Msg("database initialized with 0 evm and cadence heights")
 	}
 
-	// TEMP: Remove `DirectCallHashCalculationBlockHeightChange` after PreviewNet is reset
-	models.DirectCallHashCalculationBlockHeightChange = cfg.HashCalculationHeightChange
-
 	collector := metrics.NewCollector(logger)
 
 	go func() {
@@ -132,7 +129,6 @@ func Start(ctx context.Context, cfg *config.Config) error {
 		accounts,
 		trace,
 		blocksPublisher,
-		transactionsPublisher,
 		logsPublisher,
 		logger,
 		collector,
@@ -155,7 +151,6 @@ func startIngestion(
 	accounts storage.AccountIndexer,
 	trace storage.TraceIndexer,
 	blocksPublisher *models.Publisher,
-	transactionsPublisher *models.Publisher,
 	logsPublisher *models.Publisher,
 	logger zerolog.Logger,
 	collector metrics.Collector,
