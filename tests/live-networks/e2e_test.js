@@ -59,14 +59,6 @@ describe('Ethereum Contract Deployment and Interaction Tests', function () {
         await assert.doesNotReject(web3.eth.getGasPrice())
     })
 
-    it('Should get tx by block number and index', async function () {
-        // todo might not have tx
-
-        //let tx = await web3.eth.getTransactionFromBlock(initBlock, 0)
-        //console.log(tx)
-        //assert.ok(tx.blockNumber)
-    })
-
     it('Should transfer value to itself', async function () {
         let value = 0.01
         let receipt = await transfer(value, userAccount.address) // todo check nonce
