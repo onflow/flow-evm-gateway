@@ -6,9 +6,17 @@ const storageABI = require("./storageABI.json");
 
 let endpoints = {
     local: "http://localhost:8545",
-    previewnet: "https://previewnet.evm.nodes.onflow.org",
-    migrationnet: "https://evm-001.migrationtestnet1.nodes.onflow.org",
     testnet: "https://testnet.evm.nodes.onflow.org"
+}
+
+if (process.env.GENERATE == 1) {
+    const web3 = new Web3(endpoints.local) // doesn't matter
+    const privateKey = web3.eth.accounts.create().privateKey
+    const address = web3.eth.accounts.privateKeyToAccount(privateKey).address
+
+    console.log("Private Key:", privateKey)
+    console.log("Address:", address)
+    return
 }
 
 let rpcHost = process.env.RPC_HOST;
