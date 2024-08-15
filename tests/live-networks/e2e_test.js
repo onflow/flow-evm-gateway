@@ -44,7 +44,10 @@ describe('Ethereum Contract Deployment and Interaction Tests', function () {
         assert.ok(block, "Should fetch the latest block number")
     })
 
-    // todo check previous blocks and old data
+    it('Should fetch genesis block', async function() {
+        const block = await web3.eth.getBlock(0)
+        assert.ok(block, "Should fetch the latest block number")
+    })
 
     it('Get specific block', async function () {
         let block = await web3.eth.getBlock(2, false)
