@@ -108,17 +108,17 @@ func (_m *ReceiptIndexer) GetByTransactionID(ID common.Hash) (*models.StorageRec
 	return r0, r1
 }
 
-// Store provides a mock function with given fields: receipt, batch
-func (_m *ReceiptIndexer) Store(receipt *models.StorageReceipt, batch *pebble.Batch) error {
-	ret := _m.Called(receipt, batch)
+// Store provides a mock function with given fields: receipts, evmHeight, batch
+func (_m *ReceiptIndexer) Store(receipts []*models.StorageReceipt, evmHeight uint64, batch *pebble.Batch) error {
+	ret := _m.Called(receipts, evmHeight, batch)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Store")
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(*models.StorageReceipt, *pebble.Batch) error); ok {
-		r0 = rf(receipt, batch)
+	if rf, ok := ret.Get(0).(func([]*models.StorageReceipt, uint64, *pebble.Batch) error); ok {
+		r0 = rf(receipts, evmHeight, batch)
 	} else {
 		r0 = ret.Error(0)
 	}
