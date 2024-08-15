@@ -30,32 +30,35 @@ type DefaultCollector struct {
 }
 
 func NewCollector() Collector {
-	apiErrors := promauto.NewCounter(prometheus.CounterOpts{
+	registry := prometheus.NewRegistry()
+	factory := promauto.With(registry)
+
+	apiErrors := factory.NewCounter(prometheus.CounterOpts{
 		Name: prefixedName("api_errors_total"),
 		Help: "Total number of API errors",
 	})
 
-	traceDownloadErrorCounter := promauto.NewCounter(prometheus.CounterOpts{
+	traceDownloadErrorCounter := factory.NewCounter(prometheus.CounterOpts{
 		Name: prefixedName("trace_download_errors_total"),
 		Help: "Total number of trace download errors",
 	})
 
-	serverPanicsCounters := promauto.NewCounterVec(prometheus.CounterOpts{
+	serverPanicsCounters := factory.NewCounterVec(prometheus.CounterOpts{
 		Name: prefixedName("api_server_panics_total"),
 		Help: "Total number of panics in the API server",
 	}, []string{"reason"})
 
-	evmBlockHeight := prometheus.NewGauge(prometheus.GaugeOpts{
+	evmBlockHeight := factory.NewGauge(prometheus.GaugeOpts{
 		Name: prefixedName("evm_block_height"),
 		Help: "Current EVM block height",
 	})
 
-	evmAccountCallCounters := promauto.NewCounterVec(prometheus.CounterOpts{
+	evmAccountCallCounters := factory.NewCounterVec(prometheus.CounterOpts{
 		Name: prefixedName("evm_account_interactions_total"),
 		Help: "Total number of account interactions",
 	}, []string{"address"})
 
-	requestDurations := promauto.NewHistogramVec(prometheus.HistogramOpts{
+	requestDurations := factory.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    prefixedName("api_request_duration_seconds"),
 		Help:    "Duration of the request made a specific API endpoint",
 		Buckets: prometheus.DefBuckets,
