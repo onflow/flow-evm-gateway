@@ -159,15 +159,12 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 	for i, tx := range events.Transactions() {
 		receipt := events.Receipts()[i]
 
-		from, err := tx.From()
-		if err == nil {
-			e.collector.EVMFeesCollected(from, receipt.GasUsed, receipt.EffectiveGasPrice)
-		}
-
 		err = e.indexTransaction(tx, receipt, batch)
 		if err != nil {
 			return fmt.Errorf("failed to index transaction %s event: %w", tx.Hash().String(), err)
 		}
+
+		e.collector.EVMFeesCollected(tx, receipt)
 	}
 
 	err = e.indexReceipts(events.Receipts(), events.Block(), batch)

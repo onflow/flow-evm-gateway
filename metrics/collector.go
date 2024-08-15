@@ -9,9 +9,10 @@ import (
 	sdk "github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go/fvm/evm/events"
 	"github.com/onflow/flow-go/model/flow"
-	"github.com/onflow/go-ethereum/common"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
+
+	"github.com/onflow/flow-evm-gateway/models"
 )
 
 type Collector interface {
@@ -21,7 +22,7 @@ type Collector interface {
 	EVMHeightIndexed(height uint64)
 	EVMAccountInteraction(address string)
 	MeasureRequestDuration(start time.Time, method string)
-	EVMFeesCollected(from common.Address, gasUsed uint64, gasPrice *big.Int)
+	EVMFeesCollected(tx models.Transaction, receipt *models.StorageReceipt)
 	FlowFeesCollected(from sdk.Address, txEvents []sdk.Event)
 }
 
@@ -153,7 +154,19 @@ func (c *DefaultCollector) MeasureRequestDuration(start time.Time, method string
 		Observe(float64(time.Since(start)))
 }
 
-func (c *DefaultCollector) EVMFeesCollected(from common.Address, gasUsed uint64, gasPrice *big.Int) {
+func (c *DefaultCollector) EVMFeesCollected(tx models.Transaction, receipt *models.StorageReceipt) {
+	if receipt == nil {
+		return
+	}
+
+	from, err := tx.From()
+	if err != nil {
+		return
+	}
+
+	gasUsed := receipt.GasUsed
+	gasPrice := receipt.EffectiveGasPrice
+
 	gasUsedBigInt := new(big.Int).SetUint64(gasUsed)
 	gasBigInt := new(big.Int).Mul(gasUsedBigInt, gasPrice)
 
