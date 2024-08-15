@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	gethVM "github.com/onflow/go-ethereum/core/vm"
 	gethLog "github.com/onflow/go-ethereum/log"
 	"github.com/onflow/go-ethereum/rpc"
 	"github.com/rs/cors"
@@ -62,9 +63,16 @@ const (
 	batchResponseMaxSize = 5 * 1000 * 1000 // 5 MB
 )
 
-func NewHTTPServer(logger zerolog.Logger, collector metrics.Collector, cfg *config.Config) *httpServer {
-	zeroSlog := slogzerolog.Option{Logger: &logger}.NewZerologHandler()
-	gethLog.SetDefault(gethLog.NewLogger(slog.New(zeroSlog).Handler()))
+func NewHTTPServer(
+	logger zerolog.Logger,
+	collector metrics.Collector,
+	cfg *config.Config,
+) *httpServer {
+	zeroSlog := slogzerolog.Option{
+		Logger: &logger,
+		Level:  slog.LevelError,
+	}.NewZerologHandler()
+	gethLog.SetDefault(gethLog.NewLogger(zeroSlog))
 
 	return &httpServer{
 		logger:    logger,
@@ -456,16 +464,20 @@ func (w *responseHandler) Write(data []byte) (int, error) {
 			if !errorIs(errMsg, errs.ErrRateLimit) &&
 				!errorIs(errMsg, errs.ErrInvalid) &&
 				!errorIs(errMsg, errs.ErrFailedTransaction) &&
-				!errorIs(errMsg, errs.ErrNotSupported) {
-				// set logging level to error
-				log = l.Error().Err(errors.New(errMsg))
+				!errorIs(errMsg, errs.ErrNotSupported) &&
+				!errorIs(errMsg, gethVM.ErrExecutionReverted) {
+				// log the error
+				l.Error().Err(errors.New(errMsg)).Msg("API response")
 			}
 		}
 	}
 
-	// log all responses
-	r, _ := message.Result.MarshalJSON()
-	log.Str("result", string(r)).Msg("API response")
+	// log all response results of successful requests,
+	// as errors are logged with error log level.
+	if message.Error == nil {
+		r, _ := message.Result.MarshalJSON()
+		log.Str("result", string(r)).Msg("API response")
+	}
 
 	return w.ResponseWriter.Write(data)
 }
