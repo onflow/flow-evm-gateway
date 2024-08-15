@@ -156,11 +156,13 @@ func (c *DefaultCollector) MeasureRequestDuration(start time.Time, method string
 
 func (c *DefaultCollector) EVMFeesCollected(tx models.Transaction, receipt *models.StorageReceipt) {
 	if receipt == nil {
+		c.logger.Debug().Msg("storage receipt is nil")
 		return
 	}
 
 	from, err := tx.From()
 	if err != nil {
+		c.logger.Debug().Msg("could not retrieve transaction sender")
 		return
 	}
 
@@ -172,7 +174,7 @@ func (c *DefaultCollector) EVMFeesCollected(tx models.Transaction, receipt *mode
 
 	gasFloat64, accuracy := gasBigInt.Float64()
 	if accuracy != big.Exact {
-		c.logger.Warn().Msg("precision lost when converting gas price to float64 in metrics collector")
+		c.logger.Debug().Msg("precision lost when converting gas price to float64 in metrics collector")
 		return
 	}
 
