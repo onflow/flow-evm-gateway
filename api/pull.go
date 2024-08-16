@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/big"
 	"sync"
 	"time"
 
@@ -478,36 +477,31 @@ func (api *PullAPI) getLogs(latestHeight uint64, filter *logsFilter) (any, error
 
 	to := filter.criteria.ToBlock
 	// we use latest as default for end range
-	end := big.NewInt(int64(latestHeight))
+	end := latestHeight
 	// unless "to" is defined in the criteria
 	if to != nil && to.Int64() >= 0 {
-		end = to
+		end = to.Uint64()
 		// if latest height is bigger than range "to" then we don't return anything
-		if latestHeight > to.Uint64() {
+		if latestHeight > end {
 			return []*gethTypes.Log{}, nil
 		}
 	}
 
-	start := big.NewInt(int64(nextHeight))
+	start := nextHeight
 	// we fetched all available data since start is now bigger than end value
-	if start.Cmp(end) > 0 {
+	if start > end {
 		return []*gethTypes.Log{}, nil
 	}
 
-	f, err := logs.NewRangeFilter(*start, *end, criteria, api.receipts)
+	f, err := logs.NewRangeFilter(start, end, criteria, api.receipts)
 	if err != nil {
-		return nil, fmt.Errorf(
-			"could not create range filter from %d to %d: %w",
-			start.Int64(),
-			end.Int64(),
-			err,
-		)
+		return nil, fmt.Errorf("could not create range filter from %d to %d: %w", start, end, err)
 	}
 
 	api.logger.Debug().
 		Uint64("latest", latestHeight).
-		Int64("from", start.Int64()).
-		Int64("to", end.Int64()).
+		Uint64("from", start).
+		Uint64("to", end).
 		Msg("get filter logs")
 
 	return f.Match()
