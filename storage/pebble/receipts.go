@@ -45,7 +45,7 @@ func (r *Receipts) Store(
 	r.mux.Lock()
 	defer r.mux.Unlock()
 
-	blooms := []*gethTypes.Bloom{}
+	var blooms []*gethTypes.Bloom
 
 	for _, receipt := range receipts {
 		if receipt.BlockNumber.Uint64() != evmHeight {
