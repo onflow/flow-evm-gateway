@@ -3,7 +3,6 @@ package pebble
 import (
 	"encoding/binary"
 	"fmt"
-	"math/big"
 	"sync"
 
 	"github.com/cockroachdb/pebble"
@@ -65,7 +64,7 @@ func (r *Receipts) Store(
 		return err
 	}
 
-	height := big.NewInt(int64(evmHeight)).Bytes()
+	height := uint64Bytes(evmHeight)
 
 	if err := r.store.set(receiptHeightKey, height, val, batch); err != nil {
 		return fmt.Errorf("failed to store receipt height: %w", err)
@@ -106,16 +105,17 @@ func (r *Receipts) GetByTransactionID(ID common.Hash) (*models.StorageReceipt, e
 	return nil, errs.ErrNotFound
 }
 
-func (r *Receipts) GetByBlockHeight(height *big.Int) ([]*models.StorageReceipt, error) {
+func (r *Receipts) GetByBlockHeight(height uint64) ([]*models.StorageReceipt, error) {
 	r.mux.RLock()
 	defer r.mux.RUnlock()
 
-	return r.getByBlockHeight(height.Bytes(), nil)
+	return r.getByBlockHeight(uint64Bytes(height), nil)
 }
 
 func (r *Receipts) getByBlockHeight(height []byte, batch *pebble.Batch) ([]*models.StorageReceipt, error) {
 	var val []byte
 	var err error
+
 	if batch != nil {
 		val, err = r.store.batchGet(batch, receiptHeightKey, height)
 	} else {
@@ -144,11 +144,11 @@ func (r *Receipts) getByBlockHeight(height []byte, batch *pebble.Batch) ([]*mode
 	return receipts, nil
 }
 
-func (r *Receipts) BloomsForBlockRange(start, end *big.Int) ([]*models.BloomsHeight, error) {
+func (r *Receipts) BloomsForBlockRange(start, end uint64) ([]*models.BloomsHeight, error) {
 	r.mux.RLock()
 	defer r.mux.RUnlock()
 
-	if start.Cmp(end) > 0 {
+	if start > end {
 		return nil, fmt.Errorf("start is bigger than end: %w", errs.ErrInvalidRange)
 	}
 
@@ -158,7 +158,7 @@ func (r *Receipts) BloomsForBlockRange(start, end *big.Int) ([]*models.BloomsHei
 		return nil, fmt.Errorf("failed getting first and last height: %w", err)
 	}
 
-	if start.Uint64() > last {
+	if start > last {
 		return nil, fmt.Errorf(
 			"start value %d is not within the indexed range of [0 - %d]: %w",
 			start,
@@ -167,7 +167,7 @@ func (r *Receipts) BloomsForBlockRange(start, end *big.Int) ([]*models.BloomsHei
 		)
 	}
 
-	if end.Uint64() > last {
+	if end > last {
 		return nil, fmt.Errorf(
 			"end value %d is not within the indexed range of [0 - %d]: %w",
 			end,
@@ -177,10 +177,10 @@ func (r *Receipts) BloomsForBlockRange(start, end *big.Int) ([]*models.BloomsHei
 	}
 
 	// we increase end by 1 since the range is exclusive at the upper boundary: [start, end)
-	endInclusive := new(big.Int).Add(end, big.NewInt(1))
+	endInclusive := end + 1
 	iterator, err := r.store.db.NewIter(&pebble.IterOptions{
-		LowerBound: makePrefix(bloomHeightKey, start.Bytes()),        // inclusive
-		UpperBound: makePrefix(bloomHeightKey, endInclusive.Bytes()), // exclusive
+		LowerBound: makePrefix(bloomHeightKey, uint64Bytes(start)),        // inclusive
+		UpperBound: makePrefix(bloomHeightKey, uint64Bytes(endInclusive)), // exclusive
 	})
 	if err != nil {
 		return nil, err
@@ -205,12 +205,11 @@ func (r *Receipts) BloomsForBlockRange(start, end *big.Int) ([]*models.BloomsHei
 			return nil, fmt.Errorf("failed to RLP-decode blooms for range [%x]: %w", val, err)
 		}
 
-		h := stripPrefix(iterator.Key())
-		height := new(big.Int).SetBytes(h)
+		height := stripPrefix(iterator.Key())
 
 		bloomsHeights = append(bloomsHeights, &models.BloomsHeight{
 			Blooms: bloomsHeight,
-			Height: height,
+			Height: binary.BigEndian.Uint64(height),
 		})
 	}
 
