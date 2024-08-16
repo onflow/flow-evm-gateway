@@ -15,6 +15,7 @@ import (
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/crypto"
+	"github.com/onflow/flow-go/fvm/evm"
 	"github.com/onflow/flow-go/fvm/evm/emulator"
 	"github.com/onflow/flow-go/fvm/evm/emulator/state"
 	"github.com/onflow/flow-go/fvm/evm/stdlib"
@@ -406,7 +407,8 @@ func (e *EVM) stateAt(evmHeight int64) (*state.StateDB, error) {
 		return nil, fmt.Errorf("could not create a remote ledger: %w", err)
 	}
 
-	return state.NewStateDB(ledger, previewnetStorageAddress)
+	storageAddress := evm.StorageAccountAddress(e.config.FlowNetworkID)
+	return state.NewStateDB(ledger, storageAddress)
 }
 
 func (e *EVM) GetStorageAt(

@@ -1,8 +1,8 @@
 tests/db-test
 tests/web3js/node_modules
 tests/web3js/package-lock.json
-tests/live-networks/node_modules
-tests/live-networks/package-lock.json
+tests/e2e-network/node_modules
+tests/e2e-network/package-lock.json
 db
 flow.json
 flow*.json
