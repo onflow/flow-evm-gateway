@@ -321,7 +321,7 @@ func TestRangeFilter(t *testing.T) {
 		criteria: FilterCriteria{
 			Addresses: []common.Address{common.HexToAddress("0x123")},
 		},
-		expectLogs: []*gethTypes.Log{},
+		expectLogs: nil,
 	}, {
 		desc:  "single address, non-existing range no match",
 		start: 5,
@@ -329,7 +329,7 @@ func TestRangeFilter(t *testing.T) {
 		criteria: FilterCriteria{
 			Addresses: []common.Address{logs[0][0].Address},
 		},
-		expectLogs: []*gethTypes.Log{},
+		expectLogs: nil,
 	}}
 
 	for _, tt := range tests {
