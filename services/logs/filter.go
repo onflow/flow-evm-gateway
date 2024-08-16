@@ -86,16 +86,24 @@ func (r *RangeFilter) Match() ([]*gethTypes.Log, error) {
 		return nil, err
 	}
 
-	logs := make([]*gethTypes.Log, 0)
+	var bloomHeightMatches []*big.Int
+	var logs []*gethTypes.Log
+
+	// first filter all the logs based on whether a bloom matches,
+	// if bloom matches we fetch only that height later and do exact match
 	for _, bloomHeight := range bloomsHeight {
 		for _, bloom := range bloomHeight.Blooms {
 			if !bloomMatch(*bloom, r.criteria) {
 				continue
 			}
+			bloomHeightMatches = append(bloomHeightMatches, bloomHeight.Height)
 		}
+	}
 
-		// todo do this concurrently
-		receipts, err := r.receipts.GetByBlockHeight(bloomHeight.Height)
+	// do exact matches only on subset of heights in the range that matched the bloom
+	for _, height := range bloomHeightMatches {
+		// todo do this concurrently but make sure order is correct
+		receipts, err := r.receipts.GetByBlockHeight(height)
 		if err != nil {
 			return nil, err
 		}
