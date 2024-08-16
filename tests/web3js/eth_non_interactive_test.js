@@ -37,7 +37,8 @@ it('get block', async () => {
     assert.equal(txCount, 3n)
     assert.equal(uncleCount, 0n)
 
-    // get block transactions
+    let gasUsed = 0n
+    // get block transactions & receipts
     for (const txIndex of [0, 1, 2]) {
         let tx = await web3.eth.getTransactionFromBlock(conf.startBlockHeight, txIndex)
         assert.isNotNull(tx)
@@ -45,7 +46,18 @@ it('get block', async () => {
         assert.equal(tx.blockHash, block.hash)
         assert.isString(tx.hash)
         assert.equal(tx.transactionIndex, txIndex)
+
+        let txReceipt = await web3.eth.getTransactionReceipt(tx.hash)
+        assert.isNotNull(txReceipt)
+        assert.equal(txReceipt.blockNumber, block.number)
+        assert.equal(txReceipt.blockHash, block.hash)
+        assert.isString(txReceipt.transactionHash)
+        assert.equal(txReceipt.transactionIndex, txIndex)
+
+        gasUsed += txReceipt.gasUsed
     }
+
+    assert.equal(block.gasUsed, gasUsed)
 
     // not existing transaction
     let no = await web3.eth.getTransactionFromBlock(conf.startBlockHeight, 5)
