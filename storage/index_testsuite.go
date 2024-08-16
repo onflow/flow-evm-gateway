@@ -258,6 +258,7 @@ func (s *ReceiptTestSuite) TestBloomsForBlockRange() {
 		bloomsHeights, err := s.ReceiptIndexer.BloomsForBlockRange(start, end)
 		s.Require().NoError(err)
 		s.Require().Len(bloomsHeights, len(testBlooms))
+
 		for i, bloomHeight := range bloomsHeights {
 			s.Require().Len(bloomHeight.Blooms, 1)
 			s.Require().Equal(bloomHeight.Blooms[0], testBlooms[i])
@@ -265,9 +266,14 @@ func (s *ReceiptTestSuite) TestBloomsForBlockRange() {
 		}
 
 		bloomsHeights, err = s.ReceiptIndexer.BloomsForBlockRange(start, big.NewInt(13))
+		subset := big.NewInt(13)
+		subsetSize := int(subset.Int64() - start.Int64() + 1) // +1 because it's inclusive
+
+		bloomsHeights, err = s.ReceiptIndexer.BloomsForBlockRange(start, subset)
 		s.Require().NoError(err)
-		s.Require().Len(bloomsHeights, 4)
-		for i := 0; i < 4; i++ {
+		s.Require().Len(bloomsHeights, subsetSize)
+
+		for i := 0; i < subsetSize; i++ {
 			s.Require().Len(bloomsHeights[i].Blooms, 1)
 			s.Require().Equal(bloomsHeights[i].Blooms[0], testBlooms[i])
 			s.Require().Equal(bloomsHeights[i].Height, testHeights[i])
@@ -291,8 +297,10 @@ func (s *ReceiptTestSuite) TestBloomsForBlockRange() {
 
 		bloomsHeights, err := s.ReceiptIndexer.BloomsForBlockRange(start, end)
 		s.Require().NoError(err)
-		s.Require().Len(bloomsHeights, len(testBlooms)/2)
+		s.Require().Equal(int64(len(bloomsHeights)), end.Int64()-start.Int64())
+
 		for i, bloomHeight := range bloomsHeights {
+			fmt.Println(bloomHeight.Height, bloomHeight.Blooms[0], bloomHeight.Blooms[1], testBlooms[i], testBlooms[i+1])
 			s.Require().Len(bloomHeight.Blooms, 2)
 			s.Require().Equal(bloomHeight.Blooms[0], testBlooms[i])
 			s.Require().Equal(bloomHeight.Blooms[1], testBlooms[i+1])
