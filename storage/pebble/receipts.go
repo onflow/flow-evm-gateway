@@ -47,14 +47,19 @@ func (r *Receipts) Store(
 	var blooms []*gethTypes.Bloom
 
 	for _, receipt := range receipts {
-		if receipt.BlockNumber.Uint64() != evmHeight {
+		height := receipt.BlockNumber.Uint64()
+		if height != evmHeight {
 			return fmt.Errorf("receipt belongs to different block height: %d", receipt.BlockNumber.Uint64())
 		}
 
 		blooms = append(blooms, &receipt.Bloom)
-		height := receipt.BlockNumber.Bytes()
 
-		if err := r.store.set(receiptTxIDToHeightKey, receipt.TxHash.Bytes(), height, batch); err != nil {
+		if err := r.store.set(
+			receiptTxIDToHeightKey,
+			receipt.TxHash.Bytes(),
+			uint64Bytes(height),
+			batch,
+		); err != nil {
 			return fmt.Errorf("failed to store receipt tx height: %w", err)
 		}
 	}
