@@ -120,7 +120,7 @@ func (c *DefaultCollector) EVMAccountInteraction(address string) {
 func (c *DefaultCollector) MeasureRequestDuration(start time.Time, method string) {
 	c.requestDurations.
 		With(prometheus.Labels{"method": method}).
-		Observe(float64(time.Since(start)))
+		Observe(time.Since(start).Seconds())
 }
 
 func prefixedName(name string) string {
