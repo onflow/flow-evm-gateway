@@ -3,7 +3,6 @@ package logs
 import (
 	"errors"
 	"fmt"
-	"math/big"
 
 	"github.com/onflow/go-ethereum/common"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
@@ -49,13 +48,13 @@ func NewFilterCriteria(addresses []common.Address, topics [][]common.Hash) (*Fil
 // RangeFilter matches all the indexed logs within the range defined as
 // start and end block height. The start must be strictly smaller or equal than end value.
 type RangeFilter struct {
-	start, end *big.Int
+	start, end uint64
 	criteria   *FilterCriteria
 	receipts   storage.ReceiptIndexer
 }
 
 func NewRangeFilter(
-	start, end big.Int,
+	start, end uint64,
 	criteria FilterCriteria,
 	receipts storage.ReceiptIndexer,
 ) (*RangeFilter, error) {
@@ -63,9 +62,8 @@ func NewRangeFilter(
 		return nil, fmt.Errorf("max topics exceeded, only %d allowed", maxTopics)
 	}
 
-	// check if both start and end don't have special values (negative values representing last block etc.)
-	// if so, make sure that beginning number is not bigger than end
-	if start.Cmp(big.NewInt(0)) > 0 && end.Cmp(big.NewInt(0)) > 0 && start.Cmp(&end) > 0 {
+	// make sure that beginning number is not bigger than end
+	if start > end {
 		return nil, errors.Join(
 			errs.ErrInvalid,
 			fmt.Errorf("start block number must be smaller or equal to end block number"),
@@ -73,8 +71,8 @@ func NewRangeFilter(
 	}
 
 	return &RangeFilter{
-		start:    &start,
-		end:      &end,
+		start:    start,
+		end:      end,
 		criteria: &criteria,
 		receipts: receipts,
 	}, nil
@@ -86,7 +84,7 @@ func (r *RangeFilter) Match() ([]*gethTypes.Log, error) {
 		return nil, err
 	}
 
-	var bloomHeightMatches []*big.Int
+	var bloomHeightMatches []uint64
 	var logs []*gethTypes.Log
 
 	// first filter all the logs based on whether a bloom matches,
@@ -155,7 +153,7 @@ func (i *IDFilter) Match() ([]*gethTypes.Log, error) {
 		return nil, err
 	}
 
-	receipts, err := i.receipts.GetByBlockHeight(big.NewInt(int64(blk.Height)))
+	receipts, err := i.receipts.GetByBlockHeight(blk.Height)
 	if err != nil {
 		return nil, err
 	}
