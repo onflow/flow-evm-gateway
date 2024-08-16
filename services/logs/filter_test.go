@@ -118,7 +118,7 @@ func receiptStorage() storage.ReceiptIndexer {
 
 	receiptStorage := &mocks.ReceiptIndexer{}
 	receiptStorage.
-		On("GetByBlockHeight", mock.AnythingOfType("*big.Int")).
+		On("GetByBlockHeight", mock.AnythingOfType("uint64")).
 		Return(func(height *big.Int) ([]*models.StorageReceipt, error) {
 			rcps := make([]*models.StorageReceipt, 0)
 			for _, r := range receipts {
@@ -135,7 +135,7 @@ func receiptStorage() storage.ReceiptIndexer {
 		})
 
 	receiptStorage.
-		On("BloomsForBlockRange", mock.AnythingOfType("*big.Int"), mock.AnythingOfType("*big.Int")).
+		On("BloomsForBlockRange", mock.AnythingOfType("uint64"), mock.AnythingOfType("uint64")).
 		Return(func(start, end *big.Int) ([]*models.BloomsHeight, error) {
 			blooms := make([]*gethTypes.Bloom, 0)
 			bloomsHeight := make([]*models.BloomsHeight, 0)
@@ -145,7 +145,7 @@ func receiptStorage() storage.ReceiptIndexer {
 					blooms = append(blooms, &r.Bloom)
 					bloomsHeight = append(bloomsHeight, &models.BloomsHeight{
 						Blooms: blooms,
-						Height: r.BlockNumber,
+						Height: r.BlockNumber.Uint64(),
 					})
 				}
 			}
@@ -285,13 +285,13 @@ func TestRangeFilter(t *testing.T) {
 
 	tests := []struct {
 		desc       string
-		start, end *big.Int
+		start, end uint64
 		expectLogs []*gethTypes.Log
 		criteria   FilterCriteria
 	}{{
 		desc:  "single topic, single address, single block match single log",
-		start: big.NewInt(0),
-		end:   big.NewInt(1),
+		start: 0,
+		end:   1,
 		criteria: FilterCriteria{
 			Addresses: []common.Address{logs[0][0].Address},
 			Topics:    [][]common.Hash{logs[0][0].Topics[:1]},
@@ -299,8 +299,8 @@ func TestRangeFilter(t *testing.T) {
 		expectLogs: logs[0][:1],
 	}, {
 		desc:  "single topic, single address, all blocks match multiple logs",
-		start: big.NewInt(0),
-		end:   big.NewInt(4),
+		start: 0,
+		end:   4,
 		criteria: FilterCriteria{
 			Addresses: []common.Address{logs[0][0].Address},
 			Topics:    [][]common.Hash{logs[0][0].Topics[:1]},
@@ -308,24 +308,24 @@ func TestRangeFilter(t *testing.T) {
 		expectLogs: []*gethTypes.Log{logs[0][0], logs[3][1]},
 	}, {
 		desc:  "single address, all blocks match multiple logs",
-		start: big.NewInt(0),
-		end:   big.NewInt(4),
+		start: 0,
+		end:   4,
 		criteria: FilterCriteria{
 			Addresses: []common.Address{logs[0][0].Address},
 		},
 		expectLogs: []*gethTypes.Log{logs[0][0], logs[0][1], logs[1][0], logs[3][1]},
 	}, {
 		desc:  "invalid address, all blocks no match",
-		start: big.NewInt(0),
-		end:   big.NewInt(4),
+		start: 0,
+		end:   4,
 		criteria: FilterCriteria{
 			Addresses: []common.Address{common.HexToAddress("0x123")},
 		},
 		expectLogs: []*gethTypes.Log{},
 	}, {
 		desc:  "single address, non-existing range no match",
-		start: big.NewInt(5),
-		end:   big.NewInt(10),
+		start: 5,
+		end:   10,
 		criteria: FilterCriteria{
 			Addresses: []common.Address{logs[0][0].Address},
 		},
@@ -334,7 +334,7 @@ func TestRangeFilter(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			filter, err := NewRangeFilter(*tt.start, *tt.end, tt.criteria, receiptStorage())
+			filter, err := NewRangeFilter(tt.start, tt.end, tt.criteria, receiptStorage())
 			require.NoError(t, err)
 
 			matchedLogs, err := filter.Match()
@@ -346,8 +346,8 @@ func TestRangeFilter(t *testing.T) {
 
 	t.Run("with topics count exceeding limit", func(t *testing.T) {
 		_, err := NewRangeFilter(
-			*big.NewInt(0),
-			*big.NewInt(4),
+			0,
+			4,
 			FilterCriteria{
 				Topics: [][]common.Hash{
 					{common.HexToHash("123")},
