@@ -3,7 +3,6 @@ package logs
 import (
 	"errors"
 	"fmt"
-	"math/big"
 
 	"github.com/onflow/go-ethereum/common"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
@@ -49,13 +48,13 @@ func NewFilterCriteria(addresses []common.Address, topics [][]common.Hash) (*Fil
 // RangeFilter matches all the indexed logs within the range defined as
 // start and end block height. The start must be strictly smaller or equal than end value.
 type RangeFilter struct {
-	start, end *big.Int
+	start, end uint64
 	criteria   *FilterCriteria
 	receipts   storage.ReceiptIndexer
 }
 
 func NewRangeFilter(
-	start, end big.Int,
+	start, end uint64,
 	criteria FilterCriteria,
 	receipts storage.ReceiptIndexer,
 ) (*RangeFilter, error) {
@@ -63,9 +62,8 @@ func NewRangeFilter(
 		return nil, fmt.Errorf("max topics exceeded, only %d allowed", maxTopics)
 	}
 
-	// check if both start and end don't have special values (negative values representing last block etc.)
-	// if so, make sure that beginning number is not bigger than end
-	if start.Cmp(big.NewInt(0)) > 0 && end.Cmp(big.NewInt(0)) > 0 && start.Cmp(&end) > 0 {
+	// make sure that beginning number is not bigger than end
+	if start > end {
 		return nil, errors.Join(
 			errs.ErrInvalid,
 			fmt.Errorf("start block number must be smaller or equal to end block number"),
@@ -73,8 +71,8 @@ func NewRangeFilter(
 	}
 
 	return &RangeFilter{
-		start:    &start,
-		end:      &end,
+		start:    start,
+		end:      end,
 		criteria: &criteria,
 		receipts: receipts,
 	}, nil
@@ -86,16 +84,26 @@ func (r *RangeFilter) Match() ([]*gethTypes.Log, error) {
 		return nil, err
 	}
 
-	logs := make([]*gethTypes.Log, 0)
+	var bloomHeightMatches []uint64
+	var logs []*gethTypes.Log
+
+	// first filter all the logs based on whether a bloom matches,
+	// if bloom matches we fetch only that height later and do exact match
 	for _, bloomHeight := range bloomsHeight {
 		for _, bloom := range bloomHeight.Blooms {
-			if !bloomMatch(*bloom, r.criteria) {
-				continue
+			if bloomMatch(*bloom, r.criteria) {
+				bloomHeightMatches = append(bloomHeightMatches, bloomHeight.Height)
+				// if there's a match we add the height and skip to next height
+				// even if there would be multiple matches for height we just want to have unique heights
+				break
 			}
 		}
+	}
 
-		// todo do this concurrently
-		receipts, err := r.receipts.GetByBlockHeight(bloomHeight.Height)
+	// do exact matches only on subset of heights in the range that matched the bloom
+	for _, height := range bloomHeightMatches {
+		// todo do this concurrently but make sure order is correct
+		receipts, err := r.receipts.GetByBlockHeight(height)
 		if err != nil {
 			return nil, err
 		}
@@ -147,7 +155,7 @@ func (i *IDFilter) Match() ([]*gethTypes.Log, error) {
 		return nil, err
 	}
 
-	receipts, err := i.receipts.GetByBlockHeight(big.NewInt(int64(blk.Height)))
+	receipts, err := i.receipts.GetByBlockHeight(blk.Height)
 	if err != nil {
 		return nil, err
 	}

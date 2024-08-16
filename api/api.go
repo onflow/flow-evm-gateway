@@ -649,7 +649,7 @@ func (b *BlockChainAPI) GetLogs(
 		to = latest
 	}
 
-	f, err := logs.NewRangeFilter(*from, *to, filter, b.receipts)
+	f, err := logs.NewRangeFilter(from.Uint64(), to.Uint64(), filter, b.receipts)
 	if err != nil {
 		return handleError[[]*types.Log](err, l, b.collector)
 	}
@@ -657,6 +657,11 @@ func (b *BlockChainAPI) GetLogs(
 	res, err := f.Match()
 	if err != nil {
 		return handleError[[]*types.Log](err, l, b.collector)
+	}
+
+	// makes sure the response is correctly serialized
+	if res == nil {
+		return []*types.Log{}, nil
 	}
 
 	return res, nil
