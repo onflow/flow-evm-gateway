@@ -265,7 +265,6 @@ func (s *ReceiptTestSuite) TestBloomsForBlockRange() {
 			s.Require().Equal(bloomHeight.Height, testHeights[i])
 		}
 
-		bloomsHeights, err = s.ReceiptIndexer.BloomsForBlockRange(start, big.NewInt(13))
 		subset := big.NewInt(13)
 		subsetSize := int(subset.Int64() - start.Int64() + 1) // +1 because it's inclusive
 
@@ -290,7 +289,9 @@ func (s *ReceiptTestSuite) TestBloomsForBlockRange() {
 			r1 := mocks.NewReceipt(i, common.HexToHash(fmt.Sprintf("0x%d", i)))
 			r2 := mocks.NewReceipt(i, common.HexToHash(fmt.Sprintf("0x%d", i)))
 			receipts := []*models.StorageReceipt{r1, r2}
+
 			s.Require().NoError(s.ReceiptIndexer.Store(receipts, i, nil))
+
 			testBlooms = append(testBlooms, &r1.Bloom, &r2.Bloom)
 			testHeights = append(testHeights, big.NewInt(int64(i)))
 		}
@@ -299,13 +300,54 @@ func (s *ReceiptTestSuite) TestBloomsForBlockRange() {
 		s.Require().NoError(err)
 		s.Require().Equal(int64(len(bloomsHeights)), end.Int64()-start.Int64())
 
-		for i, bloomHeight := range bloomsHeights {
-			fmt.Println(bloomHeight.Height, bloomHeight.Blooms[0], bloomHeight.Blooms[1], testBlooms[i], testBlooms[i+1])
-			s.Require().Len(bloomHeight.Blooms, 2)
-			s.Require().Equal(bloomHeight.Blooms[0], testBlooms[i])
-			s.Require().Equal(bloomHeight.Blooms[1], testBlooms[i+1])
-			s.Require().Equal(bloomHeight.Height, testHeights[i])
+		bloomIndex := 0
+		for i, bh := range bloomsHeights {
+			s.Require().Equal(bh.Height, testHeights[i])
+			s.Require().Len(bh.Blooms, 2)
+
+			for _, bloom := range bh.Blooms {
+				s.Require().Equal(bloom, testBlooms[bloomIndex])
+				bloomIndex++
+			}
 		}
+
+		subset := big.NewInt(17)
+		subsetSize := int(subset.Int64()-start.Int64()) + 1 // +1 because it's inclusive interval
+		bloomsHeights, err = s.ReceiptIndexer.BloomsForBlockRange(start, subset)
+		s.Require().NoError(err)
+		s.Require().Len(bloomsHeights, subsetSize)
+
+		bloomIndex = 0
+		for i, bh := range bloomsHeights {
+			s.Require().Equal(bh.Height, testHeights[i])
+			s.Require().Len(bh.Blooms, 2)
+
+			for _, bloom := range bh.Blooms {
+				s.Require().Equal(bloom, testBlooms[bloomIndex])
+				bloomIndex++
+			}
+		}
+	})
+
+	s.Run("single height range entry with lots of logs", func() {
+		start := big.NewInt(255)
+		end := big.NewInt(270)
+		testBlooms := make([]*types.Bloom, 0)
+		testHeights := make([]*big.Int, 0)
+
+		for i := start.Uint64(); i < end.Uint64(); i++ {
+			r1 := mocks.NewReceipt(i, common.HexToHash(fmt.Sprintf("0x%d", i)))
+			receipts := []*models.StorageReceipt{r1}
+			s.Require().NoError(s.ReceiptIndexer.Store(receipts, i, nil))
+			testBlooms = append(testBlooms, &r1.Bloom)
+			testHeights = append(testHeights, big.NewInt(int64(i)))
+		}
+
+		specific := big.NewInt(260)
+		bloomsHeights, err := s.ReceiptIndexer.BloomsForBlockRange(specific, specific)
+		fmt.Println(bloomsHeights[0].Height, bloomsHeights[0].Blooms[0])
+		s.Require().NoError(err)
+		s.Require().Len(bloomsHeights, 1)
 	})
 
 	s.Run("invalid block range", func() {
@@ -317,8 +359,8 @@ func (s *ReceiptTestSuite) TestBloomsForBlockRange() {
 	})
 
 	s.Run("non-existing block range", func() {
-		start := big.NewInt(100)
-		end := big.NewInt(105)
+		start := big.NewInt(400)
+		end := big.NewInt(405)
 		bloomsHeights, err := s.ReceiptIndexer.BloomsForBlockRange(start, end)
 		s.Require().ErrorIs(err, errors.ErrInvalidRange)
 		s.Require().Nil(bloomsHeights)
