@@ -7,6 +7,7 @@ import (
 	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/go-ethereum/common"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
+	"golang.org/x/exp/rand"
 
 	"github.com/onflow/flow-evm-gateway/models"
 )
@@ -61,6 +62,7 @@ func NewReceipt(height uint64, ID common.Hash) *models.StorageReceipt {
 		BlockHash:         ID,
 		BlockNumber:       big.NewInt(int64(height)),
 		TransactionIndex:  1,
+		Bloom:             gethTypes.Bloom{byte(height), byte(rand.Int())},
 	}
 }
 
