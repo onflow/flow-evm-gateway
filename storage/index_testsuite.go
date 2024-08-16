@@ -333,14 +333,14 @@ func (s *ReceiptTestSuite) TestBloomsForBlockRange() {
 		end := uint64(270)
 		specific := uint64(260)
 
-		var expectedBloom types.Bloom
+		var expectedBloom *types.Bloom
 		for i := start; i < end; i++ {
 			r1 := mocks.NewReceipt(i, common.HexToHash(fmt.Sprintf("0x%d", i)))
 			receipts := []*models.StorageReceipt{r1}
 			s.Require().NoError(s.ReceiptIndexer.Store(receipts, i, nil))
 
 			if i == specific {
-				expectedBloom = r1.Bloom
+				expectedBloom = &r1.Bloom
 			}
 		}
 
