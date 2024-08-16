@@ -659,6 +659,11 @@ func (b *BlockChainAPI) GetLogs(
 		return handleError[[]*types.Log](err, l, b.collector)
 	}
 
+	// makes sure the response is correctly serialized
+	if res == nil {
+		return []*types.Log{}, nil
+	}
+
 	return res, nil
 }
 
