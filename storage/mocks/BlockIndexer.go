@@ -78,9 +78,9 @@ func (_m *BlockIndexer) GetByID(ID common.Hash) (*models.Block, error) {
 	return r0, r1
 }
 
-// GetCadenceHeight provides a mock function with given fields: evmHeight
-func (_m *BlockIndexer) GetCadenceHeight(evmHeight uint64) (uint64, error) {
-	ret := _m.Called(evmHeight)
+// GetCadenceHeight provides a mock function with given fields: height
+func (_m *BlockIndexer) GetCadenceHeight(height uint64) (uint64, error) {
+	ret := _m.Called(height)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetCadenceHeight")
@@ -89,16 +89,16 @@ func (_m *BlockIndexer) GetCadenceHeight(evmHeight uint64) (uint64, error) {
 	var r0 uint64
 	var r1 error
 	if rf, ok := ret.Get(0).(func(uint64) (uint64, error)); ok {
-		return rf(evmHeight)
+		return rf(height)
 	}
 	if rf, ok := ret.Get(0).(func(uint64) uint64); ok {
-		r0 = rf(evmHeight)
+		r0 = rf(height)
 	} else {
 		r0 = ret.Get(0).(uint64)
 	}
 
 	if rf, ok := ret.Get(1).(func(uint64) error); ok {
-		r1 = rf(evmHeight)
+		r1 = rf(height)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -106,9 +106,9 @@ func (_m *BlockIndexer) GetCadenceHeight(evmHeight uint64) (uint64, error) {
 	return r0, r1
 }
 
-// GetCadenceID provides a mock function with given fields: evmHeight
-func (_m *BlockIndexer) GetCadenceID(evmHeight uint64) (flow.Identifier, error) {
-	ret := _m.Called(evmHeight)
+// GetCadenceID provides a mock function with given fields: height
+func (_m *BlockIndexer) GetCadenceID(height uint64) (flow.Identifier, error) {
+	ret := _m.Called(height)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetCadenceID")
@@ -117,10 +117,10 @@ func (_m *BlockIndexer) GetCadenceID(evmHeight uint64) (flow.Identifier, error) 
 	var r0 flow.Identifier
 	var r1 error
 	if rf, ok := ret.Get(0).(func(uint64) (flow.Identifier, error)); ok {
-		return rf(evmHeight)
+		return rf(height)
 	}
 	if rf, ok := ret.Get(0).(func(uint64) flow.Identifier); ok {
-		r0 = rf(evmHeight)
+		r0 = rf(height)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(flow.Identifier)
@@ -128,7 +128,7 @@ func (_m *BlockIndexer) GetCadenceID(evmHeight uint64) (flow.Identifier, error) 
 	}
 
 	if rf, ok := ret.Get(1).(func(uint64) error); ok {
-		r1 = rf(evmHeight)
+		r1 = rf(height)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -220,9 +220,9 @@ func (_m *BlockIndexer) LatestEVMHeight() (uint64, error) {
 	return r0, r1
 }
 
-// SetLatestCadenceHeight provides a mock function with given fields: height, batch
-func (_m *BlockIndexer) SetLatestCadenceHeight(height uint64, batch *pebble.Batch) error {
-	ret := _m.Called(height, batch)
+// SetLatestCadenceHeight provides a mock function with given fields: cadenceHeight, batch
+func (_m *BlockIndexer) SetLatestCadenceHeight(cadenceHeight uint64, batch *pebble.Batch) error {
+	ret := _m.Called(cadenceHeight, batch)
 
 	if len(ret) == 0 {
 		panic("no return value specified for SetLatestCadenceHeight")
@@ -230,7 +230,7 @@ func (_m *BlockIndexer) SetLatestCadenceHeight(height uint64, batch *pebble.Batc
 
 	var r0 error
 	if rf, ok := ret.Get(0).(func(uint64, *pebble.Batch) error); ok {
-		r0 = rf(height, batch)
+		r0 = rf(cadenceHeight, batch)
 	} else {
 		r0 = ret.Error(0)
 	}
