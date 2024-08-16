@@ -91,10 +91,12 @@ func (r *RangeFilter) Match() ([]*gethTypes.Log, error) {
 	// if bloom matches we fetch only that height later and do exact match
 	for _, bloomHeight := range bloomsHeight {
 		for _, bloom := range bloomHeight.Blooms {
-			if !bloomMatch(*bloom, r.criteria) {
-				continue
+			if bloomMatch(*bloom, r.criteria) {
+				bloomHeightMatches = append(bloomHeightMatches, bloomHeight.Height)
+				// if there's a match we add the height and skip to next height
+				// even if there would be multiple matches for height we just want to have unique heights
+				break
 			}
-			bloomHeightMatches = append(bloomHeightMatches, bloomHeight.Height)
 		}
 	}
 
