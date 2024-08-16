@@ -307,6 +307,15 @@ func TestRangeFilter(t *testing.T) {
 		},
 		expectLogs: []*gethTypes.Log{logs[0][0], logs[3][1]},
 	}, {
+		desc:  "single topic, single address, subset of blocks match single log",
+		start: 2,
+		end:   4,
+		criteria: FilterCriteria{
+			Addresses: []common.Address{logs[0][0].Address},
+			Topics:    [][]common.Hash{logs[0][0].Topics[:1]},
+		},
+		expectLogs: []*gethTypes.Log{logs[3][1]},
+	}, {
 		desc:  "single address, all blocks match multiple logs",
 		start: 0,
 		end:   4,
