@@ -119,10 +119,10 @@ func receiptStorage() storage.ReceiptIndexer {
 	receiptStorage := &mocks.ReceiptIndexer{}
 	receiptStorage.
 		On("GetByBlockHeight", mock.AnythingOfType("uint64")).
-		Return(func(height *big.Int) ([]*models.StorageReceipt, error) {
+		Return(func(height uint64) ([]*models.StorageReceipt, error) {
 			rcps := make([]*models.StorageReceipt, 0)
 			for _, r := range receipts {
-				if r.BlockNumber.Cmp(height) == 0 {
+				if r.BlockNumber.Uint64() == height {
 					rcps = append(rcps, r)
 				}
 			}
@@ -136,12 +136,12 @@ func receiptStorage() storage.ReceiptIndexer {
 
 	receiptStorage.
 		On("BloomsForBlockRange", mock.AnythingOfType("uint64"), mock.AnythingOfType("uint64")).
-		Return(func(start, end *big.Int) ([]*models.BloomsHeight, error) {
+		Return(func(start, end uint64) ([]*models.BloomsHeight, error) {
 			blooms := make([]*gethTypes.Bloom, 0)
 			bloomsHeight := make([]*models.BloomsHeight, 0)
 
 			for _, r := range receipts {
-				if r.BlockNumber.Cmp(start) >= 0 && r.BlockNumber.Cmp(end) <= 0 {
+				if r.BlockNumber.Uint64() >= start && r.BlockNumber.Uint64() <= end {
 					blooms = append(blooms, &r.Bloom)
 					bloomsHeight = append(bloomsHeight, &models.BloomsHeight{
 						Blooms: blooms,
