@@ -972,7 +972,7 @@ func (b *BlockChainAPI) prepareBlockResponse(
 			if err != nil {
 				return nil, err
 			}
-			totalGasUsed += tx.Gas
+			totalGasUsed += hexutil.Uint64(txReceipt.GasUsed)
 			logs = append(logs, txReceipt.Logs...)
 			blockSize += tx.Size()
 		}
