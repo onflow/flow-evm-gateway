@@ -133,5 +133,5 @@ func MarshalReceipt(
 
 type BloomsHeight struct {
 	Blooms []*gethTypes.Bloom
-	Height *big.Int
+	Height uint64
 }
