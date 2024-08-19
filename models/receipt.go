@@ -53,7 +53,11 @@ func (sr *StorageReceipt) ToGethReceipt() *gethTypes.Receipt {
 	}
 }
 
-func NewStorageReceipt(receipt *gethTypes.Receipt, revertReason []byte) *StorageReceipt {
+func NewStorageReceipt(
+	receipt *gethTypes.Receipt,
+	revertReason []byte,
+	precompiledCalls []byte,
+) *StorageReceipt {
 	return &StorageReceipt{
 		Type:              receipt.Type,
 		PostState:         receipt.PostState,
@@ -71,6 +75,7 @@ func NewStorageReceipt(receipt *gethTypes.Receipt, revertReason []byte) *Storage
 		BlockNumber:       receipt.BlockNumber,
 		TransactionIndex:  receipt.TransactionIndex,
 		RevertReason:      revertReason,
+		PrecompiledCalls:  precompiledCalls,
 	}
 }
 
