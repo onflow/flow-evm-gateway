@@ -4,6 +4,7 @@ import (
 	"github.com/onflow/flow-go/fvm/evm"
 	"github.com/onflow/flow-go/fvm/evm/emulator"
 	"github.com/onflow/flow-go/fvm/evm/emulator/state"
+	"github.com/onflow/flow-go/fvm/evm/precompiles"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/onflow/go-ethereum/common"
@@ -18,6 +19,7 @@ type State struct {
 	emulator      types.Emulator
 	evmHeight     uint64
 	blocks        storage.BlockIndexer
+	receipts      storage.ReceiptIndexer
 }
 
 func NewState(
@@ -50,6 +52,18 @@ func (s *State) Execute(tx *gethTypes.Transaction) error {
 		return err
 	}
 
+	receipt, err := s.receipts.GetByTransactionID(tx.Hash())
+	if err != nil {
+		return err
+	}
+
+	calls, err := types.AggregatedPrecompileCallsFromEncoded(receipt.PrecompiledCalls)
+	if err != nil {
+		return err
+	}
+
+	precompileContracts := precompiles.AggregatedPrecompiledCallsToPrecompiledContracts(calls)
+
 	blockCtx := types.BlockContext{
 		ChainID:                nil,
 		BlockNumber:            block.Height,
@@ -73,7 +87,7 @@ func (s *State) Execute(tx *gethTypes.Transaction) error {
 		},
 		Random:                    common.Hash{}, // todo we need to expose rand value used in block
 		Tracer:                    nil,           // todo check, but no need for tracer now
-		ExtraPrecompiledContracts: nil,           // todo check, but no need for now
+		ExtraPrecompiledContracts: precompileContracts,
 	}
 	bv, err := s.emulator.NewBlockView(blockCtx)
 	if err != nil {
