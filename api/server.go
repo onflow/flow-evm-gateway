@@ -243,15 +243,15 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		r.RemoteAddr = r.Header.Get(h.config.AddressHeader)
 	}
 
+	requestBody := make(map[string]any)
 	// Check if WebSocket request and serve if JSON-RPC over WebSocket is enabled
 	if b, err := io.ReadAll(r.Body); err == nil {
-		body := make(map[string]any)
-		_ = json.Unmarshal(b, &body)
+		_ = json.Unmarshal(b, &requestBody)
 
 		h.logger.Debug().
 			Str("IP", r.RemoteAddr).
 			Str("url", r.URL.String()).
-			Fields(body).
+			Fields(requestBody).
 			Bool("is-ws", isWebSocket(r)).
 			Msg("API request")
 
@@ -262,6 +262,7 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// additional response handling
 	logW := &responseHandler{
 		ResponseWriter: w,
+		requestBody:    requestBody,
 		log:            h.logger,
 		metrics:        h.collector,
 	}
@@ -412,8 +413,9 @@ var _ http.ResponseWriter = &responseHandler{}
 // todo we should replace go-ethereum server implementation with our own so we have more control
 type responseHandler struct {
 	http.ResponseWriter
-	log     zerolog.Logger
-	metrics metrics.Collector
+	requestBody map[string]any
+	log         zerolog.Logger
+	metrics     metrics.Collector
 }
 
 const errCodePanic = -32603
@@ -442,11 +444,7 @@ func (w *responseHandler) Write(data []byte) (int, error) {
 	}
 
 	// create a default debug logger
-	s, _ := message.Params.MarshalJSON()
-	l := w.log.With().
-		Str("method", message.Method).
-		Str("params", string(s)).
-		Logger()
+	l := w.log.With().Fields(w.requestBody).Logger()
 	log := l.Debug()
 
 	// handle possible error
@@ -476,7 +474,7 @@ func (w *responseHandler) Write(data []byte) (int, error) {
 	// as errors are logged with error log level.
 	if message.Error == nil {
 		r, _ := message.Result.MarshalJSON()
-		log.Str("result", string(r)).Msg("API response")
+		log.RawJSON("result", r).Msg("API response")
 	}
 
 	return w.ResponseWriter.Write(data)
