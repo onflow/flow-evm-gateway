@@ -106,5 +106,5 @@ func parseInvalidError(err error) (error, bool) {
 		return nil, false
 	}
 
-	return errs.FailedTransaction(matches[1]), true
+	return errs.NewFailedTransactionError(matches[1]), true
 }

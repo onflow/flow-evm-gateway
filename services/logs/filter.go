@@ -1,7 +1,6 @@
 package logs
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/onflow/go-ethereum/common"
@@ -64,9 +63,11 @@ func NewRangeFilter(
 
 	// make sure that beginning number is not bigger than end
 	if start > end {
-		return nil, errors.Join(
+		return nil, fmt.Errorf(
+			"%w: start block number (%d) must be smaller or equal to end block number (%d)",
 			errs.ErrInvalid,
-			fmt.Errorf("start block number must be smaller or equal to end block number"),
+			start,
+			end,
 		)
 	}
 

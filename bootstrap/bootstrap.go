@@ -81,7 +81,7 @@ func Start(ctx context.Context, cfg *config.Config) error {
 	}
 
 	// if database is not initialized require init height
-	if _, err := blocks.LatestCadenceHeight(); errors.Is(err, errs.ErrNotInitialized) {
+	if _, err := blocks.LatestCadenceHeight(); errors.Is(err, errs.ErrStorageNotInitialized) {
 		cadenceHeight := cfg.InitCadenceHeight
 		cadenceBlock, err := client.GetBlockHeaderByHeight(ctx, cadenceHeight)
 		if err != nil {

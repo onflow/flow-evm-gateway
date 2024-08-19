@@ -45,12 +45,12 @@ func (b *BlockTestSuite) TestGet() {
 		// non-existing id
 		bl, err := b.Blocks.GetByID(common.HexToHash("0x10"))
 		b.Require().Nil(bl)
-		b.Require().ErrorIs(err, errors.ErrNotFound)
+		b.Require().ErrorIs(err, errors.ErrEntityNotFound)
 
 		// non-existing height
 		bl, err = b.Blocks.GetByHeight(uint64(200))
 		b.Require().Nil(bl)
-		b.Require().ErrorIs(err, errors.ErrNotFound)
+		b.Require().ErrorIs(err, errors.ErrEntityNotFound)
 	})
 }
 
@@ -213,7 +213,7 @@ func (s *ReceiptTestSuite) TestGetReceiptByTransactionID() {
 		nonExistingTxHash := common.HexToHash("0x123")
 		retReceipt, err := s.ReceiptIndexer.GetByTransactionID(nonExistingTxHash)
 		s.Require().Nil(retReceipt)
-		s.Require().ErrorIs(err, errors.ErrNotFound)
+		s.Require().ErrorIs(err, errors.ErrEntityNotFound)
 	})
 }
 
@@ -234,7 +234,7 @@ func (s *ReceiptTestSuite) TestGetReceiptByBlockHeight() {
 	s.Run("non-existing block height", func() {
 		retReceipt, err := s.ReceiptIndexer.GetByBlockHeight(1337)
 		s.Require().Nil(retReceipt)
-		s.Require().ErrorIs(err, errors.ErrNotFound)
+		s.Require().ErrorIs(err, errors.ErrEntityNotFound)
 	})
 }
 
@@ -355,15 +355,35 @@ func (s *ReceiptTestSuite) TestBloomsForBlockRange() {
 		start := uint64(10)
 		end := uint64(5) // end is less than start
 		bloomsHeights, err := s.ReceiptIndexer.BloomsForBlockRange(start, end)
-		s.Require().ErrorIs(err, errors.ErrInvalidRange)
+		s.Require().ErrorIs(err, errors.ErrInvalidBlockRange)
+		s.Require().ErrorContains(
+			err,
+			"invalid block height range: start value 10 is bigger than end value 5",
+		)
 		s.Require().Nil(bloomsHeights)
 	})
 
-	s.Run("non-existing block range", func() {
+	s.Run("non-existing start height", func() {
 		start := uint64(400)
 		end := uint64(405)
 		bloomsHeights, err := s.ReceiptIndexer.BloomsForBlockRange(start, end)
-		s.Require().ErrorIs(err, errors.ErrInvalidRange)
+		s.Require().ErrorIs(err, errors.ErrInvalidBlockRange)
+		s.Require().ErrorContains(
+			err,
+			"invalid block height range: start value 400 is not within the indexed range of [0 - 300]",
+		)
+		s.Require().Nil(bloomsHeights)
+	})
+
+	s.Run("non-existing end height", func() {
+		start := uint64(10)
+		end := uint64(405)
+		bloomsHeights, err := s.ReceiptIndexer.BloomsForBlockRange(start, end)
+		s.Require().ErrorIs(err, errors.ErrInvalidBlockRange)
+		s.Require().ErrorContains(
+			err,
+			"invalid block height range: end value 405 is not within the indexed range of [0 - 300]",
+		)
 		s.Require().Nil(bloomsHeights)
 	})
 }
@@ -443,7 +463,7 @@ func (s *TransactionTestSuite) TestGetTransaction() {
 		nonExistingTxHash := common.HexToHash("0x789")
 		retTx, err := s.TransactionIndexer.Get(nonExistingTxHash)
 		s.Require().Nil(retTx)
-		s.Require().ErrorIs(err, errors.ErrNotFound)
+		s.Require().ErrorIs(err, errors.ErrEntityNotFound)
 	})
 }
 
@@ -552,7 +572,7 @@ func (s *TraceTestSuite) TestGet() {
 	s.Run("get not found trace", func() {
 		id := common.Hash{0x02}
 		val, err := s.TraceIndexer.GetTransaction(id)
-		s.Require().ErrorIs(err, errors.ErrNotFound)
+		s.Require().ErrorIs(err, errors.ErrEntityNotFound)
 		s.Require().Nil(val)
 	})
 }

@@ -107,7 +107,7 @@ func (r *Receipts) GetByTransactionID(ID common.Hash) (*models.StorageReceipt, e
 		}
 	}
 
-	return nil, errs.ErrNotFound
+	return nil, errs.ErrEntityNotFound
 }
 
 func (r *Receipts) GetByBlockHeight(height uint64) ([]*models.StorageReceipt, error) {
@@ -154,7 +154,12 @@ func (r *Receipts) BloomsForBlockRange(start, end uint64) ([]*models.BloomsHeigh
 	defer r.mux.RUnlock()
 
 	if start > end {
-		return nil, fmt.Errorf("start is bigger than end: %w", errs.ErrInvalidRange)
+		return nil, fmt.Errorf(
+			"%w: start value %d is bigger than end value %d",
+			errs.ErrInvalidBlockRange,
+			start,
+			end,
+		)
 	}
 
 	// make sure the first and last height are within indexed values
@@ -165,19 +170,19 @@ func (r *Receipts) BloomsForBlockRange(start, end uint64) ([]*models.BloomsHeigh
 
 	if start > last {
 		return nil, fmt.Errorf(
-			"start value %d is not within the indexed range of [0 - %d]: %w",
+			"%w: start value %d is not within the indexed range of [0 - %d]",
+			errs.ErrInvalidBlockRange,
 			start,
 			last,
-			errs.ErrInvalidRange,
 		)
 	}
 
 	if end > last {
 		return nil, fmt.Errorf(
-			"end value %d is not within the indexed range of [0 - %d]: %w",
+			"%w: end value %d is not within the indexed range of [0 - %d]",
+			errs.ErrInvalidBlockRange,
 			end,
 			last,
-			errs.ErrInvalidRange,
 		)
 	}
 

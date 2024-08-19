@@ -462,7 +462,7 @@ func (w *responseHandler) Write(data []byte) (int, error) {
 			if !errorIs(errMsg, errs.ErrRateLimit) &&
 				!errorIs(errMsg, errs.ErrInvalid) &&
 				!errorIs(errMsg, errs.ErrFailedTransaction) &&
-				!errorIs(errMsg, errs.ErrNotSupported) &&
+				!errorIs(errMsg, errs.ErrEndpointNotSupported) &&
 				!errorIs(errMsg, gethVM.ErrExecutionReverted) {
 				// log the error
 				l.Error().Err(errors.New(errMsg)).Msg("API response")

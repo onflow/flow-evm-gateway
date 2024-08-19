@@ -20,6 +20,7 @@ it('rate limit after X requests', async function () {
             await ws.eth.getBlockNumber()
             requestsMade++
         } catch(e) {
+            assert.equal(e.innerError.message, 'limit of requests per second reached: 50 rps')
             requestsFailed++
         }
     }
@@ -38,6 +39,7 @@ it('rate limit after X requests', async function () {
             await ws.eth.getBlockNumber()
             requestsMade++
         } catch(e) {
+            assert.equal(e.innerError.message, 'limit of requests per second reached: 50 rps')
             requestsFailed++
         }
     }

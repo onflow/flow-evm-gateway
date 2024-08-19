@@ -70,7 +70,7 @@ func (a *Accounts) getNonce(address common.Address, batch *pebble.Batch) (uint64
 	}
 	if err != nil {
 		// if no nonce was yet saved for the account the nonce is 0
-		if errors.Is(err, errs.ErrNotFound) {
+		if errors.Is(err, errs.ErrEntityNotFound) {
 			return 0, 0, nil
 		}
 

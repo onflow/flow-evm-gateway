@@ -292,23 +292,18 @@ func (api *PullAPI) GetFilterLogs(
 
 	filter, ok := api.filters[id]
 	if !ok {
-		return nil, errors.Join(
-			errs.ErrNotFound,
-			fmt.Errorf("filted by id %s does not exist", id),
-		)
+		return nil, fmt.Errorf("%w: filter by id %s does not exist", errs.ErrEntityNotFound, id)
+
 	}
 
 	if filter.expired() {
 		api.UninstallFilter(id)
-		return nil, errors.Join(
-			errs.ErrNotFound,
-			fmt.Errorf("filted by id %s has expired", id),
-		)
+		return nil, fmt.Errorf("%w: filter by id %s has expired", errs.ErrEntityNotFound, id)
 	}
 
 	logsFilter, ok := filter.(*logsFilter)
 	if !ok {
-		return nil, fmt.Errorf("filted by id %s is not a logs filter", id)
+		return nil, fmt.Errorf("filter by id %s is not a logs filter", id)
 	}
 
 	current, err := api.blocks.LatestEVMHeight()
@@ -344,7 +339,7 @@ func (api *PullAPI) GetFilterChanges(ctx context.Context, id rpc.ID) (any, error
 
 	f, ok := api.filters[id]
 	if !ok {
-		return nil, errors.Join(errs.ErrNotFound, fmt.Errorf("filted by id %s does not exist", id))
+		return nil, fmt.Errorf("%w: filter by id %s does not exist", errs.ErrEntityNotFound, id)
 	}
 
 	current, err := api.blocks.LatestEVMHeight()
@@ -354,7 +349,7 @@ func (api *PullAPI) GetFilterChanges(ctx context.Context, id rpc.ID) (any, error
 
 	if f.expired() {
 		api.UninstallFilter(id)
-		return nil, errors.Join(errs.ErrNotFound, fmt.Errorf("filted by id %s expired", id))
+		return nil, fmt.Errorf("%w: filter by id %s has expired", errs.ErrEntityNotFound, id)
 	}
 
 	var result any
@@ -443,7 +438,7 @@ func (api *PullAPI) getTransactions(latestHeight uint64, filter *transactionsFil
 	for i := nextHeight; i <= latestHeight; i++ {
 		b, err := api.blocks.GetByHeight(i)
 		if err != nil {
-			if errors.Is(err, errs.ErrNotFound) {
+			if errors.Is(err, errs.ErrEntityNotFound) {
 				return nil, nil
 			}
 			return nil, err

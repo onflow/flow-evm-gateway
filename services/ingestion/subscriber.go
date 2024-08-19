@@ -2,7 +2,6 @@ package ingestion
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/onflow/cadence/runtime/common"
@@ -158,7 +157,7 @@ func (r *RPCSubscriber) subscribe(ctx context.Context, height uint64, opts ...ac
 					return
 				}
 
-				events <- models.NewBlockEventsError(errors.Join(err, errs.ErrDisconnected))
+				events <- models.NewBlockEventsError(fmt.Errorf("%w: %w", errs.ErrDisconnected, err))
 				return
 			}
 		}

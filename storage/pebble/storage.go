@@ -94,7 +94,7 @@ func (s *Storage) get(keyCode byte, key ...[]byte) ([]byte, error) {
 
 	if err != nil {
 		if errors.Is(err, pebble.ErrNotFound) {
-			return nil, errs.ErrNotFound
+			return nil, errs.ErrEntityNotFound
 		}
 		return nil, err
 	}

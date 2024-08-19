@@ -98,7 +98,7 @@ func (b *Blocks) GetByHeight(height uint64) (*models.Block, error) {
 
 	// check if the requested height is within the known range
 	if height > last {
-		return nil, errs.ErrNotFound
+		return nil, errs.ErrEntityNotFound
 	}
 
 	blk, err := b.getBlock(blockHeightKey, uint64Bytes(height))
@@ -148,8 +148,8 @@ func (b *Blocks) LatestEVMHeight() (uint64, error) {
 func (b *Blocks) latestEVMHeight() (uint64, error) {
 	val, err := b.store.get(latestEVMHeightKey)
 	if err != nil {
-		if errors.Is(err, errs.ErrNotFound) {
-			return 0, errs.ErrNotInitialized
+		if errors.Is(err, errs.ErrEntityNotFound) {
+			return 0, errs.ErrStorageNotInitialized
 		}
 		return 0, fmt.Errorf("failed to get height: %w", err)
 	}
@@ -163,8 +163,8 @@ func (b *Blocks) LatestCadenceHeight() (uint64, error) {
 
 	val, err := b.store.get(latestCadenceHeightKey)
 	if err != nil {
-		if errors.Is(err, errs.ErrNotFound) {
-			return 0, errs.ErrNotInitialized
+		if errors.Is(err, errs.ErrEntityNotFound) {
+			return 0, errs.ErrStorageNotInitialized
 		}
 		return 0, fmt.Errorf("failed to get latest cadence height: %w", err)
 	}
@@ -187,7 +187,7 @@ func (b *Blocks) SetLatestCadenceHeight(height uint64, batch *pebble.Batch) erro
 func (b *Blocks) InitHeights(cadenceHeight uint64, cadenceID flow.Identifier) error {
 	// sanity check, make sure we don't have any heights stored, disable overwriting the database
 	_, err := b.LatestEVMHeight()
-	if !errors.Is(err, errs.ErrNotInitialized) {
+	if !errors.Is(err, errs.ErrStorageNotInitialized) {
 		return fmt.Errorf("can not init the database that already has data stored")
 	}
 

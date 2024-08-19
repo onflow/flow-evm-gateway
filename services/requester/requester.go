@@ -214,7 +214,7 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 	}
 
 	if tx.GasPrice().Cmp(e.config.GasPrice) < 0 {
-		return common.Hash{}, errs.TransactionGasPriceTooLow(e.config.GasPrice)
+		return common.Hash{}, errs.NewTxGasPriceTooLowError(e.config.GasPrice)
 	}
 
 	txData := hex.EncodeToString(data)
@@ -321,7 +321,7 @@ func (e *EVM) GetBalance(
 		[]cadence.Value{hexEncodedAddress},
 	)
 	if err != nil {
-		if !errors.Is(err, errs.ErrOutOfRange) {
+		if !errors.Is(err, errs.ErrHeightOutOfRange) {
 			e.logger.Error().
 				Err(err).
 				Str("address", address.String()).
@@ -362,7 +362,7 @@ func (e *EVM) GetNonce(
 		[]cadence.Value{hexEncodedAddress},
 	)
 	if err != nil {
-		if !errors.Is(err, errs.ErrOutOfRange) {
+		if !errors.Is(err, errs.ErrHeightOutOfRange) {
 			e.logger.Error().Err(err).
 				Str("address", address.String()).
 				Int64("evm-height", evmHeight).
@@ -454,7 +454,7 @@ func (e *EVM) Call(
 		[]cadence.Value{hexEncodedTx, hexEncodedAddress},
 	)
 	if err != nil {
-		if !errors.Is(err, errs.ErrOutOfRange) {
+		if !errors.Is(err, errs.ErrHeightOutOfRange) {
 			e.logger.Error().
 				Err(err).
 				Uint64("cadence-height", height).
@@ -549,7 +549,7 @@ func (e *EVM) GetCode(
 		[]cadence.Value{hexEncodedAddress},
 	)
 	if err != nil {
-		if !errors.Is(err, errs.ErrOutOfRange) {
+		if !errors.Is(err, errs.ErrHeightOutOfRange) {
 			e.logger.Error().
 				Err(err).
 				Uint64("cadence-height", height).
@@ -695,7 +695,7 @@ func (e *EVM) executeScriptAtHeight(
 		// if snapshot doesn't exist on EN, the height at which script was executed is out
 		// of the boundaries the EN keeps state, so return out of range
 		if strings.Contains(err.Error(), "failed to create storage snapshot") {
-			return nil, errs.ErrOutOfRange
+			return nil, errs.NewHeightOutOfRangeError(height)
 		}
 	}
 
@@ -733,7 +733,7 @@ func parseResult(res cadence.Value) (*evmTypes.ResultSummary, error) {
 		if result.ErrorCode == evmTypes.ExecutionErrCodeExecutionReverted {
 			return nil, errs.NewRevertError(result.ReturnedData)
 		}
-		return nil, errs.FailedTransaction(result.ErrorMessage)
+		return nil, errs.NewFailedTransactionError(result.ErrorMessage)
 	}
 
 	return result, err

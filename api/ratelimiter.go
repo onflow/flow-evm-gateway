@@ -25,10 +25,10 @@ func rateLimit(ctx context.Context, limiter limiter.Store, logger zerolog.Logger
 		return nil // if no client identifier disable limit
 	}
 
-	_, _, _, ok, _ := limiter.Take(ctx, remote)
+	requestsLimit, _, _, ok, _ := limiter.Take(ctx, remote)
 	if !ok {
 		logger.Debug().Str("origin", remote).Msg("rate limit reached")
-		return errs.ErrRateLimit
+		return errs.NewRateLimitError(requestsLimit)
 	}
 
 	return nil

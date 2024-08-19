@@ -40,7 +40,7 @@ type TransactionArgs struct {
 func (txArgs TransactionArgs) Validate() error {
 	// Prevent accidental erroneous usage of both 'input' and 'data' (show stopper)
 	if txArgs.Data != nil && txArgs.Input != nil && !bytes.Equal(*txArgs.Data, *txArgs.Input) {
-		return errs.InvalidTransaction(
+		return errs.NewInvalidTransactionError(
 			errors.New(`ambiguous request: both "data" and "input" are set and are not identical`),
 		)
 	}
@@ -64,13 +64,13 @@ func (txArgs TransactionArgs) Validate() error {
 		if txDataLen == 0 {
 			// Prevent sending ether into black hole (show stopper)
 			if txArgs.Value.ToInt().Cmp(big.NewInt(0)) > 0 {
-				return errs.InvalidTransaction(
+				return errs.NewInvalidTransactionError(
 					errors.New("transaction will create a contract with value but empty code"),
 				)
 			}
 
 			// No value submitted at least, critically Warn, but don't blow up
-			return errs.InvalidTransaction(errors.New("transaction will create a contract with empty code"))
+			return errs.NewInvalidTransactionError(errors.New("transaction will create a contract with empty code"))
 		}
 	}
 
@@ -79,7 +79,7 @@ func (txArgs TransactionArgs) Validate() error {
 		to := common.NewMixedcaseAddress(*txArgs.To)
 
 		if bytes.Equal(to.Address().Bytes(), common.Address{}.Bytes()) {
-			return errs.InvalidTransaction(errors.New("transaction recipient is the zero address"))
+			return errs.NewInvalidTransactionError(errors.New("transaction recipient is the zero address"))
 		}
 	}
 
@@ -175,7 +175,7 @@ func NewTransaction(
 ) (*Transaction, error) {
 	f, err := tx.From()
 	if err != nil {
-		return nil, errors.Join(fmt.Errorf("failed to get from value: %w", err), errs.ErrInternal)
+		return nil, fmt.Errorf("%w: failed to get from value: %w", errs.ErrInternal, err)
 	}
 	from := common.NewMixedcaseAddress(f)
 

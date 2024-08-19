@@ -104,7 +104,7 @@ func blockStorage() storage.BlockIndexer {
 					return b, nil
 				}
 			}
-			return nil, errs.ErrNotFound
+			return nil, errs.ErrEntityNotFound
 		})
 
 	return blockStorage
@@ -128,7 +128,7 @@ func receiptStorage() storage.ReceiptIndexer {
 			}
 
 			if len(rcps) == 0 {
-				return nil, errs.ErrNotFound
+				return nil, errs.ErrEntityNotFound
 			}
 
 			return rcps, nil
