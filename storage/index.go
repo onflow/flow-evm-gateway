@@ -64,9 +64,7 @@ type BlockIndexer interface {
 type ReceiptIndexer interface {
 	// Store provided receipt.
 	// Batch is required to batch multiple indexer operations, skipped if nil.
-	// Expected errors:
-	// - errors.Duplicate if the block already exists.
-	Store(receipts []*models.StorageReceipt, height uint64, batch *pebble.Batch) error
+	Store(receipts []*models.StorageReceipt, batch *pebble.Batch) error
 
 	// GetByTransactionID returns the receipt for the transaction ID.
 	// Expected errors:
