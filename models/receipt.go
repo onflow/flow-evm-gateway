@@ -31,6 +31,7 @@ type StorageReceipt struct {
 	BlockNumber       *big.Int         `json:"blockNumber,omitempty"`
 	TransactionIndex  uint             `json:"transactionIndex"`
 	RevertReason      []byte           `json:"revertReason"`
+	PrecompiledCalls  []byte
 }
 
 func (sr *StorageReceipt) ToGethReceipt() *gethTypes.Receipt {
