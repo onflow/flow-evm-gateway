@@ -56,7 +56,7 @@ func (a *Accounts) Update(
 
 	nonce += 1
 
-	data := encodeNonce(nonce, receipt.BlockNumber.Uint64())
+	data := encodeNonce(nonce, txHeight)
 	return a.store.set(accountNonceKey, from.Bytes(), data, batch)
 }
 

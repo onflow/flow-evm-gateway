@@ -98,9 +98,7 @@ func (l *Ledger) AllocateSlabIndex(owner []byte) (atree.SlabIndex, error) {
 			)
 		}
 
-		for i := range val {
-			index[i] = val[i]
-		}
+		copy(index[:], val)
 	}
 
 	index.Next()

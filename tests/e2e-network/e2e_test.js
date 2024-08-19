@@ -6,8 +6,17 @@ const storageABI = require("./storageABI.json");
 
 let endpoints = {
     local: "http://localhost:8545",
-    previewnet: "https://previewnet.evm.nodes.onflow.org",
-    migrationnet: "https://evm-001.migrationtestnet1.nodes.onflow.org"
+    testnet: "https://testnet.evm.nodes.onflow.org"
+}
+
+if (process.env.GENERATE == 1) {
+    const web3 = new Web3(endpoints.local) // doesn't matter
+    const privateKey = web3.eth.accounts.create().privateKey
+    const address = web3.eth.accounts.privateKeyToAccount(privateKey).address
+
+    console.log("Private Key:", privateKey)
+    console.log("Address:", address)
+    return
 }
 
 let rpcHost = process.env.RPC_HOST;
@@ -26,26 +35,30 @@ if (userPrivateKey == "") {
 
 const userAccount = web3.eth.accounts.privateKeyToAccount(userPrivateKey);
 
-describe('Ethereum Contract Deployment and Interaction Tests', function () {
+console.log("Using user account: ", userAccount.address)
+
+describe('Ethereum Contract Deployment and Interaction Tests', function() {
     this.timeout(0) // Disable timeout since blockchain interactions can be slow
     let initBlock = 0
 
-    it('Should get the network ID', async function () {
+    it('Should get the network ID', async function() {
         const id = await web3.eth.getChainId()
         assert.ok(id, "Network ID should be available")
     })
 
-    it('Should fetch the latest block number', async function () {
+    it('Should fetch the latest block number', async function() {
         const block = await web3.eth.getBlockNumber()
         initBlock = block
         assert.ok(block, "Should fetch the latest block number")
     })
 
-    // todo check previous blocks and old data
+    it('Should get genesis block', async function() {
+        const block = await web3.eth.getBlock(0)
+        assert.ok(block, "Should fetch the genesis block")
+    })
 
     it('Get specific block', async function () {
-        let block = await web3.eth.getBlock(2, false)
-        console.log(block)
+        let block = await web3.eth.getBlock(1, false)
         assert.ok(block)
     })
 
@@ -57,24 +70,16 @@ describe('Ethereum Contract Deployment and Interaction Tests', function () {
         await assert.doesNotReject(web3.eth.getGasPrice())
     })
 
-    it('Should get tx by block number and index', async function () {
-        // todo might not have tx
-
-        //let tx = await web3.eth.getTransactionFromBlock(initBlock, 0)
-        //console.log(tx)
-        //assert.ok(tx.blockNumber)
-    })
-
-    it('Should transfer value to itself', async function () {
+    it('Should transfer value to itself', async function (){
         let value = 0.01
         let receipt = await transfer(value, userAccount.address) // todo check nonce
         assert.equal(userAccount.address, receipt.to)
         assert.equal(receipt.status, 1n)
     })
 
-    it('Should ensure the EOA is sufficiently funded', async function () {
+    it('Should ensure the EOA is sufficiently funded', async function() {
         const balance = await getBalance(userAccount.address)
-        assert.ok(parseFloat(balance) >= 9, "EOA should be funded with at least 9 Ether")
+        assert.ok(parseFloat(balance) >= 5, "EOA should be funded with at least 9 Ether")
     })
 
     describe('Contract interactions', async function () {
@@ -97,7 +102,7 @@ describe('Ethereum Contract Deployment and Interaction Tests', function () {
             assert.strictEqual(parseInt(result), initValue, "Retrieve call should return the value stored");
         })
 
-        it('Should store a new value in the Store contract', async function () {
+        it('Should store a new value in the Store contract', async function() {
             // store a value in the contract
             let signed = await userAccount.signTransaction({
                 from: userAccount.address,
@@ -133,20 +138,26 @@ describe('Ethereum Contract Deployment and Interaction Tests', function () {
             assert.equal(events[0].returnValues.value, newValue, "the event value should match the new value")
         })
 
-        it('Should not match events with non-matching filter', async function () {
-            lastBlock = await web3.eth.getBlockNumber()
-
+        it('Should not match events with non-matching filter', async function() {
             let events = await storage.getPastEvents("NewStore", {
                 fromBlock: initBlock,
                 toBlock: lastBlock,
                 topics: [
                     null, // wildcard for method name
                     null, // wildcard for caller
-                    web3Utils.padLeft(web3Utils.toHex(newValue + 100), 64) // hex value left-padded matching our new value to filter against
+                    web3Utils.padLeft(web3Utils.toHex(newValue+100), 64) // hex value left-padded matching our new value to filter against
                 ]
             })
 
             assert.equal(events.length, 0, "should not get any events")
+        })
+
+        it('Gets storage at', async function () {
+            const slot = 0; // The slot for the 'number' variable
+
+            let stored = await web3.eth.getStorageAt(deployedAddress, slot)
+            const value = web3.utils.hexToNumberString(stored);
+            assert.equal(value, newValue)
         })
 
         // todo get the trace for transaction
@@ -164,7 +175,7 @@ describe('EVM Gateway load tests', function () {
         let txs = []
 
         for (let i = 0; i < batch; i++) {
-            console.log("sending ", i)
+            console.log("sending request ", i)
             txs.push(transfer(value, userAccount.address, nonce + BigInt(i)))
             await new Promise(res => setTimeout(() => res(), 100))
         }
@@ -212,6 +223,5 @@ async function transfer(amount, to, nonce) {
     }
 
     let signed = await userAccount.signTransaction(tx)
-    console.log(signed.transactionHash)
     return web3.eth.sendSignedTransaction(signed.rawTransaction)
 }

@@ -45,28 +45,26 @@ type BlockIndexer interface {
 
 	// SetLatestCadenceHeight sets the latest Cadence height.
 	// Batch is required to batch multiple indexer operations, skipped if nil.
-	SetLatestCadenceHeight(height uint64, batch *pebble.Batch) error
+	SetLatestCadenceHeight(cadenceHeight uint64, batch *pebble.Batch) error
 
 	// GetCadenceHeight returns the Cadence height that matches the
 	// provided EVM height. Each EVM block indexed contains a link
 	// to the Cadence height.
 	// - errors.NotFound if the height is not found
-	GetCadenceHeight(evmHeight uint64) (uint64, error)
+	GetCadenceHeight(height uint64) (uint64, error)
 
 	// GetCadenceID returns the Cadence block ID that matches the
 	// provided EVM height. Each EVM block indexed contains a link to the
 	// Cadence block ID. Multiple EVM heights can point to the same
 	// Cadence block ID.
 	// - errors.NotFound if the height is not found
-	GetCadenceID(evmHeight uint64) (flow.Identifier, error)
+	GetCadenceID(height uint64) (flow.Identifier, error)
 }
 
 type ReceiptIndexer interface {
 	// Store provided receipt.
 	// Batch is required to batch multiple indexer operations, skipped if nil.
-	// Expected errors:
-	// - errors.Duplicate if the block already exists.
-	Store(receipts []*models.StorageReceipt, evmHeight uint64, batch *pebble.Batch) error
+	Store(receipts []*models.StorageReceipt, batch *pebble.Batch) error
 
 	// GetByTransactionID returns the receipt for the transaction ID.
 	// Expected errors:
@@ -76,14 +74,14 @@ type ReceiptIndexer interface {
 	// GetByBlockHeight returns the receipt for the block height.
 	// Expected errors:
 	// - errors.NotFound if the receipt is not found
-	GetByBlockHeight(height *big.Int) ([]*models.StorageReceipt, error)
+	GetByBlockHeight(height uint64) ([]*models.StorageReceipt, error)
 
 	// BloomsForBlockRange returns slice of bloom values and a slice of block heights
 	// corresponding to each item in the bloom slice. It only matches the blooms between
 	// inclusive start and end block height.
 	// Expected errors:
 	// - errors.InvalidRange if the block by the height was not indexed or if the end and start values are invalid.
-	BloomsForBlockRange(start, end *big.Int) ([]*models.BloomsHeight, error)
+	BloomsForBlockRange(start, end uint64) ([]*models.BloomsHeight, error)
 }
 
 type TransactionIndexer interface {

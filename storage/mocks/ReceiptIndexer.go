@@ -3,8 +3,6 @@
 package mocks
 
 import (
-	big "math/big"
-
 	common "github.com/onflow/go-ethereum/common"
 	mock "github.com/stretchr/testify/mock"
 
@@ -19,7 +17,7 @@ type ReceiptIndexer struct {
 }
 
 // BloomsForBlockRange provides a mock function with given fields: start, end
-func (_m *ReceiptIndexer) BloomsForBlockRange(start *big.Int, end *big.Int) ([]*models.BloomsHeight, error) {
+func (_m *ReceiptIndexer) BloomsForBlockRange(start uint64, end uint64) ([]*models.BloomsHeight, error) {
 	ret := _m.Called(start, end)
 
 	if len(ret) == 0 {
@@ -28,10 +26,10 @@ func (_m *ReceiptIndexer) BloomsForBlockRange(start *big.Int, end *big.Int) ([]*
 
 	var r0 []*models.BloomsHeight
 	var r1 error
-	if rf, ok := ret.Get(0).(func(*big.Int, *big.Int) ([]*models.BloomsHeight, error)); ok {
+	if rf, ok := ret.Get(0).(func(uint64, uint64) ([]*models.BloomsHeight, error)); ok {
 		return rf(start, end)
 	}
-	if rf, ok := ret.Get(0).(func(*big.Int, *big.Int) []*models.BloomsHeight); ok {
+	if rf, ok := ret.Get(0).(func(uint64, uint64) []*models.BloomsHeight); ok {
 		r0 = rf(start, end)
 	} else {
 		if ret.Get(0) != nil {
@@ -39,7 +37,7 @@ func (_m *ReceiptIndexer) BloomsForBlockRange(start *big.Int, end *big.Int) ([]*
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(*big.Int, *big.Int) error); ok {
+	if rf, ok := ret.Get(1).(func(uint64, uint64) error); ok {
 		r1 = rf(start, end)
 	} else {
 		r1 = ret.Error(1)
@@ -49,7 +47,7 @@ func (_m *ReceiptIndexer) BloomsForBlockRange(start *big.Int, end *big.Int) ([]*
 }
 
 // GetByBlockHeight provides a mock function with given fields: height
-func (_m *ReceiptIndexer) GetByBlockHeight(height *big.Int) ([]*models.StorageReceipt, error) {
+func (_m *ReceiptIndexer) GetByBlockHeight(height uint64) ([]*models.StorageReceipt, error) {
 	ret := _m.Called(height)
 
 	if len(ret) == 0 {
@@ -58,10 +56,10 @@ func (_m *ReceiptIndexer) GetByBlockHeight(height *big.Int) ([]*models.StorageRe
 
 	var r0 []*models.StorageReceipt
 	var r1 error
-	if rf, ok := ret.Get(0).(func(*big.Int) ([]*models.StorageReceipt, error)); ok {
+	if rf, ok := ret.Get(0).(func(uint64) ([]*models.StorageReceipt, error)); ok {
 		return rf(height)
 	}
-	if rf, ok := ret.Get(0).(func(*big.Int) []*models.StorageReceipt); ok {
+	if rf, ok := ret.Get(0).(func(uint64) []*models.StorageReceipt); ok {
 		r0 = rf(height)
 	} else {
 		if ret.Get(0) != nil {
@@ -69,7 +67,7 @@ func (_m *ReceiptIndexer) GetByBlockHeight(height *big.Int) ([]*models.StorageRe
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(*big.Int) error); ok {
+	if rf, ok := ret.Get(1).(func(uint64) error); ok {
 		r1 = rf(height)
 	} else {
 		r1 = ret.Error(1)
@@ -108,17 +106,17 @@ func (_m *ReceiptIndexer) GetByTransactionID(ID common.Hash) (*models.StorageRec
 	return r0, r1
 }
 
-// Store provides a mock function with given fields: receipts, evmHeight, batch
-func (_m *ReceiptIndexer) Store(receipts []*models.StorageReceipt, evmHeight uint64, batch *pebble.Batch) error {
-	ret := _m.Called(receipts, evmHeight, batch)
+// Store provides a mock function with given fields: receipts, batch
+func (_m *ReceiptIndexer) Store(receipts []*models.StorageReceipt, batch *pebble.Batch) error {
+	ret := _m.Called(receipts, batch)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Store")
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func([]*models.StorageReceipt, uint64, *pebble.Batch) error); ok {
-		r0 = rf(receipts, evmHeight, batch)
+	if rf, ok := ret.Get(0).(func([]*models.StorageReceipt, *pebble.Batch) error); ok {
+		r0 = rf(receipts, batch)
 	} else {
 		r0 = ret.Error(0)
 	}
