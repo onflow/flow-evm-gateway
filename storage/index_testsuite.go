@@ -174,7 +174,7 @@ func (s *ReceiptTestSuite) TestStoreReceipt() {
 
 	s.Run("store receipt successfully", func() {
 		receipt := mocks.NewReceipt(1, common.HexToHash("0xf1"))
-		err := s.ReceiptIndexer.Store([]*models.StorageReceipt{receipt}, 1, nil)
+		err := s.ReceiptIndexer.Store([]*models.StorageReceipt{receipt}, nil)
 		s.Require().NoError(err)
 	})
 
@@ -186,7 +186,7 @@ func (s *ReceiptTestSuite) TestStoreReceipt() {
 			mocks.NewReceipt(height, common.HexToHash("0x3")),
 		}
 
-		err := s.ReceiptIndexer.Store(receipts, height, nil)
+		err := s.ReceiptIndexer.Store(receipts, nil)
 		s.Require().NoError(err)
 
 		storeReceipts, err := s.ReceiptIndexer.GetByBlockHeight(height)
@@ -196,12 +196,22 @@ func (s *ReceiptTestSuite) TestStoreReceipt() {
 			s.compareReceipts(receipts[i], sr)
 		}
 	})
+
+	s.Run("fail to store multiple receipts with different heights", func() {
+		receipts := []*models.StorageReceipt{
+			mocks.NewReceipt(1, common.HexToHash("0x1")),
+			mocks.NewReceipt(2, common.HexToHash("0x2")),
+		}
+
+		err := s.ReceiptIndexer.Store(receipts, nil)
+		s.Require().EqualError(err, "can't store receipts for multiple heights")
+	})
 }
 
 func (s *ReceiptTestSuite) TestGetReceiptByTransactionID() {
 	s.Run("existing transaction ID", func() {
 		receipt := mocks.NewReceipt(2, common.HexToHash("0xf2"))
-		err := s.ReceiptIndexer.Store([]*models.StorageReceipt{receipt}, 2, nil)
+		err := s.ReceiptIndexer.Store([]*models.StorageReceipt{receipt}, nil)
 		s.Require().NoError(err)
 
 		retReceipt, err := s.ReceiptIndexer.GetByTransactionID(receipt.TxHash)
@@ -220,11 +230,11 @@ func (s *ReceiptTestSuite) TestGetReceiptByTransactionID() {
 func (s *ReceiptTestSuite) TestGetReceiptByBlockHeight() {
 	s.Run("existing block height", func() {
 		receipt := mocks.NewReceipt(3, common.HexToHash("0x1"))
-		err := s.ReceiptIndexer.Store([]*models.StorageReceipt{receipt}, 3, nil)
+		err := s.ReceiptIndexer.Store([]*models.StorageReceipt{receipt}, nil)
 		s.Require().NoError(err)
 		// add one more receipt that shouldn't be retrieved
 		r := mocks.NewReceipt(4, common.HexToHash("0x2"))
-		s.Require().NoError(s.ReceiptIndexer.Store([]*models.StorageReceipt{r}, 4, nil))
+		s.Require().NoError(s.ReceiptIndexer.Store([]*models.StorageReceipt{r}, nil))
 
 		retReceipts, err := s.ReceiptIndexer.GetByBlockHeight(receipt.BlockNumber.Uint64())
 		s.Require().NoError(err)
@@ -250,7 +260,7 @@ func (s *ReceiptTestSuite) TestBloomsForBlockRange() {
 			r := mocks.NewReceipt(i, common.HexToHash(fmt.Sprintf("0xf1%d", i)))
 			testBlooms = append(testBlooms, &r.Bloom)
 			testHeights = append(testHeights, i)
-			err := s.ReceiptIndexer.Store([]*models.StorageReceipt{r}, i, nil)
+			err := s.ReceiptIndexer.Store([]*models.StorageReceipt{r}, nil)
 			s.Require().NoError(err)
 		}
 
@@ -289,7 +299,7 @@ func (s *ReceiptTestSuite) TestBloomsForBlockRange() {
 			r2 := mocks.NewReceipt(i, common.HexToHash(fmt.Sprintf("0x%d", i)))
 			receipts := []*models.StorageReceipt{r1, r2}
 
-			s.Require().NoError(s.ReceiptIndexer.Store(receipts, i, nil))
+			s.Require().NoError(s.ReceiptIndexer.Store(receipts, nil))
 
 			testBlooms = append(testBlooms, &r1.Bloom, &r2.Bloom)
 			testHeights = append(testHeights, i)
@@ -337,7 +347,7 @@ func (s *ReceiptTestSuite) TestBloomsForBlockRange() {
 		for i := start; i < end; i++ {
 			r1 := mocks.NewReceipt(i, common.HexToHash(fmt.Sprintf("0x%d", i)))
 			receipts := []*models.StorageReceipt{r1}
-			s.Require().NoError(s.ReceiptIndexer.Store(receipts, i, nil))
+			s.Require().NoError(s.ReceiptIndexer.Store(receipts, nil))
 
 			if i == specific {
 				expectedBloom = &r1.Bloom
