@@ -197,7 +197,7 @@ func decodeTransactionEvent(event cadence.Event) (Transaction, *StorageReceipt, 
 		revertReason = txEvent.ReturnedData
 	}
 
-	receipt := NewStorageReceipt(gethReceipt, revertReason)
+	receipt := NewStorageReceipt(gethReceipt, revertReason, txEvent.PrecompiledCalls)
 
 	var tx Transaction
 	// check if the transaction payload is actually from a direct call,
