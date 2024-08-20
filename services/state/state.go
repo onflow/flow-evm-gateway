@@ -10,6 +10,7 @@ import (
 	"github.com/onflow/go-ethereum/common"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 
+	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
 )
@@ -17,7 +18,7 @@ import (
 type State struct {
 	types.StateDB // todo change to types.ReadOnlyView
 	emulator      types.Emulator
-	evmHeight     uint64
+	block         *models.Block
 	blocks        storage.BlockIndexer
 	receipts      storage.ReceiptIndexer
 }
@@ -30,6 +31,11 @@ func NewState(
 ) (*State, error) {
 	storageAddress := evm.StorageAccountAddress(chainID)
 
+	block, err := blocks.GetByHeight(evmHeight)
+	if err != nil {
+		return nil, err
+	}
+
 	// todo do we need state db?
 	s, err := state.NewStateDB(ledger, storageAddress)
 	if err != nil {
@@ -39,40 +45,52 @@ func NewState(
 	emu := emulator.NewEmulator(ledger, storageAddress)
 
 	return &State{
-		StateDB:   s,
-		emulator:  emu,
-		evmHeight: evmHeight,
-		blocks:    blocks,
+		StateDB:  s,
+		emulator: emu,
+		block:    block,
+		blocks:   blocks,
 	}, nil
 }
 
 func (s *State) Execute(tx *gethTypes.Transaction) error {
-	block, err := s.blocks.GetByHeight(s.evmHeight)
+	blockCtx, err := s.blockContext(tx.Hash())
 	if err != nil {
 		return err
 	}
 
-	receipt, err := s.receipts.GetByTransactionID(tx.Hash())
+	bv, err := s.emulator.NewBlockView(blockCtx)
 	if err != nil {
 		return err
+	}
+
+	_, err = bv.RunTransaction(tx)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *State) blockContext(hash common.Hash) (types.BlockContext, error) {
+	receipt, err := s.receipts.GetByTransactionID(hash)
+	if err != nil {
+		return types.BlockContext{}, err
 	}
 
 	calls, err := types.AggregatedPrecompileCallsFromEncoded(receipt.PrecompiledCalls)
 	if err != nil {
-		return err
+		return types.BlockContext{}, err
 	}
 
 	precompileContracts := precompiles.AggregatedPrecompiledCallsToPrecompiledContracts(calls)
 
-	blockCtx := types.BlockContext{
-		ChainID:                nil,
-		BlockNumber:            block.Height,
-		BlockTimestamp:         block.Timestamp,
+	return types.BlockContext{
+		ChainID:                types.FlowEVMPreviewNetChainID, // todo configure dynamically
+		BlockNumber:            s.block.Height,
+		BlockTimestamp:         s.block.Timestamp,
 		DirectCallBaseGasUsage: types.DefaultDirectCallBaseGasUsage, // todo check
 		DirectCallGasPrice:     types.DefaultDirectCallGasPrice,
-		TxCountSoFar:           0,               // todo check it might not be needed for execution
-		TotalGasUsedSoFar:      0,               // todo check it might not be needed for execution
-		GasFeeCollector:        types.Address{}, // todo check
+		GasFeeCollector:        types.Address(receipt.Coinbase),
 		GetHashFunc: func(n uint64) common.Hash {
 			b, err := s.blocks.GetByHeight(n)
 			if err != nil {
@@ -85,19 +103,11 @@ func (s *State) Execute(tx *gethTypes.Transaction) error {
 
 			return h
 		},
-		Random:                    common.Hash{}, // todo we need to expose rand value used in block
-		Tracer:                    nil,           // todo check, but no need for tracer now
+		Random:                    receipt.Random,
 		ExtraPrecompiledContracts: precompileContracts,
-	}
-	bv, err := s.emulator.NewBlockView(blockCtx)
-	if err != nil {
-		return err
-	}
-
-	_, err = bv.RunTransaction(tx)
-	if err != nil {
-		return err
-	}
-
-	return nil
+		// todo check values bellow if they are needed by the execution
+		TxCountSoFar:      0,
+		TotalGasUsedSoFar: 0,
+		Tracer:            nil,
+	}, nil
 }
