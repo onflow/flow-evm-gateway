@@ -114,11 +114,11 @@ func TestBlock(t *testing.T) {
 		_ = blocks.Store(2, flow.Identifier{0x1}, mocks.NewBlock(1), nil) // init
 
 		bl, err := blocks.GetByHeight(11)
-		require.ErrorIs(t, err, errors.ErrNotFound)
+		require.ErrorIs(t, err, errors.ErrEntityNotFound)
 		require.Nil(t, bl)
 
 		bl, err = blocks.GetByID(common.Hash{0x1})
-		require.ErrorIs(t, err, errors.ErrNotFound)
+		require.ErrorIs(t, err, errors.ErrEntityNotFound)
 		require.Nil(t, bl)
 	})
 }
@@ -178,7 +178,7 @@ func TestBatch(t *testing.T) {
 		require.NoError(t, err)
 
 		_, err = blocks.LatestCadenceHeight()
-		require.ErrorIs(t, err, errors.ErrNotInitialized)
+		require.ErrorIs(t, err, errors.ErrStorageNotInitialized)
 	})
 
 	runDB("multiple batch stores", t, func(t *testing.T, db *Storage) {

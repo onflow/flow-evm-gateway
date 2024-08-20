@@ -70,7 +70,7 @@ func (a *Accounts) getNonce(address common.Address, batch *pebble.Batch) (uint64
 	}
 	if err != nil {
 		// if no nonce was yet saved for the account the nonce is 0
-		if errors.Is(err, errs.ErrNotFound) {
+		if errors.Is(err, errs.ErrEntityNotFound) {
 			return 0, 0, nil
 		}
 
@@ -90,7 +90,7 @@ func (a *Accounts) GetNonce(address common.Address) (uint64, error) {
 	defer a.mux.RUnlock()
 	nonce, _, err := a.getNonce(address, nil)
 	if err != nil {
-		return 0, fmt.Errorf("failed to get nonce: %w", err)
+		return 0, fmt.Errorf("failed to get nonce of address: %s, with: %w", address, err)
 	}
 
 	return nonce, nil
@@ -103,7 +103,7 @@ func (a *Accounts) GetBalance(address common.Address) (*big.Int, error) {
 // decodeNonce converts nonce data into nonce and height
 func decodeNonce(data []byte) (uint64, uint64, error) {
 	if len(data) != 16 {
-		return 0, 0, fmt.Errorf("invalid nonce data")
+		return 0, 0, fmt.Errorf("invalid nonce data, expected length: %d, got: %d", 16, len(data))
 	}
 	nonce := binary.BigEndian.Uint64(data[:8])
 	height := binary.BigEndian.Uint64(data[8:])

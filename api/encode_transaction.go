@@ -1,7 +1,7 @@
 package api
 
 import (
-	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/onflow/go-ethereum/core/types"
@@ -49,7 +49,7 @@ func encodeTxFromArgs(args TransactionArgs) ([]byte, error) {
 
 	enc, err := tx.MarshalBinary()
 	if err != nil {
-		return nil, errors.Join(err, errs.ErrInvalid)
+		return nil, fmt.Errorf("%w: %w", errs.ErrInvalid, err)
 	}
 
 	return enc, nil

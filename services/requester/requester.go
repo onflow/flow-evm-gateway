@@ -214,7 +214,7 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 	}
 
 	if tx.GasPrice().Cmp(e.config.GasPrice) < 0 {
-		return common.Hash{}, errs.TransactionGasPriceTooLow(e.config.GasPrice)
+		return common.Hash{}, errs.NewTxGasPriceTooLowError(e.config.GasPrice)
 	}
 
 	txData := hex.EncodeToString(data)
@@ -288,12 +288,16 @@ func (e *EVM) buildTransaction(ctx context.Context, script []byte, args ...caden
 
 	for _, arg := range args {
 		if err := flowTx.AddArgument(arg); err != nil {
-			return nil, fmt.Errorf("failed to add argument: %w", err)
+			return nil, fmt.Errorf("failed to add argument: %s, with %w", arg, err)
 		}
 	}
 
 	if err := flowTx.SignEnvelope(address, index, e.signer); err != nil {
-		return nil, fmt.Errorf("failed to sign transaction envelope: %w", err)
+		return nil, fmt.Errorf(
+			"failed to sign transaction envelope for address: %s and index: %d, with: %w",
+			address,
+			index,
+			err)
 	}
 
 	return flowTx, nil
@@ -321,7 +325,7 @@ func (e *EVM) GetBalance(
 		[]cadence.Value{hexEncodedAddress},
 	)
 	if err != nil {
-		if !errors.Is(err, errs.ErrOutOfRange) {
+		if !errors.Is(err, errs.ErrHeightOutOfRange) {
 			e.logger.Error().
 				Err(err).
 				Str("address", address.String()).
@@ -329,12 +333,17 @@ func (e *EVM) GetBalance(
 				Uint64("cadence-height", height).
 				Msg("failed to get get balance")
 		}
-		return nil, fmt.Errorf("failed to get balance: %w", err)
+		return nil, fmt.Errorf(
+			"failed to get balance of address: %s at height: %d, with: %w",
+			address,
+			evmHeight,
+			err,
+		)
 	}
 
 	// sanity check, should never occur
 	if _, ok := val.(cadence.UInt); !ok {
-		e.logger.Panic().Msg(fmt.Sprintf("failed to convert balance %v to UInt", val))
+		return nil, fmt.Errorf("failed to convert balance %v to UInt, got type: %T", val, val)
 	}
 
 	return val.(cadence.UInt).Big(), nil
@@ -362,19 +371,24 @@ func (e *EVM) GetNonce(
 		[]cadence.Value{hexEncodedAddress},
 	)
 	if err != nil {
-		if !errors.Is(err, errs.ErrOutOfRange) {
+		if !errors.Is(err, errs.ErrHeightOutOfRange) {
 			e.logger.Error().Err(err).
 				Str("address", address.String()).
 				Int64("evm-height", evmHeight).
 				Uint64("cadence-height", height).
 				Msg("failed to get nonce")
 		}
-		return 0, fmt.Errorf("failed to get nonce: %w", err)
+		return 0, fmt.Errorf(
+			"failed to get nonce of address: %s at height: %d, with: %w",
+			address,
+			evmHeight,
+			err,
+		)
 	}
 
 	// sanity check, should never occur
 	if _, ok := val.(cadence.UInt64); !ok {
-		e.logger.Panic().Msg(fmt.Sprintf("failed to convert balance %v to UInt64", val))
+		return 0, fmt.Errorf("failed to convert nonce %v to UInt64, got type: %T", val, val)
 	}
 
 	nonce := uint64(val.(cadence.UInt64))
@@ -404,7 +418,7 @@ func (e *EVM) stateAt(evmHeight int64) (*state.StateDB, error) {
 
 	ledger, err := newRemoteLedger(e.config.AccessNodeHost, cadenceHeight)
 	if err != nil {
-		return nil, fmt.Errorf("could not create a remote ledger: %w", err)
+		return nil, fmt.Errorf("could not create remote ledger for height: %d, with: %w", cadenceHeight, err)
 	}
 
 	storageAddress := evm.StorageAccountAddress(e.config.FlowNetworkID)
@@ -454,7 +468,7 @@ func (e *EVM) Call(
 		[]cadence.Value{hexEncodedTx, hexEncodedAddress},
 	)
 	if err != nil {
-		if !errors.Is(err, errs.ErrOutOfRange) {
+		if !errors.Is(err, errs.ErrHeightOutOfRange) {
 			e.logger.Error().
 				Err(err).
 				Uint64("cadence-height", height).
@@ -463,7 +477,7 @@ func (e *EVM) Call(
 				Str("data", string(data)).
 				Msg("failed to execute call")
 		}
-		return nil, fmt.Errorf("failed to execute script: %w", err)
+		return nil, fmt.Errorf("failed to execute script at height: %d, with: %w", height, err)
 	}
 
 	evmResult, err := parseResult(scriptResult)
@@ -510,7 +524,7 @@ func (e *EVM) EstimateGas(
 		[]cadence.Value{hexEncodedTx, hexEncodedAddress},
 	)
 	if err != nil {
-		return 0, fmt.Errorf("failed to execute script: %w", err)
+		return 0, fmt.Errorf("failed to execute script at height: %d, with: %w", height, err)
 	}
 
 	evmResult, err := parseResult(scriptResult)
@@ -549,7 +563,7 @@ func (e *EVM) GetCode(
 		[]cadence.Value{hexEncodedAddress},
 	)
 	if err != nil {
-		if !errors.Is(err, errs.ErrOutOfRange) {
+		if !errors.Is(err, errs.ErrHeightOutOfRange) {
 			e.logger.Error().
 				Err(err).
 				Uint64("cadence-height", height).
@@ -558,7 +572,12 @@ func (e *EVM) GetCode(
 				Msg("failed to get code")
 		}
 
-		return nil, fmt.Errorf("failed to execute script for get code: %w", err)
+		return nil, fmt.Errorf(
+			"failed to execute script for get code of address: %s at height: %d, with: %w",
+			address,
+			height,
+			err,
+		)
 	}
 
 	code, err := cadenceStringToBytes(value)
@@ -590,7 +609,7 @@ func (e *EVM) GetLatestEVMHeight(ctx context.Context) (uint64, error) {
 
 	// sanity check, should never occur
 	if _, ok := val.(cadence.UInt64); !ok {
-		e.logger.Panic().Msg(fmt.Sprintf("failed to convert height %v to UInt64", val))
+		return 0, fmt.Errorf("failed to convert height %v to UInt64, got type: %T", val, val)
 	}
 
 	height := uint64(val.(cadence.UInt64))
@@ -606,7 +625,11 @@ func (e *EVM) GetLatestEVMHeight(ctx context.Context) (uint64, error) {
 func (e *EVM) getSignerNetworkInfo(ctx context.Context) (uint32, uint64, error) {
 	account, err := e.client.GetAccount(ctx, e.config.COAAddress)
 	if err != nil {
-		return 0, 0, fmt.Errorf("failed to get signer info account: %w", err)
+		return 0, 0, fmt.Errorf(
+			"failed to get signer info account for address: %s, with: %w",
+			e.config.COAAddress,
+			err,
+		)
 	}
 
 	signerPub := e.signer.PublicKey()
@@ -616,7 +639,11 @@ func (e *EVM) getSignerNetworkInfo(ctx context.Context) (uint32, uint64, error) 
 		}
 	}
 
-	return 0, 0, fmt.Errorf("provided account address and signer keys do not match")
+	return 0, 0, fmt.Errorf(
+		"provided account address: %s and signer public key: %s, do not match",
+		e.config.COAAddress,
+		signerPub.String(),
+	)
 }
 
 // replaceAddresses replace the addresses based on the network
@@ -648,7 +675,11 @@ func (e *EVM) evmToCadenceHeight(height int64) (uint64, error) {
 	evmHeight := uint64(height)
 	evmLatest, err := e.blocks.LatestEVMHeight()
 	if err != nil {
-		return 0, fmt.Errorf("failed to map evm to cadence height, getting latest evm height: %w", err)
+		return 0, fmt.Errorf(
+			"failed to map evm height: %d to cadence height, getting latest evm height: %w",
+			evmHeight,
+			err,
+		)
 	}
 
 	// if provided evm height equals to latest evm height indexed we
@@ -661,7 +692,7 @@ func (e *EVM) evmToCadenceHeight(height int64) (uint64, error) {
 
 	cadenceHeight, err := e.blocks.GetCadenceHeight(uint64(evmHeight))
 	if err != nil {
-		return 0, fmt.Errorf("failed to map evm to cadence height: %w", err)
+		return 0, fmt.Errorf("failed to map evm height: %d to cadence height: %w", evmHeight, err)
 	}
 
 	return cadenceHeight, nil
@@ -695,7 +726,7 @@ func (e *EVM) executeScriptAtHeight(
 		// if snapshot doesn't exist on EN, the height at which script was executed is out
 		// of the boundaries the EN keeps state, so return out of range
 		if strings.Contains(err.Error(), "failed to create storage snapshot") {
-			return nil, errs.ErrOutOfRange
+			return nil, errs.NewHeightOutOfRangeError(height)
 		}
 	}
 
@@ -711,29 +742,33 @@ func addressToCadenceString(address common.Address) (cadence.String, error) {
 func cadenceStringToBytes(value cadence.Value) ([]byte, error) {
 	cdcString, ok := value.(cadence.String)
 	if !ok {
-		return nil, fmt.Errorf("failed to convert cadence value to string: %v", value)
+		return nil, fmt.Errorf(
+			"failed to convert cadence value of type: %T to string: %v",
+			value,
+			value,
+		)
 	}
 
 	code, err := hex.DecodeString(string(cdcString))
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode string to byte array [%s]: %w", cdcString, err)
+		return nil, fmt.Errorf("failed to hex-decode string to byte array [%s]: %w", cdcString, err)
 	}
 
 	return code, nil
 }
 
-// handleResult
+// parseResult
 func parseResult(res cadence.Value) (*evmTypes.ResultSummary, error) {
 	result, err := stdlib.ResultSummaryFromEVMResultValue(res)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode EVM result: %w", err)
+		return nil, fmt.Errorf("failed to decode EVM result of type: %s, with: %w", res.Type().ID(), err)
 	}
 
 	if result.ErrorCode != 0 {
 		if result.ErrorCode == evmTypes.ExecutionErrCodeExecutionReverted {
 			return nil, errs.NewRevertError(result.ReturnedData)
 		}
-		return nil, errs.FailedTransaction(result.ErrorMessage)
+		return nil, errs.NewFailedTransactionError(result.ErrorMessage)
 	}
 
 	return result, err

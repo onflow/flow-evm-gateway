@@ -148,7 +148,7 @@ func (c *CrossSporkClient) getClientForHeight(height uint64) (access.Client, err
 
 	client := c.sporkClients.get(height)
 	if client == nil {
-		return nil, errs.ErrOutOfRange
+		return nil, errs.NewHeightOutOfRangeError(height)
 	}
 
 	c.logger.Debug().

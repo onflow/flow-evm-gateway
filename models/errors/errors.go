@@ -13,51 +13,58 @@ import (
 var (
 	// API specific errors
 
-	ErrNotSupported = errors.New("endpoint is not supported")
-	ErrRateLimit    = errors.New("limit of requests per second reached")
+	ErrEndpointNotSupported = errors.New("endpoint is not supported")
+	ErrRateLimit            = errors.New("limit of requests per second reached")
+	ErrIndexOnlyMode        = errors.New("transaction submission not allowed in index-only mode")
 
 	// General errors
 
 	ErrInternal     = errors.New("internal error")
 	ErrInvalid      = errors.New("invalid")
 	ErrRecoverable  = errors.New("recoverable")
-	ErrDisconnected = Recoverable(errors.New("disconnected"))
+	ErrDisconnected = NewRecoverableError(errors.New("disconnected"))
 
 	// Transaction errors
 
 	ErrFailedTransaction  = errors.New("failed transaction")
-	ErrInvalidTransaction = fmt.Errorf("%w: %w", ErrFailedTransaction, errors.New("invalid"))
+	ErrInvalidTransaction = fmt.Errorf("%w: %w", ErrInvalid, ErrFailedTransaction)
 
 	// Storage errors
 
-	// ErrNotInitialized indicates storage instance was not correctly initialized and contains empty required values.
-	ErrNotInitialized = errors.New("storage not initialized")
-	// ErrNotFound indicates the resource does not exist.
-	ErrNotFound = errors.New("entity not found")
-	// ErrDuplicate indicates that the entity can not be stored due to an already existing same entity.
-	ErrDuplicate = errors.New("entity duplicate")
-	// ErrInvalidRange indicates that the block range provided as start and end height is invalid.
-	ErrInvalidRange = fmt.Errorf("%w: %w", ErrInvalid, errors.New("invalid block height range"))
-	// ErrOutOfRange indicates the requested height is out of available range
-	ErrOutOfRange = fmt.Errorf("%w: %w", ErrInvalid, errors.New("height is out of available range"))
+	// ErrStorageNotInitialized indicates storage instance was not correctly initialized and contains empty required values.
+	ErrStorageNotInitialized = errors.New("storage not initialized")
+	// ErrEntityNotFound indicates the resource does not exist.
+	ErrEntityNotFound = errors.New("entity not found")
+	// ErrInvalidBlockRange indicates that the block range provided as start and end height is invalid.
+	ErrInvalidBlockRange = fmt.Errorf("%w %w", ErrInvalid, errors.New("block height range"))
+	// ErrHeightOutOfRange indicates the requested height is out of available range
+	ErrHeightOutOfRange = fmt.Errorf("%w %w", ErrInvalid, errors.New("height not in available range"))
 )
 
-func FailedTransaction(reason string) error {
+func NewEndpointNotSupportedError(endpoint string) error {
+	return fmt.Errorf("%w: %s", ErrEndpointNotSupported, endpoint)
+}
+
+func NewHeightOutOfRangeError(height uint64) error {
+	return fmt.Errorf("%w: %d", ErrHeightOutOfRange, height)
+}
+
+func NewFailedTransactionError(reason string) error {
 	return fmt.Errorf("%w: %w", ErrFailedTransaction, errors.New(reason))
 }
 
-func InvalidTransaction(err error) error {
+func NewInvalidTransactionError(err error) error {
 	return fmt.Errorf("%w: %w", ErrInvalidTransaction, err)
 }
 
-func TransactionGasPriceTooLow(gasPrice *big.Int) error {
-	return InvalidTransaction(fmt.Errorf(
+func NewTxGasPriceTooLowError(gasPrice *big.Int) error {
+	return NewInvalidTransactionError(fmt.Errorf(
 		"the minimum accepted gas price for transactions is: %d",
 		gasPrice,
 	))
 }
 
-func Recoverable(err error) error {
+func NewRecoverableError(err error) error {
 	return fmt.Errorf("%w: %w", ErrRecoverable, err)
 }
 

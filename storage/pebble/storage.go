@@ -60,7 +60,7 @@ func New(dir string, log zerolog.Logger) (*Storage, error) {
 
 	db, err := pebble.Open(dir, opts)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open db: %w", err)
+		return nil, fmt.Errorf("failed to open db for dir: %s, with: %w", dir, err)
 	}
 
 	return &Storage{
@@ -94,7 +94,7 @@ func (s *Storage) get(keyCode byte, key ...[]byte) ([]byte, error) {
 
 	if err != nil {
 		if errors.Is(err, pebble.ErrNotFound) {
-			return nil, errs.ErrNotFound
+			return nil, errs.ErrEntityNotFound
 		}
 		return nil, err
 	}
