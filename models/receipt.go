@@ -31,6 +31,9 @@ type StorageReceipt struct {
 	BlockNumber       *big.Int         `json:"blockNumber,omitempty"`
 	TransactionIndex  uint             `json:"transactionIndex"`
 	RevertReason      []byte           `json:"revertReason"`
+	PrecompiledCalls  []byte
+	Coinbase          common.Address
+	Random            common.Hash
 }
 
 func (sr *StorageReceipt) ToGethReceipt() *gethTypes.Receipt {
@@ -57,6 +60,8 @@ func NewStorageReceipt(
 	receipt *gethTypes.Receipt,
 	revertReason []byte,
 	precompiledCalls []byte,
+	coinbase common.Address,
+	random common.Hash,
 ) *StorageReceipt {
 	return &StorageReceipt{
 		Type:              receipt.Type,
@@ -76,6 +81,8 @@ func NewStorageReceipt(
 		TransactionIndex:  receipt.TransactionIndex,
 		RevertReason:      revertReason,
 		PrecompiledCalls:  precompiledCalls,
+		Random:            random,
+		Coinbase:          coinbase,
 	}
 }
 
