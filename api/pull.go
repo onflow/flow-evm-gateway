@@ -260,7 +260,11 @@ func (api *PullAPI) NewFilter(ctx context.Context, criteria filters.FilterCriter
 		if criteria.ToBlock != nil &&
 			criteria.FromBlock.Cmp(criteria.ToBlock) > 0 &&
 			criteria.ToBlock.Int64() > 0 {
-			return "", fmt.Errorf("from block must be lower than to block")
+			return "", fmt.Errorf(
+				"from block (%d) must be lower than to block (%d)",
+				latest,
+				criteria.ToBlock.Int64(),
+			)
 		}
 		// todo we should check for max range of from-to heights
 	}
@@ -292,23 +296,18 @@ func (api *PullAPI) GetFilterLogs(
 
 	filter, ok := api.filters[id]
 	if !ok {
-		return nil, errors.Join(
-			errs.ErrNotFound,
-			fmt.Errorf("filted by id %s does not exist", id),
-		)
+		return nil, fmt.Errorf("%w: filter by id %s does not exist", errs.ErrEntityNotFound, id)
+
 	}
 
 	if filter.expired() {
 		api.UninstallFilter(id)
-		return nil, errors.Join(
-			errs.ErrNotFound,
-			fmt.Errorf("filted by id %s has expired", id),
-		)
+		return nil, fmt.Errorf("%w: filter by id %s has expired", errs.ErrEntityNotFound, id)
 	}
 
 	logsFilter, ok := filter.(*logsFilter)
 	if !ok {
-		return nil, fmt.Errorf("filted by id %s is not a logs filter", id)
+		return nil, fmt.Errorf("filter by id %s is not a logs filter", id)
 	}
 
 	current, err := api.blocks.LatestEVMHeight()
@@ -323,7 +322,7 @@ func (api *PullAPI) GetFilterLogs(
 
 	logs, ok := result.([]*gethTypes.Log)
 	if !ok {
-		return nil, fmt.Errorf("logs filter returned incorrect type: %T", logs)
+		return nil, fmt.Errorf("logs filter returned incorrect type: %T", result)
 	}
 
 	return logs, nil
@@ -344,7 +343,7 @@ func (api *PullAPI) GetFilterChanges(ctx context.Context, id rpc.ID) (any, error
 
 	f, ok := api.filters[id]
 	if !ok {
-		return nil, errors.Join(errs.ErrNotFound, fmt.Errorf("filted by id %s does not exist", id))
+		return nil, fmt.Errorf("%w: filter by id %s does not exist", errs.ErrEntityNotFound, id)
 	}
 
 	current, err := api.blocks.LatestEVMHeight()
@@ -354,7 +353,7 @@ func (api *PullAPI) GetFilterChanges(ctx context.Context, id rpc.ID) (any, error
 
 	if f.expired() {
 		api.UninstallFilter(id)
-		return nil, errors.Join(errs.ErrNotFound, fmt.Errorf("filted by id %s expired", id))
+		return nil, fmt.Errorf("%w: filter by id %s has expired", errs.ErrEntityNotFound, id)
 	}
 
 	var result any
@@ -366,7 +365,7 @@ func (api *PullAPI) GetFilterChanges(ctx context.Context, id rpc.ID) (any, error
 	case *logsFilter:
 		result, err = api.getLogs(current, filterType)
 	default:
-		return nil, fmt.Errorf("invalid filter type")
+		return nil, fmt.Errorf("invalid filter type: %T", filterType)
 	}
 	if err != nil {
 		return nil, err
@@ -443,7 +442,7 @@ func (api *PullAPI) getTransactions(latestHeight uint64, filter *transactionsFil
 	for i := nextHeight; i <= latestHeight; i++ {
 		b, err := api.blocks.GetByHeight(i)
 		if err != nil {
-			if errors.Is(err, errs.ErrNotFound) {
+			if errors.Is(err, errs.ErrEntityNotFound) {
 				return nil, nil
 			}
 			return nil, err

@@ -1,7 +1,6 @@
 package logs
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/onflow/go-ethereum/common"
@@ -33,10 +32,10 @@ type FilterCriteria struct {
 
 func NewFilterCriteria(addresses []common.Address, topics [][]common.Hash) (*FilterCriteria, error) {
 	if len(topics) > maxTopics {
-		return nil, fmt.Errorf("max topics exceeded, only %d allowed", maxTopics)
+		return nil, fmt.Errorf("max topics exceeded, only %d allowed, got %d", maxTopics, len(topics))
 	}
 	if len(addresses) > maxAddresses {
-		return nil, fmt.Errorf("max addresses exceeded, only %d allowed", maxAddresses)
+		return nil, fmt.Errorf("max addresses exceeded, only %d allowed, got %d", maxAddresses, len(addresses))
 	}
 
 	return &FilterCriteria{
@@ -59,14 +58,16 @@ func NewRangeFilter(
 	receipts storage.ReceiptIndexer,
 ) (*RangeFilter, error) {
 	if len(criteria.Topics) > maxTopics {
-		return nil, fmt.Errorf("max topics exceeded, only %d allowed", maxTopics)
+		return nil, fmt.Errorf("max topics exceeded, only %d allowed, got %d", maxTopics, len(criteria.Topics))
 	}
 
 	// make sure that beginning number is not bigger than end
 	if start > end {
-		return nil, errors.Join(
+		return nil, fmt.Errorf(
+			"%w: start block number (%d) must be smaller or equal to end block number (%d)",
 			errs.ErrInvalid,
-			fmt.Errorf("start block number must be smaller or equal to end block number"),
+			start,
+			end,
 		)
 	}
 
@@ -138,7 +139,7 @@ func NewIDFilter(
 	receipts storage.ReceiptIndexer,
 ) (*IDFilter, error) {
 	if len(criteria.Topics) > maxTopics {
-		return nil, fmt.Errorf("max topics exceeded, only %d allowed", maxTopics)
+		return nil, fmt.Errorf("max topics exceeded, only %d allowed, got %d", maxTopics, len(criteria.Topics))
 	}
 
 	return &IDFilter{

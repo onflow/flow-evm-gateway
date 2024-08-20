@@ -180,7 +180,7 @@ func decodeTransactionEvent(event cadence.Event) (Transaction, *StorageReceipt, 
 	if len(txEvent.Logs) > 0 {
 		err = rlp.Decode(bytes.NewReader(txEvent.Logs), &gethReceipt.Logs)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to rlp decode logs: %w", err)
+			return nil, nil, fmt.Errorf("failed to RLP-decode logs: %w", err)
 		}
 	}
 

@@ -166,13 +166,13 @@ func FromFlags() (*Config, error) {
 
 	cfg.COAAddress = flow.HexToAddress(coa)
 	if cfg.COAAddress == flow.EmptyAddress {
-		return nil, fmt.Errorf("invalid COA address value")
+		return nil, fmt.Errorf("COA address value is the empty address")
 	}
 
 	if key != "" {
 		pkey, err := crypto.DecodePrivateKeyHex(crypto.ECDSA_P256, key)
 		if err != nil {
-			return nil, fmt.Errorf("invalid COA key: %w", err)
+			return nil, fmt.Errorf("invalid COA private key: %w", err)
 		}
 		cfg.COAKey = pkey
 	} else if keysPath != "" {
@@ -277,7 +277,7 @@ func FromFlags() (*Config, error) {
 
 	exp, err := time.ParseDuration(filterExpiry)
 	if err != nil {
-		return nil, fmt.Errorf("filter expiry not valid unit: %w", err)
+		return nil, fmt.Errorf("invalid unit %s for filter expiry: %w", filterExpiry, err)
 	}
 	cfg.FilterExpiry = exp
 
@@ -293,9 +293,9 @@ func FromFlags() (*Config, error) {
 	cfg.TracesEnabled = cfg.TracesBucketName != ""
 
 	if walletKey != "" {
-		var k, err = gethCrypto.HexToECDSA(walletKey)
+		k, err := gethCrypto.HexToECDSA(walletKey)
 		if err != nil {
-			return nil, fmt.Errorf("wrong private key for wallet API: %w", err)
+			return nil, fmt.Errorf("invalid private key for wallet API: %w", err)
 		}
 
 		cfg.WalletKey = k

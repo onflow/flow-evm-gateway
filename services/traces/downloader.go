@@ -38,7 +38,7 @@ func NewGCPDownloader(bucketName string, logger zerolog.Logger) (*GCPDownloader,
 	// we don't require authentication for public bucket
 	client, err := storage.NewClient(ctx, option.WithoutAuthentication())
 	if err != nil {
-		return nil, fmt.Errorf("storage.NewClient: %w", err)
+		return nil, fmt.Errorf("failed to create Google Cloud Storage client: %w", err)
 	}
 
 	return &GCPDownloader{
@@ -63,7 +63,7 @@ func (g *GCPDownloader) Download(txID common.Hash, blockID flow.Identifier) (jso
 
 	rc, err := g.bucket.Object(id).NewReader(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to download id %s: %w", id, err)
+		return nil, fmt.Errorf("failed to download object id %s: %w", id, err)
 	}
 	defer rc.Close()
 

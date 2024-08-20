@@ -64,7 +64,7 @@ func (s *StreamAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
 			return func(data any) error {
 				block, ok := data.(*models.Block)
 				if !ok {
-					return fmt.Errorf("invalid data sent to block subscription")
+					return fmt.Errorf("invalid data sent to block subscription: %s", sub.ID)
 				}
 
 				h, err := block.Hash()
@@ -100,7 +100,7 @@ func (s *StreamAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) (*
 			return func(data any) error {
 				tx, ok := data.(*gethTypes.Transaction)
 				if !ok {
-					return fmt.Errorf("invalid data sent to pending transaction subscription")
+					return fmt.Errorf("invalid data sent to pending transaction subscription: %s", sub.ID)
 				}
 
 				if fullTx != nil && *fullTx {
@@ -117,7 +117,7 @@ func (s *StreamAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) (*
 func (s *StreamAPI) Logs(ctx context.Context, criteria filters.FilterCriteria) (*rpc.Subscription, error) {
 	logCriteria, err := logs.NewFilterCriteria(criteria.Addresses, criteria.Topics)
 	if err != nil {
-		return nil, fmt.Errorf("failed to crete log subscription filter: %w", err)
+		return nil, fmt.Errorf("failed to create log subscription filter: %w", err)
 	}
 
 	return s.newSubscription(
@@ -127,7 +127,7 @@ func (s *StreamAPI) Logs(ctx context.Context, criteria filters.FilterCriteria) (
 			return func(data any) error {
 				allLogs, ok := data.([]*gethTypes.Log)
 				if !ok {
-					return fmt.Errorf("invalid data sent to log subscription")
+					return fmt.Errorf("invalid data sent to log subscription: %s", sub.ID)
 				}
 
 				for _, log := range allLogs {
