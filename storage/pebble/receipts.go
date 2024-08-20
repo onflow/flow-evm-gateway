@@ -31,27 +31,25 @@ func NewReceipts(store *Storage) *Receipts {
 
 // Store receipt in the index.
 //
-// Storing receipt will create multiple indexes, each receipt has a transaction ID,
-// and a block height. We create following mappings:
+// Storing receipt will create multiple indexes, each receipt has a transaction ID, and a block height.
+// We create following mappings:
 // - receipt transaction ID => block height bytes
 // - receipt block height => list of encoded receipts (1+ per block)
 // - receipt block height => list of bloom filters (1+ per block)
-func (r *Receipts) Store(
-	receipts []*models.StorageReceipt,
-	evmHeight uint64,
-	batch *pebble.Batch,
-) error {
+func (r *Receipts) Store(receipts []*models.StorageReceipt, batch *pebble.Batch) error {
 	r.mux.Lock()
 	defer r.mux.Unlock()
 
 	var blooms []*gethTypes.Bloom
+	var height uint64
 
 	for _, receipt := range receipts {
-		height := receipt.BlockNumber.Uint64()
-		if height != evmHeight {
-			return fmt.Errorf("receipt belongs to different block height: %d", receipt.BlockNumber.Uint64())
+		h := receipt.BlockNumber.Uint64()
+		if height != 0 && h != height { // extra safety check
+			return fmt.Errorf("can't store receipts for multiple heights")
 		}
 
+		height = h
 		blooms = append(blooms, &receipt.Bloom)
 
 		if err := r.store.set(
@@ -64,23 +62,23 @@ func (r *Receipts) Store(
 		}
 	}
 
-	val, err := rlp.EncodeToBytes(receipts)
+	receiptBytes, err := rlp.EncodeToBytes(receipts)
 	if err != nil {
 		return err
 	}
 
-	height := uint64Bytes(evmHeight)
+	heightBytes := uint64Bytes(height)
 
-	if err := r.store.set(receiptHeightKey, height, val, batch); err != nil {
+	if err := r.store.set(receiptHeightKey, heightBytes, receiptBytes, batch); err != nil {
 		return fmt.Errorf("failed to store receipt height: %w", err)
 	}
 
-	bloomVal, err := rlp.EncodeToBytes(blooms)
+	bloomBytes, err := rlp.EncodeToBytes(blooms)
 	if err != nil {
 		return fmt.Errorf("failed to encode blooms: %w", err)
 	}
 
-	if err := r.store.set(bloomHeightKey, height, bloomVal, batch); err != nil {
+	if err := r.store.set(bloomHeightKey, heightBytes, bloomBytes, batch); err != nil {
 		return fmt.Errorf("failed to store bloom height: %w", err)
 	}
 
