@@ -814,7 +814,7 @@ func (b *BlockChainAPI) FeeHistory(
 
 	if blockCount > maxFeeHistoryBlockCount {
 		return handleError[*FeeHistoryResult](
-			fmt.Errorf("block count has to be between 1 and 1024, got: %d", blockCount),
+			fmt.Errorf("block count has to be between 1 and %d, got: %d", maxFeeHistoryBlockCount, blockCount),
 			l,
 			b.collector,
 		)
