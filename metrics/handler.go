@@ -51,7 +51,7 @@ func extractMethod(r *http.Request, logger zerolog.Logger) (string, error) {
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		return "", fmt.Errorf("error reading request body: %s", err)
+		return "", fmt.Errorf("error reading request body: %w", err)
 	}
 	r.Body = io.NopCloser(bytes.NewBuffer(body))
 
@@ -59,7 +59,7 @@ func extractMethod(r *http.Request, logger zerolog.Logger) (string, error) {
 		Method string `json:"method"`
 	}
 	if err := json.Unmarshal(body, &requestBody); err != nil {
-		return "", fmt.Errorf("error extracting method from body: %s", err)
+		return "", fmt.Errorf("error extracting method from body: %w", err)
 	}
 
 	return requestBody.Method, nil

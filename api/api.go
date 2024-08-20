@@ -813,7 +813,11 @@ func (b *BlockChainAPI) FeeHistory(
 		Logger()
 
 	if blockCount > maxFeeHistoryBlockCount {
-		return handleError[*FeeHistoryResult](fmt.Errorf("block count has to be between 1 and 1024"), l, b.collector)
+		return handleError[*FeeHistoryResult](
+			fmt.Errorf("block count has to be between 1 and 1024, got: %d", blockCount),
+			l,
+			b.collector,
+		)
 	}
 
 	lastBlockNumber := uint64(lastBlock)

@@ -175,7 +175,12 @@ func NewTransaction(
 ) (*Transaction, error) {
 	f, err := tx.From()
 	if err != nil {
-		return nil, fmt.Errorf("%w: failed to get from value: %w", errs.ErrInternal, err)
+		return nil, fmt.Errorf(
+			"%w: failed to get from address for tx: %s, with: %w",
+			errs.ErrInternal,
+			tx.Hash(),
+			err,
+		)
 	}
 	from := common.NewMixedcaseAddress(f)
 

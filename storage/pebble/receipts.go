@@ -60,7 +60,12 @@ func (r *Receipts) Store(
 			uint64Bytes(height),
 			batch,
 		); err != nil {
-			return fmt.Errorf("failed to store receipt tx height: %w", err)
+			return fmt.Errorf(
+				"failed to store receipt tx ID: %s to height: %d mapping, with: %w",
+				receipt.TxHash,
+				height,
+				err,
+			)
 		}
 	}
 
@@ -72,16 +77,16 @@ func (r *Receipts) Store(
 	height := uint64Bytes(evmHeight)
 
 	if err := r.store.set(receiptHeightKey, height, val, batch); err != nil {
-		return fmt.Errorf("failed to store receipt height: %w", err)
+		return fmt.Errorf("failed to store receipt height: %d, with: %w", height, err)
 	}
 
 	bloomVal, err := rlp.EncodeToBytes(blooms)
 	if err != nil {
-		return fmt.Errorf("failed to encode blooms: %w", err)
+		return fmt.Errorf("failed to encode blooms for height: %d, with: %w", height, err)
 	}
 
 	if err := r.store.set(bloomHeightKey, height, bloomVal, batch); err != nil {
-		return fmt.Errorf("failed to store bloom height: %w", err)
+		return fmt.Errorf("failed to store blooms at height: %d, with: %w", height, err)
 	}
 
 	return nil
@@ -93,12 +98,12 @@ func (r *Receipts) GetByTransactionID(ID common.Hash) (*models.StorageReceipt, e
 
 	height, err := r.store.get(receiptTxIDToHeightKey, ID.Bytes())
 	if err != nil {
-		return nil, fmt.Errorf("failed to get receipt by tx ID: %w", err)
+		return nil, fmt.Errorf("failed to get receipt by tx ID: %s, with: %w", ID, err)
 	}
 
 	receipts, err := r.getByBlockHeight(height, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get receipt by height: %w", err)
+		return nil, fmt.Errorf("failed to get receipt by height: %d, with: %w", height, err)
 	}
 
 	for _, rcp := range receipts {
@@ -132,7 +137,12 @@ func (r *Receipts) getByBlockHeight(height []byte, batch *pebble.Batch) ([]*mode
 
 	var receipts []*models.StorageReceipt
 	if err = rlp.DecodeBytes(val, &receipts); err != nil {
-		return nil, fmt.Errorf("failed to RLP-decode block receipt [%x]: %w", val, err)
+		return nil, fmt.Errorf(
+			"failed to RLP-decode block receipts [%x] at height: %d, with: %w",
+			val,
+			height,
+			err,
+		)
 	}
 
 	for _, rcp := range receipts {
@@ -210,12 +220,17 @@ func (r *Receipts) BloomsForBlockRange(start, end uint64) ([]*models.BloomsHeigh
 			return nil, err
 		}
 
+		height := stripPrefix(iterator.Key())
+
 		var bloomsHeight []*gethTypes.Bloom
 		if err := rlp.DecodeBytes(val, &bloomsHeight); err != nil {
-			return nil, fmt.Errorf("failed to RLP-decode blooms for range [%x]: %w", val, err)
+			return nil, fmt.Errorf(
+				"failed to RLP-decode blooms for range [%x] at height: %d, with: %w",
+				val,
+				height,
+				err,
+			)
 		}
-
-		height := stripPrefix(iterator.Key())
 
 		bloomsHeights = append(bloomsHeights, &models.BloomsHeight{
 			Blooms: bloomsHeight,
@@ -229,7 +244,7 @@ func (r *Receipts) BloomsForBlockRange(start, end uint64) ([]*models.BloomsHeigh
 func (r *Receipts) getLast() (uint64, error) {
 	l, err := r.store.get(latestEVMHeightKey)
 	if err != nil {
-		return 0, fmt.Errorf("failed getting latest height: %w", err)
+		return 0, fmt.Errorf("failed getting latest EVM height: %w", err)
 	}
 
 	return binary.BigEndian.Uint64(l), nil

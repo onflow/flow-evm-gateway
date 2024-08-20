@@ -74,7 +74,7 @@ func (t *TxPool) Send(
 		}
 		// retry until transaction is sealed
 		if res.Status < flow.TransactionStatusSealed {
-			return retry.RetryableError(fmt.Errorf("transaction not sealed"))
+			return retry.RetryableError(fmt.Errorf("transaction %s not sealed", flowTx.ID()))
 		}
 
 		if res.Error != nil {

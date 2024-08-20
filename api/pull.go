@@ -260,7 +260,11 @@ func (api *PullAPI) NewFilter(ctx context.Context, criteria filters.FilterCriter
 		if criteria.ToBlock != nil &&
 			criteria.FromBlock.Cmp(criteria.ToBlock) > 0 &&
 			criteria.ToBlock.Int64() > 0 {
-			return "", fmt.Errorf("from block must be lower than to block")
+			return "", fmt.Errorf(
+				"from block (%d) must be lower than to block (%d)",
+				latest,
+				criteria.ToBlock.Int64(),
+			)
 		}
 		// todo we should check for max range of from-to heights
 	}
@@ -318,7 +322,7 @@ func (api *PullAPI) GetFilterLogs(
 
 	logs, ok := result.([]*gethTypes.Log)
 	if !ok {
-		return nil, fmt.Errorf("logs filter returned incorrect type: %T", logs)
+		return nil, fmt.Errorf("logs filter returned incorrect type: %T", result)
 	}
 
 	return logs, nil
@@ -361,7 +365,7 @@ func (api *PullAPI) GetFilterChanges(ctx context.Context, id rpc.ID) (any, error
 	case *logsFilter:
 		result, err = api.getLogs(current, filterType)
 	default:
-		return nil, fmt.Errorf("invalid filter type")
+		return nil, fmt.Errorf("invalid filter type: %T", filterType)
 	}
 	if err != nil {
 		return nil, err
