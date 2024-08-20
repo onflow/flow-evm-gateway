@@ -90,7 +90,7 @@ func decodeCadenceEvents(events flow.BlockEvents) (*CadenceEvents, error) {
 
 		if isBlockExecutedEvent(val) {
 			if e.block != nil { // safety check, we can only have 1 or 0 evm blocks per one flow block
-				return nil, fmt.Errorf("EVM block was already set for this Flow block, invalid event data")
+				return nil, fmt.Errorf("EVM block was already set for Flow block: %d", events.Height)
 			}
 
 			block, err := decodeBlockEvent(val)
@@ -115,7 +115,7 @@ func decodeCadenceEvents(events flow.BlockEvents) (*CadenceEvents, error) {
 
 	// safety check, we can't have an empty block with transactions
 	if e.block == nil && len(e.transactions) > 0 {
-		return nil, fmt.Errorf("EVM block can not be nil if transactions are present, invalid event data")
+		return nil, fmt.Errorf("EVM block can not be nil if transactions are present, Flow block: %d", events.Height)
 	}
 
 	return e, nil

@@ -180,7 +180,7 @@ func decodeTransactionEvent(event cadence.Event) (Transaction, *StorageReceipt, 
 	if len(txEvent.Logs) > 0 {
 		err = rlp.Decode(bytes.NewReader(txEvent.Logs), &gethReceipt.Logs)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to rlp decode logs: %w", err)
+			return nil, nil, fmt.Errorf("failed to RLP-decode logs: %w", err)
 		}
 	}
 
@@ -197,7 +197,13 @@ func decodeTransactionEvent(event cadence.Event) (Transaction, *StorageReceipt, 
 		revertReason = txEvent.ReturnedData
 	}
 
-	receipt := NewStorageReceipt(gethReceipt, revertReason, txEvent.PrecompiledCalls)
+	receipt := NewStorageReceipt(
+		gethReceipt,
+		revertReason,
+		txEvent.PrecompiledCalls,
+		common.HexToAddress(txEvent.Coinbase),
+		txEvent.Random,
+	)
 
 	var tx Transaction
 	// check if the transaction payload is actually from a direct call,

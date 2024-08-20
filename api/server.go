@@ -86,7 +86,7 @@ func NewHTTPServer(
 // The address can only be set while the server is not running.
 func (h *httpServer) SetListenAddr(host string, port int) error {
 	if h.listener != nil && (host != h.host || port != h.port) {
-		return fmt.Errorf("HTTP server already running on %s", h.endpoint)
+		return fmt.Errorf("HTTP server already running on: %s", h.endpoint)
 	}
 
 	h.host, h.port = host, port
@@ -462,7 +462,7 @@ func (w *responseHandler) Write(data []byte) (int, error) {
 			if !errorIs(errMsg, errs.ErrRateLimit) &&
 				!errorIs(errMsg, errs.ErrInvalid) &&
 				!errorIs(errMsg, errs.ErrFailedTransaction) &&
-				!errorIs(errMsg, errs.ErrNotSupported) &&
+				!errorIs(errMsg, errs.ErrEndpointNotSupported) &&
 				!errorIs(errMsg, gethVM.ErrExecutionReverted) {
 				// log the error
 				l.Error().Err(errors.New(errMsg)).Msg("API response")

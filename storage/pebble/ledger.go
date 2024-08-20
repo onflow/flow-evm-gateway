@@ -36,7 +36,7 @@ func (l *Ledger) GetValue(owner, key []byte) ([]byte, error) {
 	val, err := l.store.get(ledgerValue, id)
 	if err != nil {
 		// as per interface expectation we need to remove nil if not found
-		if errors.Is(err, errs.ErrNotFound) {
+		if errors.Is(err, errs.ErrEntityNotFound) {
 			return nil, nil
 		}
 
@@ -85,7 +85,7 @@ func (l *Ledger) AllocateSlabIndex(owner []byte) (atree.SlabIndex, error) {
 
 	val, err := l.store.get(ledgerSlabIndex, owner)
 	if err != nil {
-		if !errors.Is(err, errs.ErrNotFound) {
+		if !errors.Is(err, errs.ErrEntityNotFound) {
 			return atree.SlabIndexUndefined, err
 		}
 	}

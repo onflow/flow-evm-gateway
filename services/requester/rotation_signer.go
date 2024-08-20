@@ -2,8 +2,9 @@ package requester
 
 import (
 	"fmt"
-	"github.com/onflow/flow-go-sdk/crypto"
 	"sync"
+
+	"github.com/onflow/flow-go-sdk/crypto"
 )
 
 var _ crypto.Signer = &KeyRotationSigner{}
@@ -28,8 +29,11 @@ func NewKeyRotationSigner(keys []crypto.PrivateKey, hashAlgo crypto.HashAlgorith
 	// check compatibility to form a signing key
 	for _, pk := range keys {
 		if !crypto.CompatibleAlgorithms(pk.Algorithm(), hashAlgo) {
-			return nil, fmt.Errorf("signature algorithm %s and hashing algorithm are incompatible %s",
-				pk.Algorithm(), hashAlgo)
+			return nil, fmt.Errorf(
+				"signature algorithm %s and hashing algorithm are incompatible %s",
+				pk.Algorithm(),
+				hashAlgo,
+			)
 		}
 	}
 

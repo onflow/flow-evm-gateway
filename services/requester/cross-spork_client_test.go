@@ -102,7 +102,7 @@ func Test_CrossSpork(t *testing.T) {
 
 		c, err = client.getClientForHeight(10)
 		require.Nil(t, c)
-		require.ErrorIs(t, err, errs.ErrOutOfRange)
+		require.ErrorIs(t, err, errs.ErrHeightOutOfRange)
 
 		require.True(t, client.IsPastSpork(200))
 		require.True(t, client.IsPastSpork(past1Last))
@@ -110,13 +110,13 @@ func Test_CrossSpork(t *testing.T) {
 		require.False(t, client.IsPastSpork(600))
 
 		_, err = client.ExecuteScriptAtBlockHeight(context.Background(), 20, []byte{}, nil)
-		require.ErrorIs(t, err, errs.ErrOutOfRange)
+		require.ErrorIs(t, err, errs.ErrHeightOutOfRange)
 
 		_, err = client.GetBlockHeaderByHeight(context.Background(), 20)
-		require.ErrorIs(t, err, errs.ErrOutOfRange)
+		require.ErrorIs(t, err, errs.ErrHeightOutOfRange)
 
 		_, _, err = client.SubscribeEventsByBlockHeight(context.Background(), 20, flow.EventFilter{}, nil)
-		require.ErrorIs(t, err, errs.ErrOutOfRange)
+		require.ErrorIs(t, err, errs.ErrHeightOutOfRange)
 
 		height, err := client.GetLatestHeightForSpork(context.Background(), past2Last-10)
 		require.NoError(t, err)
@@ -131,6 +131,8 @@ func Test_CrossSpork(t *testing.T) {
 		require.Equal(t, currentLast, height)
 
 		_, err = client.GetLatestHeightForSpork(context.Background(), 10)
-		require.ErrorIs(t, err, errs.ErrOutOfRange)
+		require.ErrorIs(t, err, errs.ErrHeightOutOfRange)
+
+		require.ErrorContains(t, err, "invalid height not in available range: 10")
 	})
 }
