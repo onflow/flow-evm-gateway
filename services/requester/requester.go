@@ -343,7 +343,7 @@ func (e *EVM) GetBalance(
 
 	// sanity check, should never occur
 	if _, ok := val.(cadence.UInt); !ok {
-		e.logger.Panic().Msg(fmt.Sprintf("failed to convert balance %v to UInt", val))
+		return nil, fmt.Errorf("failed to convert balance %v to UInt, got type: %T", val, val)
 	}
 
 	return val.(cadence.UInt).Big(), nil
@@ -388,7 +388,7 @@ func (e *EVM) GetNonce(
 
 	// sanity check, should never occur
 	if _, ok := val.(cadence.UInt64); !ok {
-		e.logger.Panic().Msg(fmt.Sprintf("failed to convert balance %v to UInt64", val))
+		return 0, fmt.Errorf("failed to convert nonce %v to UInt64, got type: %T", val, val)
 	}
 
 	nonce := uint64(val.(cadence.UInt64))
@@ -609,7 +609,7 @@ func (e *EVM) GetLatestEVMHeight(ctx context.Context) (uint64, error) {
 
 	// sanity check, should never occur
 	if _, ok := val.(cadence.UInt64); !ok {
-		e.logger.Panic().Msg(fmt.Sprintf("failed to convert height %v to UInt64", val))
+		return 0, fmt.Errorf("failed to convert height %v to UInt64, got type: %T", val, val)
 	}
 
 	height := uint64(val.(cadence.UInt64))
