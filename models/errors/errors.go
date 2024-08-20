@@ -45,10 +45,6 @@ func NewEndpointNotSupportedError(endpoint string) error {
 	return fmt.Errorf("%w: %s", ErrEndpointNotSupported, endpoint)
 }
 
-func NewRateLimitError(requestsLimit uint64) error {
-	return fmt.Errorf("%w: %d rps", ErrRateLimit, requestsLimit)
-}
-
 func NewHeightOutOfRangeError(height uint64) error {
 	return fmt.Errorf("%w: %d", ErrHeightOutOfRange, height)
 }
