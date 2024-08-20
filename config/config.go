@@ -100,7 +100,6 @@ type Config struct {
 func FromFlags() (*Config, error) {
 	cfg := &Config{}
 	var (
-		evmNetwork,
 		coinbase,
 		gas,
 		coa,
@@ -130,8 +129,7 @@ func FromFlags() (*Config, error) {
 	flag.BoolVar(&cfg.WSEnabled, "ws-enabled", false, "Enable websocket connections")
 	flag.StringVar(&cfg.AccessNodeHost, "access-node-grpc-host", "localhost:3569", "Host to the flow access node gRPC API")
 	flag.StringVar(&accessSporkHosts, "access-node-spork-hosts", "", `Previous spork AN hosts, defined following the schema: {host1},{host2} as a comma separated list (e.g. "host-1.com,host2.com")`)
-	flag.StringVar(&evmNetwork, "evm-network-id", "previewnet", "EVM network ID (previewnet, testnet, mainnet)")
-	flag.StringVar(&flowNetwork, "flow-network-id", "flow-emulator", "Flow network ID (flow-emulator, flow-previewnet, flow-testnet)")
+	flag.StringVar(&flowNetwork, "flow-network-id", "flow-emulator", "Flow network ID (flow-emulator, flow-previewnet, flow-testnet, flow-mainnet)")
 	flag.StringVar(&coinbase, "coinbase", "", "Coinbase address to use for fee collection")
 	flag.Uint64Var(&initHeight, "init-cadence-height", 0, "Define the Cadence block height at which to start the indexing, if starting on a new network this flag should not be used.")
 	flag.StringVar(&gas, "gas-price", "1", "Static gas price used for EVM transactions")
@@ -224,29 +222,28 @@ func FromFlags() (*Config, error) {
 		)
 	}
 
-	switch evmNetwork {
-	case "previewnet":
-		cfg.EVMNetworkID = types.FlowEVMPreviewNetChainID
-	case "testnet":
-		cfg.EVMNetworkID = types.FlowEVMTestNetChainID
-	case "mainnet":
-		cfg.EVMNetworkID = types.FlowEVMMainNetChainID
-	default:
-		return nil, fmt.Errorf("EVM network ID not supported")
-	}
-
 	switch flowNetwork {
 	case "flow-previewnet":
 		cfg.FlowNetworkID = flowGo.Previewnet
+		cfg.EVMNetworkID = types.FlowEVMPreviewNetChainID
 		cfg.InitCadenceHeight = LiveNetworkInitCadenceHeght
 	case "flow-emulator":
 		cfg.FlowNetworkID = flowGo.Emulator
+		cfg.EVMNetworkID = types.FlowEVMPreviewNetChainID
 		cfg.InitCadenceHeight = EmulatorInitCadenceHeight
 	case "flow-testnet":
 		cfg.FlowNetworkID = flowGo.Testnet
+		cfg.EVMNetworkID = types.FlowEVMTestNetChainID
+		cfg.InitCadenceHeight = LiveNetworkInitCadenceHeght
+	case "flow-mainnet":
+		cfg.FlowNetworkID = flowGo.Mainnet
+		cfg.EVMNetworkID = types.FlowEVMMainNetChainID
 		cfg.InitCadenceHeight = LiveNetworkInitCadenceHeght
 	default:
-		return nil, fmt.Errorf("flow network ID not supported, only possible to specify 'flow-previewnet' or 'flow-emulator'")
+		return nil, fmt.Errorf(
+			"flow network ID: %s not supported, valid values are ('flow-emulator', 'flow-previewnet', 'flow-testnet', 'flow-mainnet')",
+			flowNetwork,
+		)
 	}
 
 	// if a specific value was provided use it
