@@ -48,6 +48,7 @@ type Transaction interface {
 	Size() uint64
 	AccessList() gethTypes.AccessList
 	MarshalBinary() ([]byte, error)
+	GethTransaction() *gethTypes.Transaction
 }
 
 var _ Transaction = &DirectCall{}
@@ -137,6 +138,10 @@ func (dc DirectCall) MarshalBinary() ([]byte, error) {
 	return dc.DirectCall.Encode()
 }
 
+func (dc DirectCall) GethTransaction() *gethTypes.Transaction {
+	return dc.DirectCall.Transaction()
+}
+
 var _ Transaction = &TransactionCall{}
 
 type TransactionCall struct {
@@ -157,6 +162,10 @@ func (tc TransactionCall) From() (common.Address, error) {
 func (tc TransactionCall) MarshalBinary() ([]byte, error) {
 	encoded, err := tc.Transaction.MarshalBinary()
 	return append([]byte{tc.Type()}, encoded...), err
+}
+
+func (tc TransactionCall) GethTransaction() *gethTypes.Transaction {
+	return tc.Transaction
 }
 
 // decodeTransactionEvent takes a cadence event for transaction executed
