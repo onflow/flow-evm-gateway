@@ -45,7 +45,12 @@ func NewState(
 }
 
 func (s *State) Execute(tx models.Transaction) error {
-	blockCtx, err := s.blockContext(tx.Hash())
+	receipt, err := s.receipts.GetByTransactionID(tx.Hash())
+	if err != nil {
+		return err
+	}
+
+	blockCtx, err := s.blockContext(receipt)
 	if err != nil {
 		return err
 	}
@@ -60,15 +65,14 @@ func (s *State) Execute(tx models.Transaction) error {
 		return err
 	}
 
+	// todo make sure the result from running transaction matches
+	// the receipt we got from the EN, if not panic, since the state is corrupted
+	// in such case fallback to network requests
+
 	return nil
 }
 
-func (s *State) blockContext(hash common.Hash) (types.BlockContext, error) {
-	receipt, err := s.receipts.GetByTransactionID(hash)
-	if err != nil {
-		return types.BlockContext{}, err
-	}
-
+func (s *State) blockContext(receipt *models.StorageReceipt) (types.BlockContext, error) {
 	calls, err := types.AggregatedPrecompileCallsFromEncoded(receipt.PrecompiledCalls)
 	if err != nil {
 		return types.BlockContext{}, err
