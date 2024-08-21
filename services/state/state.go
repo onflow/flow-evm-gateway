@@ -55,7 +55,7 @@ func (s *State) Execute(tx models.Transaction) error {
 		return err
 	}
 
-	_, err = bv.RunTransaction(tx)
+	_, err = bv.RunTransaction(tx.GethTransaction())
 	if err != nil {
 		return err
 	}
