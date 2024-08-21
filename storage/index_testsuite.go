@@ -185,6 +185,14 @@ func (s *ReceiptTestSuite) TestStoreReceipt() {
 			mocks.NewReceipt(height, common.HexToHash("0x2")),
 			mocks.NewReceipt(height, common.HexToHash("0x3")),
 		}
+		// Log index field holds the index position in the entire block
+		logIndex := uint(0)
+		for _, receipt := range receipts {
+			for _, log := range receipt.Logs {
+				log.Index = logIndex
+				logIndex++
+			}
+		}
 
 		err := s.ReceiptIndexer.Store(receipts, nil)
 		s.Require().NoError(err)
