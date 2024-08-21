@@ -1,6 +1,7 @@
 package state
 
 import (
+	"github.com/onflow/atree"
 	"github.com/onflow/flow-go/fvm/evm"
 	"github.com/onflow/flow-go/fvm/evm/emulator"
 	"github.com/onflow/flow-go/fvm/evm/emulator/state"
@@ -8,11 +9,9 @@ import (
 	"github.com/onflow/flow-go/fvm/evm/types"
 	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/onflow/go-ethereum/common"
-	gethTypes "github.com/onflow/go-ethereum/core/types"
 
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/storage"
-	"github.com/onflow/flow-evm-gateway/storage/pebble"
 )
 
 type State struct {
@@ -24,17 +23,11 @@ type State struct {
 }
 
 func NewState(
-	evmHeight uint64,
-	blocks storage.BlockIndexer,
-	ledger *pebble.Ledger,
+	block *models.Block,
+	ledger atree.Ledger,
 	chainID flowGo.ChainID,
 ) (*State, error) {
 	storageAddress := evm.StorageAccountAddress(chainID)
-
-	block, err := blocks.GetByHeight(evmHeight)
-	if err != nil {
-		return nil, err
-	}
 
 	// todo do we need state db?
 	s, err := state.NewStateDB(ledger, storageAddress)
@@ -48,11 +41,10 @@ func NewState(
 		StateDB:  s,
 		emulator: emu,
 		block:    block,
-		blocks:   blocks,
 	}, nil
 }
 
-func (s *State) Execute(tx *gethTypes.Transaction) error {
+func (s *State) Execute(tx models.Transaction) error {
 	blockCtx, err := s.blockContext(tx.Hash())
 	if err != nil {
 		return err
