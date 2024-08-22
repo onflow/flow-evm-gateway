@@ -69,6 +69,12 @@ func (e *Engine) Notify(data any) {
 		return
 	}
 
+	// If the block has no transactions, we simply return early
+	// as there are no transaction traces to index.
+	if len(block.TransactionHashes) == 0 {
+		return
+	}
+
 	l := e.logger.With().Uint64("evm-height", block.Height).Logger()
 
 	cadenceID, err := e.blocks.GetCadenceID(block.Height)
