@@ -3,7 +3,6 @@ package traces
 import (
 	"context"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -30,7 +29,6 @@ type Engine struct {
 }
 
 func NewTracesIngestionEngine(
-	initEVMHeight uint64,
 	blocksPublisher *models.Publisher,
 	blocks storage.BlockIndexer,
 	traces storage.TraceIndexer,
@@ -38,9 +36,6 @@ func NewTracesIngestionEngine(
 	logger zerolog.Logger,
 	collector metrics.Collector,
 ) *Engine {
-	height := &atomic.Uint64{}
-	height.Store(initEVMHeight)
-
 	return &Engine{
 		status:          models.NewEngineStatus(),
 		logger:          logger.With().Str("component", "trace-ingestion").Logger(),
