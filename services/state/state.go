@@ -1,6 +1,8 @@
 package state
 
 import (
+	"fmt"
+
 	"github.com/onflow/atree"
 	"github.com/onflow/flow-go/fvm/evm"
 	"github.com/onflow/flow-go/fvm/evm/emulator"
@@ -26,6 +28,8 @@ func NewState(
 	block *models.Block,
 	ledger atree.Ledger,
 	chainID flowGo.ChainID,
+	blocks storage.BlockIndexer,
+	receipts storage.ReceiptIndexer,
 ) (*State, error) {
 	storageAddress := evm.StorageAccountAddress(chainID)
 
@@ -41,6 +45,8 @@ func NewState(
 		StateDB:  s,
 		emulator: emu,
 		block:    block,
+		blocks:   blocks,
+		receipts: receipts,
 	}, nil
 }
 
@@ -60,14 +66,26 @@ func (s *State) Execute(tx models.Transaction) error {
 		return err
 	}
 
-	_, err = bv.RunTransaction(tx.GethTransaction())
-	if err != nil {
-		return err
+	switch tx.(type) {
+	case models.DirectCall:
+		t := tx.(models.DirectCall)
+		_, err := bv.DirectCall(t.DirectCall)
+		if err != nil {
+			return err
+		}
+
+	case models.TransactionCall:
+		t := tx.(models.TransactionCall)
+		_, err := bv.RunTransaction(t.Transaction)
+		if err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("unknown transaction type")
 	}
 
 	// todo make sure the result from running transaction matches
-	// the receipt we got from the EN, if not panic, since the state is corrupted
-	// in such case fallback to network requests
+	// the receipt we got from the EN, if not fallback to network requests
 
 	return nil
 }
