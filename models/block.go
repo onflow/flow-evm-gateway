@@ -60,6 +60,7 @@ func decodeBlockEvent(event cadence.Event) (*Block, error) {
 			ReceiptRoot:         payload.ReceiptRoot,
 			TransactionHashRoot: payload.TransactionHashRoot,
 			TotalGasUsed:        payload.TotalGasUsed,
+			PrevRandao:          payload.PrevRandao,
 		},
 	}, nil
 }

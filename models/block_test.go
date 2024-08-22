@@ -20,6 +20,7 @@ func Test_DecodeBlockExecutedEvent(t *testing.T) {
 		ReceiptRoot:         gethCommon.HexToHash("0x2"),
 		TransactionHashRoot: gethCommon.HexToHash("0x3"),
 		TotalGasUsed:        uint64(30),
+		PrevRandao:          gethCommon.HexToHash("0x15"),
 	}
 	block := &Block{Block: gethBlock}
 	ev := events.NewBlockEvent(gethBlock)
@@ -44,7 +45,7 @@ func Test_Hash(t *testing.T) {
 	// coming from changes in EVM Core (flow-go), we should be aware of changes
 	// and this test makes sure we are, if changes occur it means they break backward
 	// compatibility when calculating hashes for older blocks.
-	const hash = "0x416d070745756c79d23d3bda31020ece8326ac7e862c2f5440c9a0661edd3769"
+	const hash = "0xa120ee31d9d5721baca8bed4f94f3065c47066e06d03ed1ab25c3d45775ee879"
 
 	gethBlock := &types.Block{
 		ParentBlockHash:     gethCommon.HexToHash("0x1"),
@@ -53,6 +54,7 @@ func Test_Hash(t *testing.T) {
 		ReceiptRoot:         gethCommon.HexToHash("0x2"),
 		TransactionHashRoot: gethCommon.HexToHash("0x3"),
 		TotalGasUsed:        uint64(30),
+		PrevRandao:          gethCommon.HexToHash("0x15"),
 	}
 	block := &Block{Block: gethBlock}
 
@@ -70,6 +72,7 @@ func Test_EncodingDecoding(t *testing.T) {
 			ReceiptRoot:         gethCommon.HexToHash("0x2"),
 			TransactionHashRoot: gethCommon.HexToHash("0x3"),
 			TotalGasUsed:        uint64(30),
+			PrevRandao:          gethCommon.HexToHash("0x15"),
 		},
 		TransactionHashes: []gethCommon.Hash{
 			gethCommon.HexToHash("0x55"),
