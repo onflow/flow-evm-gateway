@@ -48,6 +48,7 @@ Operating an EVM Gateway is straightforward. It can either be deployed locally a
 --coinbase {EVM-account} \
 --coa-address {funded Flow account address} \
 --coa-key-file {file containing private keys for coa-address, KMS should be used on live networks} \
+--init-cadence-height {network Flow height}
 --coa-resource-create 
 ```
 
