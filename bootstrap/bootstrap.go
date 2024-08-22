@@ -20,6 +20,7 @@ import (
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/services/ingestion"
 	"github.com/onflow/flow-evm-gateway/services/requester"
+	"github.com/onflow/flow-evm-gateway/services/state"
 	"github.com/onflow/flow-evm-gateway/services/traces"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
@@ -251,6 +252,23 @@ func startIngestion(
 
 	// wait for ingestion engines to be ready
 	<-restartableEventEngine.Ready()
+
+	stateEngine := state.NewStateEngine(
+		cfg,
+		pebble.NewLedger(store),
+		blocksPublisher,
+		blocks,
+		transactions,
+		receipts,
+		logger,
+	)
+	if err := stateEngine.Run(ctx); err != nil {
+		logger.Error().Err(err).Msg("state engine failed to run")
+		panic(err)
+	}
+
+	// wait for state engine to be ready
+	<-stateEngine.Ready()
 
 	logger.Info().Msg("ingestion start up successful")
 	return nil
