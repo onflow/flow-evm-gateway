@@ -93,18 +93,6 @@ type blockV0 struct {
 	TotalGasUsed        uint64
 }
 
-// Adds PrevRandao field
-type blockV1 struct {
-	ParentBlockHash     gethCommon.Hash
-	Height              uint64
-	Timestamp           uint64
-	TotalSupply         *big.Int
-	ReceiptRoot         gethCommon.Hash
-	TransactionHashRoot gethCommon.Hash
-	TotalGasUsed        uint64
-	PrevRandao          gethCommon.Hash
-}
-
 func pastBlockHash(b any) (gethCommon.Hash, error) {
 	data, err := rlp.EncodeToBytes(b)
 	return gethCrypto.Keccak256Hash(data), err
@@ -125,22 +113,6 @@ func decodeBlockBreakingChanges(encoded []byte) *Block {
 				ReceiptRoot:         b0.ReceiptRoot,
 				TransactionHashRoot: b0.TransactionHashRoot,
 				TotalGasUsed:        b0.TotalGasUsed,
-			},
-		}
-	}
-
-	b1 := &blockV1{}
-	if err := rlp.DecodeBytes(encoded, b1); err == nil {
-		return &Block{
-			Block: &types.Block{
-				ParentBlockHash:     b1.ParentBlockHash,
-				Height:              b1.Height,
-				Timestamp:           b1.Timestamp,
-				TotalSupply:         b1.TotalSupply,
-				ReceiptRoot:         b1.ReceiptRoot,
-				TransactionHashRoot: b1.TransactionHashRoot,
-				TotalGasUsed:        b1.TotalGasUsed,
-				PrevRandao:          b1.PrevRandao,
 			},
 		}
 	}
