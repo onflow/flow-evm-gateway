@@ -9,7 +9,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/onflow/atree v0.8.0-rc.6
 	github.com/onflow/cadence v1.0.0-preview.49
-	github.com/onflow/flow-go v0.37.6
+	github.com/onflow/flow-go v0.37.7-0.20240822174309-8b4fff2114d4
 	github.com/onflow/flow-go-sdk v1.0.0-preview.51
 	github.com/onflow/flow/protobuf/go/flow v0.4.5
 	github.com/onflow/go-ethereum v1.14.7
