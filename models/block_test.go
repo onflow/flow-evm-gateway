@@ -16,6 +16,7 @@ func Test_DecodeBlockExecutedEvent(t *testing.T) {
 	gethBlock := &types.Block{
 		ParentBlockHash:     gethCommon.HexToHash("0x1"),
 		Height:              100,
+		Timestamp:           1724406853,
 		TotalSupply:         big.NewInt(100),
 		ReceiptRoot:         gethCommon.HexToHash("0x2"),
 		TransactionHashRoot: gethCommon.HexToHash("0x3"),
@@ -45,11 +46,12 @@ func Test_Hash(t *testing.T) {
 	// coming from changes in EVM Core (flow-go), we should be aware of changes
 	// and this test makes sure we are, if changes occur it means they break backward
 	// compatibility when calculating hashes for older blocks.
-	const hash = "0xa120ee31d9d5721baca8bed4f94f3065c47066e06d03ed1ab25c3d45775ee879"
+	const hash = "0x1f0435edbc1600d96ae988eb580772b87b5a4b14c59c60e240182a492ac8fefe"
 
 	gethBlock := &types.Block{
 		ParentBlockHash:     gethCommon.HexToHash("0x1"),
 		Height:              100,
+		Timestamp:           1724406853,
 		TotalSupply:         big.NewInt(100),
 		ReceiptRoot:         gethCommon.HexToHash("0x2"),
 		TransactionHashRoot: gethCommon.HexToHash("0x3"),
@@ -68,6 +70,7 @@ func Test_EncodingDecoding(t *testing.T) {
 		Block: &types.Block{
 			ParentBlockHash:     gethCommon.HexToHash("0x1"),
 			Height:              100,
+			Timestamp:           1724406853,
 			TotalSupply:         big.NewInt(100),
 			ReceiptRoot:         gethCommon.HexToHash("0x2"),
 			TransactionHashRoot: gethCommon.HexToHash("0x3"),
