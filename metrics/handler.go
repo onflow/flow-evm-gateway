@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+
+	"github.com/onflow/flow-evm-gateway/tracing"
 )
 
 // HttpHandler is a thin middleware for gathering metrics about http request.
@@ -18,28 +20,32 @@ type HttpHandler struct {
 	handler   http.Handler
 	collector Collector
 	logger    zerolog.Logger
+	tracer    tracing.Tracer
 }
 
-func NewMetricsHandler(handler http.Handler, collector Collector, log zerolog.Logger) *HttpHandler {
+func NewMetricsHandler(handler http.Handler, collector Collector, log zerolog.Logger, tracer tracing.Tracer) *HttpHandler {
 	return &HttpHandler{
 		handler:   handler,
 		collector: collector,
 		logger:    log,
+		tracer:    tracer,
 	}
 }
 
 func (h *HttpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	var start time.Time
-
 	method, err := extractMethod(r, h.logger)
 	if err != nil {
 		h.logger.Debug().Err(err).Msg("error extracting method")
-	} else {
-		start = time.Now()
-		defer h.collector.MeasureRequestDuration(start, method)
+		h.handler.ServeHTTP(w, r)
+		return
 	}
 
-	h.handler.ServeHTTP(w, r)
+	// save time as a metric
+	start := time.Now()
+	defer h.collector.MeasureRequestDuration(start, method)
+
+	ctx, _ := h.tracer.Start(r.Context(), method)
+	h.handler.ServeHTTP(w, r.WithContext(ctx))
 }
 
 func extractMethod(r *http.Request, logger zerolog.Logger) (string, error) {

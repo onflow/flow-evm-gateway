@@ -12,8 +12,6 @@ import (
 	"github.com/onflow/flow-go-sdk/crypto"
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-limiter/memorystore"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/trace"
 
 	"github.com/onflow/flow-evm-gateway/api"
 	"github.com/onflow/flow-evm-gateway/config"
@@ -25,7 +23,7 @@ import (
 	"github.com/onflow/flow-evm-gateway/services/traces"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
-	tr "github.com/onflow/flow-evm-gateway/traces"
+	"github.com/onflow/flow-evm-gateway/tracing"
 )
 
 func Start(ctx context.Context, cfg *config.Config) error {
@@ -104,12 +102,17 @@ func Start(ctx context.Context, cfg *config.Config) error {
 
 	collector := metrics.NewCollector(logger)
 
-	err = tr.RegisterTraceProvider(ctx, logger, 4318)
+	err = tracing.RegisterTraceProvider(ctx, "flow-evm-gateway")
 	if err != nil {
 		logger.Error().Err(err).Msg("failed to register trace provider")
 		return err
 	}
-	tracer := otel.Tracer("evm-gateway-tracer")
+
+	tracer, err := tracing.NewTracer("evm-gateway-tracer")
+	if err != nil {
+		logger.Error().Err(err).Msg("failed to create tracer")
+		return err
+	}
 
 	go func() {
 		err := startServer(
@@ -229,7 +232,7 @@ func startIngestion(
 		go func() {
 			err = tracesEngine.Run(ctx)
 			if err != nil {
-				logger.Error().Err(err).Msg("traces ingestion engine failed to run")
+				logger.Error().Err(err).Msg("tracing ingestion engine failed to run")
 				panic(err)
 			}
 		}()
@@ -281,7 +284,7 @@ func startServer(
 	logsPublisher *models.Publisher,
 	logger zerolog.Logger,
 	collector metrics.Collector,
-	tracer trace.Tracer,
+	tracer tracing.Tracer,
 ) error {
 	l := logger.With().Str("component", "API").Logger()
 	l.Info().Msg("starting up RPC server")

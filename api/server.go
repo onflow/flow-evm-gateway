@@ -24,11 +24,11 @@ import (
 	"github.com/rs/cors"
 	"github.com/rs/zerolog"
 	slogzerolog "github.com/samber/slog-zerolog"
-	"go.opentelemetry.io/otel/trace"
 
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/metrics"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
+	"github.com/onflow/flow-evm-gateway/tracing"
 )
 
 type rpcHandler struct {
@@ -56,7 +56,7 @@ type httpServer struct {
 
 	config    *config.Config
 	collector metrics.Collector
-	tracer    trace.Tracer
+	tracer    tracing.Tracer
 }
 
 const (
@@ -68,7 +68,7 @@ const (
 func NewHTTPServer(
 	logger zerolog.Logger,
 	collector metrics.Collector,
-	tracer trace.Tracer,
+	tracer tracing.Tracer,
 	cfg *config.Config,
 ) *httpServer {
 	zeroSlog := slogzerolog.Option{
@@ -280,7 +280,7 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if h.httpHandler != nil {
 		if checkPath(r, "") {
 			metrics.
-				NewMetricsHandler(h.httpHandler, h.collector, h.logger).
+				NewMetricsHandler(h.httpHandler, h.collector, h.logger, h.tracer).
 				ServeHTTP(logW, r)
 			return
 		}

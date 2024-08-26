@@ -26,7 +26,6 @@ import (
 	"github.com/onflow/go-ethereum/core/types"
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/onflow/flow-evm-gateway/config"
@@ -34,6 +33,7 @@ import (
 	"github.com/onflow/flow-evm-gateway/models"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/storage"
+	"github.com/onflow/flow-evm-gateway/tracing"
 )
 
 var (
@@ -113,7 +113,7 @@ type EVM struct {
 	validationOptions *txpool.ValidationOptions
 
 	collector metrics.Collector
-	tracer    trace.Tracer
+	tracer    tracing.Tracer
 }
 
 func NewEVM(
@@ -124,7 +124,7 @@ func NewEVM(
 	blocks storage.BlockIndexer,
 	txPool *TxPool,
 	collector metrics.Collector,
-	tracer trace.Tracer,
+	tracer tracing.Tracer,
 ) (*EVM, error) {
 	logger = logger.With().Str("component", "requester").Logger()
 	// check that the address stores already created COA resource in the "evm" storage path.

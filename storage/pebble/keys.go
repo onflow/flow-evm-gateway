@@ -21,7 +21,7 @@ const (
 	accountNonceKey   = byte(30)
 	accountBalanceKey = byte(31)
 
-	// traces keys
+	// tracing keys
 	traceTxIDKey = byte(40)
 
 	// ledger value

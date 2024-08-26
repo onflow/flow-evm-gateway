@@ -12,10 +12,10 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-retry"
 	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/trace"
 
 	"github.com/onflow/flow-evm-gateway/models"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
+	"github.com/onflow/flow-evm-gateway/tracing"
 )
 
 const (
@@ -32,7 +32,7 @@ type TxPool struct {
 	client      *CrossSporkClient
 	pool        *sync.Map
 	txPublisher *models.Publisher
-	tracer      trace.Tracer
+	tracer      tracing.Tracer
 	// todo add methods to inspect transaction pool state
 }
 
@@ -40,7 +40,7 @@ func NewTxPool(
 	client *CrossSporkClient,
 	transactionsPublisher *models.Publisher,
 	logger zerolog.Logger,
-	tracer trace.Tracer,
+	tracer tracing.Tracer,
 ) *TxPool {
 	return &TxPool{
 		logger:      logger.With().Str("component", "tx-pool").Logger(),
@@ -89,13 +89,13 @@ func (t *TxPool) sendTransaction(ctx context.Context, flowTx *flow.Transaction) 
 }
 
 func (t *TxPool) publishTransaction(ctx context.Context, evmTx *gethTypes.Transaction) {
-	ctx, span := t.tracer.Start(ctx, "txPublisher.publishTransaction()")
+	_, span := t.tracer.Start(ctx, "txPublisher.publishTransaction()")
 	defer span.End()
 	t.txPublisher.Publish(evmTx) // publish pending transaction event
 }
 
 func (t *TxPool) storeTransaction(ctx context.Context, evmTx *gethTypes.Transaction) error {
-	ctx, span := t.tracer.Start(ctx, "pool.storeTransaction()")
+	_, span := t.tracer.Start(ctx, "pool.storeTransaction()")
 	defer span.End()
 
 	t.pool.Store(evmTx.Hash(), evmTx)
