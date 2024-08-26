@@ -12,6 +12,57 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func Test_DecodePastBlockFormat(t *testing.T) {
+	blockBytes := []byte{
+		248, 156, 248, 120, 160, 5, 170, 74, 110, 219, 207, 111, 168, 17,
+		120, 86, 101, 150, 190, 28, 127, 255, 123, 114, 22, 21, 200, 179,
+		187, 209, 79, 247, 109, 156, 129, 236, 155, 130, 9, 215, 132, 102,
+		189, 0, 250, 136, 13, 224, 182, 181, 251, 111, 228, 0, 160, 57, 163,
+		66, 17, 141, 15, 78, 47, 246, 121, 13, 19, 7, 126, 229, 201, 221, 85,
+		213, 225, 164, 193, 181, 63, 108, 177, 251, 179, 104, 191, 249, 104,
+		160, 182, 119, 229, 18, 214, 49, 27, 157, 131, 54, 121, 174, 222, 128,
+		0, 55, 18, 11, 170, 131, 254, 16, 83, 211, 50, 143, 168, 121, 144, 218,
+		234, 244, 131, 18, 177, 169, 225, 160, 86, 232, 217, 88, 110, 212, 66,
+		33, 54, 171, 14, 121, 201, 197, 55, 179, 63, 9, 183, 163, 184, 112, 202,
+		86, 158, 35, 10, 21, 185, 37, 195, 178,
+	}
+
+	block, err := NewBlockFromBytes(blockBytes)
+	require.NoError(t, err)
+
+	assert.Equal(
+		t,
+		gethCommon.HexToHash("0x05aa4a6edbcf6fa81178566596be1c7fff7b721615c8b3bbd14ff76d9c81ec9b"),
+		block.ParentBlockHash,
+	)
+	assert.Equal(t, uint64(2519), block.Height)
+	assert.Equal(t, uint64(1723662586), block.Timestamp)
+	assert.Equal(t, big.NewInt(1000000010000000000), block.TotalSupply)
+	assert.Equal(
+		t,
+		gethCommon.HexToHash("0x39a342118d0f4e2ff6790d13077ee5c9dd55d5e1a4c1b53f6cb1fbb368bff968"),
+		block.ReceiptRoot,
+	)
+	assert.Equal(
+		t,
+		gethCommon.HexToHash("0xb677e512d6311b9d833679aede800037120baa83fe1053d3328fa87990daeaf4"),
+		block.TransactionHashRoot,
+	)
+	assert.Equal(t, uint64(1_225_129), block.TotalGasUsed)
+	assert.Equal(
+		t,
+		gethCommon.Hash{},
+		block.PrevRandao,
+	)
+	assert.Equal(
+		t,
+		[]gethCommon.Hash{
+			gethCommon.HexToHash("0x56e8d9586ed4422136ab0e79c9c537b33f09b7a3b870ca569e230a15b925c3b2"),
+		},
+		block.TransactionHashes,
+	)
+}
+
 func Test_DecodeBlockExecutedEvent(t *testing.T) {
 	gethBlock := &types.Block{
 		ParentBlockHash:     gethCommon.HexToHash("0x1"),
