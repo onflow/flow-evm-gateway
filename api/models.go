@@ -153,7 +153,7 @@ func (tx *Transaction) Size() uint64 {
 
 func NewTransactionResult(
 	tx models.Transaction,
-	receipt models.StorageReceipt,
+	receipt models.Receipt,
 	networkID *big.Int,
 ) (*Transaction, error) {
 	res, err := NewTransaction(tx, networkID)
@@ -293,4 +293,61 @@ type SyncStatus struct {
 	StartingBlock hexutil.Uint64 `json:"startingBlock"`
 	CurrentBlock  hexutil.Uint64 `json:"currentBlock"`
 	HighestBlock  hexutil.Uint64 `json:"highestBlock"`
+}
+
+// MarshalReceipt takes a receipt and its associated transaction,
+// and marshals the receipt to the proper structure needed by
+// eth_getTransactionReceipt.
+func MarshalReceipt(
+	receipt *models.Receipt,
+	tx models.Transaction,
+) (map[string]interface{}, error) {
+	from, err := tx.From()
+	if err != nil {
+		return map[string]interface{}{}, err
+	}
+
+	txHash := tx.Hash()
+
+	fields := map[string]interface{}{
+		"blockHash":         receipt.BlockHash,
+		"blockNumber":       hexutil.Uint64(receipt.BlockNumber.Uint64()),
+		"transactionHash":   txHash,
+		"transactionIndex":  hexutil.Uint64(receipt.TransactionIndex),
+		"from":              from.Hex(),
+		"to":                nil,
+		"gasUsed":           hexutil.Uint64(receipt.GasUsed),
+		"cumulativeGasUsed": hexutil.Uint64(receipt.CumulativeGasUsed),
+		"contractAddress":   nil,
+		"logs":              receipt.Logs,
+		"logsBloom":         receipt.Bloom,
+		"type":              hexutil.Uint(tx.Type()),
+		"effectiveGasPrice": (*hexutil.Big)(receipt.EffectiveGasPrice),
+	}
+
+	if tx.To() != nil {
+		fields["to"] = tx.To().Hex()
+	}
+
+	fields["status"] = hexutil.Uint(receipt.Status)
+
+	if receipt.Logs == nil {
+		fields["logs"] = []*types.Log{}
+	}
+
+	if tx.Type() == types.BlobTxType {
+		fields["blobGasUsed"] = hexutil.Uint64(receipt.BlobGasUsed)
+		fields["blobGasPrice"] = (*hexutil.Big)(receipt.BlobGasPrice)
+	}
+
+	// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
+	if receipt.ContractAddress != (common.Address{}) {
+		fields["contractAddress"] = receipt.ContractAddress.Hex()
+	}
+
+	if len(receipt.RevertReason) > 0 {
+		fields["revertReason"] = hexutil.Bytes(receipt.RevertReason)
+	}
+
+	return fields, nil
 }

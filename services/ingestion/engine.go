@@ -229,7 +229,7 @@ func (e *Engine) indexBlock(
 
 func (e *Engine) indexTransaction(
 	tx models.Transaction,
-	receipt *models.StorageReceipt,
+	receipt *models.Receipt,
 	batch *pebbleDB.Batch,
 ) error {
 	if tx == nil || receipt == nil { // safety check shouldn't happen
@@ -256,7 +256,7 @@ func (e *Engine) indexTransaction(
 }
 
 func (e *Engine) indexReceipts(
-	receipts []*models.StorageReceipt,
+	receipts []*models.Receipt,
 	batch *pebbleDB.Batch,
 ) error {
 	if receipts == nil {

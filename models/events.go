@@ -28,10 +28,10 @@ func isTransactionExecutedEvent(event cadence.Event) bool {
 // CadenceEvents contains Flow emitted events containing one or zero evm block executed event,
 // and multiple or zero evm transaction events.
 type CadenceEvents struct {
-	events       flow.BlockEvents  // Flow events for a specific flow block
-	block        *Block            // EVM block (at most one per Flow block)
-	transactions []Transaction     // transactions in the EVM block
-	receipts     []*StorageReceipt // receipts for transactions
+	events       flow.BlockEvents // Flow events for a specific flow block
+	block        *Block           // EVM block (at most one per Flow block)
+	transactions []Transaction    // transactions in the EVM block
+	receipts     []*Receipt       // receipts for transactions
 }
 
 // NewCadenceEvents decodes the events into evm types.
@@ -135,7 +135,7 @@ func (c *CadenceEvents) Transactions() []Transaction {
 
 // Receipts included in the EVM block, if event doesn't
 // contain EVM transactions the return value is nil.
-func (c *CadenceEvents) Receipts() []*StorageReceipt {
+func (c *CadenceEvents) Receipts() []*Receipt {
 	return c.receipts
 }
 
