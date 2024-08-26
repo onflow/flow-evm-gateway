@@ -185,14 +185,14 @@ func TestTraceIngestion(t *testing.T) {
 		// make sure download was called as many times as all blocks times the hashes it contained
 		require.Eventuallyf(t, func() bool {
 			return len(downloadedIDs) == blockCount*txCount
-		}, time.Second*10, time.Millisecond*100, "tracing not downloaded")
+		}, time.Second*10, time.Millisecond*100, "traces not downloaded")
 
 		close(downloadedIDs)
 
 		// make sure stored was called as many times as all blocks times the hashes it contained
 		require.Eventuallyf(t, func() bool {
 			return len(stored) == blockCount*txCount
-		}, time.Second*10, time.Millisecond*100, "tracing not indexed")
+		}, time.Second*10, time.Millisecond*100, "traces not indexed")
 
 		close(stored)
 

@@ -17,7 +17,7 @@ import (
 const downloadTimeout = 5 * time.Minute
 
 type Downloader interface {
-	// Download tracing or returning an error with the failure
+	// Download traces or returning an error with the failure
 	Download(txID common.Hash, blockIO flow.Identifier) (json.RawMessage, error)
 }
 
