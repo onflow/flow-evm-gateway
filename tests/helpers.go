@@ -81,14 +81,15 @@ func startEmulator(createTestAccounts bool) (*server.EmulatorServer, error) {
 	}
 
 	srv := server.NewEmulatorServer(&log, &server.Config{
-		ServicePrivateKey:      pkey,
-		ServiceKeySigAlgo:      sigAlgo,
-		ServiceKeyHashAlgo:     hashAlgo,
-		GenesisTokenSupply:     genesisToken,
-		WithContracts:          true,
-		Host:                   "localhost",
-		TransactionExpiry:      10,
-		TransactionMaxGasLimit: flow.DefaultMaxTransactionGasLimit,
+		ServicePrivateKey:         pkey,
+		ServiceKeySigAlgo:         sigAlgo,
+		ServiceKeyHashAlgo:        hashAlgo,
+		GenesisTokenSupply:        genesisToken,
+		WithContracts:             true,
+		Host:                      "localhost",
+		TransactionExpiry:         10,
+		TransactionMaxGasLimit:    flow.DefaultMaxTransactionGasLimit,
+		SkipTransactionValidation: true,
 	})
 
 	go func() {
@@ -137,24 +138,24 @@ func servicesSetup(t *testing.T) (emulator.Emulator, func()) {
 
 	// default config
 	cfg := &config.Config{
-		DatabaseDir:              t.TempDir(),
-		AccessNodeHost:           "localhost:3569", // emulator
-		RPCPort:                  8545,
-		RPCHost:                  "127.0.0.1",
-		FlowNetworkID:            "flow-emulator",
-		EVMNetworkID:             evmTypes.FlowEVMPreviewNetChainID,
-		Coinbase:                 common.HexToAddress(eoaTestAddress),
-		COAAddress:               service.Address,
-		COAKey:                   service.PrivateKey,
-		CreateCOAResource:        false,
-		GasPrice:                 new(big.Int).SetUint64(150),
-		LogLevel:                 zerolog.DebugLevel,
-		LogWriter:                testLogWriter(),
-		StreamTimeout:            time.Second * 30,
-		StreamLimit:              10,
-		RateLimit:                50,
-		WSEnabled:                true,
-		MetricsPort:                 8443,
+		DatabaseDir:       t.TempDir(),
+		AccessNodeHost:    "localhost:3569", // emulator
+		RPCPort:           8545,
+		RPCHost:           "127.0.0.1",
+		FlowNetworkID:     "flow-emulator",
+		EVMNetworkID:      evmTypes.FlowEVMPreviewNetChainID,
+		Coinbase:          common.HexToAddress(eoaTestAddress),
+		COAAddress:        service.Address,
+		COAKey:            service.PrivateKey,
+		CreateCOAResource: false,
+		GasPrice:          new(big.Int).SetUint64(150),
+		LogLevel:          zerolog.DebugLevel,
+		LogWriter:         testLogWriter(),
+		StreamTimeout:     time.Second * 30,
+		StreamLimit:       10,
+		RateLimit:         50,
+		WSEnabled:         true,
+		MetricsPort:       8443,
 	}
 
 	go func() {

@@ -28,7 +28,7 @@ import (
 )
 
 func Test_StateExecution(t *testing.T) {
-	srv, host, err := startEmulator(true)
+	srv, err := startEmulator(true)
 	require.NoError(t, err)
 
 	emu := srv.Emulator()
@@ -46,7 +46,7 @@ func Test_StateExecution(t *testing.T) {
 		FlowNetworkID:     flowGo.Emulator,
 		HeartbeatInterval: 50,
 		EVMNetworkID:      types.FlowEVMPreviewNetChainID,
-		AccessNodeHost:    host,
+		AccessNodeHost:    "localhost:3569",
 		Coinbase:          common.HexToAddress(eoaTestAddress),
 		COAAddress:        service.Address,
 		COAKey:            service.PrivateKey,
