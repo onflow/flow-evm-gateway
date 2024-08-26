@@ -64,6 +64,10 @@ func NewReceipt(
 func ReceiptsFromBytes(data []byte) ([]*Receipt, error) {
 	var receipts []*Receipt
 	if err := rlp.DecodeBytes(data, &receipts); err != nil {
+		receipts, err = legacyReceiptFromBytes(data)
+		if err == nil {
+			return receipts, nil
+		}
 
 		return nil, fmt.Errorf("failed to RLP-decode block receipts [%x] %w", data, err)
 	}
