@@ -15,11 +15,10 @@ import (
 // geth node has the data locally, but we don't in evm gateway, so we can not reproduce those values
 // and we need to store them
 type StorageReceipt struct {
-	Type              uint8  `json:"type,omitempty"`
-	PostState         []byte `json:"root"`
-	Status            uint64 `json:"status"`
-	CumulativeGasUsed uint64 `json:"cumulativeGasUsed"`
-	// todo we could skip bloom to optimize storage and dynamically recalculate it
+	Type              uint8            `json:"type,omitempty"`
+	PostState         []byte           `json:"root"`
+	Status            uint64           `json:"status"`
+	CumulativeGasUsed uint64           `json:"cumulativeGasUsed"`
 	Bloom             gethTypes.Bloom  `json:"logsBloom"`
 	Logs              []*gethTypes.Log `json:"logs"`
 	TxHash            common.Hash      `json:"transactionHash"`
@@ -32,6 +31,7 @@ type StorageReceipt struct {
 	BlockNumber       *big.Int         `json:"blockNumber,omitempty"`
 	TransactionIndex  uint             `json:"transactionIndex"`
 	RevertReason      []byte           `json:"revertReason"`
+	PrecompiledCalls  []byte
 }
 
 func (sr *StorageReceipt) ToGethReceipt() *gethTypes.Receipt {
@@ -54,7 +54,11 @@ func (sr *StorageReceipt) ToGethReceipt() *gethTypes.Receipt {
 	}
 }
 
-func NewStorageReceipt(receipt *gethTypes.Receipt, revertReason []byte) *StorageReceipt {
+func NewStorageReceipt(
+	receipt *gethTypes.Receipt,
+	revertReason []byte,
+	precompiledCalls []byte,
+) *StorageReceipt {
 	return &StorageReceipt{
 		Type:              receipt.Type,
 		PostState:         receipt.PostState,
@@ -72,6 +76,7 @@ func NewStorageReceipt(receipt *gethTypes.Receipt, revertReason []byte) *Storage
 		BlockNumber:       receipt.BlockNumber,
 		TransactionIndex:  receipt.TransactionIndex,
 		RevertReason:      revertReason,
+		PrecompiledCalls:  precompiledCalls,
 	}
 }
 
@@ -134,5 +139,5 @@ func MarshalReceipt(
 
 type BloomsHeight struct {
 	Blooms []*gethTypes.Bloom
-	Height *big.Int
+	Height uint64
 }

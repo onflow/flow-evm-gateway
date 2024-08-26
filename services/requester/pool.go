@@ -119,7 +119,7 @@ func (t *TxPool) retryGetTransactionResult(ctx context.Context, flowTx *flow.Tra
 		}
 
 		if res.Status < flow.TransactionStatusSealed {
-			return retry.RetryableError(fmt.Errorf("transaction not sealed"))
+			return retry.RetryableError(fmt.Errorf("transaction %s not sealed", flowTx.ID()))
 		}
 
 		if res.Error != nil {
@@ -153,5 +153,5 @@ func parseInvalidError(err error) (error, bool) {
 		return nil, false
 	}
 
-	return errs.FailedTransaction(matches[1]), true
+	return errs.NewFailedTransactionError(matches[1]), true
 }

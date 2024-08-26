@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	gethVM "github.com/onflow/go-ethereum/core/vm"
 	gethLog "github.com/onflow/go-ethereum/log"
 	"github.com/onflow/go-ethereum/rpc"
 	"github.com/rs/cors"
@@ -64,9 +65,17 @@ const (
 	batchResponseMaxSize = 5 * 1000 * 1000 // 5 MB
 )
 
-func NewHTTPServer(logger zerolog.Logger, collector metrics.Collector, tracer trace.Tracer, cfg *config.Config) *httpServer {
-	zeroSlog := slogzerolog.Option{Logger: &logger}.NewZerologHandler()
-	gethLog.SetDefault(gethLog.NewLogger(slog.New(zeroSlog).Handler()))
+func NewHTTPServer(
+	logger zerolog.Logger,
+	collector metrics.Collector,
+	tracer trace.Tracer,
+	cfg *config.Config,
+) *httpServer {
+	zeroSlog := slogzerolog.Option{
+		Logger: &logger,
+		Level:  slog.LevelError,
+	}.NewZerologHandler()
+	gethLog.SetDefault(gethLog.NewLogger(zeroSlog))
 
 	return &httpServer{
 		logger:    logger,
@@ -81,7 +90,7 @@ func NewHTTPServer(logger zerolog.Logger, collector metrics.Collector, tracer tr
 // The address can only be set while the server is not running.
 func (h *httpServer) SetListenAddr(host string, port int) error {
 	if h.listener != nil && (host != h.host || port != h.port) {
-		return fmt.Errorf("HTTP server already running on %s", h.endpoint)
+		return fmt.Errorf("HTTP server already running on: %s", h.endpoint)
 	}
 
 	h.host, h.port = host, port
@@ -238,15 +247,15 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		r.RemoteAddr = r.Header.Get(h.config.AddressHeader)
 	}
 
+	requestBody := make(map[string]any)
 	// Check if WebSocket request and serve if JSON-RPC over WebSocket is enabled
 	if b, err := io.ReadAll(r.Body); err == nil {
-		body := make(map[string]any)
-		_ = json.Unmarshal(b, &body)
+		_ = json.Unmarshal(b, &requestBody)
 
 		h.logger.Debug().
 			Str("IP", r.RemoteAddr).
 			Str("url", r.URL.String()).
-			Fields(body).
+			Fields(requestBody).
 			Bool("is-ws", isWebSocket(r)).
 			Msg("API request")
 
@@ -257,6 +266,7 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// additional response handling
 	logW := &responseHandler{
 		ResponseWriter: w,
+		requestBody:    requestBody,
 		log:            h.logger,
 		metrics:        h.collector,
 	}
@@ -407,8 +417,9 @@ var _ http.ResponseWriter = &responseHandler{}
 // todo we should replace go-ethereum server implementation with our own so we have more control
 type responseHandler struct {
 	http.ResponseWriter
-	log     zerolog.Logger
-	metrics metrics.Collector
+	requestBody map[string]any
+	log         zerolog.Logger
+	metrics     metrics.Collector
 }
 
 const errCodePanic = -32603
@@ -437,11 +448,7 @@ func (w *responseHandler) Write(data []byte) (int, error) {
 	}
 
 	// create a default debug logger
-	s, _ := message.Params.MarshalJSON()
-	l := w.log.With().
-		Str("method", message.Method).
-		Str("params", string(s)).
-		Logger()
+	l := w.log.With().Fields(w.requestBody).Logger()
 	log := l.Debug()
 
 	// handle possible error
@@ -459,16 +466,20 @@ func (w *responseHandler) Write(data []byte) (int, error) {
 			if !errorIs(errMsg, errs.ErrRateLimit) &&
 				!errorIs(errMsg, errs.ErrInvalid) &&
 				!errorIs(errMsg, errs.ErrFailedTransaction) &&
-				!errorIs(errMsg, errs.ErrNotSupported) {
-				// set logging level to error
-				log = l.Error().Err(errors.New(errMsg))
+				!errorIs(errMsg, errs.ErrEndpointNotSupported) &&
+				!errorIs(errMsg, gethVM.ErrExecutionReverted) {
+				// log the error
+				l.Error().Err(errors.New(errMsg)).Msg("API response")
 			}
 		}
 	}
 
-	// log all responses
-	r, _ := message.Result.MarshalJSON()
-	log.Str("result", string(r)).Msg("API response")
+	// log all response results of successful requests,
+	// as errors are logged with error log level.
+	if message.Error == nil {
+		r, _ := message.Result.MarshalJSON()
+		log.RawJSON("result", r).Msg("API response")
+	}
 
 	return w.ResponseWriter.Write(data)
 }

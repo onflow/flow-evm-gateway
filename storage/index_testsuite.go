@@ -2,7 +2,6 @@ package storage
 
 import (
 	"fmt"
-	"math/big"
 
 	"github.com/goccy/go-json"
 	"github.com/onflow/flow-go-sdk"
@@ -46,12 +45,12 @@ func (b *BlockTestSuite) TestGet() {
 		// non-existing id
 		bl, err := b.Blocks.GetByID(common.HexToHash("0x10"))
 		b.Require().Nil(bl)
-		b.Require().ErrorIs(err, errors.ErrNotFound)
+		b.Require().ErrorIs(err, errors.ErrEntityNotFound)
 
 		// non-existing height
 		bl, err = b.Blocks.GetByHeight(uint64(200))
 		b.Require().Nil(bl)
-		b.Require().ErrorIs(err, errors.ErrNotFound)
+		b.Require().ErrorIs(err, errors.ErrEntityNotFound)
 	})
 }
 
@@ -175,7 +174,7 @@ func (s *ReceiptTestSuite) TestStoreReceipt() {
 
 	s.Run("store receipt successfully", func() {
 		receipt := mocks.NewReceipt(1, common.HexToHash("0xf1"))
-		err := s.ReceiptIndexer.Store([]*models.StorageReceipt{receipt}, 1, nil)
+		err := s.ReceiptIndexer.Store([]*models.StorageReceipt{receipt}, nil)
 		s.Require().NoError(err)
 	})
 
@@ -187,22 +186,32 @@ func (s *ReceiptTestSuite) TestStoreReceipt() {
 			mocks.NewReceipt(height, common.HexToHash("0x3")),
 		}
 
-		err := s.ReceiptIndexer.Store(receipts, height, nil)
+		err := s.ReceiptIndexer.Store(receipts, nil)
 		s.Require().NoError(err)
 
-		storeReceipts, err := s.ReceiptIndexer.GetByBlockHeight(big.NewInt(height))
+		storeReceipts, err := s.ReceiptIndexer.GetByBlockHeight(height)
 		s.Require().NoError(err)
 
 		for i, sr := range storeReceipts {
 			s.compareReceipts(receipts[i], sr)
 		}
 	})
+
+	s.Run("fail to store multiple receipts with different heights", func() {
+		receipts := []*models.StorageReceipt{
+			mocks.NewReceipt(1, common.HexToHash("0x1")),
+			mocks.NewReceipt(2, common.HexToHash("0x2")),
+		}
+
+		err := s.ReceiptIndexer.Store(receipts, nil)
+		s.Require().EqualError(err, "can't store receipts for multiple heights")
+	})
 }
 
 func (s *ReceiptTestSuite) TestGetReceiptByTransactionID() {
 	s.Run("existing transaction ID", func() {
 		receipt := mocks.NewReceipt(2, common.HexToHash("0xf2"))
-		err := s.ReceiptIndexer.Store([]*models.StorageReceipt{receipt}, 2, nil)
+		err := s.ReceiptIndexer.Store([]*models.StorageReceipt{receipt}, nil)
 		s.Require().NoError(err)
 
 		retReceipt, err := s.ReceiptIndexer.GetByTransactionID(receipt.TxHash)
@@ -214,60 +223,65 @@ func (s *ReceiptTestSuite) TestGetReceiptByTransactionID() {
 		nonExistingTxHash := common.HexToHash("0x123")
 		retReceipt, err := s.ReceiptIndexer.GetByTransactionID(nonExistingTxHash)
 		s.Require().Nil(retReceipt)
-		s.Require().ErrorIs(err, errors.ErrNotFound)
+		s.Require().ErrorIs(err, errors.ErrEntityNotFound)
 	})
 }
 
 func (s *ReceiptTestSuite) TestGetReceiptByBlockHeight() {
 	s.Run("existing block height", func() {
 		receipt := mocks.NewReceipt(3, common.HexToHash("0x1"))
-		err := s.ReceiptIndexer.Store([]*models.StorageReceipt{receipt}, 3, nil)
+		err := s.ReceiptIndexer.Store([]*models.StorageReceipt{receipt}, nil)
 		s.Require().NoError(err)
 		// add one more receipt that shouldn't be retrieved
 		r := mocks.NewReceipt(4, common.HexToHash("0x2"))
-		s.Require().NoError(s.ReceiptIndexer.Store([]*models.StorageReceipt{r}, 4, nil))
+		s.Require().NoError(s.ReceiptIndexer.Store([]*models.StorageReceipt{r}, nil))
 
-		retReceipts, err := s.ReceiptIndexer.GetByBlockHeight(receipt.BlockNumber)
+		retReceipts, err := s.ReceiptIndexer.GetByBlockHeight(receipt.BlockNumber.Uint64())
 		s.Require().NoError(err)
 		s.compareReceipts(receipt, retReceipts[0])
 	})
 
 	s.Run("non-existing block height", func() {
-		retReceipt, err := s.ReceiptIndexer.GetByBlockHeight(big.NewInt(1337))
+		retReceipt, err := s.ReceiptIndexer.GetByBlockHeight(1337)
 		s.Require().Nil(retReceipt)
-		s.Require().ErrorIs(err, errors.ErrNotFound)
+		s.Require().ErrorIs(err, errors.ErrEntityNotFound)
 	})
 }
 
 func (s *ReceiptTestSuite) TestBloomsForBlockRange() {
 
 	s.Run("valid block range", func() {
-		start := big.NewInt(10)
-		end := big.NewInt(15)
+		start := uint64(10)
+		end := uint64(15)
 		testBlooms := make([]*types.Bloom, 0)
-		testHeights := make([]*big.Int, 0)
+		testHeights := make([]uint64, 0)
 
-		for i := start.Uint64(); i < end.Uint64(); i++ {
+		for i := start; i < end; i++ {
 			r := mocks.NewReceipt(i, common.HexToHash(fmt.Sprintf("0xf1%d", i)))
 			testBlooms = append(testBlooms, &r.Bloom)
-			testHeights = append(testHeights, big.NewInt(int64(i)))
-			err := s.ReceiptIndexer.Store([]*models.StorageReceipt{r}, i, nil)
+			testHeights = append(testHeights, i)
+			err := s.ReceiptIndexer.Store([]*models.StorageReceipt{r}, nil)
 			s.Require().NoError(err)
 		}
 
 		bloomsHeights, err := s.ReceiptIndexer.BloomsForBlockRange(start, end)
 		s.Require().NoError(err)
 		s.Require().Len(bloomsHeights, len(testBlooms))
+
 		for i, bloomHeight := range bloomsHeights {
 			s.Require().Len(bloomHeight.Blooms, 1)
 			s.Require().Equal(bloomHeight.Blooms[0], testBlooms[i])
 			s.Require().Equal(bloomHeight.Height, testHeights[i])
 		}
 
-		bloomsHeights, err = s.ReceiptIndexer.BloomsForBlockRange(start, big.NewInt(13))
+		subset := uint64(13)
+		subsetSize := int(subset - start + 1) // +1 because it's inclusive
+
+		bloomsHeights, err = s.ReceiptIndexer.BloomsForBlockRange(start, subset)
 		s.Require().NoError(err)
-		s.Require().Len(bloomsHeights, 4)
-		for i := 0; i < 4; i++ {
+		s.Require().Len(bloomsHeights, subsetSize)
+
+		for i := 0; i < subsetSize; i++ {
 			s.Require().Len(bloomsHeights[i].Blooms, 1)
 			s.Require().Equal(bloomsHeights[i].Blooms[0], testBlooms[i])
 			s.Require().Equal(bloomsHeights[i].Height, testHeights[i])
@@ -275,44 +289,111 @@ func (s *ReceiptTestSuite) TestBloomsForBlockRange() {
 	})
 
 	s.Run("valid block range with multiple receipts per block", func() {
-		start := big.NewInt(15)
-		end := big.NewInt(20)
+		start := uint64(15)
+		end := uint64(20)
 		testBlooms := make([]*types.Bloom, 0)
-		testHeights := make([]*big.Int, 0)
+		testHeights := make([]uint64, 0)
 
-		for i := start.Uint64(); i < end.Uint64(); i++ {
+		for i := start; i < end; i++ {
 			r1 := mocks.NewReceipt(i, common.HexToHash(fmt.Sprintf("0x%d", i)))
 			r2 := mocks.NewReceipt(i, common.HexToHash(fmt.Sprintf("0x%d", i)))
 			receipts := []*models.StorageReceipt{r1, r2}
-			s.Require().NoError(s.ReceiptIndexer.Store(receipts, i, nil))
+
+			s.Require().NoError(s.ReceiptIndexer.Store(receipts, nil))
+
 			testBlooms = append(testBlooms, &r1.Bloom, &r2.Bloom)
-			testHeights = append(testHeights, big.NewInt(int64(i)))
+			testHeights = append(testHeights, i)
 		}
 
 		bloomsHeights, err := s.ReceiptIndexer.BloomsForBlockRange(start, end)
 		s.Require().NoError(err)
-		s.Require().Len(bloomsHeights, len(testBlooms)/2)
-		for i, bloomHeight := range bloomsHeights {
-			s.Require().Len(bloomHeight.Blooms, 2)
-			s.Require().Equal(bloomHeight.Blooms[0], testBlooms[i])
-			s.Require().Equal(bloomHeight.Blooms[1], testBlooms[i+1])
-			s.Require().Equal(bloomHeight.Height, testHeights[i])
+		s.Require().Equal(len(bloomsHeights), int(end-start))
+
+		bloomIndex := 0
+		for i, bh := range bloomsHeights {
+			s.Require().Equal(bh.Height, testHeights[i])
+			s.Require().Len(bh.Blooms, 2)
+
+			for _, bloom := range bh.Blooms {
+				s.Require().Equal(bloom, testBlooms[bloomIndex])
+				bloomIndex++
+			}
+		}
+
+		subset := uint64(17)
+		subsetSize := int(subset-start) + 1 // +1 because it's inclusive interval
+		bloomsHeights, err = s.ReceiptIndexer.BloomsForBlockRange(start, subset)
+		s.Require().NoError(err)
+		s.Require().Len(bloomsHeights, subsetSize)
+
+		bloomIndex = 0
+		for i, bh := range bloomsHeights {
+			s.Require().Equal(bh.Height, testHeights[i])
+			s.Require().Len(bh.Blooms, 2)
+
+			for _, bloom := range bh.Blooms {
+				s.Require().Equal(bloom, testBlooms[bloomIndex])
+				bloomIndex++
+			}
 		}
 	})
 
+	s.Run("single height range", func() {
+		start := uint64(256)
+		end := uint64(270)
+		specific := uint64(260)
+
+		var expectedBloom *types.Bloom
+		for i := start; i < end; i++ {
+			r1 := mocks.NewReceipt(i, common.HexToHash(fmt.Sprintf("0x%d", i)))
+			receipts := []*models.StorageReceipt{r1}
+			s.Require().NoError(s.ReceiptIndexer.Store(receipts, nil))
+
+			if i == specific {
+				expectedBloom = &r1.Bloom
+			}
+		}
+
+		bloomsHeights, err := s.ReceiptIndexer.BloomsForBlockRange(specific, specific)
+		s.Require().NoError(err)
+		s.Require().Len(bloomsHeights, 1)
+		s.Require().Len(bloomsHeights[0].Blooms, 1)
+		s.Require().Equal(expectedBloom, bloomsHeights[0].Blooms[0])
+	})
+
 	s.Run("invalid block range", func() {
-		start := big.NewInt(10)
-		end := big.NewInt(5) // end is less than start
+		start := uint64(10)
+		end := uint64(5) // end is less than start
 		bloomsHeights, err := s.ReceiptIndexer.BloomsForBlockRange(start, end)
-		s.Require().ErrorIs(err, errors.ErrInvalidRange)
+		s.Require().ErrorIs(err, errors.ErrInvalidBlockRange)
+		s.Require().ErrorContains(
+			err,
+			"invalid block height range: start value 10 is bigger than end value 5",
+		)
 		s.Require().Nil(bloomsHeights)
 	})
 
-	s.Run("non-existing block range", func() {
-		start := big.NewInt(100)
-		end := big.NewInt(105)
+	s.Run("non-existing start height", func() {
+		start := uint64(400)
+		end := uint64(405)
 		bloomsHeights, err := s.ReceiptIndexer.BloomsForBlockRange(start, end)
-		s.Require().ErrorIs(err, errors.ErrInvalidRange)
+		s.Require().ErrorIs(err, errors.ErrInvalidBlockRange)
+		s.Require().ErrorContains(
+			err,
+			"invalid block height range: start value 400 is not within the indexed range of [0 - 300]",
+		)
+		s.Require().Nil(bloomsHeights)
+	})
+
+	s.Run("non-existing end height", func() {
+		start := uint64(10)
+		end := uint64(405)
+		bloomsHeights, err := s.ReceiptIndexer.BloomsForBlockRange(start, end)
+		s.Require().ErrorIs(err, errors.ErrInvalidBlockRange)
+		s.Require().ErrorContains(
+			err,
+			"invalid block height range: end value 405 is not within the indexed range of [0 - 300]",
+		)
 		s.Require().Nil(bloomsHeights)
 	})
 }
@@ -392,7 +473,7 @@ func (s *TransactionTestSuite) TestGetTransaction() {
 		nonExistingTxHash := common.HexToHash("0x789")
 		retTx, err := s.TransactionIndexer.Get(nonExistingTxHash)
 		s.Require().Nil(retTx)
-		s.Require().ErrorIs(err, errors.ErrNotFound)
+		s.Require().ErrorIs(err, errors.ErrEntityNotFound)
 	})
 }
 
@@ -501,7 +582,7 @@ func (s *TraceTestSuite) TestGet() {
 	s.Run("get not found trace", func() {
 		id := common.Hash{0x02}
 		val, err := s.TraceIndexer.GetTransaction(id)
-		s.Require().ErrorIs(err, errors.ErrNotFound)
+		s.Require().ErrorIs(err, errors.ErrEntityNotFound)
 		s.Require().Nil(val)
 	})
 }

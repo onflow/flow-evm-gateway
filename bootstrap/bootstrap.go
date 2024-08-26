@@ -84,7 +84,7 @@ func Start(ctx context.Context, cfg *config.Config) error {
 	}
 
 	// if database is not initialized require init height
-	if _, err := blocks.LatestCadenceHeight(); errors.Is(err, errs.ErrNotInitialized) {
+	if _, err := blocks.LatestCadenceHeight(); errors.Is(err, errs.ErrStorageNotInitialized) {
 		cadenceHeight := cfg.InitCadenceHeight
 		cadenceBlock, err := client.GetBlockHeaderByHeight(ctx, cadenceHeight)
 		if err != nil {
@@ -92,7 +92,12 @@ func Start(ctx context.Context, cfg *config.Config) error {
 		}
 
 		if err := blocks.InitHeights(cadenceHeight, cadenceBlock.ID); err != nil {
-			return fmt.Errorf("failed to init the database: %w", err)
+			return fmt.Errorf(
+				"failed to init the database for block height: %d and ID: %s, with : %w",
+				cadenceHeight,
+				cadenceBlock.ID,
+				err,
+			)
 		}
 		logger.Info().Msg("database initialized with 0 evm and cadence heights")
 	}
@@ -181,7 +186,11 @@ func startIngestion(
 	// make sure the provided block to start the indexing can be loaded
 	_, err = client.GetBlockHeaderByHeight(context.Background(), latestCadenceHeight)
 	if err != nil {
-		return fmt.Errorf("failed to get provided cadence height: %w", err)
+		return fmt.Errorf(
+			"failed to get provided cadence height %d: %w",
+			latestCadenceHeight,
+			err,
+		)
 	}
 
 	logger.Info().
@@ -295,7 +304,7 @@ func startServer(
 			logger,
 		)
 	default:
-		return fmt.Errorf("must either provide single COA key, or list of COA keys")
+		return fmt.Errorf("must provide either single COA / keylist of COA keys / COA cloud KMS keys")
 	}
 	if err != nil {
 		return fmt.Errorf("failed to create a COA signer: %w", err)

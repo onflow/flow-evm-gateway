@@ -28,6 +28,7 @@ import (
 	"github.com/onflow/flow-evm-gateway/services/logs"
 	"github.com/onflow/flow-evm-gateway/services/requester"
 	"github.com/onflow/flow-evm-gateway/storage"
+	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 )
 
 const maxFeeHistoryBlockCount = 1024
@@ -183,7 +184,7 @@ func (b *BlockChainAPI) SendRawTransaction(
 	defer span.End()
 
 	if b.config.IndexOnly {
-		err := errs.ErrNotSupported
+		err := errs.ErrIndexOnlyMode
 		span.SetStatus(codes.Error, err.Error())
 		return common.Hash{}, err
 	}
@@ -470,10 +471,11 @@ func (b *BlockChainAPI) GetBlockReceipts(
 	} else if numHash.BlockNumber != nil {
 		block, err = b.blocks.GetByHeight(uint64(numHash.BlockNumber.Int64()))
 	} else {
-		return handleError[[]*models.StorageReceipt](errors.Join(
-			errs.ErrInvalid,
-			fmt.Errorf("block number or hash not provided"),
-		), l, b.collector)
+		return handleError[[]*models.StorageReceipt](
+			fmt.Errorf("%w: block number or hash not provided", errs.ErrInvalid),
+			l,
+			b.collector,
+		)
 	}
 	if err != nil {
 		return handleError[[]*models.StorageReceipt](err, l, b.collector)
@@ -661,7 +663,7 @@ func (b *BlockChainAPI) GetLogs(
 		to = latest
 	}
 
-	f, err := logs.NewRangeFilter(*from, *to, filter, b.receipts)
+	f, err := logs.NewRangeFilter(from.Uint64(), to.Uint64(), filter, b.receipts)
 	if err != nil {
 		return handleError[[]*types.Log](err, l, b.collector)
 	}
@@ -669,6 +671,11 @@ func (b *BlockChainAPI) GetLogs(
 	res, err := f.Match()
 	if err != nil {
 		return handleError[[]*types.Log](err, l, b.collector)
+	}
+
+	// makes sure the response is correctly serialized
+	if res == nil {
+		return []*types.Log{}, nil
 	}
 
 	return res, nil
@@ -819,7 +826,11 @@ func (b *BlockChainAPI) FeeHistory(
 		Logger()
 
 	if blockCount > maxFeeHistoryBlockCount {
-		return handleError[*FeeHistoryResult](fmt.Errorf("block count has to be between 1 and 1024"), l, b.collector)
+		return handleError[*FeeHistoryResult](
+			fmt.Errorf("block count has to be between 1 and %d, got: %d", maxFeeHistoryBlockCount, blockCount),
+			l,
+			b.collector,
+		)
 	}
 
 	lastBlockNumber := uint64(lastBlock)
@@ -899,7 +910,11 @@ func (b *BlockChainAPI) GetStorageAt(
 
 	key, _, err := decodeHash(storageSlot)
 	if err != nil {
-		return handleError[hexutil.Bytes](errors.Join(errs.ErrInvalid, err), l, b.collector)
+		return handleError[hexutil.Bytes](
+			fmt.Errorf("%w: %w", errs.ErrInvalid, err),
+			l,
+			b.collector,
+		)
 	}
 
 	evmHeight, err := b.getBlockNumber(&blockNumberOrHash)
@@ -963,6 +978,7 @@ func (b *BlockChainAPI) prepareBlockResponse(
 		Timestamp:        hexutil.Uint64(block.Timestamp),
 		BaseFeePerGas:    hexutil.Big(*big.NewInt(0)),
 		LogsBloom:        types.LogsBloom([]*types.Log{}),
+		Miner:            evmTypes.CoinbaseAddress.ToCommon(),
 	}
 
 	blockBytes, err := block.ToBytes()
@@ -984,7 +1000,7 @@ func (b *BlockChainAPI) prepareBlockResponse(
 			if err != nil {
 				return nil, err
 			}
-			totalGasUsed += tx.Gas
+			totalGasUsed += hexutil.Uint64(txReceipt.GasUsed)
 			logs = append(logs, txReceipt.Logs...)
 			blockSize += tx.Size()
 		}
@@ -1002,7 +1018,7 @@ func (b *BlockChainAPI) prepareBlockResponse(
 }
 
 func (b *BlockChainAPI) getBlockNumber(blockNumberOrHash *rpc.BlockNumberOrHash) (int64, error) {
-	err := errors.Join(errs.ErrInvalid, fmt.Errorf("neither block number nor hash specified"))
+	err := fmt.Errorf("%w: neither block number nor hash specified", errs.ErrInvalid)
 	if blockNumberOrHash == nil {
 		return 0, err
 	}
@@ -1022,9 +1038,9 @@ func (b *BlockChainAPI) getBlockNumber(blockNumberOrHash *rpc.BlockNumberOrHash)
 	return 0, err
 }
 
-// handleError takes in an error and in case the error is of type ErrNotFound
+// handleError takes in an error and in case the error is of type ErrEntityNotFound
 // it returns nil instead of an error since that is according to the API spec,
-// if the error is not of type ErrNotFound it will return the error and the generic
+// if the error is not of type ErrEntityNotFound it will return the error and the generic
 // empty type.
 func handleError[T any](err error, log zerolog.Logger, collector metrics.Collector) (T, error) {
 	var (
@@ -1034,7 +1050,7 @@ func handleError[T any](err error, log zerolog.Logger, collector metrics.Collect
 
 	switch {
 	// as per specification returning nil and nil for not found resources
-	case errors.Is(err, errs.ErrNotFound):
+	case errors.Is(err, errs.ErrEntityNotFound):
 		return zero, nil
 	case errors.Is(err, errs.ErrInvalid):
 		return zero, err
@@ -1060,10 +1076,13 @@ func decodeHash(s string) (h common.Hash, inputLength int, err error) {
 	}
 	b, err := hex.DecodeString(s)
 	if err != nil {
-		return common.Hash{}, 0, errors.New("hex string invalid")
+		return common.Hash{}, 0, fmt.Errorf("invalid hex string: %s", s)
 	}
-	if len(b) > 32 {
-		return common.Hash{}, len(b), errors.New("hex string too long, want at most 32 bytes")
+	if len(b) > common.HashLength {
+		return common.Hash{}, len(b), fmt.Errorf(
+			"hex string too long, want at most 32 bytes, have %d bytes",
+			len(b),
+		)
 	}
 	return common.BytesToHash(b), len(b), nil
 }
@@ -1167,7 +1186,7 @@ func (b *BlockChainAPI) GetProof(
 	storageKeys []string,
 	blockNumberOrHash rpc.BlockNumberOrHash,
 ) (*AccountResult, error) {
-	return nil, errs.ErrNotSupported
+	return nil, errs.NewEndpointNotSupportedError("eth_getProof")
 }
 
 // CreateAccessList creates an EIP-2930 type AccessList for the given transaction.
@@ -1177,5 +1196,5 @@ func (b *BlockChainAPI) CreateAccessList(
 	args TransactionArgs,
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 ) (*AccessListResult, error) {
-	return nil, errs.ErrNotSupported
+	return nil, errs.NewEndpointNotSupportedError("eth_createAccessList")
 }

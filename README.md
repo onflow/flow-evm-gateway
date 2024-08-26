@@ -40,11 +40,11 @@ The binary can then be run using the correct flags (see the table below or the e
 # Running
 Operating an EVM Gateway is straightforward. It can either be deployed locally alongside the Flow emulator or configured to connect with any active Flow networks supporting EVM. Given that the EVM Gateway depends solely on [Access Node APIs](https://developers.flow.com/networks/node-ops/access-onchain-data/access-nodes/accessing-data/access-api), it is compatible with any networks offering this API access.
 
-**Example Configuration for Previewnet**
+**Example Configuration for Testnet**
 ```
 ./evm-gateway
---access-node-grpc-host https://previewnet.evm.nodes.onflow.org \
---flow-network-id flow-previewnet \
+--access-node-grpc-host https://testnet.evm.nodes.onflow.org \
+--flow-network-id flow-testnet \
 --coinbase {EVM-account} \
 --coa-address {funded Flow account address} \
 --coa-key-file {file containing private keys for coa-address, KMS should be used on live networks} \
@@ -122,8 +122,8 @@ The application can be configured using the following flags at runtime:
 | `ws-enabled`                 | `false`                         | Enable websocket connections                                                                                                                                         |
 | `access-node-grpc-host`      | `localhost:3569`                | Host to the flow access node gRPC API                                                                                                                                |
 | `access-node-spork-hosts`    | `""`                            | Previous spork AN hosts, defined as a comma-separated list (e.g. `"host-1.com,host2.com"`)                                                                             |
-| `evm-network-id`             | `previewnet`                    | EVM network ID (options: `previewnet`, `testnet`, `mainnet`)                                                                                                         |
-| `flow-network-id`            | `flow-emulator`                 | Flow network ID (options: `flow-emulator`, `flow-previewnet`, `flow-testnet`)                                                                                       |
+| `evm-network-id`             | `testnet   `                    | EVM network ID (options: `testnet`, `mainnet`)                                                                                                         |
+| `flow-network-id`            | `flow-emulator`                 | Flow network ID (options: `flow-emulator`, `flow-testnet`, `flow-mainnet`)                                                                                       |
 | `coinbase`                   | `""`                            | Coinbase address to use for fee collection                                                                                                                           |
 | `init-cadence-height`        | `0`                             | Cadence block height to start indexing; avoid using on a new network                                                                                                 |
 | `gas-price`                  | `1`                             | Static gas price for EVM transactions                                                                                                                                |
@@ -159,24 +159,6 @@ EVM Gateway has public RPC endpoints available for the following environments:
 
 | Name            | Value                                  |
 |-----------------|----------------------------------------|
-| Network Name    | Migrationnet                             |
-| Description     | The public RPC URL for Flow Migrationnet |
-| RPC Endpoint    | https://evm-001.migrationtestnet1.nodes.onflow.org|
-| Chain ID        | 646                                    |
-| Currency Symbol | FLOW                                   |
-| Block Explorer  | /        |
-
-| Name            | Value                                  |
-|-----------------|----------------------------------------|
-| Network Name    | Previewnet                             |
-| Description     | The public RPC URL for Flow Previewnet |
-| RPC Endpoint    | https://previewnet.evm.nodes.onflow.org|
-| Chain ID        | 646                                    |
-| Currency Symbol | FLOW                                   |
-| Block Explorer  | https://evm.flowscan.io                |
-
-| Name            | Value                                  |
-|-----------------|----------------------------------------|
 | Network Name    | Testnet                                |
 | Description     | The public RPC URL for Flow Testnet    |
 | RPC Endpoint    | https://testnet.evm.nodes.onflow.org   |
@@ -191,7 +173,7 @@ EVM Gateway has public RPC endpoints available for the following environments:
 | RPC Endpoint    | https://mainnet.evm.nodes.onflow.org   |
 | Chain ID        | 747                                    |
 | Currency Symbol | FLOW                                   |
-| Block Explorer  | https://flowdiver.io                   |
+| Block Explorer  | https://evm.flowscan.io                |
 
 
 # JSON-RPC API

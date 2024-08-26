@@ -103,7 +103,11 @@ func (e *Engine) Run(ctx context.Context) error {
 
 	for events := range e.subscriber.Subscribe(ctx, latestCadence) {
 		if events.Err != nil {
-			return fmt.Errorf("failure in event subscription: %w", events.Err)
+			return fmt.Errorf(
+				"failure in event subscription at height %d, with: %w",
+				latestCadence,
+				events.Err,
+			)
 		}
 
 		err = e.processEvents(events.Events)
@@ -137,7 +141,11 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 	// if heartbeat interval with no data still update the cadence height
 	if events.Empty() {
 		if err := e.blocks.SetLatestCadenceHeight(events.CadenceHeight(), nil); err != nil {
-			return fmt.Errorf("failed to update to latest cadence height during events ingestion: %w", err)
+			return fmt.Errorf(
+				"failed to update to latest cadence height: %d, during events ingestion: %w",
+				events.CadenceHeight(),
+				err,
+			)
 		}
 		return nil // nothing else to do this was heartbeat event with not event payloads
 	}
@@ -165,7 +173,7 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 		}
 	}
 
-	err = e.indexReceipts(events.Receipts(), events.Block(), batch)
+	err = e.indexReceipts(events.Receipts(), batch)
 	if err != nil {
 		return fmt.Errorf("failed to index receipts for block %d event: %w", events.Block().Height, err)
 	}
@@ -183,7 +191,7 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 		}
 	}
 
-	e.collector.EVMHeightIndexed(events.CadenceHeight())
+	e.collector.EVMHeightIndexed(events.Block().Height)
 	return nil
 }
 
@@ -194,7 +202,7 @@ func (e *Engine) indexBlock(
 	batch *pebbleDB.Batch,
 ) error {
 	if block == nil { // safety check shouldn't happen
-		return fmt.Errorf("can't process empty block")
+		return fmt.Errorf("can't process empty EVM block for Flow block: %d", cadenceHeight)
 	}
 	// only init latest height if not set
 	if e.evmLastHeight == nil {
@@ -237,11 +245,11 @@ func (e *Engine) indexTransaction(
 		Msg("ingesting new transaction executed event")
 
 	if err := e.transactions.Store(tx, batch); err != nil {
-		return fmt.Errorf("failed to store tx: %w", err)
+		return fmt.Errorf("failed to store tx: %s, with: %w", tx.Hash(), err)
 	}
 
 	if err := e.accounts.Update(tx, receipt, batch); err != nil {
-		return fmt.Errorf("failed to update accounts: %w", err)
+		return fmt.Errorf("failed to update accounts for tx: %s, with: %w", tx.Hash(), err)
 	}
 
 	return nil
@@ -249,18 +257,13 @@ func (e *Engine) indexTransaction(
 
 func (e *Engine) indexReceipts(
 	receipts []*models.StorageReceipt,
-	block *models.Block,
 	batch *pebbleDB.Batch,
 ) error {
-	if block == nil { // safety check shouldn't happen
-		return fmt.Errorf("can't process empty block")
-	}
-
 	if receipts == nil {
 		return nil
 	}
 
-	if err := e.receipts.Store(receipts, block.Height, batch); err != nil {
+	if err := e.receipts.Store(receipts, batch); err != nil {
 		return fmt.Errorf("failed to store receipt: %w", err)
 	}
 

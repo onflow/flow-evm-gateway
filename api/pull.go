@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/big"
 	"sync"
 	"time"
 
@@ -261,7 +260,11 @@ func (api *PullAPI) NewFilter(ctx context.Context, criteria filters.FilterCriter
 		if criteria.ToBlock != nil &&
 			criteria.FromBlock.Cmp(criteria.ToBlock) > 0 &&
 			criteria.ToBlock.Int64() > 0 {
-			return "", fmt.Errorf("from block must be lower than to block")
+			return "", fmt.Errorf(
+				"from block (%d) must be lower than to block (%d)",
+				latest,
+				criteria.ToBlock.Int64(),
+			)
 		}
 		// todo we should check for max range of from-to heights
 	}
@@ -293,23 +296,18 @@ func (api *PullAPI) GetFilterLogs(
 
 	filter, ok := api.filters[id]
 	if !ok {
-		return nil, errors.Join(
-			errs.ErrNotFound,
-			fmt.Errorf("filted by id %s does not exist", id),
-		)
+		return nil, fmt.Errorf("%w: filter by id %s does not exist", errs.ErrEntityNotFound, id)
+
 	}
 
 	if filter.expired() {
 		api.UninstallFilter(id)
-		return nil, errors.Join(
-			errs.ErrNotFound,
-			fmt.Errorf("filted by id %s has expired", id),
-		)
+		return nil, fmt.Errorf("%w: filter by id %s has expired", errs.ErrEntityNotFound, id)
 	}
 
 	logsFilter, ok := filter.(*logsFilter)
 	if !ok {
-		return nil, fmt.Errorf("filted by id %s is not a logs filter", id)
+		return nil, fmt.Errorf("filter by id %s is not a logs filter", id)
 	}
 
 	current, err := api.blocks.LatestEVMHeight()
@@ -324,7 +322,7 @@ func (api *PullAPI) GetFilterLogs(
 
 	logs, ok := result.([]*gethTypes.Log)
 	if !ok {
-		return nil, fmt.Errorf("logs filter returned incorrect type: %T", logs)
+		return nil, fmt.Errorf("logs filter returned incorrect type: %T", result)
 	}
 
 	return logs, nil
@@ -345,7 +343,7 @@ func (api *PullAPI) GetFilterChanges(ctx context.Context, id rpc.ID) (any, error
 
 	f, ok := api.filters[id]
 	if !ok {
-		return nil, errors.Join(errs.ErrNotFound, fmt.Errorf("filted by id %s does not exist", id))
+		return nil, fmt.Errorf("%w: filter by id %s does not exist", errs.ErrEntityNotFound, id)
 	}
 
 	current, err := api.blocks.LatestEVMHeight()
@@ -355,7 +353,7 @@ func (api *PullAPI) GetFilterChanges(ctx context.Context, id rpc.ID) (any, error
 
 	if f.expired() {
 		api.UninstallFilter(id)
-		return nil, errors.Join(errs.ErrNotFound, fmt.Errorf("filted by id %s expired", id))
+		return nil, fmt.Errorf("%w: filter by id %s has expired", errs.ErrEntityNotFound, id)
 	}
 
 	var result any
@@ -367,7 +365,7 @@ func (api *PullAPI) GetFilterChanges(ctx context.Context, id rpc.ID) (any, error
 	case *logsFilter:
 		result, err = api.getLogs(current, filterType)
 	default:
-		return nil, fmt.Errorf("invalid filter type")
+		return nil, fmt.Errorf("invalid filter type: %T", filterType)
 	}
 	if err != nil {
 		return nil, err
@@ -444,7 +442,7 @@ func (api *PullAPI) getTransactions(latestHeight uint64, filter *transactionsFil
 	for i := nextHeight; i <= latestHeight; i++ {
 		b, err := api.blocks.GetByHeight(i)
 		if err != nil {
-			if errors.Is(err, errs.ErrNotFound) {
+			if errors.Is(err, errs.ErrEntityNotFound) {
 				return nil, nil
 			}
 			return nil, err
@@ -478,36 +476,31 @@ func (api *PullAPI) getLogs(latestHeight uint64, filter *logsFilter) (any, error
 
 	to := filter.criteria.ToBlock
 	// we use latest as default for end range
-	end := big.NewInt(int64(latestHeight))
+	end := latestHeight
 	// unless "to" is defined in the criteria
 	if to != nil && to.Int64() >= 0 {
-		end = to
+		end = to.Uint64()
 		// if latest height is bigger than range "to" then we don't return anything
-		if latestHeight > to.Uint64() {
+		if latestHeight > end {
 			return []*gethTypes.Log{}, nil
 		}
 	}
 
-	start := big.NewInt(int64(nextHeight))
+	start := nextHeight
 	// we fetched all available data since start is now bigger than end value
-	if start.Cmp(end) > 0 {
+	if start > end {
 		return []*gethTypes.Log{}, nil
 	}
 
-	f, err := logs.NewRangeFilter(*start, *end, criteria, api.receipts)
+	f, err := logs.NewRangeFilter(start, end, criteria, api.receipts)
 	if err != nil {
-		return nil, fmt.Errorf(
-			"could not create range filter from %d to %d: %w",
-			start.Int64(),
-			end.Int64(),
-			err,
-		)
+		return nil, fmt.Errorf("could not create range filter from %d to %d: %w", start, end, err)
 	}
 
 	api.logger.Debug().
 		Uint64("latest", latestHeight).
-		Int64("from", start.Int64()).
-		Int64("to", end.Int64()).
+		Uint64("from", start).
+		Uint64("to", end).
 		Msg("get filter logs")
 
 	return f.Match()

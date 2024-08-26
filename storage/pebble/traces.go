@@ -42,7 +42,7 @@ func (t *Traces) GetTransaction(ID common.Hash) (json.RawMessage, error) {
 
 	val, err := t.store.get(traceTxIDKey, ID.Bytes())
 	if err != nil {
-		return nil, fmt.Errorf("failed to get trace by ID %s: %w", ID.String(), err)
+		return nil, fmt.Errorf("failed to get trace for transaction ID %s: %w", ID.String(), err)
 	}
 
 	return val, nil

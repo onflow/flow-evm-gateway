@@ -2,7 +2,6 @@ package ingestion
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/onflow/cadence/runtime/common"
@@ -119,7 +118,9 @@ func (r *RPCSubscriber) subscribe(ctx context.Context, height uint64, opts ...ac
 
 	evs, errChan, err := r.client.SubscribeEventsByBlockHeight(ctx, height, r.blocksFilter(), opts...)
 	if err != nil {
-		events <- models.NewBlockEventsError(fmt.Errorf("failed to subscribe to events by block height: %w", err))
+		events <- models.NewBlockEventsError(
+			fmt.Errorf("failed to subscribe to events by block height: %d, with: %w", height, err),
+		)
 		return events
 	}
 
@@ -158,7 +159,7 @@ func (r *RPCSubscriber) subscribe(ctx context.Context, height uint64, opts ...ac
 					return
 				}
 
-				events <- models.NewBlockEventsError(errors.Join(err, errs.ErrDisconnected))
+				events <- models.NewBlockEventsError(fmt.Errorf("%w: %w", errs.ErrDisconnected, err))
 				return
 			}
 		}

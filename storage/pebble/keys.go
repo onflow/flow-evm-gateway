@@ -24,6 +24,10 @@ const (
 	// traces keys
 	traceTxIDKey = byte(40)
 
+	// ledger value
+	ledgerValue     = byte(50)
+	ledgerSlabIndex = byte(51)
+
 	// special keys
 	latestEVMHeightKey     = byte(100)
 	latestCadenceHeightKey = byte(102)

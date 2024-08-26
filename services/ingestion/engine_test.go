@@ -253,7 +253,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 				return eventsChan
 			})
 
-		txCdc, txEvent, transaction, result, err := newTransaction()
+		txCdc, txEvent, transaction, result, err := newTransaction(nextHeight)
 		require.NoError(t, err)
 		blockCdc, block, blockEvent, err := newBlock(nextHeight, []gethCommon.Hash{result.TxHash})
 		require.NoError(t, err)
@@ -297,12 +297,12 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			Once()
 
 		receipts.
-			On("Store", mock.AnythingOfType("[]*models.StorageReceipt"), mock.AnythingOfType("uint64"), mock.Anything).
-			Return(func(receipts []*models.StorageReceipt, evmHeight uint64, _ *pebbleDB.Batch) error {
+			On("Store", mock.AnythingOfType("[]*models.StorageReceipt"), mock.Anything).
+			Return(func(receipts []*models.StorageReceipt, _ *pebbleDB.Batch) error {
 				assert.Len(t, receipts, 1)
 				rcp := receipts[0]
 
-				assert.Equal(t, nextHeight, evmHeight)
+				assert.Equal(t, nextHeight, rcp.BlockNumber.Uint64())
 				assert.Len(t, rcp.Logs, len(result.Logs))
 				assert.Equal(t, result.DeployedContractAddress.ToCommon().String(), rcp.ContractAddress.String())
 				return nil
@@ -356,7 +356,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 				return eventsChan
 			})
 
-		txCdc, txEvent, _, res, err := newTransaction()
+		txCdc, txEvent, _, res, err := newTransaction(nextHeight)
 		require.NoError(t, err)
 		blockCdc, _, blockEvent, err := newBlock(nextHeight, []gethCommon.Hash{res.TxHash})
 		require.NoError(t, err)
@@ -399,8 +399,8 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			Once()
 
 		receipts.
-			On("Store", mock.AnythingOfType("[]*models.StorageReceipt"), mock.AnythingOfType("uint64"), mock.Anything).
-			Return(func(receipts []*models.StorageReceipt, evmHeight uint64, _ *pebbleDB.Batch) error {
+			On("Store", mock.AnythingOfType("[]*models.StorageReceipt"), mock.Anything).
+			Return(func(receipts []*models.StorageReceipt, _ *pebbleDB.Batch) error {
 				require.True(t, blocksFirst)
 				return nil
 			}).
@@ -476,6 +476,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			close(done)
 		}()
 
+		evmHeight := uint64(0)
 		events := make([]flow.Event, 0)
 		blockIndexedFirst := false
 		txsStored := 0
@@ -483,7 +484,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		txHashes := make([]gethCommon.Hash, eventCount)
 
 		for i := 0; i < eventCount; i++ {
-			txCdc, txEvent, transaction, res, err := newTransaction()
+			txCdc, txEvent, transaction, res, err := newTransaction(evmHeight)
 			txHashes[i] = res.TxHash
 			require.NoError(t, err)
 
@@ -499,8 +500,8 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 				Once()
 
 			receipts.
-				On("Store", mock.AnythingOfType("[]*models.StorageReceipt"), mock.AnythingOfType("uint64"), mock.Anything).
-				Return(func(receipts []*models.StorageReceipt, evmHeight uint64, _ *pebbleDB.Batch) error { return nil }).
+				On("Store", mock.AnythingOfType("[]*models.StorageReceipt"), mock.Anything).
+				Return(func(receipts []*models.StorageReceipt, _ *pebbleDB.Batch) error { return nil }).
 				Once()
 
 			events = append(events, flow.Event{
@@ -510,7 +511,6 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		}
 
 		blocksStored := 0
-		evmHeight := uint64(0)
 		blockCdc, block, blockEvent, err := newBlock(evmHeight, txHashes)
 		require.NoError(t, err)
 
@@ -566,7 +566,7 @@ func newBlock(height uint64, txHashes []gethCommon.Hash) (cadence.Event, *models
 	return blockCdc, block, blockEvent, err
 }
 
-func newTransaction() (cadence.Event, *events.Event, models.Transaction, *types.Result, error) {
+func newTransaction(height uint64) (cadence.Event, *events.Event, models.Transaction, *types.Result, error) {
 	res := &types.Result{
 		VMError:                 nil,
 		TxType:                  1,
@@ -597,7 +597,7 @@ func newTransaction() (cadence.Event, *events.Event, models.Transaction, *types.
 	ev := events.NewTransactionEvent(
 		res,
 		txEncoded,
-		1,
+		height,
 	)
 
 	cdcEv, err := ev.Payload.ToCadence(flowGo.Previewnet)

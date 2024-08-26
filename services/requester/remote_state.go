@@ -15,8 +15,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-var previewnetStorageAddress = flow.HexToAddress("0x4f6fd534ddd3fc5f")
-
 var _ atree.Ledger = &remoteLedger{}
 
 func newRemoteLedger(host string, cadenceHeight uint64) (*remoteLedger, error) {
@@ -26,7 +24,7 @@ func newRemoteLedger(host string, cadenceHeight uint64) (*remoteLedger, error) {
 		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(1024*1024*1024)),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("could not connect to rpc host: %w", err)
+		return nil, fmt.Errorf("could not connect to rpc host: %s, with %w", host, err)
 	}
 
 	return &remoteLedger{
