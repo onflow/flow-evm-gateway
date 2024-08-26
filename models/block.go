@@ -78,6 +78,39 @@ func decodeBlockEvent(event cadence.Event) (*Block, error) {
 	}, nil
 }
 
+// todo remove this after updated in flow-go
+type blockEventPayloadV0 struct {
+	Height              uint64          `cadence:"height"`
+	Hash                gethCommon.Hash `cadence:"hash"`
+	Timestamp           uint64          `cadence:"timestamp"`
+	TotalSupply         cadence.Int     `cadence:"totalSupply"`
+	TotalGasUsed        uint64          `cadence:"totalGasUsed"`
+	ParentBlockHash     gethCommon.Hash `cadence:"parentHash"`
+	ReceiptRoot         gethCommon.Hash `cadence:"receiptRoot"`
+	TransactionHashRoot gethCommon.Hash `cadence:"transactionHashRoot"`
+}
+
+// DecodeBlockEventPayload decodes Cadence event into block event payload.
+func decodeLegacyBlockEvent(event cadence.Event) (*Block, error) {
+	var block blockEventPayloadV0
+	err := cadence.DecodeFields(event, &block)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Block{
+		Block: &types.Block{
+			ParentBlockHash:     block.ParentBlockHash,
+			Height:              block.Height,
+			Timestamp:           block.Timestamp,
+			TotalSupply:         block.TotalSupply.Value,
+			ReceiptRoot:         block.ReceiptRoot,
+			TransactionHashRoot: block.TransactionHashRoot,
+			TotalGasUsed:        block.TotalGasUsed,
+		},
+	}, nil
+}
+
 // blockV0 is the block format, prior to adding the PrevRandao field.
 type blockV0 struct {
 	Block             *blockV0Fields
