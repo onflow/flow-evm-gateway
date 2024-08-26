@@ -243,7 +243,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		accounts := &storageMock.AccountIndexer{}
 		accounts.
 			On("Update", mock.AnythingOfType("models.TransactionCall"), mock.AnythingOfType("*models.StorageReceipt"), mock.Anything).
-			Return(func(tx models.Transaction, receipt *models.StorageReceipt, _ *pebbleDB.Batch) error { return nil })
+			Return(func(tx models.Transaction, receipt *models.Receipt, _ *pebbleDB.Batch) error { return nil })
 
 		eventsChan := make(chan models.BlockEvents)
 		subscriber := &mocks.EventSubscriber{}
@@ -298,7 +298,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 
 		receipts.
 			On("Store", mock.AnythingOfType("[]*models.StorageReceipt"), mock.Anything).
-			Return(func(receipts []*models.StorageReceipt, _ *pebbleDB.Batch) error {
+			Return(func(receipts []*models.Receipt, _ *pebbleDB.Batch) error {
 				assert.Len(t, receipts, 1)
 				rcp := receipts[0]
 
@@ -346,7 +346,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		accounts := &storageMock.AccountIndexer{}
 		accounts.
 			On("Update", mock.AnythingOfType("models.TransactionCall"), mock.AnythingOfType("*models.StorageReceipt"), mock.Anything).
-			Return(func(tx models.Transaction, receipt *models.StorageReceipt, _ *pebbleDB.Batch) error { return nil })
+			Return(func(tx models.Transaction, receipt *models.Receipt, _ *pebbleDB.Batch) error { return nil })
 
 		eventsChan := make(chan models.BlockEvents)
 		subscriber := &mocks.EventSubscriber{}
@@ -400,7 +400,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 
 		receipts.
 			On("Store", mock.AnythingOfType("[]*models.StorageReceipt"), mock.Anything).
-			Return(func(receipts []*models.StorageReceipt, _ *pebbleDB.Batch) error {
+			Return(func(receipts []*models.Receipt, _ *pebbleDB.Batch) error {
 				require.True(t, blocksFirst)
 				return nil
 			}).
@@ -444,7 +444,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		accounts := &storageMock.AccountIndexer{}
 		accounts.
 			On("Update", mock.Anything, mock.AnythingOfType("*models.StorageReceipt"), mock.Anything).
-			Return(func(t models.Transaction, r *models.StorageReceipt, _ *pebbleDB.Batch) error { return nil })
+			Return(func(t models.Transaction, r *models.Receipt, _ *pebbleDB.Batch) error { return nil })
 
 		eventsChan := make(chan models.BlockEvents)
 		subscriber := &mocks.EventSubscriber{}
@@ -501,7 +501,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 
 			receipts.
 				On("Store", mock.AnythingOfType("[]*models.StorageReceipt"), mock.Anything).
-				Return(func(receipts []*models.StorageReceipt, _ *pebbleDB.Batch) error { return nil }).
+				Return(func(receipts []*models.Receipt, _ *pebbleDB.Batch) error { return nil }).
 				Once()
 
 			events = append(events, flow.Event{

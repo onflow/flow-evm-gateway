@@ -153,7 +153,7 @@ func (tx *Transaction) Size() uint64 {
 
 func NewTransactionResult(
 	tx models.Transaction,
-	receipt models.StorageReceipt,
+	receipt models.Receipt,
 	networkID *big.Int,
 ) (*Transaction, error) {
 	res, err := NewTransaction(tx, networkID)

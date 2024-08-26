@@ -19,6 +19,8 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-limiter"
 
+	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
+
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/models"
@@ -26,7 +28,6 @@ import (
 	"github.com/onflow/flow-evm-gateway/services/logs"
 	"github.com/onflow/flow-evm-gateway/services/requester"
 	"github.com/onflow/flow-evm-gateway/storage"
-	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 )
 
 const maxFeeHistoryBlockCount = 1024
@@ -440,7 +441,7 @@ func (b *BlockChainAPI) GetBlockByNumber(
 func (b *BlockChainAPI) GetBlockReceipts(
 	ctx context.Context,
 	numHash rpc.BlockNumberOrHash,
-) ([]*models.StorageReceipt, error) {
+) ([]*models.Receipt, error) {
 	l := b.logger.With().
 		Str("endpoint", "getBlockReceipts").
 		Str("hash", numHash.String()).
@@ -459,21 +460,21 @@ func (b *BlockChainAPI) GetBlockReceipts(
 	} else if numHash.BlockNumber != nil {
 		block, err = b.blocks.GetByHeight(uint64(numHash.BlockNumber.Int64()))
 	} else {
-		return handleError[[]*models.StorageReceipt](
+		return handleError[[]*models.Receipt](
 			fmt.Errorf("%w: block number or hash not provided", errs.ErrInvalid),
 			l,
 			b.collector,
 		)
 	}
 	if err != nil {
-		return handleError[[]*models.StorageReceipt](err, l, b.collector)
+		return handleError[[]*models.Receipt](err, l, b.collector)
 	}
 
-	receipts := make([]*models.StorageReceipt, len(block.TransactionHashes))
+	receipts := make([]*models.Receipt, len(block.TransactionHashes))
 	for i, hash := range block.TransactionHashes {
 		rcp, err := b.receipts.GetByTransactionID(hash)
 		if err != nil {
-			return handleError[[]*models.StorageReceipt](err, l, b.collector)
+			return handleError[[]*models.Receipt](err, l, b.collector)
 		}
 		receipts[i] = rcp
 	}

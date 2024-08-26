@@ -77,7 +77,7 @@ func (_m *AccountIndexer) GetNonce(address common.Address) (uint64, error) {
 }
 
 // Update provides a mock function with given fields: tx, receipt, batch
-func (_m *AccountIndexer) Update(tx models.Transaction, receipt *models.StorageReceipt, batch *pebble.Batch) error {
+func (_m *AccountIndexer) Update(tx models.Transaction, receipt *models.Receipt, batch *pebble.Batch) error {
 	ret := _m.Called(tx, receipt, batch)
 
 	if len(ret) == 0 {
@@ -85,7 +85,7 @@ func (_m *AccountIndexer) Update(tx models.Transaction, receipt *models.StorageR
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(models.Transaction, *models.StorageReceipt, *pebble.Batch) error); ok {
+	if rf, ok := ret.Get(0).(func(models.Transaction, *models.Receipt, *pebble.Batch) error); ok {
 		r0 = rf(tx, receipt, batch)
 	} else {
 		r0 = ret.Error(0)

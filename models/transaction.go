@@ -162,7 +162,7 @@ func (tc TransactionCall) MarshalBinary() ([]byte, error) {
 // decodeTransactionEvent takes a cadence event for transaction executed
 // and decodes its payload into a Transaction interface and a StorageReceipt.
 // The concrete type will be either a TransactionCall or a DirectCall.
-func decodeTransactionEvent(event cadence.Event) (Transaction, *StorageReceipt, error) {
+func decodeTransactionEvent(event cadence.Event) (Transaction, *Receipt, error) {
 	txEvent, err := events.DecodeTransactionEventPayload(event)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to Cadence decode transaction event [%s]: %w", event.String(), err)
@@ -197,7 +197,7 @@ func decodeTransactionEvent(event cadence.Event) (Transaction, *StorageReceipt, 
 		revertReason = txEvent.ReturnedData
 	}
 
-	receipt := NewStorageReceipt(gethReceipt, revertReason, txEvent.PrecompiledCalls)
+	receipt := NewReceipt(gethReceipt, revertReason, txEvent.PrecompiledCalls)
 
 	var tx Transaction
 	// check if the transaction payload is actually from a direct call,

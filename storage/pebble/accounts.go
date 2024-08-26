@@ -31,7 +31,7 @@ func NewAccounts(db *Storage) *Accounts {
 
 func (a *Accounts) Update(
 	tx models.Transaction,
-	receipt *models.StorageReceipt,
+	receipt *models.Receipt,
 	batch *pebble.Batch,
 ) error {
 	a.mux.Lock()

@@ -8,13 +8,13 @@ import (
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 )
 
-// StorageReceipt is a receipt representation for storage.
+// Receipt struct copies the geth.Receipt type found here:
+// https://github.com/ethereum/go-ethereum/blob/9bbb9df18549d6f81c3d1f4fc6c65f71bc92490d/core/types/receipt.go#L52
 //
-// This struct copies the geth.Receipt type found here: https://github.com/ethereum/go-ethereum/blob/9bbb9df18549d6f81c3d1f4fc6c65f71bc92490d/core/types/receipt.go#L52
 // the reason is if we use geth.Receipt some values will be skipped when RLP encoding which is because
 // geth node has the data locally, but we don't in evm gateway, so we can not reproduce those values
 // and we need to store them
-type StorageReceipt struct {
+type Receipt struct {
 	Type              uint8            `json:"type,omitempty"`
 	PostState         []byte           `json:"root"`
 	Status            uint64           `json:"status"`
@@ -34,32 +34,12 @@ type StorageReceipt struct {
 	PrecompiledCalls  []byte
 }
 
-func (sr *StorageReceipt) ToGethReceipt() *gethTypes.Receipt {
-	return &gethTypes.Receipt{
-		Type:              sr.Type,
-		PostState:         sr.PostState,
-		Status:            sr.Status,
-		CumulativeGasUsed: sr.CumulativeGasUsed,
-		Bloom:             sr.Bloom,
-		Logs:              sr.Logs,
-		TxHash:            sr.TxHash,
-		ContractAddress:   sr.ContractAddress,
-		GasUsed:           sr.GasUsed,
-		EffectiveGasPrice: sr.EffectiveGasPrice,
-		BlobGasUsed:       sr.BlobGasUsed,
-		BlobGasPrice:      sr.BlobGasPrice,
-		BlockHash:         sr.BlockHash,
-		BlockNumber:       sr.BlockNumber,
-		TransactionIndex:  sr.TransactionIndex,
-	}
-}
-
-func NewStorageReceipt(
+func NewReceipt(
 	receipt *gethTypes.Receipt,
 	revertReason []byte,
 	precompiledCalls []byte,
-) *StorageReceipt {
-	return &StorageReceipt{
+) *Receipt {
+	return &Receipt{
 		Type:              receipt.Type,
 		PostState:         receipt.PostState,
 		Status:            receipt.Status,
@@ -80,11 +60,15 @@ func NewStorageReceipt(
 	}
 }
 
+func ReceiptsFromBytes(data []byte) {
+
+}
+
 // MarshalReceipt takes a receipt and its associated transaction,
 // and marshals the receipt to the proper structure needed by
 // eth_getTransactionReceipt.
 func MarshalReceipt(
-	receipt *StorageReceipt,
+	receipt *Receipt,
 	tx Transaction,
 ) (map[string]interface{}, error) {
 	from, err := tx.From()
