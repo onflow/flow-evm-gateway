@@ -104,6 +104,7 @@ func FromFlags() (*Config, error) {
 		gas,
 		coa,
 		key,
+		keyAlg,
 		keysPath,
 		flowNetwork,
 		logLevel,
@@ -135,6 +136,7 @@ func FromFlags() (*Config, error) {
 	flag.StringVar(&gas, "gas-price", "1", "Static gas price used for EVM transactions")
 	flag.StringVar(&coa, "coa-address", "", "Flow address that holds COA account used for submitting transactions")
 	flag.StringVar(&key, "coa-key", "", "Private key value for the COA address used for submitting transactions")
+	flag.StringVar(&keyAlg, "coa-key-alg", "ECDSA_P256", "Private key algorithm for the COA private key, only effective if coa-key is present, defaults to ECDSA_P256")
 	flag.StringVar(&keysPath, "coa-key-file", "", "File path that contains JSON array of COA keys used in key-rotation mechanism, this is exclusive with coa-key flag.")
 	flag.BoolVar(&cfg.CreateCOAResource, "coa-resource-create", false, "Auto-create the COA resource in the Flow COA account provided if one doesn't exist")
 	flag.StringVar(&logLevel, "log-level", "debug", "Define verbosity of the log output ('debug', 'info', 'warn', 'error', 'fatal', 'panic')")
@@ -170,11 +172,21 @@ func FromFlags() (*Config, error) {
 	}
 
 	if key != "" {
-		pkey, err := crypto.DecodePrivateKeyHex(crypto.ECDSA_P256, key)
-		if err != nil {
-			return nil, fmt.Errorf("invalid COA private key: %w", err)
+		if strings.EqualFold(keyAlg, crypto.ECDSA_P256.String()) {
+			pkey, err := crypto.DecodePrivateKeyHex(crypto.ECDSA_P256, key)
+			if err != nil {
+				return nil, fmt.Errorf("invalid COA private key: %w", err)
+			}
+			cfg.COAKey = pkey
+		} else if strings.EqualFold(keyAlg, crypto.ECDSA_secp256k1.String()) {
+			pkey, err := crypto.DecodePrivateKeyHex(crypto.ECDSA_secp256k1, key)
+			if err != nil {
+				return nil, fmt.Errorf("invalid COA private key: %w", err)
+			}
+			cfg.COAKey = pkey
+		} else {
+			return nil, fmt.Errorf("unrecognized COA private key algorith: %s", keyAlg)
 		}
-		cfg.COAKey = pkey
 	} else if keysPath != "" {
 		raw, err := os.ReadFile(keysPath)
 		if err != nil {

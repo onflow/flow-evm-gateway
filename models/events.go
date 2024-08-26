@@ -53,7 +53,8 @@ func NewCadenceEvents(events flow.BlockEvents) (*CadenceEvents, error) {
 		return nil, err
 	}
 
-	logIndex := uint(0) // todo revisit if we can reconstruct it simply like this
+	// Log index field holds the index position in the entire block
+	logIndex := uint(0)
 	for i, rcp := range e.receipts {
 		// add transaction hashes to the block
 		e.block.TransactionHashes = append(e.block.TransactionHashes, rcp.TxHash)

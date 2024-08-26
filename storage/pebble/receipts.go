@@ -143,14 +143,18 @@ func (r *Receipts) getByBlockHeight(height []byte, batch *pebble.Batch) ([]*mode
 		)
 	}
 
+	// Log index field holds the index position in the entire block
+	logIndex := uint(0)
 	for _, rcp := range receipts {
 		// dynamically populate the values since they are not stored to save space
-		for i, l := range rcp.Logs {
-			l.BlockHash = rcp.BlockHash
+		for _, l := range rcp.Logs {
 			l.BlockNumber = rcp.BlockNumber.Uint64()
+			l.BlockHash = rcp.BlockHash
 			l.TxHash = rcp.TxHash
 			l.TxIndex = rcp.TransactionIndex
-			l.Index = uint(i)
+			l.Index = logIndex
+			l.Removed = false
+			logIndex++
 		}
 	}
 

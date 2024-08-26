@@ -1,7 +1,6 @@
 const { assert } = require('chai')
 const conf = require('./config')
 const helpers = require('./helpers')
-const web3 = conf.web3
 
 it('emit logs and retrieve them using different filters', async () => {
     setTimeout(() => process.exit(1), 19 * 1000) // hack if the ws connection is not closed
