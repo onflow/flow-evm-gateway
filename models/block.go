@@ -61,6 +61,10 @@ func (b *Block) Hash() (gethCommon.Hash, error) {
 func decodeBlockEvent(event cadence.Event) (*Block, error) {
 	payload, err := events.DecodeBlockEventPayload(event)
 	if err != nil {
+		if block, err := decodeLegacyBlockEvent(event); err == nil {
+			return block, nil
+		}
+
 		return nil, fmt.Errorf("failed to cadence decode block [%s]: %w", event.String(), err)
 	}
 
