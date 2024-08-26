@@ -32,7 +32,7 @@ func NewDebugAPI(tracer storage.TraceIndexer, blocks storage.BlockIndexer, logge
 }
 
 // TraceTransaction will return a debug execution trace of a transaction if it exists,
-// currently we only support CALL tracing, so the config is ignored.
+// currently we only support CALL traces, so the config is ignored.
 func (d *DebugAPI) TraceTransaction(
 	ctx context.Context,
 	hash gethCommon.Hash,

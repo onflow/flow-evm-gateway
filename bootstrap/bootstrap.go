@@ -232,7 +232,7 @@ func startIngestion(
 		go func() {
 			err = tracesEngine.Run(ctx)
 			if err != nil {
-				logger.Error().Err(err).Msg("tracing ingestion engine failed to run")
+				logger.Error().Err(err).Msg("traces ingestion engine failed to run")
 				panic(err)
 			}
 		}()
