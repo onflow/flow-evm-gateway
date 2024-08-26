@@ -356,7 +356,7 @@ func (b *BlockChainAPI) GetTransactionReceipt(
 		return handleError[map[string]interface{}](err, l, b.collector)
 	}
 
-	txReceipt, err := models.MarshalReceipt(receipt, tx)
+	txReceipt, err := MarshalReceipt(receipt, tx)
 	if err != nil {
 		return handleError[map[string]interface{}](err, l, b.collector)
 	}
