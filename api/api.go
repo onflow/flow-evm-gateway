@@ -26,6 +26,7 @@ import (
 	"github.com/onflow/flow-evm-gateway/services/logs"
 	"github.com/onflow/flow-evm-gateway/services/requester"
 	"github.com/onflow/flow-evm-gateway/storage"
+	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 )
 
 const maxFeeHistoryBlockCount = 1024
@@ -965,6 +966,7 @@ func (b *BlockChainAPI) prepareBlockResponse(
 		Timestamp:        hexutil.Uint64(block.Timestamp),
 		BaseFeePerGas:    hexutil.Big(*big.NewInt(0)),
 		LogsBloom:        types.LogsBloom([]*types.Log{}),
+		Miner:            evmTypes.CoinbaseAddress.ToCommon(),
 	}
 
 	blockBytes, err := block.ToBytes()
