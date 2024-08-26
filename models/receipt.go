@@ -1,10 +1,12 @@
 package models
 
 import (
+	"fmt"
 	"math/big"
 
 	"github.com/onflow/go-ethereum/common"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
+	"github.com/onflow/go-ethereum/rlp"
 )
 
 // Receipt struct copies the geth.Receipt type found here:
@@ -59,8 +61,12 @@ func NewReceipt(
 	}
 }
 
-func ReceiptsFromBytes(data []byte) {
-
+func ReceiptsFromBytes(data []byte) ([]*Receipt, error) {
+	var receipts []*Receipt
+	if err := rlp.DecodeBytes(data, &receipts); err != nil {
+		return nil, fmt.Errorf("failed to RLP-decode block receipts [%x] %w", data, err)
+	}
+	return receipts, nil
 }
 
 type BloomsHeight struct {

@@ -133,14 +133,9 @@ func (r *Receipts) getByBlockHeight(height []byte, batch *pebble.Batch) ([]*mode
 		return nil, err
 	}
 
-	var receipts []*models.Receipt
-	if err = rlp.DecodeBytes(val, &receipts); err != nil {
-		return nil, fmt.Errorf(
-			"failed to RLP-decode block receipts [%x] at height: %d, with: %w",
-			val,
-			height,
-			err,
-		)
+	receipts, err := models.ReceiptsFromBytes(val)
+	if err != nil {
+		return nil, err
 	}
 
 	// Log index field holds the index position in the entire block
