@@ -358,29 +358,35 @@ func (b *Bootstrap) startEngine(
 	b.logger.Info().Msgf("%s engine strated successfully", name)
 }
 
-func Run(ctx context.Context, cfg *config.Config) {
+// Run will run complete bootstrap of the EVM gateway with all the engines.
+// Run is a blocking call, but it does signal readiness of the service
+// through a channel provided as an argument.
+func Run(ctx context.Context, cfg *config.Config, ready chan struct{}) error {
 	boot, err := New(cfg)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	if cfg.TracesEnabled {
 		if err := boot.StartTraceDownloader(ctx); err != nil {
-			panic(err)
+			return err
 		}
 	}
 
 	if err := boot.StartEventIngestion(ctx); err != nil {
-		panic(err)
+		return err
 	}
 
 	if err := boot.StartAPIServer(ctx); err != nil {
-		panic(err)
+		return err
 	}
 
 	if err := boot.StartMetricsServer(ctx); err != nil {
-		panic(err)
+		return err
 	}
+
+	// mark ready
+	close(ready)
 
 	// if context is canceled start shutdown
 	<-ctx.Done()
@@ -390,4 +396,6 @@ func Run(ctx context.Context, cfg *config.Config) {
 	boot.StopMetricsServer()
 	boot.StopEventIngestion()
 	boot.StopTraceDownloader()
+
+	return nil
 }
