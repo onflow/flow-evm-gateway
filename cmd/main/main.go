@@ -25,36 +25,14 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	boot, err := bootstrap.New(cfg)
+	go func() {
+		osSig := make(chan os.Signal, 1)
+		signal.Notify(osSig, syscall.SIGINT, syscall.SIGTERM)
 
-	if cfg.TracesEnabled {
-		if err := boot.StartTraceDownloader(ctx); err != nil {
-			panic(err)
-		}
-	}
+		<-osSig
+		fmt.Println("OS Signal to shutdown received, shutting down")
+		cancel()
+	}()
 
-	if err := boot.StartEventIngestion(ctx); err != nil {
-		panic(err)
-	}
-
-	if err := boot.StartAPIServer(ctx); err != nil {
-		panic(err)
-	}
-
-	if err := boot.StartMetricsServer(ctx); err != nil {
-		panic(err)
-	}
-
-	osSig := make(chan os.Signal, 1)
-	signal.Notify(osSig, syscall.SIGINT, syscall.SIGTERM)
-
-	<-osSig
-	fmt.Println("OS Signal to shutdown received, shutting down")
-
-	boot.StopEventIngestion()
-	boot.StopMetricsServer()
-	boot.StopEventIngestion()
-	boot.StopTraceDownloader()
-
-	cancel()
+	bootstrap.Run(ctx, cfg)
 }
