@@ -47,23 +47,23 @@ func (_m *ReceiptIndexer) BloomsForBlockRange(start uint64, end uint64) ([]*mode
 }
 
 // GetByBlockHeight provides a mock function with given fields: height
-func (_m *ReceiptIndexer) GetByBlockHeight(height uint64) ([]*models.StorageReceipt, error) {
+func (_m *ReceiptIndexer) GetByBlockHeight(height uint64) ([]*models.Receipt, error) {
 	ret := _m.Called(height)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetByBlockHeight")
 	}
 
-	var r0 []*models.StorageReceipt
+	var r0 []*models.Receipt
 	var r1 error
-	if rf, ok := ret.Get(0).(func(uint64) ([]*models.StorageReceipt, error)); ok {
+	if rf, ok := ret.Get(0).(func(uint64) ([]*models.Receipt, error)); ok {
 		return rf(height)
 	}
-	if rf, ok := ret.Get(0).(func(uint64) []*models.StorageReceipt); ok {
+	if rf, ok := ret.Get(0).(func(uint64) []*models.Receipt); ok {
 		r0 = rf(height)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]*models.StorageReceipt)
+			r0 = ret.Get(0).([]*models.Receipt)
 		}
 	}
 
@@ -77,23 +77,23 @@ func (_m *ReceiptIndexer) GetByBlockHeight(height uint64) ([]*models.StorageRece
 }
 
 // GetByTransactionID provides a mock function with given fields: ID
-func (_m *ReceiptIndexer) GetByTransactionID(ID common.Hash) (*models.StorageReceipt, error) {
+func (_m *ReceiptIndexer) GetByTransactionID(ID common.Hash) (*models.Receipt, error) {
 	ret := _m.Called(ID)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetByTransactionID")
 	}
 
-	var r0 *models.StorageReceipt
+	var r0 *models.Receipt
 	var r1 error
-	if rf, ok := ret.Get(0).(func(common.Hash) (*models.StorageReceipt, error)); ok {
+	if rf, ok := ret.Get(0).(func(common.Hash) (*models.Receipt, error)); ok {
 		return rf(ID)
 	}
-	if rf, ok := ret.Get(0).(func(common.Hash) *models.StorageReceipt); ok {
+	if rf, ok := ret.Get(0).(func(common.Hash) *models.Receipt); ok {
 		r0 = rf(ID)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*models.StorageReceipt)
+			r0 = ret.Get(0).(*models.Receipt)
 		}
 	}
 
@@ -107,7 +107,7 @@ func (_m *ReceiptIndexer) GetByTransactionID(ID common.Hash) (*models.StorageRec
 }
 
 // Store provides a mock function with given fields: receipts, batch
-func (_m *ReceiptIndexer) Store(receipts []*models.StorageReceipt, batch *pebble.Batch) error {
+func (_m *ReceiptIndexer) Store(receipts []*models.Receipt, batch *pebble.Batch) error {
 	ret := _m.Called(receipts, batch)
 
 	if len(ret) == 0 {
@@ -115,7 +115,7 @@ func (_m *ReceiptIndexer) Store(receipts []*models.StorageReceipt, batch *pebble
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func([]*models.StorageReceipt, *pebble.Batch) error); ok {
+	if rf, ok := ret.Get(0).(func([]*models.Receipt, *pebble.Batch) error); ok {
 		r0 = rf(receipts, batch)
 	} else {
 		r0 = ret.Error(0)

@@ -201,12 +201,7 @@ func startIngestion(
 			return err
 		}
 
-		initHeight, err := blocks.LatestEVMHeight()
-		if err != nil {
-			return err
-		}
 		tracesEngine := traces.NewTracesIngestionEngine(
-			initHeight,
 			blocksPublisher,
 			blocks,
 			trace,

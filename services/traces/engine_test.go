@@ -81,7 +81,14 @@ func TestTraceIngestion(t *testing.T) {
 				return nil
 			})
 
-		engine := NewTracesIngestionEngine(latestHeight, blockPublisher, blocks, trace, downloader, zerolog.Nop(), metrics.NopCollector)
+		engine := NewTracesIngestionEngine(
+			blockPublisher,
+			blocks,
+			trace,
+			downloader,
+			zerolog.Nop(),
+			metrics.NopCollector,
+		)
 
 		err := engine.Run(context.Background())
 		require.NoError(t, err)
@@ -172,7 +179,14 @@ func TestTraceIngestion(t *testing.T) {
 				return nil
 			})
 
-		engine := NewTracesIngestionEngine(latestHeight, blocksPublisher, blocks, trace, downloader, zerolog.Nop(), metrics.NopCollector)
+		engine := NewTracesIngestionEngine(
+			blocksPublisher,
+			blocks,
+			trace,
+			downloader,
+			zerolog.Nop(),
+			metrics.NopCollector,
+		)
 
 		err := engine.Run(context.Background())
 		require.NoError(t, err)
@@ -252,7 +266,14 @@ func TestTraceIngestion(t *testing.T) {
 				return nil, fmt.Errorf("failed download")
 			})
 
-		engine := NewTracesIngestionEngine(latestHeight, blockBroadcaster, blocks, trace, downloader, logger, collector)
+		engine := NewTracesIngestionEngine(
+			blockBroadcaster,
+			blocks,
+			trace,
+			downloader,
+			logger,
+			collector,
+		)
 
 		err := engine.Run(context.Background())
 		require.NoError(t, err)

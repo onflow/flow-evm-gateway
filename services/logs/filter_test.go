@@ -34,7 +34,7 @@ func mustHash(b *models.Block) common.Hash {
 	return h
 }
 
-var receipts = []*models.StorageReceipt{
+var receipts = []*models.Receipt{
 	{
 		BlockNumber: big.NewInt(int64(blocks[0].Height)),
 		BlockHash:   mustHash(blocks[0]),
@@ -112,15 +112,15 @@ func blockStorage() storage.BlockIndexer {
 
 func receiptStorage() storage.ReceiptIndexer {
 	for _, r := range receipts { // calculate bloom filters
-		rcp := r.ToGethReceipt()
+		rcp := toGethReceipt(r)
 		r.Bloom = gethTypes.CreateBloom(gethTypes.Receipts{rcp})
 	}
 
 	receiptStorage := &mocks.ReceiptIndexer{}
 	receiptStorage.
 		On("GetByBlockHeight", mock.AnythingOfType("uint64")).
-		Return(func(height uint64) ([]*models.StorageReceipt, error) {
-			rcps := make([]*models.StorageReceipt, 0)
+		Return(func(height uint64) ([]*models.Receipt, error) {
+			rcps := make([]*models.Receipt, 0)
 			for _, r := range receipts {
 				if r.BlockNumber.Uint64() == height {
 					rcps = append(rcps, r)
@@ -154,6 +154,26 @@ func receiptStorage() storage.ReceiptIndexer {
 		})
 
 	return receiptStorage
+}
+
+func toGethReceipt(sr *models.Receipt) *gethTypes.Receipt {
+	return &gethTypes.Receipt{
+		Type:              sr.Type,
+		PostState:         sr.PostState,
+		Status:            sr.Status,
+		CumulativeGasUsed: sr.CumulativeGasUsed,
+		Bloom:             sr.Bloom,
+		Logs:              sr.Logs,
+		TxHash:            sr.TxHash,
+		ContractAddress:   sr.ContractAddress,
+		GasUsed:           sr.GasUsed,
+		EffectiveGasPrice: sr.EffectiveGasPrice,
+		BlobGasUsed:       sr.BlobGasUsed,
+		BlobGasPrice:      sr.BlobGasPrice,
+		BlockHash:         sr.BlockHash,
+		BlockNumber:       sr.BlockNumber,
+		TransactionIndex:  sr.TransactionIndex,
+	}
 }
 
 func TestIDFilter(t *testing.T) {

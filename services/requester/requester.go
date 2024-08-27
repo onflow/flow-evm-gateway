@@ -18,7 +18,7 @@ import (
 	"github.com/onflow/flow-go/fvm/evm"
 	"github.com/onflow/flow-go/fvm/evm/emulator"
 	"github.com/onflow/flow-go/fvm/evm/emulator/state"
-	"github.com/onflow/flow-go/fvm/evm/stdlib"
+	evmImpl "github.com/onflow/flow-go/fvm/evm/impl"
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/flow-go/fvm/systemcontracts"
 	"github.com/onflow/go-ethereum/common"
@@ -759,7 +759,7 @@ func cadenceStringToBytes(value cadence.Value) ([]byte, error) {
 
 // parseResult
 func parseResult(res cadence.Value) (*evmTypes.ResultSummary, error) {
-	result, err := stdlib.ResultSummaryFromEVMResultValue(res)
+	result, err := evmImpl.ResultSummaryFromEVMResultValue(res)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode EVM result of type: %s, with: %w", res.Type().ID(), err)
 	}

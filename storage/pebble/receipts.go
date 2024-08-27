@@ -36,7 +36,7 @@ func NewReceipts(store *Storage) *Receipts {
 // - receipt transaction ID => block height bytes
 // - receipt block height => list of encoded receipts (1+ per block)
 // - receipt block height => list of bloom filters (1+ per block)
-func (r *Receipts) Store(receipts []*models.StorageReceipt, batch *pebble.Batch) error {
+func (r *Receipts) Store(receipts []*models.Receipt, batch *pebble.Batch) error {
 	r.mux.Lock()
 	defer r.mux.Unlock()
 
@@ -90,7 +90,7 @@ func (r *Receipts) Store(receipts []*models.StorageReceipt, batch *pebble.Batch)
 	return nil
 }
 
-func (r *Receipts) GetByTransactionID(ID common.Hash) (*models.StorageReceipt, error) {
+func (r *Receipts) GetByTransactionID(ID common.Hash) (*models.Receipt, error) {
 	r.mux.RLock()
 	defer r.mux.RUnlock()
 
@@ -113,14 +113,14 @@ func (r *Receipts) GetByTransactionID(ID common.Hash) (*models.StorageReceipt, e
 	return nil, errs.ErrEntityNotFound
 }
 
-func (r *Receipts) GetByBlockHeight(height uint64) ([]*models.StorageReceipt, error) {
+func (r *Receipts) GetByBlockHeight(height uint64) ([]*models.Receipt, error) {
 	r.mux.RLock()
 	defer r.mux.RUnlock()
 
 	return r.getByBlockHeight(uint64Bytes(height), nil)
 }
 
-func (r *Receipts) getByBlockHeight(height []byte, batch *pebble.Batch) ([]*models.StorageReceipt, error) {
+func (r *Receipts) getByBlockHeight(height []byte, batch *pebble.Batch) ([]*models.Receipt, error) {
 	var val []byte
 	var err error
 
@@ -133,14 +133,9 @@ func (r *Receipts) getByBlockHeight(height []byte, batch *pebble.Batch) ([]*mode
 		return nil, err
 	}
 
-	var receipts []*models.StorageReceipt
-	if err = rlp.DecodeBytes(val, &receipts); err != nil {
-		return nil, fmt.Errorf(
-			"failed to RLP-decode block receipts [%x] at height: %d, with: %w",
-			val,
-			height,
-			err,
-		)
+	receipts, err := models.ReceiptsFromBytes(val)
+	if err != nil {
+		return nil, err
 	}
 
 	// Log index field holds the index position in the entire block
