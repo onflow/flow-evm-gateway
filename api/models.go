@@ -219,7 +219,9 @@ func NewTransaction(
 	if tx.Type() > types.AccessListTxType {
 		result.GasFeeCap = (*hexutil.Big)(tx.GasFeeCap())
 		result.GasTipCap = (*hexutil.Big)(tx.GasTipCap())
-		result.GasPrice = (*hexutil.Big)(tx.GasFeeCap()) // Since BaseFee is `0`, this is the effective gas price the sender is willing to pay.
+		// Since BaseFee is `0`, this is the max gas price
+		// the sender is willing to pay.
+		result.GasPrice = (*hexutil.Big)(tx.GasFeeCap())
 	}
 
 	if tx.Type() > types.DynamicFeeTxType {

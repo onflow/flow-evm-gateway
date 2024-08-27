@@ -42,6 +42,7 @@ type Transaction interface {
 	GasFeeCap() *big.Int
 	GasTipCap() *big.Int
 	GasPrice() *big.Int
+	EffectiveGasPrice(*big.Int) *big.Int
 	BlobGas() uint64
 	BlobGasFeeCap() *big.Int
 	BlobHashes() []common.Hash
@@ -109,6 +110,10 @@ func (dc DirectCall) GasPrice() *big.Int {
 	return big.NewInt(0)
 }
 
+func (dc DirectCall) EffectiveGasPrice(baseFee *big.Int) *big.Int {
+	return big.NewInt(0)
+}
+
 func (dc DirectCall) BlobGas() uint64 {
 	return 0
 }
@@ -152,6 +157,22 @@ func (tc TransactionCall) From() (common.Address, error) {
 		gethTypes.LatestSignerForChainID(tc.ChainId()),
 		tc.Transaction,
 	)
+}
+
+func (tc TransactionCall) EffectiveGasPrice(baseFee *big.Int) *big.Int {
+	switch tc.Type() {
+	case gethTypes.LegacyTxType, gethTypes.AccessListTxType:
+		return tc.GasPrice()
+	case gethTypes.DynamicFeeTxType, gethTypes.BlobTxType:
+		fee := tc.GasTipCap()
+		fee = fee.Add(fee, baseFee)
+		if tc.GasFeeCapIntCmp(fee) < 0 {
+			return tc.GasFeeCap()
+		}
+		return fee
+	}
+
+	return big.NewInt(0)
 }
 
 func (tc TransactionCall) MarshalBinary() ([]byte, error) {
@@ -217,8 +238,7 @@ func decodeTransactionEvent(event cadence.Event) (Transaction, *Receipt, error) 
 		tx = TransactionCall{Transaction: gethTx}
 	}
 
-	// since there's no base fee we can always use gas price
-	receipt.EffectiveGasPrice = tx.GasPrice()
+	receipt.EffectiveGasPrice = tx.EffectiveGasPrice(big.NewInt(0))
 
 	return tx, receipt, nil
 }
