@@ -34,5 +34,14 @@ func main() {
 		cancel()
 	}()
 
-	bootstrap.Run(ctx, cfg)
+	ready := make(chan struct{})
+	go func() {
+		err = bootstrap.Run(ctx, cfg, ready)
+		if err != nil {
+			panic(err)
+		}
+	}()
+
+	<-ready
+	fmt.Println("EVM gateway bootstrap completed, services running")
 }
