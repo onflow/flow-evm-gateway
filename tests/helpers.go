@@ -163,15 +163,7 @@ func servicesSetup(t *testing.T) (emulator.Emulator, func()) {
 		require.NoError(t, err)
 	}()
 
-	// allow for some time to startup
-	require.Eventually(t, func() bool {
-		select {
-		case <-bootstrapDone:
-			return true
-		default:
-			return false
-		}
-	}, time.Second*5, time.Millisecond*100)
+	<-bootstrapDone
 
 	return emu, func() {
 		cancel()

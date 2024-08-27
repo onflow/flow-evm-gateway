@@ -80,11 +80,13 @@ func Test_ConcurrentTransactionSubmission(t *testing.T) {
 		url: fmt.Sprintf("%s:%d", cfg.RPCHost, cfg.RPCPort),
 	}
 
+	ready := make(chan struct{})
 	go func() {
-		err = bootstrap.Start(ctx, cfg)
+		err := bootstrap.Run(ctx, cfg, ready)
 		require.NoError(t, err)
 	}()
-	time.Sleep(500 * time.Millisecond) // some time to startup
+
+	<-ready
 
 	eoaKey, err := crypto.HexToECDSA(eoaTestPrivateKey)
 	require.NoError(t, err)
@@ -216,11 +218,13 @@ func Test_CloudKMSConcurrentTransactionSubmission(t *testing.T) {
 		url: fmt.Sprintf("%s:%d", cfg.RPCHost, cfg.RPCPort),
 	}
 
+	ready := make(chan struct{})
 	go func() {
-		err = bootstrap.Start(ctx, cfg)
+		err := bootstrap.Run(ctx, cfg, ready)
 		require.NoError(t, err)
 	}()
-	time.Sleep(2500 * time.Millisecond) // some time to startup
+
+	<-ready
 
 	eoaKey, err := crypto.HexToECDSA(eoaTestPrivateKey)
 	require.NoError(t, err)
