@@ -42,7 +42,6 @@ type Transaction interface {
 	GasFeeCap() *big.Int
 	GasTipCap() *big.Int
 	GasPrice() *big.Int
-	EffectiveGasPrice(*big.Int) *big.Int
 	BlobGas() uint64
 	BlobGasFeeCap() *big.Int
 	BlobHashes() []common.Hash
@@ -110,10 +109,6 @@ func (dc DirectCall) GasPrice() *big.Int {
 	return big.NewInt(0)
 }
 
-func (dc DirectCall) EffectiveGasPrice(baseFee *big.Int) *big.Int {
-	return big.NewInt(0)
-}
-
 func (dc DirectCall) BlobGas() uint64 {
 	return 0
 }
@@ -159,22 +154,6 @@ func (tc TransactionCall) From() (common.Address, error) {
 	)
 }
 
-func (tc TransactionCall) EffectiveGasPrice(baseFee *big.Int) *big.Int {
-	switch tc.Type() {
-	case gethTypes.LegacyTxType, gethTypes.AccessListTxType:
-		return tc.GasPrice()
-	case gethTypes.DynamicFeeTxType, gethTypes.BlobTxType:
-		fee := tc.GasTipCap()
-		fee = fee.Add(fee, baseFee)
-		if tc.GasFeeCapIntCmp(fee) < 0 {
-			return tc.GasFeeCap()
-		}
-		return fee
-	}
-
-	return big.NewInt(0)
-}
-
 func (tc TransactionCall) MarshalBinary() ([]byte, error) {
 	encoded, err := tc.Transaction.MarshalBinary()
 	return append([]byte{tc.Type()}, encoded...), err
@@ -190,12 +169,13 @@ func decodeTransactionEvent(event cadence.Event) (Transaction, *Receipt, error) 
 	}
 
 	gethReceipt := &gethTypes.Receipt{
-		BlockNumber:      big.NewInt(int64(txEvent.BlockHeight)),
-		Type:             txEvent.TransactionType,
-		TxHash:           txEvent.Hash,
-		ContractAddress:  common.HexToAddress(txEvent.ContractAddress),
-		GasUsed:          txEvent.GasConsumed,
-		TransactionIndex: uint(txEvent.Index),
+		BlockNumber:       big.NewInt(int64(txEvent.BlockHeight)),
+		Type:              txEvent.TransactionType,
+		TxHash:            txEvent.Hash,
+		ContractAddress:   common.HexToAddress(txEvent.ContractAddress),
+		GasUsed:           txEvent.GasConsumed,
+		TransactionIndex:  uint(txEvent.Index),
+		EffectiveGasPrice: big.NewInt(0),
 	}
 
 	if len(txEvent.Logs) > 0 {
@@ -228,17 +208,15 @@ func decodeTransactionEvent(event cadence.Event) (Transaction, *Receipt, error) 
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to RLP-decode direct call [%x]: %w", txEvent.Payload, err)
 		}
-
 		tx = DirectCall{DirectCall: directCall}
 	} else {
 		gethTx := &gethTypes.Transaction{}
 		if err := gethTx.UnmarshalBinary(txEvent.Payload); err != nil {
 			return nil, nil, fmt.Errorf("failed to RLP-decode transaction [%x]: %w", txEvent.Payload, err)
 		}
+		receipt.EffectiveGasPrice = gethTx.EffectiveGasTipValue(nil)
 		tx = TransactionCall{Transaction: gethTx}
 	}
-
-	receipt.EffectiveGasPrice = tx.EffectiveGasPrice(big.NewInt(0))
 
 	return tx, receipt, nil
 }
