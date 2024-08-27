@@ -357,3 +357,37 @@ func (b *Bootstrap) startEngine(
 	<-engine.Ready()
 	b.logger.Info().Msgf("%s engine strated successfully", name)
 }
+
+func Run(ctx context.Context, cfg *config.Config) {
+	boot, err := New(cfg)
+	if err != nil {
+		panic(err)
+	}
+
+	if cfg.TracesEnabled {
+		if err := boot.StartTraceDownloader(ctx); err != nil {
+			panic(err)
+		}
+	}
+
+	if err := boot.StartEventIngestion(ctx); err != nil {
+		panic(err)
+	}
+
+	if err := boot.StartAPIServer(ctx); err != nil {
+		panic(err)
+	}
+
+	if err := boot.StartMetricsServer(ctx); err != nil {
+		panic(err)
+	}
+
+	// if context is canceled start shutdown
+	<-ctx.Done()
+	boot.logger.Warn().Msg("bootstrap received context cancellation, stopping services")
+
+	boot.StopEventIngestion()
+	boot.StopMetricsServer()
+	boot.StopEventIngestion()
+	boot.StopTraceDownloader()
+}
