@@ -48,6 +48,7 @@ type Bootstrap struct {
 	server     *api.Server
 	metrics    *metrics.Server
 	events     *ingestion.Engine
+	traces     *traces.Engine
 }
 
 func New(config *config.Config) (*Bootstrap, error) {
@@ -150,7 +151,7 @@ func (b *Bootstrap) StartTraceDownloader(ctx context.Context) error {
 	}
 
 	// initialize trace downloader engine
-	tracesEngine := traces.NewTracesIngestionEngine(
+	b.traces = traces.NewTracesIngestionEngine(
 		b.publishers.Block,
 		b.storages.Blocks,
 		b.storages.Traces,
@@ -159,8 +160,16 @@ func (b *Bootstrap) StartTraceDownloader(ctx context.Context) error {
 		b.collector,
 	)
 
-	b.startEngine(ctx, tracesEngine, "trace-downloader")
+	b.startEngine(ctx, b.traces, "trace-downloader")
 	return nil
+}
+
+func (b *Bootstrap) StopTraceDownloader() {
+	if b.traces == nil {
+		return
+	}
+	b.logger.Warn().Msg("stopping trace downloader engine")
+	b.traces.Stop()
 }
 
 func (b *Bootstrap) StopEventIngestion() {
