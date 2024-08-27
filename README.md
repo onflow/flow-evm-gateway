@@ -42,13 +42,59 @@ Operating an EVM Gateway is straightforward. It can either be deployed locally a
 
 **Example Configuration for Testnet**
 ```
-./evm-gateway
---access-node-grpc-host https://testnet.evm.nodes.onflow.org \
---flow-network-id flow-testnet \
---coinbase {EVM-account} \
---coa-address {funded Flow account address} \
---coa-key-file {file containing private keys for coa-address, KMS should be used on live networks} \
---coa-resource-create 
+./evm-gateway \
+--access-node-grpc-host=access.devnet.nodes.onflow.org:9000 \
+--flow-network-id=flow-testnet \
+--init-cadence-height=211176670 \
+--ws-enabled=true \
+--coa-resource-create=true \
+--coinbase=FACF71692421039876a5BB4F10EF7A439D8ef61E \
+--coa-address=0x62631c28c9fc5a91 \
+--coa-key=2892fba444f1d5787739708874e3b01160671924610411ac787ac1379d420f49 \
+--gas-price=100
+```
+
+For the `--gas-price`, feel free to experiment with different values.
+
+The `--coinbase` can be any EOA address.
+
+To generate your own `--coa-key` and `--coa-address`, run:
+
+```bash
+# Install Flow CLI, if you do not already have it installed
+sh -ci "$(curl -fsSL https://raw.githubusercontent.com/onflow/flow-cli/master/install.sh)"
+
+flow-c1 keys generate
+```
+
+This will output something similar to:
+
+```bash
+🔴️ Store private key safely and don't share with anyone!
+Private Key 		 3cf8334d644b390f45df380e5108c908b53a483856cb4808295c3c54a28e4ad1
+Public Key 		 33a13ade6461b308e5149d32804396ce56bc52c9be06f7c416af09422f14cd609ba3d104ce4d14dd4f4b754d11917e9d203ef415b9e2786f8d85f1b49a197747
+Mnemonic 		 often scare peanut arena future click resemble grain unknown boil corn change
+Derivation Path 	 m/44'/539'/0'/0/0
+Signature Algorithm 	 ECDSA_P256
+```
+
+Visit https://faucet.flow.com/, and use the generated `Public Key`, to create and fund your Flow account.
+Make sure to use the Flow address and the `Private Key` for the `--coa-address` & `--coa-key` flags.
+
+Once the EVM Gateway is up and running, verify that indexing works with:
+
+```bash
+curl -s -XPOST 'localhost:8545' --header 'Content-Type: application/json' --data-raw '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
+```
+
+Should return a response similar to:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": "0x68"
+}
 ```
 
 ### Running Locally
