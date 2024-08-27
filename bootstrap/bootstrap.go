@@ -233,11 +233,9 @@ func startIngestion(
 		logger,
 		collector,
 	)
-	const retries = 15
-	restartableEventEngine := models.NewRestartableEngine(eventEngine, retries, logger)
 
 	go func() {
-		err = restartableEventEngine.Run(ctx)
+		err = eventEngine.Run(ctx)
 		if err != nil {
 			logger.Error().Err(err).Msg("event ingestion engine failed to run")
 			panic(err)
@@ -245,7 +243,7 @@ func startIngestion(
 	}()
 
 	// wait for ingestion engines to be ready
-	<-restartableEventEngine.Ready()
+	<-eventEngine.Ready()
 
 	logger.Info().Msg("ingestion start up successful")
 	return nil
