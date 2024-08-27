@@ -25,6 +25,159 @@ import (
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
 )
 
+type Storages struct {
+	Storage      *pebble.Storage
+	Blocks       storage.BlockIndexer
+	Transactions storage.TransactionIndexer
+	Receipts     storage.ReceiptIndexer
+	Accounts     storage.AccountIndexer
+	Traces       storage.TraceIndexer
+}
+
+type Publishers struct {
+	Block       *models.Publisher
+	Transaction *models.Publisher
+	Logs        *models.Publisher
+}
+
+type Bootstrap struct {
+	logger     zerolog.Logger
+	config     *config.Config
+	client     *requester.CrossSporkClient
+	storages   *Storages
+	publishers *Publishers
+}
+
+func New(config *config.Config) (*Bootstrap, error) {
+	logger := zerolog.New(config.LogWriter).With().Timestamp().Logger()
+	logger = logger.Level(config.LogLevel)
+	logger.Info().Msg("starting up the EVM gateway")
+
+	// create pebble storage from the provided database root directory
+	store, err := pebble.New(config.DatabaseDir, logger)
+	if err != nil {
+		return nil, err
+	}
+
+	// create access client with cross-spork capabilities
+	currentSporkClient, err := grpc.NewClient(config.AccessNodeHost)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create client connection for host: %s, with error: %w", b.config.AccessNodeHost, err)
+	}
+
+	// if we provided access node previous spork hosts add them to the client
+	pastSporkClients := make([]access.Client, len(config.AccessNodePreviousSporkHosts))
+	for i, host := range config.AccessNodePreviousSporkHosts {
+		grpcClient, err := grpc.NewClient(host)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create client connection for host: %s, with error: %w", host, err)
+		}
+
+		pastSporkClients[i] = grpcClient
+	}
+
+	// initialize cross spork client to the access nodes
+	client, err := requester.NewCrossSporkClient(
+		currentSporkClient,
+		pastSporkClients,
+		logger,
+		config.FlowNetworkID,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Bootstrap{
+		publishers: &Publishers{
+			Block:       nil,
+			Transaction: nil,
+			Logs:        nil,
+		},
+		storages: &Storages{
+			Storage:      store,
+			Blocks:       pebble.NewBlocks(store, config.FlowNetworkID),
+			Transactions: pebble.NewTransactions(store),
+			Receipts:     pebble.NewReceipts(store),
+			Accounts:     pebble.NewAccounts(store),
+			Traces:       pebble.NewTraces(store),
+		},
+		logger: logger,
+		config: config,
+		client: client,
+	}, nil
+}
+
+func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
+	// create event subscriber
+	subscriber := ingestion.NewRPCSubscriber(
+		b.client,
+		b.config.HeartbeatInterval,
+		b.config.FlowNetworkID,
+		b.logger,
+	)
+
+	// initialize event ingestion engine
+	eventEngine := ingestion.NewEventIngestionEngine(
+		subscriber,
+		b.storages.Storage,
+		b.storages.Blocks,
+		b.storages.Receipts,
+		b.storages.Transactions,
+		b.storages.Accounts,
+		b.publishers.Block,
+		b.publishers.Logs,
+		b.logger,
+		collector,
+	)
+	const retries = 15
+	restartableEventEngine := models.NewRestartableEngine(eventEngine, retries, b.logger)
+
+	b.startEngine(ctx, restartableEventEngine, "event-ingestion")
+	return nil
+}
+
+func (b *Bootstrap) StartTraceDownloader(ctx context.Context) error {
+	// create gcp downloader
+	downloader, err := traces.NewGCPDownloader(b.config.TracesBucketName, b.logger)
+	if err != nil {
+		return err
+	}
+
+	// initialize trace downloader engine
+	tracesEngine := traces.NewTracesIngestionEngine(
+		b.publishers.Block,
+		b.storages.Blocks,
+		b.storages.Traces,
+		downloader,
+		b.logger,
+		collector,
+	)
+
+	b.startEngine(ctx, tracesEngine, "trace-downloader")
+	return nil
+}
+
+func (b *Bootstrap) StartRPCServer() {
+
+}
+
+func (b *Bootstrap) startEngine(
+	ctx context.Context,
+	engine models.Engine,
+	name string,
+) {
+	go func() {
+		err := engine.Run(ctx)
+		if err != nil {
+			b.logger.Error().Err(err).Msgf("%s engine failed to run", name)
+			panic(err)
+		}
+	}()
+
+	<-engine.Ready()
+	b.logger.Info().Msgf("%s engine strated successfully", name)
+}
+
 func Start(ctx context.Context, cfg *config.Config) error {
 	logger := zerolog.New(cfg.LogWriter).With().Timestamp().Logger()
 	logger = logger.Level(cfg.LogLevel)
@@ -201,7 +354,12 @@ func startIngestion(
 			return err
 		}
 
+		initHeight, err := blocks.LatestEVMHeight()
+		if err != nil {
+			return err
+		}
 		tracesEngine := traces.NewTracesIngestionEngine(
+			initHeight,
 			blocksPublisher,
 			blocks,
 			trace,
