@@ -478,6 +478,7 @@ func Run(ctx context.Context, cfg *config.Config, ready chan struct{}) error {
 	boot.StopMetricsServer()
 	boot.StopEventIngestion()
 	boot.StopTraceDownloader()
+	boot.StopAPIServer()
 
 	return nil
 }
