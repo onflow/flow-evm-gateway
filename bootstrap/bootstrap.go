@@ -73,10 +73,11 @@ func New(config *config.Config) (*Bootstrap, error) {
 			Transaction: models.NewPublisher(),
 			Logs:        models.NewPublisher(),
 		},
-		storages: storages,
-		logger:   logger,
-		config:   config,
-		client:   client,
+		storages:  storages,
+		logger:    logger,
+		config:    config,
+		client:    client,
+		collector: metrics.NewCollector(logger),
 	}, nil
 }
 
