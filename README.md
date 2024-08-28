@@ -24,7 +24,7 @@ The basic design of the EVM Gateway consists of a couple of components:
 
 **Manual Build**
 
-We suggest using docker to run the EVM Gateway as explained in the next section. If you decide to build the binaries yourself you can do so by running:
+We recommend using Docker to run the EVM Gateway, as detailed in the subsequent section. Alternatively, if you decide to build the binaries manually, you can do so by running:
 
 ```
 go build -o evm-gateway cmd/main/main.go
