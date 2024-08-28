@@ -451,20 +451,20 @@ func Run(ctx context.Context, cfg *config.Config, ready chan struct{}) error {
 
 	if cfg.TracesEnabled {
 		if err := boot.StartTraceDownloader(ctx); err != nil {
-			return err
+			return fmt.Errorf("failed to start trace downloader engine: %w", err)
 		}
 	}
 
 	if err := boot.StartEventIngestion(ctx); err != nil {
-		return err
+		return fmt.Errorf("failed to start event ingestion engine: %w", err)
 	}
 
 	if err := boot.StartAPIServer(ctx); err != nil {
-		return err
+		return fmt.Errorf("failed to start API server: %w", err)
 	}
 
 	if err := boot.StartMetricsServer(ctx); err != nil {
-		return err
+		return fmt.Errorf("failed to start metrics server: %w", err)
 	}
 
 	// mark ready
