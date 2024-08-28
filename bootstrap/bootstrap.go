@@ -131,10 +131,8 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 		b.logger,
 		b.collector,
 	)
-	const retries = 15
-	restartableEventEngine := models.NewRestartableEngine(b.events, retries, b.logger)
 
-	b.startEngine(ctx, restartableEventEngine, "event-ingestion")
+	b.startEngine(ctx, b.events, "event-ingestion")
 	return nil
 }
 
