@@ -16,6 +16,7 @@ type Collector interface {
 	EVMHeightIndexed(height uint64)
 	EVMAccountInteraction(address string)
 	MeasureRequestDuration(start time.Time, method string)
+	OperatorBalance(account flow.Account)
 }
 
 var _ Collector = &DefaultCollector{}
