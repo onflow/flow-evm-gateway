@@ -36,6 +36,10 @@ func TestWeb3_E2E(t *testing.T) {
 		runWeb3Test(t, "eth_non_interactive_test")
 	})
 
+	t.Run("test transaction type fees", func(t *testing.T) {
+		runWeb3Test(t, "eth_transaction_type_fees_test")
+	})
+
 	t.Run("retrieve syncing status", func(t *testing.T) {
 		runWeb3Test(t, "eth_syncing_status_test")
 	})
