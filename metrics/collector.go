@@ -91,6 +91,7 @@ func NewCollector(logger zerolog.Logger) Collector {
 		evmBlockHeight:            evmBlockHeight,
 		evmAccountCallCounters:    evmAccountCallCounters,
 		requestDurations:          requestDurations,
+		operatorBalance:           operatorBalance,
 	}
 }
 
