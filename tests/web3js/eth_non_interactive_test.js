@@ -182,7 +182,7 @@ it('get code', async () => {
 
 it('get coinbase', async () => {
     let coinbase = await web3.eth.getCoinbase()
-    assert.equal(coinbase, conf.serviceEOA) // e2e configured account
+    assert.equal(coinbase, conf.coinbase) // e2e configured account
 })
 
 it('get gas price', async () => {
