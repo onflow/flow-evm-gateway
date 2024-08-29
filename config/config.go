@@ -164,6 +164,8 @@ func FromFlags() (*Config, error) {
 	cfg.Coinbase = common.HexToAddress(coinbase)
 	if g, ok := new(big.Int).SetString(gas, 10); ok {
 		cfg.GasPrice = g
+	} else if !ok {
+		return nil, fmt.Errorf("invalid gas price")
 	}
 
 	cfg.COAAddress = flow.HexToAddress(coa)
