@@ -35,7 +35,7 @@ type rpcHandler struct {
 	server *rpc.Server
 }
 
-type httpServer struct {
+type Server struct {
 	logger   zerolog.Logger
 	timeouts rpc.HTTPTimeouts
 
@@ -63,18 +63,20 @@ const (
 	batchResponseMaxSize = 5 * 1000 * 1000 // 5 MB
 )
 
-func NewHTTPServer(
+func NewServer(
 	logger zerolog.Logger,
 	collector metrics.Collector,
 	cfg *config.Config,
-) *httpServer {
+) *Server {
+	logger = logger.With().Str("component", "API").Logger()
+
 	zeroSlog := slogzerolog.Option{
 		Logger: &logger,
 		Level:  slog.LevelError,
 	}.NewZerologHandler()
 	gethLog.SetDefault(gethLog.NewLogger(zeroSlog))
 
-	return &httpServer{
+	return &Server{
 		logger:    logger,
 		timeouts:  rpc.DefaultHTTPTimeouts,
 		config:    cfg,
@@ -84,7 +86,7 @@ func NewHTTPServer(
 
 // SetListenAddr configures the listening address of the server.
 // The address can only be set while the server is not running.
-func (h *httpServer) SetListenAddr(host string, port int) error {
+func (h *Server) SetListenAddr(host string, port int) error {
 	if h.listener != nil && (host != h.host || port != h.port) {
 		return fmt.Errorf("HTTP server already running on: %s", h.endpoint)
 	}
@@ -96,7 +98,7 @@ func (h *httpServer) SetListenAddr(host string, port int) error {
 }
 
 // ListenAddr returns the listening address of the server.
-func (h *httpServer) ListenAddr() string {
+func (h *Server) ListenAddr() string {
 	if h.listener != nil {
 		return h.listener.Addr().String()
 	}
@@ -105,7 +107,7 @@ func (h *httpServer) ListenAddr() string {
 }
 
 // EnableRPC turns on JSON-RPC over HTTP on the server.
-func (h *httpServer) EnableRPC(apis []rpc.API) error {
+func (h *Server) EnableRPC(apis []rpc.API) error {
 	if h.rpcAllowed() {
 		return fmt.Errorf("JSON-RPC over HTTP is already enabled")
 	}
@@ -130,12 +132,12 @@ func (h *httpServer) EnableRPC(apis []rpc.API) error {
 }
 
 // rpcAllowed returns true when JSON-RPC over HTTP is enabled.
-func (h *httpServer) rpcAllowed() bool {
+func (h *Server) rpcAllowed() bool {
 	return h.httpHandler != nil
 }
 
 // EnableWS turns on JSON-RPC over WebSocket on the server.
-func (h *httpServer) EnableWS(apis []rpc.API) error {
+func (h *Server) EnableWS(apis []rpc.API) error {
 	if h.wsAllowed() {
 		return fmt.Errorf("JSON-RPC over WebSocket is already enabled")
 	}
@@ -159,12 +161,12 @@ func (h *httpServer) EnableWS(apis []rpc.API) error {
 }
 
 // wsAllowed returns true when JSON-RPC over WebSocket is enabled.
-func (h *httpServer) wsAllowed() bool {
+func (h *Server) wsAllowed() bool {
 	return h.wsHandler != nil
 }
 
 // disableWS disables the JSON-RPC over WebSocket handler.
-func (h *httpServer) disableWS() bool {
+func (h *Server) disableWS() bool {
 	if h.wsAllowed() {
 		h.wsHandler.server.Stop()
 		h.wsHandler = nil
@@ -175,7 +177,7 @@ func (h *httpServer) disableWS() bool {
 }
 
 // Start starts the HTTP server if it is enabled and not already running.
-func (h *httpServer) Start() error {
+func (h *Server) Start() error {
 	if h.endpoint == "" || h.listener != nil {
 		return nil // already running or not configured
 	}
@@ -226,7 +228,7 @@ func (h *httpServer) Start() error {
 }
 
 // disableRPC stops the JSON-RPC over HTTP handler.
-func (h *httpServer) disableRPC() bool {
+func (h *Server) disableRPC() bool {
 	if h.rpcAllowed() {
 		h.httpHandler.server.Stop()
 		h.httpHandler = nil
@@ -236,7 +238,7 @@ func (h *httpServer) disableRPC() bool {
 	return false
 }
 
-func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// this overwrites the remote address with the header value, this is used when the server is
 	// behind a proxy, and the true source address is overwritten by proxy, but retained in a header.
 	if h.config.AddressHeader != "" {
@@ -286,7 +288,7 @@ func (h *httpServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // Stop shuts down the HTTP server.
-func (h *httpServer) Stop() {
+func (h *Server) Stop() {
 	if h.listener == nil {
 		return // not running
 	}

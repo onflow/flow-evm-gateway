@@ -158,12 +158,14 @@ func servicesSetup(t *testing.T) (emulator.Emulator, func()) {
 		MetricsPort:       8443,
 	}
 
+	bootstrapDone := make(chan struct{})
 	go func() {
-		err = bootstrap.Start(ctx, cfg)
+		err = bootstrap.Run(ctx, cfg, bootstrapDone)
 		require.NoError(t, err)
 	}()
 
-	time.Sleep(2 * time.Second) // some time to startup
+	<-bootstrapDone
+
 	return emu, func() {
 		cancel()
 		srv.Stop()
