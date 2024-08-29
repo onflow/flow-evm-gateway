@@ -1,6 +1,6 @@
 import EVM
 
-transaction(hexEncodedTx: String) {
+transaction(hexEncodedTx: String, coinbase: String) {
     let coa: &EVM.CadenceOwnedAccount
 
     prepare(signer: auth(Storage) &Account) {
@@ -12,7 +12,7 @@ transaction(hexEncodedTx: String) {
     execute {
         let txResult = EVM.run(
             tx: hexEncodedTx.decodeHex(),
-            coinbase: self.coa.address()
+            coinbase: EVM.addressFromString(coinbase)
         )
         assert(
             txResult.status == EVM.Status.failed || txResult.status == EVM.Status.successful,
