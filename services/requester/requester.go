@@ -636,6 +636,8 @@ func (e *EVM) getSignerNetworkInfo(ctx context.Context) (uint32, uint64, error) 
 		)
 	}
 
+	e.collector.OperatorBalance(account)
+
 	signerPub := e.signer.PublicKey()
 	for _, k := range account.Keys {
 		if k.PublicKey.Equals(signerPub) {
