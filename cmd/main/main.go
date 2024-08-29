@@ -25,15 +25,6 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	go func() {
-		osSig := make(chan os.Signal, 1)
-		signal.Notify(osSig, syscall.SIGINT, syscall.SIGTERM)
-
-		<-osSig
-		fmt.Println("OS Signal to shutdown received, shutting down")
-		cancel()
-	}()
-
 	ready := make(chan struct{})
 	go func() {
 		err = bootstrap.Run(ctx, cfg, ready)
@@ -43,5 +34,11 @@ func main() {
 	}()
 
 	<-ready
-	fmt.Println("EVM gateway bootstrap completed, services running")
+
+	osSig := make(chan os.Signal, 1)
+	signal.Notify(osSig, syscall.SIGINT, syscall.SIGTERM)
+
+	<-osSig
+	fmt.Println("OS Signal to shutdown received, shutting down")
+	cancel()
 }
