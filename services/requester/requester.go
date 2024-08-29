@@ -222,9 +222,13 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 	if err != nil {
 		return common.Hash{}, err
 	}
+	coinbaseAddress, err := cadence.NewString(e.config.Coinbase.Hex())
+	if err != nil {
+		return common.Hash{}, err
+	}
 
 	script := e.replaceAddresses(runTxScript)
-	flowTx, err := e.buildTransaction(ctx, script, hexEncodedTx)
+	flowTx, err := e.buildTransaction(ctx, script, hexEncodedTx, coinbaseAddress)
 	if err != nil {
 		e.logger.Error().Err(err).Str("data", txData).Msg("failed to build transaction")
 		return common.Hash{}, err
@@ -631,6 +635,8 @@ func (e *EVM) getSignerNetworkInfo(ctx context.Context) (uint32, uint64, error) 
 			err,
 		)
 	}
+
+	e.collector.OperatorBalance(account)
 
 	signerPub := e.signer.PublicKey()
 	for _, k := range account.Keys {

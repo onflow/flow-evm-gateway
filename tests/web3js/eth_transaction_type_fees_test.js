@@ -1,4 +1,3 @@
-const utils = require('web3-utils')
 const { assert } = require('chai')
 const conf = require('./config')
 const helpers = require('./helpers')
@@ -66,6 +65,9 @@ it('calculates fees for legacy tx type', async () => {
     } catch (e) {
         assert.include(e.message, "the minimum accepted gas price for transactions is: 150")
     }
+
+    let coinbaseBalance = await web3.eth.getBalance(conf.coinbase)
+    assert.equal(coinbaseBalance, 55585700n)
 })
 
 it('calculates fees for access list tx type', async () => {
@@ -120,6 +122,9 @@ it('calculates fees for access list tx type', async () => {
     } catch (e) {
         assert.include(e.message, "the minimum accepted gas price for transactions is: 150")
     }
+
+    let coinbaseBalance = await web3.eth.getBalance(conf.coinbase)
+    assert.equal(coinbaseBalance, 60085350n)
 })
 
 it('calculates fees for dynamic fees tx type', async () => {
@@ -215,4 +220,7 @@ it('calculates fees for dynamic fees tx type', async () => {
     } catch (e) {
         assert.include(e.message, "the minimum accepted gas price for transactions is: 150")
     }
+
+    let coinbaseBalance = await web3.eth.getBalance(conf.coinbase)
+    assert.equal(coinbaseBalance, 70093350n)
 })
