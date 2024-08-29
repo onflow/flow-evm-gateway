@@ -82,7 +82,8 @@ func New(config *config.Config) (*Bootstrap, error) {
 }
 
 func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
-	b.logger.Info().Msg("bootstrap starting event ingestion")
+	l := b.logger.With().Str("component", "bootstrap-ingestion").Logger()
+	l.Info().Msg("bootstrap starting event ingestion")
 
 	// get latest cadence block from the network and the database
 	latestCadenceBlock, err := b.client.GetLatestBlock(context.Background(), true)
@@ -105,7 +106,7 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 		)
 	}
 
-	b.logger.Info().
+	l.Info().
 		Uint64("start-cadence-height", latestCadenceHeight).
 		Uint64("latest-cadence-height", latestCadenceBlock.Height).
 		Uint64("missed-heights", latestCadenceBlock.Height-latestCadenceHeight).
@@ -133,12 +134,13 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 		b.collector,
 	)
 
-	b.startEngine(ctx, b.events, "event-ingestion")
+	startEngine(ctx, b.events, l)
 	return nil
 }
 
 func (b *Bootstrap) StartTraceDownloader(ctx context.Context) error {
-	b.logger.Info().Msg("bootstrap starting trace downloader")
+	l := b.logger.With().Str("component", "bootstrap-traces").Logger()
+	l.Info().Msg("starting engine")
 
 	// create gcp downloader
 	downloader, err := traces.NewGCPDownloader(b.config.TracesBucketName, b.logger)
@@ -156,7 +158,7 @@ func (b *Bootstrap) StartTraceDownloader(ctx context.Context) error {
 		b.collector,
 	)
 
-	b.startEngine(ctx, b.traces, "trace-downloader")
+	startEngine(ctx, b.traces, l)
 	return nil
 }
 
@@ -337,21 +339,23 @@ func (b *Bootstrap) StopMetricsServer() {
 	b.metrics.Stop()
 }
 
-func (b *Bootstrap) startEngine(
+// startEngine starts provided engine and panics if there are startup errors.
+func startEngine(
 	ctx context.Context,
 	engine models.Engine,
-	name string,
+	logger zerolog.Logger,
 ) {
+	logger.Info().Msg("starting engine")
 	go func() {
 		err := engine.Run(ctx)
 		if err != nil {
-			b.logger.Error().Err(err).Msgf("%s engine failed to run", name)
+			logger.Error().Err(err).Msg("engine failed to run")
 			panic(err)
 		}
 	}()
 
 	<-engine.Ready()
-	b.logger.Info().Msgf("%s engine strated successfully", name)
+	logger.Info().Msg("engine started successfully")
 }
 
 // setupCrossSporkClient sets up a cross-spork AN client.
