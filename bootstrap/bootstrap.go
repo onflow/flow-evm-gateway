@@ -62,7 +62,7 @@ func New(config *config.Config) (*Bootstrap, error) {
 		return nil, err
 	}
 
-	storages, err := setupStorage(config, logger)
+	storages, err := setupStorage(config, client, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +85,7 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 	b.logger.Info().Msg("bootstrap starting event ingestion")
 
 	// get latest cadence block from the network and the database
-	latestCadenceBlock, err := b.client.GetLatestBlock(context.Background(), false)
+	latestCadenceBlock, err := b.client.GetLatestBlock(context.Background(), true)
 	if err != nil {
 		return fmt.Errorf("failed to get latest cadence block: %w", err)
 	}
@@ -389,7 +389,11 @@ func setupCrossSporkClient(config *config.Config, logger zerolog.Logger) (*reque
 
 // setupStorage creates storage and initializes it with configured starting cadence height
 // in case such a height doesn't already exist in the database.
-func setupStorage(config *config.Config, logger zerolog.Logger) (*Storages, error) {
+func setupStorage(
+	config *config.Config,
+	client *requester.CrossSporkClient,
+	logger zerolog.Logger,
+) (*Storages, error) {
 	// create pebble storage from the provided database root directory
 	store, err := pebble.New(config.DatabaseDir, logger)
 	if err != nil {
@@ -397,11 +401,6 @@ func setupStorage(config *config.Config, logger zerolog.Logger) (*Storages, erro
 	}
 
 	blocks := pebble.NewBlocks(store, config.FlowNetworkID)
-
-	client, err := setupCrossSporkClient(config, logger)
-	if err != nil {
-		return nil, err
-	}
 
 	// hard set the start cadence height, this is used when force reindexing
 	if config.ForceStartCadenceHeight != 0 {
