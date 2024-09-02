@@ -420,6 +420,7 @@ type responseHandler struct {
 	metrics     metrics.Collector
 }
 
+const errMethodNotFound = -32601
 const errCodePanic = -32603
 
 type jsonError struct {
@@ -455,6 +456,8 @@ func (w *responseHandler) Write(data []byte) (int, error) {
 		switch message.Error.Code {
 		case errCodePanic:
 			w.metrics.ServerPanicked(errMsg)
+		case errMethodNotFound:
+			break
 		default:
 			if errMsg == "" {
 				break
