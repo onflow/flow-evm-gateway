@@ -181,7 +181,6 @@ func NewEVM(
 
 	// create COA on the account
 	if config.CreateCOAResource {
-		// we ignore errors for now since creation of already existing COA resource will fail, which is fine for now
 		tx, err := evm.buildTransaction(
 			context.Background(),
 			evm.replaceAddresses(createCOAScript),
@@ -189,9 +188,11 @@ func NewEVM(
 		)
 		if err != nil {
 			logger.Warn().Err(err).Msg("COA resource auto-creation failure")
+			return nil, fmt.Errorf("COA resource auto-creation failure: %w", err)
 		}
 		if err := evm.client.SendTransaction(context.Background(), *tx); err != nil {
 			logger.Warn().Err(err).Msg("failed to send COA resource auto-creation transaction")
+			return nil, fmt.Errorf("failed to send COA resource auto-creation transaction: %w", err)
 		}
 	}
 
