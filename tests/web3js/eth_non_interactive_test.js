@@ -27,6 +27,14 @@ it('get block', async () => {
     )
     assert.equal(block.size, 3994n)
     assert.equal(block.miner, '0x0000000000000000000000030000000000000000')
+    assert.equal(
+        block.sha3Uncles,
+        '0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347'
+    )
+    assert.equal(
+        block.stateRoot,
+        '0x0000000000000000000000000000000000000000000000000000000000000000'
+    )
 
     let blockHash = await web3.eth.getBlock(block.hash)
     assert.deepEqual(block, blockHash)

@@ -968,6 +968,7 @@ func (b *BlockChainAPI) prepareBlockResponse(
 		BaseFeePerGas:    hexutil.Big(*big.NewInt(0)),
 		LogsBloom:        types.LogsBloom([]*types.Log{}),
 		Miner:            evmTypes.CoinbaseAddress.ToCommon(),
+		Sha3Uncles:       types.EmptyUncleHash,
 	}
 
 	blockBytes, err := block.ToBytes()
