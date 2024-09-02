@@ -181,7 +181,6 @@ func NewEVM(
 
 	// create COA on the account
 	if config.CreateCOAResource {
-		// we ignore errors for now since creation of already existing COA resource will fail, which is fine for now
 		tx, err := evm.buildTransaction(
 			context.Background(),
 			evm.replaceAddresses(createCOAScript),
@@ -189,9 +188,11 @@ func NewEVM(
 		)
 		if err != nil {
 			logger.Warn().Err(err).Msg("COA resource auto-creation failure")
+			return nil, fmt.Errorf("COA resource auto-creation failure: %w", err)
 		}
 		if err := evm.client.SendTransaction(context.Background(), *tx); err != nil {
 			logger.Warn().Err(err).Msg("failed to send COA resource auto-creation transaction")
+			return nil, fmt.Errorf("failed to send COA resource auto-creation transaction: %w", err)
 		}
 	}
 
@@ -478,7 +479,7 @@ func (e *EVM) Call(
 				Uint64("cadence-height", height).
 				Int64("evm-height", evmHeight).
 				Str("from", from.String()).
-				Str("data", string(data)).
+				Str("data", hex.EncodeToString(data)).
 				Msg("failed to execute call")
 		}
 		return nil, fmt.Errorf("failed to execute script at height: %d, with: %w", height, err)
@@ -528,6 +529,15 @@ func (e *EVM) EstimateGas(
 		[]cadence.Value{hexEncodedTx, hexEncodedAddress},
 	)
 	if err != nil {
+		if !errors.Is(err, errs.ErrHeightOutOfRange) {
+			e.logger.Error().
+				Err(err).
+				Uint64("cadence-height", height).
+				Int64("evm-height", evmHeight).
+				Str("from", from.String()).
+				Str("data", hex.EncodeToString(data)).
+				Msg("failed to execute estimateGas")
+		}
 		return 0, fmt.Errorf("failed to execute script at height: %d, with: %w", height, err)
 	}
 
@@ -540,7 +550,9 @@ func (e *EVM) EstimateGas(
 
 	e.logger.Debug().
 		Uint64("gas", gasConsumed).
-		Msg("gas estimation executed")
+		Int64("evm-height", evmHeight).
+		Uint64("cadence-height", height).
+		Msg("estimateGas executed")
 
 	return gasConsumed, nil
 }
