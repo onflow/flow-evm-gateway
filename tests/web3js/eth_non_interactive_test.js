@@ -300,22 +300,25 @@ it('can make batch requests', async () => {
         { jsonrpc: '2.0', id: 5, result: '0x3' }
     )
 
-    // The maximum number of batch requests is 5,
-    // so this next batch should fail.
-    let getTransactionCount = {
-        jsonrpc: '2.0',
-        id: 6,
-        method: 'eth_getTransactionCount',
-        params: ['0x658Bdf435d810C91414eC09147DAA6DB62406379', 'latest'],
+    for (let i = 0; i <= 50; i++) {
+        let getTransactionCount = {
+            jsonrpc: '2.0',
+            id: 6 + i,
+            method: 'eth_getTransactionCount',
+            params: ['0x658Bdf435d810C91414eC09147DAA6DB62406379', 'latest'],
+        }
+        batch.add(getTransactionCount)
     }
 
-    batch.add(getTransactionCount)
-
+    let error = null
     try {
+        // The maximum number of batch requests is 25,
+        // so this next batch should fail.
         results = await batch.execute()
-    } catch (error) {
-        assert.equal(error.innerError[0].message, 'batch too large')
+    } catch (err) {
+        error = err
     }
+    assert.equal(error.innerError[0].message, 'batch too large')
 })
 
 it('get fee history', async () => {
