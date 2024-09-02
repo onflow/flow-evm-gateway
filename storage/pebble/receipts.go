@@ -101,7 +101,11 @@ func (r *Receipts) GetByTransactionID(ID common.Hash) (*models.Receipt, error) {
 
 	receipts, err := r.getByBlockHeight(height, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get receipt by height: %d, with: %w", height, err)
+		return nil, fmt.Errorf(
+			"failed to get receipt by height: %d, with: %w",
+			binary.BigEndian.Uint64(height),
+			err,
+		)
 	}
 
 	for _, rcp := range receipts {
@@ -224,7 +228,7 @@ func (r *Receipts) BloomsForBlockRange(start, end uint64) ([]*models.BloomsHeigh
 			return nil, fmt.Errorf(
 				"failed to RLP-decode blooms for range [%x] at height: %d, with: %w",
 				val,
-				height,
+				binary.BigEndian.Uint64(height),
 				err,
 			)
 		}
