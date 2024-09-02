@@ -60,7 +60,7 @@ type Server struct {
 const (
 	shutdownTimeout      = 5 * time.Second
 	batchRequestLimit    = 50
-	batchResponseMaxSize = 10 * 1000 * 1000 // 5 MB
+	batchResponseMaxSize = 10 * 1000 * 1000 // 10 MB
 )
 
 func NewServer(
