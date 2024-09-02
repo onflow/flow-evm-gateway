@@ -479,7 +479,7 @@ func (e *EVM) Call(
 				Uint64("cadence-height", height).
 				Int64("evm-height", evmHeight).
 				Str("from", from.String()).
-				Str("data", string(data)).
+				Str("data", hex.EncodeToString(data)).
 				Msg("failed to execute call")
 		}
 		return nil, fmt.Errorf("failed to execute script at height: %d, with: %w", height, err)
@@ -529,6 +529,15 @@ func (e *EVM) EstimateGas(
 		[]cadence.Value{hexEncodedTx, hexEncodedAddress},
 	)
 	if err != nil {
+		if !errors.Is(err, errs.ErrHeightOutOfRange) {
+			e.logger.Error().
+				Err(err).
+				Uint64("cadence-height", height).
+				Int64("evm-height", evmHeight).
+				Str("from", from.String()).
+				Str("data", hex.EncodeToString(data)).
+				Msg("failed to execute estimateGas")
+		}
 		return 0, fmt.Errorf("failed to execute script at height: %d, with: %w", height, err)
 	}
 
@@ -541,7 +550,9 @@ func (e *EVM) EstimateGas(
 
 	e.logger.Debug().
 		Uint64("gas", gasConsumed).
-		Msg("gas estimation executed")
+		Int64("evm-height", evmHeight).
+		Uint64("cadence-height", height).
+		Msg("estimateGas executed")
 
 	return gasConsumed, nil
 }
