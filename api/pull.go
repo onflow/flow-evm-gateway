@@ -221,6 +221,10 @@ func (api *PullAPI) UninstallFilter(id rpc.ID) bool {
 	api.mux.Lock()
 	defer api.mux.Unlock()
 
+	return api.uninstallFilter(id)
+}
+
+func (api *PullAPI) uninstallFilter(id rpc.ID) bool {
 	if _, ok := api.filters[id]; !ok { // not found
 		return false
 	}
@@ -301,7 +305,7 @@ func (api *PullAPI) GetFilterLogs(
 	}
 
 	if filter.expired() {
-		api.UninstallFilter(id)
+		api.uninstallFilter(id)
 		return nil, fmt.Errorf("%w: filter by id %s has expired", errs.ErrEntityNotFound, id)
 	}
 
@@ -352,7 +356,7 @@ func (api *PullAPI) GetFilterChanges(ctx context.Context, id rpc.ID) (any, error
 	}
 
 	if f.expired() {
-		api.UninstallFilter(id)
+		api.uninstallFilter(id)
 		return nil, fmt.Errorf("%w: filter by id %s has expired", errs.ErrEntityNotFound, id)
 	}
 
