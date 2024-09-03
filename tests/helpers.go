@@ -156,6 +156,7 @@ func servicesSetup(t *testing.T) (emulator.Emulator, func()) {
 		RateLimit:         50,
 		WSEnabled:         true,
 		MetricsPort:       8443,
+		FilterExpiry:      time.Second * 5,
 	}
 
 	bootstrapDone := make(chan struct{})
