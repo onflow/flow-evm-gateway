@@ -36,6 +36,10 @@ func TestWeb3_E2E(t *testing.T) {
 		runWeb3Test(t, "eth_non_interactive_test")
 	})
 
+	t.Run("test transaction type fees", func(t *testing.T) {
+		runWeb3Test(t, "eth_transaction_type_fees_test")
+	})
+
 	t.Run("retrieve syncing status", func(t *testing.T) {
 		runWeb3Test(t, "eth_syncing_status_test")
 	})
@@ -64,8 +68,8 @@ func TestWeb3_E2E(t *testing.T) {
 		runWeb3Test(t, "eth_logs_filtering_test")
 	})
 
-	t.Run("test get filter logs", func(t *testing.T) {
-		runWeb3Test(t, "eth_get_filter_logs_test")
+	t.Run("test filter-related endpoints", func(t *testing.T) {
+		runWeb3Test(t, "eth_filter_endpoints_test")
 	})
 
 	t.Run("rate-limit requests made by single client", func(t *testing.T) {

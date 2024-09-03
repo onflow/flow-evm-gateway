@@ -18,6 +18,14 @@ import (
 
 var _ models.Engine = &Engine{}
 
+// Engine is an implementation of the trace downloader engine.
+//
+// Traces are ethereum transaction execution traces: https://geth.ethereum.org/docs/developers/evm-tracing
+// Currently EVM gateway doesn't produce the traces since it doesn't
+// execute the transactions and is thus relying on the execution node
+// to produce and upload the traces during execution. This engine
+// listens for new transaction events and then downloads and index the
+// traces from the transaction execution.
 type Engine struct {
 	logger          zerolog.Logger
 	status          *models.EngineStatus
@@ -28,6 +36,7 @@ type Engine struct {
 	collector       metrics.Collector
 }
 
+// NewTracesIngestionEngine creates a new instance of the engine.
 func NewTracesIngestionEngine(
 	blocksPublisher *models.Publisher,
 	blocks storage.BlockIndexer,

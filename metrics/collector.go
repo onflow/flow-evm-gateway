@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/onflow/flow-go-sdk"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
 )
@@ -15,6 +16,7 @@ type Collector interface {
 	EVMHeightIndexed(height uint64)
 	EVMAccountInteraction(address string)
 	MeasureRequestDuration(start time.Time, method string)
+	OperatorBalance(account *flow.Account)
 }
 
 var _ Collector = &DefaultCollector{}
@@ -25,6 +27,7 @@ type DefaultCollector struct {
 	traceDownloadErrorCounter prometheus.Counter
 	serverPanicsCounters      *prometheus.CounterVec
 	evmBlockHeight            prometheus.Gauge
+	operatorBalance           prometheus.Gauge
 	evmAccountCallCounters    *prometheus.CounterVec
 	requestDurations          *prometheus.HistogramVec
 }
@@ -44,6 +47,11 @@ func NewCollector(logger zerolog.Logger) Collector {
 		Name: prefixedName("api_server_panics_total"),
 		Help: "Total number of panics in the API server",
 	}, []string{"reason"})
+
+	operatorBalance := prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: prefixedName("operator_balance"),
+		Help: "Flow balance of the EVM gateway operator wallet",
+	})
 
 	evmBlockHeight := prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: prefixedName("evm_block_height"),
@@ -67,6 +75,7 @@ func NewCollector(logger zerolog.Logger) Collector {
 		traceDownloadErrorCounter,
 		serverPanicsCounters,
 		evmBlockHeight,
+		operatorBalance,
 		evmAccountCallCounters,
 		requestDurations,
 	}
@@ -82,6 +91,7 @@ func NewCollector(logger zerolog.Logger) Collector {
 		evmBlockHeight:            evmBlockHeight,
 		evmAccountCallCounters:    evmAccountCallCounters,
 		requestDurations:          requestDurations,
+		operatorBalance:           operatorBalance,
 	}
 }
 
@@ -115,6 +125,10 @@ func (c *DefaultCollector) EVMHeightIndexed(height uint64) {
 func (c *DefaultCollector) EVMAccountInteraction(address string) {
 	c.evmAccountCallCounters.With(prometheus.Labels{"address": address}).Inc()
 
+}
+
+func (c *DefaultCollector) OperatorBalance(account *flow.Account) {
+	c.operatorBalance.Set(float64(account.Balance))
 }
 
 func (c *DefaultCollector) MeasureRequestDuration(start time.Time, method string) {

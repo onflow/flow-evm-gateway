@@ -148,7 +148,11 @@ func (b *Blocks) GetByID(ID common.Hash) (*models.Block, error) {
 
 	blk, err := b.getBlock(blockHeightKey, height)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get EVM block by height: %d, with: %w", height, err)
+		return nil, fmt.Errorf(
+			"failed to get EVM block by height: %d, with: %w",
+			binary.BigEndian.Uint64(height),
+			err,
+		)
 	}
 
 	return blk, nil

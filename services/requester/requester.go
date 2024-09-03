@@ -18,7 +18,7 @@ import (
 	"github.com/onflow/flow-go/fvm/evm"
 	"github.com/onflow/flow-go/fvm/evm/emulator"
 	"github.com/onflow/flow-go/fvm/evm/emulator/state"
-	"github.com/onflow/flow-go/fvm/evm/stdlib"
+	evmImpl "github.com/onflow/flow-go/fvm/evm/impl"
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/flow-go/fvm/systemcontracts"
 	"github.com/onflow/go-ethereum/common"
@@ -181,7 +181,6 @@ func NewEVM(
 
 	// create COA on the account
 	if config.CreateCOAResource {
-		// we ignore errors for now since creation of already existing COA resource will fail, which is fine for now
 		tx, err := evm.buildTransaction(
 			context.Background(),
 			evm.replaceAddresses(createCOAScript),
@@ -189,9 +188,11 @@ func NewEVM(
 		)
 		if err != nil {
 			logger.Warn().Err(err).Msg("COA resource auto-creation failure")
+			return nil, fmt.Errorf("COA resource auto-creation failure: %w", err)
 		}
 		if err := evm.client.SendTransaction(context.Background(), *tx); err != nil {
 			logger.Warn().Err(err).Msg("failed to send COA resource auto-creation transaction")
+			return nil, fmt.Errorf("failed to send COA resource auto-creation transaction: %w", err)
 		}
 	}
 
@@ -222,9 +223,13 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 	if err != nil {
 		return common.Hash{}, err
 	}
+	coinbaseAddress, err := cadence.NewString(e.config.Coinbase.Hex())
+	if err != nil {
+		return common.Hash{}, err
+	}
 
 	script := e.replaceAddresses(runTxScript)
-	flowTx, err := e.buildTransaction(ctx, script, hexEncodedTx)
+	flowTx, err := e.buildTransaction(ctx, script, hexEncodedTx, coinbaseAddress)
 	if err != nil {
 		e.logger.Error().Err(err).Str("data", txData).Msg("failed to build transaction")
 		return common.Hash{}, err
@@ -474,7 +479,7 @@ func (e *EVM) Call(
 				Uint64("cadence-height", height).
 				Int64("evm-height", evmHeight).
 				Str("from", from.String()).
-				Str("data", string(data)).
+				Str("data", hex.EncodeToString(data)).
 				Msg("failed to execute call")
 		}
 		return nil, fmt.Errorf("failed to execute script at height: %d, with: %w", height, err)
@@ -524,6 +529,15 @@ func (e *EVM) EstimateGas(
 		[]cadence.Value{hexEncodedTx, hexEncodedAddress},
 	)
 	if err != nil {
+		if !errors.Is(err, errs.ErrHeightOutOfRange) {
+			e.logger.Error().
+				Err(err).
+				Uint64("cadence-height", height).
+				Int64("evm-height", evmHeight).
+				Str("from", from.String()).
+				Str("data", hex.EncodeToString(data)).
+				Msg("failed to execute estimateGas")
+		}
 		return 0, fmt.Errorf("failed to execute script at height: %d, with: %w", height, err)
 	}
 
@@ -536,7 +550,9 @@ func (e *EVM) EstimateGas(
 
 	e.logger.Debug().
 		Uint64("gas", gasConsumed).
-		Msg("gas estimation executed")
+		Int64("evm-height", evmHeight).
+		Uint64("cadence-height", height).
+		Msg("estimateGas executed")
 
 	return gasConsumed, nil
 }
@@ -631,6 +647,8 @@ func (e *EVM) getSignerNetworkInfo(ctx context.Context) (uint32, uint64, error) 
 			err,
 		)
 	}
+
+	e.collector.OperatorBalance(account)
 
 	signerPub := e.signer.PublicKey()
 	for _, k := range account.Keys {
@@ -759,7 +777,7 @@ func cadenceStringToBytes(value cadence.Value) ([]byte, error) {
 
 // parseResult
 func parseResult(res cadence.Value) (*evmTypes.ResultSummary, error) {
-	result, err := stdlib.ResultSummaryFromEVMResultValue(res)
+	result, err := evmImpl.ResultSummaryFromEVMResultValue(res)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode EVM result of type: %s, with: %w", res.Type().ID(), err)
 	}

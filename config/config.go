@@ -136,7 +136,7 @@ func FromFlags() (*Config, error) {
 	flag.StringVar(&gas, "gas-price", "1", "Static gas price used for EVM transactions")
 	flag.StringVar(&coa, "coa-address", "", "Flow address that holds COA account used for submitting transactions")
 	flag.StringVar(&key, "coa-key", "", "Private key value for the COA address used for submitting transactions")
-	flag.StringVar(&keyAlg, "coa-key-alg", "ECDSA_P256", "Private key algorithm for the COA private key, only effective if coa-key is present, defaults to ECDSA_P256")
+	flag.StringVar(&keyAlg, "coa-key-alg", "ECDSA_P256", "Private key algorithm for the COA private key, only effective if coa-key/coa-key-file is present. Available values (ECDSA_P256 / ECDSA_secp256k1 / BLS_BLS12_381), defaults to ECDSA_P256.")
 	flag.StringVar(&keysPath, "coa-key-file", "", "File path that contains JSON array of COA keys used in key-rotation mechanism, this is exclusive with coa-key flag.")
 	flag.BoolVar(&cfg.CreateCOAResource, "coa-resource-create", false, "Auto-create the COA resource in the Flow COA account provided if one doesn't exist")
 	flag.StringVar(&logLevel, "log-level", "debug", "Define verbosity of the log output ('debug', 'info', 'warn', 'error', 'fatal', 'panic')")
@@ -164,6 +164,8 @@ func FromFlags() (*Config, error) {
 	cfg.Coinbase = common.HexToAddress(coinbase)
 	if g, ok := new(big.Int).SetString(gas, 10); ok {
 		cfg.GasPrice = g
+	} else if !ok {
+		return nil, fmt.Errorf("invalid gas price")
 	}
 
 	cfg.COAAddress = flow.HexToAddress(coa)
@@ -172,21 +174,12 @@ func FromFlags() (*Config, error) {
 	}
 
 	if key != "" {
-		if strings.EqualFold(keyAlg, crypto.ECDSA_P256.String()) {
-			pkey, err := crypto.DecodePrivateKeyHex(crypto.ECDSA_P256, key)
-			if err != nil {
-				return nil, fmt.Errorf("invalid COA private key: %w", err)
-			}
-			cfg.COAKey = pkey
-		} else if strings.EqualFold(keyAlg, crypto.ECDSA_secp256k1.String()) {
-			pkey, err := crypto.DecodePrivateKeyHex(crypto.ECDSA_secp256k1, key)
-			if err != nil {
-				return nil, fmt.Errorf("invalid COA private key: %w", err)
-			}
-			cfg.COAKey = pkey
-		} else {
-			return nil, fmt.Errorf("unrecognized COA private key algorith: %s", keyAlg)
+		sigAlgo := crypto.StringToSignatureAlgorithm(keyAlg)
+		pkey, err := crypto.DecodePrivateKeyHex(sigAlgo, key)
+		if err != nil {
+			return nil, fmt.Errorf("invalid COA private key: %w", err)
 		}
+		cfg.COAKey = pkey
 	} else if keysPath != "" {
 		raw, err := os.ReadFile(keysPath)
 		if err != nil {
@@ -198,8 +191,9 @@ func FromFlags() (*Config, error) {
 		}
 
 		cfg.COAKeys = make([]crypto.PrivateKey, len(keysJSON))
+		sigAlgo := crypto.StringToSignatureAlgorithm(keyAlg)
 		for i, k := range keysJSON {
-			pk, err := crypto.DecodePrivateKeyHex(crypto.ECDSA_P256, k) // todo support different algos
+			pk, err := crypto.DecodePrivateKeyHex(sigAlgo, k)
 			if err != nil {
 				return nil, fmt.Errorf("a key from the COA key list file is not valid, key %s, error: %w", k, err)
 			}

@@ -16,6 +16,7 @@ import (
 	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/go-ethereum/common"
 	"github.com/onflow/go-ethereum/crypto"
+	"github.com/onflow/go-ethereum/ethclient"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -80,11 +81,13 @@ func Test_ConcurrentTransactionSubmission(t *testing.T) {
 		url: fmt.Sprintf("%s:%d", cfg.RPCHost, cfg.RPCPort),
 	}
 
+	ready := make(chan struct{})
 	go func() {
-		err = bootstrap.Start(ctx, cfg)
+		err := bootstrap.Run(ctx, cfg, ready)
 		require.NoError(t, err)
 	}()
-	time.Sleep(500 * time.Millisecond) // some time to startup
+
+	<-ready
 
 	eoaKey, err := crypto.HexToECDSA(eoaTestPrivateKey)
 	require.NoError(t, err)
@@ -127,6 +130,73 @@ func Test_ConcurrentTransactionSubmission(t *testing.T) {
 
 		return true
 	}, time.Second*30, time.Second*1, "all transactions were not executed")
+}
+
+func Test_EthClientTest(t *testing.T) {
+	srv, err := startEmulator(true)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer func() {
+		cancel()
+		srv.Stop()
+	}()
+
+	grpcHost := "localhost:3569"
+	emu := srv.Emulator()
+	service := emu.ServiceKey()
+
+	client, err := grpc.NewClient(grpcHost)
+	require.NoError(t, err)
+
+	time.Sleep(500 * time.Millisecond) // some time to startup
+
+	// create new account with keys used for key-rotation
+	keyCount := 5
+	createdAddr, keys, err := bootstrap.CreateMultiKeyAccount(
+		client,
+		keyCount,
+		service.Address,
+		"0xee82856bf20e2aa6",
+		"0x0ae53cb6e3f42a79",
+		service.PrivateKey,
+	)
+	require.NoError(t, err)
+
+	cfg := &config.Config{
+		DatabaseDir:       t.TempDir(),
+		AccessNodeHost:    grpcHost,
+		RPCPort:           8545,
+		RPCHost:           "127.0.0.1",
+		FlowNetworkID:     "flow-emulator",
+		EVMNetworkID:      types.FlowEVMPreviewNetChainID,
+		Coinbase:          eoaTestAccount,
+		COAAddress:        *createdAddr,
+		COAKeys:           keys,
+		CreateCOAResource: true,
+		GasPrice:          new(big.Int).SetUint64(150),
+		LogLevel:          zerolog.DebugLevel,
+		LogWriter:         testLogWriter(),
+	}
+
+	ready := make(chan struct{})
+	go func() {
+		err := bootstrap.Run(ctx, cfg, ready)
+		require.NoError(t, err)
+	}()
+
+	<-ready
+
+	ethClient, err := ethclient.Dial("http://127.0.0.1:8545")
+	require.NoError(t, err)
+
+	blockNumber, err := ethClient.BlockNumber(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, uint64(3), blockNumber)
+
+	block, err := ethClient.BlockByNumber(context.Background(), big.NewInt(3))
+	require.NoError(t, err)
+	assert.Equal(t, big.NewInt(3), block.Number())
 }
 
 func Test_CloudKMSConcurrentTransactionSubmission(t *testing.T) {
@@ -216,11 +286,13 @@ func Test_CloudKMSConcurrentTransactionSubmission(t *testing.T) {
 		url: fmt.Sprintf("%s:%d", cfg.RPCHost, cfg.RPCPort),
 	}
 
+	ready := make(chan struct{})
 	go func() {
-		err = bootstrap.Start(ctx, cfg)
+		err := bootstrap.Run(ctx, cfg, ready)
 		require.NoError(t, err)
 	}()
-	time.Sleep(2500 * time.Millisecond) // some time to startup
+
+	<-ready
 
 	eoaKey, err := crypto.HexToECDSA(eoaTestPrivateKey)
 	require.NoError(t, err)

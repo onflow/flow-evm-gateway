@@ -52,6 +52,7 @@ const (
 	// this is a test eoa account created on account setup
 	eoaTestAddress    = "0xFACF71692421039876a5BB4F10EF7A439D8ef61E"
 	eoaTestPrivateKey = "f6d5333177711e562cabf1f311916196ee6ffc2a07966d9d4628094073bd5442"
+	coinbaseAddress   = "0x658Bdf435d810C91414eC09147DAA6DB62406379"
 	eoaFundAmount     = 5.0
 	coaFundAmount     = 10.0
 )
@@ -137,32 +138,35 @@ func servicesSetup(t *testing.T) (emulator.Emulator, func()) {
 
 	// default config
 	cfg := &config.Config{
-		DatabaseDir:              t.TempDir(),
-		AccessNodeHost:           "localhost:3569", // emulator
-		RPCPort:                  8545,
-		RPCHost:                  "127.0.0.1",
-		FlowNetworkID:            "flow-emulator",
-		EVMNetworkID:             evmTypes.FlowEVMPreviewNetChainID,
-		Coinbase:                 common.HexToAddress(eoaTestAddress),
-		COAAddress:               service.Address,
-		COAKey:                   service.PrivateKey,
-		CreateCOAResource:        false,
-		GasPrice:                 new(big.Int).SetUint64(150),
-		LogLevel:                 zerolog.DebugLevel,
-		LogWriter:                testLogWriter(),
-		StreamTimeout:            time.Second * 30,
-		StreamLimit:              10,
-		RateLimit:                50,
-		WSEnabled:                true,
-		MetricsPort:                 8443,
+		DatabaseDir:       t.TempDir(),
+		AccessNodeHost:    "localhost:3569", // emulator
+		RPCPort:           8545,
+		RPCHost:           "127.0.0.1",
+		FlowNetworkID:     "flow-emulator",
+		EVMNetworkID:      evmTypes.FlowEVMPreviewNetChainID,
+		Coinbase:          common.HexToAddress(coinbaseAddress),
+		COAAddress:        service.Address,
+		COAKey:            service.PrivateKey,
+		CreateCOAResource: false,
+		GasPrice:          new(big.Int).SetUint64(150),
+		LogLevel:          zerolog.DebugLevel,
+		LogWriter:         testLogWriter(),
+		StreamTimeout:     time.Second * 30,
+		StreamLimit:       10,
+		RateLimit:         50,
+		WSEnabled:         true,
+		MetricsPort:       8443,
+		FilterExpiry:      time.Second * 5,
 	}
 
+	bootstrapDone := make(chan struct{})
 	go func() {
-		err = bootstrap.Start(ctx, cfg)
+		err = bootstrap.Run(ctx, cfg, bootstrapDone)
 		require.NoError(t, err)
 	}()
 
-	time.Sleep(2 * time.Second) // some time to startup
+	<-bootstrapDone
+
 	return emu, func() {
 		cancel()
 		srv.Stop()
