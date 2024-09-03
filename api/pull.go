@@ -15,7 +15,7 @@ import (
 	"github.com/sethvargo/go-limiter"
 
 	"github.com/onflow/flow-evm-gateway/config"
-	"github.com/onflow/flow-evm-gateway/models"
+	"github.com/onflow/flow-evm-gateway/metrics"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/services/logs"
 	"github.com/onflow/flow-evm-gateway/storage"
@@ -300,33 +300,56 @@ func (api *PullAPI) GetFilterLogs(
 
 	filter, ok := api.filters[id]
 	if !ok {
-		return nil, fmt.Errorf("%w: filter by id %s does not exist", errs.ErrEntityNotFound, id)
-
+		return handleError[[]*gethTypes.Log](
+			fmt.Errorf("%w: filter by id %s does not exist", errs.ErrEntityNotFound, id),
+			api.logger,
+			metrics.NopCollector,
+		)
 	}
 
 	if filter.expired() {
 		api.uninstallFilter(id)
-		return nil, fmt.Errorf("%w: filter by id %s has expired", errs.ErrEntityNotFound, id)
+		return handleError[[]*gethTypes.Log](
+			fmt.Errorf("%w: filter by id %s has expired", errs.ErrEntityNotFound, id),
+			api.logger,
+			metrics.NopCollector,
+		)
 	}
 
 	logsFilter, ok := filter.(*logsFilter)
 	if !ok {
-		return nil, fmt.Errorf("filter by id %s is not a logs filter", id)
+		return handleError[[]*gethTypes.Log](
+			fmt.Errorf("%w: filter by id %s is not a logs filter", errs.ErrInvalid, id),
+			api.logger,
+			metrics.NopCollector,
+		)
 	}
 
 	current, err := api.blocks.LatestEVMHeight()
 	if err != nil {
-		return nil, err
+		return handleError[[]*gethTypes.Log](
+			err,
+			api.logger,
+			metrics.NopCollector,
+		)
 	}
 
 	result, err := api.getLogs(current, logsFilter)
 	if err != nil {
-		return nil, err
+		return handleError[[]*gethTypes.Log](
+			err,
+			api.logger,
+			metrics.NopCollector,
+		)
 	}
 
 	logs, ok := result.([]*gethTypes.Log)
 	if !ok {
-		return nil, fmt.Errorf("logs filter returned incorrect type: %T", result)
+		return handleError[[]*gethTypes.Log](
+			fmt.Errorf("logs filter returned incorrect type: %T", result),
+			api.logger,
+			metrics.NopCollector,
+		)
 	}
 
 	return logs, nil
@@ -347,17 +370,29 @@ func (api *PullAPI) GetFilterChanges(ctx context.Context, id rpc.ID) (any, error
 
 	f, ok := api.filters[id]
 	if !ok {
-		return nil, fmt.Errorf("%w: filter by id %s does not exist", errs.ErrEntityNotFound, id)
+		return handleError[any](
+			fmt.Errorf("%w: filter by id %s does not exist", errs.ErrEntityNotFound, id),
+			api.logger,
+			metrics.NopCollector,
+		)
 	}
 
 	current, err := api.blocks.LatestEVMHeight()
 	if err != nil {
-		return nil, err
+		return handleError[any](
+			err,
+			api.logger,
+			metrics.NopCollector,
+		)
 	}
 
 	if f.expired() {
 		api.uninstallFilter(id)
-		return nil, fmt.Errorf("%w: filter by id %s has expired", errs.ErrEntityNotFound, id)
+		return handleError[any](
+			fmt.Errorf("%w: filter by id %s has expired", errs.ErrEntityNotFound, id),
+			api.logger,
+			metrics.NopCollector,
+		)
 	}
 
 	var result any
@@ -369,10 +404,19 @@ func (api *PullAPI) GetFilterChanges(ctx context.Context, id rpc.ID) (any, error
 	case *logsFilter:
 		result, err = api.getLogs(current, filterType)
 	default:
-		return nil, fmt.Errorf("invalid filter type: %T", filterType)
+		return handleError[any](
+			fmt.Errorf("%w: non-supported filter type: %T", errs.ErrInvalid, filterType),
+			api.logger,
+			metrics.NopCollector,
+		)
 	}
+
 	if err != nil {
-		return nil, err
+		return handleError[any](
+			err,
+			api.logger,
+			metrics.NopCollector,
+		)
 	}
 
 	f.updateUsed(current)
@@ -432,7 +476,7 @@ func (api *PullAPI) getBlocks(latestHeight uint64, filter *blocksFilter) ([]comm
 }
 
 func (api *PullAPI) getTransactions(latestHeight uint64, filter *transactionsFilter) (any, error) {
-	txs := make([]models.Transaction, 0)
+	txs := make([]*Transaction, 0)
 	hashes := make([]common.Hash, 0)
 	nextHeight := filter.next()
 
@@ -452,14 +496,21 @@ func (api *PullAPI) getTransactions(latestHeight uint64, filter *transactionsFil
 			return nil, err
 		}
 
-		// for now there will only be one tx per block
 		for _, h := range b.TransactionHashes {
 			tx, err := api.transactions.Get(h)
 			if err != nil {
 				return nil, err
 			}
+			receipt, err := api.receipts.GetByTransactionID(h)
+			if err != nil {
+				return nil, err
+			}
+			txResult, err := NewTransactionResult(tx, *receipt, api.config.EVMNetworkID)
+			if err != nil {
+				return nil, err
+			}
 
-			txs = append(txs, tx)
+			txs = append(txs, txResult)
 			hashes = append(hashes, tx.Hash())
 		}
 	}
