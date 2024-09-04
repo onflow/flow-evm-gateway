@@ -4,7 +4,9 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go/fvm/evm/events"
+	"github.com/onflow/flow-go/fvm/evm/stdlib"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	flowGo "github.com/onflow/flow-go/model/flow"
 	gethCommon "github.com/onflow/go-ethereum/common"
@@ -64,7 +66,7 @@ func Test_DecodePastBlockFormat(t *testing.T) {
 }
 
 func Test_FixedHashBlock(t *testing.T) {
-	fixed := gethCommon.HexToHash("0x2")
+	fixed := gethCommon.HexToHash("0x2").String()
 	block := Block{
 		Block: &types.Block{
 			Height: 1,
@@ -78,7 +80,7 @@ func Test_FixedHashBlock(t *testing.T) {
 
 	h, err := block.Hash()
 	require.NoError(t, err)
-	assert.Equal(t, fixed, h)
+	assert.Equal(t, fixed, h.String())
 
 	data, err := block.ToBytes()
 	require.NoError(t, err)
@@ -89,7 +91,7 @@ func Test_FixedHashBlock(t *testing.T) {
 	// make sure fixed hash and transaction hashes persists after decoding
 	h, err = decoded.Hash()
 	require.NoError(t, err)
-	require.Equal(t, fixed, h)
+	require.Equal(t, fixed, h.String())
 	require.Equal(t, block.TransactionHashes, decoded.TransactionHashes)
 }
 
@@ -119,6 +121,49 @@ func Test_DecodeBlockExecutedEvent(t *testing.T) {
 	h2, err := decBlock.Hash()
 	require.NoError(t, err)
 	assert.Equal(t, h1, h2)
+}
+
+func Test_DecodingLegacyBlockExecutedEvent(t *testing.T) {
+	block := types.Block{
+		ParentBlockHash:     gethCommon.HexToHash("0x2"),
+		Height:              1,
+		Timestamp:           123,
+		TotalSupply:         big.NewInt(222),
+		ReceiptRoot:         gethCommon.HexToHash("0x4"),
+		TransactionHashRoot: gethCommon.HexToHash("0x5"),
+		TotalGasUsed:        100,
+	}
+
+	blockHash, err := block.Hash()
+	require.NoError(t, err)
+
+	eventType := stdlib.CadenceTypesForChain(flowGo.Testnet).BlockExecuted
+
+	legacyEvent := cadence.NewEvent([]cadence.Value{
+		cadence.NewUInt64(block.Height),
+		hashToCadenceArrayValue(blockHash),
+		cadence.NewUInt64(block.Timestamp),
+		cadence.NewIntFromBig(block.TotalSupply),
+		cadence.NewUInt64(block.TotalGasUsed),
+		hashToCadenceArrayValue(block.ParentBlockHash),
+		hashToCadenceArrayValue(block.ReceiptRoot),
+		hashToCadenceArrayValue(block.TransactionHashRoot),
+	}).WithType(eventType)
+
+	b, err := decodeLegacyBlockEvent(legacyEvent)
+	require.NoError(t, err)
+
+	require.Equal(t, block.ParentBlockHash, b.ParentBlockHash)
+	require.Equal(t, block.Height, b.Height)
+	bh, err := block.Hash()
+	require.NoError(t, err)
+	dech, err := b.Hash()
+	require.NoError(t, err)
+	require.Equal(t, bh, dech)
+
+	b2, err := decodeBlockEvent(legacyEvent)
+	require.NoError(t, err)
+	require.Equal(t, b, b2)
 }
 
 func Test_Hash(t *testing.T) {
@@ -170,5 +215,20 @@ func Test_EncodingDecoding(t *testing.T) {
 	blockDec, err := NewBlockFromBytes(bytes)
 	require.NoError(t, err)
 
-	assert.Equal(t, block, blockDec)
+	dh, err := blockDec.Hash()
+	require.NoError(t, err)
+	bh, err := block.Hash()
+	require.NoError(t, err)
+	require.Equal(t, bh, dh)
 }
+
+func hashToCadenceArrayValue(hash gethCommon.Hash) cadence.Array {
+	values := make([]cadence.Value, len(hash))
+	for i, v := range hash {
+		values[i] = cadence.NewUInt8(v)
+	}
+	return cadence.NewArray(values).
+		WithType(cadenceHashType)
+}
+
+var cadenceHashType = cadence.NewConstantSizedArrayType(gethCommon.HashLength, cadence.UInt8Type)
