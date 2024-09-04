@@ -63,6 +63,36 @@ func Test_DecodePastBlockFormat(t *testing.T) {
 	)
 }
 
+func Test_FixedHashBlock(t *testing.T) {
+	fixed := gethCommon.HexToHash("0x2")
+	block := Block{
+		Block: &types.Block{
+			Height: 1,
+		},
+		FixedHash: &fixed,
+		TransactionHashes: []gethCommon.Hash{
+			gethCommon.HexToHash("0x3"),
+			gethCommon.HexToHash("0x4"),
+		},
+	}
+
+	h, err := block.Hash()
+	require.NoError(t, err)
+	assert.Equal(t, fixed, h)
+
+	data, err := block.ToBytes()
+	require.NoError(t, err)
+
+	decoded, err := NewBlockFromBytes(data)
+	require.NoError(t, err)
+
+	// make sure fixed hash and transaction hashes persists after decoding
+	h, err = decoded.Hash()
+	require.NoError(t, err)
+	require.Equal(t, fixed, h)
+	require.Equal(t, block.TransactionHashes, decoded.TransactionHashes)
+}
+
 func Test_DecodeBlockExecutedEvent(t *testing.T) {
 	gethBlock := &types.Block{
 		ParentBlockHash:     gethCommon.HexToHash("0x1"),
