@@ -36,6 +36,10 @@ func NewBlockFromBytes(data []byte) (*Block, error) {
 		b = pastBlock
 	}
 
+	// this is added because RLP decoding will decode into an empty string
+	if b.FixedHash != nil && *b.FixedHash == "" {
+		b.FixedHash = nil
+	}
 	return b, nil
 }
 
