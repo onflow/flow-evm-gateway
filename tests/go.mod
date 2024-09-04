@@ -4,12 +4,12 @@ go 1.22
 
 require (
 	github.com/goccy/go-json v0.10.2
-	github.com/onflow/cadence v1.0.0-preview.48
+	github.com/onflow/cadence v1.0.0-preview.52
 	github.com/onflow/crypto v0.25.2
-	github.com/onflow/flow-emulator v1.0.0-preview.39
+	github.com/onflow/flow-emulator v1.0.0
 	github.com/onflow/flow-evm-gateway v0.0.0-20240201154855-4d4d3d3f19c7
-	github.com/onflow/flow-go v0.37.4-0.20240820034854-632dde4b981c
-	github.com/onflow/flow-go-sdk v1.0.0-preview.50
+	github.com/onflow/flow-go v0.37.10
+	github.com/onflow/flow-go-sdk v1.0.0-preview.54
 	github.com/onflow/go-ethereum v1.14.7
 	github.com/rs/zerolog v1.31.0
 	github.com/stretchr/testify v1.9.0
@@ -81,6 +81,7 @@ require (
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/golang/snappy v0.0.5-0.20220116011046-fa5810519dcb // indirect
+	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/go-dap v0.11.0 // indirect
 	github.com/google/s2a-go v0.1.7 // indirect
 	github.com/google/uuid v1.6.0 // indirect
@@ -145,14 +146,14 @@ require (
 	github.com/multiformats/go-multistream v0.5.0 // indirect
 	github.com/multiformats/go-varint v0.0.7 // indirect
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
-	github.com/onflow/atree v0.8.0-rc.5 // indirect
+	github.com/onflow/atree v0.8.0-rc.6 // indirect
 	github.com/onflow/flow-core-contracts/lib/go/contracts v1.3.1 // indirect
 	github.com/onflow/flow-core-contracts/lib/go/templates v1.3.1 // indirect
 	github.com/onflow/flow-ft/lib/go/contracts v1.0.0 // indirect
 	github.com/onflow/flow-ft/lib/go/templates v1.0.0 // indirect
 	github.com/onflow/flow-nft/lib/go/contracts v1.2.1 // indirect
 	github.com/onflow/flow-nft/lib/go/templates v1.2.0 // indirect
-	github.com/onflow/flow/protobuf/go/flow v0.4.5 // indirect
+	github.com/onflow/flow/protobuf/go/flow v0.4.6 // indirect
 	github.com/onflow/sdks v0.6.0-preview.1 // indirect
 	github.com/onflow/wal v1.0.2 // indirect
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58 // indirect
@@ -232,6 +233,7 @@ require (
 	google.golang.org/protobuf v1.33.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
+	gotest.tools v2.2.0+incompatible // indirect
 	lukechampine.com/blake3 v1.3.0 // indirect
 	modernc.org/libc v1.37.6 // indirect
 	modernc.org/mathutil v1.6.0 // indirect

@@ -4,7 +4,7 @@
 
 **EVM Gateway enables seamless interaction with EVM on Flow, mirroring the experience of engaging with any other EVM blockchain.**
 
-EVM Gateway implements the Ethereum JSON-RPC API for [EVM on Flow](https://developers.flow.com/evm/about) which conforms to the Ethereum [JSON-RPC specification](https://ethereum.github.io/execution-apis/api-documentation/). EVM Gateway is specifically designed to integrate with the EVM environment on the Flow blockchain. Rather than implementing the full `geth` stack, the JSON-RPC API available in EVM Gateway is a lightweight implementation which uses Flow's underlying consensus and smart contract language, [Cadence](https://cadence-lang.org/docs/), to handle calls received by the EVM Gateway. For those interested in the underlying implementation details please refer to the [FLIP #243](https://github.com/onflow/flips/issues/243) (EVM Gateway) and [FLIP #223](https://github.com/onflow/flips/issues/223) (EVM on Flow Core) improvement proposals. 
+EVM Gateway implements the Ethereum JSON-RPC API for [EVM on Flow](https://developers.flow.com/evm/about) which conforms to the Ethereum [JSON-RPC specification](https://ethereum.github.io/execution-apis/api-documentation/). The EVM Gateway is tailored for integration with the EVM environment on the Flow blockchain. Rather than implementing the full `geth` stack, the JSON-RPC API available in EVM Gateway is a lightweight implementation that uses Flow's underlying consensus and smart contract language, [Cadence](https://cadence-lang.org/docs/), to handle calls received by the EVM Gateway. For those interested in the underlying implementation details, please refer to the [FLIP #243](https://github.com/onflow/flips/issues/243) (EVM Gateway) and [FLIP #223](https://github.com/onflow/flips/issues/223) (EVM on Flow Core) improvement proposals. 
 
 EVM Gateway is compatible with the majority of standard Ethereum JSON-RPC APIs allowing seamless integration with existing Ethereum-compatible web3 tools via HTTP. EVM Gateway honors Ethereum's JSON-RPC namespace system, grouping RPC methods into categories based on their specific purpose. Each method name is constructed using the namespace, an underscore, and the specific method name in that namespace. For example, the `eth_call` method is located within the `eth` namespace. See below for details on methods currently supported or planned.
 
@@ -22,11 +22,9 @@ The basic design of the EVM Gateway consists of a couple of components:
 
 # Building
 
-We suggest using the docker images we build for you during our CD process. The images can be found at `onflow/flow-evm-gateway`.
-
 **Manual Build**
 
-If you decide to build the binaries yourself you can do so by running:
+We recommend using Docker to run the EVM Gateway, as detailed in the subsequent section. Alternatively, if you decide to build the binaries manually, you can do so by running:
 
 ```
 go build -o evm-gateway cmd/main/main.go
@@ -40,16 +38,6 @@ The binary can then be run using the correct flags (see the table below or the e
 # Running
 Operating an EVM Gateway is straightforward. It can either be deployed locally alongside the Flow emulator or configured to connect with any active Flow networks supporting EVM. Given that the EVM Gateway depends solely on [Access Node APIs](https://developers.flow.com/networks/node-ops/access-onchain-data/access-nodes/accessing-data/access-api), it is compatible with any networks offering this API access.
 
-**Example Configuration for Testnet**
-```
-./evm-gateway
---access-node-grpc-host https://testnet.evm.nodes.onflow.org \
---flow-network-id flow-testnet \
---coinbase {EVM-account} \
---coa-address {funded Flow account address} \
---coa-key-file {file containing private keys for coa-address, KMS should be used on live networks} \
---coa-resource-create 
-```
 
 ### Running Locally
 **Start Emulator**
@@ -59,6 +47,8 @@ To run the gateway locally you need to start the emulator with EVM enabled:
 flow emulator --evm-enabled
 ```
 _Make sure flow.json has the emulator account configured to address and private key we will use for starting gateway bellow._
+
+Please refer to the configuration section and read through all the configuration flags before proceeding.
 
 Then you need to start the gateway:
 ```
@@ -109,6 +99,74 @@ it should return:
   "result": "0x2"
 }
 ```
+
+**Running on Testnet**
+
+Running against the testnet with a local build can be done by pointing the gateway to the testnet ANs and providing the correct configuration. 
+Please refer to the configuration section and read through all the configuration flags before proceeding.
+
+Below is an example configuration for running against testnet, with an already created testnet account.
+
+```
+./evm-gateway \
+--access-node-grpc-host=access.devnet.nodes.onflow.org:9000 \
+--flow-network-id=flow-testnet \
+--init-cadence-height=211176670 \
+--ws-enabled=true \
+--coa-resource-create=true \
+--coinbase=FACF71692421039876a5BB4F10EF7A439D8ef61E \
+--coa-address=0x62631c28c9fc5a91 \
+--coa-key=2892fba444f1d5787739708874e3b01160671924610411ac787ac1379d420f49 \
+--gas-price=100
+```
+
+For the `--gas-price`, feel free to experiment with different values.
+
+The `--coinbase` can be any EOA address.
+
+To generate your own `--coa-key` and `--coa-address`, run:
+
+```bash
+# Install Flow CLI, if you do not already have it installed
+sh -ci "$(curl -fsSL https://raw.githubusercontent.com/onflow/flow-cli/master/install.sh)"
+
+flow-c1 keys generate
+```
+
+This will output something similar to:
+
+```bash
+🔴️ Store private key safely and don't share with anyone!
+Private Key 		 3cf8334d.....95c3c54a28e4ad1
+Public Key 		 33a13ade6....85f1b49a197747
+Mnemonic 		 often scare peanut ... boil corn change
+Derivation Path 	 m/44'/539'/0'/0/0
+Signature Algorithm 	 ECDSA_P256
+```
+
+Visit https://faucet.flow.com/, and use the generated `Public Key`, to create and fund your Flow account.
+Make sure to use the Flow address and the `Private Key` for the `--coa-address` & `--coa-key` flags.
+
+Once the EVM Gateway is up and running, verify that indexing works with:
+
+```bash
+curl -s -XPOST 'localhost:8545' --header 'Content-Type: application/json' --data-raw '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
+```
+
+Should return a response similar to:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": "0x68"
+}
+```
+
+**Running on Mainnet**
+
+Running the EVM gateway for mainnet requires additional security and stability measures which are described in this document: https://flowfoundation.notion.site/EVM-Gateway-Deployment-3c41da6710af40acbaf971e22ce0a9fd?pvs=74
+
 
 ## Configuration Flags
 

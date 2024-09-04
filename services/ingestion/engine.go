@@ -16,6 +16,20 @@ import (
 
 var _ models.Engine = &Engine{}
 
+// Engine is an implementation of the event ingestion engine.
+//
+// This engine monitors the Flow network for two types of EVM events:
+//   - block executed: emitted anytime a new block is created on the network,
+//     it is representation of an EVM block and contains all the consensus information.
+//   - transaction executed: emitted anytime a new transaction is executed
+//     independently of block event. This is similar to EVM transaction receipt and
+//     contains information about the transaction execution, like result, gas used etc.
+//
+// The ingested events explained above are then indexed in a local database and
+// used in any queries from the RPC APIs.
+// Ingestion of the events is idempotent so if a reindex needs to happen it can, since
+// it will just overwrite the current indexed data. Idempotency is an important
+// requirement of the implementation of this engine.
 type Engine struct {
 	subscriber      EventSubscriber
 	store           *pebble.Storage
@@ -191,7 +205,7 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 		}
 	}
 
-	e.collector.EVMHeightIndexed(events.CadenceHeight())
+	e.collector.EVMHeightIndexed(events.Block().Height)
 	return nil
 }
 
@@ -229,7 +243,7 @@ func (e *Engine) indexBlock(
 
 func (e *Engine) indexTransaction(
 	tx models.Transaction,
-	receipt *models.StorageReceipt,
+	receipt *models.Receipt,
 	batch *pebbleDB.Batch,
 ) error {
 	if tx == nil || receipt == nil { // safety check shouldn't happen
@@ -256,7 +270,7 @@ func (e *Engine) indexTransaction(
 }
 
 func (e *Engine) indexReceipts(
-	receipts []*models.StorageReceipt,
+	receipts []*models.Receipt,
 	batch *pebbleDB.Batch,
 ) error {
 	if receipts == nil {

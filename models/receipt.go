@@ -1,20 +1,21 @@
 package models
 
 import (
+	"fmt"
 	"math/big"
 
 	"github.com/onflow/go-ethereum/common"
-	"github.com/onflow/go-ethereum/common/hexutil"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
+	"github.com/onflow/go-ethereum/rlp"
 )
 
-// StorageReceipt is a receipt representation for storage.
+// Receipt struct copies the geth.Receipt type found here:
+// https://github.com/ethereum/go-ethereum/blob/9bbb9df18549d6f81c3d1f4fc6c65f71bc92490d/core/types/receipt.go#L52
 //
-// This struct copies the geth.Receipt type found here: https://github.com/ethereum/go-ethereum/blob/9bbb9df18549d6f81c3d1f4fc6c65f71bc92490d/core/types/receipt.go#L52
 // the reason is if we use geth.Receipt some values will be skipped when RLP encoding which is because
 // geth node has the data locally, but we don't in evm gateway, so we can not reproduce those values
 // and we need to store them
-type StorageReceipt struct {
+type Receipt struct {
 	Type              uint8            `json:"type,omitempty"`
 	PostState         []byte           `json:"root"`
 	Status            uint64           `json:"status"`
@@ -36,34 +37,14 @@ type StorageReceipt struct {
 	Random            common.Hash
 }
 
-func (sr *StorageReceipt) ToGethReceipt() *gethTypes.Receipt {
-	return &gethTypes.Receipt{
-		Type:              sr.Type,
-		PostState:         sr.PostState,
-		Status:            sr.Status,
-		CumulativeGasUsed: sr.CumulativeGasUsed,
-		Bloom:             sr.Bloom,
-		Logs:              sr.Logs,
-		TxHash:            sr.TxHash,
-		ContractAddress:   sr.ContractAddress,
-		GasUsed:           sr.GasUsed,
-		EffectiveGasPrice: sr.EffectiveGasPrice,
-		BlobGasUsed:       sr.BlobGasUsed,
-		BlobGasPrice:      sr.BlobGasPrice,
-		BlockHash:         sr.BlockHash,
-		BlockNumber:       sr.BlockNumber,
-		TransactionIndex:  sr.TransactionIndex,
-	}
-}
-
-func NewStorageReceipt(
+func NewReceipt(
 	receipt *gethTypes.Receipt,
 	revertReason []byte,
 	precompiledCalls []byte,
 	coinbase common.Address,
 	random common.Hash,
-) *StorageReceipt {
-	return &StorageReceipt{
+) *Receipt {
+	return &Receipt{
 		Type:              receipt.Type,
 		PostState:         receipt.PostState,
 		Status:            receipt.Status,
@@ -86,61 +67,12 @@ func NewStorageReceipt(
 	}
 }
 
-// MarshalReceipt takes a receipt and its associated transaction,
-// and marshals the receipt to the proper structure needed by
-// eth_getTransactionReceipt.
-func MarshalReceipt(
-	receipt *StorageReceipt,
-	tx Transaction,
-) (map[string]interface{}, error) {
-	from, err := tx.From()
-	if err != nil {
-		return map[string]interface{}{}, err
+func ReceiptsFromBytes(data []byte) ([]*Receipt, error) {
+	var receipts []*Receipt
+	if err := rlp.DecodeBytes(data, &receipts); err != nil {
+		return nil, fmt.Errorf("failed to RLP-decode block receipts [%x] %w", data, err)
 	}
-
-	txHash := tx.Hash()
-
-	fields := map[string]interface{}{
-		"blockHash":         receipt.BlockHash,
-		"blockNumber":       hexutil.Uint64(receipt.BlockNumber.Uint64()),
-		"transactionHash":   txHash,
-		"transactionIndex":  hexutil.Uint64(receipt.TransactionIndex),
-		"from":              from.Hex(),
-		"to":                nil,
-		"gasUsed":           hexutil.Uint64(receipt.GasUsed),
-		"cumulativeGasUsed": hexutil.Uint64(receipt.CumulativeGasUsed),
-		"contractAddress":   nil,
-		"logs":              receipt.Logs,
-		"logsBloom":         receipt.Bloom,
-		"type":              hexutil.Uint(tx.Type()),
-		"effectiveGasPrice": (*hexutil.Big)(receipt.EffectiveGasPrice),
-	}
-
-	if tx.To() != nil {
-		fields["to"] = tx.To().Hex()
-	}
-
-	fields["status"] = hexutil.Uint(receipt.Status)
-
-	if receipt.Logs == nil {
-		fields["logs"] = []*gethTypes.Log{}
-	}
-
-	if tx.Type() == gethTypes.BlobTxType {
-		fields["blobGasUsed"] = hexutil.Uint64(receipt.BlobGasUsed)
-		fields["blobGasPrice"] = (*hexutil.Big)(receipt.BlobGasPrice)
-	}
-
-	// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
-	if receipt.ContractAddress != (common.Address{}) {
-		fields["contractAddress"] = receipt.ContractAddress.Hex()
-	}
-
-	if len(receipt.RevertReason) > 0 {
-		fields["revertReason"] = hexutil.Bytes(receipt.RevertReason)
-	}
-
-	return fields, nil
+	return receipts, nil
 }
 
 type BloomsHeight struct {

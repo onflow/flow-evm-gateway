@@ -175,7 +175,13 @@ func newTransaction(nonce uint64) (Transaction, *types.Result, flow.Event, error
 }
 
 func newBlock(height uint64, hashes []gethCommon.Hash) (*Block, flow.Event, error) {
-	gethBlock := types.NewBlock(gethCommon.HexToHash("0x01"), height, uint64(1337), big.NewInt(100))
+	gethBlock := types.NewBlock(
+		gethCommon.HexToHash("0x01"),
+		height,
+		uint64(1337),
+		big.NewInt(100),
+		gethCommon.HexToHash("0x15"),
+	)
 	evmBlock := &Block{
 		Block:             gethBlock,
 		TransactionHashes: hashes,

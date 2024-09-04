@@ -174,16 +174,24 @@ func (s *ReceiptTestSuite) TestStoreReceipt() {
 
 	s.Run("store receipt successfully", func() {
 		receipt := mocks.NewReceipt(1, common.HexToHash("0xf1"))
-		err := s.ReceiptIndexer.Store([]*models.StorageReceipt{receipt}, nil)
+		err := s.ReceiptIndexer.Store([]*models.Receipt{receipt}, nil)
 		s.Require().NoError(err)
 	})
 
 	s.Run("store multiple receipts at same height", func() {
 		const height = 5
-		receipts := []*models.StorageReceipt{
+		receipts := []*models.Receipt{
 			mocks.NewReceipt(height, common.HexToHash("0x1")),
 			mocks.NewReceipt(height, common.HexToHash("0x2")),
 			mocks.NewReceipt(height, common.HexToHash("0x3")),
+		}
+		// Log index field holds the index position in the entire block
+		logIndex := uint(0)
+		for _, receipt := range receipts {
+			for _, log := range receipt.Logs {
+				log.Index = logIndex
+				logIndex++
+			}
 		}
 
 		err := s.ReceiptIndexer.Store(receipts, nil)
@@ -198,7 +206,7 @@ func (s *ReceiptTestSuite) TestStoreReceipt() {
 	})
 
 	s.Run("fail to store multiple receipts with different heights", func() {
-		receipts := []*models.StorageReceipt{
+		receipts := []*models.Receipt{
 			mocks.NewReceipt(1, common.HexToHash("0x1")),
 			mocks.NewReceipt(2, common.HexToHash("0x2")),
 		}
@@ -211,7 +219,7 @@ func (s *ReceiptTestSuite) TestStoreReceipt() {
 func (s *ReceiptTestSuite) TestGetReceiptByTransactionID() {
 	s.Run("existing transaction ID", func() {
 		receipt := mocks.NewReceipt(2, common.HexToHash("0xf2"))
-		err := s.ReceiptIndexer.Store([]*models.StorageReceipt{receipt}, nil)
+		err := s.ReceiptIndexer.Store([]*models.Receipt{receipt}, nil)
 		s.Require().NoError(err)
 
 		retReceipt, err := s.ReceiptIndexer.GetByTransactionID(receipt.TxHash)
@@ -230,11 +238,11 @@ func (s *ReceiptTestSuite) TestGetReceiptByTransactionID() {
 func (s *ReceiptTestSuite) TestGetReceiptByBlockHeight() {
 	s.Run("existing block height", func() {
 		receipt := mocks.NewReceipt(3, common.HexToHash("0x1"))
-		err := s.ReceiptIndexer.Store([]*models.StorageReceipt{receipt}, nil)
+		err := s.ReceiptIndexer.Store([]*models.Receipt{receipt}, nil)
 		s.Require().NoError(err)
 		// add one more receipt that shouldn't be retrieved
 		r := mocks.NewReceipt(4, common.HexToHash("0x2"))
-		s.Require().NoError(s.ReceiptIndexer.Store([]*models.StorageReceipt{r}, nil))
+		s.Require().NoError(s.ReceiptIndexer.Store([]*models.Receipt{r}, nil))
 
 		retReceipts, err := s.ReceiptIndexer.GetByBlockHeight(receipt.BlockNumber.Uint64())
 		s.Require().NoError(err)
@@ -260,7 +268,7 @@ func (s *ReceiptTestSuite) TestBloomsForBlockRange() {
 			r := mocks.NewReceipt(i, common.HexToHash(fmt.Sprintf("0xf1%d", i)))
 			testBlooms = append(testBlooms, &r.Bloom)
 			testHeights = append(testHeights, i)
-			err := s.ReceiptIndexer.Store([]*models.StorageReceipt{r}, nil)
+			err := s.ReceiptIndexer.Store([]*models.Receipt{r}, nil)
 			s.Require().NoError(err)
 		}
 
@@ -297,7 +305,7 @@ func (s *ReceiptTestSuite) TestBloomsForBlockRange() {
 		for i := start; i < end; i++ {
 			r1 := mocks.NewReceipt(i, common.HexToHash(fmt.Sprintf("0x%d", i)))
 			r2 := mocks.NewReceipt(i, common.HexToHash(fmt.Sprintf("0x%d", i)))
-			receipts := []*models.StorageReceipt{r1, r2}
+			receipts := []*models.Receipt{r1, r2}
 
 			s.Require().NoError(s.ReceiptIndexer.Store(receipts, nil))
 
@@ -346,7 +354,7 @@ func (s *ReceiptTestSuite) TestBloomsForBlockRange() {
 		var expectedBloom *types.Bloom
 		for i := start; i < end; i++ {
 			r1 := mocks.NewReceipt(i, common.HexToHash(fmt.Sprintf("0x%d", i)))
-			receipts := []*models.StorageReceipt{r1}
+			receipts := []*models.Receipt{r1}
 			s.Require().NoError(s.ReceiptIndexer.Store(receipts, nil))
 
 			if i == specific {
@@ -398,7 +406,7 @@ func (s *ReceiptTestSuite) TestBloomsForBlockRange() {
 	})
 }
 
-func (s *ReceiptTestSuite) compareReceipts(expected *models.StorageReceipt, actual *models.StorageReceipt) {
+func (s *ReceiptTestSuite) compareReceipts(expected *models.Receipt, actual *models.Receipt) {
 	s.Require().Equal(expected.BlockNumber, actual.BlockNumber)
 	s.Require().Equal(expected.TxHash, actual.TxHash)
 	s.Require().Equal(expected.Type, actual.Type)

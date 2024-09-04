@@ -160,21 +160,22 @@ func (tc TransactionCall) MarshalBinary() ([]byte, error) {
 }
 
 // decodeTransactionEvent takes a cadence event for transaction executed
-// and decodes its payload into a Transaction interface and a StorageReceipt.
+// and decodes its payload into a Transaction interface and a Receipt.
 // The concrete type will be either a TransactionCall or a DirectCall.
-func decodeTransactionEvent(event cadence.Event) (Transaction, *StorageReceipt, error) {
+func decodeTransactionEvent(event cadence.Event) (Transaction, *Receipt, error) {
 	txEvent, err := events.DecodeTransactionEventPayload(event)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to Cadence decode transaction event [%s]: %w", event.String(), err)
 	}
 
 	gethReceipt := &gethTypes.Receipt{
-		BlockNumber:      big.NewInt(int64(txEvent.BlockHeight)),
-		Type:             txEvent.TransactionType,
-		TxHash:           txEvent.Hash,
-		ContractAddress:  common.HexToAddress(txEvent.ContractAddress),
-		GasUsed:          txEvent.GasConsumed,
-		TransactionIndex: uint(txEvent.Index),
+		BlockNumber:       big.NewInt(int64(txEvent.BlockHeight)),
+		Type:              txEvent.TransactionType,
+		TxHash:            txEvent.Hash,
+		ContractAddress:   common.HexToAddress(txEvent.ContractAddress),
+		GasUsed:           txEvent.GasConsumed,
+		TransactionIndex:  uint(txEvent.Index),
+		EffectiveGasPrice: big.NewInt(0),
 	}
 
 	if len(txEvent.Logs) > 0 {
@@ -197,7 +198,7 @@ func decodeTransactionEvent(event cadence.Event) (Transaction, *StorageReceipt, 
 		revertReason = txEvent.ReturnedData
 	}
 
-	receipt := NewStorageReceipt(
+	receipt := NewReceipt(
 		gethReceipt,
 		revertReason,
 		txEvent.PrecompiledCalls,
@@ -213,18 +214,15 @@ func decodeTransactionEvent(event cadence.Event) (Transaction, *StorageReceipt, 
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to RLP-decode direct call [%x]: %w", txEvent.Payload, err)
 		}
-
 		tx = DirectCall{DirectCall: directCall}
 	} else {
 		gethTx := &gethTypes.Transaction{}
 		if err := gethTx.UnmarshalBinary(txEvent.Payload); err != nil {
 			return nil, nil, fmt.Errorf("failed to RLP-decode transaction [%x]: %w", txEvent.Payload, err)
 		}
+		receipt.EffectiveGasPrice = gethTx.EffectiveGasTipValue(nil)
 		tx = TransactionCall{Transaction: gethTx}
 	}
-
-	// since there's no base fee we can always use gas price
-	receipt.EffectiveGasPrice = tx.GasPrice()
 
 	return tx, receipt, nil
 }

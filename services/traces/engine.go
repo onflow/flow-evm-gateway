@@ -3,7 +3,6 @@ package traces
 import (
 	"context"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -19,6 +18,14 @@ import (
 
 var _ models.Engine = &Engine{}
 
+// Engine is an implementation of the trace downloader engine.
+//
+// Traces are ethereum transaction execution traces: https://geth.ethereum.org/docs/developers/evm-tracing
+// Currently EVM gateway doesn't produce the traces since it doesn't
+// execute the transactions and is thus relying on the execution node
+// to produce and upload the traces during execution. This engine
+// listens for new transaction events and then downloads and index the
+// traces from the transaction execution.
 type Engine struct {
 	logger          zerolog.Logger
 	status          *models.EngineStatus
@@ -29,8 +36,8 @@ type Engine struct {
 	collector       metrics.Collector
 }
 
+// NewTracesIngestionEngine creates a new instance of the engine.
 func NewTracesIngestionEngine(
-	initEVMHeight uint64,
 	blocksPublisher *models.Publisher,
 	blocks storage.BlockIndexer,
 	traces storage.TraceIndexer,
@@ -38,9 +45,6 @@ func NewTracesIngestionEngine(
 	logger zerolog.Logger,
 	collector metrics.Collector,
 ) *Engine {
-	height := &atomic.Uint64{}
-	height.Store(initEVMHeight)
-
 	return &Engine{
 		status:          models.NewEngineStatus(),
 		logger:          logger.With().Str("component", "trace-ingestion").Logger(),
@@ -66,6 +70,12 @@ func (e *Engine) Notify(data any) {
 	block, ok := data.(*models.Block)
 	if !ok {
 		e.logger.Error().Msg("invalid event type sent to trace ingestion")
+		return
+	}
+
+	// If the block has no transactions, we simply return early
+	// as there are no transaction traces to index.
+	if len(block.TransactionHashes) == 0 {
 		return
 	}
 

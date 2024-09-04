@@ -64,17 +64,17 @@ type BlockIndexer interface {
 type ReceiptIndexer interface {
 	// Store provided receipt.
 	// Batch is required to batch multiple indexer operations, skipped if nil.
-	Store(receipts []*models.StorageReceipt, batch *pebble.Batch) error
+	Store(receipts []*models.Receipt, batch *pebble.Batch) error
 
 	// GetByTransactionID returns the receipt for the transaction ID.
 	// Expected errors:
 	// - errors.NotFound if the receipt is not found
-	GetByTransactionID(ID common.Hash) (*models.StorageReceipt, error)
+	GetByTransactionID(ID common.Hash) (*models.Receipt, error)
 
 	// GetByBlockHeight returns the receipt for the block height.
 	// Expected errors:
 	// - errors.NotFound if the receipt is not found
-	GetByBlockHeight(height uint64) ([]*models.StorageReceipt, error)
+	GetByBlockHeight(height uint64) ([]*models.Receipt, error)
 
 	// BloomsForBlockRange returns slice of bloom values and a slice of block heights
 	// corresponding to each item in the bloom slice. It only matches the blooms between
@@ -100,7 +100,7 @@ type TransactionIndexer interface {
 type AccountIndexer interface {
 	// Update account with executed transactions.
 	// Batch is required to batch multiple indexer operations, skipped if nil.
-	Update(tx models.Transaction, receipt *models.StorageReceipt, batch *pebble.Batch) error
+	Update(tx models.Transaction, receipt *models.Receipt, batch *pebble.Batch) error
 
 	// GetNonce gets an account nonce. If no nonce was indexed it returns 0.
 	// todo add getting nonce at provided block height / hash
