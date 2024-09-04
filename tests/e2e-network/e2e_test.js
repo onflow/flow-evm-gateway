@@ -5,8 +5,10 @@ const fs = require('fs');
 const storageABI = require("./storageABI.json");
 
 let endpoints = {
-    local: "http://localhost:8545",
-    testnet: "https://testnet.evm.nodes.onflow.org"
+    local: "http://localhost:3000",
+    previewnet: "https://previewnet.evm.nodes.onflow.org",
+    migrationnet: "https://migrationtestnet.evm.nodes.onflow.org",
+    testnet: "https://testnet.evm.nodes.onflow.org",
 }
 
 if (process.env.GENERATE == 1) {
@@ -37,9 +39,10 @@ const userAccount = web3.eth.accounts.privateKeyToAccount(userPrivateKey);
 
 console.log("Using user account: ", userAccount.address)
 
-describe('Ethereum Contract Deployment and Interaction Tests', function() {
+describe('Ethereum Contract Deployment and Interaction Tests', async function() {
     this.timeout(0) // Disable timeout since blockchain interactions can be slow
     let initBlock = 0
+    let gasPrice = await web3.eth.getGasPrice()
 
     it('Should get the network ID', async function() {
         const id = await web3.eth.getChainId()
@@ -109,7 +112,7 @@ describe('Ethereum Contract Deployment and Interaction Tests', function() {
                 to: deployedAddress,
                 data: storage.methods.store(newValue).encodeABI(),
                 value: '0',
-                gasPrice: '10',
+                gasPrice: gasPrice,
             })
             let result = await web3.eth.sendSignedTransaction(signed.rawTransaction)
             assert.ok(result.transactionHash)
@@ -203,7 +206,7 @@ async function deployContract() {
         from: userAccount.address,
         data: data,
         value: '0',
-        gasPrice: '0',
+        gasPrice: gasPrice,
     })
 
     let rcp = await web3.eth.sendSignedTransaction(signed.rawTransaction)
@@ -216,7 +219,7 @@ async function transfer(amount, to, nonce) {
         data: null,
         to: to,
         value: web3.utils.toWei(amount, "ether"),
-        gasPrice: '0',
+        gasPrice: gasPrice,
     }
     if (nonce != null) {
         tx.nonce = nonce
