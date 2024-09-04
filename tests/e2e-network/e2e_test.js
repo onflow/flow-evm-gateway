@@ -5,8 +5,10 @@ const fs = require('fs');
 const storageABI = require("./storageABI.json");
 
 let endpoints = {
-    local: "http://localhost:8545",
-    testnet: "https://testnet.evm.nodes.onflow.org"
+    local: "http://localhost:3000",
+    previewnet: "https://previewnet.evm.nodes.onflow.org",
+    migrationnet: "https://migrationtestnet.evm.nodes.onflow.org",
+    testnet: "https://testnet.evm.nodes.onflow.org",
 }
 
 if (process.env.GENERATE == 1) {
@@ -34,12 +36,14 @@ if (userPrivateKey == "") {
 }
 
 const userAccount = web3.eth.accounts.privateKeyToAccount(userPrivateKey);
+let gasPrice
 
 console.log("Using user account: ", userAccount.address)
 
-describe('Ethereum Contract Deployment and Interaction Tests', function() {
+describe('Ethereum Contract Deployment and Interaction Tests', async function() {
     this.timeout(0) // Disable timeout since blockchain interactions can be slow
     let initBlock = 0
+    gasPrice = await web3.eth.getGasPrice()
 
     it('Should get the network ID', async function() {
         const id = await web3.eth.getChainId()
@@ -109,7 +113,7 @@ describe('Ethereum Contract Deployment and Interaction Tests', function() {
                 to: deployedAddress,
                 data: storage.methods.store(newValue).encodeABI(),
                 value: '0',
-                gasPrice: '10',
+                gasPrice: gasPrice,
             })
             let result = await web3.eth.sendSignedTransaction(signed.rawTransaction)
             assert.ok(result.transactionHash)
@@ -164,6 +168,21 @@ describe('Ethereum Contract Deployment and Interaction Tests', function() {
     })
 })
 
+// this test traverses the blockchain and checks the blocks are correct and linked.
+describe('Validate blockchain', function () {
+    let startHeight = process.env.CHECK_HEIGHT
+    if (startHeight == "") {
+        console.log("You need to set the `CHECK_HEIGHT` env variable")
+        process.exit(1)
+    }
+
+    it('traverse blockchain', async function () {
+        let first = await web3.eth.getBlock(startHeight)
+
+        await getBlock(first.parentHash, first.number)
+    })
+})
+
 describe('EVM Gateway load tests', function () {
     this.timeout(0)
     //return // skip unless explicitly run
@@ -184,6 +203,32 @@ describe('EVM Gateway load tests', function () {
     })
 })
 
+
+async function getBlock(hash, number) {
+    console.log("checking block: ", hash, number)
+
+    let block = await web3.eth.getBlock(hash)
+    if (block == null) {
+        assert.fail(`missing block ${hash}`)
+        return
+    }
+
+    if (block.number+1n !== number) {
+        assert.fail(`invalid block number ${number} != ${block.number+1} block hash: ${block.hash}`)
+    }
+
+    if (block.transactions != null) {
+        for (let hash of block.transactions) {
+            let tx = await web3.eth.getTransaction(hash)
+            if (tx.blockNumber !== block.number) {
+                assert.fail(`invalid transaction ${tx} at block ${number}`)
+            }
+        }
+    }
+
+    await getBlock(block.parentHash, block.number)
+}
+
 async function getBalance(addr) {
     return web3.eth.getBalance(addr).then(wei => {
         return web3Utils.fromWei(wei, 'ether')
@@ -203,7 +248,7 @@ async function deployContract() {
         from: userAccount.address,
         data: data,
         value: '0',
-        gasPrice: '0',
+        gasPrice: gasPrice,
     })
 
     let rcp = await web3.eth.sendSignedTransaction(signed.rawTransaction)
@@ -216,7 +261,7 @@ async function transfer(amount, to, nonce) {
         data: null,
         to: to,
         value: web3.utils.toWei(amount, "ether"),
-        gasPrice: '0',
+        gasPrice: gasPrice,
     }
     if (nonce != null) {
         tx.nonce = nonce
