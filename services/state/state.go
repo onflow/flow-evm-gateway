@@ -56,6 +56,13 @@ func (s *State) Execute(tx models.Transaction) error {
 		return err
 	}
 
+	if receipt.Status != uint64(types.StatusSuccessful) {
+		// todo should we even execute invalid transactions
+		// failed we should - validate this
+		fmt.Println("WRN: non successful transaction", receipt.Status, receipt.TxHash.String())
+		fmt.Println(string(receipt.RevertReason))
+	}
+
 	blockCtx, err := s.blockContext(receipt)
 	if err != nil {
 		return err
@@ -68,6 +75,7 @@ func (s *State) Execute(tx models.Transaction) error {
 
 	switch tx.(type) {
 	case models.DirectCall:
+		fmt.Println("# executing direct call")
 		t := tx.(models.DirectCall)
 		_, err := bv.DirectCall(t.DirectCall)
 		if err != nil {
@@ -75,11 +83,13 @@ func (s *State) Execute(tx models.Transaction) error {
 		}
 
 	case models.TransactionCall:
+		fmt.Println("# executing transaction call")
 		t := tx.(models.TransactionCall)
-		_, err := bv.RunTransaction(t.Transaction)
+		res, err := bv.RunTransaction(t.Transaction)
 		if err != nil {
 			return err
 		}
+		fmt.Println("# tx rexec result", res.VMError, res.ValidationError, res.TxHash, res.Failed())
 	default:
 		return fmt.Errorf("unknown transaction type")
 	}
