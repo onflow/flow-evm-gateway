@@ -33,6 +33,7 @@ type Storages struct {
 	Receipts     storage.ReceiptIndexer
 	Accounts     storage.AccountIndexer
 	Traces       storage.TraceIndexer
+	Ledger       *pebble.Ledger
 }
 
 type Publishers struct {
@@ -52,6 +53,7 @@ type Bootstrap struct {
 	metrics    *metrics.Server
 	events     *ingestion.Engine
 	traces     *traces.Engine
+	state      *state.Engine
 }
 
 func New(config *config.Config) (*Bootstrap, error) {
@@ -177,6 +179,32 @@ func (b *Bootstrap) StopEventIngestion() {
 	}
 	b.logger.Warn().Msg("stopping event ingestion engine")
 	b.events.Stop()
+}
+
+func (b *Bootstrap) StartStateIndex(ctx context.Context) error {
+	l := b.logger.With().Str("component", "bootstrap-state").Logger()
+	l.Info().Msg("starting engine")
+
+	b.state = state.NewStateEngine(
+		b.config,
+		b.storages.Ledger,
+		b.publishers.Block,
+		b.storages.Blocks,
+		b.storages.Transactions,
+		b.storages.Receipts,
+		b.logger,
+	)
+
+	startEngine(ctx, b.state, l)
+	return nil
+}
+
+func (b *Bootstrap) StopStateIndex() {
+	if b.state == nil {
+		return
+	}
+	b.logger.Warn().Msg("stopping state index engine")
+	b.state.Stop()
 }
 
 func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
@@ -441,6 +469,7 @@ func setupStorage(
 		Receipts:     pebble.NewReceipts(store),
 		Accounts:     pebble.NewAccounts(store),
 		Traces:       pebble.NewTraces(store),
+		Ledger:       pebble.NewLedger(store),
 	}, nil
 }
 
