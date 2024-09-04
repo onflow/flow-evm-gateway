@@ -36,12 +36,24 @@ func NewBlockFromBytes(data []byte) (*Block, error) {
 		b = pastBlock
 	}
 
+	// this is added because RLP decoding will decode into an empty string
+	if b.FixedHash != nil && *b.FixedHash == "" {
+		b.FixedHash = nil
+	}
 	return b, nil
 }
 
 type Block struct {
 	*types.Block
-	hash              *gethCommon.Hash
+	// We define fixed hash in case where types.Block format changes which
+	// will produce a different hash on Block.Hash() calculation since it
+	// will have more fields than before, so we make sure the hash we calculated
+	// with the previous format is fixed by assigning it to this field and then
+	// on hash calculation we check if this field is set we just return it.
+	// We must make the FixedHash exported so RLP encoding preserve it, and
+	// we must use string not common.Hash since RLP decoding has an issue
+	// with decoding into nil pointer slice.
+	FixedHash         *string
 	TransactionHashes []gethCommon.Hash
 }
 
@@ -50,8 +62,8 @@ func (b *Block) ToBytes() ([]byte, error) {
 }
 
 func (b *Block) Hash() (gethCommon.Hash, error) {
-	if b.hash != nil {
-		return *b.hash, nil
+	if b.FixedHash != nil && *b.FixedHash != "" {
+		return gethCommon.HexToHash(*b.FixedHash), nil
 	}
 	return b.Block.Hash()
 }
@@ -61,6 +73,10 @@ func (b *Block) Hash() (gethCommon.Hash, error) {
 func decodeBlockEvent(event cadence.Event) (*Block, error) {
 	payload, err := events.DecodeBlockEventPayload(event)
 	if err != nil {
+		if block, err := decodeLegacyBlockEvent(event); err == nil {
+			return block, nil
+		}
+
 		return nil, fmt.Errorf("failed to cadence decode block [%s]: %w", event.String(), err)
 	}
 
@@ -75,6 +91,41 @@ func decodeBlockEvent(event cadence.Event) (*Block, error) {
 			TotalGasUsed:        payload.TotalGasUsed,
 			PrevRandao:          payload.PrevRandao,
 		},
+	}, nil
+}
+
+// todo remove this after updated in flow-go
+type blockEventPayloadV0 struct {
+	Height              uint64          `cadence:"height"`
+	Hash                gethCommon.Hash `cadence:"hash"`
+	Timestamp           uint64          `cadence:"timestamp"`
+	TotalSupply         cadence.Int     `cadence:"totalSupply"`
+	TotalGasUsed        uint64          `cadence:"totalGasUsed"`
+	ParentBlockHash     gethCommon.Hash `cadence:"parentHash"`
+	ReceiptRoot         gethCommon.Hash `cadence:"receiptRoot"`
+	TransactionHashRoot gethCommon.Hash `cadence:"transactionHashRoot"`
+}
+
+// DecodeBlockEventPayload decodes Cadence event into block event payload.
+func decodeLegacyBlockEvent(event cadence.Event) (*Block, error) {
+	var block blockEventPayloadV0
+	err := cadence.DecodeFields(event, &block)
+	if err != nil {
+		return nil, err
+	}
+
+	h := block.Hash.String()
+	return &Block{
+		Block: &types.Block{
+			ParentBlockHash:     block.ParentBlockHash,
+			Height:              block.Height,
+			Timestamp:           block.Timestamp,
+			TotalSupply:         block.TotalSupply.Value,
+			ReceiptRoot:         block.ReceiptRoot,
+			TransactionHashRoot: block.TransactionHashRoot,
+			TotalGasUsed:        block.TotalGasUsed,
+		},
+		FixedHash: &h,
 	}, nil
 }
 
@@ -122,6 +173,7 @@ func decodeBlockBreakingChanges(encoded []byte) (*Block, error) {
 	if err != nil {
 		return nil, err
 	}
+	h := blockHash.String()
 
 	return &Block{
 		Block: &types.Block{
@@ -133,7 +185,7 @@ func decodeBlockBreakingChanges(encoded []byte) (*Block, error) {
 			TransactionHashRoot: b0.Block.TransactionHashRoot,
 			TotalGasUsed:        b0.Block.TotalGasUsed,
 		},
-		hash:              &blockHash,
+		FixedHash:         &h,
 		TransactionHashes: b0.TransactionHashes,
 	}, nil
 }
