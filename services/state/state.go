@@ -104,7 +104,7 @@ func (s *State) blockContext(receipt *models.Receipt) (types.BlockContext, error
 		BlockTimestamp:         s.block.Timestamp,
 		DirectCallBaseGasUsage: types.DefaultDirectCallBaseGasUsage, // todo check
 		DirectCallGasPrice:     types.DefaultDirectCallGasPrice,
-		GasFeeCollector:        types.Address(receipt.Coinbase),
+		GasFeeCollector:        types.CoinbaseAddress,
 		GetHashFunc: func(n uint64) common.Hash {
 			b, err := s.blocks.GetByHeight(n)
 			if err != nil {
@@ -117,7 +117,7 @@ func (s *State) blockContext(receipt *models.Receipt) (types.BlockContext, error
 
 			return h
 		},
-		Random:                    receipt.Random,
+		Random:                    s.block.PrevRandao,
 		ExtraPrecompiledContracts: precompileContracts,
 		// todo check values bellow if they are needed by the execution
 		TxCountSoFar:      0,
