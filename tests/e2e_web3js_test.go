@@ -28,6 +28,10 @@ func TestWeb3_E2E(t *testing.T) {
 		runWeb3Test(t, "setup_test")
 	})
 
+	t.Run("test blockchain is linked via parent hashes", func(t *testing.T) {
+		runWeb3Test(t, "blockchain_test")
+	})
+
 	t.Run("test net JSON-RPC endpoints", func(t *testing.T) {
 		runWeb3Test(t, "net_namespace_test")
 	})
