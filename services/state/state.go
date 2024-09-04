@@ -90,7 +90,7 @@ func (s *State) Execute(tx models.Transaction) error {
 	return nil
 }
 
-func (s *State) blockContext(receipt *models.StorageReceipt) (types.BlockContext, error) {
+func (s *State) blockContext(receipt *models.Receipt) (types.BlockContext, error) {
 	calls, err := types.AggregatedPrecompileCallsFromEncoded(receipt.PrecompiledCalls)
 	if err != nil {
 		return types.BlockContext{}, err
