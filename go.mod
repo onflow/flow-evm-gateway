@@ -8,8 +8,8 @@ require (
 	github.com/goccy/go-json v0.10.2
 	github.com/google/uuid v1.6.0
 	github.com/onflow/atree v0.8.0-rc.6
-	github.com/onflow/cadence v1.0.0-preview.51
-	github.com/onflow/flow-go v0.37.7-0.20240830182756-9ac9e1889c34
+	github.com/onflow/cadence v1.0.0-preview.52
+	github.com/onflow/flow-go v0.37.10
 	github.com/onflow/flow-go-sdk v1.0.0-preview.54
 	github.com/onflow/flow/protobuf/go/flow v0.4.6
 	github.com/onflow/go-ethereum v1.14.7
@@ -142,6 +142,7 @@ require (
 	github.com/onflow/flow-nft/lib/go/contracts v1.2.1 // indirect
 	github.com/onflow/flow-nft/lib/go/templates v1.2.0 // indirect
 	github.com/onflow/sdks v0.6.0-preview.1 // indirect
+	github.com/onsi/ginkgo v1.16.4 // indirect
 	github.com/onsi/gomega v1.18.1 // indirect
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.6 // indirect
