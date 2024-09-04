@@ -202,8 +202,6 @@ func decodeTransactionEvent(event cadence.Event) (Transaction, *Receipt, error) 
 		gethReceipt,
 		revertReason,
 		txEvent.PrecompiledCalls,
-		common.HexToAddress(txEvent.Coinbase),
-		txEvent.Random,
 	)
 
 	var tx Transaction

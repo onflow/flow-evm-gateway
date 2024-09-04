@@ -33,16 +33,12 @@ type Receipt struct {
 	TransactionIndex  uint             `json:"transactionIndex"`
 	RevertReason      []byte           `json:"revertReason"`
 	PrecompiledCalls  []byte
-	Coinbase          common.Address
-	Random            common.Hash
 }
 
 func NewReceipt(
 	receipt *gethTypes.Receipt,
 	revertReason []byte,
 	precompiledCalls []byte,
-	coinbase common.Address,
-	random common.Hash,
 ) *Receipt {
 	return &Receipt{
 		Type:              receipt.Type,
@@ -62,8 +58,6 @@ func NewReceipt(
 		TransactionIndex:  receipt.TransactionIndex,
 		RevertReason:      revertReason,
 		PrecompiledCalls:  precompiledCalls,
-		Random:            random,
-		Coinbase:          coinbase,
 	}
 }
 
