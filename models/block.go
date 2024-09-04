@@ -41,7 +41,7 @@ func NewBlockFromBytes(data []byte) (*Block, error) {
 
 type Block struct {
 	*types.Block
-	hash              *gethCommon.Hash
+	FixedHash         *gethCommon.Hash
 	TransactionHashes []gethCommon.Hash
 }
 
@@ -50,8 +50,8 @@ func (b *Block) ToBytes() ([]byte, error) {
 }
 
 func (b *Block) Hash() (gethCommon.Hash, error) {
-	if b.hash != nil {
-		return *b.hash, nil
+	if b.FixedHash != nil {
+		return *b.FixedHash, nil
 	}
 	return b.Block.Hash()
 }
@@ -112,6 +112,7 @@ func decodeLegacyBlockEvent(event cadence.Event) (*Block, error) {
 			TransactionHashRoot: block.TransactionHashRoot,
 			TotalGasUsed:        block.TotalGasUsed,
 		},
+		FixedHash: &block.Hash,
 	}, nil
 }
 
@@ -119,11 +120,15 @@ func decodeLegacyBlockEvent(event cadence.Event) (*Block, error) {
 type blockV0 struct {
 	Block             *blockV0Fields
 	TransactionHashes []gethCommon.Hash
+	hash              *gethCommon.Hash
 }
 
 // Hash returns the hash of the block, taking into account only
 // the fields from the blockV0Fields type.
 func (b *blockV0) Hash() (gethCommon.Hash, error) {
+	if b.hash != nil {
+		return *b.hash, nil
+	}
 	data, err := b.Block.ToBytes()
 	return gethCrypto.Keccak256Hash(data), err
 }
@@ -170,7 +175,7 @@ func decodeBlockBreakingChanges(encoded []byte) (*Block, error) {
 			TransactionHashRoot: b0.Block.TransactionHashRoot,
 			TotalGasUsed:        b0.Block.TotalGasUsed,
 		},
-		hash:              &blockHash,
+		FixedHash:         &blockHash,
 		TransactionHashes: b0.TransactionHashes,
 	}, nil
 }
