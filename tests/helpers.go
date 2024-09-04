@@ -327,7 +327,8 @@ func evmSign(
 	signer *ecdsa.PrivateKey,
 	nonce uint64,
 	to *common.Address,
-	data []byte) ([]byte, common.Hash, error) {
+	data []byte,
+) ([]byte, common.Hash, error) {
 	gasPrice := big.NewInt(0)
 
 	evmTx := types.NewTx(&types.LegacyTx{Nonce: nonce, To: to, Value: weiValue, Gas: gasLimit, GasPrice: gasPrice, Data: data})
