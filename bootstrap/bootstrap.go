@@ -46,6 +46,7 @@ type Bootstrap struct {
 	logger     zerolog.Logger
 	config     *config.Config
 	Client     *requester.CrossSporkClient
+	Requester  requester.Requester
 	Storages   *Storages
 	Publishers *Publishers
 	collector  metrics.Collector
@@ -249,6 +250,7 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to create EVM requester: %w", err)
 	}
+	b.Requester = evm
 
 	// create rate limiter for requests on the APIs. Tokens are number of requests allowed per 1 second interval
 	// if no limit is defined we specify max value, effectively disabling rate-limiting
