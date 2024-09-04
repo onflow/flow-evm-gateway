@@ -45,7 +45,7 @@ type Publishers struct {
 type Bootstrap struct {
 	logger     zerolog.Logger
 	config     *config.Config
-	client     *requester.CrossSporkClient
+	Client     *requester.CrossSporkClient
 	Storages   *Storages
 	Publishers *Publishers
 	collector  metrics.Collector
@@ -79,7 +79,7 @@ func New(config *config.Config) (*Bootstrap, error) {
 		Storages:  storages,
 		logger:    logger,
 		config:    config,
-		client:    client,
+		Client:    client,
 		collector: metrics.NewCollector(logger),
 	}, nil
 }
@@ -89,7 +89,7 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 	l.Info().Msg("bootstrap starting event ingestion")
 
 	// get latest cadence block from the network and the database
-	latestCadenceBlock, err := b.client.GetLatestBlock(context.Background(), true)
+	latestCadenceBlock, err := b.Client.GetLatestBlock(context.Background(), true)
 	if err != nil {
 		return fmt.Errorf("failed to get latest cadence block: %w", err)
 	}
@@ -100,7 +100,7 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 	}
 
 	// make sure the provided block to start the indexing can be loaded
-	_, err = b.client.GetBlockHeaderByHeight(context.Background(), latestCadenceHeight)
+	_, err = b.Client.GetBlockHeaderByHeight(context.Background(), latestCadenceHeight)
 	if err != nil {
 		return fmt.Errorf(
 			"failed to get provided cadence height %d: %w",
@@ -117,7 +117,7 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 
 	// create event subscriber
 	subscriber := ingestion.NewRPCSubscriber(
-		b.client,
+		b.Client,
 		b.config.HeartbeatInterval,
 		b.config.FlowNetworkID,
 		b.logger,
@@ -235,10 +235,10 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 	}
 
 	// create transaction pool
-	txPool := requester.NewTxPool(b.client, b.Publishers.Transaction, b.logger)
+	txPool := requester.NewTxPool(b.Client, b.Publishers.Transaction, b.logger)
 
 	evm, err := requester.NewEVM(
-		b.client,
+		b.Client,
 		b.config,
 		signer,
 		b.logger,
