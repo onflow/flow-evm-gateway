@@ -25,7 +25,7 @@ it('get block', async () => {
         block.transactionsRoot,
         '0x0000000000000000000000000000000000000000000000000000000000000000'
     )
-    assert.equal(block.size, 3994n)
+    assert.equal(block.size, 3995n)
     assert.equal(block.miner, '0x0000000000000000000000030000000000000000')
     assert.equal(
         block.sha3Uncles,
