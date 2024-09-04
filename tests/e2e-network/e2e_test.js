@@ -36,13 +36,14 @@ if (userPrivateKey == "") {
 }
 
 const userAccount = web3.eth.accounts.privateKeyToAccount(userPrivateKey);
+let gasPrice
 
 console.log("Using user account: ", userAccount.address)
 
 describe('Ethereum Contract Deployment and Interaction Tests', async function() {
     this.timeout(0) // Disable timeout since blockchain interactions can be slow
     let initBlock = 0
-    let gasPrice = await web3.eth.getGasPrice()
+    gasPrice = await web3.eth.getGasPrice()
 
     it('Should get the network ID', async function() {
         const id = await web3.eth.getChainId()
@@ -213,7 +214,7 @@ async function getBlock(hash, number) {
     }
 
     if (block.number+1n !== number) {
-        assert.fail(`invalid block number ${number} != ${block.number} block hash: ${block.hash}`)
+        assert.fail(`invalid block number ${number} != ${block.number+1} block hash: ${block.hash}`)
     }
 
     if (block.transactions != null) {
