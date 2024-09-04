@@ -167,6 +167,21 @@ describe('Ethereum Contract Deployment and Interaction Tests', async function() 
     })
 })
 
+// this test traverses the blockchain and checks the blocks are correct and linked.
+describe('Validate blockchain', function () {
+    let startHeight = process.env.CHECK_HEIGHT
+    if (startHeight == "") {
+        console.log("You need to set the `CHECK_HEIGHT` env variable")
+        process.exit(1)
+    }
+
+    it('traverse blockchain', async function () {
+        let first = await web3.eth.getBlock(startHeight)
+
+        await getBlock(first.parentHash, first.number)
+    })
+})
+
 describe('EVM Gateway load tests', function () {
     this.timeout(0)
     //return // skip unless explicitly run
@@ -186,6 +201,32 @@ describe('EVM Gateway load tests', function () {
         await Promise.all(txs)
     })
 })
+
+
+async function getBlock(hash, number) {
+    console.log("checking block: ", hash, number)
+
+    let block = await web3.eth.getBlock(hash)
+    if (block == null) {
+        assert.fail(`missing block ${hash}`)
+        return
+    }
+
+    if (block.number+1n !== number) {
+        assert.fail(`invalid block number ${number} != ${block.number} block hash: ${block.hash}`)
+    }
+
+    if (block.transactions != null) {
+        for (let hash of block.transactions) {
+            let tx = await web3.eth.getTransaction(hash)
+            if (tx.blockNumber !== block.number) {
+                assert.fail(`invalid transaction ${tx} at block ${number}`)
+            }
+        }
+    }
+
+    await getBlock(block.parentHash, block.number)
+}
 
 async function getBalance(addr) {
     return web3.eth.getBalance(addr).then(wei => {
