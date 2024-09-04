@@ -214,6 +214,7 @@ func Test_EncodingDecoding(t *testing.T) {
 
 	blockDec, err := NewBlockFromBytes(bytes)
 	require.NoError(t, err)
+	require.Equal(t, block, blockDec)
 
 	dh, err := blockDec.Hash()
 	require.NoError(t, err)
