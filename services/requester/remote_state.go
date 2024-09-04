@@ -57,7 +57,8 @@ func (l *remoteLedger) GetValue(owner, key []byte) ([]byte, error) {
 			RegisterIds: []*entities.RegisterID{registerID},
 		},
 	)
-	if err != nil && status.Code(err) != codes.NotFound {
+	errorCode := status.Code(err)
+	if err != nil && errorCode != codes.NotFound && errorCode != codes.OutOfRange {
 		return nil, err
 	}
 
