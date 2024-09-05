@@ -2,7 +2,6 @@ package tests
 
 import (
 	"context"
-	"fmt"
 	"math/big"
 	"testing"
 	"time"
@@ -53,11 +52,9 @@ func Test_StateExecution(t *testing.T) {
 	b, err := bootstrap.New(cfg)
 	require.NoError(t, err)
 
-	time.Sleep(1 * time.Second)
-
-	require.NoError(t, b.StartEventIngestion(ctx))
-	require.NoError(t, b.StartAPIServer(ctx))
 	require.NoError(t, b.StartStateIndex(ctx))
+	require.NoError(t, b.StartAPIServer(ctx))
+	require.NoError(t, b.StartEventIngestion(ctx))
 
 	blocks := b.Storages.Blocks
 	receipts := b.Storages.Receipts
@@ -83,13 +80,10 @@ func Test_StateExecution(t *testing.T) {
 	evmTx, _, err := evmSign(amount, 21000, eoaKey, 0, &testAddr, nil)
 	require.NoError(t, err)
 
-	time.Sleep(1 * time.Second)
-
-	fmt.Println("-------------------------")
 	hash, err := requester.SendRawTransaction(ctx, evmTx)
 	require.NoError(t, err)
 	require.NotEmpty(t, hash)
-	fmt.Println("-------------------------")
+
 	time.Sleep(1 * time.Second) // wait for tx to get ingested
 
 	latest, err = blocks.LatestEVMHeight()
