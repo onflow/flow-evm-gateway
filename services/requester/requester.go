@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/crypto"
@@ -57,6 +58,24 @@ var (
 	getLatestEVMHeight []byte
 )
 
+type scriptType int
+
+const (
+	dryRun scriptType = iota
+	getBalance
+	getNonce
+	getCode
+	getLatest
+)
+
+var scripts = map[scriptType][]byte{
+	dryRun:     dryRunScript,
+	getBalance: getBalanceScript,
+	getNonce:   getNonceScript,
+	getCode:    getCodeScript,
+	getLatest:  getLatestEVMHeight,
+}
+
 const minFlowBalance = 2
 const coaFundingBalance = minFlowBalance - 1
 
@@ -98,13 +117,14 @@ type Requester interface {
 var _ Requester = &EVM{}
 
 type EVM struct {
-	client *CrossSporkClient
-	config *config.Config
-	signer crypto.Signer
-	txPool *TxPool
-	logger zerolog.Logger
-	blocks storage.BlockIndexer
-	mux    sync.Mutex
+	client      *CrossSporkClient
+	config      *config.Config
+	signer      crypto.Signer
+	txPool      *TxPool
+	logger      zerolog.Logger
+	blocks      storage.BlockIndexer
+	mux         sync.Mutex
+	scriptCache *expirable.LRU[string, cadence.Value]
 
 	head              *types.Header
 	evmSigner         types.Signer
@@ -166,6 +186,9 @@ func NewEVM(
 		MinTip:  new(big.Int),
 	}
 
+	// todo make size and time configurable
+	cache := expirable.NewLRU[string, cadence.Value](1000, nil, time.Second)
+
 	evm := &EVM{
 		client:            client,
 		config:            config,
@@ -177,6 +200,7 @@ func NewEVM(
 		evmSigner:         evmSigner,
 		validationOptions: validationOptions,
 		collector:         collector,
+		scriptCache:       cache,
 	}
 
 	// create COA on the account
@@ -325,7 +349,7 @@ func (e *EVM) GetBalance(
 
 	val, err := e.executeScriptAtHeight(
 		ctx,
-		getBalanceScript,
+		getBalance,
 		height,
 		[]cadence.Value{hexEncodedAddress},
 	)
@@ -371,7 +395,7 @@ func (e *EVM) GetNonce(
 
 	val, err := e.executeScriptAtHeight(
 		ctx,
-		getNonceScript,
+		getNonce,
 		height,
 		[]cadence.Value{hexEncodedAddress},
 	)
@@ -468,7 +492,7 @@ func (e *EVM) Call(
 
 	scriptResult, err := e.executeScriptAtHeight(
 		ctx,
-		dryRunScript,
+		dryRun,
 		height,
 		[]cadence.Value{hexEncodedTx, hexEncodedAddress},
 	)
@@ -524,7 +548,7 @@ func (e *EVM) EstimateGas(
 
 	scriptResult, err := e.executeScriptAtHeight(
 		ctx,
-		dryRunScript,
+		dryRun,
 		height,
 		[]cadence.Value{hexEncodedTx, hexEncodedAddress},
 	)
@@ -574,7 +598,7 @@ func (e *EVM) GetCode(
 
 	value, err := e.executeScriptAtHeight(
 		ctx,
-		getCodeScript,
+		getCode,
 		height,
 		[]cadence.Value{hexEncodedAddress},
 	)
@@ -612,12 +636,11 @@ func (e *EVM) GetCode(
 }
 
 func (e *EVM) GetLatestEVMHeight(ctx context.Context) (uint64, error) {
-	// TODO(m-Peter): Consider adding some time-based caching, if this
-	// endpoint turns out to be called quite frequently.
-	val, err := e.client.ExecuteScriptAtLatestBlock(
+	val, err := e.executeScriptAtHeight(
 		ctx,
-		e.replaceAddresses(getLatestEVMHeight),
-		[]cadence.Value{},
+		getLatest,
+		LatestBlockHeight,
+		nil,
 	)
 	if err != nil {
 		return 0, err
@@ -722,30 +745,55 @@ func (e *EVM) evmToCadenceHeight(height int64) (uint64, error) {
 // executed at the latest sealed block.
 func (e *EVM) executeScriptAtHeight(
 	ctx context.Context,
-	script []byte,
+	scriptType scriptType,
 	height uint64,
 	arguments []cadence.Value,
 ) (cadence.Value, error) {
+	script, ok := scripts[scriptType]
+	if !ok {
+		return nil, fmt.Errorf("unknown script type")
+	}
+
+	// try and get the value from the cache if key is supported
+	key := cacheKey(scriptType, height, arguments)
+	if key != "" {
+		val, ok := e.scriptCache.Get(key)
+		if ok {
+			e.logger.Info().
+				Uint64("evm-height", height).
+				Int("script", int(scriptType)).
+				Str("result", val.String()).
+				Msg("cache hit")
+			return val, nil
+		}
+	}
+
+	var res cadence.Value
+	var err error
+
 	if height == LatestBlockHeight {
-		return e.client.ExecuteScriptAtLatestBlock(
+		res, err = e.client.ExecuteScriptAtLatestBlock(
 			ctx,
 			e.replaceAddresses(script),
 			arguments,
 		)
+	} else {
+		res, err = e.client.ExecuteScriptAtBlockHeight(
+			ctx,
+			height,
+			e.replaceAddresses(script),
+			arguments,
+		)
 	}
-
-	res, err := e.client.ExecuteScriptAtBlockHeight(
-		ctx,
-		height,
-		e.replaceAddresses(script),
-		arguments,
-	)
 	if err != nil {
 		// if snapshot doesn't exist on EN, the height at which script was executed is out
 		// of the boundaries the EN keeps state, so return out of range
-		if strings.Contains(err.Error(), "failed to create storage snapshot") {
+		const storageError = "failed to create storage snapshot"
+		if strings.Contains(err.Error(), storageError) {
 			return nil, errs.NewHeightOutOfRangeError(height)
 		}
+	} else if key != "" { // if error is nil and key is supported add to cache
+		e.scriptCache.Add(key, res)
 	}
 
 	return res, err
@@ -790,4 +838,28 @@ func parseResult(res cadence.Value) (*evmTypes.ResultSummary, error) {
 	}
 
 	return result, err
+}
+
+// cacheKey builds the cache key from the script type, height and arguments.
+func cacheKey(scriptType scriptType, height uint64, args []cadence.Value) string {
+	key := fmt.Sprintf("%d%d", scriptType, height)
+
+	switch scriptType {
+	case getBalance:
+		if len(args) != 1 {
+			return ""
+		}
+		key = fmt.Sprintf("%s%s", key, args[0].String())
+	case getNonce:
+		if len(args) != 1 {
+			return ""
+		}
+		key = fmt.Sprintf("%s%s", key, args[0].String())
+	case getLatest:
+		// no additional arguments
+	default:
+		return ""
+	}
+
+	return key
 }
