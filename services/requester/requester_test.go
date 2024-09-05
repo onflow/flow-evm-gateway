@@ -106,7 +106,7 @@ func Test_Caching(t *testing.T) {
 		}
 
 		// wait for cache expiry
-		time.Sleep(cacheExpiry)
+		time.Sleep(cacheExpiry + 100*time.Millisecond)
 
 		require.Equal(t, 0, cache.Len()) // make sure cache is empty
 
