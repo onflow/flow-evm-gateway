@@ -849,12 +849,14 @@ func cacheKey(scriptType scriptType, height uint64, args []cadence.Value) string
 		if len(args) != 1 {
 			return ""
 		}
-		key = fmt.Sprintf("%s%s", key, args[0].String())
+		v := args[0].(cadence.String)
+		key = fmt.Sprintf("%s%s", key, string(v))
 	case getNonce:
 		if len(args) != 1 {
 			return ""
 		}
-		key = fmt.Sprintf("%s%s", key, args[0].String())
+		v := args[0].(cadence.String)
+		key = fmt.Sprintf("%s%s", key, string(v))
 	case getLatest:
 		// no additional arguments
 	default:
