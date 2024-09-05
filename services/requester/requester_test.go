@@ -134,24 +134,24 @@ func Test_Caching(t *testing.T) {
 		}
 
 		tests := []acc{{
-			height:  100,
-			address: cadence.String("123"),
-			balance: cadence.NewInt(2),
+			height:  1002233,
+			address: cadence.String("1AC87F33D10b76E8BDd4fb501445A5ec413eb121"),
+			balance: cadence.NewInt(23958395),
 		}, {
-			height:  101,
-			address: cadence.String("222"),
+			height:  2002233,
+			address: cadence.String("A3014d9F6162a162BAD9Ff15346A4B82A56F841f"),
 			balance: cadence.NewInt(1),
 		}, {
-			height:  102,
-			address: cadence.String("333"),
+			height:  3002233,
+			address: cadence.String("53e6A4b36a56CB68fe54661416Be2c5b3Ee193c9"),
 			balance: cadence.NewInt(4),
 		}, {
-			height:  104,
-			address: cadence.String("444"),
+			height:  4002233,
+			address: cadence.String("839fEfa0750798B3A0BD9c925871e3f5027a5d44"),
 			balance: cadence.NewInt(3),
 		}, {
-			height:  105,
-			address: cadence.String("555"),
+			height:  7002233,
+			address: cadence.String("243a064089cF765E1F270B90913Db31cdDf299F5"),
 			balance: cadence.NewInt(5),
 		}}
 
