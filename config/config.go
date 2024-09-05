@@ -95,7 +95,7 @@ type Config struct {
 	MetricsPort int
 	// IndexOnly configures the gateway to not accept any transactions but only queries of the state
 	IndexOnly bool
-	// Cache size
+	// Cache size in units of items in cache, one unit in cache takes approximately 64 bytes
 	CacheSize uint
 }
 
@@ -147,7 +147,7 @@ func FromFlags() (*Config, error) {
 	flag.Uint64Var(&cfg.RateLimit, "rate-limit", 50, "Rate-limit requests per second made by the client over any protocol (ws/http)")
 	flag.StringVar(&cfg.AddressHeader, "address-header", "", "Address header that contains the client IP, this is useful when the server is behind a proxy that sets the source IP of the client. Leave empty if no proxy is used.")
 	flag.Uint64Var(&cfg.HeartbeatInterval, "heartbeat-interval", 100, "Heartbeat interval for AN event subscription")
-	flag.UintVar(&cfg.CacheSize, "script-cache-size", 1000, "Cache size used for script execution in items kept in cache")
+	flag.UintVar(&cfg.CacheSize, "script-cache-size", 10000, "Cache size used for script execution in items kept in cache")
 	flag.IntVar(&streamTimeout, "stream-timeout", 3, "Defines the timeout in seconds the server waits for the event to be sent to the client")
 	flag.Uint64Var(&forceStartHeight, "force-start-height", 0, "Force set starting Cadence height. WARNING: This should only be used locally or for testing, never in production.")
 	flag.StringVar(&filterExpiry, "filter-expiry", "5m", "Filter defines the time it takes for an idle filter to expire")
