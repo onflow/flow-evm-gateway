@@ -49,6 +49,12 @@ func NewStateEngine(
 	}
 }
 
+// todo rethink whether it would be more robust to rely on blocks in the storage
+// instead of receiving events, relying on storage and keeping a separate count of
+// transactions executed would allow for independent restart and reexecution
+// if we panic with events the missed tx won't get reexecuted since it's relying on
+// event ingestion also not indexing that transaction
+
 func (e *Engine) Notify(data any) {
 	block, ok := data.(*models.Block)
 	if !ok {
@@ -73,7 +79,7 @@ func (e *Engine) Notify(data any) {
 
 		err = state.Execute(tx)
 		if err != nil {
-			panic(err) // todo refactor
+			panic(err)
 		}
 	}
 }
