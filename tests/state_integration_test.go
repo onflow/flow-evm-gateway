@@ -97,4 +97,15 @@ func Test_StateExecution(t *testing.T) {
 
 	balance = st.GetBalance(testAddr)
 	assert.Equal(t, amount.Uint64(), balance.Uint64())
+
+	// todo note
+	// after running contract deployment I see a weird issue with tx reexecution failing, I believe that is the tx that redestributes the fee from coinbase to actualy set coinbase
+	// NEW TX: {"Type":255,"SubType":3,"From":[0,0,0,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0],"To":[250,207,113,105,36,33,3,152,118,165,187,79,16,239,122,67,157,142,246,30],"Data":"","Value":159834000000000,"GasLimit":23300,"Nonce":1}
+	//panic: invalid transaction 0xd66968a4b4f4de32a23433d206a0639247d8f60d87ab8e2e3b85448ef1c3aed4: insufficient funds for gas * price + value: address 0x0000000000000000000000030000000000000000 have 0 want 159834000000000
+	// the problem is coinbase doesn't have those funds
+	// it might the problem we use emulator directly and those refunds are happening on contract handler
+	// investigate more
+	// the other issue is ofc the missmatch of the gas used in the test
+
+	time.Sleep(180 * time.Second)
 }

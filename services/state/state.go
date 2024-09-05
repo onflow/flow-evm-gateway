@@ -1,6 +1,7 @@
 package state
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/onflow/atree"
@@ -51,15 +52,13 @@ func NewState(
 }
 
 func (s *State) Execute(tx models.Transaction) error {
+	t, _ := json.Marshal(tx)
+
+	fmt.Printf("\nNEW TX: %s\n", string(t))
+
 	receipt, err := s.receipts.GetByTransactionID(tx.Hash())
 	if err != nil {
 		return err
-	}
-
-	if receipt.Status != uint64(types.StatusSuccessful) {
-		// todo should we even execute invalid transactions
-		// failed we should - validate this
-		fmt.Println("WRN: non successful transaction", receipt.Status, receipt.TxHash.String())
 	}
 
 	blockCtx, err := s.blockContext(receipt)
@@ -90,9 +89,29 @@ func (s *State) Execute(tx models.Transaction) error {
 		return err
 	}
 
-	if !models.EqualReceipts(res.Receipt(), receipt) {
+	// todo we can remove this after since we compare receipt status anyway
+	if res.Failed() {
+		fmt.Println("WRN: failed transaction: ", res.VMError)
+	}
+
+	// we should never produce invalid transaction, since if the transaction was emitted from the evm core
+	// it must have either been successful or failed, invalid transactions are not emitted
+	if res.Invalid() {
+		return fmt.Errorf("invalid transaction %s: %w", tx.Hash(), res.ValidationError)
+	}
+
+	if ok, errs := models.EqualReceipts(res.Receipt(), receipt); !ok {
 		// todo add maybe a log of result and expected result
-		return fmt.Errorf("rexecution of transaction %s did not produce same result", tx.Hash().String())
+		//return fmt.Errorf("rexecution of transaction %s did not produce same result: %w", tx.Hash().String(), err)
+		if res.Receipt() == nil {
+			fmt.Printf("\n\n ------- NO RECEIPT ---------- \nresult: %v", res)
+		}
+
+		r, _ := res.Receipt().MarshalJSON()
+		r1, _ := json.Marshal(receipt)
+		fmt.Printf("\n\n --------------- MISMATCH ------------- \n \nerrors: %v\nlocal result: %v\nlocal receipt: %v\nremote receipt:%v\n\n", errs, res, string(r), string(r1))
+	} else {
+		fmt.Printf("\nMATCH %s\n\n", tx.Hash())
 	}
 
 	return nil
