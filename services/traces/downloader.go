@@ -14,7 +14,7 @@ import (
 	"google.golang.org/api/option"
 )
 
-const downloadTimeout = 5 * time.Minute
+const downloadTimeout = 15 * time.Minute
 
 type Downloader interface {
 	// Download traces or returning an error with the failure
