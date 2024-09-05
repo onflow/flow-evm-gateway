@@ -60,7 +60,6 @@ func (s *State) Execute(tx models.Transaction) error {
 		// todo should we even execute invalid transactions
 		// failed we should - validate this
 		fmt.Println("WRN: non successful transaction", receipt.Status, receipt.TxHash.String())
-		fmt.Println(string(receipt.RevertReason))
 	}
 
 	blockCtx, err := s.blockContext(receipt)
@@ -73,29 +72,28 @@ func (s *State) Execute(tx models.Transaction) error {
 		return err
 	}
 
+	var res *types.Result
+
 	switch tx.(type) {
 	case models.DirectCall:
-		fmt.Println("# executing direct call")
 		t := tx.(models.DirectCall)
-		_, err := bv.DirectCall(t.DirectCall)
-		if err != nil {
-			return err
-		}
-
+		res, err = bv.DirectCall(t.DirectCall)
 	case models.TransactionCall:
-		fmt.Println("# executing transaction call")
 		t := tx.(models.TransactionCall)
-		res, err := bv.RunTransaction(t.Transaction)
-		if err != nil {
-			return err
-		}
-		fmt.Println("# tx rexec result", res.VMError, res.ValidationError, res.TxHash, res.Failed())
+		res, err = bv.RunTransaction(t.Transaction)
 	default:
-		return fmt.Errorf("unknown transaction type")
+		return fmt.Errorf("invalid transaction type")
 	}
 
-	// todo make sure the result from running transaction matches
-	// the receipt we got from the EN, if not fallback to network requests
+	if err != nil {
+		// todo is this ok, the service would restart and retry?
+		return err
+	}
+
+	if !models.EqualReceipts(res.Receipt(), receipt) {
+		// todo add maybe a log of result and expected result
+		return fmt.Errorf("rexecution of transaction %s did not produce same result", tx.Hash().String())
+	}
 
 	return nil
 }
