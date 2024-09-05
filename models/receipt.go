@@ -71,46 +71,76 @@ func ReceiptsFromBytes(data []byte) ([]*Receipt, error) {
 }
 
 // EqualReceipts takes a geth Receipt type and EVM GW receipt and compares all the applicable values.
-func EqualReceipts(gethReceipt *gethTypes.Receipt, receipt *Receipt) bool {
+func EqualReceipts(gethReceipt *gethTypes.Receipt, receipt *Receipt) (bool, error) {
 	// fail if any receipt or both are nil
 	if gethReceipt == nil || receipt == nil {
-		return false
+		return false, fmt.Errorf("one or both receipts are nil")
 	}
 	// compare logs
 	if len(gethReceipt.Logs) != len(receipt.Logs) {
-		return false
+		return false, fmt.Errorf("log length mismatch: geth logs length %d, receipt logs length %d", len(gethReceipt.Logs), len(receipt.Logs))
 	}
 
-	// todo block data might not be present, investigate
+	// compare each log entry
 	for i, l := range gethReceipt.Logs {
 		rl := receipt.Logs[i]
-		if rl.BlockNumber != l.BlockNumber ||
-			rl.Removed != l.Removed ||
-			rl.TxHash.Cmp(l.TxHash) != 0 ||
-			rl.Address.Cmp(l.Address) != 0 ||
-			rl.BlockHash.Cmp(l.BlockHash) != 0 ||
-			rl.Index != l.Index ||
-			bytes.Equal(rl.Data, l.Data) == false ||
-			rl.TxIndex != l.TxIndex {
-			return false
+		if rl.BlockNumber != l.BlockNumber {
+			return false, fmt.Errorf("log block number mismatch at index %d: %d != %d", i, rl.BlockNumber, l.BlockNumber)
+		}
+		if rl.Removed != l.Removed {
+			return false, fmt.Errorf("log removed status mismatch at index %d: %v != %v", i, rl.Removed, l.Removed)
+		}
+		if rl.TxHash.Cmp(l.TxHash) != 0 {
+			return false, fmt.Errorf("log TxHash mismatch at index %d", i)
+		}
+		if rl.Address.Cmp(l.Address) != 0 {
+			return false, fmt.Errorf("log address mismatch at index %d", i)
+		}
+		if rl.BlockHash.Cmp(l.BlockHash) != 0 {
+			return false, fmt.Errorf("log block hash mismatch at index %d", i)
+		}
+		if rl.Index != l.Index {
+			return false, fmt.Errorf("log index mismatch at index %d: %d != %d", i, rl.Index, l.Index)
+		}
+		if !bytes.Equal(rl.Data, l.Data) {
+			return false, fmt.Errorf("log data mismatch at index %d", i)
+		}
+		if rl.TxIndex != l.TxIndex {
+			return false, fmt.Errorf("log transaction index mismatch at index %d: %d != %d", i, rl.TxIndex, l.TxIndex)
 		}
 		// compare all topics
 		for j, t := range rl.Topics {
 			if t.Cmp(l.Topics[j]) != 0 {
-				return false
+				return false, fmt.Errorf("log topic mismatch at index %d, topic %d", i, j)
 			}
 		}
 	}
 
 	// compare all receipt data
-	return gethReceipt.TxHash.Cmp(receipt.TxHash) == 0 &&
-		gethReceipt.GasUsed == receipt.GasUsed &&
-		gethReceipt.CumulativeGasUsed == receipt.CumulativeGasUsed &&
-		gethReceipt.Type == receipt.Type &&
-		gethReceipt.ContractAddress.Cmp(receipt.ContractAddress) == 0 &&
-		gethReceipt.Status == receipt.Status &&
-		bytes.Equal(gethReceipt.Bloom.Bytes(), receipt.Bloom.Bytes())
-	// todo there are other fields, should we compare, do we have block number?
+	if gethReceipt.TxHash.Cmp(receipt.TxHash) != 0 {
+		return false, fmt.Errorf("receipt TxHash mismatch")
+	}
+	if gethReceipt.GasUsed != receipt.GasUsed {
+		return false, fmt.Errorf("receipt GasUsed mismatch: %d != %d", gethReceipt.GasUsed, receipt.GasUsed)
+	}
+	if gethReceipt.CumulativeGasUsed != receipt.CumulativeGasUsed {
+		return false, fmt.Errorf("receipt CumulativeGasUsed mismatch: %d != %d", gethReceipt.CumulativeGasUsed, receipt.CumulativeGasUsed)
+	}
+	if gethReceipt.Type != receipt.Type {
+		return false, fmt.Errorf("receipt Type mismatch: %d != %d", gethReceipt.Type, receipt.Type)
+	}
+	if gethReceipt.ContractAddress.Cmp(receipt.ContractAddress) != 0 {
+		return false, fmt.Errorf("receipt ContractAddress mismatch")
+	}
+	if gethReceipt.Status != receipt.Status {
+		return false, fmt.Errorf("receipt Status mismatch: %d != %d", gethReceipt.Status, receipt.Status)
+	}
+	if !bytes.Equal(gethReceipt.Bloom.Bytes(), receipt.Bloom.Bytes()) {
+		return false, fmt.Errorf("receipt Bloom mismatch")
+	}
+
+	// all fields match
+	return true, nil
 }
 
 type BloomsHeight struct {
