@@ -186,8 +186,10 @@ func NewEVM(
 		MinTip:  new(big.Int),
 	}
 
-	// todo make size and time configurable
-	cache := expirable.NewLRU[string, cadence.Value](1000, nil, time.Second)
+	var cache *expirable.LRU[string, cadence.Value]
+	if config.CacheSize != 0 {
+		cache = expirable.NewLRU[string, cadence.Value](int(config.CacheSize), nil, time.Second)
+	}
 
 	evm := &EVM{
 		client:            client,
@@ -756,7 +758,7 @@ func (e *EVM) executeScriptAtHeight(
 
 	// try and get the value from the cache if key is supported
 	key := cacheKey(scriptType, height, arguments)
-	if key != "" {
+	if key != "" && e.scriptCache != nil {
 		val, ok := e.scriptCache.Get(key)
 		if ok {
 			e.logger.Info().
@@ -792,7 +794,7 @@ func (e *EVM) executeScriptAtHeight(
 		if strings.Contains(err.Error(), storageError) {
 			return nil, errs.NewHeightOutOfRangeError(height)
 		}
-	} else if key != "" { // if error is nil and key is supported add to cache
+	} else if key != "" && e.scriptCache != nil { // if error is nil and key is supported add to cache
 		e.scriptCache.Add(key, res)
 	}
 
