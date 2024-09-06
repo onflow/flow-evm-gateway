@@ -121,7 +121,7 @@ func decodeCadenceEvents(events flow.BlockEvents) (*CadenceEvents, error) {
 		return nil, fmt.Errorf("EVM block can not be nil if transactions are present, Flow block: %d", events.Height)
 	}
 
-	if e.block != nil && len(e.transactions) > 0 {
+	if e.block != nil {
 		txHashes := evmTypes.TransactionHashes([]gethCommon.Hash{})
 		for _, tx := range e.transactions {
 			txHashes = append(txHashes, tx.Hash())
