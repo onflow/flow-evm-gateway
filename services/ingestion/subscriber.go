@@ -148,28 +148,7 @@ func (r *RPCSubscriber) subscribe(ctx context.Context, height uint64, opts ...ac
 
 				evts := models.NewBlockEvents(blockEvents)
 				if evts.Err != nil {
-					blkEvents := flow.BlockEvents{
-						BlockID:        blockEvents.BlockID,
-						Height:         blockEvents.Height,
-						BlockTimestamp: blockEvents.BlockTimestamp,
-					}
-					for _, eventFilter := range r.blocksFilter().EventTypes {
-						recoveredEvents, err := r.client.GetEventsForHeightRange(
-							ctx,
-							eventFilter,
-							blockEvents.Height,
-							blockEvents.Height,
-						)
-						if err != nil {
-							events <- models.NewBlockEventsError(err)
-							return
-						}
-						for _, blockEvent := range recoveredEvents {
-							blkEvents.Events = append(blkEvents.Events, blockEvent.Events...)
-						}
-					}
-
-					events <- models.NewBlockEvents(blkEvents)
+					events <- r.fetchBlockEvents(ctx, blockEvents)
 					return
 				}
 
@@ -278,4 +257,34 @@ func (r *RPCSubscriber) blocksFilter() flow.EventFilter {
 			transactionExecutedEvent,
 		},
 	}
+}
+
+func (r *RPCSubscriber) fetchBlockEvents(
+	ctx context.Context,
+	blockEvents flow.BlockEvents,
+) models.BlockEvents {
+	blkEvents := flow.BlockEvents{
+		BlockID:        blockEvents.BlockID,
+		Height:         blockEvents.Height,
+		BlockTimestamp: blockEvents.BlockTimestamp,
+	}
+	for _, eventFilter := range r.blocksFilter().EventTypes {
+		recoveredEvents, err := r.client.GetEventsForHeightRange(
+			ctx,
+			eventFilter,
+			blockEvents.Height,
+			blockEvents.Height,
+		)
+		if err != nil {
+			return models.NewBlockEventsError(err)
+		}
+		if len(recoveredEvents) > 1 {
+			return models.NewBlockEventsError(
+				fmt.Errorf("received unexpected Flow block events for height: %d", blockEvents.Height),
+			)
+		}
+		blkEvents.Events = append(blkEvents.Events, recoveredEvents[0].Events...)
+	}
+
+	return models.NewBlockEvents(blkEvents)
 }
