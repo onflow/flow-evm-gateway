@@ -63,7 +63,7 @@ func (txArgs TransactionArgs) Validate() error {
 		// e.g. https://github.com/onflow/go-ethereum/issues/16106.
 		if txDataLen == 0 {
 			// Prevent sending ether into black hole (show stopper)
-			if txArgs.Value.ToInt().Cmp(big.NewInt(0)) > 0 {
+			if txArgs.Value != nil && txArgs.Value.ToInt().Cmp(big.NewInt(0)) > 0 {
 				return errs.NewInvalidTransactionError(
 					errors.New("transaction will create a contract with value but empty code"),
 				)
