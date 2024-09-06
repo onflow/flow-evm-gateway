@@ -101,7 +101,7 @@ func (l *Ledger) AllocateSlabIndex(owner []byte) (atree.SlabIndex, error) {
 		copy(index[:], val)
 	}
 
-	index.Next()
+	index = index.Next()
 	if err := l.store.set(ledgerSlabIndex, owner, index[:], nil); err != nil {
 		return atree.SlabIndexUndefined, fmt.Errorf(
 			"slab index failed to set for owner %x: %w",
