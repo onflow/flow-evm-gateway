@@ -64,7 +64,7 @@ func (e *Engine) Notify(data any) {
 
 	e.logger.Info().Uint64("evm-height", block.Height).Msg("received new block")
 
-	state, err := NewState(block, e.ledger, e.config.FlowNetworkID, e.blocks, e.receipts)
+	state, err := NewState(block, e.ledger, e.config.FlowNetworkID, e.blocks, e.receipts, e.logger)
 	if err != nil {
 		panic(err) // todo refactor
 	}
