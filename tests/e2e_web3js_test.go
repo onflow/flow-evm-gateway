@@ -24,6 +24,10 @@ var (
 
 func TestWeb3_E2E(t *testing.T) {
 
+	t.Run("build EVM state", func(t *testing.T) {
+		runWeb3Test(t, "build_evm_state_test")
+	})
+
 	t.Run("test setup sanity check", func(t *testing.T) {
 		runWeb3Test(t, "setup_test")
 	})
