@@ -80,6 +80,18 @@ func TestValidateTransaction(t *testing.T) {
 			valid:  false,
 			errMsg: "transaction will create a contract with empty code",
 		},
+		"create empty contract (nil value)": {
+			txArgs: TransactionArgs{
+				Nonce:    (*hexutil.Uint64)(&nonce),
+				To:       nil,
+				Value:    nil,
+				Gas:      (*hexutil.Uint64)(&gasLimit),
+				GasPrice: (*hexutil.Big)(big.NewInt(0)),
+				Data:     &hexutil.Bytes{},
+			},
+			valid:  false,
+			errMsg: "transaction will create a contract with empty code",
+		},
 		"create empty contract (with value)": {
 			txArgs: TransactionArgs{
 				Nonce:    (*hexutil.Uint64)(&nonce),

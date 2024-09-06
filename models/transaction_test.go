@@ -331,6 +331,20 @@ func TestValidateTransaction(t *testing.T) {
 			valid:  false,
 			errMsg: "transaction will create a contract with empty code",
 		},
+		"create empty contract (nil value)": {
+			tx: gethTypes.NewTx(
+				&gethTypes.LegacyTx{
+					Nonce:    1,
+					To:       nil,
+					Value:    nil,
+					Gas:      53_000,
+					GasPrice: big.NewInt(0),
+					Data:     []byte{},
+				},
+			),
+			valid:  false,
+			errMsg: "transaction will create a contract with empty code",
+		},
 		"create empty contract (with value)": {
 			tx: gethTypes.NewTx(
 				&gethTypes.LegacyTx{
