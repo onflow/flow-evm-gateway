@@ -80,7 +80,8 @@ func Test_StateExecution_Transfers(t *testing.T) {
 	assert.Equal(t, uint64(0), balance.Uint64())
 
 	amount := big.NewInt(1)
-	evmTx, _, err := evmSign(amount, 21000, eoaKey, 0, &testAddr, nil)
+	nonce := uint64(0)
+	evmTx, _, err := evmSign(amount, 21000, eoaKey, nonce, &testAddr, nil)
 	require.NoError(t, err)
 
 	hash, err := requester.SendRawTransaction(ctx, evmTx)
@@ -102,7 +103,8 @@ func Test_StateExecution_Transfers(t *testing.T) {
 	assert.Equal(t, amount.Uint64(), balance.Uint64())
 
 	amount2 := big.NewInt(2)
-	evmTx, _, err = evmSign(amount2, 21000, eoaKey, 0, &testAddr, nil)
+	nonce++
+	evmTx, _, err = evmSign(amount2, 21000, eoaKey, nonce, &testAddr, nil)
 	require.NoError(t, err)
 
 	hash, err = requester.SendRawTransaction(ctx, evmTx)
