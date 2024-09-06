@@ -1,7 +1,6 @@
 package state
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/onflow/atree"
@@ -12,6 +11,7 @@ import (
 	"github.com/onflow/flow-go/fvm/evm/types"
 	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/onflow/go-ethereum/common"
+	"github.com/rs/zerolog"
 
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/storage"
@@ -23,6 +23,7 @@ type State struct {
 	block         *models.Block
 	blocks        storage.BlockIndexer
 	receipts      storage.ReceiptIndexer
+	logger        zerolog.Logger
 }
 
 func NewState(
@@ -31,7 +32,9 @@ func NewState(
 	chainID flowGo.ChainID,
 	blocks storage.BlockIndexer,
 	receipts storage.ReceiptIndexer,
+	logger zerolog.Logger,
 ) (*State, error) {
+	logger = logger.With().Str("component", "state-execution").Logger()
 	storageAddress := evm.StorageAccountAddress(chainID)
 
 	// todo do we need state db?
@@ -42,19 +45,23 @@ func NewState(
 
 	emu := emulator.NewEmulator(ledger, storageAddress)
 
+	// todo optimization: we could init the state block view here instead of on each tx execution
+	// but we would need to append all precompile calls since they are needed for
+	// block context
+
 	return &State{
 		StateDB:  s,
 		emulator: emu,
 		block:    block,
 		blocks:   blocks,
 		receipts: receipts,
+		logger:   logger,
 	}, nil
 }
 
 func (s *State) Execute(tx models.Transaction) error {
-	t, _ := json.Marshal(tx)
-
-	fmt.Printf("\nNEW TX: %s\n", string(t))
+	l := s.logger.With().Str("tx-hash", tx.Hash().String()).Logger()
+	l.Info().Msg("executing new transaction")
 
 	receipt, err := s.receipts.GetByTransactionID(tx.Hash())
 	if err != nil {
@@ -89,11 +96,6 @@ func (s *State) Execute(tx models.Transaction) error {
 		return err
 	}
 
-	// todo we can remove this after since we compare receipt status anyway
-	if res.Failed() {
-		fmt.Println("WRN: failed transaction: ", res.VMError)
-	}
-
 	// we should never produce invalid transaction, since if the transaction was emitted from the evm core
 	// it must have either been successful or failed, invalid transactions are not emitted
 	if res.Invalid() {
@@ -101,19 +103,10 @@ func (s *State) Execute(tx models.Transaction) error {
 	}
 
 	if ok, errs := models.EqualReceipts(res.Receipt(), receipt); !ok {
-		// todo add maybe a log of result and expected result
-		//return fmt.Errorf("rexecution of transaction %s did not produce same result: %w", tx.Hash().String(), err)
-		if res.Receipt() == nil {
-			fmt.Printf("\n\n ------- NO RECEIPT ---------- \nresult: %v", res)
-		}
-
-		r, _ := res.Receipt().MarshalJSON()
-		r1, _ := json.Marshal(receipt)
-		fmt.Printf("\n\n --------------- MISMATCH ------------- \n \nerrors: %v\nlocal result: %v\nlocal receipt: %v\nremote receipt:%v\n\n", errs, res, string(r), string(r1))
-	} else {
-		fmt.Printf("\nMATCH %s\n\n", tx.Hash())
+		return fmt.Errorf("state missmatch: %v", errs)
 	}
 
+	l.Debug().Msg("transaction executed successfully")
 	return nil
 }
 
