@@ -148,6 +148,10 @@ func (r *RPCSubscriber) subscribe(ctx context.Context, height uint64, opts ...ac
 
 				evts := models.NewBlockEvents(blockEvents)
 				if evts.Err != nil {
+					r.logger.Warn().Err(err).Msgf(
+						"failed to parse EVM block events for Flow height: %d, retrying with gRPC API...",
+						blockEvents.Height,
+					)
 					events <- r.fetchBlockEvents(ctx, blockEvents)
 					return
 				}
