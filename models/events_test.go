@@ -61,6 +61,40 @@ func TestCadenceEvents_Block(t *testing.T) {
 			}
 		})
 	}
+
+	cadenceHeight := uint64(1)
+	txCount := 10
+	txEvents := make([]flow.Event, txCount)
+	txs := make([]Transaction, txCount)
+	hashes := make([]gethCommon.Hash, txCount)
+	results := make([]*types.Result, txCount)
+
+	blockEvents := flow.BlockEvents{
+		BlockID: flow.Identifier{0x1},
+		Height:  cadenceHeight,
+	}
+
+	// generate txs
+	for i := 0; i < txCount; i++ {
+		var err error
+		txs[i], results[i], txEvents[i], err = newTransaction(uint64(i))
+		require.NoError(t, err)
+		hashes[i] = txs[i].Hash()
+		blockEvents.Events = append(blockEvents.Events, txEvents[i])
+	}
+
+	// generate single block
+	_, blockEvent, err := newBlock(1, hashes[0:txCount-2])
+	require.NoError(t, err)
+	blockEvents.Events = append(blockEvents.Events, blockEvent)
+
+	_, err = NewCadenceEvents(blockEvents)
+	require.Error(t, err)
+	assert.ErrorContains(
+		t,
+		err,
+		"block 1 references missing transaction/s",
+	)
 }
 
 func Test_EventDecoding(t *testing.T) {
@@ -174,7 +208,7 @@ func newTransaction(nonce uint64) (Transaction, *types.Result, flow.Event, error
 	return TransactionCall{Transaction: tx}, res, flowEvent, err
 }
 
-func newBlock(height uint64, hashes []gethCommon.Hash) (*Block, flow.Event, error) {
+func newBlock(height uint64, txHashes []gethCommon.Hash) (*Block, flow.Event, error) {
 	gethBlock := types.NewBlock(
 		gethCommon.HexToHash("0x01"),
 		height,
@@ -182,9 +216,10 @@ func newBlock(height uint64, hashes []gethCommon.Hash) (*Block, flow.Event, erro
 		big.NewInt(100),
 		gethCommon.HexToHash("0x15"),
 	)
+	gethBlock.TransactionHashRoot = types.TransactionHashes(txHashes).RootHash()
 	evmBlock := &Block{
 		Block:             gethBlock,
-		TransactionHashes: hashes,
+		TransactionHashes: txHashes,
 	}
 
 	ev := events.NewBlockEvent(gethBlock)
