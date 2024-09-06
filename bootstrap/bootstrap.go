@@ -490,6 +490,10 @@ func Run(ctx context.Context, cfg *config.Config, ready chan struct{}) error {
 		}
 	}
 
+	if err := boot.StartStateIndex(ctx); err != nil {
+		return fmt.Errorf("failed to start local state index engine: %w", err)
+	}
+
 	if err := boot.StartEventIngestion(ctx); err != nil {
 		return fmt.Errorf("failed to start event ingestion engine: %w", err)
 	}
