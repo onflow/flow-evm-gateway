@@ -20,6 +20,7 @@ import (
 type State struct {
 	types.StateDB // todo change to types.ReadOnlyView
 	emulator      types.Emulator
+	chainID       flowGo.ChainID
 	block         *models.Block
 	blocks        storage.BlockIndexer
 	receipts      storage.ReceiptIndexer
@@ -52,6 +53,7 @@ func NewState(
 	return &State{
 		StateDB:  s,
 		emulator: emu,
+		chainID:  chainID,
 		block:    block,
 		blocks:   blocks,
 		receipts: receipts,
@@ -119,7 +121,7 @@ func (s *State) blockContext(receipt *models.Receipt) (types.BlockContext, error
 	precompileContracts := precompiles.AggregatedPrecompiledCallsToPrecompiledContracts(calls)
 
 	return types.BlockContext{
-		ChainID:                types.FlowEVMPreviewNetChainID, // todo configure dynamically
+		ChainID:                types.EVMChainIDFromFlowChainID(s.chainID),
 		BlockNumber:            s.block.Height,
 		BlockTimestamp:         s.block.Timestamp,
 		DirectCallBaseGasUsage: types.DefaultDirectCallBaseGasUsage, // todo check
