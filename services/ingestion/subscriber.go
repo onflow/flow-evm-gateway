@@ -146,6 +146,33 @@ func (r *RPCSubscriber) subscribe(ctx context.Context, height uint64, opts ...ac
 					return
 				}
 
+				evts := models.NewBlockEvents(blockEvents)
+				if evts.Err != nil {
+					blkEvents := flow.BlockEvents{
+						BlockID:        blockEvents.BlockID,
+						Height:         blockEvents.Height,
+						BlockTimestamp: blockEvents.BlockTimestamp,
+					}
+					for _, eventFilter := range r.blocksFilter().EventTypes {
+						recoveredEvents, err := r.client.GetEventsForHeightRange(
+							ctx,
+							eventFilter,
+							blockEvents.Height,
+							blockEvents.Height,
+						)
+						if err != nil {
+							events <- models.NewBlockEventsError(err)
+							return
+						}
+						for _, blockEvent := range recoveredEvents {
+							blkEvents.Events = append(blkEvents.Events, blockEvent.Events...)
+						}
+					}
+
+					events <- models.NewBlockEvents(blkEvents)
+					return
+				}
+
 				events <- models.NewBlockEvents(blockEvents)
 
 			case err, ok := <-errChan:
