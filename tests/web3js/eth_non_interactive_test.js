@@ -62,6 +62,17 @@ it('get block', async () => {
         assert.equal(txReceipt.blockHash, block.hash)
         assert.isString(txReceipt.transactionHash)
         assert.equal(txReceipt.transactionIndex, txIndex)
+        assert.isNotNull(txReceipt.from)
+
+        // first transaction is the COA resource creation,
+        // which also does the contract deployment
+        if (txIndex == 0) {
+            assert.isNotNull(txReceipt.contractAddress)
+            assert.isUndefined(txReceipt.to)
+        } else {
+            assert.isUndefined(txReceipt.contractAddress)
+            assert.isNotNull(txReceipt.to)
+        }
 
         gasUsed += txReceipt.gasUsed
     }
