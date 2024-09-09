@@ -8,7 +8,6 @@ import (
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go/fvm/evm/events"
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
-	gethCommon "github.com/onflow/go-ethereum/common"
 )
 
 // isBlockExecutedEvent checks whether the given event contains block executed data.
@@ -122,7 +121,7 @@ func decodeCadenceEvents(events flow.BlockEvents) (*CadenceEvents, error) {
 	}
 
 	if e.block != nil {
-		txHashes := evmTypes.TransactionHashes([]gethCommon.Hash{})
+		txHashes := evmTypes.TransactionHashes{}
 		for _, tx := range e.transactions {
 			txHashes = append(txHashes, tx.Hash())
 		}

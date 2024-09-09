@@ -64,37 +64,95 @@ func TestCadenceEvents_Block(t *testing.T) {
 
 	cadenceHeight := uint64(1)
 	txCount := 10
-	txEvents := make([]flow.Event, txCount)
-	txs := make([]Transaction, txCount)
 	hashes := make([]gethCommon.Hash, txCount)
-	results := make([]*types.Result, txCount)
-
-	blockEvents := flow.BlockEvents{
-		BlockID: flow.Identifier{0x1},
-		Height:  cadenceHeight,
-	}
+	events := make([]flow.Event, 0)
 
 	// generate txs
 	for i := 0; i < txCount; i++ {
-		var err error
-		txs[i], results[i], txEvents[i], err = newTransaction(uint64(i))
+		tx, _, txEvent, err := newTransaction(uint64(i))
 		require.NoError(t, err)
-		hashes[i] = txs[i].Hash()
-		blockEvents.Events = append(blockEvents.Events, txEvents[i])
+		hashes[i] = tx.Hash()
+		events = append(events, txEvent)
 	}
 
-	// generate single block
-	_, blockEvent, err := newBlock(1, hashes[0:txCount-2])
-	require.NoError(t, err)
-	blockEvents.Events = append(blockEvents.Events, blockEvent)
+	t.Run("block with less transaction hashes", func(t *testing.T) {
+		// generate single block
+		_, blockEvent, err := newBlock(cadenceHeight, hashes[:txCount-2])
+		require.NoError(t, err)
 
-	_, err = NewCadenceEvents(blockEvents)
-	require.Error(t, err)
-	assert.ErrorContains(
-		t,
-		err,
-		"block 1 references missing transaction/s",
-	)
+		blockEvents := flow.BlockEvents{
+			BlockID: flow.Identifier{0x1},
+			Height:  cadenceHeight,
+			Events:  events,
+		}
+
+		blockEvents.Events = append(blockEvents.Events, blockEvent)
+
+		_, err = NewCadenceEvents(blockEvents)
+		require.Error(t, err)
+		assert.ErrorContains(
+			t,
+			err,
+			"block 1 references missing transaction/s",
+		)
+	})
+
+	t.Run("block with equal transaction hashes", func(t *testing.T) {
+		// generate single block
+		_, blockEvent, err := newBlock(cadenceHeight, hashes)
+		require.NoError(t, err)
+
+		blockEvents := flow.BlockEvents{
+			BlockID: flow.Identifier{0x1},
+			Height:  cadenceHeight,
+			Events:  events,
+		}
+
+		blockEvents.Events = append(blockEvents.Events, blockEvent)
+
+		_, err = NewCadenceEvents(blockEvents)
+		require.NoError(t, err)
+	})
+
+	t.Run("block with empty transaction hashes", func(t *testing.T) {
+		// generate single block
+		_, blockEvent, err := newBlock(cadenceHeight, []gethCommon.Hash{})
+		require.NoError(t, err)
+
+		blockEvents := flow.BlockEvents{
+			BlockID: flow.Identifier{0x1},
+			Height:  cadenceHeight,
+		}
+
+		blockEvents.Events = append(blockEvents.Events, blockEvent)
+
+		_, err = NewCadenceEvents(blockEvents)
+		require.NoError(t, err)
+	})
+
+	t.Run("block with more transaction hashes", func(t *testing.T) {
+		tx, _, _, err := newTransaction(1)
+		require.NoError(t, err)
+
+		// generate single block
+		_, blockEvent, err := newBlock(cadenceHeight, []gethCommon.Hash{tx.Hash()})
+		require.NoError(t, err)
+
+		blockEvents := flow.BlockEvents{
+			BlockID: flow.Identifier{0x1},
+			Height:  cadenceHeight,
+		}
+
+		blockEvents.Events = append(blockEvents.Events, blockEvent)
+
+		_, err = NewCadenceEvents(blockEvents)
+		require.Error(t, err)
+		assert.ErrorContains(
+			t,
+			err,
+			"block 1 references missing transaction/s",
+		)
+	})
 }
 
 func Test_EventDecoding(t *testing.T) {
