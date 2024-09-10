@@ -60,7 +60,6 @@ func (l *Register) GetValue(owner, key []byte) ([]byte, error) {
 		)
 	}
 
-	fmt.Printf("----- \nget value: %x %x %x\n-----\n", owner, key, val)
 	return val, nil
 }
 
@@ -69,8 +68,6 @@ func (l *Register) SetValue(owner, key, value []byte) error {
 	defer l.mux.Unlock()
 
 	id := l.id(owner, key)
-	fmt.Println("owner", owner, "key", key, "value", value)
-	fmt.Printf("----- \nset value: %x %x\n-----\n", id, value)
 	if err := l.store.set(ledgerValue, id, value, nil); err != nil {
 		return fmt.Errorf(
 			"failed to store ledger value for owner %x and key %x: %w",
