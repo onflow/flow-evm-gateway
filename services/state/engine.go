@@ -69,7 +69,7 @@ func (e *Engine) Notify(data any) {
 		panic(err) // todo refactor
 	}
 
-	for _, h := range block.TransactionHashes {
+	for i, h := range block.TransactionHashes {
 		e.logger.Info().Str("hash", h.String()).Msg("transaction execution")
 
 		tx, err := e.transactions.Get(h)
@@ -77,7 +77,7 @@ func (e *Engine) Notify(data any) {
 			panic(err) // todo refactor
 		}
 
-		err = state.Execute(tx)
+		err = state.Execute(tx, uint(i))
 		if err != nil {
 			panic(err)
 		}

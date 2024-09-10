@@ -38,7 +38,6 @@ func NewState(
 	logger = logger.With().Str("component", "state-execution").Logger()
 	storageAddress := evm.StorageAccountAddress(chainID)
 
-	// todo do we need state db?
 	s, err := state.NewStateDB(ledger, storageAddress)
 	if err != nil {
 		return nil, err
@@ -61,7 +60,7 @@ func NewState(
 	}, nil
 }
 
-func (s *State) Execute(tx models.Transaction) error {
+func (s *State) Execute(tx models.Transaction, index uint) error {
 	l := s.logger.With().Str("tx-hash", tx.Hash().String()).Logger()
 	l.Info().Msg("executing new transaction")
 
@@ -70,7 +69,7 @@ func (s *State) Execute(tx models.Transaction) error {
 		return err
 	}
 
-	blockCtx, err := s.blockContext(receipt)
+	blockCtx, err := s.blockContext(receipt, index)
 	if err != nil {
 		return err
 	}
@@ -112,7 +111,7 @@ func (s *State) Execute(tx models.Transaction) error {
 	return nil
 }
 
-func (s *State) blockContext(receipt *models.Receipt) (types.BlockContext, error) {
+func (s *State) blockContext(receipt *models.Receipt, txIndex uint) (types.BlockContext, error) {
 	calls, err := types.AggregatedPrecompileCallsFromEncoded(receipt.PrecompiledCalls)
 	if err != nil {
 		return types.BlockContext{}, err
@@ -141,8 +140,8 @@ func (s *State) blockContext(receipt *models.Receipt) (types.BlockContext, error
 		},
 		Random:                    s.block.PrevRandao,
 		ExtraPrecompiledContracts: precompileContracts,
+		TxCountSoFar:              txIndex,
 		// todo check values bellow if they are needed by the execution
-		TxCountSoFar:      0,
 		TotalGasUsedSoFar: 0,
 		Tracer:            nil,
 	}, nil
