@@ -41,7 +41,10 @@ it('should handle a large number of EVM interactions', async () => {
     let senderBalance = await web3.eth.getBalance(conf.eoa.address)
     assert.equal(senderBalance, 1999999999937000000n)
 
-    let transferAmounts = ['0.01', '0.03', '0.05']
+    // Each EOA has a 0.15 ether, so the below transfer amounts
+    // should never add up to that, or the transfer transaction
+    // will revert.
+    let transferAmounts = ['0.01', '0.02', '0.04']
     for (let i = 0; i < eoaCount; i++) {
         let sender = accounts[i]
 
