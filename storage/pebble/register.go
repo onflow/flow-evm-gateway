@@ -31,6 +31,8 @@ func NewRegister(store *Storage) *Register {
 }
 
 func (l *Register) SetHeight(height uint64) {
+	l.mux.Lock()
+	defer l.mux.Unlock()
 	l.height = uint64Bytes(height)
 }
 
@@ -54,6 +56,7 @@ func (l *Register) GetValue(owner, key []byte) ([]byte, error) {
 		)
 	}
 
+	fmt.Printf("----- \nget value: %x %x\n-----", id, val)
 	return val, nil
 }
 
@@ -62,6 +65,7 @@ func (l *Register) SetValue(owner, key, value []byte) error {
 	defer l.mux.Unlock()
 
 	id := l.id(owner, key)
+	fmt.Printf("----- \nset value: %x %x\n-----", id, value)
 	if err := l.store.set(ledgerValue, id, value, nil); err != nil {
 		return fmt.Errorf(
 			"failed to store ledger value for owner %x and key %x: %w",
