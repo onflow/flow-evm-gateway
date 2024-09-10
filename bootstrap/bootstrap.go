@@ -33,7 +33,7 @@ type Storages struct {
 	Receipts     storage.ReceiptIndexer
 	Accounts     storage.AccountIndexer
 	Traces       storage.TraceIndexer
-	Ledger       *pebble.Ledger
+	Registers    *pebble.Register
 }
 
 type Publishers struct {
@@ -188,8 +188,8 @@ func (b *Bootstrap) StartStateIndex(ctx context.Context) error {
 
 	b.State = state.NewStateEngine(
 		b.config.FlowNetworkID,
-		b.Storages.Ledger,
 		b.Publishers.Block,
+		b.Storages.Registers,
 		b.Storages.Blocks,
 		b.Storages.Transactions,
 		b.Storages.Receipts,
@@ -471,7 +471,7 @@ func setupStorage(
 		Receipts:     pebble.NewReceipts(store),
 		Accounts:     pebble.NewAccounts(store),
 		Traces:       pebble.NewTraces(store),
-		Ledger:       pebble.NewLedger(store),
+		Registers:    pebble.NewRegister(store),
 	}, nil
 }
 

@@ -5,6 +5,7 @@ import (
 
 	"github.com/cockroachdb/pebble"
 	"github.com/goccy/go-json"
+	"github.com/onflow/atree"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/go-ethereum/common"
 
@@ -117,4 +118,10 @@ type TraceIndexer interface {
 
 	// GetTransaction will retrieve transaction trace by the transaction ID.
 	GetTransaction(ID common.Hash) (json.RawMessage, error)
+}
+
+type RegisterIndexer interface {
+	atree.Ledger
+	// SetHeight sets the current height at which the ledger index is positioned.
+	SetHeight(height uint64)
 }

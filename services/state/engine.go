@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/onflow/atree"
 	"github.com/onflow/flow-go/fvm/evm/precompiles"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	flowGo "github.com/onflow/flow-go/model/flow"
@@ -27,13 +26,13 @@ type Engine struct {
 	blocks         storage.BlockIndexer
 	transactions   storage.TransactionIndexer
 	receipts       storage.ReceiptIndexer
-	ledger         atree.Ledger
+	registers      storage.RegisterIndexer
 }
 
 func NewStateEngine(
 	chainID flowGo.ChainID,
-	ledger atree.Ledger,
 	blockPublisher *models.Publisher,
+	registers storage.RegisterIndexer,
 	blocks storage.BlockIndexer,
 	transactions storage.TransactionIndexer,
 	receipts storage.ReceiptIndexer,
@@ -49,7 +48,7 @@ func NewStateEngine(
 		blocks:         blocks,
 		transactions:   transactions,
 		receipts:       receipts,
-		ledger:         ledger,
+		registers:      registers,
 	}
 }
 
@@ -109,7 +108,9 @@ func (e *Engine) ID() uuid.UUID {
 // Transaction executed should match a receipt we have indexed from the network
 // produced by execution nodes. This check makes sure we keep a correct state.
 func (e *Engine) executeBlock(block *models.Block) error {
-	state, err := NewState(block, e.ledger, e.chainID, e.blocks, e.receipts, e.logger)
+
+	e.registers.SetHeight(block.Height)
+	state, err := NewState(block, e.registers, e.chainID, e.blocks, e.receipts, e.logger)
 	if err != nil {
 		return err
 	}

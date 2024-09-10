@@ -10,27 +10,31 @@ import (
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
 )
 
-var _ atree.Ledger = &Ledger{}
+var _ atree.Ledger = &Register{}
 
 // todo we need to support historic data,
 // we likely need to create ledger with the context of block height
 // and then prepend all keys with that height
 
-type Ledger struct {
+type Register struct {
 	height []byte
 	store  *Storage
 	mux    sync.RWMutex
 }
 
-func NewLedger(store *Storage, height uint64) *Ledger {
-	return &Ledger{
+func NewRegister(store *Storage) *Register {
+	return &Register{
 		store:  store,
-		height: uint64Bytes(height),
+		height: uint64Bytes(0),
 		mux:    sync.RWMutex{},
 	}
 }
 
-func (l *Ledger) GetValue(owner, key []byte) ([]byte, error) {
+func (l *Register) SetHeight(height uint64) {
+	l.height = uint64Bytes(height)
+}
+
+func (l *Register) GetValue(owner, key []byte) ([]byte, error) {
 	l.mux.RLock()
 	defer l.mux.RUnlock()
 
@@ -53,7 +57,7 @@ func (l *Ledger) GetValue(owner, key []byte) ([]byte, error) {
 	return val, nil
 }
 
-func (l *Ledger) SetValue(owner, key, value []byte) error {
+func (l *Register) SetValue(owner, key, value []byte) error {
 	l.mux.Lock()
 	defer l.mux.Unlock()
 
@@ -70,7 +74,7 @@ func (l *Ledger) SetValue(owner, key, value []byte) error {
 	return nil
 }
 
-func (l *Ledger) ValueExists(owner, key []byte) (bool, error) {
+func (l *Register) ValueExists(owner, key []byte) (bool, error) {
 	val, err := l.GetValue(owner, key)
 	if err != nil {
 		return false, err
@@ -79,7 +83,7 @@ func (l *Ledger) ValueExists(owner, key []byte) (bool, error) {
 	return val != nil, nil
 }
 
-func (l *Ledger) AllocateSlabIndex(owner []byte) (atree.SlabIndex, error) {
+func (l *Register) AllocateSlabIndex(owner []byte) (atree.SlabIndex, error) {
 	l.mux.Lock()
 	defer l.mux.Unlock()
 
@@ -116,7 +120,7 @@ func (l *Ledger) AllocateSlabIndex(owner []byte) (atree.SlabIndex, error) {
 }
 
 // id calculate ledger id with included block height for owner and key
-func (l *Ledger) id(owner, key []byte) []byte {
+func (l *Register) id(owner, key []byte) []byte {
 	id := append(l.height, owner...)
 	id = append(id, key...)
 	return id

@@ -70,7 +70,11 @@ func Test_StateExecution_Transfers(t *testing.T) {
 	// wait for emulator to boot
 	time.Sleep(time.Second)
 
-	st, err := state.NewState(block, pebble.NewLedger(store), cfg.FlowNetworkID, blocks, receipts, logger)
+	register := pebble.NewRegister(store)
+	evmHeight := uint64(0)
+	register.SetHeight(evmHeight)
+
+	st, err := state.NewState(block, register, cfg.FlowNetworkID, blocks, receipts, logger)
 	require.NoError(t, err)
 
 	testAddr := common.HexToAddress("55253ed90B70b96C73092D8680915aaF50081194")
@@ -96,7 +100,10 @@ func Test_StateExecution_Transfers(t *testing.T) {
 	block, err = blocks.GetByHeight(latest)
 	require.NoError(t, err)
 
-	st, err = state.NewState(block, pebble.NewLedger(store), cfg.FlowNetworkID, blocks, receipts, logger)
+	register = pebble.NewRegister(store)
+	evmHeight++
+	register.SetHeight(evmHeight)
+	st, err = state.NewState(block, register, cfg.FlowNetworkID, blocks, receipts, logger)
 	require.NoError(t, err)
 
 	balance = st.GetBalance(testAddr)
@@ -116,7 +123,10 @@ func Test_StateExecution_Transfers(t *testing.T) {
 	latest, err = blocks.LatestEVMHeight()
 	require.NoError(t, err)
 
-	st, err = state.NewState(block, pebble.NewLedger(store), cfg.FlowNetworkID, blocks, receipts, logger)
+	register = pebble.NewRegister(store)
+	evmHeight++
+	register.SetHeight(evmHeight)
+	st, err = state.NewState(block, register, cfg.FlowNetworkID, blocks, receipts, logger)
 	require.NoError(t, err)
 
 	balance = st.GetBalance(testAddr)
