@@ -103,11 +103,19 @@ func (e *Engine) ID() uuid.UUID {
 	return uuid.New()
 }
 
+// executeBlock will execute all transactions in the provided block.
+// If a transaction fails to execute or the result doesn't match expected
+// result return an error.
+// Transaction executed should match a receipt we have indexed from the network
+// produced by execution nodes. This check makes sure we keep a correct state.
 func (e *Engine) executeBlock(block *models.Block) error {
 	state, err := NewState(block, e.ledger, e.chainID, e.blocks, e.receipts, e.logger)
 	if err != nil {
 		return err
 	}
+
+	// track gas usage in a virtual block
+	gasUsed := uint64(0)
 
 	for i, h := range block.TransactionHashes {
 		e.logger.Info().Str("hash", h.String()).Msg("transaction execution")
@@ -122,7 +130,7 @@ func (e *Engine) executeBlock(block *models.Block) error {
 			return err
 		}
 
-		ctx, err := e.blockContext(block, receipt, uint(i))
+		ctx, err := e.blockContext(block, receipt, uint(i), gasUsed)
 		if err != nil {
 			return err
 		}
@@ -131,6 +139,9 @@ func (e *Engine) executeBlock(block *models.Block) error {
 		if err != nil {
 			return err
 		}
+
+		// increment the gas used only after it's executed
+		gasUsed += receipt.GasUsed
 
 		if ok, errs := models.EqualReceipts(resultReceipt, receipt); !ok {
 			return fmt.Errorf("state missmatch: %v", errs)
@@ -144,6 +155,7 @@ func (e *Engine) blockContext(
 	block *models.Block,
 	receipt *models.Receipt,
 	txIndex uint,
+	gasUsed uint64,
 ) (types.BlockContext, error) {
 	calls, err := types.AggregatedPrecompileCallsFromEncoded(receipt.PrecompiledCalls)
 	if err != nil {
@@ -174,7 +186,7 @@ func (e *Engine) blockContext(
 		Random:                    block.PrevRandao,
 		ExtraPrecompiledContracts: precompileContracts,
 		TxCountSoFar:              txIndex,
-		TotalGasUsedSoFar:         receipt.CumulativeGasUsed,
+		TotalGasUsedSoFar:         gasUsed,
 		// todo what to do with the tracer
 		Tracer: nil,
 	}, nil
