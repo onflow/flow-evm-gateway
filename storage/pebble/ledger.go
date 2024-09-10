@@ -17,14 +17,16 @@ var _ atree.Ledger = &Ledger{}
 // and then prepend all keys with that height
 
 type Ledger struct {
-	store *Storage
-	mux   sync.RWMutex
+	height uint64
+	store  *Storage
+	mux    sync.RWMutex
 }
 
-func NewLedger(store *Storage) *Ledger {
+func NewLedger(store *Storage, height uint64) *Ledger {
 	return &Ledger{
-		store: store,
-		mux:   sync.RWMutex{},
+		store:  store,
+		height: height,
+		mux:    sync.RWMutex{},
 	}
 }
 
@@ -55,7 +57,7 @@ func (l *Ledger) SetValue(owner, key, value []byte) error {
 	l.mux.Lock()
 	defer l.mux.Unlock()
 
-	id := append(owner, key...)
+	id := ledgerID(l.height, owner, key)
 	if err := l.store.set(ledgerValue, id, value, nil); err != nil {
 		return fmt.Errorf(
 			"failed to store ledger value for owner %x and key %x: %w",
@@ -111,4 +113,10 @@ func (l *Ledger) AllocateSlabIndex(owner []byte) (atree.SlabIndex, error) {
 	}
 
 	return index, nil
+}
+
+func ledgerID(height uint64, owner, key []byte) []byte {
+	id := append(uint64Bytes(height), owner...)
+	id = append(id, key...)
+	return id
 }
