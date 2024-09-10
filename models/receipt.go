@@ -121,10 +121,9 @@ func EqualReceipts(gethReceipt *gethTypes.Receipt, receipt *Receipt) (bool, []er
 	if gethReceipt.GasUsed != receipt.GasUsed {
 		errs = append(errs, fmt.Errorf("receipt GasUsed mismatch: %d != %d", gethReceipt.GasUsed, receipt.GasUsed))
 	}
-	// todo should we compare this? we don't have a concept of blocks
-	//if gethReceipt.CumulativeGasUsed != receipt.CumulativeGasUsed {
-	//	errs = append(errs, fmt.Errorf("receipt CumulativeGasUsed mismatch: %d != %d", gethReceipt.CumulativeGasUsed, receipt.CumulativeGasUsed))
-	//}
+	if gethReceipt.CumulativeGasUsed != receipt.CumulativeGasUsed {
+		errs = append(errs, fmt.Errorf("receipt CumulativeGasUsed mismatch: %d != %d", gethReceipt.CumulativeGasUsed, receipt.CumulativeGasUsed))
+	}
 	if gethReceipt.Type != 0 && gethReceipt.Type != receipt.Type { // only compare if not direct call
 		errs = append(errs, fmt.Errorf("receipt Type mismatch: %d != %d", gethReceipt.Type, receipt.Type))
 	}

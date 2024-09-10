@@ -2,12 +2,16 @@ package state
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/onflow/atree"
+	"github.com/onflow/flow-go/fvm/evm/precompiles"
+	"github.com/onflow/flow-go/fvm/evm/types"
+	flowGo "github.com/onflow/flow-go/model/flow"
+	"github.com/onflow/go-ethereum/common"
 	"github.com/rs/zerolog"
 
-	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/storage"
 )
@@ -16,7 +20,7 @@ var _ models.Engine = &Engine{}
 var _ models.Subscriber = &Engine{}
 
 type Engine struct {
-	config         *config.Config
+	chainID        flowGo.ChainID
 	logger         zerolog.Logger
 	status         *models.EngineStatus
 	blockPublisher *models.Publisher
@@ -27,7 +31,7 @@ type Engine struct {
 }
 
 func NewStateEngine(
-	config *config.Config,
+	chainID flowGo.ChainID,
 	ledger atree.Ledger,
 	blockPublisher *models.Publisher,
 	blocks storage.BlockIndexer,
@@ -38,7 +42,7 @@ func NewStateEngine(
 	log := logger.With().Str("component", "state").Logger()
 
 	return &Engine{
-		config:         config,
+		chainID:        chainID,
 		logger:         log,
 		status:         models.NewEngineStatus(),
 		blockPublisher: blockPublisher,
@@ -62,26 +66,14 @@ func (e *Engine) Notify(data any) {
 		return
 	}
 
-	e.logger.Info().Uint64("evm-height", block.Height).Msg("received new block")
+	l := e.logger.With().Uint64("evm-height", block.Height).Logger()
+	l.Info().Msg("received new block")
 
-	state, err := NewState(block, e.ledger, e.config.FlowNetworkID, e.blocks, e.receipts, e.logger)
-	if err != nil {
-		panic(err) // todo refactor
+	if err := e.executeBlock(block); err != nil {
+		panic(fmt.Errorf("failed to execute block at height %d: %w", block.Height, err))
 	}
 
-	for i, h := range block.TransactionHashes {
-		e.logger.Info().Str("hash", h.String()).Msg("transaction execution")
-
-		tx, err := e.transactions.Get(h)
-		if err != nil {
-			panic(err) // todo refactor
-		}
-
-		err = state.Execute(tx, uint(i))
-		if err != nil {
-			panic(err)
-		}
-	}
+	l.Info().Msg("successfully executed block")
 }
 
 func (e *Engine) Run(ctx context.Context) error {
@@ -109,4 +101,81 @@ func (e *Engine) Error() <-chan error {
 
 func (e *Engine) ID() uuid.UUID {
 	return uuid.New()
+}
+
+func (e *Engine) executeBlock(block *models.Block) error {
+	state, err := NewState(block, e.ledger, e.chainID, e.blocks, e.receipts, e.logger)
+	if err != nil {
+		return err
+	}
+
+	for i, h := range block.TransactionHashes {
+		e.logger.Info().Str("hash", h.String()).Msg("transaction execution")
+
+		tx, err := e.transactions.Get(h)
+		if err != nil {
+			return err
+		}
+
+		receipt, err := e.receipts.GetByTransactionID(tx.Hash())
+		if err != nil {
+			return err
+		}
+
+		ctx, err := e.blockContext(block, receipt, uint(i))
+		if err != nil {
+			return err
+		}
+
+		resultReceipt, err := state.Execute(ctx, tx)
+		if err != nil {
+			return err
+		}
+
+		if ok, errs := models.EqualReceipts(resultReceipt, receipt); !ok {
+			return fmt.Errorf("state missmatch: %v", errs)
+		}
+	}
+
+	return nil
+}
+
+func (e *Engine) blockContext(
+	block *models.Block,
+	receipt *models.Receipt,
+	txIndex uint,
+) (types.BlockContext, error) {
+	calls, err := types.AggregatedPrecompileCallsFromEncoded(receipt.PrecompiledCalls)
+	if err != nil {
+		return types.BlockContext{}, err
+	}
+
+	precompileContracts := precompiles.AggregatedPrecompiledCallsToPrecompiledContracts(calls)
+
+	return types.BlockContext{
+		ChainID:                types.EVMChainIDFromFlowChainID(e.chainID),
+		BlockNumber:            block.Height,
+		BlockTimestamp:         block.Timestamp,
+		DirectCallBaseGasUsage: types.DefaultDirectCallBaseGasUsage, // todo check
+		DirectCallGasPrice:     types.DefaultDirectCallGasPrice,
+		GasFeeCollector:        types.CoinbaseAddress,
+		GetHashFunc: func(n uint64) common.Hash {
+			b, err := e.blocks.GetByHeight(n)
+			if err != nil {
+				panic(err)
+			}
+			h, err := b.Hash()
+			if err != nil {
+				panic(err)
+			}
+
+			return h
+		},
+		Random:                    block.PrevRandao,
+		ExtraPrecompiledContracts: precompileContracts,
+		TxCountSoFar:              txIndex,
+		TotalGasUsedSoFar:         receipt.CumulativeGasUsed,
+		// todo what to do with the tracer
+		Tracer: nil,
+	}, nil
 }
