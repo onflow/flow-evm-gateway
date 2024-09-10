@@ -70,8 +70,8 @@ func Test_StateExecution_Transfers(t *testing.T) {
 	// wait for emulator to boot
 	time.Sleep(time.Second)
 
-	evmHeight := uint64(0)
-	register := pebble.NewRegister(store, evmHeight)
+	register := pebble.NewRegister(store, latest)
+	height0 := latest
 
 	st, err := state.NewState(block, register, cfg.FlowNetworkID, blocks, receipts, logger)
 	require.NoError(t, err)
@@ -99,8 +99,10 @@ func Test_StateExecution_Transfers(t *testing.T) {
 	block, err = blocks.GetByHeight(latest)
 	require.NoError(t, err)
 
-	evmHeight++
-	register = pebble.NewRegister(store, evmHeight)
+	height1 := latest
+	amount1 := amount.Uint64()
+
+	register = pebble.NewRegister(store, latest)
 	st, err = state.NewState(block, register, cfg.FlowNetworkID, blocks, receipts, logger)
 	require.NoError(t, err)
 
@@ -121,13 +123,48 @@ func Test_StateExecution_Transfers(t *testing.T) {
 	latest, err = blocks.LatestEVMHeight()
 	require.NoError(t, err)
 
-	evmHeight++
-	register = pebble.NewRegister(store, evmHeight)
+	block, err = blocks.GetByHeight(latest)
+	require.NoError(t, err)
+
+	height2 := latest
+	register = pebble.NewRegister(store, latest)
 	st, err = state.NewState(block, register, cfg.FlowNetworkID, blocks, receipts, logger)
 	require.NoError(t, err)
 
 	balance = st.GetBalance(testAddr)
 	assert.Equal(t, amount.Uint64()+amount2.Uint64(), balance.Uint64())
-}
 
-// todo test historic heights
+	// read balance at historic heights
+	// height 0
+	block, err = blocks.GetByHeight(height0)
+	require.NoError(t, err)
+
+	register = pebble.NewRegister(store, height0)
+	st, err = state.NewState(block, register, cfg.FlowNetworkID, blocks, receipts, logger)
+	require.NoError(t, err)
+
+	balance = st.GetBalance(testAddr)
+	assert.Equal(t, uint64(0), balance.Uint64())
+
+	// height 1
+	block, err = blocks.GetByHeight(height1)
+	require.NoError(t, err)
+
+	register = pebble.NewRegister(store, height1)
+	st, err = state.NewState(block, register, cfg.FlowNetworkID, blocks, receipts, logger)
+	require.NoError(t, err)
+
+	balance = st.GetBalance(testAddr)
+	assert.Equal(t, amount1, balance.Uint64())
+
+	// height 2
+	block, err = blocks.GetByHeight(height2)
+	require.NoError(t, err)
+
+	register = pebble.NewRegister(store, height2)
+	st, err = state.NewState(block, register, cfg.FlowNetworkID, blocks, receipts, logger)
+	require.NoError(t, err)
+
+	balance = st.GetBalance(testAddr)
+	assert.Equal(t, amount1+amount2.Uint64(), balance.Uint64())
+}
