@@ -44,10 +44,6 @@ func NewState(
 
 	emu := emulator.NewEmulator(ledger, storageAddress)
 
-	// todo optimization: we could init the state block view here instead of on each tx execution
-	// but we would need to append all precompile calls since they are needed for
-	// block context
-
 	return &State{
 		StateDB:  s,
 		emulator: emu,
