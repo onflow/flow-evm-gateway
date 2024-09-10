@@ -17,7 +17,7 @@ var _ atree.Ledger = &Ledger{}
 // and then prepend all keys with that height
 
 type Ledger struct {
-	height uint64
+	height []byte
 	store  *Storage
 	mux    sync.RWMutex
 }
@@ -25,7 +25,7 @@ type Ledger struct {
 func NewLedger(store *Storage, height uint64) *Ledger {
 	return &Ledger{
 		store:  store,
-		height: height,
+		height: uint64Bytes(height),
 		mux:    sync.RWMutex{},
 	}
 }
@@ -34,7 +34,7 @@ func (l *Ledger) GetValue(owner, key []byte) ([]byte, error) {
 	l.mux.RLock()
 	defer l.mux.RUnlock()
 
-	id := append(owner, key...)
+	id := l.id(owner, key)
 	val, err := l.store.get(ledgerValue, id)
 	if err != nil {
 		// as per interface expectation we need to remove nil if not found
@@ -57,7 +57,7 @@ func (l *Ledger) SetValue(owner, key, value []byte) error {
 	l.mux.Lock()
 	defer l.mux.Unlock()
 
-	id := ledgerID(l.height, owner, key)
+	id := l.id(owner, key)
 	if err := l.store.set(ledgerValue, id, value, nil); err != nil {
 		return fmt.Errorf(
 			"failed to store ledger value for owner %x and key %x: %w",
@@ -115,8 +115,9 @@ func (l *Ledger) AllocateSlabIndex(owner []byte) (atree.SlabIndex, error) {
 	return index, nil
 }
 
-func ledgerID(height uint64, owner, key []byte) []byte {
-	id := append(uint64Bytes(height), owner...)
+// id calculate ledger id with included block height for owner and key
+func (l *Ledger) id(owner, key []byte) []byte {
+	id := append(l.height, owner...)
 	id = append(id, key...)
 	return id
 }
