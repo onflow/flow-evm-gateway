@@ -187,7 +187,7 @@ func (b *Bootstrap) StartStateIndex(ctx context.Context) error {
 	l.Info().Msg("starting engine")
 
 	b.State = state.NewStateEngine(
-		b.config,
+		b.config.FlowNetworkID,
 		b.Storages.Ledger,
 		b.Publishers.Block,
 		b.Storages.Blocks,
