@@ -70,9 +70,8 @@ func Test_StateExecution_Transfers(t *testing.T) {
 	// wait for emulator to boot
 	time.Sleep(time.Second)
 
-	register := pebble.NewRegister(store)
 	evmHeight := uint64(0)
-	register.SetHeight(evmHeight)
+	register := pebble.NewRegister(store, evmHeight)
 
 	st, err := state.NewState(block, register, cfg.FlowNetworkID, blocks, receipts, logger)
 	require.NoError(t, err)
@@ -100,9 +99,8 @@ func Test_StateExecution_Transfers(t *testing.T) {
 	block, err = blocks.GetByHeight(latest)
 	require.NoError(t, err)
 
-	register = pebble.NewRegister(store)
 	evmHeight++
-	register.SetHeight(evmHeight)
+	register = pebble.NewRegister(store, evmHeight)
 	st, err = state.NewState(block, register, cfg.FlowNetworkID, blocks, receipts, logger)
 	require.NoError(t, err)
 
@@ -118,14 +116,13 @@ func Test_StateExecution_Transfers(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, hash)
 
-	// wait for new block event
+	// wait for new block event, todo replace with better method
 	time.Sleep(time.Second)
 	latest, err = blocks.LatestEVMHeight()
 	require.NoError(t, err)
 
-	register = pebble.NewRegister(store)
 	evmHeight++
-	register.SetHeight(evmHeight)
+	register = pebble.NewRegister(store, evmHeight)
 	st, err = state.NewState(block, register, cfg.FlowNetworkID, blocks, receipts, logger)
 	require.NoError(t, err)
 

@@ -13,6 +13,7 @@ import (
 
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/storage"
+	"github.com/onflow/flow-evm-gateway/storage/pebble"
 )
 
 var _ models.Engine = &Engine{}
@@ -23,16 +24,16 @@ type Engine struct {
 	logger         zerolog.Logger
 	status         *models.EngineStatus
 	blockPublisher *models.Publisher
+	store          *pebble.Storage
 	blocks         storage.BlockIndexer
 	transactions   storage.TransactionIndexer
 	receipts       storage.ReceiptIndexer
-	registers      storage.RegisterIndexer
 }
 
 func NewStateEngine(
 	chainID flowGo.ChainID,
 	blockPublisher *models.Publisher,
-	registers storage.RegisterIndexer,
+	store *pebble.Storage,
 	blocks storage.BlockIndexer,
 	transactions storage.TransactionIndexer,
 	receipts storage.ReceiptIndexer,
@@ -43,12 +44,12 @@ func NewStateEngine(
 	return &Engine{
 		chainID:        chainID,
 		logger:         log,
+		store:          store,
 		status:         models.NewEngineStatus(),
 		blockPublisher: blockPublisher,
 		blocks:         blocks,
 		transactions:   transactions,
 		receipts:       receipts,
-		registers:      registers,
 	}
 }
 
@@ -108,9 +109,8 @@ func (e *Engine) ID() uuid.UUID {
 // Transaction executed should match a receipt we have indexed from the network
 // produced by execution nodes. This check makes sure we keep a correct state.
 func (e *Engine) executeBlock(block *models.Block) error {
-
-	e.registers.SetHeight(block.Height)
-	state, err := NewState(block, e.registers, e.chainID, e.blocks, e.receipts, e.logger)
+	registers := pebble.NewRegister(e.store, block.Height)
+	state, err := NewState(block, registers, e.chainID, e.blocks, e.receipts, e.logger)
 	if err != nil {
 		return err
 	}

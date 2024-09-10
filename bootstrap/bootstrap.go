@@ -189,7 +189,7 @@ func (b *Bootstrap) StartStateIndex(ctx context.Context) error {
 	b.State = state.NewStateEngine(
 		b.config.FlowNetworkID,
 		b.Publishers.Block,
-		b.Storages.Registers,
+		b.Storages.Storage,
 		b.Storages.Blocks,
 		b.Storages.Transactions,
 		b.Storages.Receipts,
@@ -471,7 +471,6 @@ func setupStorage(
 		Receipts:     pebble.NewReceipts(store),
 		Accounts:     pebble.NewAccounts(store),
 		Traces:       pebble.NewTraces(store),
-		Registers:    pebble.NewRegister(store),
 	}, nil
 }
 
