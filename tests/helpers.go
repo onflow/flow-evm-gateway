@@ -211,9 +211,9 @@ func setupTestAccounts(emu emulator.Emulator) error {
 	code := `
 	transaction(eoaAddress: [UInt8; 20]) {
 		let fundVault: @FlowToken.Vault
-		let auth: auth(Storage) &Account
+		let auth: auth(Capabilities, Storage) &Account
 	
-		prepare(signer: auth(Storage) &Account) {
+		prepare(signer: auth(Capabilities, Storage) &Account) {
 			let vaultRef = signer.storage.borrow<auth(FungibleToken.Withdraw) &FlowToken.Vault>(
 				from: /storage/flowTokenVault
 			) ?? panic("Could not borrow reference to the owner's Vault!")
@@ -234,7 +234,13 @@ func setupTestAccounts(emu emulator.Emulator) error {
 				value: EVM.Balance(attoflow: weiAmount)
 			)
 
-			self.auth.storage.save<@EVM.CadenceOwnedAccount>(<-account, to: StoragePath(identifier: "evm")!)
+			self.auth.storage.save<@EVM.CadenceOwnedAccount>(
+				<-account,
+				to: /storage/evm
+			)
+
+			let cap = self.auth.capabilities.storage.issue<&EVM.CadenceOwnedAccount>(/storage/evm)
+			self.auth.capabilities.publish(cap, at: /public/evm)
 		}
 	}`
 

@@ -252,13 +252,7 @@
 		"type": "function"
 	},
 	{
-		"inputs": [
-			{
-				"internalType": "uint64",
-				"name": "expected",
-				"type": "uint64"
-			}
-		],
+		"inputs": [],
 		"name": "verifyArchCallToFlowBlockHeight",
 		"outputs": [
 			{
@@ -304,11 +298,6 @@
 	},
 	{
 		"inputs": [
-			{
-				"internalType": "bool",
-				"name": "expected",
-				"type": "bool"
-			},
 			{
 				"internalType": "address",
 				"name": "arg0",
