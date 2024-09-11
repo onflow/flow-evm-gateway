@@ -46,7 +46,7 @@ type Bootstrap struct {
 	logger     zerolog.Logger
 	config     *config.Config
 	Client     *requester.CrossSporkClient
-	Requester  requester.Requester
+	Requester  requester.EVM
 	Storages   *Storages
 	Publishers *Publishers
 	collector  metrics.Collector
@@ -238,7 +238,7 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 	// create transaction pool
 	txPool := requester.NewTxPool(b.Client, b.Publishers.Transaction, b.logger)
 
-	evm, err := requester.NewEVM(
+	evm, err := requester.NewRemote(
 		b.Client,
 		b.config,
 		signer,

@@ -81,7 +81,7 @@ const coaFundingBalance = minFlowBalance - 1
 
 const LatestBlockHeight uint64 = math.MaxUint64 - 1
 
-type Requester interface {
+type EVM interface {
 	// SendRawTransaction will submit signed transaction data to the network.
 	// The submitted EVM transaction hash is returned.
 	SendRawTransaction(ctx context.Context, data []byte) (common.Hash, error)
@@ -114,9 +114,9 @@ type Requester interface {
 	GetStorageAt(ctx context.Context, address common.Address, hash common.Hash, evmHeight int64) (common.Hash, error)
 }
 
-var _ Requester = &EVM{}
+var _ EVM = &Remote{}
 
-type EVM struct {
+type Remote struct {
 	client      *CrossSporkClient
 	config      *config.Config
 	signer      crypto.Signer
@@ -133,7 +133,7 @@ type EVM struct {
 	collector metrics.Collector
 }
 
-func NewEVM(
+func NewRemote(
 	client *CrossSporkClient,
 	config *config.Config,
 	signer crypto.Signer,
@@ -141,7 +141,7 @@ func NewEVM(
 	blocks storage.BlockIndexer,
 	txPool *TxPool,
 	collector metrics.Collector,
-) (*EVM, error) {
+) (*Remote, error) {
 	logger = logger.With().Str("component", "requester").Logger()
 	// check that the address stores already created COA resource in the "evm" storage path.
 	// if it doesn't check if the auto-creation boolean is true and if so create it
@@ -191,7 +191,7 @@ func NewEVM(
 		cache = expirable.NewLRU[string, cadence.Value](int(config.CacheSize), nil, time.Second)
 	}
 
-	evm := &EVM{
+	evm := &Remote{
 		client:            client,
 		config:            config,
 		signer:            signer,
@@ -225,7 +225,7 @@ func NewEVM(
 	return evm, nil
 }
 
-func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash, error) {
+func (e *Remote) SendRawTransaction(ctx context.Context, data []byte) (common.Hash, error) {
 	tx := &types.Transaction{}
 	if err := tx.UnmarshalBinary(data); err != nil {
 		return common.Hash{}, err
@@ -284,7 +284,7 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 
 // buildTransaction creates a flow transaction from the provided script with the arguments
 // and signs it with the configured COA account.
-func (e *EVM) buildTransaction(ctx context.Context, script []byte, args ...cadence.Value) (*flow.Transaction, error) {
+func (e *Remote) buildTransaction(ctx context.Context, script []byte, args ...cadence.Value) (*flow.Transaction, error) {
 	// building and signing transactions should be blocking, so we don't have keys conflict
 	e.mux.Lock()
 	defer e.mux.Unlock()
@@ -334,7 +334,7 @@ func (e *EVM) buildTransaction(ctx context.Context, script []byte, args ...caden
 	return flowTx, nil
 }
 
-func (e *EVM) GetBalance(
+func (e *Remote) GetBalance(
 	ctx context.Context,
 	address common.Address,
 	evmHeight int64,
@@ -380,7 +380,7 @@ func (e *EVM) GetBalance(
 	return val.(cadence.UInt).Big(), nil
 }
 
-func (e *EVM) GetNonce(
+func (e *Remote) GetNonce(
 	ctx context.Context,
 	address common.Address,
 	evmHeight int64,
@@ -433,7 +433,7 @@ func (e *EVM) GetNonce(
 	return nonce, nil
 }
 
-func (e *EVM) stateAt(evmHeight int64) (*state.StateDB, error) {
+func (e *Remote) stateAt(evmHeight int64) (*state.StateDB, error) {
 	cadenceHeight, err := e.evmToCadenceHeight(evmHeight)
 	if err != nil {
 		return nil, err
@@ -456,7 +456,7 @@ func (e *EVM) stateAt(evmHeight int64) (*state.StateDB, error) {
 	return state.NewStateDB(ledger, storageAddress)
 }
 
-func (e *EVM) GetStorageAt(
+func (e *Remote) GetStorageAt(
 	ctx context.Context,
 	address common.Address,
 	hash common.Hash,
@@ -471,7 +471,7 @@ func (e *EVM) GetStorageAt(
 	return result, stateDB.Error()
 }
 
-func (e *EVM) Call(
+func (e *Remote) Call(
 	ctx context.Context,
 	data []byte,
 	from common.Address,
@@ -527,7 +527,7 @@ func (e *EVM) Call(
 	return result, nil
 }
 
-func (e *EVM) EstimateGas(
+func (e *Remote) EstimateGas(
 	ctx context.Context,
 	data []byte,
 	from common.Address,
@@ -583,7 +583,7 @@ func (e *EVM) EstimateGas(
 	return gasConsumed, nil
 }
 
-func (e *EVM) GetCode(
+func (e *Remote) GetCode(
 	ctx context.Context,
 	address common.Address,
 	evmHeight int64,
@@ -637,7 +637,7 @@ func (e *EVM) GetCode(
 	return code, nil
 }
 
-func (e *EVM) GetLatestEVMHeight(ctx context.Context) (uint64, error) {
+func (e *Remote) GetLatestEVMHeight(ctx context.Context) (uint64, error) {
 	val, err := e.executeScriptAtHeight(
 		ctx,
 		getLatest,
@@ -663,7 +663,7 @@ func (e *EVM) GetLatestEVMHeight(ctx context.Context) (uint64, error) {
 }
 
 // getSignerNetworkInfo loads the signer account from network and returns key index and sequence number
-func (e *EVM) getSignerNetworkInfo(ctx context.Context) (uint32, uint64, error) {
+func (e *Remote) getSignerNetworkInfo(ctx context.Context) (uint32, uint64, error) {
 	account, err := e.client.GetAccount(ctx, e.config.COAAddress)
 	if err != nil {
 		return 0, 0, fmt.Errorf(
@@ -690,7 +690,7 @@ func (e *EVM) getSignerNetworkInfo(ctx context.Context) (uint32, uint64, error) 
 }
 
 // replaceAddresses replace the addresses based on the network
-func (e *EVM) replaceAddresses(script []byte) []byte {
+func (e *Remote) replaceAddresses(script []byte) []byte {
 	// make the list of all contracts we should replace address for
 	sc := systemcontracts.SystemContractsForChain(e.config.FlowNetworkID)
 	contracts := []systemcontracts.SystemContract{sc.EVMContract, sc.FungibleToken, sc.FlowToken}
@@ -710,7 +710,7 @@ func (e *EVM) replaceAddresses(script []byte) []byte {
 	return []byte(s)
 }
 
-func (e *EVM) evmToCadenceHeight(height int64) (uint64, error) {
+func (e *Remote) evmToCadenceHeight(height int64) (uint64, error) {
 	if height < 0 {
 		return LatestBlockHeight, nil
 	}
@@ -745,7 +745,7 @@ func (e *EVM) evmToCadenceHeight(height int64) (uint64, error) {
 // block height, with the given arguments. A height of `LatestBlockHeight`
 // (math.MaxUint64 - 1) is a special value, which means the script will be
 // executed at the latest sealed block.
-func (e *EVM) executeScriptAtHeight(
+func (e *Remote) executeScriptAtHeight(
 	ctx context.Context,
 	scriptType scriptType,
 	height uint64,
