@@ -3,7 +3,6 @@ package state
 import (
 	"fmt"
 
-	"github.com/onflow/atree"
 	"github.com/onflow/flow-go/fvm/evm"
 	"github.com/onflow/flow-go/fvm/evm/emulator"
 	"github.com/onflow/flow-go/fvm/evm/emulator/state"
@@ -16,6 +15,7 @@ import (
 
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/storage"
+	"github.com/onflow/flow-evm-gateway/storage/pebble"
 )
 
 type BlockState struct {
@@ -32,8 +32,8 @@ type BlockState struct {
 
 func NewBlockState(
 	block *models.Block,
-	ledger atree.Ledger,
 	chainID flowGo.ChainID,
+	store *pebble.Storage,
 	blocks storage.BlockIndexer,
 	receipts storage.ReceiptIndexer,
 	logger zerolog.Logger,
@@ -41,16 +41,21 @@ func NewBlockState(
 	logger = logger.With().Str("component", "state-execution").Logger()
 	storageAddress := evm.StorageAccountAddress(chainID)
 
-	s, err := state.NewStateDB(ledger, storageAddress)
+	block, err := blocks.GetByHeight(block.Height)
 	if err != nil {
 		return nil, err
 	}
 
-	emu := emulator.NewEmulator(ledger, storageAddress)
+	registers := pebble.NewRegister(store, block.Height)
+
+	stateDB, err := state.NewStateDB(registers, storageAddress)
+	if err != nil {
+		return nil, err
+	}
 
 	return &BlockState{
-		StateDB:  s,
-		emulator: emu,
+		emulator: emulator.NewEmulator(registers, storageAddress),
+		StateDB:  stateDB,
 		chainID:  chainID,
 		block:    block,
 		blocks:   blocks,

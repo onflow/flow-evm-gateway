@@ -13,6 +13,13 @@ import (
 
 var _ EVMClient = &LocalClient{}
 
+func NewLocalClient(state *state.BlockState, blocks storage.BlockIndexer) *LocalClient {
+	return &LocalClient{
+		state:  state,
+		blocks: blocks,
+	}
+}
+
 type LocalClient struct {
 	state  *state.BlockState
 	blocks storage.BlockIndexer

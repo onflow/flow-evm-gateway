@@ -106,8 +106,7 @@ func (e *Engine) ID() uuid.UUID {
 // Transaction executed should match a receipt we have indexed from the network
 // produced by execution nodes. This check makes sure we keep a correct state.
 func (e *Engine) executeBlock(block *models.Block) error {
-	registers := pebble.NewRegister(e.store, block.Height)
-	state, err := NewBlockState(block, registers, e.chainID, e.blocks, e.receipts, e.logger)
+	state, err := NewBlockState(block, e.chainID, e.store, e.blocks, e.receipts, e.logger)
 	if err != nil {
 		return err
 	}
