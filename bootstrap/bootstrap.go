@@ -46,7 +46,7 @@ type Bootstrap struct {
 	logger     zerolog.Logger
 	config     *config.Config
 	Client     *requester.CrossSporkClient
-	Requester  requester.EVMClient
+	EVMClient  requester.EVMClient
 	Storages   *Storages
 	Publishers *Publishers
 	collector  metrics.Collector
@@ -238,19 +238,20 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 	// create transaction pool
 	txPool := requester.NewTxPool(b.Client, b.Publishers.Transaction, b.logger)
 
-	evm, err := requester.NewRemote(
-		b.Client,
+	b.EVMClient, err = requester.NewClientHandler(
 		b.config,
-		signer,
-		b.logger,
-		b.Storages.Blocks,
+		b.Storages.Storage,
 		txPool,
+		signer,
+		b.Client,
+		b.Storages.Blocks,
+		b.Storages.Receipts,
+		b.logger,
 		b.collector,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create EVM requester: %w", err)
 	}
-	b.Requester = evm
 
 	// create rate limiter for requests on the APIs. Tokens are number of requests allowed per 1 second interval
 	// if no limit is defined we specify max value, effectively disabling rate-limiting
@@ -267,7 +268,7 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 	blockchainAPI, err := api.NewBlockChainAPI(
 		b.logger,
 		b.config,
-		evm,
+		b.EVMClient,
 		b.Storages.Blocks,
 		b.Storages.Transactions,
 		b.Storages.Receipts,

@@ -59,7 +59,7 @@ func Test_StateExecution_Transfers(t *testing.T) {
 	blocks := b.Storages.Blocks
 	receipts := b.Storages.Receipts
 	store := b.Storages.Storage
-	requester := b.Requester
+	requester := b.EVMClient
 
 	latest, err := blocks.LatestEVMHeight()
 	require.NoError(t, err)
