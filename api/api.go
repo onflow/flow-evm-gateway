@@ -83,7 +83,7 @@ func SupportedAPIs(
 type BlockChainAPI struct {
 	logger                zerolog.Logger
 	config                *config.Config
-	evm                   requester.EVM
+	evm                   requester.EVMClient
 	blocks                storage.BlockIndexer
 	transactions          storage.TransactionIndexer
 	receipts              storage.ReceiptIndexer
@@ -96,7 +96,7 @@ type BlockChainAPI struct {
 func NewBlockChainAPI(
 	logger zerolog.Logger,
 	config *config.Config,
-	evm requester.EVM,
+	evm requester.EVMClient,
 	blocks storage.BlockIndexer,
 	transactions storage.TransactionIndexer,
 	receipts storage.ReceiptIndexer,

@@ -46,7 +46,7 @@ type Bootstrap struct {
 	logger     zerolog.Logger
 	config     *config.Config
 	Client     *requester.CrossSporkClient
-	Requester  requester.EVM
+	Requester  requester.EVMClient
 	Storages   *Storages
 	Publishers *Publishers
 	collector  metrics.Collector
