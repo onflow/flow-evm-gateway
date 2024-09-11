@@ -17,7 +17,6 @@ import (
 	"github.com/onflow/flow-evm-gateway/bootstrap"
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/services/state"
-	"github.com/onflow/flow-evm-gateway/storage/pebble"
 )
 
 func Test_StateExecution_Transfers(t *testing.T) {
@@ -70,10 +69,9 @@ func Test_StateExecution_Transfers(t *testing.T) {
 	// wait for emulator to boot
 	time.Sleep(time.Second)
 
-	register := pebble.NewRegister(store, latest)
 	height0 := latest
 
-	st, err := state.NewBlockState(block, register, cfg.FlowNetworkID, blocks, receipts, logger)
+	st, err := state.NewBlockState(block, cfg.FlowNetworkID, store, blocks, receipts, logger)
 	require.NoError(t, err)
 
 	testAddr := common.HexToAddress("55253ed90B70b96C73092D8680915aaF50081194")
@@ -102,8 +100,7 @@ func Test_StateExecution_Transfers(t *testing.T) {
 	height1 := latest
 	amount1 := amount.Uint64()
 
-	register = pebble.NewRegister(store, latest)
-	st, err = state.NewBlockState(block, register, cfg.FlowNetworkID, blocks, receipts, logger)
+	st, err = state.NewBlockState(block, cfg.FlowNetworkID, store, blocks, receipts, logger)
 	require.NoError(t, err)
 
 	balance = st.GetBalance(testAddr)
@@ -127,8 +124,7 @@ func Test_StateExecution_Transfers(t *testing.T) {
 	require.NoError(t, err)
 
 	height2 := latest
-	register = pebble.NewRegister(store, latest)
-	st, err = state.NewBlockState(block, register, cfg.FlowNetworkID, blocks, receipts, logger)
+	st, err = state.NewBlockState(block, cfg.FlowNetworkID, store, blocks, receipts, logger)
 	require.NoError(t, err)
 
 	balance = st.GetBalance(testAddr)
@@ -139,8 +135,7 @@ func Test_StateExecution_Transfers(t *testing.T) {
 	block, err = blocks.GetByHeight(height0)
 	require.NoError(t, err)
 
-	register = pebble.NewRegister(store, height0)
-	st, err = state.NewBlockState(block, register, cfg.FlowNetworkID, blocks, receipts, logger)
+	st, err = state.NewBlockState(block, cfg.FlowNetworkID, store, blocks, receipts, logger)
 	require.NoError(t, err)
 
 	balance = st.GetBalance(testAddr)
@@ -150,8 +145,7 @@ func Test_StateExecution_Transfers(t *testing.T) {
 	block, err = blocks.GetByHeight(height1)
 	require.NoError(t, err)
 
-	register = pebble.NewRegister(store, height1)
-	st, err = state.NewBlockState(block, register, cfg.FlowNetworkID, blocks, receipts, logger)
+	st, err = state.NewBlockState(block, cfg.FlowNetworkID, store, blocks, receipts, logger)
 	require.NoError(t, err)
 
 	balance = st.GetBalance(testAddr)
@@ -161,8 +155,7 @@ func Test_StateExecution_Transfers(t *testing.T) {
 	block, err = blocks.GetByHeight(height2)
 	require.NoError(t, err)
 
-	register = pebble.NewRegister(store, height2)
-	st, err = state.NewBlockState(block, register, cfg.FlowNetworkID, blocks, receipts, logger)
+	st, err = state.NewBlockState(block, cfg.FlowNetworkID, store, blocks, receipts, logger)
 	require.NoError(t, err)
 
 	balance = st.GetBalance(testAddr)
