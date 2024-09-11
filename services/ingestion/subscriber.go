@@ -3,6 +3,7 @@ package ingestion
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/onflow/cadence/runtime/common"
 	"github.com/onflow/flow-go/fvm/evm/events"
@@ -102,6 +103,8 @@ func (r *RPCSubscriber) Subscribe(ctx context.Context, height uint64) <-chan mod
 	return events
 }
 
+var recovered bool
+
 // subscribe to events by the provided height and handle any errors.
 //
 // Subscribing to EVM specific events and handle any disconnection errors
@@ -146,6 +149,24 @@ func (r *RPCSubscriber) subscribe(ctx context.Context, height uint64, opts ...ac
 					return
 				}
 
+				if blockEvents.Height < 86718842 && recovered {
+					fmt.Println("skipping, already recovered")
+					continue
+				}
+				evs := models.NewBlockEvents(blockEvents)
+				if evs.Err != nil {
+					// special case for handling issue with failed system transaction that caused
+					// missing EVM block but still had EVM transactions
+					// todo this should be removed right after we bridge this gap
+					if strings.Contains(evs.Err.Error(), "EVM block can not be nil") {
+						r.logger.Warn().Uint64("cadence-height", blockEvents.Height).Msg("EVM Block is nil, recovering events")
+						evs := r.recoverMissingEVMBlock(ctx, blockEvents)
+						r.logger.Warn().Int("length", evs.Events.Length()).Uint64("height", evs.Events.Block().Height).Int("txs", len(evs.Events.Transactions())).Msg("Recovered events")
+						events <- evs
+						recovered = true
+						continue
+					}
+				}
 				events <- models.NewBlockEvents(blockEvents)
 
 			case err, ok := <-errChan:
@@ -225,6 +246,46 @@ func (r *RPCSubscriber) backfill(ctx context.Context, height uint64) <-chan mode
 	}()
 
 	return events
+}
+
+func (r *RPCSubscriber) recoverMissingEVMBlock(
+	ctx context.Context,
+	blockEvents flow.BlockEvents,
+) models.BlockEvents {
+	start := uint64(86695292) // height at which issue started
+	end := uint64(86718842)   // height at which issue ended
+	maxInterval := uint64(240)
+
+	blkEvents := flow.BlockEvents{
+		BlockID:        blockEvents.BlockID,
+		Height:         end,
+		BlockTimestamp: blockEvents.BlockTimestamp,
+	}
+
+	for i := start; i < end; i += maxInterval {
+		newStart := i
+		newEnd := i + maxInterval
+
+		if newEnd > end {
+			newEnd = end
+		}
+
+		result, _ := r.client.GetEventsForHeightRange(ctx, "A.e467b9dd11fa00df.EVM.BlockExecuted", newStart, newEnd)
+		for _, r := range result {
+			if len(r.Events) > 0 {
+				blkEvents.Events = append(blkEvents.Events, r.Events...)
+			}
+		}
+
+		result, _ = r.client.GetEventsForHeightRange(ctx, "A.e467b9dd11fa00df.EVM.TransactionExecuted", newStart, newEnd)
+		for _, r := range result {
+			if len(r.Events) > 0 {
+				blkEvents.Events = append(blkEvents.Events, r.Events...)
+			}
+		}
+	}
+
+	return models.NewBlockEvents(blkEvents)
 }
 
 // blockFilter define events we subscribe to:
