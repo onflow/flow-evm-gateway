@@ -282,19 +282,11 @@ func (r *RPCSubscriber) fetchBlockEvents(
 			return models.NewBlockEventsError(err)
 		}
 
-		if len(recoveredEvents) > 1 {
-			return models.NewBlockEventsError(
+		if len(recoveredEvents) != 1 {
+		         return models.NewBlockEventsError(
 				fmt.Errorf(
-					"received multiple Flow block events for height: %d",
-					blockEvents.Height,
-				),
-			)
-		}
-
-		if len(recoveredEvents) == 0 {
-			return models.NewBlockEventsError(
-				fmt.Errorf(
-					"received empty Flow block events for height: %d",
+					"received %d but expected 1 event for height %d",
+					len(recoveredEvents),
 					blockEvents.Height,
 				),
 			)
