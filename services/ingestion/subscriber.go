@@ -152,6 +152,9 @@ func (r *RPCSubscriber) subscribe(ctx context.Context, height uint64, opts ...ac
 						"failed to parse EVM block events for Flow height: %d, retrying with gRPC API...",
 						blockEvents.Height,
 					)
+					// call the `GetEventsForHeightRange` gRPC API endpoint to fetch
+					// the EVM-related events, when event streaming returned an
+					// inconsistent response.
 					events <- r.fetchBlockEvents(ctx, blockEvents)
 				} else {
 					events <- models.NewBlockEvents(blockEvents)
@@ -262,6 +265,13 @@ func (r *RPCSubscriber) blocksFilter() flow.EventFilter {
 	}
 }
 
+// fetchBlockEvents is used as a backup mechanism for fetching EVM-related
+// events, when the event streaming API returns an inconsistent response.
+// An inconsistent response could be an EVM block that references EVM
+// transactions which are not present in the response.
+// Under the hood, it uses the `GetEventsForHeightRange` gRPC API endpoint,
+// making sure that we receive the expected events length for each event type
+// and Flow height.
 func (r *RPCSubscriber) fetchBlockEvents(
 	ctx context.Context,
 	blockEvents flow.BlockEvents,
@@ -283,7 +293,7 @@ func (r *RPCSubscriber) fetchBlockEvents(
 		}
 
 		if len(recoveredEvents) != 1 {
-		         return models.NewBlockEventsError(
+			return models.NewBlockEventsError(
 				fmt.Errorf(
 					"received %d but expected 1 event for height %d",
 					len(recoveredEvents),
