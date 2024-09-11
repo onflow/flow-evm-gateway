@@ -91,8 +91,7 @@ func (l *Register) AllocateSlabIndex(owner []byte) (atree.SlabIndex, error) {
 
 	var index atree.SlabIndex
 
-	id := l.id(owner, nil)
-	val, err := l.store.get(ledgerSlabIndex, id)
+	val, err := l.store.get(ledgerSlabIndex, owner)
 	if err != nil {
 		if !errors.Is(err, errs.ErrEntityNotFound) {
 			return atree.SlabIndexUndefined, err
@@ -111,7 +110,7 @@ func (l *Register) AllocateSlabIndex(owner []byte) (atree.SlabIndex, error) {
 	}
 
 	index = index.Next()
-	if err := l.store.set(ledgerSlabIndex, id, index[:], nil); err != nil {
+	if err := l.store.set(ledgerSlabIndex, owner, index[:], nil); err != nil {
 		return atree.SlabIndexUndefined, fmt.Errorf(
 			"slab index failed to set for owner %x: %w",
 			owner,
