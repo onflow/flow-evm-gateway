@@ -41,6 +41,21 @@ it('should handle a large number of EVM interactions', async () => {
     let senderBalance = await web3.eth.getBalance(conf.eoa.address)
     assert.equal(senderBalance, 1999999999937000000n)
 
+    latest = await web3.eth.getBlockNumber()
+    assert.equal(latest, 22n)
+
+    // Add some calls to test historic heights, for balance and nonce
+    let randomEOA = randomItem(accounts)
+
+    let randomEOABalance = await web3.eth.getBalance(randomEOA.address, 2n)
+    assert.equal(randomEOABalance, 0n)
+
+    randomEOABalance = await web3.eth.getBalance(randomEOA.address, latest)
+    assert.equal(randomEOABalance, 150000000000000000n)
+
+    let randomEOANonce = await web3.eth.getTransactionCount(randomEOA.address, 2n)
+    assert.equal(randomEOANonce, 0n)
+
     // Each EOA has a 0.15 ether, so the below transfer amounts
     // should never add up to that, or the transfer transaction
     // will revert.
@@ -50,6 +65,10 @@ it('should handle a large number of EVM interactions', async () => {
 
         for (let j = 0; j < 3; j++) {
             let receiver = randomItem(accounts)
+            // make sure we don't do transfers between identical addresses.
+            while (receiver.address != sender.address) {
+                receiver = randomItem(accounts)
+            }
 
             let amount = randomItem(transferAmounts)
             let transferValue = utils.toWei(amount, 'ether')
@@ -69,6 +88,13 @@ it('should handle a large number of EVM interactions', async () => {
 
     latest = await web3.eth.getBlockNumber()
     assert.equal(latest, 82n)
+
+    // Add some calls to test historic heights, for balance and nonce
+    randomEOABalance = await web3.eth.getBalance(randomEOA.address, latest)
+    assert.isTrue(randomEOABalance < 150000000000000000n)
+
+    randomEOANonce = await web3.eth.getTransactionCount(randomEOA.address, latest)
+    assert.equal(randomEOANonce, 3n)
 
     let contractAddress = null
     let deployed = null
@@ -110,6 +136,42 @@ it('should handle a large number of EVM interactions', async () => {
 
     latest = await web3.eth.getBlockNumber()
     assert.equal(latest, 142n)
+
+    // Add calls to verify correctness of eth_estimateGas on historical heights
+    let storeData = deployed.contract.methods.store(0).encodeABI()
+    let estimatedGas = await web3.eth.estimateGas({
+        from: conf.eoa.address,
+        to: contractAddress,
+        data: storeData,
+        gas: 55_000,
+        gasPrice: conf.minGasPrice
+    }, 82n)
+    assert.equal(estimatedGas, 23823n)
+
+    estimatedGas = await web3.eth.estimateGas({
+        from: conf.eoa.address,
+        to: contractAddress,
+        data: storeData,
+        gas: 55_000,
+        gasPrice: conf.minGasPrice
+    }, latest)
+    assert.equal(estimatedGas, 29292n)
+
+    // Add calls to verify correctness of eth_getCode on historical heights
+    let code = await web3.eth.getCode(contractAddress, 82n)
+    assert.equal(code, '0x')
+
+    code = await web3.eth.getCode(contractAddress, latest)
+    assert.lengthOf(code, 9806)
+
+    // Add calls to verify correctness of eth_call on historical heights
+    let callRetrieve = await deployed.contract.methods.retrieve().encodeABI()
+    let result = await web3.eth.call({ to: contractAddress, data: callRetrieve }, 82n)
+    assert.equal(result, '0x')
+
+    result = await web3.eth.call({ to: contractAddress, data: callRetrieve }, latest)
+    let storedNumber = web3.eth.abi.decodeParameter('uint256', result)
+    assert.isTrue(storedNumber != 1337n) // this is the initial value
 
     // submit a transaction that calls blockNumber()
     let blockNumberData = deployed.contract.methods.blockNumber().encodeABI()
