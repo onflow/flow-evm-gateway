@@ -5,10 +5,7 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/onflow/flow-go/fvm/evm/precompiles"
-	"github.com/onflow/flow-go/fvm/evm/types"
 	flowGo "github.com/onflow/flow-go/model/flow"
-	"github.com/onflow/go-ethereum/common"
 	"github.com/rs/zerolog"
 
 	"github.com/onflow/flow-evm-gateway/models"
@@ -110,85 +107,21 @@ func (e *Engine) ID() uuid.UUID {
 // produced by execution nodes. This check makes sure we keep a correct state.
 func (e *Engine) executeBlock(block *models.Block) error {
 	registers := pebble.NewRegister(e.store, block.Height)
-	state, err := NewState(block, registers, e.chainID, e.blocks, e.receipts, e.logger)
+	state, err := NewBlockState(block, registers, e.chainID, e.blocks, e.receipts, e.logger)
 	if err != nil {
 		return err
 	}
 
-	// track gas usage in a virtual block
-	gasUsed := uint64(0)
-
-	for i, h := range block.TransactionHashes {
-		e.logger.Info().Str("hash", h.String()).Msg("transaction execution")
-
+	for _, h := range block.TransactionHashes {
 		tx, err := e.transactions.Get(h)
 		if err != nil {
 			return err
 		}
 
-		receipt, err := e.receipts.GetByTransactionID(tx.Hash())
-		if err != nil {
+		if err := state.Execute(tx); err != nil {
 			return err
-		}
-
-		ctx, err := e.blockContext(block, receipt, uint(i), gasUsed)
-		if err != nil {
-			return err
-		}
-
-		resultReceipt, err := state.Execute(ctx, tx)
-		if err != nil {
-			return err
-		}
-
-		// increment the gas used only after it's executed
-		gasUsed += receipt.GasUsed
-
-		if ok, errs := models.EqualReceipts(resultReceipt, receipt); !ok {
-			return fmt.Errorf("state missmatch: %v", errs)
 		}
 	}
 
 	return nil
-}
-
-func (e *Engine) blockContext(
-	block *models.Block,
-	receipt *models.Receipt,
-	txIndex uint,
-	gasUsed uint64,
-) (types.BlockContext, error) {
-	calls, err := types.AggregatedPrecompileCallsFromEncoded(receipt.PrecompiledCalls)
-	if err != nil {
-		return types.BlockContext{}, err
-	}
-
-	precompileContracts := precompiles.AggregatedPrecompiledCallsToPrecompiledContracts(calls)
-
-	return types.BlockContext{
-		ChainID:                types.EVMChainIDFromFlowChainID(e.chainID),
-		BlockNumber:            block.Height,
-		BlockTimestamp:         block.Timestamp,
-		DirectCallBaseGasUsage: types.DefaultDirectCallBaseGasUsage, // todo check
-		DirectCallGasPrice:     types.DefaultDirectCallGasPrice,
-		GasFeeCollector:        types.CoinbaseAddress,
-		GetHashFunc: func(n uint64) common.Hash {
-			b, err := e.blocks.GetByHeight(n)
-			if err != nil {
-				panic(err)
-			}
-			h, err := b.Hash()
-			if err != nil {
-				panic(err)
-			}
-
-			return h
-		},
-		Random:                    block.PrevRandao,
-		ExtraPrecompiledContracts: precompileContracts,
-		TxCountSoFar:              txIndex,
-		TotalGasUsedSoFar:         gasUsed,
-		// todo what to do with the tracer
-		Tracer: nil,
-	}, nil
 }

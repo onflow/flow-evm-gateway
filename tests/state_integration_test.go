@@ -73,7 +73,7 @@ func Test_StateExecution_Transfers(t *testing.T) {
 	register := pebble.NewRegister(store, latest)
 	height0 := latest
 
-	st, err := state.NewState(block, register, cfg.FlowNetworkID, blocks, receipts, logger)
+	st, err := state.NewBlockState(block, register, cfg.FlowNetworkID, blocks, receipts, logger)
 	require.NoError(t, err)
 
 	testAddr := common.HexToAddress("55253ed90B70b96C73092D8680915aaF50081194")
@@ -103,7 +103,7 @@ func Test_StateExecution_Transfers(t *testing.T) {
 	amount1 := amount.Uint64()
 
 	register = pebble.NewRegister(store, latest)
-	st, err = state.NewState(block, register, cfg.FlowNetworkID, blocks, receipts, logger)
+	st, err = state.NewBlockState(block, register, cfg.FlowNetworkID, blocks, receipts, logger)
 	require.NoError(t, err)
 
 	balance = st.GetBalance(testAddr)
@@ -128,7 +128,7 @@ func Test_StateExecution_Transfers(t *testing.T) {
 
 	height2 := latest
 	register = pebble.NewRegister(store, latest)
-	st, err = state.NewState(block, register, cfg.FlowNetworkID, blocks, receipts, logger)
+	st, err = state.NewBlockState(block, register, cfg.FlowNetworkID, blocks, receipts, logger)
 	require.NoError(t, err)
 
 	balance = st.GetBalance(testAddr)
@@ -140,7 +140,7 @@ func Test_StateExecution_Transfers(t *testing.T) {
 	require.NoError(t, err)
 
 	register = pebble.NewRegister(store, height0)
-	st, err = state.NewState(block, register, cfg.FlowNetworkID, blocks, receipts, logger)
+	st, err = state.NewBlockState(block, register, cfg.FlowNetworkID, blocks, receipts, logger)
 	require.NoError(t, err)
 
 	balance = st.GetBalance(testAddr)
@@ -151,7 +151,7 @@ func Test_StateExecution_Transfers(t *testing.T) {
 	require.NoError(t, err)
 
 	register = pebble.NewRegister(store, height1)
-	st, err = state.NewState(block, register, cfg.FlowNetworkID, blocks, receipts, logger)
+	st, err = state.NewBlockState(block, register, cfg.FlowNetworkID, blocks, receipts, logger)
 	require.NoError(t, err)
 
 	balance = st.GetBalance(testAddr)
@@ -162,7 +162,7 @@ func Test_StateExecution_Transfers(t *testing.T) {
 	require.NoError(t, err)
 
 	register = pebble.NewRegister(store, height2)
-	st, err = state.NewState(block, register, cfg.FlowNetworkID, blocks, receipts, logger)
+	st, err = state.NewBlockState(block, register, cfg.FlowNetworkID, blocks, receipts, logger)
 	require.NoError(t, err)
 
 	balance = st.GetBalance(testAddr)

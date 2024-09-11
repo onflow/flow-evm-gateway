@@ -7,8 +7,10 @@ import (
 	"github.com/onflow/flow-go/fvm/evm"
 	"github.com/onflow/flow-go/fvm/evm/emulator"
 	"github.com/onflow/flow-go/fvm/evm/emulator/state"
+	"github.com/onflow/flow-go/fvm/evm/precompiles"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	flowGo "github.com/onflow/flow-go/model/flow"
+	"github.com/onflow/go-ethereum/common"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/rs/zerolog"
 
@@ -16,24 +18,26 @@ import (
 	"github.com/onflow/flow-evm-gateway/storage"
 )
 
-type State struct {
+type BlockState struct {
 	types.StateDB // todo change to types.ReadOnlyView
 	emulator      types.Emulator
 	chainID       flowGo.ChainID
 	block         *models.Block
+	txIndex       uint
+	gasUsed       uint64
 	blocks        storage.BlockIndexer
 	receipts      storage.ReceiptIndexer
 	logger        zerolog.Logger
 }
 
-func NewState(
+func NewBlockState(
 	block *models.Block,
 	ledger atree.Ledger,
 	chainID flowGo.ChainID,
 	blocks storage.BlockIndexer,
 	receipts storage.ReceiptIndexer,
 	logger zerolog.Logger,
-) (*State, error) {
+) (*BlockState, error) {
 	logger = logger.With().Str("component", "state-execution").Logger()
 	storageAddress := evm.StorageAccountAddress(chainID)
 
@@ -44,7 +48,7 @@ func NewState(
 
 	emu := emulator.NewEmulator(ledger, storageAddress)
 
-	return &State{
+	return &BlockState{
 		StateDB:  s,
 		emulator: emu,
 		chainID:  chainID,
@@ -55,13 +59,19 @@ func NewState(
 	}, nil
 }
 
-func (s *State) Execute(ctx types.BlockContext, tx models.Transaction) (*gethTypes.Receipt, error) {
+func (s *BlockState) Execute(tx models.Transaction) error {
 	l := s.logger.With().Str("tx-hash", tx.Hash().String()).Logger()
 	l.Info().Msg("executing new transaction")
 
+	receipt, err := s.receipts.GetByTransactionID(tx.Hash())
+	if err != nil {
+		return err
+	}
+
+	ctx, err := s.blockContext(receipt)
 	bv, err := s.emulator.NewBlockView(ctx)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	var res *types.Result
@@ -72,20 +82,92 @@ func (s *State) Execute(ctx types.BlockContext, tx models.Transaction) (*gethTyp
 	case models.TransactionCall:
 		res, err = bv.RunTransaction(t.Transaction)
 	default:
-		return nil, fmt.Errorf("invalid transaction type")
+		return fmt.Errorf("invalid transaction type")
 	}
 
 	if err != nil {
 		// todo is this ok, the service would restart and retry?
-		return nil, err
+		return err
 	}
 
 	// we should never produce invalid transaction, since if the transaction was emitted from the evm core
 	// it must have either been successful or failed, invalid transactions are not emitted
 	if res.Invalid() {
-		return nil, fmt.Errorf("invalid transaction %s: %w", tx.Hash(), res.ValidationError)
+		return fmt.Errorf("invalid transaction %s: %w", tx.Hash(), res.ValidationError)
 	}
 
+	if ok, errs := models.EqualReceipts(res.Receipt(), receipt); !ok {
+		return fmt.Errorf("state missmatch: %v", errs)
+	}
+
+	// increment values as part of a virtual block
+	s.gasUsed += res.GasConsumed
+	s.txIndex++
+
 	l.Debug().Msg("transaction executed successfully")
-	return res.Receipt(), nil
+	return nil
+}
+
+func (s *BlockState) Call(from common.Address, tx *gethTypes.Transaction) ([]byte, error) {
+	receipt, err := s.receipts.GetByTransactionID(tx.Hash())
+	if err != nil {
+		return nil, err
+	}
+
+	ctx, err := s.blockContext(receipt)
+	if err != nil {
+		return nil, err
+	}
+
+	bv, err := s.emulator.NewBlockView(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := bv.DryRunTransaction(tx, from)
+	if err != nil {
+		return nil, err
+	}
+
+	if res.Failed() {
+		// todo what if it fails
+	}
+
+	return res.ReturnedData, nil
+}
+
+func (s *BlockState) blockContext(receipt *models.Receipt) (types.BlockContext, error) {
+	calls, err := types.AggregatedPrecompileCallsFromEncoded(receipt.PrecompiledCalls)
+	if err != nil {
+		return types.BlockContext{}, err
+	}
+
+	precompileContracts := precompiles.AggregatedPrecompiledCallsToPrecompiledContracts(calls)
+
+	return types.BlockContext{
+		ChainID:                types.EVMChainIDFromFlowChainID(s.chainID),
+		BlockNumber:            s.block.Height,
+		BlockTimestamp:         s.block.Timestamp,
+		DirectCallBaseGasUsage: types.DefaultDirectCallBaseGasUsage, // todo check
+		DirectCallGasPrice:     types.DefaultDirectCallGasPrice,
+		GasFeeCollector:        types.CoinbaseAddress,
+		GetHashFunc: func(n uint64) common.Hash {
+			b, err := s.blocks.GetByHeight(n)
+			if err != nil {
+				panic(err)
+			}
+			h, err := b.Hash()
+			if err != nil {
+				panic(err)
+			}
+
+			return h
+		},
+		Random:                    s.block.PrevRandao,
+		ExtraPrecompiledContracts: precompileContracts,
+		TxCountSoFar:              s.txIndex,
+		TotalGasUsedSoFar:         s.gasUsed,
+		// todo what to do with the tracer
+		Tracer: nil,
+	}, nil
 }
