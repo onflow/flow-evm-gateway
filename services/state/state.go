@@ -66,12 +66,10 @@ func (s *State) Execute(ctx types.BlockContext, tx models.Transaction) (*gethTyp
 
 	var res *types.Result
 
-	switch tx.(type) {
+	switch t := tx.(type) {
 	case models.DirectCall:
-		t := tx.(models.DirectCall)
 		res, err = bv.DirectCall(t.DirectCall)
 	case models.TransactionCall:
-		t := tx.(models.TransactionCall)
 		res, err = bv.RunTransaction(t.Transaction)
 	default:
 		return nil, fmt.Errorf("invalid transaction type")
