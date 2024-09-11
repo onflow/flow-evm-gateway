@@ -13,10 +13,6 @@ import (
 
 var _ atree.Ledger = &Register{}
 
-// todo we need to support historic data,
-// we likely need to create ledger with the context of block height
-// and then prepend all keys with that height
-
 type Register struct {
 	height uint64
 	store  *Storage
