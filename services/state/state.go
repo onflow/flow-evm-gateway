@@ -108,13 +108,8 @@ func (s *BlockState) Execute(tx models.Transaction) error {
 	return nil
 }
 
-func (s *BlockState) Call(from common.Address, tx *gethTypes.Transaction) ([]byte, error) {
-	receipt, err := s.receipts.GetByTransactionID(tx.Hash())
-	if err != nil {
-		return nil, err
-	}
-
-	ctx, err := s.blockContext(receipt)
+func (s *BlockState) Call(from common.Address, data []byte) (*types.Result, error) {
+	ctx, err := s.blockContext(nil)
 	if err != nil {
 		return nil, err
 	}
@@ -124,27 +119,19 @@ func (s *BlockState) Call(from common.Address, tx *gethTypes.Transaction) ([]byt
 		return nil, err
 	}
 
-	res, err := bv.DryRunTransaction(tx, from)
-	if err != nil {
+	tx := &gethTypes.Transaction{}
+	if err := tx.UnmarshalBinary(data); err != nil {
 		return nil, err
 	}
 
-	if res.Failed() {
-		// todo what if it fails
-	}
-
-	return res.ReturnedData, nil
+	return bv.DryRunTransaction(tx, from)
 }
 
+// blockContext produces a context that is used by the block view during the execution.
+// It can be used for transaction execution and calls. Receipt is not required when
+// producing the context for calls.
 func (s *BlockState) blockContext(receipt *models.Receipt) (types.BlockContext, error) {
-	calls, err := types.AggregatedPrecompileCallsFromEncoded(receipt.PrecompiledCalls)
-	if err != nil {
-		return types.BlockContext{}, err
-	}
-
-	precompileContracts := precompiles.AggregatedPrecompiledCallsToPrecompiledContracts(calls)
-
-	return types.BlockContext{
+	ctx := types.BlockContext{
 		ChainID:                types.EVMChainIDFromFlowChainID(s.chainID),
 		BlockNumber:            s.block.Height,
 		BlockTimestamp:         s.block.Timestamp,
@@ -163,11 +150,23 @@ func (s *BlockState) blockContext(receipt *models.Receipt) (types.BlockContext, 
 
 			return h
 		},
-		Random:                    s.block.PrevRandao,
-		ExtraPrecompiledContracts: precompileContracts,
-		TxCountSoFar:              s.txIndex,
-		TotalGasUsedSoFar:         s.gasUsed,
+		Random:            s.block.PrevRandao,
+		TxCountSoFar:      s.txIndex,
+		TotalGasUsedSoFar: s.gasUsed,
 		// todo what to do with the tracer
 		Tracer: nil,
-	}, nil
+	}
+
+	// only add precompile contracts if we have a receipt, in case of calls we don't produce receipts
+	// todo in cases where calls use cadence arch we should fail and execute such calls using remote client
+	if receipt != nil {
+		calls, err := types.AggregatedPrecompileCallsFromEncoded(receipt.PrecompiledCalls)
+		if err != nil {
+			return types.BlockContext{}, err
+		}
+
+		ctx.ExtraPrecompiledContracts = precompiles.AggregatedPrecompiledCallsToPrecompiledContracts(calls)
+	}
+
+	return ctx, nil
 }
