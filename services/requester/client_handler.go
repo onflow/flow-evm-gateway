@@ -2,9 +2,22 @@ package requester
 
 import (
 	"context"
+	"errors"
 	"math/big"
+	"reflect"
+	"sync"
+	"time"
 
+	"github.com/onflow/flow-go-sdk/crypto"
 	"github.com/onflow/go-ethereum/common"
+	"github.com/rs/zerolog"
+
+	"github.com/onflow/flow-evm-gateway/config"
+	"github.com/onflow/flow-evm-gateway/metrics"
+	"github.com/onflow/flow-evm-gateway/models"
+	"github.com/onflow/flow-evm-gateway/services/state"
+	"github.com/onflow/flow-evm-gateway/storage"
+	"github.com/onflow/flow-evm-gateway/storage/pebble"
 )
 
 var _ EVMClient = &ClientHandler{}
@@ -14,38 +27,264 @@ var _ EVMClient = &ClientHandler{}
 // and implements error handling logic that can prefer either remote result or
 // local result.
 type ClientHandler struct {
-	remote *RemoteClient
-	local  *LocalClient
+	remote    *RemoteClient
+	config    *config.Config
+	store     *pebble.Storage
+	blocks    storage.BlockIndexer
+	receipts  storage.ReceiptIndexer
+	logger    zerolog.Logger
+	collector metrics.Collector
+}
+
+func NewClientHandler(
+	config *config.Config,
+	store *pebble.Storage,
+	txPool *TxPool,
+	signer crypto.Signer,
+	client *CrossSporkClient,
+	blocks storage.BlockIndexer,
+	receipts storage.ReceiptIndexer,
+	logger zerolog.Logger,
+	collector metrics.Collector,
+) (*ClientHandler, error) {
+	remote, err := NewRemote(client, config, signer, logger, blocks, txPool, collector)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ClientHandler{
+		remote:    remote,
+		config:    config,
+		store:     store,
+		blocks:    blocks,
+		receipts:  receipts,
+		logger:    logger,
+		collector: collector,
+	}, nil
 }
 
 func (c *ClientHandler) SendRawTransaction(ctx context.Context, data []byte) (common.Hash, error) {
-
+	// always use remote client
+	return c.remote.SendRawTransaction(ctx, data)
 }
 
-func (c *ClientHandler) GetBalance(ctx context.Context, address common.Address, evmHeight int64) (*big.Int, error) {
+func (c *ClientHandler) GetBalance(
+	ctx context.Context,
+	address common.Address,
+	height int64,
+) (*big.Int, error) {
+	local, err := c.localClient(height)
+	if err != nil {
+		return nil, err
+	}
 
+	return handleCall(func() (*big.Int, error) {
+		return local.GetBalance(ctx, address, height)
+	}, func() (*big.Int, error) {
+		return c.remote.GetBalance(ctx, address, height)
+	}, c.logger.With().Str("client-call", "get balance").Logger())
 }
 
-func (c *ClientHandler) Call(ctx context.Context, data []byte, from common.Address, evmHeight int64) ([]byte, error) {
+func (c *ClientHandler) Call(
+	ctx context.Context,
+	data []byte,
+	from common.Address,
+	height int64,
+) ([]byte, error) {
+	local, err := c.localClient(height)
+	if err != nil {
+		return nil, err
+	}
 
+	return handleCall(func() ([]byte, error) {
+		return local.Call(ctx, data, from, height)
+	}, func() ([]byte, error) {
+		return c.remote.Call(ctx, data, from, height)
+	}, c.logger.With().Str("client-call", "call").Logger())
 }
 
-func (c *ClientHandler) EstimateGas(ctx context.Context, data []byte, from common.Address, evmHeight int64) (uint64, error) {
+func (c *ClientHandler) EstimateGas(
+	ctx context.Context,
+	data []byte,
+	from common.Address,
+	height int64,
+) (uint64, error) {
+	local, err := c.localClient(height)
+	if err != nil {
+		return 0, err
+	}
 
+	return handleCall(func() (uint64, error) {
+		return local.EstimateGas(ctx, data, from, height)
+	}, func() (uint64, error) {
+		return c.remote.EstimateGas(ctx, data, from, height)
+	}, c.logger.With().Str("client-call", "estimate gas").Logger())
 }
 
-func (c *ClientHandler) GetNonce(ctx context.Context, address common.Address, evmHeight int64) (uint64, error) {
+func (c *ClientHandler) GetNonce(
+	ctx context.Context,
+	address common.Address,
+	height int64,
+) (uint64, error) {
+	local, err := c.localClient(height)
+	if err != nil {
+		return 0, err
+	}
 
+	return handleCall(func() (uint64, error) {
+		return local.GetNonce(ctx, address, height)
+	}, func() (uint64, error) {
+		return c.remote.GetNonce(ctx, address, height)
+	}, c.logger.With().Str("client-call", "get nonce").Logger())
 }
 
-func (c *ClientHandler) GetCode(ctx context.Context, address common.Address, evmHeight int64) ([]byte, error) {
+func (c *ClientHandler) GetCode(
+	ctx context.Context,
+	address common.Address,
+	height int64,
+) ([]byte, error) {
+	local, err := c.localClient(height)
+	if err != nil {
+		return nil, err
+	}
 
+	return handleCall(func() ([]byte, error) {
+		return local.GetCode(ctx, address, height)
+	}, func() ([]byte, error) {
+		return c.remote.GetCode(ctx, address, height)
+	}, c.logger.With().Str("client-call", "get code").Logger())
 }
 
 func (c *ClientHandler) GetLatestEVMHeight(ctx context.Context) (uint64, error) {
+	local, err := c.localClient(models.LatestBlockNumber.Int64())
+	if err != nil {
+		return 0, err
+	}
 
+	return handleCall(func() (uint64, error) {
+		return local.GetLatestEVMHeight(ctx)
+	}, func() (uint64, error) {
+		return c.remote.GetLatestEVMHeight(ctx)
+	}, c.logger.With().Str("client-call", "get latest height").Logger())
 }
 
-func (c *ClientHandler) GetStorageAt(ctx context.Context, address common.Address, hash common.Hash, evmHeight int64) (common.Hash, error) {
+func (c *ClientHandler) GetStorageAt(
+	ctx context.Context,
+	address common.Address,
+	hash common.Hash,
+	height int64,
+) (common.Hash, error) {
+	local, err := c.localClient(height)
+	if err != nil {
+		return common.Hash{}, err
+	}
 
+	return handleCall(func() (common.Hash, error) {
+		return local.GetStorageAt(ctx, address, hash, height)
+	}, func() (common.Hash, error) {
+		return c.remote.GetStorageAt(ctx, address, hash, height)
+	}, c.logger.With().Str("client-call", "get storage at").Logger())
+}
+
+func (c *ClientHandler) localClient(height int64) (*LocalClient, error) {
+	h := uint64(height)
+	if height < 0 {
+		latest, err := c.blocks.LatestEVMHeight()
+		if err != nil {
+			return nil, err
+		}
+		h = latest
+	}
+	block, err := c.blocks.GetByHeight(h)
+	if err != nil {
+		return nil, err
+	}
+
+	blockState, err := state.NewBlockState(
+		block,
+		c.config.FlowNetworkID,
+		c.store,
+		c.blocks,
+		c.receipts,
+		c.logger,
+	)
+
+	return NewLocalClient(blockState, c.blocks), nil
+}
+
+// handleCall takes in local and remote call and implements error handling logic to return
+// correct result, it also compares the results in case there are no errors and reports any differences.
+func handleCall[T any](
+	local func() (T, error),
+	remote func() (T, error),
+	logger zerolog.Logger,
+) (T, error) {
+	logger.Info().Msg("executing state client call")
+
+	var localErr, remoteErr error
+	var localRes, remoteRes T
+
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+	go func() {
+		s := time.Now()
+		localRes, localErr = local()
+		logger.Info().
+			Dur("execution-time", time.Since(s)).
+			Msg("local call executed")
+		wg.Done()
+	}()
+
+	go func() {
+		s := time.Now()
+		remoteRes, remoteErr = remote()
+		logger.Info().
+			Dur("execution-time", time.Since(s)).
+			Msg("remote call executed")
+		wg.Done()
+	}()
+
+	wg.Wait()
+
+	// happy case, both errs are nil and results are same
+	if localErr == nil && remoteErr == nil {
+		// if results are not same log the diff
+		if !reflect.DeepEqual(localRes, remoteRes) {
+			logger.Error().
+				Any("local", localRes).
+				Any("remote", remoteRes).
+				Msg("results from local and remote client are note the same")
+		}
+	}
+
+	// make sure if both return an error the errors are the same
+	if localErr != nil && remoteErr != nil {
+		if !errors.Is(localErr, remoteErr) {
+			logger.Error().
+				Str("local", localErr.Error()).
+				Str("remote", remoteErr.Error()).
+				Msg("errors from local and remote client are note the same")
+		}
+	}
+
+	// if remote received an error but local call worked, return the local result
+	// this can be due to rate-limits or pruned state on AN/EN
+	if localErr == nil && remoteErr != nil {
+		logger.Warn().
+			Str("remote-error", remoteErr.Error()).
+			Any("local-result", localRes).
+			Msg("error from remote client but not from local client")
+
+		return localRes, nil
+	}
+
+	// if remote succeeded but local received an error this is a bug
+	if localErr != nil && remoteErr == nil {
+		logger.Error().
+			Str("local-error", localErr.Error()).
+			Any("remote-result", remoteRes).
+			Msg("error from local client but not from remote client")
+	}
+
+	return remoteRes, remoteErr
 }
