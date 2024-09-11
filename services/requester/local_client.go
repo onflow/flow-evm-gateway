@@ -28,13 +28,22 @@ func (l *LocalClient) GetBalance(ctx context.Context, address common.Address, ev
 }
 
 func (l *LocalClient) Call(ctx context.Context, data []byte, from common.Address, evmHeight int64) ([]byte, error) {
-	//TODO implement me
-	panic("implement me")
+	res, err := l.state.Call(from, data)
+	if err != nil {
+		return nil, err
+	}
+
+	// todo what if it failed?
+
+	return res.ReturnedData, nil
 }
 
 func (l *LocalClient) EstimateGas(ctx context.Context, data []byte, from common.Address, evmHeight int64) (uint64, error) {
-	//TODO implement me
-	panic("implement me")
+	res, err := l.state.Call(from, data)
+	if err != nil {
+		return 0, err
+	}
+	return res.GasConsumed, nil
 }
 
 func (l *LocalClient) GetNonce(ctx context.Context, address common.Address, evmHeight int64) (uint64, error) {
