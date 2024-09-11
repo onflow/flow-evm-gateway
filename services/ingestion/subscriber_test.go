@@ -332,7 +332,7 @@ func Test_SubscribingWithRetryOnErrorMultipleBlocks(t *testing.T) {
 			assert.ErrorContains(
 				t,
 				ev.Err,
-				"received multiple Flow block events for height: 5",
+				"received 2 but expected 1 event for height 5",
 			)
 			prevHeight = cadenceHeight
 		} else {
@@ -459,7 +459,7 @@ func Test_SubscribingWithRetryOnErrorEmptyBlocks(t *testing.T) {
 			assert.ErrorContains(
 				t,
 				ev.Err,
-				"received empty Flow block events for height: 5",
+				"received 0 but expected 1 event for height 5",
 			)
 			prevHeight = cadenceHeight
 		} else {
