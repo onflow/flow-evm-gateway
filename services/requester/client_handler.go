@@ -2,7 +2,6 @@ package requester
 
 import (
 	"context"
-	"errors"
 	"math/big"
 	"reflect"
 	"sync"
@@ -258,13 +257,12 @@ func handleCall[T any](
 	}
 
 	// make sure if both return an error the errors are the same
-	if localErr != nil && remoteErr != nil {
-		if !errors.Is(localErr, remoteErr) {
-			logger.Error().
-				Str("local", localErr.Error()).
-				Str("remote", remoteErr.Error()).
-				Msg("errors from local and remote client are note the same")
-		}
+	if localErr != nil && remoteErr != nil &&
+		localErr.Error() != remoteErr.Error() {
+		logger.Error().
+			Str("local", localErr.Error()).
+			Str("remote", remoteErr.Error()).
+			Msg("errors from local and remote client are note the same")
 	}
 
 	// if remote received an error but local call worked, return the local result
@@ -286,5 +284,5 @@ func handleCall[T any](
 			Msg("error from local client but not from remote client")
 	}
 
-	return remoteRes, remoteErr
+	return localRes, localErr
 }
