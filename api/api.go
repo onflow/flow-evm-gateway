@@ -888,35 +888,7 @@ func (b *BlockChainAPI) GetStorageAt(
 	storageSlot string,
 	blockNumberOrHash rpc.BlockNumberOrHash,
 ) (hexutil.Bytes, error) {
-	l := b.logger.With().
-		Str("endpoint", "getStorageAt").
-		Str("address", address.String()).
-		Logger()
-
-	if err := rateLimit(ctx, b.limiter, l); err != nil {
-		return nil, err
-	}
-
-	key, _, err := decodeHash(storageSlot)
-	if err != nil {
-		return handleError[hexutil.Bytes](
-			fmt.Errorf("%w: %w", errs.ErrInvalid, err),
-			l,
-			b.collector,
-		)
-	}
-
-	evmHeight, err := b.getBlockNumber(&blockNumberOrHash)
-	if err != nil {
-		return handleError[hexutil.Bytes](err, l, b.collector)
-	}
-
-	result, err := b.evm.GetStorageAt(ctx, address, key, evmHeight)
-	if err != nil {
-		return handleError[hexutil.Bytes](err, l, b.collector)
-	}
-
-	return result[:], nil
+	return nil, errs.ErrEndpointNotSupported
 }
 
 func (b *BlockChainAPI) fetchBlockTransactions(
