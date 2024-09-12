@@ -59,6 +59,16 @@ type BlockIndexer interface {
 	// Cadence block ID.
 	// - errors.NotFound if the height is not found
 	GetCadenceID(height uint64) (flow.Identifier, error)
+
+	// ExecutedHeight marks an evm height as executed by the local state index.
+	// This keeps track of all block transactions being re-executed to rebuild the
+	// local state index.
+	ExecutedHeight(evmHeight uint64) error
+
+	// LatestExecutedHeight stores the height at which the local state index
+	// is re-executed and indexed. Each block gets executed for rebuilding
+	// local state index and this height tracks the progress.
+	LatestExecutedHeight() (uint64, error)
 }
 
 type ReceiptIndexer interface {
