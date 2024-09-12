@@ -356,6 +356,16 @@ func (b *BlockChainAPI) GetTransactionReceipt(
 		return handleError[map[string]interface{}](err, l, b.collector)
 	}
 
+	// we don't return receipts until local state index
+	// recreated the state by executing the transaction
+	latestExecutedHeight, err := b.blocks.LatestExecutedHeight()
+	if err != nil {
+		return nil, err
+	}
+	if receipt.BlockNumber.Uint64() > latestExecutedHeight {
+		return nil, nil
+	}
+
 	txReceipt, err := MarshalReceipt(receipt, tx)
 	if err != nil {
 		return handleError[map[string]interface{}](err, l, b.collector)
