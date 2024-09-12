@@ -784,6 +784,10 @@ func cadenceStringToBytes(value cadence.Value) ([]byte, error) {
 		)
 	}
 
+	if cdcString == "" {
+		return nil, nil
+	}
+
 	code, err := hex.DecodeString(string(cdcString))
 	if err != nil {
 		return nil, fmt.Errorf("failed to hex-decode string to byte array [%s]: %w", cdcString, err)
