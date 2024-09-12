@@ -9,7 +9,7 @@ require (
 	github.com/onflow/flow-emulator v1.0.0
 	github.com/onflow/flow-evm-gateway v0.0.0-20240201154855-4d4d3d3f19c7
 	github.com/onflow/flow-go v0.37.10
-	github.com/onflow/flow-go-sdk v1.0.0-preview.54
+	github.com/onflow/flow-go-sdk v1.0.0-preview.56
 	github.com/onflow/go-ethereum v1.14.7
 	github.com/rs/zerolog v1.31.0
 	github.com/stretchr/testify v1.9.0
