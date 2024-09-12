@@ -2,6 +2,7 @@ const web3Utils = require('web3-utils')
 const { assert } = require('chai')
 const conf = require('./config')
 const helpers = require('./helpers')
+const web3types = require('web3-types')
 const web3 = conf.web3
 
 it('get chain ID', async () => {
@@ -97,13 +98,18 @@ it('should get block receipts', async () => {
     assert.lengthOf(blockReceipts, 3)
 
     for (let blockReceipt of blockReceipts) {
-        let response = await helpers.callRPCMethod(
-            'eth_getTransactionReceipt',
-            [blockReceipt.transactionHash]
+        let txReceipt = await web3.eth.getTransactionReceipt(
+            blockReceipt.transactionHash,
+            web3types.ETH_DATA_FORMAT
         )
-        assert.equal(response.status, 200)
+        // normalize missing fields from transaction receipt
+        if (txReceipt.to === undefined) {
+            txReceipt.to = null
+        }
+        if (txReceipt.contractAddress === undefined) {
+            txReceipt.contractAddress = null
+        }
 
-        let txReceipt = response.body.result
         assert.deepEqual(blockReceipt, txReceipt)
     }
 })
