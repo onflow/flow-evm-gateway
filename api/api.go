@@ -440,11 +440,11 @@ func (b *BlockChainAPI) GetBlockByNumber(
 // GetBlockReceipts returns the block receipts for the given block hash or number or tag.
 func (b *BlockChainAPI) GetBlockReceipts(
 	ctx context.Context,
-	numHash rpc.BlockNumberOrHash,
-) ([]*models.Receipt, error) {
+	blockNumberOrHash rpc.BlockNumberOrHash,
+) ([]map[string]interface{}, error) {
 	l := b.logger.With().
 		Str("endpoint", "getBlockReceipts").
-		Str("hash", numHash.String()).
+		Str("hash", blockNumberOrHash.String()).
 		Logger()
 
 	if err := rateLimit(ctx, b.limiter, l); err != nil {
@@ -455,28 +455,37 @@ func (b *BlockChainAPI) GetBlockReceipts(
 		block *models.Block
 		err   error
 	)
-	if numHash.BlockHash != nil {
-		block, err = b.blocks.GetByID(*numHash.BlockHash)
-	} else if numHash.BlockNumber != nil {
-		block, err = b.blocks.GetByHeight(uint64(numHash.BlockNumber.Int64()))
+	if blockNumberOrHash.BlockHash != nil {
+		block, err = b.blocks.GetByID(*blockNumberOrHash.BlockHash)
+	} else if blockNumberOrHash.BlockNumber != nil {
+		block, err = b.blocks.GetByHeight(uint64(blockNumberOrHash.BlockNumber.Int64()))
 	} else {
-		return handleError[[]*models.Receipt](
+		return handleError[[]map[string]interface{}](
 			fmt.Errorf("%w: block number or hash not provided", errs.ErrInvalid),
 			l,
 			b.collector,
 		)
 	}
 	if err != nil {
-		return handleError[[]*models.Receipt](err, l, b.collector)
+		return handleError[[]map[string]interface{}](err, l, b.collector)
 	}
 
-	receipts := make([]*models.Receipt, len(block.TransactionHashes))
+	receipts := make([]map[string]interface{}, len(block.TransactionHashes))
 	for i, hash := range block.TransactionHashes {
-		rcp, err := b.receipts.GetByTransactionID(hash)
+		tx, err := b.transactions.Get(hash)
 		if err != nil {
-			return handleError[[]*models.Receipt](err, l, b.collector)
+			return handleError[[]map[string]interface{}](err, l, b.collector)
 		}
-		receipts[i] = rcp
+
+		receipt, err := b.receipts.GetByTransactionID(hash)
+		if err != nil {
+			return handleError[[]map[string]interface{}](err, l, b.collector)
+		}
+
+		receipts[i], err = MarshalReceipt(receipt, tx)
+		if err != nil {
+			return handleError[[]map[string]interface{}](err, l, b.collector)
+		}
 	}
 
 	return receipts, nil
