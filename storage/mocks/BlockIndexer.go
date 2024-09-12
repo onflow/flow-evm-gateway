@@ -18,6 +18,24 @@ type BlockIndexer struct {
 	mock.Mock
 }
 
+// ExecutedHeight provides a mock function with given fields: evmHeight
+func (_m *BlockIndexer) ExecutedHeight(evmHeight uint64) error {
+	ret := _m.Called(evmHeight)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ExecutedHeight")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(uint64) error); ok {
+		r0 = rf(evmHeight)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
 // GetByHeight provides a mock function with given fields: height
 func (_m *BlockIndexer) GetByHeight(height uint64) (*models.Block, error) {
 	ret := _m.Called(height)
@@ -198,6 +216,34 @@ func (_m *BlockIndexer) LatestEVMHeight() (uint64, error) {
 
 	if len(ret) == 0 {
 		panic("no return value specified for LatestEVMHeight")
+	}
+
+	var r0 uint64
+	var r1 error
+	if rf, ok := ret.Get(0).(func() (uint64, error)); ok {
+		return rf()
+	}
+	if rf, ok := ret.Get(0).(func() uint64); ok {
+		r0 = rf()
+	} else {
+		r0 = ret.Get(0).(uint64)
+	}
+
+	if rf, ok := ret.Get(1).(func() error); ok {
+		r1 = rf()
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// LatestExecutedHeight provides a mock function with given fields:
+func (_m *BlockIndexer) LatestExecutedHeight() (uint64, error) {
+	ret := _m.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for LatestExecutedHeight")
 	}
 
 	var r0 uint64
