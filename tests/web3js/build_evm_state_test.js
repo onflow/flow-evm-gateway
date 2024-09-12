@@ -239,6 +239,14 @@ it('should handle a large number of EVM interactions', async () => {
     })
     assert.equal(res.receipt.status, conf.successStatus)
 
+    // make a contract call for verifyArchCallToRandomSource(uint64 height)
+    res = await web3.eth.call({ to: contractAddress, data: getRandomSourceData }, latest)
+    assert.notEqual(
+        res,
+        '0x0000000000000000000000000000000000000000000000000000000000000000'
+    )
+    assert.lengthOf(res, 66)
+
     // submit a transaction that calls verifyArchCallToRevertibleRandom()
     let revertibleRandomData = deployed.contract.methods.verifyArchCallToRevertibleRandom().encodeABI()
     res = await helpers.signAndSend({
@@ -250,6 +258,14 @@ it('should handle a large number of EVM interactions', async () => {
     })
     assert.equal(res.receipt.status, conf.successStatus)
 
+    // make a contract call for verifyArchCallToRevertibleRandom()
+    res = await web3.eth.call({ to: contractAddress, data: revertibleRandomData }, latest)
+    assert.notEqual(
+        res,
+        '0x0000000000000000000000000000000000000000000000000000000000000000'
+    )
+    assert.lengthOf(res, 66)
+
     // submit a transaction that calls verifyArchCallToFlowBlockHeight()
     let flowBlockHeightData = deployed.contract.methods.verifyArchCallToFlowBlockHeight().encodeABI()
     res = await helpers.signAndSend({
@@ -260,6 +276,13 @@ it('should handle a large number of EVM interactions', async () => {
         gasPrice: conf.minGasPrice,
     })
     assert.equal(res.receipt.status, conf.successStatus)
+
+    // make a contract call for verifyArchCallToFlowBlockHeight()
+    res = await web3.eth.call({ to: contractAddress, data: flowBlockHeightData }, latest)
+    assert.equal(
+        web3.eth.abi.decodeParameter('uint64', res),
+        latest,
+    )
 
     // submit a transaction that calls verifyArchCallToVerifyCOAOwnershipProof(address,bytes32,bytes)
     let tx = await web3.eth.getTransactionFromBlock(conf.startBlockHeight, 1)
@@ -276,6 +299,13 @@ it('should handle a large number of EVM interactions', async () => {
         gasPrice: conf.minGasPrice,
     })
     assert.equal(res.receipt.status, conf.successStatus)
+
+    // make a contract call for verifyArchCallToVerifyCOAOwnershipProof(address,bytes32,bytes)
+    res = await web3.eth.call({ to: contractAddress, data: verifyCOAOwnershipProofData }, latest)
+    assert.equal(
+        web3.eth.abi.decodeParameter('bool', res),
+        false,
+    )
 })
 
 function randomItem(items) {
