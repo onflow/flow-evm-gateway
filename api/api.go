@@ -130,12 +130,13 @@ func (b *BlockChainAPI) BlockNumber(ctx context.Context) (hexutil.Uint64, error)
 		return 0, err
 	}
 
-	latestBlockHeight, err := b.blocks.LatestEVMHeight()
+	latestExecutedHeight, err := b.blocks.LatestExecutedHeight()
+	fmt.Println("######", latestExecutedHeight, err)
 	if err != nil {
-		return handleError[hexutil.Uint64](err, b.logger, b.collector)
+		return hexutil.Uint64(0), err
 	}
 
-	return hexutil.Uint64(latestBlockHeight), nil
+	return hexutil.Uint64(latestExecutedHeight), nil
 }
 
 // Syncing returns false in case the node is currently not syncing with the network.
