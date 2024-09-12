@@ -1,6 +1,8 @@
 const web3Utils = require('web3-utils')
 const { assert } = require('chai')
 const conf = require('./config')
+const helpers = require('./helpers')
+const web3types = require('web3-types')
 const web3 = conf.web3
 
 it('get chain ID', async () => {
@@ -82,6 +84,34 @@ it('get block', async () => {
     // not existing transaction
     let no = await web3.eth.getTransactionFromBlock(conf.startBlockHeight, 5)
     assert.isNull(no)
+})
+
+it('should get block receipts', async () => {
+    let height = await web3.eth.getBlockNumber()
+    assert.equal(height, conf.startBlockHeight)
+
+    let block = await web3.eth.getBlock(height)
+    let response = await helpers.callRPCMethod('eth_getBlockReceipts', [block.hash])
+    assert.equal(response.status, 200)
+
+    let blockReceipts = response.body.result
+    assert.lengthOf(blockReceipts, 3)
+
+    for (let blockReceipt of blockReceipts) {
+        let txReceipt = await web3.eth.getTransactionReceipt(
+            blockReceipt.transactionHash,
+            web3types.ETH_DATA_FORMAT
+        )
+        // normalize missing fields from transaction receipt
+        if (txReceipt.to === undefined) {
+            txReceipt.to = null
+        }
+        if (txReceipt.contractAddress === undefined) {
+            txReceipt.contractAddress = null
+        }
+
+        assert.deepEqual(blockReceipt, txReceipt)
+    }
 })
 
 it('should get block transaction count', async () => {
