@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"math/big"
 
+	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/go-ethereum/common"
 
+	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/services/state"
 	"github.com/onflow/flow-evm-gateway/storage"
 )
@@ -52,7 +54,13 @@ func (l *LocalClient) Call(
 		return nil, err
 	}
 
-	// todo what if it failed?
+	result := res.ResultSummary()
+	if result.ErrorCode != 0 {
+		if result.ErrorCode == evmTypes.ExecutionErrCodeExecutionReverted {
+			return nil, errs.NewRevertError(result.ReturnedData)
+		}
+		return nil, errs.NewFailedTransactionError(result.ErrorMessage)
+	}
 
 	return res.ReturnedData, nil
 }
