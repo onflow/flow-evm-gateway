@@ -86,19 +86,17 @@ contract Storage {
         return output;
     }
 
-    function verifyArchCallToFlowBlockHeight(uint64 expected) public view returns (uint64){
+    function verifyArchCallToFlowBlockHeight() public view returns (uint64){
         (bool ok, bytes memory data) = cadenceArch.staticcall(abi.encodeWithSignature("flowBlockHeight()"));
         require(ok, "unsuccessful call to arch ");
         uint64 output = abi.decode(data, (uint64));
-        require(expected == output, "output doesnt match the expected value");
         return output;
     }
 
-    function verifyArchCallToVerifyCOAOwnershipProof(bool expected, address arg0 , bytes32 arg1 , bytes memory arg2 ) public view returns (bool){
+    function verifyArchCallToVerifyCOAOwnershipProof(address arg0 , bytes32 arg1 , bytes memory arg2 ) public view returns (bool){
         (bool ok, bytes memory data) = cadenceArch.staticcall(abi.encodeWithSignature("verifyCOAOwnershipProof(address,bytes32,bytes)", arg0, arg1, arg2));
         require(ok, "unsuccessful call to arch");
         bool output = abi.decode(data, (bool));
-        require(expected == output, "output doesnt match the expected value");
         return output;
     }
 }
