@@ -229,7 +229,7 @@ func handleCall[T any](
 		s := time.Now()
 		localRes, localErr = local()
 		logger.Info().
-			Dur("execution-time", time.Since(s)).
+			Int64("execution-ms", time.Since(s).Milliseconds()).
 			Msg("local call executed")
 		wg.Done()
 	}()
@@ -238,7 +238,7 @@ func handleCall[T any](
 		s := time.Now()
 		remoteRes, remoteErr = remote()
 		logger.Info().
-			Dur("execution-time", time.Since(s)).
+			Int64("execution-ms", time.Since(s).Milliseconds()).
 			Msg("remote call executed")
 		wg.Done()
 	}()
