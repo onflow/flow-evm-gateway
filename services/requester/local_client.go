@@ -22,6 +22,10 @@ func NewLocalClient(state *state.BlockState, blocks storage.BlockIndexer) *Local
 	}
 }
 
+// LocalClient preforms read-only queries on the local state.
+// The client is created with the state instance which is initialized using a
+// evm height so all the methods that take evm height as parameter can ignore it
+// since the state is already initialized with it.
 type LocalClient struct {
 	state  *state.BlockState
 	blocks storage.BlockIndexer
@@ -80,6 +84,15 @@ func (l *LocalClient) EstimateGas(
 	if err != nil {
 		return 0, err
 	}
+
+	result := res.ResultSummary()
+	if result.ErrorCode != 0 {
+		if result.ErrorCode == evmTypes.ExecutionErrCodeExecutionReverted {
+			return 0, errs.NewRevertError(result.ReturnedData)
+		}
+		return 0, errs.NewFailedTransactionError(result.ErrorMessage)
+	}
+
 	return res.GasConsumed, nil
 }
 
