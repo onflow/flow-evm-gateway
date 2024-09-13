@@ -683,7 +683,7 @@ func (e *RemoteClient) evmToCadenceHeight(height int64) (uint64, error) {
 	}
 
 	evmHeight := uint64(height)
-	evmLatest, err := e.blocks.LatestEVMHeight()
+	evmLatest, err := e.blocks.LatestIndexedHeight()
 	if err != nil {
 		return 0, fmt.Errorf(
 			"failed to map evm height: %d to cadence height, getting latest evm height: %w",

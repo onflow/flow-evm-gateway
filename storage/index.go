@@ -33,11 +33,6 @@ type BlockIndexer interface {
 	// - errors.NotFound if the block is not found
 	GetHeightByID(ID common.Hash) (uint64, error)
 
-	// LatestEVMHeight returns the latest stored EVM block height.
-	// Expected errors:
-	// - errors.NotInitialized if the storage was not initialized
-	LatestEVMHeight() (uint64, error)
-
 	// LatestCadenceHeight return the latest stored Cadence height.
 	// Expected errors:
 	// - errors.NotInitialized if the storage was not initialized
@@ -60,15 +55,20 @@ type BlockIndexer interface {
 	// - errors.NotFound if the height is not found
 	GetCadenceID(height uint64) (flow.Identifier, error)
 
-	// ExecutedHeight marks an evm height as executed by the local state index.
-	// This keeps track of all block transactions being re-executed to rebuild the
+	// SetExecutedHeight sets the evm block height which was re-executed by
+	// local state index. We use this value to keep track of progress of
 	// local state index.
-	ExecutedHeight(evmHeight uint64) error
+	SetExecutedHeight(evmHeight uint64) error
 
-	// LatestExecutedHeight stores the height at which the local state index
-	// is re-executed and indexed. Each block gets executed for rebuilding
+	// LatestExecutedHeight stores the evm block height at which the local
+	// state index is re-executed. Each block gets executed for rebuilding
 	// local state index and this height tracks the progress.
 	LatestExecutedHeight() (uint64, error)
+
+	// LatestIndexedHeight returns the latest indexed EVM block height.
+	// Expected errors:
+	// - errors.NotInitialized if the storage was not initialized
+	LatestIndexedHeight() (uint64, error)
 }
 
 type ReceiptIndexer interface {

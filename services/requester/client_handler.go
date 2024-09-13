@@ -188,7 +188,7 @@ func (c *ClientHandler) GetStorageAt(
 func (c *ClientHandler) localClient(height int64) (*LocalClient, error) {
 	h := uint64(height)
 	if height < 0 {
-		latest, err := c.blocks.LatestEVMHeight()
+		latest, err := c.blocks.LatestIndexedHeight()
 		if err != nil {
 			return nil, err
 		}

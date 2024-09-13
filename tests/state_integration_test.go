@@ -60,7 +60,7 @@ func Test_StateExecution_Transfers(t *testing.T) {
 	store := b.Storages.Storage
 	requester := b.EVMClient
 
-	latest, err := blocks.LatestEVMHeight()
+	latest, err := blocks.LatestIndexedHeight()
 	require.NoError(t, err)
 
 	block, err := blocks.GetByHeight(latest)
@@ -91,7 +91,7 @@ func Test_StateExecution_Transfers(t *testing.T) {
 
 	// wait for new block event
 	time.Sleep(time.Second)
-	latest, err = blocks.LatestEVMHeight()
+	latest, err = blocks.LatestIndexedHeight()
 	require.NoError(t, err)
 
 	block, err = blocks.GetByHeight(latest)
@@ -117,7 +117,7 @@ func Test_StateExecution_Transfers(t *testing.T) {
 
 	// wait for new block event, todo replace with better method
 	time.Sleep(time.Second)
-	latest, err = blocks.LatestEVMHeight()
+	latest, err = blocks.LatestIndexedHeight()
 	require.NoError(t, err)
 
 	block, err = blocks.GetByHeight(latest)

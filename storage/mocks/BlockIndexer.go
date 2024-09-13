@@ -19,11 +19,11 @@ type BlockIndexer struct {
 }
 
 // ExecutedHeight provides a mock function with given fields: evmHeight
-func (_m *BlockIndexer) ExecutedHeight(evmHeight uint64) error {
+func (_m *BlockIndexer) SetExecutedHeight(evmHeight uint64) error {
 	ret := _m.Called(evmHeight)
 
 	if len(ret) == 0 {
-		panic("no return value specified for ExecutedHeight")
+		panic("no return value specified for SetExecutedHeight")
 	}
 
 	var r0 error
@@ -211,11 +211,11 @@ func (_m *BlockIndexer) LatestCadenceHeight() (uint64, error) {
 }
 
 // LatestEVMHeight provides a mock function with given fields:
-func (_m *BlockIndexer) LatestEVMHeight() (uint64, error) {
+func (_m *BlockIndexer) LatestIndexedHeight() (uint64, error) {
 	ret := _m.Called()
 
 	if len(ret) == 0 {
-		panic("no return value specified for LatestEVMHeight")
+		panic("no return value specified for LatestIndexedHeight")
 	}
 
 	var r0 uint64

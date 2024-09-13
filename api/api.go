@@ -105,7 +105,7 @@ func NewBlockChainAPI(
 	collector metrics.Collector,
 ) (*BlockChainAPI, error) {
 	// get the height from which the indexing resumed since the last restart, this is needed for syncing status.
-	indexingResumedHeight, err := blocks.LatestEVMHeight()
+	indexingResumedHeight, err := blocks.LatestIndexedHeight()
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve the indexing resumed height: %w", err)
 	}
@@ -150,7 +150,7 @@ func (b *BlockChainAPI) Syncing(ctx context.Context) (interface{}, error) {
 		return nil, err
 	}
 
-	currentBlock, err := b.blocks.LatestEVMHeight()
+	currentBlock, err := b.blocks.LatestIndexedHeight()
 	if err != nil {
 		return handleError[any](err, b.logger, b.collector)
 	}
@@ -308,7 +308,7 @@ func (b *BlockChainAPI) GetTransactionByBlockNumberAndIndex(
 	}
 
 	if blockNumber < rpc.EarliestBlockNumber {
-		latestBlockNumber, err := b.blocks.LatestEVMHeight()
+		latestBlockNumber, err := b.blocks.LatestIndexedHeight()
 		if err != nil {
 			return handleError[*Transaction](err, l, b.collector)
 		}
@@ -428,7 +428,7 @@ func (b *BlockChainAPI) GetBlockByNumber(
 	height := uint64(blockNumber)
 	var err error
 	if blockNumber < 0 {
-		height, err = b.blocks.LatestEVMHeight()
+		height, err = b.blocks.LatestIndexedHeight()
 		if err != nil {
 			return handleError[*Block](err, l, b.collector)
 		}
@@ -533,7 +533,7 @@ func (b *BlockChainAPI) GetBlockTransactionCountByNumber(
 	}
 
 	if blockNumber < rpc.EarliestBlockNumber {
-		latestBlockNumber, err := b.blocks.LatestEVMHeight()
+		latestBlockNumber, err := b.blocks.LatestIndexedHeight()
 		if err != nil {
 			return handleError[*hexutil.Uint](err, l, b.collector)
 		}
@@ -649,7 +649,7 @@ func (b *BlockChainAPI) GetLogs(
 		to = criteria.ToBlock
 	}
 
-	h, err := b.blocks.LatestEVMHeight()
+	h, err := b.blocks.LatestIndexedHeight()
 	if err != nil {
 		return handleError[[]*types.Log](err, l, b.collector)
 	}
@@ -837,7 +837,7 @@ func (b *BlockChainAPI) FeeHistory(
 	var err error
 	if lastBlock < 0 {
 		// From the special block tags, we only support "latest".
-		lastBlockNumber, err = b.blocks.LatestEVMHeight()
+		lastBlockNumber, err = b.blocks.LatestIndexedHeight()
 		if err != nil {
 			return handleError[*FeeHistoryResult](err, l, b.collector)
 		}

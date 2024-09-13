@@ -104,5 +104,5 @@ func (l *LocalClient) GetStorageAt(
 }
 
 func (l *LocalClient) GetLatestEVMHeight(ctx context.Context) (uint64, error) {
-	return l.blocks.LatestEVMHeight()
+	return l.blocks.LatestIndexedHeight()
 }
