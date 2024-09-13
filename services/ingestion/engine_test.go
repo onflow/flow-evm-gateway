@@ -556,6 +556,7 @@ func newBlock(height uint64, txHashes []gethCommon.Hash) (cadence.Event, *models
 		TotalSupply:     big.NewInt(100),
 		ReceiptRoot:     gethCommon.HexToHash("0x2"),
 	}
+	gethBlock.TransactionHashRoot = types.TransactionHashes(txHashes).RootHash()
 	block := &models.Block{
 		Block:             gethBlock,
 		TransactionHashes: txHashes,
@@ -567,6 +568,17 @@ func newBlock(height uint64, txHashes []gethCommon.Hash) (cadence.Event, *models
 }
 
 func newTransaction(height uint64) (cadence.Event, *events.Event, models.Transaction, *types.Result, error) {
+	txEncoded, err := hex.DecodeString("f9015880808301e8488080b901086060604052341561000f57600080fd5b60eb8061001d6000396000f300606060405260043610603f576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff168063c6888fa1146044575b600080fd5b3415604e57600080fd5b606260048080359060200190919050506078565b6040518082815260200191505060405180910390f35b60007f24abdb5865df5079dcc5ac590ff6f01d5c16edbc5fab4e195d9febd1114503da600783026040518082815260200191505060405180910390a16007820290509190505600a165627a7a7230582040383f19d9f65246752244189b02f56e8d0980ed44e7a56c0b200458caad20bb002982052fa09c05a7389284dc02b356ec7dee8a023c5efd3a9d844fa3c481882684b0640866a057e96d0a71a857ed509bb2b7333e78b2408574b8cc7f51238f25c58812662653")
+	if err != nil {
+		return cadence.Event{}, nil, nil, nil, err
+	}
+
+	tx := &gethTypes.Transaction{}
+	err = tx.UnmarshalBinary(txEncoded)
+	if err != nil {
+		return cadence.Event{}, nil, nil, nil, err
+	}
+
 	res := &types.Result{
 		VMError:                 nil,
 		TxType:                  1,
@@ -580,18 +592,7 @@ func newTransaction(height uint64) (cadence.Event, *events.Event, models.Transac
 			Address: gethCommon.Address{0x3, 0x5},
 			Topics:  []gethCommon.Hash{{0x2, 0x66}, {0x7, 0x1}},
 		}},
-		TxHash: gethCommon.HexToHash("0x33"),
-	}
-
-	txEncoded, err := hex.DecodeString("f9015880808301e8488080b901086060604052341561000f57600080fd5b60eb8061001d6000396000f300606060405260043610603f576000357c0100000000000000000000000000000000000000000000000000000000900463ffffffff168063c6888fa1146044575b600080fd5b3415604e57600080fd5b606260048080359060200190919050506078565b6040518082815260200191505060405180910390f35b60007f24abdb5865df5079dcc5ac590ff6f01d5c16edbc5fab4e195d9febd1114503da600783026040518082815260200191505060405180910390a16007820290509190505600a165627a7a7230582040383f19d9f65246752244189b02f56e8d0980ed44e7a56c0b200458caad20bb002982052fa09c05a7389284dc02b356ec7dee8a023c5efd3a9d844fa3c481882684b0640866a057e96d0a71a857ed509bb2b7333e78b2408574b8cc7f51238f25c58812662653")
-	if err != nil {
-		return cadence.Event{}, nil, nil, nil, err
-	}
-
-	tx := &gethTypes.Transaction{}
-	err = tx.UnmarshalBinary(txEncoded)
-	if err != nil {
-		return cadence.Event{}, nil, nil, nil, err
+		TxHash: tx.Hash(),
 	}
 
 	ev := events.NewTransactionEvent(
