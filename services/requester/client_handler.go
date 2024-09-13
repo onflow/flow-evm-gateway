@@ -267,5 +267,5 @@ func handleCall[T any](
 			Msg("error from local client but not from remote client")
 	}
 
-	return localRes, localErr
+	return remoteRes, remoteErr
 }
