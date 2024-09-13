@@ -11,7 +11,7 @@ require (
 	github.com/onflow/atree v0.8.0-rc.6
 	github.com/onflow/cadence v1.0.0-preview.52
 	github.com/onflow/flow-go v0.37.10
-	github.com/onflow/flow-go-sdk v1.0.0-preview.54
+	github.com/onflow/flow-go-sdk v1.0.0-preview.56
 	github.com/onflow/flow/protobuf/go/flow v0.4.6
 	github.com/onflow/go-ethereum v1.14.7
 	github.com/prometheus/client_golang v1.18.0
