@@ -62,7 +62,10 @@ func testLogWriter() io.Writer {
 		return zerolog.Nop()
 	}
 
-	return zerolog.NewConsoleWriter()
+	writer := zerolog.NewConsoleWriter()
+	zerolog.TimeFieldFormat = time.RFC3339Nano
+	writer.TimeFormat = "04:05.0000"
+	return writer
 }
 
 func startEmulator(createTestAccounts bool) (*server.EmulatorServer, error) {
@@ -76,7 +79,7 @@ func startEmulator(createTestAccounts bool) (*server.EmulatorServer, error) {
 		return nil, err
 	}
 
-	log := logger.With().Timestamp().Str("component", "emulator").Logger().Level(zerolog.DebugLevel)
+	log := zerolog.New(testLogWriter()).With().Timestamp().Str("component", "emulator").Logger().Level(zerolog.DebugLevel)
 	if logOutput == "false" {
 		log = zerolog.Nop()
 	}
