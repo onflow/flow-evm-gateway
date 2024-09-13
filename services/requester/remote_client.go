@@ -679,30 +679,16 @@ func (e *RemoteClient) replaceAddresses(script []byte) []byte {
 
 func (e *RemoteClient) evmToCadenceHeight(height int64) (uint64, error) {
 	if height < 0 {
-		return LatestBlockHeight, nil
+		h, err := e.blocks.LatestExecutedHeight()
+		if err != nil {
+			return 0, err
+		}
+		height = int64(h)
 	}
 
-	evmHeight := uint64(height)
-	evmLatest, err := e.blocks.LatestIndexedHeight()
+	cadenceHeight, err := e.blocks.GetCadenceHeight(uint64(height))
 	if err != nil {
-		return 0, fmt.Errorf(
-			"failed to map evm height: %d to cadence height, getting latest evm height: %w",
-			evmHeight,
-			err,
-		)
-	}
-
-	// if provided evm height equals to latest evm height indexed we
-	// return latest height special value to signal requester to execute
-	// script at the latest block, not at the cadence height we get from the
-	// index, that is because at that point the height might already be pruned
-	if evmHeight == evmLatest {
-		return LatestBlockHeight, nil
-	}
-
-	cadenceHeight, err := e.blocks.GetCadenceHeight(uint64(evmHeight))
-	if err != nil {
-		return 0, fmt.Errorf("failed to map evm height: %d to cadence height: %w", evmHeight, err)
+		return 0, fmt.Errorf("failed to map evm height: %d to cadence height: %w", height, err)
 	}
 
 	return cadenceHeight, nil
