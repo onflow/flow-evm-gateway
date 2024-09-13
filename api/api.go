@@ -443,11 +443,11 @@ func (b *BlockChainAPI) GetBlockByNumber(
 // GetBlockReceipts returns the block receipts for the given block hash or number or tag.
 func (b *BlockChainAPI) GetBlockReceipts(
 	ctx context.Context,
-	numHash rpc.BlockNumberOrHash,
-) ([]*models.Receipt, error) {
+	blockNumberOrHash rpc.BlockNumberOrHash,
+) ([]map[string]any, error) {
 	l := b.logger.With().
 		Str("endpoint", "getBlockReceipts").
-		Str("hash", numHash.String()).
+		Str("hash", blockNumberOrHash.String()).
 		Logger()
 
 	if err := rateLimit(ctx, b.limiter, l); err != nil {
@@ -456,21 +456,30 @@ func (b *BlockChainAPI) GetBlockReceipts(
 
 	height, err := b.resolveBlockNumberOrHash(&numHash, true)
 	if err != nil {
-		return handleError[[]*models.Receipt](err, l, b.collector)
+		return handleError[[]map[string]any](err, l, b.collector)
 	}
 
 	block, err := b.blocks.GetByHeight(uint64(height))
 	if err != nil {
-		return handleError[[]*models.Receipt](err, l, b.collector)
+		return handleError[[]map[string]any](err, l, b.collector)
 	}
 
-	receipts := make([]*models.Receipt, len(block.TransactionHashes))
+	receipts := make([]map[string]interface{}, len(block.TransactionHashes))
 	for i, hash := range block.TransactionHashes {
-		rcp, err := b.receipts.GetByTransactionID(hash)
+		tx, err := b.transactions.Get(hash)
 		if err != nil {
-			return handleError[[]*models.Receipt](err, l, b.collector)
+			return handleError[[]map[string]any](err, l, b.collector)
 		}
-		receipts[i] = rcp
+
+		receipt, err := b.receipts.GetByTransactionID(hash)
+		if err != nil {
+			return handleError[[]map[string]any](err, l, b.collector)
+		}
+
+		receipts[i], err = MarshalReceipt(receipt, tx)
+		if err != nil {
+			return handleError[[]map[string]any](err, l, b.collector)
+		}
 	}
 
 	return receipts, nil

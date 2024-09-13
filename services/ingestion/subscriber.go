@@ -146,7 +146,19 @@ func (r *RPCSubscriber) subscribe(ctx context.Context, height uint64, opts ...ac
 					return
 				}
 
-				events <- models.NewBlockEvents(blockEvents)
+				evts := models.NewBlockEvents(blockEvents)
+				if evts.Err != nil {
+					r.logger.Warn().Err(err).Msgf(
+						"failed to parse EVM block events for Flow height: %d, retrying with gRPC API...",
+						blockEvents.Height,
+					)
+					// call the `GetEventsForHeightRange` gRPC API endpoint to fetch
+					// the EVM-related events, when event streaming returned an
+					// inconsistent response.
+					events <- r.fetchBlockEvents(ctx, blockEvents)
+				} else {
+					events <- models.NewBlockEvents(blockEvents)
+				}
 
 			case err, ok := <-errChan:
 				if !ok {
@@ -251,4 +263,47 @@ func (r *RPCSubscriber) blocksFilter() flow.EventFilter {
 			transactionExecutedEvent,
 		},
 	}
+}
+
+// fetchBlockEvents is used as a backup mechanism for fetching EVM-related
+// events, when the event streaming API returns an inconsistent response.
+// An inconsistent response could be an EVM block that references EVM
+// transactions which are not present in the response.
+// Under the hood, it uses the `GetEventsForHeightRange` gRPC API endpoint,
+// making sure that we receive the expected events length for each event type
+// and Flow height.
+func (r *RPCSubscriber) fetchBlockEvents(
+	ctx context.Context,
+	blockEvents flow.BlockEvents,
+) models.BlockEvents {
+	blkEvents := flow.BlockEvents{
+		BlockID:        blockEvents.BlockID,
+		Height:         blockEvents.Height,
+		BlockTimestamp: blockEvents.BlockTimestamp,
+	}
+	for _, eventType := range r.blocksFilter().EventTypes {
+		recoveredEvents, err := r.client.GetEventsForHeightRange(
+			ctx,
+			eventType,
+			blockEvents.Height,
+			blockEvents.Height,
+		)
+		if err != nil {
+			return models.NewBlockEventsError(err)
+		}
+
+		if len(recoveredEvents) != 1 {
+			return models.NewBlockEventsError(
+				fmt.Errorf(
+					"received %d but expected 1 event for height %d",
+					len(recoveredEvents),
+					blockEvents.Height,
+				),
+			)
+		}
+
+		blkEvents.Events = append(blkEvents.Events, recoveredEvents[0].Events...)
+	}
+
+	return models.NewBlockEvents(blkEvents)
 }
