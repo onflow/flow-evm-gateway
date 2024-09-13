@@ -188,7 +188,8 @@ func (c *ClientHandler) GetStorageAt(
 func (c *ClientHandler) localClient(height int64) (*LocalClient, error) {
 	h := uint64(height)
 	if height < 0 {
-		latest, err := c.blocks.LatestIndexedHeight()
+		// todo double-check if last indexed or executed height
+		latest, err := c.blocks.LatestExecutedHeight()
 		if err != nil {
 			return nil, err
 		}
@@ -229,7 +230,7 @@ func handleCall[T any](
 		s := time.Now()
 		localRes, localErr = local()
 		logger.Info().
-			Int64("execution-ms", time.Since(s).Milliseconds()).
+			Int64("execution-ns", time.Since(s).Nanoseconds()).
 			Msg("local call executed")
 		wg.Done()
 	}()
@@ -238,7 +239,7 @@ func handleCall[T any](
 		s := time.Now()
 		remoteRes, remoteErr = remote()
 		logger.Info().
-			Int64("execution-ms", time.Since(s).Milliseconds()).
+			Int64("execution-ns", time.Since(s).Nanoseconds()).
 			Msg("remote call executed")
 		wg.Done()
 	}()
