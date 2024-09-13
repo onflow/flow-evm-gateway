@@ -6,9 +6,9 @@ require (
 	github.com/goccy/go-json v0.10.2
 	github.com/onflow/cadence v1.0.0-preview.52
 	github.com/onflow/crypto v0.25.2
-	github.com/onflow/flow-emulator v1.0.0
+	github.com/onflow/flow-emulator v1.0.0-preview.42
 	github.com/onflow/flow-evm-gateway v0.0.0-20240201154855-4d4d3d3f19c7
-	github.com/onflow/flow-go v0.37.10
+	github.com/onflow/flow-go v0.37.10-util-ensure-checkpoint-exists.0.20240913181158-64c0d613aa69
 	github.com/onflow/flow-go-sdk v1.0.0-preview.56
 	github.com/onflow/go-ethereum v1.14.7
 	github.com/rs/zerolog v1.31.0
@@ -153,7 +153,7 @@ require (
 	github.com/onflow/flow-ft/lib/go/templates v1.0.0 // indirect
 	github.com/onflow/flow-nft/lib/go/contracts v1.2.1 // indirect
 	github.com/onflow/flow-nft/lib/go/templates v1.2.0 // indirect
-	github.com/onflow/flow/protobuf/go/flow v0.4.6 // indirect
+	github.com/onflow/flow/protobuf/go/flow v0.4.7 // indirect
 	github.com/onflow/sdks v0.6.0-preview.1 // indirect
 	github.com/onflow/wal v1.0.2 // indirect
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58 // indirect
