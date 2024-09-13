@@ -214,7 +214,7 @@ func (b *BlockChainAPI) GetBalance(
 		return nil, err
 	}
 
-	evmHeight, err := b.resolveBlockNumberOrHash(&blockNumberOrHash, true)
+	evmHeight, err := b.resolveBlockNumberOrHash(&blockNumberOrHash)
 	if err != nil {
 		return handleError[*hexutil.Big](err, l, b.collector)
 	}
@@ -307,7 +307,7 @@ func (b *BlockChainAPI) GetTransactionByBlockNumberAndIndex(
 		return nil, err
 	}
 
-	height, err := b.resolveBlockNumber(blockNumber, true)
+	height, err := b.resolveBlockNumber(blockNumber)
 	if err != nil {
 		return nil, err
 	}
@@ -422,7 +422,7 @@ func (b *BlockChainAPI) GetBlockByNumber(
 		return nil, err
 	}
 
-	height, err := b.resolveBlockNumber(blockNumber, true)
+	height, err := b.resolveBlockNumber(blockNumber)
 	if err != nil {
 		return handleError[*Block](err, l, b.collector)
 	}
@@ -454,7 +454,7 @@ func (b *BlockChainAPI) GetBlockReceipts(
 		return nil, err
 	}
 
-	height, err := b.resolveBlockNumberOrHash(&numHash, true)
+	height, err := b.resolveBlockNumberOrHash(&numHash)
 	if err != nil {
 		return handleError[[]map[string]any](err, l, b.collector)
 	}
@@ -524,7 +524,7 @@ func (b *BlockChainAPI) GetBlockTransactionCountByNumber(
 		return nil, err
 	}
 
-	height, err := b.resolveBlockNumber(blockNumber, true)
+	height, err := b.resolveBlockNumber(blockNumber)
 	if err != nil {
 		return handleError[*hexutil.Uint](err, l, b.collector)
 	}
@@ -568,7 +568,7 @@ func (b *BlockChainAPI) Call(
 		blockNumberOrHash = &latestBlockNumberOrHash
 	}
 
-	evmHeight, err := b.resolveBlockNumberOrHash(blockNumberOrHash, true)
+	evmHeight, err := b.resolveBlockNumberOrHash(blockNumberOrHash)
 	if err != nil {
 		return handleError[hexutil.Bytes](err, l, b.collector)
 	}
@@ -687,7 +687,7 @@ func (b *BlockChainAPI) GetTransactionCount(
 		return nil, err
 	}
 
-	evmHeight, err := b.resolveBlockNumberOrHash(&blockNumberOrHash, true)
+	evmHeight, err := b.resolveBlockNumberOrHash(&blockNumberOrHash)
 	if err != nil {
 		return handleError[*hexutil.Uint64](err, l, b.collector)
 	}
@@ -753,7 +753,7 @@ func (b *BlockChainAPI) EstimateGas(
 		blockNumberOrHash = &latestBlockNumberOrHash
 	}
 
-	evmHeight, err := b.resolveBlockNumberOrHash(blockNumberOrHash, true)
+	evmHeight, err := b.resolveBlockNumberOrHash(blockNumberOrHash)
 	if err != nil {
 		return handleError[hexutil.Uint64](err, l, b.collector)
 	}
@@ -782,7 +782,7 @@ func (b *BlockChainAPI) GetCode(
 		return nil, err
 	}
 
-	evmHeight, err := b.resolveBlockNumberOrHash(&blockNumberOrHash, true)
+	evmHeight, err := b.resolveBlockNumberOrHash(&blockNumberOrHash)
 	if err != nil {
 		return handleError[hexutil.Bytes](err, l, b.collector)
 	}
