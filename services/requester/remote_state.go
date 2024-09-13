@@ -2,33 +2,24 @@ package requester
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/onflow/atree"
 	"github.com/onflow/flow-go/engine/common/rpc/convert"
 	"github.com/onflow/flow-go/model/flow"
 	"github.com/onflow/flow/protobuf/go/flow/entities"
 	"github.com/onflow/flow/protobuf/go/flow/executiondata"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 )
 
 var _ atree.Ledger = &remoteLedger{}
 
-func newRemoteLedger(host string, cadenceHeight uint64) (*remoteLedger, error) {
-	conn, err := grpc.Dial(
-		host,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(1024*1024*1024)),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("could not connect to rpc host: %s, with %w", host, err)
-	}
-
+func newRemoteLedger(
+	client executiondata.ExecutionDataAPIClient,
+	cadenceHeight uint64,
+) (*remoteLedger, error) {
 	return &remoteLedger{
-		execution: executiondata.NewExecutionDataAPIClient(conn),
+		execution: client,
 		height:    cadenceHeight,
 	}, nil
 }
