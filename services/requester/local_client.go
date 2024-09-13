@@ -38,21 +38,12 @@ func (l *LocalClient) SendRawTransaction(
 	return common.Hash{}, fmt.Errorf("local client is read-only")
 }
 
-func (l *LocalClient) GetBalance(
-	ctx context.Context,
-	address common.Address,
-	evmHeight int64,
-) (*big.Int, error) {
+func (l *LocalClient) GetBalance(ctx context.Context, address common.Address, evmHeight uint64) (*big.Int, error) {
 	bal := l.state.GetBalance(address)
 	return (&big.Int{}).SetUint64(bal.Uint64()), nil
 }
 
-func (l *LocalClient) Call(
-	ctx context.Context,
-	data []byte,
-	from common.Address,
-	evmHeight int64,
-) ([]byte, error) {
+func (l *LocalClient) Call(ctx context.Context, data []byte, from common.Address, evmHeight uint64) ([]byte, error) {
 	res, err := l.state.Call(from, data)
 	if err != nil {
 		return nil, err
@@ -74,12 +65,7 @@ func (l *LocalClient) Call(
 	return res.ReturnedData, nil
 }
 
-func (l *LocalClient) EstimateGas(
-	ctx context.Context,
-	data []byte,
-	from common.Address,
-	evmHeight int64,
-) (uint64, error) {
+func (l *LocalClient) EstimateGas(ctx context.Context, data []byte, from common.Address, evmHeight uint64) (uint64, error) {
 	res, err := l.state.Call(from, data)
 	if err != nil {
 		return 0, err
@@ -96,28 +82,15 @@ func (l *LocalClient) EstimateGas(
 	return res.GasConsumed, nil
 }
 
-func (l *LocalClient) GetNonce(
-	ctx context.Context,
-	address common.Address,
-	evmHeight int64,
-) (uint64, error) {
+func (l *LocalClient) GetNonce(ctx context.Context, address common.Address, evmHeight uint64) (uint64, error) {
 	return l.state.GetNonce(address), nil
 }
 
-func (l *LocalClient) GetCode(
-	ctx context.Context,
-	address common.Address,
-	evmHeight int64,
-) ([]byte, error) {
+func (l *LocalClient) GetCode(ctx context.Context, address common.Address, height uint64) ([]byte, error) {
 	return l.state.GetCode(address), nil
 }
 
-func (l *LocalClient) GetStorageAt(
-	ctx context.Context,
-	address common.Address,
-	hash common.Hash,
-	evmHeight int64,
-) (common.Hash, error) {
+func (l *LocalClient) GetStorageAt(ctx context.Context, address common.Address, hash common.Hash, evmHeight uint64) (common.Hash, error) {
 	return l.state.GetState(address, hash), nil
 }
 

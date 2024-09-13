@@ -443,11 +443,11 @@ func (b *BlockChainAPI) GetBlockByNumber(
 // GetBlockReceipts returns the block receipts for the given block hash or number or tag.
 func (b *BlockChainAPI) GetBlockReceipts(
 	ctx context.Context,
-	blockNumberOrHash rpc.BlockNumberOrHash,
+	numHash rpc.BlockNumberOrHash,
 ) ([]map[string]any, error) {
 	l := b.logger.With().
 		Str("endpoint", "getBlockReceipts").
-		Str("hash", blockNumberOrHash.String()).
+		Str("hash", numHash.String()).
 		Logger()
 
 	if err := rateLimit(ctx, b.limiter, l); err != nil {
@@ -907,7 +907,7 @@ func (b *BlockChainAPI) GetStorageAt(
 		)
 	}
 
-	evmHeight, err := b.resolveBlockNumberOrHash(&blockNumberOrHash, true)
+	evmHeight, err := b.resolveBlockNumberOrHash(&blockNumberOrHash)
 	if err != nil {
 		return handleError[hexutil.Bytes](err, l, b.collector)
 	}
@@ -1009,41 +1009,34 @@ func (b *BlockChainAPI) prepareBlockResponse(
 }
 
 // resolveBlockNumberOrHash resolves the block number or hash into the evm block number.
-// If executed is true and block number is latest we use the latest executed height.
-func (b *BlockChainAPI) resolveBlockNumberOrHash(
-	block *rpc.BlockNumberOrHash,
-	executed bool,
-) (int64, error) {
+// If block number is negative we resolve to latest executed height.
+func (b *BlockChainAPI) resolveBlockNumberOrHash(block *rpc.BlockNumberOrHash) (uint64, error) {
 	err := fmt.Errorf("%w: neither block number nor hash specified", errs.ErrInvalid)
 	if block == nil {
 		return 0, err
 	}
 	if number, ok := block.Number(); ok {
-		return b.resolveBlockNumber(number, executed)
+		return b.resolveBlockNumber(number)
 	}
 
 	if hash, ok := block.Hash(); ok {
 		evmHeight, err := b.blocks.GetHeightByID(hash)
 		if err != nil {
-			b.logger.Error().Err(err).Msg("failed to get block by hash")
 			return 0, err
 		}
-		return int64(evmHeight), nil
+		return evmHeight, nil
 	}
 
 	return 0, err
 }
 
 // resolveBlockNumber resolves the block number into the evm block number.
-// If executed is true and block number is latest we use the latest executed height.
-func (b *BlockChainAPI) resolveBlockNumber(
-	number rpc.BlockNumber,
-	executed bool,
-) (int64, error) {
+// If block number is negative we resolve to latest executed height.
+func (b *BlockChainAPI) resolveBlockNumber(number rpc.BlockNumber) (uint64, error) {
 	height := number.Int64()
 
-	// if special values (latest) and executed then we return latest executed height
-	if height < 0 && executed {
+	// if special values (latest) we return latest executed height
+	if height < 0 {
 		executed, err := b.blocks.LatestExecutedHeight()
 		if err != nil {
 			return 0, err
@@ -1051,7 +1044,7 @@ func (b *BlockChainAPI) resolveBlockNumber(
 		height = int64(executed)
 	}
 
-	return height, nil
+	return uint64(height), nil
 }
 
 // handleError takes in an error and in case the error is of type ErrEntityNotFound

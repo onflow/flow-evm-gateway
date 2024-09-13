@@ -67,11 +67,7 @@ func (c *ClientHandler) SendRawTransaction(ctx context.Context, data []byte) (co
 	return c.remote.SendRawTransaction(ctx, data)
 }
 
-func (c *ClientHandler) GetBalance(
-	ctx context.Context,
-	address common.Address,
-	height int64,
-) (*big.Int, error) {
+func (c *ClientHandler) GetBalance(ctx context.Context, address common.Address, evmHeight uint64) (*big.Int, error) {
 	local, err := c.localClient(height)
 	if err != nil {
 		return nil, err
@@ -84,12 +80,7 @@ func (c *ClientHandler) GetBalance(
 	}, c.logger.With().Str("client-call", "get balance").Logger())
 }
 
-func (c *ClientHandler) Call(
-	ctx context.Context,
-	data []byte,
-	from common.Address,
-	height int64,
-) ([]byte, error) {
+func (c *ClientHandler) Call(ctx context.Context, data []byte, from common.Address, evmHeight uint64) ([]byte, error) {
 	local, err := c.localClient(height)
 	if err != nil {
 		return nil, err
@@ -102,12 +93,7 @@ func (c *ClientHandler) Call(
 	}, c.logger.With().Str("client-call", "call").Logger())
 }
 
-func (c *ClientHandler) EstimateGas(
-	ctx context.Context,
-	data []byte,
-	from common.Address,
-	height int64,
-) (uint64, error) {
+func (c *ClientHandler) EstimateGas(ctx context.Context, data []byte, from common.Address, evmHeight uint64) (uint64, error) {
 	local, err := c.localClient(height)
 	if err != nil {
 		return 0, err
@@ -120,11 +106,7 @@ func (c *ClientHandler) EstimateGas(
 	}, c.logger.With().Str("client-call", "estimate gas").Logger())
 }
 
-func (c *ClientHandler) GetNonce(
-	ctx context.Context,
-	address common.Address,
-	height int64,
-) (uint64, error) {
+func (c *ClientHandler) GetNonce(ctx context.Context, address common.Address, evmHeight uint64) (uint64, error) {
 	local, err := c.localClient(height)
 	if err != nil {
 		return 0, err
@@ -137,11 +119,7 @@ func (c *ClientHandler) GetNonce(
 	}, c.logger.With().Str("client-call", "get nonce").Logger())
 }
 
-func (c *ClientHandler) GetCode(
-	ctx context.Context,
-	address common.Address,
-	height int64,
-) ([]byte, error) {
+func (c *ClientHandler) GetCode(ctx context.Context, address common.Address, height uint64) ([]byte, error) {
 	local, err := c.localClient(height)
 	if err != nil {
 		return nil, err
@@ -167,12 +145,7 @@ func (c *ClientHandler) GetLatestEVMHeight(ctx context.Context) (uint64, error) 
 	}, c.logger.With().Str("client-call", "get latest height").Logger())
 }
 
-func (c *ClientHandler) GetStorageAt(
-	ctx context.Context,
-	address common.Address,
-	hash common.Hash,
-	height int64,
-) (common.Hash, error) {
+func (c *ClientHandler) GetStorageAt(ctx context.Context, address common.Address, hash common.Hash, evmHeight uint64) (common.Hash, error) {
 	local, err := c.localClient(height)
 	if err != nil {
 		return common.Hash{}, err

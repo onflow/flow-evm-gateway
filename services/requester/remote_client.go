@@ -302,11 +302,7 @@ func (e *RemoteClient) buildTransaction(ctx context.Context, script []byte, args
 	return flowTx, nil
 }
 
-func (e *RemoteClient) GetBalance(
-	ctx context.Context,
-	address common.Address,
-	evmHeight int64,
-) (*big.Int, error) {
+func (e *RemoteClient) GetBalance(ctx context.Context, address common.Address, evmHeight uint64) (*big.Int, error) {
 	hexEncodedAddress, err := addressToCadenceString(address)
 	if err != nil {
 		return nil, err
@@ -348,11 +344,7 @@ func (e *RemoteClient) GetBalance(
 	return val.(cadence.UInt).Big(), nil
 }
 
-func (e *RemoteClient) GetNonce(
-	ctx context.Context,
-	address common.Address,
-	evmHeight int64,
-) (uint64, error) {
+func (e *RemoteClient) GetNonce(ctx context.Context, address common.Address, evmHeight uint64) (uint64, error) {
 	hexEncodedAddress, err := addressToCadenceString(address)
 	if err != nil {
 		return 0, err
@@ -428,12 +420,7 @@ func (e *RemoteClient) stateAt(evmHeight int64) (*state.StateDB, error) {
 	return state.NewStateDB(ledger, storageAddress)
 }
 
-func (e *RemoteClient) GetStorageAt(
-	ctx context.Context,
-	address common.Address,
-	hash common.Hash,
-	evmHeight int64,
-) (common.Hash, error) {
+func (e *RemoteClient) GetStorageAt(ctx context.Context, address common.Address, hash common.Hash, evmHeight uint64) (common.Hash, error) {
 	stateDB, err := e.stateAt(evmHeight)
 	if err != nil {
 		return common.Hash{}, err
@@ -443,12 +430,7 @@ func (e *RemoteClient) GetStorageAt(
 	return result, stateDB.Error()
 }
 
-func (e *RemoteClient) Call(
-	ctx context.Context,
-	data []byte,
-	from common.Address,
-	evmHeight int64,
-) ([]byte, error) {
+func (e *RemoteClient) Call(ctx context.Context, data []byte, from common.Address, evmHeight uint64) ([]byte, error) {
 	hexEncodedTx, err := cadence.NewString(hex.EncodeToString(data))
 	if err != nil {
 		return nil, err
@@ -499,12 +481,7 @@ func (e *RemoteClient) Call(
 	return result, nil
 }
 
-func (e *RemoteClient) EstimateGas(
-	ctx context.Context,
-	data []byte,
-	from common.Address,
-	evmHeight int64,
-) (uint64, error) {
+func (e *RemoteClient) EstimateGas(ctx context.Context, data []byte, from common.Address, evmHeight uint64) (uint64, error) {
 	hexEncodedTx, err := cadence.NewString(hex.EncodeToString(data))
 	if err != nil {
 		return 0, err
@@ -555,11 +532,7 @@ func (e *RemoteClient) EstimateGas(
 	return gasConsumed, nil
 }
 
-func (e *RemoteClient) GetCode(
-	ctx context.Context,
-	address common.Address,
-	evmHeight int64,
-) ([]byte, error) {
+func (e *RemoteClient) GetCode(ctx context.Context, address common.Address, height uint64) ([]byte, error) {
 	hexEncodedAddress, err := addressToCadenceString(address)
 	if err != nil {
 		return nil, err
