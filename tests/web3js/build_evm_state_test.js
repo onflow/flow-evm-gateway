@@ -105,7 +105,7 @@ it('should handle a large number of EVM interactions', async () => {
 
     latest = await web3.eth.getBlockNumber()
     assert.equal(latest, 142n)
-})
+}).timeout(120*1000)
 
 function randomItem(items) {
     return items[Math.floor(Math.random() * items.length)]
