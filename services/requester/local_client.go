@@ -62,6 +62,11 @@ func (l *LocalClient) Call(
 		return nil, errs.NewFailedTransactionError(result.ErrorMessage)
 	}
 
+	// make sure the nil returned data is returned as empty slice to match remote client
+	if res.ReturnedData == nil {
+		res.ReturnedData = make([]byte, 0)
+	}
+
 	return res.ReturnedData, nil
 }
 
