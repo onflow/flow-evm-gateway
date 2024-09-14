@@ -259,7 +259,11 @@ func handleCall[T any](
 		return localRes, nil
 	}
 
-	// if remote succeeded but local received an error this is a bug
+	// if remote succeeded but local received an error this is a bug or in case of a
+	// call or gas estimation that uses cadence arch a failure is expected, because
+	// the local state doesn't have a way to return values for cadence arch calls because
+	// no transaction produced a precompiled calls input/output mock for it.
+	// todo find a way to possibly detect such calls and ignore errors.
 	if localErr != nil && remoteErr == nil {
 		logger.Error().
 			Str("local-error", localErr.Error()).

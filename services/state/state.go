@@ -18,6 +18,10 @@ import (
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
 )
 
+// todo reuse the error from flow-go
+// cadenceArchUnexpectedCall is returned by cadence arch
+var cadenceArchUnexpectedCall = fmt.Errorf("unexpected call")
+
 type BlockState struct {
 	types.StateDB // todo change to types.ReadOnlyView
 	emulator      types.Emulator
@@ -114,6 +118,22 @@ func (s *BlockState) Execute(tx models.Transaction) error {
 }
 
 func (s *BlockState) Call(from common.Address, data []byte) (*types.Result, error) {
+	// todo
+	// executing a transaction for a call or estimate gas that uses
+	// cadence arch calls (https://github.com/onflow/flow-go/blob/master/fvm/evm/precompiles/arch.go)
+	// will fail, because there was no receipt made by EN that would contain input and output
+	// data we use to mock the calls to cadence arch in the block context. This defer
+	// handles such a panic gracefully, so we can return the response from remote client instead.
+	//defer func() {
+	//	if r := recover(); r != nil {
+	//		if err, ok := r.(error); ok {
+	//			if errors.Is(err, cadenceArchUnexpectedCall) {
+	//
+	//			}
+	//		}
+	//	}
+	//}()
+
 	ctx, err := s.blockContext(nil)
 	if err != nil {
 		return nil, err
@@ -162,8 +182,8 @@ func (s *BlockState) blockContext(receipt *models.Receipt) (types.BlockContext, 
 		Tracer: nil,
 	}
 
-	// only add precompile contracts if we have a receipt, in case of calls we don't produce receipts
-	// todo in cases where calls use cadence arch we should fail and execute such calls using remote client
+	// only add precompile cadence arch mocks if we have a receipt,
+	// in case of call and dry run we don't produce receipts
 	if receipt != nil {
 		calls, err := types.AggregatedPrecompileCallsFromEncoded(receipt.PrecompiledCalls)
 		if err != nil {
