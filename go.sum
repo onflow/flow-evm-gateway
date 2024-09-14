@@ -1865,8 +1865,8 @@ github.com/onflow/flow-ft/lib/go/contracts v1.0.0 h1:mToacZ5NWqtlWwk/7RgIl/jeKB/
 github.com/onflow/flow-ft/lib/go/contracts v1.0.0/go.mod h1:PwsL8fC81cjnUnTfmyL/HOIyHnyaw/JA474Wfj2tl6A=
 github.com/onflow/flow-ft/lib/go/templates v1.0.0 h1:6cMS/lUJJ17HjKBfMO/eh0GGvnpElPgBXx7h5aoWJhs=
 github.com/onflow/flow-ft/lib/go/templates v1.0.0/go.mod h1:uQ8XFqmMK2jxyBSVrmyuwdWjTEb+6zGjRYotfDJ5pAE=
-github.com/onflow/flow-go v0.37.10-util-ensure-checkpoint-exists.0.20240913181158-64c0d613aa69 h1:QGlrTqqJQ02Rmy3sqt/FqFDGZkuT43qd53JmVghxy0k=
-github.com/onflow/flow-go v0.37.10-util-ensure-checkpoint-exists.0.20240913181158-64c0d613aa69/go.mod h1:Gdqw1ptnAUuB0izif88PWMK8abe655Hr8iEkXXuUJl4=
+github.com/onflow/flow-go v0.37.10-util-ensure-checkpoint-exists.0.20240914085445-a95ba3057847 h1:tQUyahbYvm1z6GiE1PpH3TJUSyWshaP/VcQCsZtXmxE=
+github.com/onflow/flow-go v0.37.10-util-ensure-checkpoint-exists.0.20240914085445-a95ba3057847/go.mod h1:Gdqw1ptnAUuB0izif88PWMK8abe655Hr8iEkXXuUJl4=
 github.com/onflow/flow-go-sdk v1.0.0-M1/go.mod h1:TDW0MNuCs4SvqYRUzkbRnRmHQL1h4X8wURsCw9P9beo=
 github.com/onflow/flow-go-sdk v1.0.0-preview.56 h1:ZnFznUXI1V8iZ+cKxoJRIeQwJTHItriKpnoKf8hFFso=
 github.com/onflow/flow-go-sdk v1.0.0-preview.56/go.mod h1:rBRNboXaTprn7M0MeO6/R1bxNpctbrx66I2FLp0V6fM=
