@@ -20,7 +20,7 @@ import (
 
 // todo reuse the error from flow-go
 // cadenceArchUnexpectedCall is returned by cadence arch
-var cadenceArchUnexpectedCall = fmt.Errorf("unexpected call")
+// var cadenceArchUnexpectedCall = fmt.Errorf("unexpected call")
 
 type BlockState struct {
 	types.StateDB // todo change to types.ReadOnlyView
