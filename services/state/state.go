@@ -122,8 +122,8 @@ func (s *BlockState) Call(from common.Address, data []byte) (*types.Result, erro
 	// executing a transaction for a call or estimate gas that uses
 	// cadence arch calls (https://github.com/onflow/flow-go/blob/master/fvm/evm/precompiles/arch.go)
 	// will fail, because there was no receipt made by EN that would contain input and output
-	// data we use to mock the calls to cadence arch in the block context. This defer
-	// handles such a panic gracefully, so we can return the response from remote client instead.
+	// data we use to mock the calls to cadence arch using the replayer in the block context.
+	// This defer handles such a panic gracefully, so we can return the response from remote client instead.
 	//defer func() {
 	//	if r := recover(); r != nil {
 	//		if err, ok := r.(error); ok {
