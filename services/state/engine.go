@@ -122,5 +122,6 @@ func (e *Engine) executeBlock(block *models.Block) error {
 		}
 	}
 
-	return nil
+	// update executed block height
+	return e.blocks.SetExecutedHeight(block.Height)
 }

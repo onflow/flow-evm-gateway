@@ -13,7 +13,6 @@ import (
 
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/metrics"
-	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/services/state"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
@@ -70,7 +69,7 @@ func (c *ClientHandler) SendRawTransaction(ctx context.Context, data []byte) (co
 func (c *ClientHandler) GetBalance(
 	ctx context.Context,
 	address common.Address,
-	height int64,
+	height uint64,
 ) (*big.Int, error) {
 	local, err := c.localClient(height)
 	if err != nil {
@@ -88,7 +87,7 @@ func (c *ClientHandler) Call(
 	ctx context.Context,
 	data []byte,
 	from common.Address,
-	height int64,
+	height uint64,
 ) ([]byte, error) {
 	local, err := c.localClient(height)
 	if err != nil {
@@ -106,7 +105,7 @@ func (c *ClientHandler) EstimateGas(
 	ctx context.Context,
 	data []byte,
 	from common.Address,
-	height int64,
+	height uint64,
 ) (uint64, error) {
 	local, err := c.localClient(height)
 	if err != nil {
@@ -123,7 +122,7 @@ func (c *ClientHandler) EstimateGas(
 func (c *ClientHandler) GetNonce(
 	ctx context.Context,
 	address common.Address,
-	height int64,
+	height uint64,
 ) (uint64, error) {
 	local, err := c.localClient(height)
 	if err != nil {
@@ -140,7 +139,7 @@ func (c *ClientHandler) GetNonce(
 func (c *ClientHandler) GetCode(
 	ctx context.Context,
 	address common.Address,
-	height int64,
+	height uint64,
 ) ([]byte, error) {
 	local, err := c.localClient(height)
 	if err != nil {
@@ -155,23 +154,15 @@ func (c *ClientHandler) GetCode(
 }
 
 func (c *ClientHandler) GetLatestEVMHeight(ctx context.Context) (uint64, error) {
-	local, err := c.localClient(models.LatestBlockNumber.Int64())
-	if err != nil {
-		return 0, err
-	}
-
-	return handleCall(func() (uint64, error) {
-		return local.GetLatestEVMHeight(ctx)
-	}, func() (uint64, error) {
-		return c.remote.GetLatestEVMHeight(ctx)
-	}, c.logger.With().Str("client-call", "get latest height").Logger())
+	// we only return latest executed heigth, both clients do the same
+	return c.blocks.LatestExecutedHeight()
 }
 
 func (c *ClientHandler) GetStorageAt(
 	ctx context.Context,
 	address common.Address,
 	hash common.Hash,
-	height int64,
+	height uint64,
 ) (common.Hash, error) {
 	local, err := c.localClient(height)
 	if err != nil {
@@ -185,16 +176,8 @@ func (c *ClientHandler) GetStorageAt(
 	}, c.logger.With().Str("client-call", "get storage at").Logger())
 }
 
-func (c *ClientHandler) localClient(height int64) (*LocalClient, error) {
-	h := uint64(height)
-	if height < 0 {
-		latest, err := c.blocks.LatestEVMHeight()
-		if err != nil {
-			return nil, err
-		}
-		h = latest
-	}
-	block, err := c.blocks.GetByHeight(h)
+func (c *ClientHandler) localClient(height uint64) (*LocalClient, error) {
+	block, err := c.blocks.GetByHeight(height)
 	if err != nil {
 		return nil, err
 	}
@@ -229,7 +212,7 @@ func handleCall[T any](
 		s := time.Now()
 		localRes, localErr = local()
 		logger.Info().
-			Dur("execution-time", time.Since(s)).
+			Int64("execution-ns", time.Since(s).Nanoseconds()).
 			Msg("local call executed")
 		wg.Done()
 	}()
@@ -238,7 +221,7 @@ func handleCall[T any](
 		s := time.Now()
 		remoteRes, remoteErr = remote()
 		logger.Info().
-			Dur("execution-time", time.Since(s)).
+			Int64("execution-ns", time.Since(s).Nanoseconds()).
 			Msg("remote call executed")
 		wg.Done()
 	}()
@@ -276,7 +259,11 @@ func handleCall[T any](
 		return localRes, nil
 	}
 
-	// if remote succeeded but local received an error this is a bug
+	// if remote succeeded but local received an error this is a bug or in case of a
+	// call or gas estimation that uses cadence arch a failure is expected, because
+	// the local state doesn't have a way to return values for cadence arch calls because
+	// no transaction produced a precompiled calls input/output mock for it.
+	// todo find a way to possibly detect such calls and ignore errors.
 	if localErr != nil && remoteErr == nil {
 		logger.Error().
 			Str("local-error", localErr.Error()).
@@ -284,5 +271,5 @@ func handleCall[T any](
 			Msg("error from local client but not from remote client")
 	}
 
-	return localRes, localErr
+	return remoteRes, remoteErr
 }

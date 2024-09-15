@@ -28,6 +28,10 @@ func TestWeb3_E2E(t *testing.T) {
 		runWeb3Test(t, "build_evm_state_test")
 	})
 
+	t.Run("test cadence arch and environment calls", func(t *testing.T) {
+		runWeb3Test(t, "cadence_arch_env_test")
+	})
+
 	t.Run("test setup sanity check", func(t *testing.T) {
 		runWeb3Test(t, "setup_test")
 	})

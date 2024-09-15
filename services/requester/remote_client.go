@@ -302,11 +302,7 @@ func (e *RemoteClient) buildTransaction(ctx context.Context, script []byte, args
 	return flowTx, nil
 }
 
-func (e *RemoteClient) GetBalance(
-	ctx context.Context,
-	address common.Address,
-	evmHeight int64,
-) (*big.Int, error) {
+func (e *RemoteClient) GetBalance(ctx context.Context, address common.Address, evmHeight uint64) (*big.Int, error) {
 	hexEncodedAddress, err := addressToCadenceString(address)
 	if err != nil {
 		return nil, err
@@ -328,7 +324,7 @@ func (e *RemoteClient) GetBalance(
 			e.logger.Error().
 				Err(err).
 				Str("address", address.String()).
-				Int64("evm-height", evmHeight).
+				Uint64("evm-height", evmHeight).
 				Uint64("cadence-height", height).
 				Msg("failed to get get balance")
 		}
@@ -348,11 +344,7 @@ func (e *RemoteClient) GetBalance(
 	return val.(cadence.UInt).Big(), nil
 }
 
-func (e *RemoteClient) GetNonce(
-	ctx context.Context,
-	address common.Address,
-	evmHeight int64,
-) (uint64, error) {
+func (e *RemoteClient) GetNonce(ctx context.Context, address common.Address, evmHeight uint64) (uint64, error) {
 	hexEncodedAddress, err := addressToCadenceString(address)
 	if err != nil {
 		return 0, err
@@ -373,7 +365,7 @@ func (e *RemoteClient) GetNonce(
 		if !errors.Is(err, errs.ErrHeightOutOfRange) {
 			e.logger.Error().Err(err).
 				Str("address", address.String()).
-				Int64("evm-height", evmHeight).
+				Uint64("evm-height", evmHeight).
 				Uint64("cadence-height", height).
 				Msg("failed to get nonce")
 		}
@@ -394,14 +386,14 @@ func (e *RemoteClient) GetNonce(
 
 	e.logger.Debug().
 		Uint64("nonce", nonce).
-		Int64("evm-height", evmHeight).
+		Uint64("evm-height", evmHeight).
 		Uint64("cadence-height", height).
 		Msg("get nonce executed")
 
 	return nonce, nil
 }
 
-func (e *RemoteClient) stateAt(evmHeight int64) (*state.StateDB, error) {
+func (e *RemoteClient) stateAt(evmHeight uint64) (*state.StateDB, error) {
 	cadenceHeight, err := e.evmToCadenceHeight(evmHeight)
 	if err != nil {
 		return nil, err
@@ -428,12 +420,7 @@ func (e *RemoteClient) stateAt(evmHeight int64) (*state.StateDB, error) {
 	return state.NewStateDB(ledger, storageAddress)
 }
 
-func (e *RemoteClient) GetStorageAt(
-	ctx context.Context,
-	address common.Address,
-	hash common.Hash,
-	evmHeight int64,
-) (common.Hash, error) {
+func (e *RemoteClient) GetStorageAt(ctx context.Context, address common.Address, hash common.Hash, evmHeight uint64) (common.Hash, error) {
 	stateDB, err := e.stateAt(evmHeight)
 	if err != nil {
 		return common.Hash{}, err
@@ -443,12 +430,7 @@ func (e *RemoteClient) GetStorageAt(
 	return result, stateDB.Error()
 }
 
-func (e *RemoteClient) Call(
-	ctx context.Context,
-	data []byte,
-	from common.Address,
-	evmHeight int64,
-) ([]byte, error) {
+func (e *RemoteClient) Call(ctx context.Context, data []byte, from common.Address, evmHeight uint64) ([]byte, error) {
 	hexEncodedTx, err := cadence.NewString(hex.EncodeToString(data))
 	if err != nil {
 		return nil, err
@@ -475,7 +457,7 @@ func (e *RemoteClient) Call(
 			e.logger.Error().
 				Err(err).
 				Uint64("cadence-height", height).
-				Int64("evm-height", evmHeight).
+				Uint64("evm-height", evmHeight).
 				Str("from", from.String()).
 				Str("data", hex.EncodeToString(data)).
 				Msg("failed to execute call")
@@ -492,7 +474,7 @@ func (e *RemoteClient) Call(
 
 	e.logger.Debug().
 		Str("result", hex.EncodeToString(result)).
-		Int64("evm-height", evmHeight).
+		Uint64("evm-height", evmHeight).
 		Uint64("cadence-height", height).
 		Msg("call executed")
 
@@ -503,7 +485,7 @@ func (e *RemoteClient) EstimateGas(
 	ctx context.Context,
 	data []byte,
 	from common.Address,
-	evmHeight int64,
+	evmHeight uint64,
 ) (uint64, error) {
 	hexEncodedTx, err := cadence.NewString(hex.EncodeToString(data))
 	if err != nil {
@@ -531,7 +513,7 @@ func (e *RemoteClient) EstimateGas(
 			e.logger.Error().
 				Err(err).
 				Uint64("cadence-height", height).
-				Int64("evm-height", evmHeight).
+				Uint64("evm-height", evmHeight).
 				Str("from", from.String()).
 				Str("data", hex.EncodeToString(data)).
 				Msg("failed to execute estimateGas")
@@ -548,24 +530,20 @@ func (e *RemoteClient) EstimateGas(
 
 	e.logger.Debug().
 		Uint64("gas", gasConsumed).
-		Int64("evm-height", evmHeight).
+		Uint64("evm-height", evmHeight).
 		Uint64("cadence-height", height).
 		Msg("estimateGas executed")
 
 	return gasConsumed, nil
 }
 
-func (e *RemoteClient) GetCode(
-	ctx context.Context,
-	address common.Address,
-	evmHeight int64,
-) ([]byte, error) {
+func (e *RemoteClient) GetCode(ctx context.Context, address common.Address, height uint64) ([]byte, error) {
 	hexEncodedAddress, err := addressToCadenceString(address)
 	if err != nil {
 		return nil, err
 	}
 
-	height, err := e.evmToCadenceHeight(evmHeight)
+	cadenceHeight, err := e.evmToCadenceHeight(height)
 	if err != nil {
 		return nil, err
 	}
@@ -573,15 +551,15 @@ func (e *RemoteClient) GetCode(
 	value, err := e.executeScriptAtHeight(
 		ctx,
 		getCode,
-		height,
+		cadenceHeight,
 		[]cadence.Value{hexEncodedAddress},
 	)
 	if err != nil {
 		if !errors.Is(err, errs.ErrHeightOutOfRange) {
 			e.logger.Error().
 				Err(err).
-				Uint64("cadence-height", height).
-				Int64("evm-height", evmHeight).
+				Uint64("cadence-height", cadenceHeight).
+				Uint64("evm-height", height).
 				Str("address", address.String()).
 				Msg("failed to get code")
 		}
@@ -589,7 +567,7 @@ func (e *RemoteClient) GetCode(
 		return nil, fmt.Errorf(
 			"failed to execute script for get code of address: %s at height: %d, with: %w",
 			address,
-			height,
+			cadenceHeight,
 			err,
 		)
 	}
@@ -601,8 +579,8 @@ func (e *RemoteClient) GetCode(
 
 	e.logger.Debug().
 		Str("address", address.Hex()).
-		Int64("evm-height", evmHeight).
-		Uint64("cadence-height", height).
+		Uint64("evm-height", height).
+		Uint64("cadence-height", cadenceHeight).
 		Str("code size", fmt.Sprintf("%d", len(code))).
 		Msg("get code executed")
 
@@ -682,32 +660,10 @@ func (e *RemoteClient) replaceAddresses(script []byte) []byte {
 	return []byte(s)
 }
 
-func (e *RemoteClient) evmToCadenceHeight(height int64) (uint64, error) {
-	if height < 0 {
-		return LatestBlockHeight, nil
-	}
-
-	evmHeight := uint64(height)
-	evmLatest, err := e.blocks.LatestEVMHeight()
+func (e *RemoteClient) evmToCadenceHeight(height uint64) (uint64, error) {
+	cadenceHeight, err := e.blocks.GetCadenceHeight(height)
 	if err != nil {
-		return 0, fmt.Errorf(
-			"failed to map evm height: %d to cadence height, getting latest evm height: %w",
-			evmHeight,
-			err,
-		)
-	}
-
-	// if provided evm height equals to latest evm height indexed we
-	// return latest height special value to signal requester to execute
-	// script at the latest block, not at the cadence height we get from the
-	// index, that is because at that point the height might already be pruned
-	if evmHeight == evmLatest {
-		return LatestBlockHeight, nil
-	}
-
-	cadenceHeight, err := e.blocks.GetCadenceHeight(uint64(evmHeight))
-	if err != nil {
-		return 0, fmt.Errorf("failed to map evm height: %d to cadence height: %w", evmHeight, err)
+		return 0, fmt.Errorf("failed to map evm height: %d to cadence height: %w", height, err)
 	}
 
 	return cadenceHeight, nil
