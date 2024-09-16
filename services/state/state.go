@@ -41,11 +41,6 @@ func NewBlockState(
 	logger = logger.With().Str("component", "state-execution").Logger()
 	storageAddress := evm.StorageAccountAddress(chainID)
 
-	block, err := blocks.GetByHeight(block.Height)
-	if err != nil {
-		return nil, err
-	}
-
 	registers := pebble.NewRegister(store, block.Height)
 
 	stateDB, err := state.NewStateDB(registers, storageAddress)
