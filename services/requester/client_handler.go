@@ -13,7 +13,6 @@ import (
 
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/metrics"
-	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/services/state"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
@@ -155,16 +154,11 @@ func (c *ClientHandler) GetCode(
 }
 
 func (c *ClientHandler) GetLatestEVMHeight(ctx context.Context) (uint64, error) {
-	local, err := c.localClient(models.LatestBlockNumber.Int64())
-	if err != nil {
-		return 0, err
-	}
-
-	return handleCall(func() (uint64, error) {
-		return local.GetLatestEVMHeight(ctx)
-	}, func() (uint64, error) {
-		return c.remote.GetLatestEVMHeight(ctx)
-	}, c.logger.With().Str("client-call", "get latest height").Logger())
+	// we use the remote client to get the latest height from the network
+	// be careful, because this height might not yet be indexed or executed locally
+	// so don't use this height to then query the state, always use the latest
+	// executed height to query the state.
+	return c.remote.GetLatestEVMHeight(ctx)
 }
 
 func (c *ClientHandler) GetStorageAt(
