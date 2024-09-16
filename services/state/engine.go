@@ -14,7 +14,6 @@ import (
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/models"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
-	"github.com/onflow/flow-evm-gateway/services/requester"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
 )
@@ -117,7 +116,7 @@ func (e *Engine) executeBlock(block *models.Block) error {
 
 	// if validation is enabled wrap the register ledger into a validator
 	if e.config.ValidateRegisters {
-		registers = requester.NewRegisterValidator(registers, nil)
+		registers = NewRegisterValidator(registers, nil)
 	}
 
 	state, err := NewBlockState(block, registers, e.config.FlowNetworkID, e.blocks, e.receipts, e.logger)
@@ -147,7 +146,7 @@ func (e *Engine) executeBlock(block *models.Block) error {
 	}
 
 	if e.config.ValidateRegisters {
-		validator := registers.(*requester.RegisterValidator)
+		validator := registers.(*RegisterValidator)
 		if err := validator.ValidateBlock(block.Height); err != nil {
 			if errors.Is(err, errs.ErrStateMismatch) {
 				return err
