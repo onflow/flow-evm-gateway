@@ -187,8 +187,8 @@ func (c *ClientHandler) localClient(height uint64) (*LocalClient, error) {
 
 	blockState, err := state.NewBlockState(
 		block,
+		pebble.NewRegister(c.store, height),
 		c.config.FlowNetworkID,
-		c.store,
 		c.blocks,
 		c.receipts,
 		c.logger,
