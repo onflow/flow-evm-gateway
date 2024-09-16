@@ -92,11 +92,11 @@ func (b *BlockTestSuite) TestHeights() {
 			err := b.Blocks.Store(lastHeight+10, flow.Identifier{byte(i)}, mocks.NewBlock(lastHeight), nil)
 			b.Require().NoError(err)
 
-			last, err := b.Blocks.LatestEVMHeight()
+			last, err := b.Blocks.LatestIndexedHeight()
 			b.Require().NoError(err)
 			b.Require().Equal(lastHeight, last)
 
-			last, err = b.Blocks.LatestEVMHeight() // second time it should get it from cache
+			last, err = b.Blocks.LatestIndexedHeight() // second time it should get it from cache
 			b.Require().NoError(err)
 			b.Require().Equal(lastHeight, last)
 		}

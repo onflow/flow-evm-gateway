@@ -203,7 +203,11 @@ func decodeTransactionEvent(event cadence.Event) (Transaction, *Receipt, error) 
 		revertReason = txEvent.ReturnedData
 	}
 
-	receipt := NewReceipt(gethReceipt, revertReason, txEvent.PrecompiledCalls)
+	receipt := NewReceipt(
+		gethReceipt,
+		revertReason,
+		txEvent.PrecompiledCalls,
+	)
 
 	var tx Transaction
 	// check if the transaction payload is actually from a direct call,

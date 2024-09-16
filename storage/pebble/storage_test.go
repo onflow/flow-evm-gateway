@@ -201,7 +201,7 @@ func TestBatch(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, bl, dbBlock)
 
-			dbEVM, err := blocks.LatestEVMHeight()
+			dbEVM, err := blocks.LatestIndexedHeight()
 			require.NoError(t, err)
 			require.Equal(t, evmHeight, dbEVM)
 

@@ -28,6 +28,10 @@ func TestWeb3_E2E(t *testing.T) {
 		runWeb3Test(t, "build_evm_state_test")
 	})
 
+	t.Run("test cadence arch and environment calls", func(t *testing.T) {
+		runWeb3Test(t, "cadence_arch_env_test")
+	})
+
 	t.Run("test setup sanity check", func(t *testing.T) {
 		runWeb3Test(t, "setup_test")
 	})
@@ -150,7 +154,7 @@ func TestWeb3_E2E(t *testing.T) {
 			require.NoError(t, err)
 
 			// contract deployment transaction
-			deployPayload, _, err := evmSign(big.NewInt(0), 1_250_000, accountKey, nonce, nil, contractCode)
+			deployPayload, _, err := evmSign(big.NewInt(0), 1_550_000, accountKey, nonce, nil, contractCode)
 			require.NoError(t, err)
 			nonce += 1
 

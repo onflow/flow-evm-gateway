@@ -210,14 +210,14 @@ func Test_CacheKey(t *testing.T) {
 
 }
 
-func createEVM(t *testing.T, cache *expirable.LRU[string, cadence.Value], mockClient *mocks.Client) *EVM {
+func createEVM(t *testing.T, cache *expirable.LRU[string, cadence.Value], mockClient *mocks.Client) *RemoteClient {
 	networkID := flowGo.Emulator
 	log := zerolog.New(zerolog.NewTestWriter(t))
 
 	client, err := NewCrossSporkClient(mockClient, nil, log, networkID)
 	require.NoError(t, err)
 
-	return &EVM{
+	return &RemoteClient{
 		client:      client,
 		logger:      log,
 		scriptCache: cache,

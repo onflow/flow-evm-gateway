@@ -97,6 +97,9 @@ type Config struct {
 	IndexOnly bool
 	// Cache size in units of items in cache, one unit in cache takes approximately 64 bytes
 	CacheSize uint
+	// ValidateRegisters sets whether we should check each register set in a local state against the on-chain data
+	// this should not be set if the node is syncing-up since it will produce a lot of requests
+	ValidateRegisters bool
 }
 
 func FromFlags() (*Config, error) {
@@ -159,6 +162,7 @@ func FromFlags() (*Config, error) {
 	flag.StringVar(&walletKey, "wallet-api-key", "", "ECDSA private key used for wallet APIs. WARNING: This should only be used locally or for testing, never in production.")
 	flag.IntVar(&cfg.MetricsPort, "metrics-port", 9091, "Port for the metrics server")
 	flag.BoolVar(&cfg.IndexOnly, "index-only", false, "Run the gateway in index-only mode which only allows querying the state and indexing, but disallows sending transactions.")
+	flag.BoolVar(&cfg.ValidateRegisters, "validate-registers", false, "Enable checking set registers in local state against the on-chain data. Should only be set when the node is up-to-sync.")
 	flag.Parse()
 
 	if coinbase == "" {

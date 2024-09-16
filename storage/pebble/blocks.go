@@ -170,7 +170,7 @@ func (b *Blocks) GetHeightByID(ID common.Hash) (uint64, error) {
 	return binary.BigEndian.Uint64(height), nil
 }
 
-func (b *Blocks) LatestEVMHeight() (uint64, error) {
+func (b *Blocks) LatestIndexedHeight() (uint64, error) {
 	b.mux.RLock()
 	defer b.mux.RUnlock()
 
@@ -218,7 +218,7 @@ func (b *Blocks) SetLatestCadenceHeight(height uint64, batch *pebble.Batch) erro
 // InitHeights sets the Cadence height to zero as well as EVM heights. Used for empty database init.
 func (b *Blocks) InitHeights(cadenceHeight uint64, cadenceID flow.Identifier) error {
 	// sanity check, make sure we don't have any heights stored, disable overwriting the database
-	_, err := b.LatestEVMHeight()
+	_, err := b.LatestIndexedHeight()
 	if !errors.Is(err, errs.ErrStorageNotInitialized) {
 		return fmt.Errorf("can't init the database that already has data stored")
 	}
@@ -262,6 +262,25 @@ func (b *Blocks) GetCadenceID(evmHeight uint64) (flow.Identifier, error) {
 	}
 
 	return flow.BytesToID(val), nil
+}
+
+func (b *Blocks) SetExecutedHeight(evmHeight uint64) error {
+	b.mux.Lock()
+	defer b.mux.Unlock()
+
+	return b.store.set(evmHeightIndex, nil, uint64Bytes(evmHeight), nil)
+}
+
+func (b *Blocks) LatestExecutedHeight() (uint64, error) {
+	b.mux.RLock()
+	defer b.mux.RUnlock()
+
+	val, err := b.store.get(evmHeightIndex)
+	if err != nil {
+		return 0, err
+	}
+
+	return binary.BigEndian.Uint64(val), nil
 }
 
 func (b *Blocks) getBlock(keyCode byte, key []byte) (*models.Block, error) {
