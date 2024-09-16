@@ -72,7 +72,7 @@ func (s *BlockState) Execute(tx models.Transaction) (*gethTypes.Receipt, error) 
 
 	ctx, err := s.blockContext(receipt)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	bv, err := s.emulator.NewBlockView(ctx)
