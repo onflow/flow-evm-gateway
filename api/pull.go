@@ -173,7 +173,7 @@ func (api *PullAPI) NewPendingTransactionFilter(
 		return "", err
 	}
 
-	last, err := api.blocks.LatestEVMHeight()
+	last, err := api.blocks.LatestIndexedHeight()
 	if err != nil {
 		return "", err
 	}
@@ -201,7 +201,7 @@ func (api *PullAPI) NewBlockFilter(ctx context.Context) (rpc.ID, error) {
 		return "", err
 	}
 
-	last, err := api.blocks.LatestEVMHeight()
+	last, err := api.blocks.LatestIndexedHeight()
 	if err != nil {
 		return "", err
 	}
@@ -250,7 +250,7 @@ func (api *PullAPI) NewFilter(ctx context.Context, criteria filters.FilterCriter
 		return "", err
 	}
 
-	latest, err := api.blocks.LatestEVMHeight()
+	latest, err := api.blocks.LatestIndexedHeight()
 	if err != nil {
 		return "", err
 	}
@@ -316,7 +316,7 @@ func (api *PullAPI) GetFilterLogs(
 		)
 	}
 
-	current, err := api.blocks.LatestEVMHeight()
+	current, err := api.blocks.LatestIndexedHeight()
 	if err != nil {
 		return nil, err
 	}
@@ -352,7 +352,7 @@ func (api *PullAPI) GetFilterChanges(ctx context.Context, id rpc.ID) (any, error
 		return nil, fmt.Errorf("filter by id %s does not exist", id)
 	}
 
-	current, err := api.blocks.LatestEVMHeight()
+	current, err := api.blocks.LatestIndexedHeight()
 	if err != nil {
 		return nil, err
 	}

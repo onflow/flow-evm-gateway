@@ -41,11 +41,7 @@ it('store revertReason field in transaction receipts', async () => {
     )
     assert.equal(200, response.status)
 
-    let latestHeight = await web3.eth.getBlockNumber()
-    let block = await web3.eth.getBlock(latestHeight)
-    assert.equal(block.number, 4n)
-
-    let revertedTx = await web3.eth.getTransactionFromBlock(latestHeight, 0)
+    let revertedTx = await web3.eth.getTransaction(signedTx.transactionHash)
     // Give some time to the engine to ingest the latest transaction
     await new Promise(res => setTimeout(res, 1500))
     rcp = await helpers.callRPCMethod(
@@ -75,11 +71,7 @@ it('store revertReason field in transaction receipts', async () => {
     )
     assert.equal(200, response.status)
 
-    latestHeight = await web3.eth.getBlockNumber()
-    block = await web3.eth.getBlock(latestHeight)
-    assert.equal(block.number, 5n)
-
-    revertedTx = await web3.eth.getTransactionFromBlock(latestHeight, 0)
+    revertedTx = await web3.eth.getTransaction(signedTx.transactionHash)
     // Give some time to the engine to ingest the latest transaction
     await new Promise(res => setTimeout(res, 1500))
     rcp = await helpers.callRPCMethod(
