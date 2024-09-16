@@ -345,7 +345,7 @@ describe('eth_getFilterChanges', async () => {
         assert.equal(txHashes[0], res.receipt.transactionHash)
         assert.equal(
             txHashes[1],
-            '0xb1b9deb629374d7c6df6becb7011282c8b733922b664a74ea9cd5bcb333d193e'
+            '0x337fca3f04eed2a5abd38dea6856848ace94102ad6c9a77ed288c8ac93135ce4'
         )
     })
 
@@ -398,12 +398,12 @@ describe('eth_getFilterChanges', async () => {
             from: '0x0000000000000000000000030000000000000000',
             gas: '0x5b04',
             gasPrice: '0x0',
-            hash: '0x71201dbf66271cedb6e87a5364b2cb84f6170e282f2b3f676196687bdf4babe0',
+            hash: '0x4c2aa69a0080917a60d2f9258db77de5abaf298b8aefbcc8ae4bb45ef80c35b5',
             input: '0x',
             nonce: '0x9',
             to: '0x658Bdf435d810C91414eC09147DAA6DB62406379',
             transactionIndex: '0x1',
-            value: '0x388fb0',
+            value: '0x38aa0e',
             type: '0x0',
             chainId: '0x286',
             v: '0xff',

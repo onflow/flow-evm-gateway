@@ -190,6 +190,9 @@ func (c *ClientHandler) localClient(height uint64) (*LocalClient, error) {
 		c.receipts,
 		c.logger,
 	)
+	if err != nil {
+		return nil, err
+	}
 
 	return NewLocalClient(blockState, c.blocks), nil
 }
