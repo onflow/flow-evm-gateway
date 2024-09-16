@@ -275,13 +275,12 @@ func (b *BlockChainAPI) GetTransactionByBlockHashAndIndex(
 		return handleError[*Transaction](err, l, b.collector)
 	}
 
-	highestIndex := len(block.TransactionHashes) - 1
-	if index > hexutil.Uint(highestIndex) {
+	if int(index) >= len(block.TransactionHashes) {
 		return nil, nil
 	}
 
 	txHash := block.TransactionHashes[index]
-	tx, err := b.GetTransactionByHash(ctx, txHash)
+	tx, err := b.prepareTransactionResponse(txHash)
 	if err != nil {
 		return handleError[*Transaction](err, l, b.collector)
 	}
@@ -324,7 +323,7 @@ func (b *BlockChainAPI) GetTransactionByBlockNumberAndIndex(
 	}
 
 	txHash := block.TransactionHashes[index]
-	tx, err := b.GetTransactionByHash(ctx, txHash)
+	tx, err := b.prepareTransactionResponse(txHash)
 	if err != nil {
 		return handleError[*Transaction](err, l, b.collector)
 	}
@@ -385,7 +384,7 @@ func (b *BlockChainAPI) GetBlockByHash(
 		return handleError[*Block](err, l, b.collector)
 	}
 
-	apiBlock, err := b.prepareBlockResponse(ctx, block, fullTx)
+	apiBlock, err := b.prepareBlockResponse(block, fullTx)
 	if err != nil {
 		return handleError[*Block](err, l, b.collector)
 	}
@@ -429,7 +428,7 @@ func (b *BlockChainAPI) GetBlockByNumber(
 		return handleError[*Block](err, l, b.collector)
 	}
 
-	apiBlock, err := b.prepareBlockResponse(ctx, block, fullTx)
+	apiBlock, err := b.prepareBlockResponse(block, fullTx)
 	if err != nil {
 		return handleError[*Block](err, l, b.collector)
 	}
@@ -440,11 +439,11 @@ func (b *BlockChainAPI) GetBlockByNumber(
 // GetBlockReceipts returns the block receipts for the given block hash or number or tag.
 func (b *BlockChainAPI) GetBlockReceipts(
 	ctx context.Context,
-	numHash rpc.BlockNumberOrHash,
-) ([]*models.Receipt, error) {
+	blockNumberOrHash rpc.BlockNumberOrHash,
+) ([]map[string]interface{}, error) {
 	l := b.logger.With().
 		Str("endpoint", "getBlockReceipts").
-		Str("hash", numHash.String()).
+		Str("hash", blockNumberOrHash.String()).
 		Logger()
 
 	if err := rateLimit(ctx, b.limiter, l); err != nil {
@@ -455,28 +454,37 @@ func (b *BlockChainAPI) GetBlockReceipts(
 		block *models.Block
 		err   error
 	)
-	if numHash.BlockHash != nil {
-		block, err = b.blocks.GetByID(*numHash.BlockHash)
-	} else if numHash.BlockNumber != nil {
-		block, err = b.blocks.GetByHeight(uint64(numHash.BlockNumber.Int64()))
+	if blockNumberOrHash.BlockHash != nil {
+		block, err = b.blocks.GetByID(*blockNumberOrHash.BlockHash)
+	} else if blockNumberOrHash.BlockNumber != nil {
+		block, err = b.blocks.GetByHeight(uint64(blockNumberOrHash.BlockNumber.Int64()))
 	} else {
-		return handleError[[]*models.Receipt](
+		return handleError[[]map[string]interface{}](
 			fmt.Errorf("%w: block number or hash not provided", errs.ErrInvalid),
 			l,
 			b.collector,
 		)
 	}
 	if err != nil {
-		return handleError[[]*models.Receipt](err, l, b.collector)
+		return handleError[[]map[string]interface{}](err, l, b.collector)
 	}
 
-	receipts := make([]*models.Receipt, len(block.TransactionHashes))
+	receipts := make([]map[string]interface{}, len(block.TransactionHashes))
 	for i, hash := range block.TransactionHashes {
-		rcp, err := b.receipts.GetByTransactionID(hash)
+		tx, err := b.transactions.Get(hash)
 		if err != nil {
-			return handleError[[]*models.Receipt](err, l, b.collector)
+			return handleError[[]map[string]interface{}](err, l, b.collector)
 		}
-		receipts[i] = rcp
+
+		receipt, err := b.receipts.GetByTransactionID(hash)
+		if err != nil {
+			return handleError[[]map[string]interface{}](err, l, b.collector)
+		}
+
+		receipts[i], err = MarshalReceipt(receipt, tx)
+		if err != nil {
+			return handleError[[]map[string]interface{}](err, l, b.collector)
+		}
 	}
 
 	return receipts, nil
@@ -920,12 +928,11 @@ func (b *BlockChainAPI) GetStorageAt(
 }
 
 func (b *BlockChainAPI) fetchBlockTransactions(
-	ctx context.Context,
 	block *models.Block,
 ) ([]*Transaction, error) {
 	transactions := make([]*Transaction, 0)
 	for _, txHash := range block.TransactionHashes {
-		transaction, err := b.GetTransactionByHash(ctx, txHash)
+		transaction, err := b.prepareTransactionResponse(txHash)
 		if err != nil {
 			return nil, err
 		}
@@ -943,8 +950,23 @@ func (b *BlockChainAPI) fetchBlockTransactions(
 	return transactions, nil
 }
 
+func (b *BlockChainAPI) prepareTransactionResponse(
+	txHash common.Hash,
+) (*Transaction, error) {
+	tx, err := b.transactions.Get(txHash)
+	if err != nil {
+		return nil, err
+	}
+
+	receipt, err := b.receipts.GetByTransactionID(txHash)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewTransactionResult(tx, *receipt, b.config.EVMNetworkID)
+}
+
 func (b *BlockChainAPI) prepareBlockResponse(
-	ctx context.Context,
 	block *models.Block,
 	fullTx bool,
 ) (*Block, error) {
@@ -977,7 +999,7 @@ func (b *BlockChainAPI) prepareBlockResponse(
 	}
 	blockSize := rlp.ListSize(uint64(len(blockBytes)))
 
-	transactions, err := b.fetchBlockTransactions(ctx, block)
+	transactions, err := b.fetchBlockTransactions(block)
 	if err != nil {
 		return nil, err
 	}
