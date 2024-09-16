@@ -2,6 +2,7 @@ package ingestion
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -64,6 +65,92 @@ func Test_Subscribing(t *testing.T) {
 
 	// this makes sure we indexed all the events
 	require.Equal(t, uint64(endHeight), prevHeight)
+}
+
+func Test_MissingBlockEvent(t *testing.T) {
+	const endHeight = uint64(20)
+	const startHeight = uint64(1)
+	const missingBlockHeight = uint64(10)
+	const foundBlockHeight = uint64(15)
+
+	currentClient, clientEvents := testutils.SetupClient(startHeight, endHeight)
+
+	client, err := requester.NewCrossSporkClient(
+		currentClient,
+		nil,
+		zerolog.New(zerolog.NewTestWriter(t)),
+		flowGo.Previewnet,
+	)
+	require.NoError(t, err)
+
+	subscriber := NewRPCSubscriber(client, 100, flowGo.Previewnet, zerolog.Nop())
+
+	events := subscriber.Subscribe(context.Background(), 1)
+
+	missingHashes := make([]gethCommon.Hash, 0)
+
+	go func() {
+		defer close(clientEvents)
+
+		for i := startHeight; i <= endHeight; i++ {
+			txCdc, txEvent, tx, _, _ := newTransaction(i)
+			blockCdc, _, blockEvent, _ := newBlock(i, []gethCommon.Hash{tx.Hash()})
+
+			if i == foundBlockHeight {
+				blockCdc, _, _, _ = newBlock(i, missingHashes)
+			}
+
+			blockEvents := []flow.Event{
+				{Value: blockCdc, Type: string(txEvent.Etype)},
+				{Value: txCdc, Type: string(blockEvent.Etype)},
+			}
+
+			if i > missingBlockHeight && i < foundBlockHeight {
+				blockEvents = blockEvents[1:] // remove block
+				missingHashes = append(missingHashes, tx.Hash())
+			}
+
+			clientEvents <- flow.BlockEvents{
+				Height: i,
+				Events: blockEvents,
+			}
+		}
+	}()
+
+	var prevHeight uint64
+	for ev := range events {
+		if prevHeight == endHeight {
+			require.ErrorIs(t, ev.Err, errs.ErrDisconnected)
+			break
+		}
+
+		require.NoError(t, ev.Err)
+		block := ev.Events.Block()
+		require.NotNil(t, block) // make sure all have blocks
+		// make sure all normal blocks have 1 tx
+		if block.Height != foundBlockHeight {
+			require.Len(t, ev.Events.Transactions(), 1)
+		}
+		// the block that was missing has all txs
+		if block.Height == foundBlockHeight {
+			// the missing block has all the transaction in between when it was missing
+			require.Len(t, ev.Events.Transactions(), int(foundBlockHeight-missingBlockHeight))
+			for i, h := range missingHashes {
+				found := false
+				for _, tx := range ev.Events.Transactions() {
+					if h.Cmp(tx.Hash()) == 0 {
+						found = true
+					}
+				}
+				require.True(t, found, fmt.Sprintf("required hash not found at index %d %s", i, h.String()))
+			}
+		}
+
+		prevHeight = ev.Events.CadenceHeight()
+	}
+
+	// this makes sure we indexed all the events
+	require.Equal(t, endHeight, prevHeight)
 }
 
 // Test that back-up fetching of EVM events is triggered when the

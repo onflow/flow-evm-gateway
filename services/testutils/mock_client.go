@@ -39,6 +39,23 @@ func (c *MockClient) SubscribeEventsByBlockHeight(
 }
 
 func SetupClientForRange(startHeight uint64, endHeight uint64) *MockClient {
+	client, events := SetupClient(startHeight, endHeight)
+	go func() {
+		defer close(events)
+
+		for i := startHeight; i <= endHeight; i++ {
+			events <- flow.BlockEvents{
+				Height: i,
+			}
+		}
+	}()
+
+	return client
+}
+
+func SetupClient(startHeight uint64, endHeight uint64) (*MockClient, chan flow.BlockEvents) {
+	events := make(chan flow.BlockEvents)
+
 	return &MockClient{
 		Client: &mocks.Client{},
 		GetLatestBlockHeaderFunc: func(ctx context.Context, sealed bool) (*flow.BlockHeader, error) {
@@ -66,19 +83,7 @@ func SetupClientForRange(startHeight uint64, endHeight uint64) *MockClient {
 			filter flow.EventFilter,
 			opts ...access.SubscribeOption,
 		) (<-chan flow.BlockEvents, <-chan error, error) {
-			events := make(chan flow.BlockEvents)
-
-			go func() {
-				defer close(events)
-
-				for i := startHeight; i <= endHeight; i++ {
-					events <- flow.BlockEvents{
-						Height: i,
-					}
-				}
-			}()
-
 			return events, make(chan error), nil
 		},
-	}
+	}, events
 }
