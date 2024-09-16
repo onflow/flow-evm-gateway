@@ -7,7 +7,6 @@ import (
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go/fvm/evm/events"
-	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 )
 
 // isBlockExecutedEvent checks whether the given event contains block executed data.
@@ -116,20 +115,23 @@ func decodeCadenceEvents(events flow.BlockEvents) (*CadenceEvents, error) {
 	}
 
 	// safety check, we can't have an empty block with transactions
-	if e.block == nil && len(e.transactions) > 0 {
-		return nil, fmt.Errorf("EVM block can not be nil if transactions are present, Flow block: %d", events.Height)
-	}
+	// if e.block == nil && len(e.transactions) > 0 {
+	// 	return nil, fmt.Errorf("EVM block can not be nil if transactions are present, Flow block: %d", events.Height)
+	// }
 
 	if e.block != nil {
-		txHashes := evmTypes.TransactionHashes{}
-		for _, tx := range e.transactions {
-			txHashes = append(txHashes, tx.Hash())
-		}
-		if e.block.TransactionHashRoot != txHashes.RootHash() {
-			return nil, fmt.Errorf(
-				"block %d references missing transaction/s",
-				e.block.Height,
-			)
+		// txHashes := evmTypes.TransactionHashes{}
+		// for _, tx := range e.transactions {
+		// 	txHashes = append(txHashes, tx.Hash())
+		// }
+		// if e.block.TransactionHashRoot != txHashes.RootHash() {
+		// 	return nil, fmt.Errorf(
+		// 		"block %d references missing transaction/s",
+		// 		e.block.Height,
+		// 	)
+		// }
+		if e.block.Height == 714157 {
+			fmt.Println("Block: ", e.block.Block)
 		}
 	}
 
@@ -173,6 +175,53 @@ func (c *CadenceEvents) CadenceBlockID() flow.Identifier {
 // Length of the Cadence events emitted.
 func (c *CadenceEvents) Length() int {
 	return len(c.events.Events)
+}
+
+func (c *CadenceEvents) Merge(ce *CadenceEvents) {
+	c.events = ce.events
+	c.block = ce.block
+	c.transactions = append(c.transactions, ce.transactions...)
+	c.receipts = append(c.receipts, ce.receipts...)
+}
+
+func (c *CadenceEvents) PopulateDynamicValues() error {
+	// if cadence event is empty don't calculate any dynamic values
+	if c.Empty() {
+		return nil
+	}
+
+	// calculate dynamic values
+	cumulativeGasUsed := uint64(0)
+	blockHash, err := c.block.Hash()
+	if err != nil {
+		return err
+	}
+
+	// Log index field holds the index position in the entire block
+	logIndex := uint(0)
+	for i, rcp := range c.receipts {
+		// add transaction hashes to the block
+		c.block.TransactionHashes = append(c.block.TransactionHashes, rcp.TxHash)
+		// calculate cumulative gas used up to that point
+		cumulativeGasUsed += rcp.GasUsed
+		rcp.CumulativeGasUsed = cumulativeGasUsed
+		// set the transaction index
+		rcp.TransactionIndex = uint(i)
+		// set calculate block hash
+		rcp.BlockHash = blockHash
+		// dynamically add missing log fields
+		for _, l := range rcp.Logs {
+			l.BlockNumber = rcp.BlockNumber.Uint64()
+			l.BlockHash = rcp.BlockHash
+			l.TxHash = rcp.TxHash
+			l.TxIndex = rcp.TransactionIndex
+			l.Index = logIndex
+			l.Removed = false
+			logIndex++
+		}
+	}
+
+	return nil
 }
 
 // BlockEvents is a wrapper around events streamed, and it also contains an error

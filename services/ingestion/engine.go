@@ -115,7 +115,21 @@ func (e *Engine) Run(ctx context.Context) error {
 
 	e.status.MarkReady()
 
+	cadenceEvents := &models.CadenceEvents{}
+	fallbackMode := false
 	for events := range e.subscriber.Subscribe(ctx, latestCadence) {
+		if events.Events.Block() == nil && len(events.Events.Transactions()) > 0 {
+			fallbackMode = true
+			cadenceEvents.Merge(events.Events)
+			continue
+		}
+		if fallbackMode && events.Events.Block() != nil {
+			cadenceEvents.Merge(events.Events)
+			cadenceEvents.PopulateDynamicValues()
+			events.Events = cadenceEvents
+			fallbackMode = false
+			cadenceEvents = &models.CadenceEvents{}
+		}
 		if events.Err != nil {
 			return fmt.Errorf(
 				"failure in event subscription at height %d, with: %w",
