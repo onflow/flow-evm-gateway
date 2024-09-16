@@ -12,6 +12,7 @@ import (
 	"github.com/onflow/flow-go-sdk/crypto"
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-limiter/memorystore"
+	grpcOpts "google.golang.org/grpc"
 
 	"github.com/onflow/flow-evm-gateway/api"
 	"github.com/onflow/flow-evm-gateway/config"
@@ -392,9 +393,16 @@ func startEngine(
 // setupCrossSporkClient sets up a cross-spork AN client.
 func setupCrossSporkClient(config *config.Config, logger zerolog.Logger) (*requester.CrossSporkClient, error) {
 	// create access client with cross-spork capabilities
-	currentSporkClient, err := grpc.NewClient(config.AccessNodeHost)
+	currentSporkClient, err := grpc.NewClient(
+		config.AccessNodeHost,
+		grpc.WithGRPCDialOptions(grpcOpts.WithDefaultCallOptions(grpcOpts.MaxCallRecvMsgSize(1024*1024*1024))),
+	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create client connection for host: %s, with error: %w", config.AccessNodeHost, err)
+		return nil, fmt.Errorf(
+			"failed to create client connection for host: %s, with error: %w",
+			config.AccessNodeHost,
+			err,
+		)
 	}
 
 	// if we provided access node previous spork hosts add them to the client
