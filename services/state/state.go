@@ -3,6 +3,7 @@ package state
 import (
 	"fmt"
 
+	"github.com/onflow/atree"
 	"github.com/onflow/flow-go/fvm/evm"
 	"github.com/onflow/flow-go/fvm/evm/emulator"
 	"github.com/onflow/flow-go/fvm/evm/emulator/state"
@@ -15,7 +16,6 @@ import (
 
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/storage"
-	"github.com/onflow/flow-evm-gateway/storage/pebble"
 )
 
 // todo reuse the error from flow-go
@@ -36,16 +36,14 @@ type BlockState struct {
 
 func NewBlockState(
 	block *models.Block,
+	registers atree.Ledger,
 	chainID flowGo.ChainID,
-	store *pebble.Storage,
 	blocks storage.BlockIndexer,
 	receipts storage.ReceiptIndexer,
 	logger zerolog.Logger,
 ) (*BlockState, error) {
 	logger = logger.With().Str("component", "state-execution").Logger()
 	storageAddress := evm.StorageAccountAddress(chainID)
-
-	registers := pebble.NewRegister(store, block.Height)
 
 	stateDB, err := state.NewStateDB(registers, storageAddress)
 	if err != nil {

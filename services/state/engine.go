@@ -5,12 +5,14 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	flowGo "github.com/onflow/flow-go/model/flow"
+	"github.com/onflow/atree"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/onflow/go-ethereum/trie"
 	"github.com/rs/zerolog"
 
+	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/models"
+	"github.com/onflow/flow-evm-gateway/services/requester"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
 )
@@ -19,7 +21,7 @@ var _ models.Engine = &Engine{}
 var _ models.Subscriber = &Engine{}
 
 type Engine struct {
-	chainID        flowGo.ChainID
+	config         *config.Config
 	logger         zerolog.Logger
 	status         *models.EngineStatus
 	blockPublisher *models.Publisher
@@ -30,7 +32,7 @@ type Engine struct {
 }
 
 func NewStateEngine(
-	chainID flowGo.ChainID,
+	config *config.Config,
 	blockPublisher *models.Publisher,
 	store *pebble.Storage,
 	blocks storage.BlockIndexer,
@@ -41,7 +43,7 @@ func NewStateEngine(
 	log := logger.With().Str("component", "state").Logger()
 
 	return &Engine{
-		chainID:        chainID,
+		config:         config,
 		logger:         log,
 		store:          store,
 		status:         models.NewEngineStatus(),
@@ -108,7 +110,15 @@ func (e *Engine) ID() uuid.UUID {
 // Transaction executed should match a receipt we have indexed from the network
 // produced by execution nodes. This check makes sure we keep a correct state.
 func (e *Engine) executeBlock(block *models.Block) error {
-	state, err := NewBlockState(block, e.chainID, e.store, e.blocks, e.receipts, e.logger)
+	var registers atree.Ledger
+	registers = pebble.NewRegister(e.store, block.Height)
+
+	// if validation is enabled wrap the register ledger into a validator
+	if e.config.ValidateRegisters {
+		registers = requester.NewRegisterValidator(registers, nil)
+	}
+
+	state, err := NewBlockState(block, registers, e.config.FlowNetworkID, e.blocks, e.receipts, e.logger)
 	if err != nil {
 		return err
 	}
@@ -132,6 +142,18 @@ func (e *Engine) executeBlock(block *models.Block) error {
 	// make sure receipt root matches, so we know all the execution results are same
 	if executedRoot.Cmp(block.ReceiptRoot) != 0 {
 		return fmt.Errorf("state mismatch")
+	}
+
+	if e.config.ValidateRegisters {
+		validator := registers.(*requester.RegisterValidator)
+		// because we currently execute all the requests against the remote client as well as
+		// local client we can afford to just log this and fix it since all the wrong local results
+		// will get overwritten by the remote client results. However once this double execution is removed
+		// we should panic at this point, since the local state will be wrong and results will be wrong.
+		// todo remove after we stop doing double execution.
+		if err := validator.ValidateBlock(block.Height); err != nil {
+			e.logger.Error().Err(err).Msg("register validation failed")
+		}
 	}
 
 	// update executed block height
