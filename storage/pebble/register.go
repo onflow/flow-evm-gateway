@@ -38,7 +38,13 @@ func (l *Register) GetValue(owner, key []byte) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create register range itterator: %w", err)
 	}
-	defer iter.Close()
+	defer func() {
+		if err := iter.Close(); err != nil {
+			if err != nil {
+				l.store.log.Error().Err(err).Msg("failed to close register iterator")
+			}
+		}
+	}()
 
 	found := iter.Last()
 	if !found {
