@@ -15,7 +15,6 @@ import (
 	"github.com/sethvargo/go-limiter"
 
 	"github.com/onflow/flow-evm-gateway/config"
-	"github.com/onflow/flow-evm-gateway/metrics"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/services/logs"
 	"github.com/onflow/flow-evm-gateway/storage"
@@ -286,7 +285,7 @@ func (api *PullAPI) NewFilter(ctx context.Context, criteria filters.FilterCriter
 }
 
 // GetFilterLogs returns the logs for the filter with the given id.
-// If the filter could not be found, `nil` is returned.
+// If the filter could not be found or has expired, an error is returned.
 func (api *PullAPI) GetFilterLogs(
 	ctx context.Context,
 	id rpc.ID,
@@ -300,56 +299,36 @@ func (api *PullAPI) GetFilterLogs(
 
 	filter, ok := api.filters[id]
 	if !ok {
-		return handleError[[]*gethTypes.Log](
-			fmt.Errorf("%w: filter by id %s does not exist", errs.ErrEntityNotFound, id),
-			api.logger,
-			metrics.NopCollector,
-		)
+		return nil, fmt.Errorf("filter by id %s does not exist", id)
 	}
 
 	if filter.expired() {
 		api.uninstallFilter(id)
-		return handleError[[]*gethTypes.Log](
-			fmt.Errorf("%w: filter by id %s has expired", errs.ErrEntityNotFound, id),
-			api.logger,
-			metrics.NopCollector,
-		)
+		return nil, fmt.Errorf("filter by id %s has expired", id)
 	}
 
 	logsFilter, ok := filter.(*logsFilter)
 	if !ok {
-		return handleError[[]*gethTypes.Log](
-			fmt.Errorf("%w: filter by id %s is not a logs filter", errs.ErrInvalid, id),
-			api.logger,
-			metrics.NopCollector,
+		return nil, fmt.Errorf(
+			"%w: filter by id %s is not a logs filter",
+			errs.ErrInvalid,
+			id,
 		)
 	}
 
 	current, err := api.blocks.LatestEVMHeight()
 	if err != nil {
-		return handleError[[]*gethTypes.Log](
-			err,
-			api.logger,
-			metrics.NopCollector,
-		)
+		return nil, err
 	}
 
 	result, err := api.getLogs(current, logsFilter)
 	if err != nil {
-		return handleError[[]*gethTypes.Log](
-			err,
-			api.logger,
-			metrics.NopCollector,
-		)
+		return nil, err
 	}
 
 	logs, ok := result.([]*gethTypes.Log)
 	if !ok {
-		return handleError[[]*gethTypes.Log](
-			fmt.Errorf("logs filter returned incorrect type: %T", result),
-			api.logger,
-			metrics.NopCollector,
-		)
+		return nil, fmt.Errorf("logs filter returned incorrect type: %T", result)
 	}
 
 	return logs, nil
@@ -362,7 +341,7 @@ func (api *PullAPI) GetFilterLogs(
 // (pending)Log filters return []Log.
 func (api *PullAPI) GetFilterChanges(ctx context.Context, id rpc.ID) (any, error) {
 	if err := rateLimit(ctx, api.ratelimiter, api.logger); err != nil {
-		return "", err
+		return nil, err
 	}
 
 	api.mux.Lock()
@@ -370,29 +349,17 @@ func (api *PullAPI) GetFilterChanges(ctx context.Context, id rpc.ID) (any, error
 
 	f, ok := api.filters[id]
 	if !ok {
-		return handleError[any](
-			fmt.Errorf("%w: filter by id %s does not exist", errs.ErrEntityNotFound, id),
-			api.logger,
-			metrics.NopCollector,
-		)
+		return nil, fmt.Errorf("filter by id %s does not exist", id)
 	}
 
 	current, err := api.blocks.LatestEVMHeight()
 	if err != nil {
-		return handleError[any](
-			err,
-			api.logger,
-			metrics.NopCollector,
-		)
+		return nil, err
 	}
 
 	if f.expired() {
 		api.uninstallFilter(id)
-		return handleError[any](
-			fmt.Errorf("%w: filter by id %s has expired", errs.ErrEntityNotFound, id),
-			api.logger,
-			metrics.NopCollector,
-		)
+		return nil, fmt.Errorf("filter by id %s has expired", id)
 	}
 
 	var result any
@@ -404,19 +371,11 @@ func (api *PullAPI) GetFilterChanges(ctx context.Context, id rpc.ID) (any, error
 	case *logsFilter:
 		result, err = api.getLogs(current, filterType)
 	default:
-		return handleError[any](
-			fmt.Errorf("%w: non-supported filter type: %T", errs.ErrInvalid, filterType),
-			api.logger,
-			metrics.NopCollector,
-		)
+		return nil, fmt.Errorf("non-supported filter type: %T", filterType)
 	}
 
 	if err != nil {
-		return handleError[any](
-			err,
-			api.logger,
-			metrics.NopCollector,
-		)
+		return nil, err
 	}
 
 	f.updateUsed(current)

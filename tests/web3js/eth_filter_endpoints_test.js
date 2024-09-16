@@ -39,14 +39,18 @@ describe('eth_uninstallFilter', async () => {
 })
 
 describe('eth_getFilterLogs', async () => {
-    it('should return null for missing filter', async () => {
+    it('should return an error for missing filter', async () => {
         let response = await helpers.callRPCMethod('eth_getFilterLogs', ['0xffa1'])
 
         assert.equal(response.status, 200)
-        assert.isNull(response.body.result)
+        assert.isDefined(response.body.error)
+        assert.equal(
+            response.body.error.message,
+            'filter by id 0xffa1 does not exist'
+        )
     })
 
-    it('should return null for expired filter', async () => {
+    it('should return an error for expired filter', async () => {
         let response = await helpers.callRPCMethod(
             'eth_newFilter',
             [{ 'address': contractAddress }]
@@ -63,7 +67,11 @@ describe('eth_getFilterLogs', async () => {
         response = await helpers.callRPCMethod('eth_getFilterLogs', [filterID])
 
         assert.equal(response.status, 200)
-        assert.isNull(response.body.result)
+        assert.isDefined(response.body.error)
+        assert.equal(
+            response.body.error.message,
+            'filter by id ' + filterID + ' has expired'
+        )
     })
 
     it('should return error message for non-logs filter', async () => {
@@ -157,14 +165,18 @@ describe('eth_getFilterLogs', async () => {
 })
 
 describe('eth_getFilterChanges', async () => {
-    it('should return null for missing filter', async () => {
+    it('should return an error for missing filter', async () => {
         let response = await helpers.callRPCMethod('eth_getFilterChanges', ['0xffa1'])
 
         assert.equal(response.status, 200)
-        assert.isNull(response.body.result)
+        assert.isDefined(response.body.error)
+        assert.equal(
+            response.body.error.message,
+            'filter by id 0xffa1 does not exist'
+        )
     })
 
-    it('should return null for expired filter', async () => {
+    it('should return an error for expired filter', async () => {
         let response = await helpers.callRPCMethod(
             'eth_newFilter',
             [{ 'address': contractAddress }]
@@ -181,7 +193,11 @@ describe('eth_getFilterChanges', async () => {
         response = await helpers.callRPCMethod('eth_getFilterChanges', [filterID])
 
         assert.equal(response.status, 200)
-        assert.isNull(response.body.result)
+        assert.isDefined(response.body.error)
+        assert.equal(
+            response.body.error.message,
+            'filter by id ' + filterID + ' has expired'
+        )
     })
 
     it('should return empty array when there are no logs', async () => {
