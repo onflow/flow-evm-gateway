@@ -154,8 +154,11 @@ func (c *ClientHandler) GetCode(
 }
 
 func (c *ClientHandler) GetLatestEVMHeight(ctx context.Context) (uint64, error) {
-	// we only return latest executed heigth, both clients do the same
-	return c.blocks.LatestExecutedHeight()
+	// we use the remote client to get the latest height from the network
+	// be careful, because this height might not yet be indexed or executed locally
+	// so don't use this height to then query the state, always use the latest
+	// executed height to query the state.
+	return c.remote.GetLatestEVMHeight(ctx)
 }
 
 func (c *ClientHandler) GetStorageAt(

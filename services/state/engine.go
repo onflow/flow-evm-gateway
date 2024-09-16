@@ -6,6 +6,8 @@ import (
 
 	"github.com/google/uuid"
 	flowGo "github.com/onflow/flow-go/model/flow"
+	gethTypes "github.com/onflow/go-ethereum/core/types"
+	"github.com/onflow/go-ethereum/trie"
 	"github.com/rs/zerolog"
 
 	"github.com/onflow/flow-evm-gateway/models"
@@ -111,15 +113,25 @@ func (e *Engine) executeBlock(block *models.Block) error {
 		return err
 	}
 
-	for _, h := range block.TransactionHashes {
+	receipts := make(gethTypes.Receipts, len(block.TransactionHashes))
+
+	for i, h := range block.TransactionHashes {
 		tx, err := e.transactions.Get(h)
 		if err != nil {
 			return err
 		}
 
-		if err := state.Execute(tx); err != nil {
-			return err
+		receipt, err := state.Execute(tx)
+		if err != nil {
+			return fmt.Errorf("failed to execute tx %s: %w", h, err)
 		}
+		receipts[i] = receipt
+	}
+
+	executedRoot := gethTypes.DeriveSha(receipts, trie.NewStackTrie(nil))
+	// make sure receipt root matches, so we know all the execution results are same
+	if executedRoot.Cmp(block.ReceiptRoot) != 0 {
+		return fmt.Errorf("state mismatch")
 	}
 
 	// update executed block height
