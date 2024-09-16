@@ -95,5 +95,5 @@ func (l *LocalClient) GetStorageAt(ctx context.Context, address common.Address, 
 }
 
 func (l *LocalClient) GetLatestEVMHeight(ctx context.Context) (uint64, error) {
-	return l.blocks.LatestIndexedHeight()
+	return 0, fmt.Errorf("should not  be called on the local state")
 }
