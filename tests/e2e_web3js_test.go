@@ -150,7 +150,7 @@ func TestWeb3_E2E(t *testing.T) {
 			require.NoError(t, err)
 
 			// contract deployment transaction
-			deployPayload, _, err := evmSign(big.NewInt(0), 350_000, accountKey, nonce, nil, contractCode)
+			deployPayload, _, err := evmSign(big.NewInt(0), 1_250_000, accountKey, nonce, nil, contractCode)
 			require.NoError(t, err)
 			nonce += 1
 

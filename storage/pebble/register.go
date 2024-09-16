@@ -123,12 +123,7 @@ func (l *Register) AllocateSlabIndex(owner []byte) (atree.SlabIndex, error) {
 
 // id calculates a ledger id with embedded block height for owner and key.
 // The key for a register has the following schema:
-// {registers identified}{owner}{key}{height}
-// Examples:
-// 00000001 11111111 00000011 00001010
-// 00000001 11111111 00000011 00001001
-// 00000001 10101011 00000011 00001000
-
+// {owner}{key}{height}
 func (l *Register) id(owner, key []byte) []byte {
 	id := append(owner, key...)
 	h := uint64Bytes(l.height)

@@ -217,7 +217,7 @@ EVM Gateway has public RPC endpoints available for the following environments:
 
 | Name            | Value                                  |
 |-----------------|----------------------------------------|
-| Network Name    | Testnet                                |
+| Network Name    | EVM on Flow Testnet                    |
 | Description     | The public RPC URL for Flow Testnet    |
 | RPC Endpoint    | https://testnet.evm.nodes.onflow.org   |
 | Chain ID        | 545                                    |
@@ -226,7 +226,7 @@ EVM Gateway has public RPC endpoints available for the following environments:
 
 | Name            | Value                                  |
 |-----------------|----------------------------------------|
-| Network Name    | Mainnet                                |
+| Network Name    | EVM on Flow                            |
 | Description     | The public RPC URL for Flow Mainnet    |
 | RPC Endpoint    | https://mainnet.evm.nodes.onflow.org   |
 | Chain ID        | 747                                    |

@@ -69,6 +69,11 @@ func (dc DirectCall) From() (common.Address, error) {
 }
 
 func (dc DirectCall) To() *common.Address {
+	// for contract deployments, `to` should always be `nil`
+	if dc.SubType == types.DeployCallSubType {
+		return nil
+	}
+
 	var to *common.Address
 	if !dc.DirectCall.EmptyToField() {
 		ct := dc.DirectCall.To.ToCommon()
