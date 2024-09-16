@@ -187,8 +187,14 @@ func (b *Bootstrap) StartStateIndex(ctx context.Context) error {
 	l := b.logger.With().Str("component", "bootstrap-state").Logger()
 	l.Info().Msg("starting engine")
 
+	execution, ok := b.Client.Client.(*grpc.Client)
+	if !ok {
+		return fmt.Errorf("execution data client not supported on the provided AN client")
+	}
+
 	b.State = state.NewStateEngine(
-		b.config.FlowNetworkID,
+		b.config,
+		execution.ExecutionDataRPCClient(),
 		b.Publishers.Block,
 		b.Storages.Storage,
 		b.Storages.Blocks,

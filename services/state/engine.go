@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/onflow/atree"
+	"github.com/onflow/flow/protobuf/go/flow/executiondata"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/onflow/go-ethereum/trie"
 	"github.com/rs/zerolog"
@@ -23,6 +24,7 @@ var _ models.Subscriber = &Engine{}
 
 type Engine struct {
 	config         *config.Config
+	execution      executiondata.ExecutionDataAPIClient
 	logger         zerolog.Logger
 	status         *models.EngineStatus
 	blockPublisher *models.Publisher
@@ -34,6 +36,7 @@ type Engine struct {
 
 func NewStateEngine(
 	config *config.Config,
+	execution executiondata.ExecutionDataAPIClient,
 	blockPublisher *models.Publisher,
 	store *pebble.Storage,
 	blocks storage.BlockIndexer,
@@ -45,6 +48,7 @@ func NewStateEngine(
 
 	return &Engine{
 		config:         config,
+		execution:      execution,
 		logger:         log,
 		store:          store,
 		status:         models.NewEngineStatus(),
