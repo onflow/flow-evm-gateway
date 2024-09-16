@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go-sdk"
+	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/onflow/flow-go-sdk/crypto"
 	"github.com/onflow/flow-go/fvm/evm"
 	"github.com/onflow/flow-go/fvm/evm/emulator"
@@ -447,7 +448,11 @@ func (e *EVM) stateAt(evmHeight int64) (*state.StateDB, error) {
 		cadenceHeight = h.Height
 	}
 
-	ledger, err := newRemoteLedger(e.config.AccessNodeHost, cadenceHeight)
+	exeClient, ok := e.client.Client.(*grpc.Client)
+	if !ok {
+		return nil, fmt.Errorf("could not convert to execution client")
+	}
+	ledger, err := newRemoteLedger(exeClient.ExecutionDataRPCClient(), cadenceHeight)
 	if err != nil {
 		return nil, fmt.Errorf("could not create remote ledger for height: %d, with: %w", cadenceHeight, err)
 	}

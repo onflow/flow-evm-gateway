@@ -480,6 +480,12 @@ func (w *responseHandler) Write(data []byte) (int, error) {
 	if message.Error == nil {
 		r, _ := message.Result.MarshalJSON()
 		log.RawJSON("result", r).Msg("API response")
+	} else { // still debug output all errors even known ones
+		l.Debug().
+			Str("error", message.Error.Message).
+			Int("code", message.Error.Code).
+			Any("data", message.Error.Data).
+			Msg("API error response")
 	}
 
 	return w.ResponseWriter.Write(data)
