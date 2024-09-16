@@ -267,12 +267,12 @@ func (r *RPCSubscriber) blocksFilter() flow.EventFilter {
 	}
 }
 
-// fetchBlockEvents is used as a backup mechanism for fetching EVM-related
+// fetchMissingData is used as a backup mechanism for fetching EVM-related
 // events, when the event streaming API returns an inconsistent response.
 // An inconsistent response could be an EVM block that references EVM
 // transactions which are not present in the response. It falls back
 // to using grpc requests instead of streaming.
-func (r *RPCSubscriber) fetchBlockEvents(
+func (r *RPCSubscriber) fetchMissingData(
 	ctx context.Context,
 	blockEvents flow.BlockEvents,
 ) models.BlockEvents {
@@ -337,7 +337,7 @@ func (r *RPCSubscriber) recover(ctx context.Context, events flow.BlockEvents, er
 
 	switch {
 	case errors.Is(err, errs.ErrMissingTransactions):
-		return r.fetchBlockEvents(ctx, events)
+		return r.fetchMissingData(ctx, events)
 	case errors.Is(err, errs.ErrMissingBlock):
 		return r.accumulateEventsMissingBlock(events)
 	}
