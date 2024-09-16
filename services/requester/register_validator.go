@@ -28,6 +28,9 @@ type RegisterValidator struct {
 	updates   map[flow.RegisterID][]byte
 }
 
+// NewRegisterValidator will create a new register validator. The register validator
+// should only be used once for atree.Ledger it wraps for a specific block height.
+// After we must call ValidateBlock only once.
 func NewRegisterValidator(
 	register atree.Ledger,
 	execution executiondata.ExecutionDataAPIClient,
@@ -55,6 +58,15 @@ func (r *RegisterValidator) SetValue(owner, key, value []byte) (err error) {
 // - Invalid error if there is a mismatch in any of the register values
 // Any other error is an issue with client request or response.
 func (r *RegisterValidator) ValidateBlock(height uint64) error {
+	defer func() {
+		// make sure we release all the data in the map after validating block
+		r.updates = make(map[flow.RegisterID][]byte)
+	}()
+
+	if len(r.updates) == 0 {
+		return nil
+	}
+
 	registers := make([]*entities.RegisterID, 0)
 	values := maps.Values(r.updates)
 
