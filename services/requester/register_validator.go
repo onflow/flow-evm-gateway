@@ -55,7 +55,7 @@ func (r *RegisterValidator) SetValue(owner, key, value []byte) (err error) {
 // ValidateBlock will go over all registers that were set during block execution and compare
 // them against the registers stored on-chain using an execution data client.
 // Expected errors:
-// - Invalid error if there is a mismatch in any of the register values
+// - ErrStateMismatch error if there is a mismatch in any of the register values
 // Any other error is an issue with client request or response.
 func (r *RegisterValidator) ValidateBlock(height uint64) error {
 	defer func() {
@@ -89,7 +89,7 @@ func (r *RegisterValidator) ValidateBlock(height uint64) error {
 		if !bytes.Equal(values[i], val) {
 			return fmt.Errorf(
 				"%w register %s with value %x does not match remote state value %x at height %d",
-				errs.ErrInvalid,
+				errs.ErrStateMismatch,
 				maps.Keys(r.updates)[i].String(),
 				values[i],
 				val,

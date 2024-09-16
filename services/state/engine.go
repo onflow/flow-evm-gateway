@@ -2,6 +2,7 @@ package state
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/models"
+	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/services/requester"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
@@ -141,17 +143,16 @@ func (e *Engine) executeBlock(block *models.Block) error {
 	executedRoot := gethTypes.DeriveSha(receipts, trie.NewStackTrie(nil))
 	// make sure receipt root matches, so we know all the execution results are same
 	if executedRoot.Cmp(block.ReceiptRoot) != 0 {
-		return fmt.Errorf("state mismatch")
+		return errs.ErrStateMismatch
 	}
 
 	if e.config.ValidateRegisters {
 		validator := registers.(*requester.RegisterValidator)
-		// because we currently execute all the requests against the remote client as well as
-		// local client we can afford to just log this and fix it since all the wrong local results
-		// will get overwritten by the remote client results. However once this double execution is removed
-		// we should panic at this point, since the local state will be wrong and results will be wrong.
-		// todo remove after we stop doing double execution.
 		if err := validator.ValidateBlock(block.Height); err != nil {
+			if errors.Is(err, errs.ErrStateMismatch) {
+				return err
+			}
+			// if there were issues with the client request only log the error
 			e.logger.Error().Err(err).Msg("register validation failed")
 		}
 	}
