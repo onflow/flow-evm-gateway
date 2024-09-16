@@ -13,7 +13,6 @@ import (
 	"golang.org/x/exp/maps"
 
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
-	"github.com/onflow/flow-evm-gateway/storage/pebble"
 )
 
 // todo we should introduce a new state of the block, indexed, executed and validate
@@ -24,17 +23,17 @@ var _ atree.Ledger = &RegisterValidator{}
 // RegisterValidator keeps track of all set register during execution and is checked
 // once the block is executed.
 type RegisterValidator struct {
-	*pebble.Register
+	atree.Ledger
 	execution executiondata.ExecutionDataAPIClient
 	updates   map[flow.RegisterID][]byte
 }
 
 func NewRegisterValidator(
-	register *pebble.Register,
+	register atree.Ledger,
 	execution executiondata.ExecutionDataAPIClient,
 ) *RegisterValidator {
 	return &RegisterValidator{
-		Register:  register,
+		Ledger:    register,
 		execution: execution,
 		updates:   make(map[flow.RegisterID][]byte),
 	}
@@ -47,7 +46,7 @@ func (r *RegisterValidator) SetValue(owner, key, value []byte) (err error) {
 	}
 	r.updates[id] = value
 
-	return r.Register.SetValue(owner, key, value)
+	return r.Ledger.SetValue(owner, key, value)
 }
 
 // ValidateBlock will go over all registers that were set during block execution and compare
