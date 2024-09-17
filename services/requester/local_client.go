@@ -40,7 +40,7 @@ func (l *LocalClient) SendRawTransaction(
 
 func (l *LocalClient) GetBalance(ctx context.Context, address common.Address, evmHeight uint64) (*big.Int, error) {
 	bal := l.state.GetBalance(address)
-	return (&big.Int{}).SetUint64(bal.Uint64()), nil
+	return bal.ToBig(), nil
 }
 
 func (l *LocalClient) Call(ctx context.Context, data []byte, from common.Address, evmHeight uint64) ([]byte, error) {
