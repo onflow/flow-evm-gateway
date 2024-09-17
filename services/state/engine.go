@@ -120,7 +120,7 @@ func (e *Engine) executeBlock(block *models.Block) error {
 
 	// if validation is enabled wrap the register ledger into a validator
 	if e.config.ValidateRegisters {
-		registers = NewRegisterValidator(registers, nil)
+		registers = NewRegisterValidator(registers, e.execution)
 	}
 
 	state, err := NewBlockState(block, registers, e.config.FlowNetworkID, e.blocks, e.receipts, e.logger)
