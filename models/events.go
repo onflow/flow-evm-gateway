@@ -8,6 +8,8 @@ import (
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go/fvm/evm/events"
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
+
+	errs "github.com/onflow/flow-evm-gateway/models/errors"
 )
 
 // isBlockExecutedEvent checks whether the given event contains block executed data.
@@ -115,9 +117,13 @@ func decodeCadenceEvents(events flow.BlockEvents) (*CadenceEvents, error) {
 		}
 	}
 
-	// safety check, we can't have an empty block with transactions
+	// safety check, we have a missing block in the events
 	if e.block == nil && len(e.transactions) > 0 {
-		return nil, fmt.Errorf("EVM block can not be nil if transactions are present, Flow block: %d", events.Height)
+		return nil, fmt.Errorf(
+			"%w EVM block nil at flow block: %d",
+			errs.ErrMissingBlock,
+			events.Height,
+		)
 	}
 
 	if e.block != nil {
@@ -127,7 +133,8 @@ func decodeCadenceEvents(events flow.BlockEvents) (*CadenceEvents, error) {
 		}
 		if e.block.TransactionHashRoot != txHashes.RootHash() {
 			return nil, fmt.Errorf(
-				"block %d references missing transaction/s",
+				"%w EVM block %d references missing transaction/s",
+				errs.ErrMissingTransactions,
 				e.block.Height,
 			)
 		}

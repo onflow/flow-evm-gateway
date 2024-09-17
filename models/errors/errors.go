@@ -19,10 +19,12 @@ var (
 
 	// General errors
 
-	ErrInternal     = errors.New("internal error")
-	ErrInvalid      = errors.New("invalid")
-	ErrRecoverable  = errors.New("recoverable")
-	ErrDisconnected = NewRecoverableError(errors.New("disconnected"))
+	ErrInternal            = errors.New("internal error")
+	ErrInvalid             = errors.New("invalid")
+	ErrRecoverable         = errors.New("recoverable")
+	ErrDisconnected        = NewRecoverableError(errors.New("disconnected"))
+	ErrMissingBlock        = errors.New("missing block")
+	ErrMissingTransactions = errors.New("missing transactions")
 
 	// Transaction errors
 

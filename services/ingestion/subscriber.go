@@ -2,6 +2,7 @@ package ingestion
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/onflow/cadence/runtime/common"
@@ -33,6 +34,9 @@ type RPCSubscriber struct {
 	chain             flowGo.ChainID
 	heartbeatInterval uint64
 	logger            zerolog.Logger
+
+	recovery        bool
+	recoveredEvents []flow.Event
 }
 
 func NewRPCSubscriber(
@@ -107,26 +111,26 @@ func (r *RPCSubscriber) Subscribe(ctx context.Context, height uint64) <-chan mod
 // Subscribing to EVM specific events and handle any disconnection errors
 // as well as context cancellations.
 func (r *RPCSubscriber) subscribe(ctx context.Context, height uint64, opts ...access.SubscribeOption) <-chan models.BlockEvents {
-	events := make(chan models.BlockEvents)
+	eventsChan := make(chan models.BlockEvents)
 
 	_, err := r.client.GetBlockHeaderByHeight(ctx, height)
 	if err != nil {
 		err = fmt.Errorf("failed to subscribe for events, the block height %d doesn't exist: %w", height, err)
-		events <- models.NewBlockEventsError(err)
-		return events
+		eventsChan <- models.NewBlockEventsError(err)
+		return eventsChan
 	}
 
-	evs, errChan, err := r.client.SubscribeEventsByBlockHeight(ctx, height, r.blocksFilter(), opts...)
+	eventStream, errChan, err := r.client.SubscribeEventsByBlockHeight(ctx, height, r.blocksFilter(), opts...)
 	if err != nil {
-		events <- models.NewBlockEventsError(
+		eventsChan <- models.NewBlockEventsError(
 			fmt.Errorf("failed to subscribe to events by block height: %d, with: %w", height, err),
 		)
-		return events
+		return eventsChan
 	}
 
 	go func() {
 		defer func() {
-			close(events)
+			close(eventsChan)
 		}()
 
 		for ctx.Err() == nil {
@@ -135,30 +139,28 @@ func (r *RPCSubscriber) subscribe(ctx context.Context, height uint64, opts ...ac
 				r.logger.Info().Msg("event ingestion received done signal")
 				return
 
-			case blockEvents, ok := <-evs:
+			case blockEvents, ok := <-eventStream:
 				if !ok {
 					var err error
 					err = errs.ErrDisconnected
 					if ctx.Err() != nil {
 						err = ctx.Err()
 					}
-					events <- models.NewBlockEventsError(err)
+					eventsChan <- models.NewBlockEventsError(err)
 					return
 				}
 
-				evts := models.NewBlockEvents(blockEvents)
-				if evts.Err != nil {
-					r.logger.Warn().Err(err).Msgf(
-						"failed to parse EVM block events for Flow height: %d, retrying with gRPC API...",
-						blockEvents.Height,
-					)
-					// call the `GetEventsForHeightRange` gRPC API endpoint to fetch
-					// the EVM-related events, when event streaming returned an
-					// inconsistent response.
-					events <- r.fetchBlockEvents(ctx, blockEvents)
-				} else {
-					events <- models.NewBlockEvents(blockEvents)
+				evmEvents := models.NewBlockEvents(blockEvents)
+				// if events contain an error, or we are in a recovery mode
+				if evmEvents.Err != nil || r.recovery {
+					evmEvents = r.recover(ctx, blockEvents, evmEvents.Err)
+					// if we are still in recovery go to the next event
+					if r.recovery {
+						continue
+					}
 				}
+
+				eventsChan <- evmEvents
 
 			case err, ok := <-errChan:
 				if !ok {
@@ -167,17 +169,17 @@ func (r *RPCSubscriber) subscribe(ctx context.Context, height uint64, opts ...ac
 					if ctx.Err() != nil {
 						err = ctx.Err()
 					}
-					events <- models.NewBlockEventsError(err)
+					eventsChan <- models.NewBlockEventsError(err)
 					return
 				}
 
-				events <- models.NewBlockEventsError(fmt.Errorf("%w: %w", errs.ErrDisconnected, err))
+				eventsChan <- models.NewBlockEventsError(fmt.Errorf("%w: %w", errs.ErrDisconnected, err))
 				return
 			}
 		}
 	}()
 
-	return events
+	return eventsChan
 }
 
 // backfill will use the provided height and with the client for the provided spork will start backfilling
@@ -265,22 +267,18 @@ func (r *RPCSubscriber) blocksFilter() flow.EventFilter {
 	}
 }
 
-// fetchBlockEvents is used as a backup mechanism for fetching EVM-related
+// fetchMissingData is used as a backup mechanism for fetching EVM-related
 // events, when the event streaming API returns an inconsistent response.
 // An inconsistent response could be an EVM block that references EVM
-// transactions which are not present in the response.
-// Under the hood, it uses the `GetEventsForHeightRange` gRPC API endpoint,
-// making sure that we receive the expected events length for each event type
-// and Flow height.
-func (r *RPCSubscriber) fetchBlockEvents(
+// transactions which are not present in the response. It falls back
+// to using grpc requests instead of streaming.
+func (r *RPCSubscriber) fetchMissingData(
 	ctx context.Context,
 	blockEvents flow.BlockEvents,
 ) models.BlockEvents {
-	blkEvents := flow.BlockEvents{
-		BlockID:        blockEvents.BlockID,
-		Height:         blockEvents.Height,
-		BlockTimestamp: blockEvents.BlockTimestamp,
-	}
+	// remove existing events
+	blockEvents.Events = nil
+
 	for _, eventType := range r.blocksFilter().EventTypes {
 		recoveredEvents, err := r.client.GetEventsForHeightRange(
 			ctx,
@@ -302,8 +300,52 @@ func (r *RPCSubscriber) fetchBlockEvents(
 			)
 		}
 
-		blkEvents.Events = append(blkEvents.Events, recoveredEvents[0].Events...)
+		blockEvents.Events = append(blockEvents.Events, recoveredEvents[0].Events...)
 	}
 
-	return models.NewBlockEvents(blkEvents)
+	return models.NewBlockEvents(blockEvents)
+}
+
+// accumulateEventsMissingBlock will keep receiving transaction events until it can produce a valid
+// EVM block event containing a block and transactions. At that point it will reset the recovery mode
+// and return the valid block events.
+func (r *RPCSubscriber) accumulateEventsMissingBlock(events flow.BlockEvents) models.BlockEvents {
+	r.recoveredEvents = append(r.recoveredEvents, events.Events...)
+	events.Events = r.recoveredEvents
+
+	recovered := models.NewBlockEvents(events)
+	r.recovery = recovered.Err != nil
+
+	if !r.recovery {
+		r.recoveredEvents = nil
+	}
+
+	return recovered
+}
+
+// recover tries to recover from an invalid data sent over the event stream.
+//
+// An invalid data can be a cause of corrupted index or network issue from the source,
+// in which case we might miss one of the events (missing transaction), or it can be
+// due to a failure from the system transaction which commits an EVM block, which results
+// in missing EVM block event but present transactions.
+func (r *RPCSubscriber) recover(
+	ctx context.Context,
+	events flow.BlockEvents,
+	err error,
+) models.BlockEvents {
+	r.logger.Warn().Err(err).Msgf(
+		"failed to parse EVM block events for Flow height: %d, entering recovery",
+		events.Height,
+	)
+
+	if errors.Is(err, errs.ErrMissingBlock) || r.recovery {
+		return r.accumulateEventsMissingBlock(events)
+	}
+
+	if errors.Is(err, errs.ErrMissingTransactions) {
+		return r.fetchMissingData(ctx, events)
+	}
+
+	return models.NewBlockEventsError(err)
 }
