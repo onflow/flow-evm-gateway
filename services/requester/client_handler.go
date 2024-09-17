@@ -262,6 +262,8 @@ func handleCall[T any](
 			Any("local-result", localRes).
 			Msg("error from remote client but not from local client")
 
+		// todo check the error type equals to a whitelist (rate-limits, pruned state (EN)...)
+
 		return localRes, nil
 	}
 

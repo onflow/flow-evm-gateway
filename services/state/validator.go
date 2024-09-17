@@ -53,11 +53,12 @@ func (r *RegisterValidator) SetValue(owner, key, value []byte) (err error) {
 }
 
 // ValidateBlock will go over all registers that were set during block execution and compare
-// them against the registers stored on-chain using an execution data client.
+// them against the registers stored on-chain using an execution data client for the provided
+// Cadence height.
 // Expected errors:
 // - ErrStateMismatch error if there is a mismatch in any of the register values
 // Any other error is an issue with client request or response.
-func (r *RegisterValidator) ValidateBlock(height uint64) error {
+func (r *RegisterValidator) ValidateBlock(cadenceHeight uint64) error {
 	defer func() {
 		// make sure we release all the data in the map after validating block
 		r.updates = make(map[flow.RegisterID][]byte)
@@ -77,7 +78,7 @@ func (r *RegisterValidator) ValidateBlock(height uint64) error {
 	response, err := r.execution.GetRegisterValues(
 		context.Background(),
 		&executiondata.GetRegisterValuesRequest{
-			BlockHeight: height,
+			BlockHeight: cadenceHeight,
 			RegisterIds: registers,
 		},
 	)
@@ -93,7 +94,7 @@ func (r *RegisterValidator) ValidateBlock(height uint64) error {
 				maps.Keys(r.updates)[i].String(),
 				values[i],
 				val,
-				height,
+				cadenceHeight,
 			)
 		}
 	}

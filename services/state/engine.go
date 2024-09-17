@@ -150,8 +150,13 @@ func (e *Engine) executeBlock(block *models.Block) error {
 	}
 
 	if e.config.ValidateRegisters {
+		cadenceHeight, err := e.blocks.GetCadenceHeight(block.Height)
+		if err != nil {
+			e.logger.Error().Err(err).Msg("register validation failed, block cadence height")
+		}
+
 		validator := registers.(*RegisterValidator)
-		if err := validator.ValidateBlock(block.Height); err != nil {
+		if err := validator.ValidateBlock(cadenceHeight); err != nil {
 			if errors.Is(err, errs.ErrStateMismatch) {
 				return err
 			}
