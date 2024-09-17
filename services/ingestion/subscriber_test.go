@@ -97,16 +97,17 @@ func Test_MissingBlockEvent(t *testing.T) {
 			blockCdc, _, blockEvent, _ := newBlock(i, []gethCommon.Hash{tx.Hash()})
 
 			if i == foundBlockHeight {
+				missingHashes = append(missingHashes, tx.Hash())
 				blockCdc, _, _, _ = newBlock(i, missingHashes)
 			}
 
 			blockEvents := []flow.Event{
-				{Value: blockCdc, Type: string(txEvent.Etype)},
-				{Value: txCdc, Type: string(blockEvent.Etype)},
+				{Value: txCdc, Type: string(txEvent.Etype)},
+				{Value: blockCdc, Type: string(blockEvent.Etype)},
 			}
 
 			if i > missingBlockHeight && i < foundBlockHeight {
-				blockEvents = blockEvents[1:] // remove block
+				blockEvents = blockEvents[:1] // remove block
 				missingHashes = append(missingHashes, tx.Hash())
 			}
 

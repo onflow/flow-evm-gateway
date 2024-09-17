@@ -329,17 +329,22 @@ func (r *RPCSubscriber) accumulateEventsMissingBlock(events flow.BlockEvents) mo
 // in which case we might miss one of the events (missing transaction), or it can be
 // due to a failure from the system transaction which commits an EVM block, which results
 // in missing EVM block event but present transactions.
-func (r *RPCSubscriber) recover(ctx context.Context, events flow.BlockEvents, err error) models.BlockEvents {
-	r.logger.Error().Err(err).Msgf(
+func (r *RPCSubscriber) recover(
+	ctx context.Context,
+	events flow.BlockEvents,
+	err error,
+) models.BlockEvents {
+	r.logger.Warn().Err(err).Msgf(
 		"failed to parse EVM block events for Flow height: %d, entering recovery",
 		events.Height,
 	)
 
-	switch {
-	case errors.Is(err, errs.ErrMissingTransactions):
-		return r.fetchMissingData(ctx, events)
-	case errors.Is(err, errs.ErrMissingBlock):
+	if errors.Is(err, errs.ErrMissingBlock) || r.recovery {
 		return r.accumulateEventsMissingBlock(events)
+	}
+
+	if errors.Is(err, errs.ErrMissingTransactions) {
+		return r.fetchMissingData(ctx, events)
 	}
 
 	return models.NewBlockEventsError(err)
