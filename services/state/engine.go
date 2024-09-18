@@ -83,6 +83,37 @@ func (e *Engine) Notify(data any) {
 }
 
 func (e *Engine) Run(ctx context.Context) error {
+	// check if we need to execute any blocks that were indexed but not executed
+	// this could happen if after index but before execution the node crashes
+	indexed, err := e.blocks.LatestIndexedHeight()
+	if err != nil {
+		return err
+	}
+
+	executed, err := e.blocks.LatestExecutedHeight()
+	if err != nil {
+		return err
+	}
+
+	if executed < indexed {
+		e.logger.Info().
+			Uint64("last-executed", executed).
+			Uint64("last-indexed", indexed).
+			Msg("syncing executed blocks on startup")
+
+		for i := executed; i <= indexed; i++ {
+			block, err := e.blocks.GetByHeight(i)
+			if err != nil {
+				return err
+			}
+
+			if err := e.executeBlock(block); err != nil {
+				return err
+			}
+		}
+	}
+
+	// after all is up to sync we subscribe to live blocks
 	e.blockPublisher.Subscribe(e)
 	e.status.MarkReady()
 	return nil
