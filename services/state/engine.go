@@ -168,7 +168,15 @@ func (e *Engine) executeBlock(block *models.Block) error {
 		registers = NewRegisterValidator(registers, e.execution)
 	}
 
-	state, err := NewBlockState(block, registers, e.config.FlowNetworkID, e.blocks, e.receipts, e.logger)
+	state, err := NewBlockState(
+		block,
+		registers,
+		e.config.FlowNetworkID,
+		e.blocks,
+		e.receipts,
+		e.logger,
+		nil,
+	)
 	if err != nil {
 		return err
 	}
