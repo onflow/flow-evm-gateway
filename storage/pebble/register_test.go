@@ -10,7 +10,7 @@ func Test_RegisterSetGet(t *testing.T) {
 
 	runDB("set and get at same height", t, func(t *testing.T, db *Storage) {
 		height := uint64(1)
-		reg := NewRegister(db, height)
+		reg := NewRegister(db, height, nil)
 
 		owner := uint64Bytes(1337)
 		key := uint64Bytes(32)
@@ -32,7 +32,7 @@ func Test_RegisterSetGet(t *testing.T) {
 		count := 100
 		for i := 0; i < count; i++ {
 			h := uint64(i)
-			reg := NewRegister(db, h)
+			reg := NewRegister(db, h, nil)
 			val := uint64Bytes(h)
 
 			err := reg.SetValue(owner, key, val)
@@ -41,7 +41,7 @@ func Test_RegisterSetGet(t *testing.T) {
 
 		for i := 0; i < count; i++ {
 			h := uint64(i)
-			reg := NewRegister(db, h)
+			reg := NewRegister(db, h, nil)
 			val := uint64Bytes(h)
 
 			retVal, err := reg.GetValue(owner, key)
@@ -67,25 +67,25 @@ func Test_RegisterSetGet(t *testing.T) {
 		key22 := uint64Bytes(500)
 		val22 := uint64Bytes(2002)
 
-		reg := NewRegister(db, height1)
+		reg := NewRegister(db, height1, nil)
 		err := reg.SetValue(owner11, key11, val11)
 		require.NoError(t, err)
 
 		height2 := uint64(3)
-		reg = NewRegister(db, height2)
+		reg = NewRegister(db, height2, nil)
 		err = reg.SetValue(owner21, key21, val21)
 		require.NoError(t, err)
 		err = reg.SetValue(owner21, key22, val22)
 		require.NoError(t, err)
 
 		height3 := uint64(5)
-		reg = NewRegister(db, height3)
+		reg = NewRegister(db, height3, nil)
 		err = reg.SetValue(owner11, key15, val15)
 		require.NoError(t, err)
 		err = reg.SetValue(owner21, key22, val22)
 		require.NoError(t, err)
 
-		reg = NewRegister(db, uint64(0))
+		reg = NewRegister(db, uint64(0), nil)
 		// not found
 		val, err := reg.GetValue(owner11, key11)
 		require.Nil(t, err)
@@ -95,22 +95,22 @@ func Test_RegisterSetGet(t *testing.T) {
 		require.NoError(t, err)
 		require.Nil(t, val)
 
-		reg = NewRegister(db, uint64(1))
+		reg = NewRegister(db, uint64(1), nil)
 		val, err = reg.GetValue(owner11, key11)
 		require.NoError(t, err)
 		require.Equal(t, val11, val)
 
-		reg = NewRegister(db, uint64(2))
+		reg = NewRegister(db, uint64(2), nil)
 		val, err = reg.GetValue(owner11, key11)
 		require.NoError(t, err)
 		require.Equal(t, val11, val)
 
-		reg = NewRegister(db, uint64(3))
+		reg = NewRegister(db, uint64(3), nil)
 		val, err = reg.GetValue(owner11, key11)
 		require.NoError(t, err)
 		require.Equal(t, val11, val)
 
-		reg = NewRegister(db, uint64(5))
+		reg = NewRegister(db, uint64(5), nil)
 		val, err = reg.GetValue(owner11, key15)
 		require.NoError(t, err)
 		require.Equal(t, val15, val)
