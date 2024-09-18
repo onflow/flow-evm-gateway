@@ -165,7 +165,11 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 	}
 
 	batch := e.store.NewBatch()
-	defer batch.Close()
+	defer func() {
+		if err := batch.Close(); err != nil {
+			e.log.Warn().Err(err).Msg("failed to close batch")
+		}
+	}()
 
 	// we first index the block
 	err := e.indexBlock(
