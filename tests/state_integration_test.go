@@ -72,7 +72,7 @@ func Test_StateExecution_Transfers(t *testing.T) {
 
 	height0 := latest
 
-	registers := pebble.NewRegister(store, height0)
+	registers := pebble.NewRegister(store, height0, nil)
 	st, err := state.NewBlockState(block, registers, cfg.FlowNetworkID, blocks, receipts, logger)
 	require.NoError(t, err)
 
@@ -102,7 +102,7 @@ func Test_StateExecution_Transfers(t *testing.T) {
 	height1 := latest
 	amount1 := amount.Uint64()
 
-	registers = pebble.NewRegister(store, height1)
+	registers = pebble.NewRegister(store, height1, nil)
 	st, err = state.NewBlockState(block, registers, cfg.FlowNetworkID, blocks, receipts, logger)
 	require.NoError(t, err)
 
@@ -127,7 +127,7 @@ func Test_StateExecution_Transfers(t *testing.T) {
 	require.NoError(t, err)
 
 	height2 := latest
-	registers = pebble.NewRegister(store, height2)
+	registers = pebble.NewRegister(store, height2, nil)
 	st, err = state.NewBlockState(block, registers, cfg.FlowNetworkID, blocks, receipts, logger)
 	require.NoError(t, err)
 
@@ -139,7 +139,7 @@ func Test_StateExecution_Transfers(t *testing.T) {
 	block, err = blocks.GetByHeight(height0)
 	require.NoError(t, err)
 
-	registers = pebble.NewRegister(store, height0)
+	registers = pebble.NewRegister(store, height0, nil)
 	st, err = state.NewBlockState(block, registers, cfg.FlowNetworkID, blocks, receipts, logger)
 	require.NoError(t, err)
 
@@ -150,7 +150,7 @@ func Test_StateExecution_Transfers(t *testing.T) {
 	block, err = blocks.GetByHeight(height1)
 	require.NoError(t, err)
 
-	registers = pebble.NewRegister(store, height1)
+	registers = pebble.NewRegister(store, height1, nil)
 	st, err = state.NewBlockState(block, registers, cfg.FlowNetworkID, blocks, receipts, logger)
 	require.NoError(t, err)
 
@@ -161,7 +161,7 @@ func Test_StateExecution_Transfers(t *testing.T) {
 	block, err = blocks.GetByHeight(height2)
 	require.NoError(t, err)
 
-	registers = pebble.NewRegister(store, height2)
+	registers = pebble.NewRegister(store, height2, nil)
 	st, err = state.NewBlockState(block, registers, cfg.FlowNetworkID, blocks, receipts, logger)
 	require.NoError(t, err)
 
