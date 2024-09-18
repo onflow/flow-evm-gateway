@@ -508,6 +508,10 @@ func Run(ctx context.Context, cfg *config.Config, ready chan struct{}) error {
 		return fmt.Errorf("failed to start local state index engine: %w", err)
 	}
 
+	// we must wait for state index to be ready before starting the ingestion engine,
+	// because state index might have to catch-up executed blocks to indexed block height
+	<-boot.State.Ready()
+
 	if err := boot.StartEventIngestion(ctx); err != nil {
 		return fmt.Errorf("failed to start event ingestion engine: %w", err)
 	}
@@ -519,6 +523,9 @@ func Run(ctx context.Context, cfg *config.Config, ready chan struct{}) error {
 	if err := boot.StartMetricsServer(ctx); err != nil {
 		return fmt.Errorf("failed to start metrics server: %w", err)
 	}
+
+	// wait for event ingestion engine
+	<-boot.Events.Ready()
 
 	// mark ready
 	close(ready)
