@@ -13,6 +13,13 @@ import (
 	"github.com/onflow/flow-evm-gateway/storage"
 )
 
+// txTraceResult is the result of a single transaction trace.
+type txTraceResult struct {
+	TxHash gethCommon.Hash `json:"txHash"`           // transaction hash
+	Result interface{}     `json:"result,omitempty"` // Trace results produced by the tracer
+	Error  string          `json:"error,omitempty"`  // Trace failure produced by the tracer
+}
+
 type DebugAPI struct {
 	logger    zerolog.Logger
 	tracer    storage.TraceIndexer
@@ -47,18 +54,19 @@ func (d *DebugAPI) TraceBlockByNumber(
 	ctx context.Context,
 	number rpc.BlockNumber,
 	_ *tracers.TraceConfig,
-) ([]json.RawMessage, error) {
+) ([]*txTraceResult, error) {
 	block, err := d.blocks.GetByHeight(uint64(number.Int64()))
 	if err != nil {
-		return handleError[[]json.RawMessage](err, d.logger, d.collector)
+		return handleError[[]*txTraceResult](err, d.logger, d.collector)
 	}
 
-	results := make([]json.RawMessage, len(block.TransactionHashes))
+	results := make([]*txTraceResult, len(block.TransactionHashes))
 	for i, h := range block.TransactionHashes {
-		results[i], err = d.TraceTransaction(ctx, h, nil)
+		txTrace, err := d.TraceTransaction(ctx, h, nil)
 		if err != nil {
-			return nil, err
+			results[i] = &txTraceResult{TxHash: h, Error: err.Error()}
 		}
+		results[i] = &txTraceResult{TxHash: h, Result: txTrace}
 	}
 
 	return results, nil
@@ -68,18 +76,19 @@ func (d *DebugAPI) TraceBlockByHash(
 	ctx context.Context,
 	hash gethCommon.Hash,
 	_ *tracers.TraceConfig,
-) ([]json.RawMessage, error) {
+) ([]*txTraceResult, error) {
 	block, err := d.blocks.GetByID(hash)
 	if err != nil {
-		return handleError[[]json.RawMessage](err, d.logger, d.collector)
+		return handleError[[]*txTraceResult](err, d.logger, d.collector)
 	}
 
-	results := make([]json.RawMessage, len(block.TransactionHashes))
+	results := make([]*txTraceResult, len(block.TransactionHashes))
 	for i, h := range block.TransactionHashes {
-		results[i], err = d.TraceTransaction(ctx, h, nil)
+		txTrace, err := d.TraceTransaction(ctx, h, nil)
 		if err != nil {
-			return nil, err
+			results[i] = &txTraceResult{TxHash: h, Error: err.Error()}
 		}
+		results[i] = &txTraceResult{TxHash: h, Result: txTrace}
 	}
 
 	return results, nil
