@@ -243,7 +243,7 @@ func (r *Receipts) BloomsForBlockRange(start, end uint64) ([]*models.BloomsHeigh
 }
 
 func (r *Receipts) getLast() (uint64, error) {
-	l, err := r.store.get(latestEVMHeightKey)
+	l, err := r.store.get(latestIndexedHeight)
 	if err != nil {
 		return 0, fmt.Errorf("failed getting latest EVM height: %w", err)
 	}

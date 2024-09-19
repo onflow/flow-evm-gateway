@@ -104,7 +104,7 @@ func (b *Blocks) Store(
 		)
 	}
 
-	if err := b.store.set(latestEVMHeightKey, nil, evmHeightBytes, batch); err != nil {
+	if err := b.store.set(latestIndexedHeight, nil, evmHeightBytes, batch); err != nil {
 		return fmt.Errorf(
 			"failed to store latest EVM height: %d, with: %w",
 			block.Height,
@@ -178,7 +178,7 @@ func (b *Blocks) LatestIndexedHeight() (uint64, error) {
 }
 
 func (b *Blocks) latestEVMHeight() (uint64, error) {
-	val, err := b.store.get(latestEVMHeightKey)
+	val, err := b.store.get(latestIndexedHeight)
 	if err != nil {
 		if errors.Is(err, errs.ErrEntityNotFound) {
 			return 0, errs.ErrStorageNotInitialized
@@ -227,8 +227,12 @@ func (b *Blocks) InitHeights(cadenceHeight uint64, cadenceID flow.Identifier) er
 		return fmt.Errorf("failed to init latest Cadence height at: %d, with: %w", cadenceHeight, err)
 	}
 
-	if err := b.store.set(latestEVMHeightKey, nil, uint64Bytes(0), nil); err != nil {
-		return fmt.Errorf("failed to init latest EVM height at: %d, with: %w", 0, err)
+	if err := b.store.set(latestIndexedHeight, nil, uint64Bytes(0), nil); err != nil {
+		return fmt.Errorf("failed to init latest indexed EVM height at: %d, with: %w", 0, err)
+	}
+
+	if err := b.store.set(latestExecutedHeight, nil, uint64Bytes(0), nil); err != nil {
+		return fmt.Errorf("failed to init latest executed EVM height at: %d, with: %w", 0, err)
 	}
 
 	// we store genesis block because it isn't emitted over the network
@@ -268,15 +272,18 @@ func (b *Blocks) SetExecutedHeight(evmHeight uint64) error {
 	b.mux.Lock()
 	defer b.mux.Unlock()
 
-	return b.store.set(evmHeightIndex, nil, uint64Bytes(evmHeight), nil)
+	return b.store.set(latestExecutedHeight, nil, uint64Bytes(evmHeight), nil)
 }
 
 func (b *Blocks) LatestExecutedHeight() (uint64, error) {
 	b.mux.RLock()
 	defer b.mux.RUnlock()
 
-	val, err := b.store.get(evmHeightIndex)
+	val, err := b.store.get(latestExecutedHeight)
 	if err != nil {
+		if errors.Is(err, errs.ErrEntityNotFound) {
+			return 0, errs.ErrStorageNotInitialized
+		}
 		return 0, err
 	}
 
