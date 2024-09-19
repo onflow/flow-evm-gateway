@@ -716,12 +716,7 @@ func (e *RemoteClient) executeScriptAtHeight(
 		)
 	}
 	if err != nil {
-		// if snapshot doesn't exist on EN, the height at which script was executed is out
-		// of the boundaries the EN keeps state, so return out of range
-		const storageError = "failed to create storage snapshot"
-		if strings.Contains(err.Error(), storageError) {
-			return nil, errs.NewHeightOutOfRangeError(height)
-		}
+		return nil, parseError(err, height)
 	} else if key != "" && e.scriptCache != nil { // if error is nil and key is supported add to cache
 		e.scriptCache.Add(key, res)
 	}
@@ -757,7 +752,8 @@ func cadenceStringToBytes(value cadence.Value) ([]byte, error) {
 	return code, nil
 }
 
-// parseResult
+// parseResult will check if the error code is present, which means there was an actual error during execution,
+// the error is then returned as a typed error instead.
 func parseResult(res cadence.Value) (*evmTypes.ResultSummary, error) {
 	result, err := evmImpl.ResultSummaryFromEVMResultValue(res)
 	if err != nil {
@@ -772,6 +768,22 @@ func parseResult(res cadence.Value) (*evmTypes.ResultSummary, error) {
 	}
 
 	return result, err
+}
+
+func parseError(err error, height uint64) error {
+	// if snapshot doesn't exist on EN, the height at which script was executed is out
+	// of the boundaries the EN keeps state, so return out of range
+	const storageError = "failed to create storage snapshot"
+	if strings.Contains(err.Error(), storageError) {
+		return errs.NewHeightOutOfRangeError(height)
+	}
+	// the AN rate-limited the request
+	const rateLimitError = "ResourceExhausted"
+	if strings.Contains(err.Error(), rateLimitError) {
+		return errs.ErrRateLimit
+	}
+
+	return err
 }
 
 // cacheKey builds the cache key from the script type, height and arguments.
