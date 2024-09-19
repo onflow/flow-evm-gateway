@@ -1,6 +1,7 @@
 package requester
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"math/big"
@@ -239,7 +240,7 @@ func handleCall[T any](
 	// happy case, both errs are nil and results are same
 	if localErr == nil && remoteErr == nil {
 		// if results are not same log the diff
-		if !reflect.DeepEqual(localRes, remoteRes) {
+		if !isEqual(localRes, remoteRes) {
 			logger.Error().
 				Any("local", localRes).
 				Any("remote", remoteRes).
@@ -288,4 +289,36 @@ func handleCall[T any](
 	}
 
 	return remoteRes, remoteErr
+}
+
+// isEqual compares two values of type T, supporting *big.Int, uint64, []byte, and gethCommon.Hash
+func isEqual[T any](a, b T) bool {
+	switch aVal := any(a).(type) {
+	case *big.Int:
+		bVal, ok := any(b).(*big.Int)
+		if !ok {
+			return false
+		}
+		return aVal.Cmp(bVal) == 0
+	case uint64:
+		bVal, ok := any(b).(uint64)
+		if !ok {
+			return false
+		}
+		return aVal == bVal
+	case []byte:
+		bVal, ok := any(b).([]byte)
+		if !ok {
+			return false
+		}
+		return bytes.Equal(aVal, bVal)
+	case common.Hash:
+		bVal, ok := any(b).(common.Hash)
+		if !ok {
+			return false
+		}
+		return aVal.Cmp(bVal) == 0
+	default:
+		return reflect.DeepEqual(a, b)
+	}
 }
