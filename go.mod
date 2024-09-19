@@ -10,7 +10,7 @@ require (
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/onflow/atree v0.8.0-rc.6
 	github.com/onflow/cadence v1.0.0-preview.52
-	github.com/onflow/flow-go v0.37.10-util-ensure-checkpoint-exists.0.20240918123637-27d2c56494f8
+	github.com/onflow/flow-go v0.37.10-util-ensure-checkpoint-exists.0.20240914104351-c2d9833c3357
 	github.com/onflow/flow-go-sdk v1.0.0-preview.56
 	github.com/onflow/flow/protobuf/go/flow v0.4.7
 	github.com/onflow/go-ethereum v1.14.7

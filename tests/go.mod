@@ -8,7 +8,7 @@ require (
 	github.com/onflow/crypto v0.25.2
 	github.com/onflow/flow-emulator v1.0.0-preview.42
 	github.com/onflow/flow-evm-gateway v0.0.0-20240201154855-4d4d3d3f19c7
-	github.com/onflow/flow-go v0.37.10-util-ensure-checkpoint-exists.0.20240918123637-27d2c56494f8
+	github.com/onflow/flow-go v0.37.10-util-ensure-checkpoint-exists.0.20240914104351-c2d9833c3357
 	github.com/onflow/flow-go-sdk v1.0.0-preview.56
 	github.com/onflow/go-ethereum v1.14.7
 	github.com/rs/zerolog v1.31.0
