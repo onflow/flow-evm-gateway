@@ -2,6 +2,7 @@ package requester
 
 import (
 	"context"
+	"errors"
 	"math/big"
 	"reflect"
 	"sync"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/metrics"
+	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/services/state"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
@@ -241,28 +243,34 @@ func handleCall[T any](
 			logger.Error().
 				Any("local", localRes).
 				Any("remote", remoteRes).
-				Msg("results from local and remote client are note the same")
+				Msg("results from local and remote client are not the same")
 		}
 	}
 
 	// make sure if both return an error the errors are the same
 	if localErr != nil && remoteErr != nil &&
 		localErr.Error() != remoteErr.Error() {
+		// if error on EN is that state is pruned or AN is rate limiting the request,
+		// we return the local error because it's more correct
+		if errors.Is(remoteErr, errs.ErrHeightOutOfRange) || errors.Is(remoteErr, errs.ErrRateLimit) {
+			return localRes, localErr
+		}
+
 		logger.Error().
 			Str("local", localErr.Error()).
 			Str("remote", remoteErr.Error()).
-			Msg("errors from local and remote client are note the same")
+			Msg("errors from local and remote client are not the same")
 	}
 
 	// if remote received an error but local call worked, return the local result
 	// this can be due to rate-limits or pruned state on AN/EN
 	if localErr == nil && remoteErr != nil {
-		logger.Warn().
-			Str("remote-error", remoteErr.Error()).
-			Any("local-result", localRes).
-			Msg("error from remote client but not from local client")
-
-		// todo check the error type equals to a whitelist (rate-limits, pruned state (EN)...)
+		if !errors.Is(remoteErr, errs.ErrHeightOutOfRange) || !errors.Is(remoteErr, errs.ErrRateLimit) {
+			logger.Warn().
+				Str("remote-error", remoteErr.Error()).
+				Any("local-result", localRes).
+				Msg("error from remote client but not from local client")
+		}
 
 		return localRes, nil
 	}
