@@ -65,8 +65,9 @@ func (d *DebugAPI) TraceBlockByNumber(
 		txTrace, err := d.TraceTransaction(ctx, h, nil)
 		if err != nil {
 			results[i] = &txTraceResult{TxHash: h, Error: err.Error()}
+		} else {
+			results[i] = &txTraceResult{TxHash: h, Result: txTrace}
 		}
-		results[i] = &txTraceResult{TxHash: h, Result: txTrace}
 	}
 
 	return results, nil
@@ -87,8 +88,9 @@ func (d *DebugAPI) TraceBlockByHash(
 		txTrace, err := d.TraceTransaction(ctx, h, nil)
 		if err != nil {
 			results[i] = &txTraceResult{TxHash: h, Error: err.Error()}
+		} else {
+			results[i] = &txTraceResult{TxHash: h, Result: txTrace}
 		}
-		results[i] = &txTraceResult{TxHash: h, Result: txTrace}
 	}
 
 	return results, nil
