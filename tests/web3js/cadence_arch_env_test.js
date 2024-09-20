@@ -21,6 +21,7 @@ describe('calls cadence arch functions and block environment functions', functio
             data: method.encodeABI(),
             value: '0',
             gasPrice: conf.minGasPrice,
+            gasLimit: 10000000,
         })
         assert.equal(res.receipt.status, conf.successStatus)
         assert.equal(res.receipt.logs.length, 1)
@@ -57,12 +58,9 @@ describe('calls cadence arch functions and block environment functions', functio
         await testEmitTx(methods.emitBlockNumber())
 
         let res = await testCall(methods.blockNumber())
-        // todo eth calls are executed at the provided block height, but at that height
-        // block environment functions (number, hash etc), will already point to the block proposal
-        // which is the next block, not the block provided by height, discuss this problem!
         assert.equal(
             web3.eth.abi.decodeParameter('uint256', res.value),
-            res.block.number+1n,
+            res.block.number,
         )
     })
 
@@ -71,14 +69,9 @@ describe('calls cadence arch functions and block environment functions', functio
 
         let res = await testCall(methods.blockTime())
 
-        // todo eth calls are executed at the provided block height, but at that height
-        // block environment functions (number, hash etc), will already point to the block proposal
-        // which is the next block, not the block provided by height, discuss this problem!
-        let prev = await web3.eth.getBlock(res.block.number)
-
         assert.equal(
             web3.eth.abi.decodeParameter('uint', res.value).toString(),
-            (prev.timestamp+1n).toString(),  // investigate why timestamp is increasing by 1
+            res.block.timestamp.toString(),
         )
     })
 
@@ -87,13 +80,10 @@ describe('calls cadence arch functions and block environment functions', functio
 
         await testEmitTx(methods.emitBlockHash(b.number))
 
-        // todo eth calls are executed at the provided block height, but at that height
-        // block environment functions (number, hash etc), will already point to the block proposal
-        // which is the next block, not the block provided by height, discuss this problem!
-        let res = await testCall(methods.blockHash(b.number+1n))
+        let res = await testCall(methods.blockHash(b.number))
         assert.equal(
             web3.eth.abi.decodeParameter('bytes32', res.value).toString(),
-            res.block.hash.toString(),
+            b.hash.toString(),
         )
     })
 
@@ -108,6 +98,10 @@ describe('calls cadence arch functions and block environment functions', functio
         await testEmitTx(methods.emitChainID())
         await testCall(methods.chainID())
     })
+
+    // todo calls will fail because they can't execute cadence arch calls
+    // we should detect that and recover, in the block executor call method we should
+    // detect cadence arch call and recover with remote call
 
     it('calls verifyArchCallToFlowBlockHeight', async function() {
         await testEmitTx(methods.emitVerifyArchCallToFlowBlockHeight())
