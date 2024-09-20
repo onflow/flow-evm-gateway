@@ -12,7 +12,7 @@ import (
 
 	"github.com/onflow/flow-evm-gateway/models"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
-	"github.com/onflow/flow-evm-gateway/services/requester"
+	"github.com/onflow/flow-evm-gateway/services/evm"
 	"github.com/onflow/flow-evm-gateway/services/testutils"
 
 	flowGo "github.com/onflow/flow-go/model/flow"
@@ -35,7 +35,7 @@ func Test_Subscribing(t *testing.T) {
 	}
 	currentClient := testutils.SetupClientForRange(21, endHeight)
 
-	client, err := requester.NewCrossSporkClient(
+	client, err := evm.NewCrossSporkClient(
 		currentClient,
 		sporkClients,
 		zerolog.Nop(),
@@ -75,7 +75,7 @@ func Test_MissingBlockEvent(t *testing.T) {
 
 	currentClient, clientEvents := testutils.SetupClient(startHeight, endHeight)
 
-	client, err := requester.NewCrossSporkClient(
+	client, err := evm.NewCrossSporkClient(
 		currentClient,
 		nil,
 		zerolog.New(zerolog.NewTestWriter(t)),
@@ -177,7 +177,7 @@ func Test_SubscribingWithRetryOnError(t *testing.T) {
 		endHeight,
 	)
 
-	client, err := requester.NewCrossSporkClient(
+	client, err := evm.NewCrossSporkClient(
 		currentClient,
 		sporkClients,
 		zerolog.Nop(),
@@ -240,7 +240,7 @@ func Test_SubscribingWithRetryOnErrorMultipleBlocks(t *testing.T) {
 		endHeight,
 	)
 
-	client, err := requester.NewCrossSporkClient(
+	client, err := evm.NewCrossSporkClient(
 		currentClient,
 		sporkClients,
 		zerolog.Nop(),
@@ -302,7 +302,7 @@ func Test_SubscribingWithRetryOnErrorEmptyBlocks(t *testing.T) {
 		endHeight,
 	)
 
-	client, err := requester.NewCrossSporkClient(
+	client, err := evm.NewCrossSporkClient(
 		currentClient,
 		sporkClients,
 		zerolog.Nop(),

@@ -10,7 +10,7 @@ import (
 
 	"github.com/onflow/flow-evm-gateway/models"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
-	"github.com/onflow/flow-evm-gateway/services/requester"
+	"github.com/onflow/flow-evm-gateway/services/evm"
 
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access"
@@ -30,7 +30,7 @@ type EventSubscriber interface {
 var _ EventSubscriber = &RPCSubscriber{}
 
 type RPCSubscriber struct {
-	client            *requester.CrossSporkClient
+	client            *evm.CrossSporkClient
 	chain             flowGo.ChainID
 	heartbeatInterval uint64
 	logger            zerolog.Logger
@@ -40,7 +40,7 @@ type RPCSubscriber struct {
 }
 
 func NewRPCSubscriber(
-	client *requester.CrossSporkClient,
+	client *evm.CrossSporkClient,
 	heartbeatInterval uint64,
 	chainID flowGo.ChainID,
 	logger zerolog.Logger,

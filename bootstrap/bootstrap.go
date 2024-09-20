@@ -19,8 +19,8 @@ import (
 	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/models"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
+	"github.com/onflow/flow-evm-gateway/services/evm"
 	"github.com/onflow/flow-evm-gateway/services/ingestion"
-	"github.com/onflow/flow-evm-gateway/services/requester"
 	"github.com/onflow/flow-evm-gateway/services/traces"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
@@ -44,7 +44,7 @@ type Publishers struct {
 type Bootstrap struct {
 	logger     zerolog.Logger
 	config     *config.Config
-	client     *requester.CrossSporkClient
+	client     *evm.CrossSporkClient
 	storages   *Storages
 	publishers *Publishers
 	collector  metrics.Collector
@@ -192,9 +192,9 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 	case b.config.COAKey != nil:
 		signer, err = crypto.NewInMemorySigner(b.config.COAKey, crypto.SHA3_256)
 	case b.config.COAKeys != nil:
-		signer, err = requester.NewKeyRotationSigner(b.config.COAKeys, crypto.SHA3_256)
+		signer, err = evm.NewKeyRotationSigner(b.config.COAKeys, crypto.SHA3_256)
 	case len(b.config.COACloudKMSKeys) > 0:
-		signer, err = requester.NewKMSKeyRotationSigner(
+		signer, err = evm.NewKMSKeyRotationSigner(
 			ctx,
 			b.config.COACloudKMSKeys,
 			b.logger,
@@ -207,9 +207,9 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 	}
 
 	// create transaction pool
-	txPool := requester.NewTxPool(b.client, b.publishers.Transaction, b.logger)
+	txPool := evm.NewTxPool(b.client, b.publishers.Transaction, b.logger)
 
-	evm, err := requester.NewEVM(
+	evm, err := evm.NewEVM(
 		b.client,
 		b.config,
 		signer,
@@ -360,7 +360,7 @@ func startEngine(
 }
 
 // setupCrossSporkClient sets up a cross-spork AN client.
-func setupCrossSporkClient(config *config.Config, logger zerolog.Logger) (*requester.CrossSporkClient, error) {
+func setupCrossSporkClient(config *config.Config, logger zerolog.Logger) (*evm.CrossSporkClient, error) {
 	// create access client with cross-spork capabilities
 	currentSporkClient, err := grpc.NewClient(
 		config.AccessNodeHost,
@@ -386,7 +386,7 @@ func setupCrossSporkClient(config *config.Config, logger zerolog.Logger) (*reque
 	}
 
 	// initialize cross spork client to the access nodes
-	client, err := requester.NewCrossSporkClient(
+	client, err := evm.NewCrossSporkClient(
 		currentSporkClient,
 		pastSporkClients,
 		logger,
@@ -403,7 +403,7 @@ func setupCrossSporkClient(config *config.Config, logger zerolog.Logger) (*reque
 // in case such a height doesn't already exist in the database.
 func setupStorage(
 	config *config.Config,
-	client *requester.CrossSporkClient,
+	client *evm.CrossSporkClient,
 	logger zerolog.Logger,
 ) (*Storages, error) {
 	// create pebble storage from the provided database root directory
