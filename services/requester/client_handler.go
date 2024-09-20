@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"math/big"
 	"reflect"
 	"sync"
@@ -83,7 +84,12 @@ func (c *ClientHandler) GetBalance(
 		return local.GetBalance(ctx, address, height)
 	}, func() (*big.Int, error) {
 		return c.remote.GetBalance(ctx, address, height)
-	}, c.logger.With().Str("client-call", "get balance").Logger())
+	}, c.logger.With().
+		Str("client-call", "get balance").
+		Str("address", address.String()).
+		Uint64("height", height).
+		Logger(),
+	)
 }
 
 func (c *ClientHandler) Call(
@@ -101,7 +107,12 @@ func (c *ClientHandler) Call(
 		return local.Call(ctx, data, from, height)
 	}, func() ([]byte, error) {
 		return c.remote.Call(ctx, data, from, height)
-	}, c.logger.With().Str("client-call", "call").Logger())
+	}, c.logger.With().
+		Str("client-call", "call").
+		Str("from", from.String()).
+		Uint64("height", height).
+		Str("data", fmt.Sprintf("%x", data)).
+		Logger())
 }
 
 func (c *ClientHandler) EstimateGas(
@@ -119,7 +130,12 @@ func (c *ClientHandler) EstimateGas(
 		return local.EstimateGas(ctx, data, from, height)
 	}, func() (uint64, error) {
 		return c.remote.EstimateGas(ctx, data, from, height)
-	}, c.logger.With().Str("client-call", "estimate gas").Logger())
+	}, c.logger.With().
+		Str("client-call", "estimate gas").
+		Str("from", from.String()).
+		Uint64("height", height).
+		Str("data", fmt.Sprintf("%x", data)).
+		Logger())
 }
 
 func (c *ClientHandler) GetNonce(
@@ -136,7 +152,10 @@ func (c *ClientHandler) GetNonce(
 		return local.GetNonce(ctx, address, height)
 	}, func() (uint64, error) {
 		return c.remote.GetNonce(ctx, address, height)
-	}, c.logger.With().Str("client-call", "get nonce").Logger())
+	}, c.logger.With().Str("client-call", "get nonce").
+		Str("address", address.String()).
+		Uint64("height", height).
+		Logger())
 }
 
 func (c *ClientHandler) GetCode(
@@ -153,7 +172,10 @@ func (c *ClientHandler) GetCode(
 		return local.GetCode(ctx, address, height)
 	}, func() ([]byte, error) {
 		return c.remote.GetCode(ctx, address, height)
-	}, c.logger.With().Str("client-call", "get code").Logger())
+	}, c.logger.With().Str("client-call", "get code").
+		Str("address", address.String()).
+		Uint64("height", height).
+		Logger())
 }
 
 func (c *ClientHandler) GetLatestEVMHeight(ctx context.Context) (uint64, error) {
