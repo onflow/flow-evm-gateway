@@ -21,7 +21,7 @@ before(async () => {
     assert.equal(rcp.contractAddress, contractAddress)
     assert.equal(rcp.status, conf.successStatus)
     assert.isUndefined(rcp.to)
-    assert.equal(rcp.gasUsed, 1130512n)
+    assert.equal(rcp.gasUsed, 1387107n)
     assert.equal(rcp.gasUsed, rcp.cumulativeGasUsed)
 })
 
