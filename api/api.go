@@ -25,8 +25,8 @@ import (
 	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/models"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
+	"github.com/onflow/flow-evm-gateway/services/evm"
 	"github.com/onflow/flow-evm-gateway/services/logs"
-	"github.com/onflow/flow-evm-gateway/services/requester"
 	"github.com/onflow/flow-evm-gateway/storage"
 )
 
@@ -83,7 +83,7 @@ func SupportedAPIs(
 type BlockChainAPI struct {
 	logger                zerolog.Logger
 	config                *config.Config
-	evm                   requester.EVMClient
+	evm                   evm.EVMClient
 	blocks                storage.BlockIndexer
 	transactions          storage.TransactionIndexer
 	receipts              storage.ReceiptIndexer
@@ -96,7 +96,7 @@ type BlockChainAPI struct {
 func NewBlockChainAPI(
 	logger zerolog.Logger,
 	config *config.Config,
-	evm requester.EVMClient,
+	evm evm.EVMClient,
 	blocks storage.BlockIndexer,
 	transactions storage.TransactionIndexer,
 	receipts storage.ReceiptIndexer,

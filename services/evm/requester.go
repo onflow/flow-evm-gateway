@@ -1,10 +1,9 @@
-package requester
+package evm
 
 import (
 	"context"
 	_ "embed"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -340,45 +339,12 @@ func (e *RemoteClient) GetBalance(
 	address common.Address,
 	evmHeight int64,
 ) (*big.Int, error) {
-	hexEncodedAddress, err := addressToCadenceString(address)
+	stateDB, err := e.stateAt(evmHeight)
 	if err != nil {
 		return nil, err
 	}
 
-	height, err := e.evmToCadenceHeight(evmHeight)
-	if err != nil {
-		return nil, err
-	}
-
-	val, err := e.executeScriptAtHeight(
-		ctx,
-		getBalance,
-		height,
-		[]cadence.Value{hexEncodedAddress},
-	)
-	if err != nil {
-		if !errors.Is(err, errs.ErrHeightOutOfRange) {
-			e.logger.Error().
-				Err(err).
-				Str("address", address.String()).
-				Int64("evm-height", evmHeight).
-				Uint64("cadence-height", height).
-				Msg("failed to get get balance")
-		}
-		return nil, fmt.Errorf(
-			"failed to get balance of address: %s at height: %d, with: %w",
-			address,
-			evmHeight,
-			err,
-		)
-	}
-
-	// sanity check, should never occur
-	if _, ok := val.(cadence.UInt); !ok {
-		return nil, fmt.Errorf("failed to convert balance %v to UInt, got type: %T", val, val)
-	}
-
-	return val.(cadence.UInt).Big(), nil
+	return stateDB.GetBalance(address).ToBig(), stateDB.Error()
 }
 
 func (e *RemoteClient) GetNonce(
@@ -386,79 +352,12 @@ func (e *RemoteClient) GetNonce(
 	address common.Address,
 	evmHeight int64,
 ) (uint64, error) {
-	hexEncodedAddress, err := addressToCadenceString(address)
+	stateDB, err := e.stateAt(evmHeight)
 	if err != nil {
 		return 0, err
 	}
 
-	height, err := e.evmToCadenceHeight(evmHeight)
-	if err != nil {
-		return 0, err
-	}
-
-	val, err := e.executeScriptAtHeight(
-		ctx,
-		getNonce,
-		height,
-		[]cadence.Value{hexEncodedAddress},
-	)
-	if err != nil {
-		if !errors.Is(err, errs.ErrHeightOutOfRange) {
-			e.logger.Error().Err(err).
-				Str("address", address.String()).
-				Int64("evm-height", evmHeight).
-				Uint64("cadence-height", height).
-				Msg("failed to get nonce")
-		}
-		return 0, fmt.Errorf(
-			"failed to get nonce of address: %s at height: %d, with: %w",
-			address,
-			evmHeight,
-			err,
-		)
-	}
-
-	// sanity check, should never occur
-	if _, ok := val.(cadence.UInt64); !ok {
-		return 0, fmt.Errorf("failed to convert nonce %v to UInt64, got type: %T", val, val)
-	}
-
-	nonce := uint64(val.(cadence.UInt64))
-
-	e.logger.Debug().
-		Uint64("nonce", nonce).
-		Int64("evm-height", evmHeight).
-		Uint64("cadence-height", height).
-		Msg("get nonce executed")
-
-	return nonce, nil
-}
-
-func (e *RemoteClient) stateAt(evmHeight int64) (*state.StateDB, error) {
-	cadenceHeight, err := e.evmToCadenceHeight(evmHeight)
-	if err != nil {
-		return nil, err
-	}
-
-	if cadenceHeight == LatestBlockHeight {
-		h, err := e.client.GetLatestBlockHeader(context.Background(), true)
-		if err != nil {
-			return nil, err
-		}
-		cadenceHeight = h.Height
-	}
-
-	exeClient, ok := e.client.Client.(*grpc.Client)
-	if !ok {
-		return nil, fmt.Errorf("could not convert to execution client")
-	}
-	ledger, err := newRemoteLedger(exeClient.ExecutionDataRPCClient(), cadenceHeight)
-	if err != nil {
-		return nil, fmt.Errorf("could not create remote ledger for height: %d, with: %w", cadenceHeight, err)
-	}
-
-	storageAddress := evm.StorageAccountAddress(e.config.FlowNetworkID)
-	return state.NewStateDB(ledger, storageAddress)
+	return stateDB.GetNonce(address), stateDB.Error()
 }
 
 func (e *RemoteClient) GetStorageAt(
@@ -472,8 +371,7 @@ func (e *RemoteClient) GetStorageAt(
 		return common.Hash{}, err
 	}
 
-	result := stateDB.GetState(address, hash)
-	return result, stateDB.Error()
+	return stateDB.GetState(address, hash), stateDB.Error()
 }
 
 func (e *RemoteClient) Call(
@@ -482,164 +380,7 @@ func (e *RemoteClient) Call(
 	from common.Address,
 	evmHeight int64,
 ) ([]byte, error) {
-	hexEncodedTx, err := cadence.NewString(hex.EncodeToString(data))
-	if err != nil {
-		return nil, err
-	}
 
-	hexEncodedAddress, err := addressToCadenceString(from)
-	if err != nil {
-		return nil, err
-	}
-
-	height, err := e.evmToCadenceHeight(evmHeight)
-	if err != nil {
-		return nil, err
-	}
-
-	scriptResult, err := e.executeScriptAtHeight(
-		ctx,
-		dryRun,
-		height,
-		[]cadence.Value{hexEncodedTx, hexEncodedAddress},
-	)
-	if err != nil {
-		if !errors.Is(err, errs.ErrHeightOutOfRange) {
-			e.logger.Error().
-				Err(err).
-				Uint64("cadence-height", height).
-				Int64("evm-height", evmHeight).
-				Str("from", from.String()).
-				Str("data", hex.EncodeToString(data)).
-				Msg("failed to execute call")
-		}
-		return nil, fmt.Errorf("failed to execute script at height: %d, with: %w", height, err)
-	}
-
-	evmResult, err := parseResult(scriptResult)
-	if err != nil {
-		return nil, err
-	}
-
-	result := evmResult.ReturnedData
-
-	e.logger.Debug().
-		Str("result", hex.EncodeToString(result)).
-		Int64("evm-height", evmHeight).
-		Uint64("cadence-height", height).
-		Msg("call executed")
-
-	return result, nil
-}
-
-func (e *RemoteClient) EstimateGas(
-	ctx context.Context,
-	data []byte,
-	from common.Address,
-	evmHeight int64,
-) (uint64, error) {
-	hexEncodedTx, err := cadence.NewString(hex.EncodeToString(data))
-	if err != nil {
-		return 0, err
-	}
-
-	hexEncodedAddress, err := addressToCadenceString(from)
-	if err != nil {
-		return 0, err
-	}
-
-	height, err := e.evmToCadenceHeight(evmHeight)
-	if err != nil {
-		return 0, err
-	}
-
-	scriptResult, err := e.executeScriptAtHeight(
-		ctx,
-		dryRun,
-		height,
-		[]cadence.Value{hexEncodedTx, hexEncodedAddress},
-	)
-	if err != nil {
-		if !errors.Is(err, errs.ErrHeightOutOfRange) {
-			e.logger.Error().
-				Err(err).
-				Uint64("cadence-height", height).
-				Int64("evm-height", evmHeight).
-				Str("from", from.String()).
-				Str("data", hex.EncodeToString(data)).
-				Msg("failed to execute estimateGas")
-		}
-		return 0, fmt.Errorf("failed to execute script at height: %d, with: %w", height, err)
-	}
-
-	evmResult, err := parseResult(scriptResult)
-	if err != nil {
-		return 0, err
-	}
-
-	gasConsumed := evmResult.GasConsumed
-
-	e.logger.Debug().
-		Uint64("gas", gasConsumed).
-		Int64("evm-height", evmHeight).
-		Uint64("cadence-height", height).
-		Msg("estimateGas executed")
-
-	return gasConsumed, nil
-}
-
-func (e *RemoteClient) GetCode(
-	ctx context.Context,
-	address common.Address,
-	evmHeight int64,
-) ([]byte, error) {
-	hexEncodedAddress, err := addressToCadenceString(address)
-	if err != nil {
-		return nil, err
-	}
-
-	height, err := e.evmToCadenceHeight(evmHeight)
-	if err != nil {
-		return nil, err
-	}
-
-	value, err := e.executeScriptAtHeight(
-		ctx,
-		getCode,
-		height,
-		[]cadence.Value{hexEncodedAddress},
-	)
-	if err != nil {
-		if !errors.Is(err, errs.ErrHeightOutOfRange) {
-			e.logger.Error().
-				Err(err).
-				Uint64("cadence-height", height).
-				Int64("evm-height", evmHeight).
-				Str("address", address.String()).
-				Msg("failed to get code")
-		}
-
-		return nil, fmt.Errorf(
-			"failed to execute script for get code of address: %s at height: %d, with: %w",
-			address,
-			height,
-			err,
-		)
-	}
-
-	code, err := cadenceStringToBytes(value)
-	if err != nil {
-		return nil, err
-	}
-
-	e.logger.Debug().
-		Str("address", address.Hex()).
-		Int64("evm-height", evmHeight).
-		Uint64("cadence-height", height).
-		Str("code size", fmt.Sprintf("%d", len(code))).
-		Msg("get code executed")
-
-	return code, nil
 }
 
 func (e *RemoteClient) GetLatestEVMHeight(ctx context.Context) (uint64, error) {
@@ -761,20 +502,6 @@ func (e *RemoteClient) executeScriptAtHeight(
 		return nil, fmt.Errorf("unknown script type")
 	}
 
-	// try and get the value from the cache if key is supported
-	key := cacheKey(scriptType, height, arguments)
-	if key != "" && e.scriptCache != nil {
-		val, ok := e.scriptCache.Get(key)
-		if ok {
-			e.logger.Info().
-				Uint64("evm-height", height).
-				Int("script", int(scriptType)).
-				Str("result", val.String()).
-				Msg("cache hit")
-			return val, nil
-		}
-	}
-
 	var res cadence.Value
 	var err error
 
@@ -799,11 +526,36 @@ func (e *RemoteClient) executeScriptAtHeight(
 		if strings.Contains(err.Error(), storageError) {
 			return nil, errs.NewHeightOutOfRangeError(height)
 		}
-	} else if key != "" && e.scriptCache != nil { // if error is nil and key is supported add to cache
-		e.scriptCache.Add(key, res)
 	}
 
 	return res, err
+}
+
+func (e *RemoteClient) stateAt(evmHeight int64) (*state.StateDB, error) {
+	cadenceHeight, err := e.evmToCadenceHeight(evmHeight)
+	if err != nil {
+		return nil, err
+	}
+
+	if cadenceHeight == LatestBlockHeight {
+		h, err := e.client.GetLatestBlockHeader(context.Background(), true)
+		if err != nil {
+			return nil, err
+		}
+		cadenceHeight = h.Height
+	}
+
+	exeClient, ok := e.client.Client.(*grpc.Client)
+	if !ok {
+		return nil, fmt.Errorf("could not convert to execution client")
+	}
+	ledger, err := newRemoteLedger(exeClient.ExecutionDataRPCClient(), cadenceHeight)
+	if err != nil {
+		return nil, fmt.Errorf("could not create remote ledger for height: %d, with: %w", cadenceHeight, err)
+	}
+
+	storageAddress := evm.StorageAccountAddress(e.config.FlowNetworkID)
+	return state.NewStateDB(ledger, storageAddress)
 }
 
 func addressToCadenceString(address common.Address) (cadence.String, error) {
@@ -845,30 +597,4 @@ func parseResult(res cadence.Value) (*evmTypes.ResultSummary, error) {
 	}
 
 	return result, err
-}
-
-// cacheKey builds the cache key from the script type, height and arguments.
-func cacheKey(scriptType scriptType, height uint64, args []cadence.Value) string {
-	key := fmt.Sprintf("%d%d", scriptType, height)
-
-	switch scriptType {
-	case getBalance:
-		if len(args) != 1 {
-			return ""
-		}
-		v := args[0].(cadence.String)
-		key = fmt.Sprintf("%s%s", key, string(v))
-	case getNonce:
-		if len(args) != 1 {
-			return ""
-		}
-		v := args[0].(cadence.String)
-		key = fmt.Sprintf("%s%s", key, string(v))
-	case getLatest:
-		// no additional arguments
-	default:
-		return ""
-	}
-
-	return key
 }
