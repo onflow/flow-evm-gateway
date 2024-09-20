@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access/grpc"
@@ -19,9 +18,9 @@ import (
 	"github.com/onflow/flow-go/fvm/evm"
 	"github.com/onflow/flow-go/fvm/evm/emulator"
 	"github.com/onflow/flow-go/fvm/evm/emulator/state"
-	evmImpl "github.com/onflow/flow-go/fvm/evm/impl"
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/flow-go/fvm/systemcontracts"
+	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/onflow/go-ethereum/common"
 	"github.com/onflow/go-ethereum/core/txpool"
 	"github.com/onflow/go-ethereum/core/types"
@@ -36,45 +35,15 @@ import (
 )
 
 var (
-	//go:embed cadence/dry_run.cdc
-	dryRunScript []byte
-
 	//go:embed cadence/run.cdc
 	runTxScript []byte
-
-	//go:embed cadence/get_balance.cdc
-	getBalanceScript []byte
 
 	//go:embed cadence/create_coa.cdc
 	createCOAScript []byte
 
-	//go:embed cadence/get_nonce.cdc
-	getNonceScript []byte
-
-	//go:embed cadence/get_code.cdc
-	getCodeScript []byte
-
 	//go:embed cadence/get_latest_evm_height.cdc
 	getLatestEVMHeight []byte
 )
-
-type scriptType int
-
-const (
-	dryRun scriptType = iota
-	getBalance
-	getNonce
-	getCode
-	getLatest
-)
-
-var scripts = map[scriptType][]byte{
-	dryRun:     dryRunScript,
-	getBalance: getBalanceScript,
-	getNonce:   getNonceScript,
-	getCode:    getCodeScript,
-	getLatest:  getLatestEVMHeight,
-}
 
 const minFlowBalance = 2
 const coaFundingBalance = minFlowBalance - 1
@@ -82,6 +51,11 @@ const coaFundingBalance = minFlowBalance - 1
 const LatestBlockHeight uint64 = math.MaxUint64 - 1
 
 type EVMClient interface {
+	// todo submitting transactions should be extracted in another type, this EVM client should only be used for
+	// querying the state and executing calls and gas estimations, the transaction submission should entirely fall
+	// in the domain of the FlowClient (a new type), whereas EVMClient as the name implies should only handle
+	// EVM requests
+
 	// SendRawTransaction will submit signed transaction data to the network.
 	// The submitted EVM transaction hash is returned.
 	SendRawTransaction(ctx context.Context, data []byte) (common.Hash, error)
@@ -117,14 +91,14 @@ type EVMClient interface {
 var _ EVMClient = &RemoteClient{}
 
 type RemoteClient struct {
-	client      *CrossSporkClient
-	config      *config.Config
-	signer      crypto.Signer
-	txPool      *TxPool
-	logger      zerolog.Logger
-	blocks      storage.BlockIndexer
-	mux         sync.Mutex
-	scriptCache *expirable.LRU[string, cadence.Value]
+	client         *CrossSporkClient
+	config         *config.Config
+	signer         crypto.Signer
+	txPool         *TxPool
+	logger         zerolog.Logger
+	blocks         storage.BlockIndexer
+	mux            sync.Mutex
+	storageAccount flowGo.Address
 
 	head              *types.Header
 	evmSigner         types.Signer
@@ -186,12 +160,7 @@ func NewEVM(
 		MinTip:  new(big.Int),
 	}
 
-	var cache *expirable.LRU[string, cadence.Value]
-	if config.CacheSize != 0 {
-		cache = expirable.NewLRU[string, cadence.Value](int(config.CacheSize), nil, time.Second)
-	}
-
-	evm := &RemoteClient{
+	evmClient := &RemoteClient{
 		client:            client,
 		config:            config,
 		signer:            signer,
@@ -202,27 +171,27 @@ func NewEVM(
 		evmSigner:         evmSigner,
 		validationOptions: validationOptions,
 		collector:         collector,
-		scriptCache:       cache,
+		storageAccount:    evm.StorageAccountAddress(config.FlowNetworkID),
 	}
 
 	// create COA on the account
 	if config.CreateCOAResource {
-		tx, err := evm.buildTransaction(
+		tx, err := evmClient.buildTransaction(
 			context.Background(),
-			evm.replaceAddresses(createCOAScript),
+			evmClient.replaceAddresses(createCOAScript),
 			cadence.UFix64(coaFundingBalance),
 		)
 		if err != nil {
 			logger.Warn().Err(err).Msg("COA resource auto-creation failure")
 			return nil, fmt.Errorf("COA resource auto-creation failure: %w", err)
 		}
-		if err := evm.client.SendTransaction(context.Background(), *tx); err != nil {
+		if err := evmClient.client.SendTransaction(context.Background(), *tx); err != nil {
 			logger.Warn().Err(err).Msg("failed to send COA resource auto-creation transaction")
 			return nil, fmt.Errorf("failed to send COA resource auto-creation transaction: %w", err)
 		}
 	}
 
-	return evm, nil
+	return evmClient, nil
 }
 
 func (e *RemoteClient) SendRawTransaction(ctx context.Context, data []byte) (common.Hash, error) {
@@ -374,19 +343,73 @@ func (e *RemoteClient) GetStorageAt(
 	return stateDB.GetState(address, hash), stateDB.Error()
 }
 
+func (e *RemoteClient) GetCode(ctx context.Context, address common.Address, evmHeight int64) ([]byte, error) {
+	stateDB, err := e.stateAt(evmHeight)
+	if err != nil {
+		return nil, err
+	}
+
+	return stateDB.GetCode(address), stateDB.Error()
+}
+
+func (e *RemoteClient) EstimateGas(ctx context.Context, data []byte, from common.Address, evmHeight int64) (uint64, error) {
+	executor, err := e.executorAt(evmHeight)
+	if err != nil {
+		return 0, err
+	}
+
+	res, err := executor.Call(from, data)
+	if err != nil {
+		return 0, err
+	}
+
+	result := res.ResultSummary()
+	if result.ErrorCode != 0 {
+		if result.ErrorCode == evmTypes.ExecutionErrCodeExecutionReverted {
+			return 0, errs.NewRevertError(result.ReturnedData)
+		}
+		return 0, errs.NewFailedTransactionError(result.ErrorMessage)
+	}
+
+	return res.GasConsumed, nil
+}
+
 func (e *RemoteClient) Call(
 	ctx context.Context,
 	data []byte,
 	from common.Address,
 	evmHeight int64,
 ) ([]byte, error) {
+	executor, err := e.executorAt(evmHeight)
+	if err != nil {
+		return nil, err
+	}
 
+	res, err := executor.Call(from, data)
+	if err != nil {
+		return nil, err
+	}
+
+	result := res.ResultSummary()
+	if result.ErrorCode != 0 {
+		if result.ErrorCode == evmTypes.ExecutionErrCodeExecutionReverted {
+			return nil, errs.NewRevertError(result.ReturnedData)
+		}
+		return nil, errs.NewFailedTransactionError(result.ErrorMessage)
+	}
+
+	// make sure the nil returned data is returned as empty slice to match remote client
+	if res.ReturnedData == nil {
+		res.ReturnedData = make([]byte, 0)
+	}
+
+	return res.ReturnedData, nil
 }
 
 func (e *RemoteClient) GetLatestEVMHeight(ctx context.Context) (uint64, error) {
 	val, err := e.executeScriptAtHeight(
 		ctx,
-		getLatest,
+		getLatestEVMHeight,
 		LatestBlockHeight,
 		nil,
 	)
@@ -457,29 +480,17 @@ func (e *RemoteClient) replaceAddresses(script []byte) []byte {
 }
 
 func (e *RemoteClient) evmToCadenceHeight(height int64) (uint64, error) {
+	// if height is special value latest height
 	if height < 0 {
-		return LatestBlockHeight, nil
+		h, err := e.client.GetLatestBlockHeader(context.Background(), true)
+		if err != nil {
+			return 0, err
+		}
+		return h.Height, nil
 	}
 
 	evmHeight := uint64(height)
-	evmLatest, err := e.blocks.LatestEVMHeight()
-	if err != nil {
-		return 0, fmt.Errorf(
-			"failed to map evm height: %d to cadence height, getting latest evm height: %w",
-			evmHeight,
-			err,
-		)
-	}
-
-	// if provided evm height equals to latest evm height indexed we
-	// return latest height special value to signal requester to execute
-	// script at the latest block, not at the cadence height we get from the
-	// index, that is because at that point the height might already be pruned
-	if evmHeight == evmLatest {
-		return LatestBlockHeight, nil
-	}
-
-	cadenceHeight, err := e.blocks.GetCadenceHeight(uint64(evmHeight))
+	cadenceHeight, err := e.blocks.GetCadenceHeight(evmHeight)
 	if err != nil {
 		return 0, fmt.Errorf("failed to map evm height: %d to cadence height: %w", evmHeight, err)
 	}
@@ -493,15 +504,10 @@ func (e *RemoteClient) evmToCadenceHeight(height int64) (uint64, error) {
 // executed at the latest sealed block.
 func (e *RemoteClient) executeScriptAtHeight(
 	ctx context.Context,
-	scriptType scriptType,
+	script []byte,
 	height uint64,
 	arguments []cadence.Value,
 ) (cadence.Value, error) {
-	script, ok := scripts[scriptType]
-	if !ok {
-		return nil, fmt.Errorf("unknown script type")
-	}
-
 	var res cadence.Value
 	var err error
 
@@ -519,33 +525,31 @@ func (e *RemoteClient) executeScriptAtHeight(
 			arguments,
 		)
 	}
-	if err != nil {
-		// if snapshot doesn't exist on EN, the height at which script was executed is out
-		// of the boundaries the EN keeps state, so return out of range
-		const storageError = "failed to create storage snapshot"
-		if strings.Contains(err.Error(), storageError) {
-			return nil, errs.NewHeightOutOfRangeError(height)
-		}
-	}
 
 	return res, err
 }
 
-func (e *RemoteClient) stateAt(evmHeight int64) (*state.StateDB, error) {
+func (e *RemoteClient) stateAt(evmHeight int64) (evmTypes.StateDB, error) {
+	ledger, err := e.ledgerAt(evmHeight)
+	if err != nil {
+		return nil, err
+	}
+
+	return state.NewStateDB(ledger, e.storageAccount)
+}
+
+func (e *RemoteClient) ledgerAt(evmHeight int64) (*remoteLedger, error) {
 	cadenceHeight, err := e.evmToCadenceHeight(evmHeight)
 	if err != nil {
 		return nil, err
 	}
 
-	if cadenceHeight == LatestBlockHeight {
-		h, err := e.client.GetLatestBlockHeader(context.Background(), true)
-		if err != nil {
-			return nil, err
-		}
-		cadenceHeight = h.Height
+	client, err := e.client.getClientForHeight(cadenceHeight)
+	if err != nil {
+		return nil, err
 	}
 
-	exeClient, ok := e.client.Client.(*grpc.Client)
+	exeClient, ok := client.(*grpc.Client)
 	if !ok {
 		return nil, fmt.Errorf("could not convert to execution client")
 	}
@@ -554,47 +558,14 @@ func (e *RemoteClient) stateAt(evmHeight int64) (*state.StateDB, error) {
 		return nil, fmt.Errorf("could not create remote ledger for height: %d, with: %w", cadenceHeight, err)
 	}
 
-	storageAddress := evm.StorageAccountAddress(e.config.FlowNetworkID)
-	return state.NewStateDB(ledger, storageAddress)
+	return ledger, nil
 }
 
-func addressToCadenceString(address common.Address) (cadence.String, error) {
-	return cadence.NewString(
-		strings.TrimPrefix(address.Hex(), "0x"),
-	)
-}
-
-func cadenceStringToBytes(value cadence.Value) ([]byte, error) {
-	cdcString, ok := value.(cadence.String)
-	if !ok {
-		return nil, fmt.Errorf(
-			"failed to convert cadence value of type: %T to string: %v",
-			value,
-			value,
-		)
-	}
-
-	code, err := hex.DecodeString(string(cdcString))
+func (e *RemoteClient) executorAt(evmHeight int64) (*BlockExecutor, error) {
+	ledger, err := e.ledgerAt(evmHeight)
 	if err != nil {
-		return nil, fmt.Errorf("failed to hex-decode string to byte array [%s]: %w", cdcString, err)
+		return nil, err
 	}
 
-	return code, nil
-}
-
-// parseResult
-func parseResult(res cadence.Value) (*evmTypes.ResultSummary, error) {
-	result, err := evmImpl.ResultSummaryFromEVMResultValue(res)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode EVM result of type: %s, with: %w", res.Type().ID(), err)
-	}
-
-	if result.ErrorCode != 0 {
-		if result.ErrorCode == evmTypes.ExecutionErrCodeExecutionReverted {
-			return nil, errs.NewRevertError(result.ReturnedData)
-		}
-		return nil, errs.NewFailedTransactionError(result.ErrorMessage)
-	}
-
-	return result, err
+	return NewBlockExecutor(nil, ledger, e.config.FlowNetworkID, e.blocks, e.logger)
 }
