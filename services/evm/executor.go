@@ -7,6 +7,7 @@ import (
 	"github.com/onflow/flow-go/fvm/evm"
 	"github.com/onflow/flow-go/fvm/evm/emulator"
 	"github.com/onflow/flow-go/fvm/evm/emulator/state"
+	"github.com/onflow/flow-go/fvm/evm/precompiles"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/onflow/go-ethereum/common"
@@ -24,6 +25,7 @@ type BlockExecutor struct {
 	block         *models.Block
 	blocks        storage.BlockIndexer
 	logger        zerolog.Logger
+	receipts      storage.ReceiptIndexer
 
 	// block dynamic data
 	txIndex uint
@@ -35,6 +37,7 @@ func NewBlockExecutor(
 	ledger atree.Ledger,
 	chainID flowGo.ChainID,
 	blocks storage.BlockIndexer,
+	receipts storage.ReceiptIndexer,
 	logger zerolog.Logger,
 ) (*BlockExecutor, error) {
 	logger = logger.With().Str("component", "state-execution").Logger()
@@ -51,6 +54,7 @@ func NewBlockExecutor(
 		chainID:  chainID,
 		block:    block,
 		blocks:   blocks,
+		receipts: receipts,
 		logger:   logger,
 	}, nil
 }
@@ -59,7 +63,12 @@ func (s *BlockExecutor) Run(tx *gethTypes.Transaction) (*gethTypes.Receipt, erro
 	l := s.logger.With().Str("tx-hash", tx.Hash().String()).Logger()
 	l.Info().Msg("executing new transaction")
 
-	ctx, err := s.blockContext()
+	receipt, err := s.receipts.GetByTransactionID(tx.Hash())
+	if err != nil {
+		return nil, err
+	}
+
+	ctx, err := s.blockContext(receipt)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +100,7 @@ func (s *BlockExecutor) Run(tx *gethTypes.Transaction) (*gethTypes.Receipt, erro
 }
 
 func (s *BlockExecutor) Call(from common.Address, data []byte) (*types.Result, error) {
-	ctx, err := s.blockContext()
+	ctx, err := s.blockContext(nil)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +121,7 @@ func (s *BlockExecutor) Call(from common.Address, data []byte) (*types.Result, e
 // blockContext produces a context that is used by the block view during the execution.
 // It can be used for transaction execution and calls. Receipt is not required when
 // producing the context for calls.
-func (s *BlockExecutor) blockContext() (types.BlockContext, error) {
+func (s *BlockExecutor) blockContext(receipt *models.Receipt) (types.BlockContext, error) {
 	ctx := types.BlockContext{
 		ChainID:                types.EVMChainIDFromFlowChainID(s.chainID),
 		BlockNumber:            s.block.Height,
@@ -137,8 +146,17 @@ func (s *BlockExecutor) blockContext() (types.BlockContext, error) {
 		TotalGasUsedSoFar: s.gasUsed,
 		// todo what to do with the tracer
 		Tracer: nil,
-		// todo set the ones from core?
-		// ExtraPrecompiledContracts: nil,
+	}
+
+	// only add precompile cadence arch mocks if we have a receipt,
+	// in case of call and dry run we don't produce receipts
+	if receipt != nil {
+		calls, err := types.AggregatedPrecompileCallsFromEncoded(receipt.PrecompiledCalls)
+		if err != nil {
+			return types.BlockContext{}, err
+		}
+
+		ctx.ExtraPrecompiledContracts = precompiles.AggregatedPrecompiledCallsToPrecompiledContracts(calls)
 	}
 
 	return ctx, nil
