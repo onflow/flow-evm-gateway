@@ -233,6 +233,6 @@ it('deploy contract and interact', async () => {
         },
         'latest'
     )
-    assert.equal(gasEstimate, 27398n)
+    assert.equal(gasEstimate, 27443n)
 
 })

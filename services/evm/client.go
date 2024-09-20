@@ -97,6 +97,7 @@ type RemoteClient struct {
 	txPool         *TxPool
 	logger         zerolog.Logger
 	blocks         storage.BlockIndexer
+	receipts       storage.ReceiptIndexer
 	mux            sync.Mutex
 	storageAccount flowGo.Address
 
@@ -113,6 +114,7 @@ func NewEVM(
 	signer crypto.Signer,
 	logger zerolog.Logger,
 	blocks storage.BlockIndexer,
+	receipts storage.ReceiptIndexer,
 	txPool *TxPool,
 	collector metrics.Collector,
 ) (*RemoteClient, error) {
@@ -166,6 +168,7 @@ func NewEVM(
 		signer:            signer,
 		logger:            logger,
 		blocks:            blocks,
+		receipts:          receipts,
 		txPool:            txPool,
 		head:              head,
 		evmSigner:         evmSigner,
@@ -589,5 +592,5 @@ func (e *RemoteClient) executorAt(evmHeight int64) (*BlockExecutor, error) {
 		return nil, err
 	}
 
-	return NewBlockExecutor(block, ledger, e.config.FlowNetworkID, e.blocks, e.logger)
+	return NewBlockExecutor(block, ledger, e.config.FlowNetworkID, e.blocks, e.receipts, e.logger)
 }

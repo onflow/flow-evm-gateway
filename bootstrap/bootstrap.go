@@ -216,6 +216,7 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 		signer,
 		b.logger,
 		b.storages.Blocks,
+		b.storages.Receipts,
 		txPool,
 		b.collector,
 	)
