@@ -59,7 +59,7 @@ func NewBlockExecutor(
 	}, nil
 }
 
-func (s *BlockExecutor) Run(tx *gethTypes.Transaction) (*gethTypes.Receipt, error) {
+func (s *BlockExecutor) Run(tx models.Transaction) (*gethTypes.Receipt, error) {
 	l := s.logger.With().Str("tx-hash", tx.Hash().String()).Logger()
 	l.Info().Msg("executing new transaction")
 
@@ -78,7 +78,17 @@ func (s *BlockExecutor) Run(tx *gethTypes.Transaction) (*gethTypes.Receipt, erro
 		return nil, err
 	}
 
-	res, err := bv.RunTransaction(tx)
+	var res *types.Result
+
+	switch t := tx.(type) {
+	case models.DirectCall:
+		res, err = bv.DirectCall(t.DirectCall)
+	case models.TransactionCall:
+		res, err = bv.RunTransaction(t.Transaction)
+	default:
+		return nil, fmt.Errorf("invalid transaction type")
+	}
+
 	if err != nil {
 		// todo is this ok, the service would restart and retry?
 		return nil, err
