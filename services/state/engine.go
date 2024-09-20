@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	pebbleDB "github.com/cockroachdb/pebble"
 	"github.com/google/uuid"
 	"github.com/onflow/atree"
 	"github.com/onflow/flow/protobuf/go/flow/executiondata"
@@ -22,6 +23,15 @@ import (
 var _ models.Engine = &Engine{}
 var _ models.Subscriber = &Engine{}
 
+// Engine state engine takes care of creating a local state by
+// re-executing each block against the local emulator and local
+// register index.
+// The engine relies on the block publisher to receive new
+// block events which is done by the event ingestion engine.
+// It also relies on the event ingestion engine to wait for the
+// state engine to be ready before subscribing, because on startup
+// we have to do a sync between last indexed and last executed block
+// during which time we should not receive any other block events.
 type Engine struct {
 	config         *config.Config
 	execution      executiondata.ExecutionDataAPIClient
@@ -59,12 +69,8 @@ func NewStateEngine(
 	}
 }
 
-// todo rethink whether it would be more robust to rely on blocks in the storage
-// instead of receiving events, relying on storage and keeping a separate count of
-// transactions executed would allow for independent restart and reexecution
-// if we panic with events the missed tx won't get reexecuted since it's relying on
-// event ingestion also not indexing that transaction
-
+// Notify will get new events for blocks from the blocks publisher,
+// which is being produced by the event ingestion engine.
 func (e *Engine) Notify(data any) {
 	block, ok := data.(*models.Block)
 	if !ok {
@@ -83,6 +89,37 @@ func (e *Engine) Notify(data any) {
 }
 
 func (e *Engine) Run(ctx context.Context) error {
+	// check if we need to execute any blocks that were indexed but not executed
+	// this could happen if after index but before execution the node crashes
+	indexed, err := e.blocks.LatestIndexedHeight()
+	if err != nil {
+		return err
+	}
+
+	executed, err := e.blocks.LatestExecutedHeight()
+	if err != nil {
+		return err
+	}
+
+	if executed < indexed {
+		e.logger.Info().
+			Uint64("last-executed", executed).
+			Uint64("last-indexed", indexed).
+			Msg("syncing executed blocks on startup")
+
+		for i := executed; i <= indexed; i++ {
+			block, err := e.blocks.GetByHeight(i)
+			if err != nil {
+				return err
+			}
+
+			if err := e.executeBlock(block); err != nil {
+				return err
+			}
+		}
+	}
+
+	// after all is up to sync we subscribe to live blocks
 	e.blockPublisher.Subscribe(e)
 	e.status.MarkReady()
 	return nil
@@ -115,8 +152,16 @@ func (e *Engine) ID() uuid.UUID {
 // Transaction executed should match a receipt we have indexed from the network
 // produced by execution nodes. This check makes sure we keep a correct state.
 func (e *Engine) executeBlock(block *models.Block) error {
+	// start a new database batch
+	batch := e.store.NewBatch()
+	defer func() {
+		if err := batch.Close(); err != nil {
+			e.logger.Warn().Err(err).Msg("failed to close batch")
+		}
+	}()
+
 	var registers atree.Ledger
-	registers = pebble.NewRegister(e.store, block.Height)
+	registers = pebble.NewRegister(e.store, block.Height, batch)
 
 	// if validation is enabled wrap the register ledger into a validator
 	if e.config.ValidateRegisters {
@@ -150,21 +195,47 @@ func (e *Engine) executeBlock(block *models.Block) error {
 	}
 
 	if e.config.ValidateRegisters {
-		cadenceHeight, err := e.blocks.GetCadenceHeight(block.Height)
-		if err != nil {
-			e.logger.Error().Err(err).Msg("register validation failed, block cadence height")
-		}
-
-		validator := registers.(*RegisterValidator)
-		if err := validator.ValidateBlock(cadenceHeight); err != nil {
-			if errors.Is(err, errs.ErrStateMismatch) {
-				return err
-			}
-			// if there were issues with the client request only log the error
-			e.logger.Error().Err(err).Msg("register validation failed")
+		if err := e.validateBlock(registers, block); err != nil {
+			return err
 		}
 	}
 
-	// update executed block height
-	return e.blocks.SetExecutedHeight(block.Height)
+	if err := e.blocks.SetExecutedHeight(block.Height); err != nil {
+		return err
+	}
+
+	if err := batch.Commit(pebbleDB.Sync); err != nil {
+		return fmt.Errorf("failed to commit executed data for block %d: %w", block.Height, err)
+	}
+
+	return nil
+}
+
+// validateBlock validates the block updated registers using the register validator.
+// If there's any register mismatch it returns an error.
+//
+// todo remove:
+// Currently, this is done synchronous but could be improved in the future, however this register
+// validation using the AN APIs will be completely replaced with the state commitment checksum once
+// the work is done on core: https://github.com/onflow/flow-go/pull/6451
+func (e *Engine) validateBlock(registers atree.Ledger, block *models.Block) error {
+	validator, ok := registers.(*RegisterValidator)
+	if !ok {
+		return fmt.Errorf("invalid register validator used")
+	}
+
+	cadenceHeight, err := e.blocks.GetCadenceHeight(block.Height)
+	if err != nil {
+		e.logger.Error().Err(err).Msg("register validation failed, block cadence height")
+	}
+
+	if err := validator.ValidateBlock(cadenceHeight); err != nil {
+		if errors.Is(err, errs.ErrStateMismatch) {
+			return err
+		}
+		// if there were issues with the client request only log the error
+		e.logger.Error().Err(err).Msg("register validation failed")
+	}
+
+	return nil
 }

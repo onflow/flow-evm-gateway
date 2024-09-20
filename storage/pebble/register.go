@@ -16,13 +16,20 @@ var _ atree.Ledger = &Register{}
 type Register struct {
 	height uint64
 	store  *Storage
+	batch  *pebble.Batch
 	mux    sync.RWMutex
 }
 
-func NewRegister(store *Storage, height uint64) *Register {
+// NewRegister creates a new index instance at the provided height, all reads and
+// writes of the registers will happen at that height.
+//
+// Batch is an optional argument, if provided the operations will be performed
+// inside that batch that later needs to be committed by the provider of the batch.
+func NewRegister(store *Storage, height uint64, batch *pebble.Batch) *Register {
 	return &Register{
 		store:  store,
 		height: height,
+		batch:  batch,
 		mux:    sync.RWMutex{},
 	}
 }
@@ -31,7 +38,12 @@ func (l *Register) GetValue(owner, key []byte) ([]byte, error) {
 	l.mux.RLock()
 	defer l.mux.RUnlock()
 
-	iter, err := l.store.db.NewIter(&pebble.IterOptions{
+	var db pebble.Reader = l.store.db
+	if l.batch != nil {
+		db = l.batch
+	}
+
+	iter, err := db.NewIter(&pebble.IterOptions{
 		LowerBound: l.idLower(owner, key),
 		UpperBound: l.idUpper(owner, key),
 	})
@@ -70,7 +82,7 @@ func (l *Register) SetValue(owner, key, value []byte) error {
 	defer l.mux.Unlock()
 
 	id := l.id(owner, key)
-	if err := l.store.set(ledgerValue, id, value, nil); err != nil {
+	if err := l.store.set(ledgerValue, id, value, l.batch); err != nil {
 		return fmt.Errorf(
 			"failed to store ledger value for owner %x and key %x: %w",
 			owner,
@@ -97,7 +109,7 @@ func (l *Register) AllocateSlabIndex(owner []byte) (atree.SlabIndex, error) {
 
 	var index atree.SlabIndex
 
-	val, err := l.store.get(ledgerSlabIndex, owner)
+	val, err := l.store.batchGet(l.batch, ledgerSlabIndex, owner)
 	if err != nil {
 		if !errors.Is(err, errs.ErrEntityNotFound) {
 			return atree.SlabIndexUndefined, err
@@ -116,7 +128,7 @@ func (l *Register) AllocateSlabIndex(owner []byte) (atree.SlabIndex, error) {
 	}
 
 	index = index.Next()
-	if err := l.store.set(ledgerSlabIndex, owner, index[:], nil); err != nil {
+	if err := l.store.set(ledgerSlabIndex, owner, index[:], l.batch); err != nil {
 		return atree.SlabIndexUndefined, fmt.Errorf(
 			"slab index failed to set for owner %x: %w",
 			owner,

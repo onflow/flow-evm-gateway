@@ -8,7 +8,7 @@ const (
 	blockIDToHeightKey          = byte(2)
 	evmHeightToCadenceHeightKey = byte(3)
 	evmHeightToCadenceIDKey     = byte(4)
-	evmHeightIndex              = byte(5)
+	latestExecutedHeight        = byte(5)
 
 	// transaction keys
 	txIDKey = byte(10)
@@ -30,7 +30,7 @@ const (
 	ledgerSlabIndex = byte(51)
 
 	// special keys
-	latestEVMHeightKey     = byte(100)
+	latestIndexedHeight    = byte(100)
 	latestCadenceHeightKey = byte(102)
 )
 
