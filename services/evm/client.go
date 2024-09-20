@@ -194,6 +194,7 @@ func NewEVM(
 	return evmClient, nil
 }
 
+// todo move to flow client
 func (e *RemoteClient) SendRawTransaction(ctx context.Context, data []byte) (common.Hash, error) {
 	tx := &types.Transaction{}
 	if err := tx.UnmarshalBinary(data); err != nil {
@@ -406,6 +407,7 @@ func (e *RemoteClient) Call(
 	return res.ReturnedData, nil
 }
 
+// todo move to flow client
 func (e *RemoteClient) GetLatestEVMHeight(ctx context.Context) (uint64, error) {
 	val, err := e.executeScriptAtHeight(
 		ctx,
@@ -479,17 +481,27 @@ func (e *RemoteClient) replaceAddresses(script []byte) []byte {
 	return []byte(s)
 }
 
-func (e *RemoteClient) evmToCadenceHeight(height int64) (uint64, error) {
+func (e *RemoteClient) resolveEVMHeight(height int64) (uint64, error) {
+	evmHeight := uint64(height)
+
 	// if height is special value latest height
 	if height < 0 {
-		h, err := e.client.GetLatestBlockHeader(context.Background(), true)
+		h, err := e.blocks.LatestEVMHeight()
 		if err != nil {
 			return 0, err
 		}
-		return h.Height, nil
+		evmHeight = h
 	}
 
-	evmHeight := uint64(height)
+	return evmHeight, nil
+}
+
+func (e *RemoteClient) evmToCadenceHeight(height int64) (uint64, error) {
+	evmHeight, err := e.resolveEVMHeight(height)
+	if err != nil {
+		return 0, err
+	}
+
 	cadenceHeight, err := e.blocks.GetCadenceHeight(evmHeight)
 	if err != nil {
 		return 0, fmt.Errorf("failed to map evm height: %d to cadence height: %w", evmHeight, err)
@@ -567,5 +579,15 @@ func (e *RemoteClient) executorAt(evmHeight int64) (*BlockExecutor, error) {
 		return nil, err
 	}
 
-	return NewBlockExecutor(nil, ledger, e.config.FlowNetworkID, e.blocks, e.logger)
+	height, err := e.resolveEVMHeight(evmHeight)
+	if err != nil {
+		return nil, err
+	}
+
+	block, err := e.blocks.GetByHeight(height)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewBlockExecutor(block, ledger, e.config.FlowNetworkID, e.blocks, e.logger)
 }
