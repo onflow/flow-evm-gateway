@@ -266,7 +266,7 @@ func handleCall[T any](
 	// if remote received an error but local call worked, return the local result
 	// this can be due to rate-limits or pruned state on AN/EN
 	if localErr == nil && remoteErr != nil {
-		if !errors.Is(remoteErr, errs.ErrHeightOutOfRange) || !errors.Is(remoteErr, errs.ErrRateLimit) {
+		if !errors.Is(remoteErr, errs.ErrHeightOutOfRange) && !errors.Is(remoteErr, errs.ErrRateLimit) {
 			logger.Warn().
 				Str("remote-error", remoteErr.Error()).
 				Any("local-result", localRes).
