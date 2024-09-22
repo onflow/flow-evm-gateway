@@ -36,10 +36,6 @@ func NewBlockFromBytes(data []byte) (*Block, error) {
 		b = pastBlock
 	}
 
-	// this is added because RLP decoding will decode into an empty string
-	if b.FixedHash != nil && *b.FixedHash == "" {
-		b.FixedHash = nil
-	}
 	return b, nil
 }
 
@@ -50,10 +46,8 @@ type Block struct {
 	// will have more fields than before, so we make sure the hash we calculated
 	// with the previous format is fixed by assigning it to this field and then
 	// on hash calculation we check if this field is set we just return it.
-	// We must make the FixedHash exported so RLP encoding preserve it, and
-	// we must use string not common.Hash since RLP decoding has an issue
-	// with decoding into nil pointer slice.
-	FixedHash         *string
+	// We must make the FixedHash exported so RLP encoding preserves it.
+	FixedHash         gethCommon.Hash
 	TransactionHashes []gethCommon.Hash
 }
 
@@ -62,8 +56,8 @@ func (b *Block) ToBytes() ([]byte, error) {
 }
 
 func (b *Block) Hash() (gethCommon.Hash, error) {
-	if b.FixedHash != nil && *b.FixedHash != "" {
-		return gethCommon.HexToHash(*b.FixedHash), nil
+	if b.FixedHash != gethCommon.HexToHash("0x0") {
+		return b.FixedHash, nil
 	}
 	return b.Block.Hash()
 }
@@ -114,7 +108,6 @@ func decodeLegacyBlockEvent(event cadence.Event) (*Block, error) {
 		return nil, err
 	}
 
-	h := block.Hash.String()
 	return &Block{
 		Block: &types.Block{
 			ParentBlockHash:     block.ParentBlockHash,
@@ -125,7 +118,7 @@ func decodeLegacyBlockEvent(event cadence.Event) (*Block, error) {
 			TransactionHashRoot: block.TransactionHashRoot,
 			TotalGasUsed:        block.TotalGasUsed,
 		},
-		FixedHash: &h,
+		FixedHash: block.Hash,
 	}, nil
 }
 
@@ -138,7 +131,10 @@ type blockV0 struct {
 // Hash returns the hash of the block, taking into account only
 // the fields from the blockV0Fields type.
 func (b *blockV0) Hash() (gethCommon.Hash, error) {
-	data, err := b.Block.ToBytes()
+	data, err := rlp.EncodeToBytes(b.Block)
+	if err != nil {
+		return gethCommon.Hash{}, err
+	}
 	return gethCrypto.Keccak256Hash(data), err
 }
 
@@ -152,11 +148,6 @@ type blockV0Fields struct {
 	ReceiptRoot         gethCommon.Hash
 	TransactionHashRoot gethCommon.Hash
 	TotalGasUsed        uint64
-}
-
-// ToBytes encodes the block fields into bytes.
-func (b *blockV0Fields) ToBytes() ([]byte, error) {
-	return rlp.EncodeToBytes(b)
 }
 
 // decodeBlockBreakingChanges will try to decode the bytes into all
@@ -173,7 +164,6 @@ func decodeBlockBreakingChanges(encoded []byte) (*Block, error) {
 	if err != nil {
 		return nil, err
 	}
-	h := blockHash.String()
 
 	return &Block{
 		Block: &types.Block{
@@ -185,7 +175,7 @@ func decodeBlockBreakingChanges(encoded []byte) (*Block, error) {
 			TransactionHashRoot: b0.Block.TransactionHashRoot,
 			TotalGasUsed:        b0.Block.TotalGasUsed,
 		},
-		FixedHash:         &h,
+		FixedHash:         blockHash,
 		TransactionHashes: b0.TransactionHashes,
 	}, nil
 }
