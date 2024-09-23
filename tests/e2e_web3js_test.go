@@ -28,8 +28,8 @@ func TestWeb3_E2E(t *testing.T) {
 		runWeb3Test(t, "build_evm_state_test")
 	})
 
-	// todo ramtin is working on a fix of a replayer for cadence arch that is failing this test
-	// please check in with him on the progress and then update flow-go
+	// todo a new emulator version should be released with this PR merged and included
+	// to fix this test https://github.com/onflow/flow-go/pull/6464
 	t.Run("test cadence arch and environment calls", func(t *testing.T) {
 		runWeb3Test(t, "cadence_arch_env_test")
 	})
