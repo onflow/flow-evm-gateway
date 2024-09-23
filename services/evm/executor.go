@@ -12,6 +12,7 @@ import (
 	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/onflow/go-ethereum/common"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
+	"github.com/onflow/go-ethereum/eth/tracers"
 	"github.com/rs/zerolog"
 
 	"github.com/onflow/flow-evm-gateway/models"
@@ -59,7 +60,10 @@ func NewBlockExecutor(
 	}, nil
 }
 
-func (s *BlockExecutor) Run(tx models.Transaction) (*gethTypes.Receipt, error) {
+func (s *BlockExecutor) Run(
+	tx models.Transaction,
+	tracer *tracers.Tracer,
+) (*gethTypes.Receipt, error) {
 	l := s.logger.With().Str("tx-hash", tx.Hash().String()).Logger()
 	l.Info().Msg("executing new transaction")
 
@@ -69,6 +73,7 @@ func (s *BlockExecutor) Run(tx models.Transaction) (*gethTypes.Receipt, error) {
 	}
 
 	ctx, err := s.blockContext(receipt)
+	ctx.Tracer = tracer
 	if err != nil {
 		return nil, err
 	}
@@ -109,8 +114,13 @@ func (s *BlockExecutor) Run(tx models.Transaction) (*gethTypes.Receipt, error) {
 	return res.LightReceipt().ToReceipt(), nil
 }
 
-func (s *BlockExecutor) Call(from common.Address, data []byte) (*types.Result, error) {
+func (s *BlockExecutor) Call(
+	from common.Address,
+	data []byte,
+	tracer *tracers.Tracer,
+) (*types.Result, error) {
 	ctx, err := s.blockContext(nil)
+	ctx.Tracer = tracer
 	if err != nil {
 		return nil, err
 	}

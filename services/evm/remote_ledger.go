@@ -32,7 +32,7 @@ type remoteLedger struct {
 	slabs     map[string]atree.SlabIndex
 }
 
-func newRemoteLedger(
+func NewRemoteLedger(
 	client executiondata.ExecutionDataAPIClient,
 	cadenceHeight uint64,
 ) (*remoteLedger, error) {

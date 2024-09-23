@@ -83,8 +83,6 @@ type Config struct {
 	ForceStartCadenceHeight uint64
 	// HeartbeatInterval sets custom heartbeat interval for events
 	HeartbeatInterval uint64
-	// TracesBucketName sets the GCP bucket name where transaction traces are being stored.
-	TracesBucketName string
 	// TracesEnabled sets whether the node is supporting transaction traces.
 	TracesEnabled bool
 	// WalletEnabled sets whether wallet APIs are enabled
@@ -151,7 +149,7 @@ func FromFlags() (*Config, error) {
 	flag.IntVar(&streamTimeout, "stream-timeout", 3, "Defines the timeout in seconds the server waits for the event to be sent to the client")
 	flag.Uint64Var(&forceStartHeight, "force-start-height", 0, "Force set starting Cadence height. WARNING: This should only be used locally or for testing, never in production.")
 	flag.StringVar(&filterExpiry, "filter-expiry", "5m", "Filter defines the time it takes for an idle filter to expire")
-	flag.StringVar(&cfg.TracesBucketName, "traces-gcp-bucket", "", "GCP bucket name where transaction traces are stored")
+	flag.BoolVar(&cfg.TracesEnabled, "traces-enabled", false, "Defines whether the node is supporting transaction traces.")
 	flag.StringVar(&cloudKMSProjectID, "coa-cloud-kms-project-id", "", "The project ID containing the KMS keys, e.g. 'flow-evm-gateway'")
 	flag.StringVar(&cloudKMSLocationID, "coa-cloud-kms-location-id", "", "The location ID where the key ring is grouped into, e.g. 'global'")
 	flag.StringVar(&cloudKMSKeyRingID, "coa-cloud-kms-key-ring-id", "", "The key ring ID where the KMS keys exist, e.g. 'tx-signing'")
@@ -298,8 +296,6 @@ func FromFlags() (*Config, error) {
 	if forceStartHeight != 0 {
 		cfg.ForceStartCadenceHeight = forceStartHeight
 	}
-
-	cfg.TracesEnabled = cfg.TracesBucketName != ""
 
 	if walletKey != "" {
 		k, err := gethCrypto.HexToECDSA(walletKey)

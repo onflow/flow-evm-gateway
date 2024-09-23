@@ -362,7 +362,7 @@ func (e *RemoteClient) EstimateGas(ctx context.Context, data []byte, from common
 		return 0, err
 	}
 
-	res, err := executor.Call(from, data)
+	res, err := executor.Call(from, data, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -389,7 +389,7 @@ func (e *RemoteClient) Call(
 		return nil, err
 	}
 
-	res, err := executor.Call(from, data)
+	res, err := executor.Call(from, data, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -559,7 +559,7 @@ func (e *RemoteClient) ledgerAt(evmHeight int64) (*remoteLedger, error) {
 		return nil, err
 	}
 
-	client, err := e.client.getClientForHeight(cadenceHeight)
+	client, err := e.client.GetClientForHeight(cadenceHeight)
 	if err != nil {
 		return nil, err
 	}
@@ -568,7 +568,7 @@ func (e *RemoteClient) ledgerAt(evmHeight int64) (*remoteLedger, error) {
 	if !ok {
 		return nil, fmt.Errorf("could not convert to execution client")
 	}
-	ledger, err := newRemoteLedger(exeClient.ExecutionDataRPCClient(), cadenceHeight)
+	ledger, err := NewRemoteLedger(exeClient.ExecutionDataRPCClient(), cadenceHeight)
 	if err != nil {
 		return nil, fmt.Errorf("could not create remote ledger for height: %d, with: %w", cadenceHeight, err)
 	}

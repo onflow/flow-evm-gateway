@@ -67,7 +67,7 @@ func Benchmark_RemoteLedger_GetBalance(b *testing.B) {
 	// will be done only once per height, all the subsequent requests for
 	// getting the balance will work on already loaded state and thus be fast
 	for i := 0; i < b.N; i++ {
-		ledger, err := newRemoteLedger(execClient, latest.Height)
+		ledger, err := NewRemoteLedger(execClient, latest.Height)
 		require.NoError(b, err)
 
 		stateDB, err := state.NewStateDB(ledger, previewnetStorageAddress)
@@ -95,5 +95,5 @@ func newPreviewnetLedger(host string) (*remoteLedger, error) {
 		return nil, err
 	}
 
-	return newRemoteLedger(execClient, latest.Height)
+	return NewRemoteLedger(execClient, latest.Height)
 }
