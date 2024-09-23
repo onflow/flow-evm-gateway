@@ -28,6 +28,7 @@ it('get block', async () => {
         '0x0000000000000000000000000000000000000000000000000000000000000000'
     )
     assert.equal(block.size, 3995n)
+    assert.equal(block.gasLimit, 120000000n)
     assert.equal(block.miner, '0x0000000000000000000000030000000000000000')
     assert.equal(
         block.sha3Uncles,
@@ -379,7 +380,7 @@ it('get fee history', async () => {
             oldestBlock: 1n,
             reward: [['0x96'], ['0x96']], // gas price is 150 during testing
             baseFeePerGas: [0n, 0n],
-            gasUsedRatio: [0, 0.04964366666666667]
+            gasUsedRatio: [0, 0.006205458333333334]
         }
     )
 })

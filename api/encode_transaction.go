@@ -9,7 +9,7 @@ import (
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
 )
 
-const blockGasLimit uint64 = 15_000_000
+const blockGasLimit uint64 = 120_000_000
 
 // encodeTxFromArgs will create a transaction from the given arguments.
 // The resulting unsigned transaction is only supposed to be used through
