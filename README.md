@@ -42,7 +42,7 @@ Operating an EVM Gateway is straightforward. It can either be deployed locally a
 ### Running Locally
 **Start Emulator**
 
-To run the gateway locally you need to start the emulator with EVM enabled:
+To run the gateway locally you need to start the Flow Emulator:
 ```
 flow emulator
 ```
