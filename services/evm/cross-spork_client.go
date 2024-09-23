@@ -141,7 +141,7 @@ func (c *CrossSporkClient) IsPastSpork(height uint64) bool {
 // If the height is contained in the current spork client we return the current spork client,
 // but that doesn't guarantee the height will be found, since the height might be bigger than the
 // latest height in the current spork, which is not checked due to performance reasons.
-func (c *CrossSporkClient) getClientForHeight(height uint64) (access.Client, error) {
+func (c *CrossSporkClient) GetClientForHeight(height uint64) (access.Client, error) {
 	if !c.IsPastSpork(height) {
 		return c.Client, nil
 	}
@@ -161,7 +161,7 @@ func (c *CrossSporkClient) getClientForHeight(height uint64) (access.Client, err
 // GetLatestHeightForSpork will determine the spork client in which the provided height is contained
 // and then find the latest height in that spork.
 func (c *CrossSporkClient) GetLatestHeightForSpork(ctx context.Context, height uint64) (uint64, error) {
-	client, err := c.getClientForHeight(height)
+	client, err := c.GetClientForHeight(height)
 	if err != nil {
 		return 0, err
 	}
@@ -177,7 +177,7 @@ func (c *CrossSporkClient) GetBlockHeaderByHeight(
 	ctx context.Context,
 	height uint64,
 ) (*flow.BlockHeader, error) {
-	client, err := c.getClientForHeight(height)
+	client, err := c.GetClientForHeight(height)
 	if err != nil {
 		return nil, err
 	}
@@ -190,7 +190,7 @@ func (c *CrossSporkClient) ExecuteScriptAtBlockHeight(
 	script []byte,
 	arguments []cadence.Value,
 ) (cadence.Value, error) {
-	client, err := c.getClientForHeight(height)
+	client, err := c.GetClientForHeight(height)
 	if err != nil {
 		return nil, err
 	}
@@ -203,7 +203,7 @@ func (c *CrossSporkClient) SubscribeEventsByBlockHeight(
 	filter flow.EventFilter,
 	opts ...access.SubscribeOption,
 ) (<-chan flow.BlockEvents, <-chan error, error) {
-	client, err := c.getClientForHeight(startHeight)
+	client, err := c.GetClientForHeight(startHeight)
 	if err != nil {
 		return nil, nil, err
 	}
