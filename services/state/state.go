@@ -12,6 +12,7 @@ import (
 	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/onflow/go-ethereum/common"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
+	"github.com/onflow/go-ethereum/eth/tracers"
 	"github.com/rs/zerolog"
 
 	"github.com/onflow/flow-evm-gateway/models"
@@ -32,6 +33,7 @@ type BlockState struct {
 	blocks        storage.BlockIndexer
 	receipts      storage.ReceiptIndexer
 	logger        zerolog.Logger
+	tracer        *tracers.Tracer
 }
 
 func NewBlockState(
@@ -41,6 +43,7 @@ func NewBlockState(
 	blocks storage.BlockIndexer,
 	receipts storage.ReceiptIndexer,
 	logger zerolog.Logger,
+	tracer *tracers.Tracer,
 ) (*BlockState, error) {
 	logger = logger.With().Str("component", "state-execution").Logger()
 	storageAddress := evm.StorageAccountAddress(chainID)
@@ -58,6 +61,7 @@ func NewBlockState(
 		blocks:   blocks,
 		receipts: receipts,
 		logger:   logger,
+		tracer:   tracer,
 	}, nil
 }
 
@@ -71,6 +75,60 @@ func (s *BlockState) Execute(tx models.Transaction) (*gethTypes.Receipt, error) 
 	}
 
 	ctx, err := s.blockContext(receipt)
+	if err != nil {
+		return nil, err
+	}
+
+	bv, err := s.emulator.NewBlockView(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var res *types.Result
+
+	switch t := tx.(type) {
+	case models.DirectCall:
+		res, err = bv.DirectCall(t.DirectCall)
+	case models.TransactionCall:
+		res, err = bv.RunTransaction(t.Transaction)
+	default:
+		return nil, fmt.Errorf("invalid transaction type")
+	}
+
+	if err != nil {
+		// todo is this ok, the service would restart and retry?
+		return nil, err
+	}
+
+	// we should never produce invalid transaction, since if the transaction was emitted from the evm core
+	// it must have either been successful or failed, invalid transactions are not emitted
+	if res.Invalid() {
+		return nil, fmt.Errorf("invalid transaction %s: %w", tx.Hash(), res.ValidationError)
+	}
+
+	// increment values as part of a virtual block
+	s.gasUsed += res.GasConsumed
+	s.txIndex++
+
+	l.Debug().Msg("transaction executed successfully")
+
+	return res.LightReceipt().ToReceipt(), nil
+}
+
+func (s *BlockState) ExecuteWithTracer(
+	tx models.Transaction,
+	tracer *tracers.Tracer,
+) (*gethTypes.Receipt, error) {
+	l := s.logger.With().Str("tx-hash", tx.Hash().String()).Logger()
+	l.Info().Msg("executing new transaction")
+
+	receipt, err := s.receipts.GetByTransactionID(tx.Hash())
+	if err != nil {
+		return nil, err
+	}
+
+	ctx, err := s.blockContext(receipt)
+	ctx.Tracer = tracer
 	if err != nil {
 		return nil, err
 	}
@@ -172,8 +230,7 @@ func (s *BlockState) blockContext(receipt *models.Receipt) (types.BlockContext, 
 		Random:            s.block.PrevRandao,
 		TxCountSoFar:      s.txIndex,
 		TotalGasUsedSoFar: s.gasUsed,
-		// todo what to do with the tracer
-		Tracer: nil,
+		Tracer:            s.tracer,
 	}
 
 	// only add precompile cadence arch mocks if we have a receipt,

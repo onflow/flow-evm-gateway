@@ -308,10 +308,15 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 		ratelimiter,
 	)
 
-	var debugAPI *api.DebugAPI
-	if b.config.TracesEnabled {
-		debugAPI = api.NewDebugAPI(b.Storages.Traces, b.Storages.Blocks, b.logger, b.collector)
-	}
+	debugAPI := api.NewDebugAPI(
+		b.Storages.Blocks,
+		b.Storages.Transactions,
+		b.Storages.Receipts,
+		b.Storages.Storage,
+		b.config,
+		b.logger,
+		b.collector,
+	)
 
 	var walletAPI *api.WalletAPI
 	if b.config.WalletEnabled {
