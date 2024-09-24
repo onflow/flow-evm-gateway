@@ -1,6 +1,5 @@
 tests/db-test
 tests/web3js/node_modules
-tests/web3js/package-lock.json
 tests/e2e-network/node_modules
 tests/e2e-network/package-lock.json
 db
