@@ -67,12 +67,12 @@ it('calculates fees for legacy tx type', async () => {
     }
 
     let coinbaseBalance = await web3.eth.getBalance(conf.coinbase)
-    assert.equal(coinbaseBalance, 174351800n)
+    assert.equal(coinbaseBalance, 212850050n)
 })
 
 it('calculates fees for access list tx type', async () => {
     let senderBalance = await web3.eth.getBalance(conf.eoa.address)
-    assert.equal(senderBalance, 4999999999791933950n)
+    assert.equal(senderBalance, 4999999999787149950n)
 
     let storeCallData = deployed.contract.methods.store(8250).encodeABI()
     let gasPrice = conf.minGasPrice + 5n
@@ -124,12 +124,12 @@ it('calculates fees for access list tx type', async () => {
     }
 
     let coinbaseBalance = await web3.eth.getBalance(conf.coinbase)
-    assert.equal(coinbaseBalance, 178858425n)
+    assert.equal(coinbaseBalance, 217363650n)
 })
 
 it('calculates fees for dynamic fees tx type', async () => {
     let senderBalance = await web3.eth.getBalance(conf.eoa.address)
-    assert.equal(senderBalance, 4999999999791933950n)
+    assert.equal(senderBalance, 4999999999782636350n)
 
     // gasTipCap is less than gasFeeCap
     // price = Min(GasTipCap, GasFeeCap) when baseFee = 0
@@ -222,5 +222,5 @@ it('calculates fees for dynamic fees tx type', async () => {
     }
 
     let coinbaseBalance = await web3.eth.getBalance(conf.coinbase)
-    assert.equal(coinbaseBalance, 188884425n)
+    assert.equal(coinbaseBalance, 227407650n)
 })
