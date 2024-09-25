@@ -88,19 +88,19 @@ func Test_CrossSpork(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		c, err := client.getClientForHeight(150)
+		c, err := client.GetClientForHeight(150)
 		require.NoError(t, err)
 		require.Equal(t, past1, c)
 
-		c, err = client.getClientForHeight(past2Last - 1)
+		c, err = client.GetClientForHeight(past2Last - 1)
 		require.NoError(t, err)
 		require.Equal(t, past2, c)
 
-		c, err = client.getClientForHeight(600)
+		c, err = client.GetClientForHeight(600)
 		require.NoError(t, err)
 		require.Equal(t, current, c)
 
-		c, err = client.getClientForHeight(10)
+		c, err = client.GetClientForHeight(10)
 		require.Nil(t, c)
 		require.ErrorIs(t, err, errs.ErrHeightOutOfRange)
 
