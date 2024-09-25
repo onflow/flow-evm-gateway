@@ -13,6 +13,7 @@ type Collector interface {
 	ApiErrorOccurred()
 	TraceDownloadFailed()
 	ServerPanicked(reason string)
+	CadenceHeightIndexed(height uint64)
 	EVMHeightIndexed(height uint64)
 	EVMAccountInteraction(address string)
 	MeasureRequestDuration(start time.Time, method string)
@@ -26,6 +27,7 @@ type DefaultCollector struct {
 	apiErrorsCounter          prometheus.Counter
 	traceDownloadErrorCounter prometheus.Counter
 	serverPanicsCounters      *prometheus.CounterVec
+	cadenceBlockHeight        prometheus.Gauge
 	evmBlockHeight            prometheus.Gauge
 	operatorBalance           prometheus.Gauge
 	evmAccountCallCounters    *prometheus.CounterVec
@@ -53,6 +55,11 @@ func NewCollector(logger zerolog.Logger) Collector {
 		Help: "Flow balance of the EVM gateway operator wallet",
 	})
 
+	cadenceBlockHeight := prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: prefixedName("cadence_block_height"),
+		Help: "Current Cadence block height",
+	})
+
 	evmBlockHeight := prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: prefixedName("evm_block_height"),
 		Help: "Current EVM block height",
@@ -74,6 +81,7 @@ func NewCollector(logger zerolog.Logger) Collector {
 		apiErrors,
 		traceDownloadErrorCounter,
 		serverPanicsCounters,
+		cadenceBlockHeight,
 		evmBlockHeight,
 		operatorBalance,
 		evmAccountCallCounters,
@@ -88,6 +96,7 @@ func NewCollector(logger zerolog.Logger) Collector {
 		apiErrorsCounter:          apiErrors,
 		traceDownloadErrorCounter: traceDownloadErrorCounter,
 		serverPanicsCounters:      serverPanicsCounters,
+		cadenceBlockHeight:        cadenceBlockHeight,
 		evmBlockHeight:            evmBlockHeight,
 		evmAccountCallCounters:    evmAccountCallCounters,
 		requestDurations:          requestDurations,
@@ -116,6 +125,10 @@ func (c *DefaultCollector) TraceDownloadFailed() {
 
 func (c *DefaultCollector) ServerPanicked(reason string) {
 	c.serverPanicsCounters.With(prometheus.Labels{"reason": reason}).Inc()
+}
+
+func (c *DefaultCollector) CadenceHeightIndexed(height uint64) {
+	c.cadenceBlockHeight.Set(float64(height))
 }
 
 func (c *DefaultCollector) EVMHeightIndexed(height uint64) {
