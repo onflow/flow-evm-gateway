@@ -266,7 +266,7 @@ The EVM Gateway supports profiling via the `pprof` package. To enable profiling,
 --profiler-port=6060
 ```
 
-This will start a pprof server on the provide host:port. You can generate profiles using the following `go tool` commands
+This will start a pprof server on the provided `host` and `port`. You can generate profiles using the following `go tool` commands
 ```
 go tool pprof -http :2000 http://localhost:6060/debug/pprof/profile
 ```
