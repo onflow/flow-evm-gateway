@@ -161,6 +161,7 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 				err,
 			)
 		}
+		e.collector.CadenceHeightIndexed(events.CadenceHeight())
 		return nil // nothing else to do this was heartbeat event with not event payloads
 	}
 
