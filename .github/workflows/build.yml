@@ -6,7 +6,7 @@ on:
       - '*'
 
 env:
-  DOCKER_IMAGE_URL: ${{ vars.REPO_DOCKER_IMAGE_URL }}:${{ github.sha }}
+  DOCKER_IMAGE_URL: ${{ vars.REPO_DOCKER_IMAGE_URL }}
 
 jobs:
   build:
@@ -19,6 +19,10 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
+
+      - name: Set Gateway Version
+        id: set_version
+        run: echo "GATEWAY_VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo 'unknown')" >> $GITHUB_OUTPUT
 
       - name: Google auth
         id: auth
@@ -36,5 +40,5 @@ jobs:
       - name: Docker Auth
         run: |-
           gcloud auth configure-docker ${{ vars.GAR_LOCATION }}-docker.pkg.dev
-          docker build -t ${{ env.DOCKER_IMAGE_URL }} --build-arg GATEWAY_VERSION=$(git describe --tags --abbrev=0 2>/dev/null) --file Dockerfile .
-          docker push ${{ env.DOCKER_IMAGE_URL }}
+          docker build -t ${{ env.DOCKER_IMAGE_URL }}:${{ steps.set_version.outputs.GATEWAY_VERSION }} --build-arg GATEWAY_VERSION=${{ steps.set_version.outputs.GATEWAY_VERSION }} --file Dockerfile .
+          docker push ${{ env.DOCKER_IMAGE_URL }}:${{ steps.set_version.outputs.GATEWAY_VERSION }}
