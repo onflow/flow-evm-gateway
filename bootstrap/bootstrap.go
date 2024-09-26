@@ -52,6 +52,7 @@ type Bootstrap struct {
 	metrics    *metrics.Server
 	events     *ingestion.Engine
 	traces     *traces.Engine
+	profiler   *api.ProfileServer
 }
 
 func New(config *config.Config) (*Bootstrap, error) {
@@ -340,6 +341,38 @@ func (b *Bootstrap) StopMetricsServer() {
 	b.metrics.Stop()
 }
 
+func (b *Bootstrap) StartProfilerServer(_ context.Context) error {
+	if !b.config.ProfilerEnabled {
+		return nil
+	}
+	b.logger.Info().Msg("bootstrap starting profiler server")
+
+	b.profiler = api.NewProfileServer(b.logger, b.config.ProfilerHost, b.config.ProfilerPort)
+
+	b.profiler.Start()
+	b.logger.Info().Msgf("Profiler server started: %s", b.profiler.ListenAddr())
+
+	return nil
+}
+
+func (b *Bootstrap) StopProfilerServer() {
+	if b.profiler == nil {
+		return
+	}
+
+	b.logger.Warn().Msg("shutting down profiler server")
+
+	err := b.profiler.Stop()
+	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			b.logger.Warn().Msg("Profiler server graceful shutdown timed out")
+			b.profiler.Close()
+		} else {
+			b.logger.Err(err).Msg("Profiler server graceful shutdown failed")
+		}
+	}
+}
+
 // startEngine starts provided engine and panics if there are startup errors.
 func startEngine(
 	ctx context.Context,
@@ -476,6 +509,10 @@ func Run(ctx context.Context, cfg *config.Config, ready chan struct{}) error {
 
 	if err := boot.StartMetricsServer(ctx); err != nil {
 		return fmt.Errorf("failed to start metrics server: %w", err)
+	}
+
+	if err := boot.StartProfilerServer(ctx); err != nil {
+		return fmt.Errorf("failed to start profiler server: %w", err)
 	}
 
 	// mark ready

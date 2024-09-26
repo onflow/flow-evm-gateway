@@ -45,4 +45,14 @@ start:
 start-local:
 	rm -rf db/
 	rm -rf metrics/data/
-	go run cmd/main/main.go --flow-network-id=flow-emulator --coinbase=FACF71692421039876a5BB4F10EF7A439D8ef61E --coa-address=f8d6e0586b0a20c7 --coa-key=2619878f0e2ff438d17835c2a4561cb87b4d24d72d12ec34569acd0dd4af7c21 --wallet-api-key=2619878f0e2ff438d17835c2a4561cb87b4d24d72d12ec34569acd0dd4af7c21 --coa-resource-create=true --gas-price=0 --log-writer=console
+	go run cmd/main/main.go \
+		--flow-network-id=flow-emulator \
+		--coinbase=FACF71692421039876a5BB4F10EF7A439D8ef61E \
+		--coa-address=f8d6e0586b0a20c7 \
+		--coa-key=2619878f0e2ff438d17835c2a4561cb87b4d24d72d12ec34569acd0dd4af7c21 \
+		--wallet-api-key=2619878f0e2ff438d17835c2a4561cb87b4d24d72d12ec34569acd0dd4af7c21 \
+		--coa-resource-create=true \
+		--gas-price=0 \
+		--log-writer=console \
+		--profiler-enabled=true \
+		--profiler-port=6060

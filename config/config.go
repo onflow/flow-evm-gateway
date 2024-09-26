@@ -97,6 +97,12 @@ type Config struct {
 	IndexOnly bool
 	// Cache size in units of items in cache, one unit in cache takes approximately 64 bytes
 	CacheSize uint
+	// ProfilerEnabled sets whether the profiler server is enabled
+	ProfilerEnabled bool
+	// ProfilerHost is the host for the profiler server will listen to (e.g. localhost, 0.0.0.0)
+	ProfilerHost string
+	// ProfilerPort is the port for the profiler server
+	ProfilerPort int
 }
 
 func FromFlags() (*Config, error) {
@@ -159,6 +165,9 @@ func FromFlags() (*Config, error) {
 	flag.StringVar(&walletKey, "wallet-api-key", "", "ECDSA private key used for wallet APIs. WARNING: This should only be used locally or for testing, never in production.")
 	flag.IntVar(&cfg.MetricsPort, "metrics-port", 9091, "Port for the metrics server")
 	flag.BoolVar(&cfg.IndexOnly, "index-only", false, "Run the gateway in index-only mode which only allows querying the state and indexing, but disallows sending transactions.")
+	flag.BoolVar(&cfg.ProfilerEnabled, "profiler-enabled", false, "Run the profiler server to capture pprof data.")
+	flag.StringVar(&cfg.ProfilerHost, "profiler-host", "localhost", "Host for the Profiler server")
+	flag.IntVar(&cfg.ProfilerPort, "profiler-port", 6060, "Port for the Profiler server")
 	flag.Parse()
 
 	if coinbase == "" {
