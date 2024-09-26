@@ -180,7 +180,6 @@ The application can be configured using the following flags at runtime:
 | `ws-enabled`                 | `false`                         | Enable websocket connections                                                             |
 | `access-node-grpc-host`      | `localhost:3569`                | Host to the flow access node gRPC API                                                    |
 | `access-node-spork-hosts`    | `""`                            | Previous spork AN hosts, defined as a comma-separated list (e.g. `"host-1.com,host2.com"`) |
-| `evm-network-id`             | `testnet   `                    | EVM network ID (options: `testnet`, `mainnet`)                                           |
 | `flow-network-id`            | `flow-emulator`                 | Flow network ID (options: `flow-emulator`, `flow-testnet`, `flow-mainnet`)               |
 | `coinbase`                   | `""`                            | Coinbase address to use for fee collection                                               |
 | `init-cadence-height`        | `0`                             | Cadence block height to start indexing; avoid using on a new network                     |
@@ -204,7 +203,6 @@ The application can be configured using the following flags at runtime:
 | `wallet-api-key`             | `""`                            | ECDSA private key for wallet APIs (local/testing use only)                               |
 | `filter-expiry`              | `5m`                            | Expiry time for idle filters                                                             |
 | `traces-gcp-bucket`          | `""`                            | GCP bucket name for transaction traces                                                   |
-| `prometheus-config-file-path`| `./metrics/prometheus.yml`      | Path to the Prometheus configuration file                                                |
 | `index-only`                 | `false`                         | Run in index-only mode, allowing state queries and indexing but no transaction sending   |
 | `profiler-enabled`           | `false`                         | Enable the pprof profiler server                                                         |
 | `profiler-host`              | `localhost`                     | Host for the pprof profiler                                                              |
