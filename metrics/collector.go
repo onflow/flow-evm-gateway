@@ -15,6 +15,7 @@ type Collector interface {
 	ServerPanicked(reason string)
 	CadenceHeightIndexed(height uint64)
 	EVMHeightIndexed(height uint64)
+	EVMTransactionIndexed(count int)
 	EVMAccountInteraction(address string)
 	MeasureRequestDuration(start time.Time, method string)
 	OperatorBalance(account *flow.Account)
@@ -29,6 +30,8 @@ type DefaultCollector struct {
 	serverPanicsCounters      *prometheus.CounterVec
 	cadenceBlockHeight        prometheus.Gauge
 	evmBlockHeight            prometheus.Gauge
+	evmBlockIndexedCounter    prometheus.Counter
+	evmTxIndexedCounter       prometheus.Counter
 	operatorBalance           prometheus.Gauge
 	evmAccountCallCounters    *prometheus.CounterVec
 	requestDurations          *prometheus.HistogramVec
@@ -65,6 +68,16 @@ func NewCollector(logger zerolog.Logger) Collector {
 		Help: "Current EVM block height",
 	})
 
+	evmBlockIndexedCounter := prometheus.NewCounter(prometheus.CounterOpts{
+		Name: prefixedName("blocks_indexed_total"),
+		Help: "Total number of blocks indexed",
+	})
+
+	evmTxIndexedCounter := prometheus.NewCounter(prometheus.CounterOpts{
+		Name: prefixedName("txs_indexed_total"),
+		Help: "Total number transactions indexed",
+	})
+
 	evmAccountCallCounters := prometheus.NewCounterVec(prometheus.CounterOpts{
 		Name: prefixedName("evm_account_interactions_total"),
 		Help: "Total number of account interactions",
@@ -83,6 +96,8 @@ func NewCollector(logger zerolog.Logger) Collector {
 		serverPanicsCounters,
 		cadenceBlockHeight,
 		evmBlockHeight,
+		evmBlockIndexedCounter,
+		evmTxIndexedCounter,
 		operatorBalance,
 		evmAccountCallCounters,
 		requestDurations,
@@ -98,6 +113,8 @@ func NewCollector(logger zerolog.Logger) Collector {
 		serverPanicsCounters:      serverPanicsCounters,
 		cadenceBlockHeight:        cadenceBlockHeight,
 		evmBlockHeight:            evmBlockHeight,
+		evmBlockIndexedCounter:    evmBlockIndexedCounter,
+		evmTxIndexedCounter:       evmTxIndexedCounter,
 		evmAccountCallCounters:    evmAccountCallCounters,
 		requestDurations:          requestDurations,
 		operatorBalance:           operatorBalance,
@@ -133,6 +150,11 @@ func (c *DefaultCollector) CadenceHeightIndexed(height uint64) {
 
 func (c *DefaultCollector) EVMHeightIndexed(height uint64) {
 	c.evmBlockHeight.Set(float64(height))
+	c.evmBlockIndexedCounter.Inc()
+}
+
+func (c *DefaultCollector) EVMTransactionIndexed(count int) {
+	c.evmTxIndexedCounter.Add(float64(count))
 }
 
 func (c *DefaultCollector) EVMAccountInteraction(address string) {

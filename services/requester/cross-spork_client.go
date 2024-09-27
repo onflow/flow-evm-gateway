@@ -28,7 +28,7 @@ func (s *sporkClient) contains(height uint64) bool {
 type sporkClients []*sporkClient
 
 // addSpork will add a new spork host defined by the first and last height boundary in that spork.
-func (s *sporkClients) add(client access.Client) error {
+func (s *sporkClients) add(logger zerolog.Logger, client access.Client) error {
 	header, err := client.GetLatestBlockHeader(context.Background(), true)
 	if err != nil {
 		return fmt.Errorf("could not get latest height using the spork client: %w", err)
@@ -38,6 +38,11 @@ func (s *sporkClients) add(client access.Client) error {
 	if err != nil {
 		return fmt.Errorf("could not get node info using the spork client: %w", err)
 	}
+
+	logger.Info().
+		Uint64("firstHeight", info.NodeRootBlockHeight).
+		Uint64("lastHeight", header.Height).
+		Msg("adding spork client")
 
 	*s = append(*s, &sporkClient{
 		firstHeight: info.NodeRootBlockHeight,
@@ -113,7 +118,7 @@ func NewCrossSporkClient(
 
 	clients := &sporkClients{}
 	for _, c := range pastSporks {
-		if err := clients.add(c); err != nil {
+		if err := clients.add(logger, c); err != nil {
 			return nil, err
 		}
 	}
