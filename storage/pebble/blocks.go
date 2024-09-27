@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 
 	"github.com/cockroachdb/pebble"
@@ -16,6 +17,11 @@ import (
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/storage"
 )
+
+var testnetBrokenParentHashBlockHeights = []uint64{
+	1,
+	1385491,
+}
 
 var _ storage.BlockIndexer = &Blocks{}
 
@@ -270,5 +276,25 @@ func (b *Blocks) getBlock(keyCode byte, key []byte) (*models.Block, error) {
 		return nil, fmt.Errorf("failed to get block: %w", err)
 	}
 
-	return models.NewBlockFromBytes(data)
+	block, err := models.NewBlockFromBytes(data)
+	if err != nil {
+		return nil, err
+	}
+
+	if b.chainID == flowGo.Testnet && slices.Contains(testnetBrokenParentHashBlockHeights, block.Height) {
+		parentBlock, err := b.getBlock(blockHeightKey, uint64Bytes(block.Height-1))
+		if err != nil {
+			return nil, err
+		}
+		// Due to the breaking change of the block hash calculation, after the
+		// introduction of the `PrevRandao` field, we need to manually set the
+		// `ParentBlockHash` field, for the 2 affected blocks on `testnet`
+		// network. `mainnet` was not affected by this.
+		block.ParentBlockHash, err = parentBlock.Hash()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return block, nil
 }
