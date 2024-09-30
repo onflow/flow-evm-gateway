@@ -319,4 +319,40 @@ it('should retrieve transaction traces', async () => {
             RETURN: 1
         }
     )
+
+    let storageValue = await web3.eth.getStorageAt(contractAddress, 0, 'latest')
+    assert.equal(
+        storageValue,
+        '0x0000000000000000000000000000000000000000000000000000000000000064'
+    )
+
+    let callTracerWithStateOverrides = {
+        tracer: 'callTracer',
+        tracerConfig: {
+            onlyTopCall: true
+        },
+        stateOverrides: {
+            '0x99a64c993965f8d69f985b5171bc20065cc32fab': {
+                stateDiff: {
+                    '0x0000000000000000000000000000000000000000000000000000000000000000': '0x00000000000000000000000000000000000000000000000000000000000003e8'
+                }
+            }
+        }
+    }
+    response = await helpers.callRPCMethod(
+        'debug_traceCall',
+        [traceCall, 'latest', callTracerWithStateOverrides]
+    )
+    assert.equal(response.status, 200)
+    assert.isDefined(response.body)
+
+    callTrace = response.body.result
+    assert.equal(callTrace.from, '0xfacf71692421039876a5bb4f10ef7a439d8ef61e')
+    assert.equal(callTrace.gas, '0x75ab')
+    assert.equal(callTrace.gasUsed, '0x6662')
+    assert.equal(callTrace.to, '0x99a64c993965f8d69f985b5171bc20065cc32fab')
+    assert.equal(
+        callTrace.output,
+        '0x00000000000000000000000000000000000000000000000000000000000003e8'
+    )
 })

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/goccy/go-json"
+	"github.com/holiman/uint256"
 	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/onflow/flow-go/fvm/evm/emulator"
 	gethCommon "github.com/onflow/go-ethereum/common"
@@ -258,6 +259,49 @@ func (d *DebugAPI) TraceCall(
 	)
 	chainConfig := emulatorConfig.ChainConfig
 	random := block.PrevRandao
+	stateDB := blockExecutor.StateDB
+
+	diff := config.StateOverrides
+	if diff != nil {
+		for addr, account := range *diff {
+			// Replace entire state if caller requires.
+			if account.State != nil {
+				stateDB.Selfdestruct6780(addr)
+				for key, value := range *account.State {
+					stateDB.SetState(addr, key, value)
+				}
+			}
+			// Override account nonce.
+			if account.Nonce != nil {
+				stateDB.SetNonce(addr, uint64(*account.Nonce))
+			}
+			// Override account(contract) code.
+			if account.Code != nil {
+				stateDB.SetCode(addr, *account.Code)
+			}
+			// Override account balance.
+			if account.Balance != nil {
+				u256Balance, _ := uint256.FromBig((*big.Int)(*account.Balance))
+				stateDB.AddBalance(addr, u256Balance, tracing.BalanceChangeUnspecified)
+			}
+			if account.State != nil && account.StateDiff != nil {
+				return nil, fmt.Errorf("account %s has both 'state' and 'stateDiff'", addr.Hex())
+			}
+			// Apply state diff into specified accounts.
+			if account.StateDiff != nil {
+				for key, value := range *account.StateDiff {
+					fmt.Println("Key: ", key)
+					fmt.Println("Value: ", value)
+					stateDB.SetState(addr, key, value)
+				}
+			}
+		}
+		// Now finalize the changes. Finalize is normally performed between transactions.
+		// By using finalize, the overrides are semantically behaving as
+		// if they were created in a transaction just before the tracing occur.
+		stateDB.Commit(true)
+	}
+
 	tracer.OnTxStart(
 		&tracing.VMContext{
 			Coinbase:    d.config.Coinbase,
@@ -266,11 +310,18 @@ func (d *DebugAPI) TraceCall(
 			Random:      &random,
 			GasPrice:    d.config.GasPrice,
 			ChainConfig: chainConfig,
-			StateDB:     blockExecutor.StateDB,
+			StateDB:     stateDB,
 		},
 		tx,
 		from,
 	)
+
+	stateVal := stateDB.GetState(
+		gethCommon.HexToAddress(args.To.Hex()),
+		gethCommon.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"),
+	)
+	fmt.Println("[StateValue]: ", stateVal)
+	//stateDB.SetState(addr, key, value)
 
 	result, err := blockExecutor.Call(from, txEncoded, tracer)
 	if err != nil {
