@@ -29,7 +29,7 @@ func TestWeb3_E2E(t *testing.T) {
 	})
 
 	// todo a new emulator version should be released with this PR merged and included
-	// to fix this test https://github.com/onflow/flow-go/pull/6464
+	// to fix this test https://github.com/onflow/flow-go/pull/6488
 	t.Run("test cadence arch and environment calls", func(t *testing.T) {
 		runWeb3Test(t, "cadence_arch_env_test")
 	})
