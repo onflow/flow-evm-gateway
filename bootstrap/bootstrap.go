@@ -137,7 +137,7 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 		b.collector,
 	)
 
-	startEngine(ctx, b.events, l)
+	StartEngine(ctx, b.events, l)
 	return nil
 }
 
@@ -161,7 +161,7 @@ func (b *Bootstrap) StartTraceDownloader(ctx context.Context) error {
 		b.collector,
 	)
 
-	startEngine(ctx, b.traces, l)
+	StartEngine(ctx, b.traces, l)
 	return nil
 }
 
@@ -374,23 +374,27 @@ func (b *Bootstrap) StopProfilerServer() {
 	}
 }
 
-// startEngine starts provided engine and panics if there are startup errors.
-func startEngine(
+// StartEngine starts provided engine and panics if there are startup errors.
+func StartEngine(
 	ctx context.Context,
 	engine models.Engine,
 	logger zerolog.Logger,
 ) {
-	logger.Info().Msg("starting engine")
+	l := logger.With().Type("engine", engine).Logger()
+
+	l.Info().Msg("starting engine")
+	start := time.Now()
 	go func() {
 		err := engine.Run(ctx)
 		if err != nil {
-			logger.Error().Err(err).Msg("engine failed to run")
-			panic(err)
+			l.Fatal().Err(err).Msg("engine failed to run")
 		}
 	}()
 
 	<-engine.Ready()
-	logger.Info().Msg("engine started successfully")
+	l.Info().
+		Dur("duration", time.Since(start)).
+		Msg("engine started successfully")
 }
 
 // setupCrossSporkClient sets up a cross-spork AN client.
