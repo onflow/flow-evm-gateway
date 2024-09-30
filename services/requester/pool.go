@@ -29,13 +29,13 @@ type TxPool struct {
 	logger      zerolog.Logger
 	client      *CrossSporkClient
 	pool        *sync.Map
-	txPublisher *models.Publisher
+	txPublisher *models.Publisher[*gethTypes.Transaction]
 	// todo add methods to inspect transaction pool state
 }
 
 func NewTxPool(
 	client *CrossSporkClient,
-	transactionsPublisher *models.Publisher,
+	transactionsPublisher *models.Publisher[*gethTypes.Transaction],
 	logger zerolog.Logger,
 ) *TxPool {
 	return &TxPool{

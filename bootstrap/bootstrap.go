@@ -10,6 +10,7 @@ import (
 	"github.com/onflow/flow-go-sdk/access"
 	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/onflow/flow-go-sdk/crypto"
+	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-limiter/memorystore"
 	grpcOpts "google.golang.org/grpc"
@@ -36,9 +37,9 @@ type Storages struct {
 }
 
 type Publishers struct {
-	Block       *models.Publisher
-	Transaction *models.Publisher
-	Logs        *models.Publisher
+	Block       *models.Publisher[*models.Block]
+	Transaction *models.Publisher[*gethTypes.Transaction]
+	Logs        *models.Publisher[[]*gethTypes.Log]
 }
 
 type Bootstrap struct {
@@ -71,9 +72,9 @@ func New(config *config.Config) (*Bootstrap, error) {
 
 	return &Bootstrap{
 		publishers: &Publishers{
-			Block:       models.NewPublisher(),
-			Transaction: models.NewPublisher(),
-			Logs:        models.NewPublisher(),
+			Block:       models.NewPublisher[*models.Block](),
+			Transaction: models.NewPublisher[*gethTypes.Transaction](),
+			Logs:        models.NewPublisher[[]*gethTypes.Log](),
 		},
 		storages:  storages,
 		logger:    logger,
@@ -208,7 +209,11 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 	}
 
 	// create transaction pool
-	txPool := requester.NewTxPool(b.client, b.publishers.Transaction, b.logger)
+	txPool := requester.NewTxPool(
+		b.client,
+		b.publishers.Transaction,
+		b.logger,
+	)
 
 	evm, err := requester.NewEVM(
 		b.client,
@@ -259,7 +264,6 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 		b.publishers.Block,
 		b.publishers.Transaction,
 		b.publishers.Logs,
-		ratelimiter,
 	)
 
 	pullAPI := api.NewPullAPI(

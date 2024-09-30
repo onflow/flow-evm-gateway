@@ -11,7 +11,6 @@ import (
 	"github.com/onflow/go-ethereum/eth/filters"
 	"github.com/onflow/go-ethereum/rpc"
 	"github.com/rs/zerolog"
-	"github.com/sethvargo/go-limiter"
 
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/models"
@@ -25,10 +24,9 @@ type StreamAPI struct {
 	blocks                storage.BlockIndexer
 	transactions          storage.TransactionIndexer
 	receipts              storage.ReceiptIndexer
-	blocksPublisher       *models.Publisher
-	transactionsPublisher *models.Publisher
-	logsPublisher         *models.Publisher
-	ratelimiter           limiter.Store
+	blocksPublisher       *models.Publisher[*models.Block]
+	transactionsPublisher *models.Publisher[*gethTypes.Transaction]
+	logsPublisher         *models.Publisher[[]*gethTypes.Log]
 }
 
 func NewStreamAPI(
@@ -37,10 +35,9 @@ func NewStreamAPI(
 	blocks storage.BlockIndexer,
 	transactions storage.TransactionIndexer,
 	receipts storage.ReceiptIndexer,
-	blocksPublisher *models.Publisher,
-	transactionsPublisher *models.Publisher,
-	logsPublisher *models.Publisher,
-	ratelimiter limiter.Store,
+	blocksPublisher *models.Publisher[*models.Block],
+	transactionsPublisher *models.Publisher[*gethTypes.Transaction],
+	logsPublisher *models.Publisher[[]*gethTypes.Log],
 ) *StreamAPI {
 	return &StreamAPI{
 		logger:                logger,
@@ -51,22 +48,17 @@ func NewStreamAPI(
 		blocksPublisher:       blocksPublisher,
 		transactionsPublisher: transactionsPublisher,
 		logsPublisher:         logsPublisher,
-		ratelimiter:           ratelimiter,
 	}
 }
 
 // NewHeads send a notification each time a new block is appended to the chain.
 func (s *StreamAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
-	return s.newSubscription(
+	return newSubscription(
 		ctx,
+		s.logger,
 		s.blocksPublisher,
-		func(notifier *rpc.Notifier, sub *rpc.Subscription) func(any) error {
-			return func(data any) error {
-				block, ok := data.(*models.Block)
-				if !ok {
-					return fmt.Errorf("invalid data sent to block subscription: %s", sub.ID)
-				}
-
+		func(notifier *rpc.Notifier, sub *rpc.Subscription) func(block *models.Block) error {
+			return func(block *models.Block) error {
 				h, err := block.Hash()
 				if err != nil {
 					return err
@@ -93,16 +85,12 @@ func (s *StreamAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
 // transaction enters the transaction pool. If fullTx is true the full tx is
 // sent to the client, otherwise the hash is sent.
 func (s *StreamAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) (*rpc.Subscription, error) {
-	return s.newSubscription(
+	return newSubscription(
 		ctx,
+		s.logger,
 		s.transactionsPublisher,
-		func(notifier *rpc.Notifier, sub *rpc.Subscription) func(any) error {
-			return func(data any) error {
-				tx, ok := data.(*gethTypes.Transaction)
-				if !ok {
-					return fmt.Errorf("invalid data sent to pending transaction subscription: %s", sub.ID)
-				}
-
+		func(notifier *rpc.Notifier, sub *rpc.Subscription) func(*gethTypes.Transaction) error {
+			return func(tx *gethTypes.Transaction) error {
 				if fullTx != nil && *fullTx {
 					return notifier.Notify(sub.ID, tx)
 				}
@@ -120,16 +108,12 @@ func (s *StreamAPI) Logs(ctx context.Context, criteria filters.FilterCriteria) (
 		return nil, fmt.Errorf("failed to create log subscription filter: %w", err)
 	}
 
-	return s.newSubscription(
+	return newSubscription(
 		ctx,
+		s.logger,
 		s.logsPublisher,
-		func(notifier *rpc.Notifier, sub *rpc.Subscription) func(any) error {
-			return func(data any) error {
-				allLogs, ok := data.([]*gethTypes.Log)
-				if !ok {
-					return fmt.Errorf("invalid data sent to log subscription: %s", sub.ID)
-				}
-
+		func(notifier *rpc.Notifier, sub *rpc.Subscription) func([]*gethTypes.Log) error {
+			return func(allLogs []*gethTypes.Log) error {
 				for _, log := range allLogs {
 					// todo we could optimize this matching for cases where we have multiple subscriptions
 					// using the same filter criteria, we could only filter once and stream to all subscribers
@@ -148,10 +132,11 @@ func (s *StreamAPI) Logs(ctx context.Context, criteria filters.FilterCriteria) (
 	)
 }
 
-func (s *StreamAPI) newSubscription(
+func newSubscription[T any](
 	ctx context.Context,
-	publisher *models.Publisher,
-	callback func(notifier *rpc.Notifier, sub *rpc.Subscription) func(any) error,
+	logger zerolog.Logger,
+	publisher *models.Publisher[T],
+	callback func(notifier *rpc.Notifier, sub *rpc.Subscription) func(T) error,
 ) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
@@ -162,8 +147,7 @@ func (s *StreamAPI) newSubscription(
 
 	subs := models.NewSubscription(callback(notifier, rpcSub))
 
-	rpcSub.ID = rpc.ID(subs.ID().String())
-	l := s.logger.With().Str("subscription-id", subs.ID().String()).Logger()
+	l := logger.With().Str("subscription-id", fmt.Sprintf("%p", subs)).Logger()
 
 	publisher.Subscribe(subs)
 
