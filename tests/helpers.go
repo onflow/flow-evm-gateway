@@ -62,7 +62,10 @@ func testLogWriter() io.Writer {
 		return zerolog.Nop()
 	}
 
-	return zerolog.NewConsoleWriter()
+	writer := zerolog.NewConsoleWriter()
+	zerolog.TimeFieldFormat = time.RFC3339Nano
+	writer.TimeFormat = "04:05.0000"
+	return writer
 }
 
 func startEmulator(createTestAccounts bool) (*server.EmulatorServer, error) {
@@ -76,7 +79,7 @@ func startEmulator(createTestAccounts bool) (*server.EmulatorServer, error) {
 		return nil, err
 	}
 
-	log := logger.With().Timestamp().Str("component", "emulator").Logger().Level(zerolog.DebugLevel)
+	log := zerolog.New(testLogWriter()).With().Timestamp().Str("component", "emulator").Logger().Level(zerolog.DebugLevel)
 	if logOutput == "false" {
 		log = zerolog.Nop()
 	}
@@ -190,13 +193,12 @@ func executeTest(t *testing.T, testFile string) {
 		}
 
 		out, err := cmd.CombinedOutput()
-		t.Log(string(out))
 
 		if err != nil {
 			var exitError *exec.ExitError
 			if errors.As(err, &exitError) {
-				if exitError.ExitCode() == 1 {
-					require.Fail(t, err.Error())
+				if exitError.ExitCode() >= 1 {
+					require.Fail(t, string(out))
 				}
 				t.Fatalf("unknown test issue: %s, output: %s", err.Error(), string(out))
 			}
@@ -332,7 +334,8 @@ func evmSign(
 	signer *ecdsa.PrivateKey,
 	nonce uint64,
 	to *common.Address,
-	data []byte) ([]byte, common.Hash, error) {
+	data []byte,
+) ([]byte, common.Hash, error) {
 	gasPrice := big.NewInt(0)
 
 	evmTx := types.NewTx(&types.LegacyTx{Nonce: nonce, To: to, Value: weiValue, Gas: gasLimit, GasPrice: gasPrice, Data: data})
