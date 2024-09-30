@@ -27,8 +27,9 @@ var _ models.Engine = &Engine{}
 // listens for new transaction events and then downloads and index the
 // traces from the transaction execution.
 type Engine struct {
+	*models.EngineStatus
+
 	logger          zerolog.Logger
-	status          *models.EngineStatus
 	blocksPublisher *models.Publisher
 	blocks          storage.BlockIndexer
 	traces          storage.TraceIndexer
@@ -46,7 +47,8 @@ func NewTracesIngestionEngine(
 	collector metrics.Collector,
 ) *Engine {
 	return &Engine{
-		status:          models.NewEngineStatus(),
+		EngineStatus: models.NewEngineStatus(),
+
 		logger:          logger.With().Str("component", "trace-ingestion").Logger(),
 		blocksPublisher: blocksPublisher,
 		blocks:          blocks,
@@ -56,11 +58,13 @@ func NewTracesIngestionEngine(
 	}
 }
 
+// Run the engine.
+// TODO: use the context to stop the engine.
 func (e *Engine) Run(ctx context.Context) error {
 	// subscribe to new blocks
 	e.blocksPublisher.Subscribe(e)
 
-	e.status.MarkReady()
+	e.MarkReady()
 	return nil
 }
 
@@ -148,13 +152,5 @@ func (e *Engine) Error() <-chan error {
 }
 
 func (e *Engine) Stop() {
-	e.status.MarkStopped()
-}
-
-func (e *Engine) Done() <-chan struct{} {
-	return e.status.IsDone()
-}
-
-func (e *Engine) Ready() <-chan struct{} {
-	return e.status.IsReady()
+	e.MarkStopped()
 }
