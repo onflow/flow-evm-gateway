@@ -11,7 +11,7 @@ require (
 	github.com/onflow/flow-go v0.37.10
 	github.com/onflow/flow-go-sdk v1.0.0-preview.56
 	github.com/onflow/go-ethereum v1.14.7
-	github.com/rs/zerolog v1.31.0
+	github.com/rs/zerolog v1.33.0
 	github.com/stretchr/testify v1.9.0
 )
 
