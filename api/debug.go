@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math/big"
-	"time"
 
 	"github.com/goccy/go-json"
 	"github.com/holiman/uint256"
@@ -186,7 +185,7 @@ func (d *DebugAPI) TraceCall(
 	// call tracer
 	head := &gethTypes.Header{
 		Number: big.NewInt(int64(block.Height)),
-		Time:   uint64(time.Now().Unix()),
+		Time:   block.Timestamp,
 	}
 	emulatorConfig := emulator.NewConfig(
 		emulator.WithChainID(d.config.EVMNetworkID),
