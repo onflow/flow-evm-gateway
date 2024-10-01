@@ -18,6 +18,7 @@ import (
 	"github.com/onflow/go-ethereum/eth/tracers/logger"
 	"github.com/onflow/go-ethereum/rpc"
 	"github.com/rs/zerolog"
+	"github.com/sethvargo/go-limiter"
 
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/metrics"
@@ -39,13 +40,14 @@ type txTraceResult struct {
 }
 
 type DebugAPI struct {
-	client    *evm.CrossSporkClient
-	tracer    storage.TraceIndexer
-	blocks    storage.BlockIndexer
-	receipts  storage.ReceiptIndexer
-	config    *config.Config
-	logger    zerolog.Logger
-	collector metrics.Collector
+	client      *evm.CrossSporkClient
+	tracer      storage.TraceIndexer
+	blocks      storage.BlockIndexer
+	receipts    storage.ReceiptIndexer
+	config      *config.Config
+	logger      zerolog.Logger
+	collector   metrics.Collector
+	ratelimiter limiter.Store
 }
 
 func NewDebugAPI(
@@ -56,15 +58,17 @@ func NewDebugAPI(
 	config *config.Config,
 	logger zerolog.Logger,
 	collector metrics.Collector,
+	ratelimiter limiter.Store,
 ) *DebugAPI {
 	return &DebugAPI{
-		client:    client,
-		tracer:    tracer,
-		blocks:    blocks,
-		receipts:  receipts,
-		config:    config,
-		logger:    logger,
-		collector: collector,
+		client:      client,
+		tracer:      tracer,
+		blocks:      blocks,
+		receipts:    receipts,
+		config:      config,
+		logger:      logger,
+		collector:   collector,
+		ratelimiter: ratelimiter,
 	}
 }
 
@@ -134,6 +138,10 @@ func (d *DebugAPI) TraceCall(
 	blockNrOrHash rpc.BlockNumberOrHash,
 	config *tracers.TraceCallConfig,
 ) (interface{}, error) {
+	if err := rateLimit(ctx, d.ratelimiter, d.logger); err != nil {
+		return nil, err
+	}
+
 	txEncoded, err := encodeTxFromArgs(args)
 	if err != nil {
 		return nil, err
