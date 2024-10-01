@@ -147,7 +147,7 @@ func (d *DebugAPI) TraceCall(
 	}
 
 	// Default address in case user does not provide one
-	from := d.config.Coinbase
+	from := gethCommon.Address{}
 	if args.From != nil {
 		from = *args.From
 	}
