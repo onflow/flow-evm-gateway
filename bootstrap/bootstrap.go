@@ -11,6 +11,8 @@ import (
 	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/onflow/flow-go-sdk/crypto"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
+
+	"github.com/onflow/flow-go/model/flow"
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-limiter/memorystore"
 	grpcOpts "google.golang.org/grpc"
@@ -279,7 +281,15 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 
 	var debugAPI *api.DebugAPI
 	if b.config.TracesEnabled {
-		debugAPI = api.NewDebugAPI(b.storages.Traces, b.storages.Blocks, b.logger, b.collector)
+		debugAPI = api.NewDebugAPI(
+			b.client,
+			b.storages.Traces,
+			b.storages.Blocks,
+			b.storages.Receipts,
+			b.config,
+			b.logger,
+			b.collector,
+		)
 	}
 
 	var walletAPI *api.WalletAPI
@@ -503,7 +513,9 @@ func Run(ctx context.Context, cfg *config.Config, ready chan struct{}) error {
 		return err
 	}
 
-	if cfg.TracesEnabled {
+	// Disable traces downloader for emulator, as it causes the E2E
+	// tests to fail.
+	if cfg.TracesEnabled && cfg.FlowNetworkID != flow.Emulator {
 		if err := boot.StartTraceDownloader(ctx); err != nil {
 			return fmt.Errorf("failed to start trace downloader engine: %w", err)
 		}
