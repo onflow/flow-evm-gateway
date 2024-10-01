@@ -26,6 +26,7 @@ import (
 	"github.com/onflow/flow-evm-gateway/storage"
 
 	evm "github.com/onflow/flow-evm-gateway/services/evm"
+	// Force-load native and js packages, to trigger registration
 	_ "github.com/onflow/go-ethereum/eth/tracers/js"
 	_ "github.com/onflow/go-ethereum/eth/tracers/native"
 )
