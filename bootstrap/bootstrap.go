@@ -284,6 +284,7 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 			b.config,
 			b.logger,
 			b.collector,
+			ratelimiter,
 		)
 	}
 
