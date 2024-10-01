@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/onflow/flow-evm-gateway/config"
+	"github.com/onflow/flow-evm-gateway/services/evm"
 )
 
 func Test_Caching(t *testing.T) {
@@ -214,7 +215,7 @@ func createEVM(t *testing.T, cache *expirable.LRU[string, cadence.Value], mockCl
 	networkID := flowGo.Emulator
 	log := zerolog.New(zerolog.NewTestWriter(t))
 
-	client, err := NewCrossSporkClient(mockClient, nil, log, networkID)
+	client, err := evm.NewCrossSporkClient(mockClient, nil, log, networkID)
 	require.NoError(t, err)
 
 	return &EVM{

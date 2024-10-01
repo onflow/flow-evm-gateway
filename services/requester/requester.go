@@ -119,7 +119,7 @@ type Requester interface {
 var _ Requester = &EVM{}
 
 type EVM struct {
-	client      *CrossSporkClient
+	client      *gwEvm.CrossSporkClient
 	config      *config.Config
 	signer      crypto.Signer
 	txPool      *TxPool
@@ -136,7 +136,7 @@ type EVM struct {
 }
 
 func NewEVM(
-	client *CrossSporkClient,
+	client *gwEvm.CrossSporkClient,
 	config *config.Config,
 	signer crypto.Signer,
 	logger zerolog.Logger,

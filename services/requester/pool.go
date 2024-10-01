@@ -14,6 +14,7 @@ import (
 
 	"github.com/onflow/flow-evm-gateway/models"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
+	"github.com/onflow/flow-evm-gateway/services/evm"
 )
 
 const (
@@ -27,14 +28,14 @@ const (
 
 type TxPool struct {
 	logger      zerolog.Logger
-	client      *CrossSporkClient
+	client      *evm.CrossSporkClient
 	pool        *sync.Map
 	txPublisher *models.Publisher[*gethTypes.Transaction]
 	// todo add methods to inspect transaction pool state
 }
 
 func NewTxPool(
-	client *CrossSporkClient,
+	client *evm.CrossSporkClient,
 	transactionsPublisher *models.Publisher[*gethTypes.Transaction],
 	logger zerolog.Logger,
 ) *TxPool {
