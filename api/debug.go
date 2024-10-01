@@ -7,8 +7,10 @@ import (
 	"time"
 
 	"github.com/goccy/go-json"
+	"github.com/holiman/uint256"
 	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/onflow/flow-go/fvm/evm/emulator"
+	"github.com/onflow/flow-go/fvm/evm/types"
 	gethCommon "github.com/onflow/go-ethereum/common"
 	"github.com/onflow/go-ethereum/core/tracing"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
@@ -183,6 +185,7 @@ func (d *DebugAPI) TraceCall(
 		emulator.WithBlockTime(head.Time),
 	)
 	random := block.PrevRandao
+	stateDB := blockExecutor.StateDB
 	tracer.OnTxStart(
 		&tracing.VMContext{
 			Coinbase:    d.config.Coinbase,
@@ -191,11 +194,16 @@ func (d *DebugAPI) TraceCall(
 			Random:      &random,
 			GasPrice:    d.config.GasPrice,
 			ChainConfig: emulatorConfig.ChainConfig,
-			StateDB:     blockExecutor.StateDB,
+			StateDB:     stateDB,
 		},
 		tx,
 		from,
 	)
+
+	err = applyStateOverrides(config, stateDB)
+	if err != nil {
+		return nil, err
+	}
 
 	result, err := blockExecutor.Call(from, txEncoded, tracer)
 	if err != nil {
@@ -235,6 +243,57 @@ func (d *DebugAPI) executorAtBlock(block *models.Block) (*evm.BlockExecutor, err
 		d.receipts,
 		d.logger,
 	)
+}
+
+func applyStateOverrides(config *tracers.TraceCallConfig, stateDB types.StateDB) error {
+	diff := config.StateOverrides
+
+	if diff == nil {
+		return nil
+	}
+
+	for addr, account := range *diff {
+		// Override account nonce.
+		if account.Nonce != nil {
+			stateDB.SetNonce(addr, uint64(*account.Nonce))
+		}
+		// Override account(contract) code.
+		if account.Code != nil {
+			stateDB.SetCode(addr, *account.Code)
+		}
+		// Override account balance.
+		if account.Balance != nil {
+			u256Balance, _ := uint256.FromBig((*big.Int)(*account.Balance))
+			currentBalance := stateDB.GetBalance(addr)
+			// If given balance is greater-or-equal than the current balance,
+			// we need to add the diff to the current balance. Otherwise,
+			// we need to sub the diff from the current balance.
+			if u256Balance.Cmp(currentBalance) >= 0 {
+				diff := u256Balance.Sub(u256Balance, currentBalance)
+				stateDB.AddBalance(addr, diff, tracing.BalanceChangeUnspecified)
+			} else {
+				diff := currentBalance.Sub(currentBalance, u256Balance)
+				stateDB.SubBalance(addr, diff, tracing.BalanceChangeUnspecified)
+			}
+		}
+		if account.State != nil && account.StateDiff != nil {
+			return fmt.Errorf("account %s has both 'state' and 'stateDiff'", addr.Hex())
+		}
+		// Replace entire state if caller requires.
+		if account.State != nil {
+			for key, value := range *account.State {
+				stateDB.SetState(addr, key, value)
+			}
+		}
+		// Apply state diff into specified accounts.
+		if account.StateDiff != nil {
+			for key, value := range *account.StateDiff {
+				stateDB.SetState(addr, key, value)
+			}
+		}
+	}
+
+	return stateDB.Commit(true)
 }
 
 func (d *DebugAPI) resolveBlockNumberOrHash(block *rpc.BlockNumberOrHash) (uint64, error) {
