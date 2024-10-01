@@ -255,13 +255,12 @@ func (d *DebugAPI) executorAtBlock(block *models.Block) (*evm.BlockExecutor, err
 }
 
 func applyStateOverrides(config *tracers.TraceCallConfig, stateDB types.StateDB) error {
-	diff := config.StateOverrides
-
-	if diff == nil {
+	if config == nil || config.StateOverrides == nil {
 		return nil
 	}
 
-	for addr, account := range *diff {
+	diff := *config.StateOverrides
+	for addr, account := range diff {
 		// Override account nonce.
 		if account.Nonce != nil {
 			stateDB.SetNonce(addr, uint64(*account.Nonce))
