@@ -7,6 +7,7 @@ require (
 	github.com/cockroachdb/pebble v1.1.1
 	github.com/goccy/go-json v0.10.2
 	github.com/hashicorp/golang-lru/v2 v2.0.7
+	github.com/holiman/uint256 v1.3.0
 	github.com/onflow/atree v0.8.0-rc.6
 	github.com/onflow/cadence v1.0.0
 	github.com/onflow/flow-go v0.38.0-preview.0.0.20241007124218-3602aeb7dfec
@@ -95,7 +96,6 @@ require (
 	github.com/hashicorp/golang-lru v1.0.2 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/holiman/bloomfilter/v2 v2.0.3 // indirect
-	github.com/holiman/uint256 v1.3.0 // indirect
 	github.com/huandu/go-clone v1.6.0 // indirect
 	github.com/huandu/go-clone/generic v1.7.2 // indirect
 	github.com/huin/goupnp v1.3.0 // indirect
