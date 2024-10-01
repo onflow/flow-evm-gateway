@@ -134,7 +134,7 @@ it('should retrieve call traces', async () => {
             onlyTopCall: true
         },
         stateOverrides: {
-            '0x99a64c993965f8d69f985b5171bc20065cc32fab': {
+            [contractAddress]: {
                 stateDiff: {
                     '0x0000000000000000000000000000000000000000000000000000000000000000': '0x00000000000000000000000000000000000000000000000000000000000003e8'
                 }
