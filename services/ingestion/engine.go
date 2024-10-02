@@ -197,6 +197,7 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 		}
 	}
 
+	e.collector.EVMTransactionIndexed(len(events.Transactions()))
 	e.collector.EVMHeightIndexed(events.Block().Height)
 	e.collector.CadenceHeightIndexed(events.CadenceHeight())
 	return nil
