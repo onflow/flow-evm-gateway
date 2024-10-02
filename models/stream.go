@@ -1,6 +1,7 @@
 package models
 
 import (
+	"fmt"
 	"sync"
 )
 
@@ -52,13 +53,19 @@ type Subscription[T any] struct {
 func NewSubscription[T any](callback func(T) error) *Subscription[T] {
 	return &Subscription[T]{
 		callback: callback,
+		err:      make(chan error),
 	}
 }
 
 func (b *Subscription[T]) Notify(data T) {
 	err := b.callback(data)
 	if err != nil {
-		b.err <- err
+		select {
+		case b.err <- err:
+		default:
+			// TODO: handle this better!
+			panic(fmt.Sprintf("failed to send error to subscription %v", err))
+		}
 	}
 }
 
