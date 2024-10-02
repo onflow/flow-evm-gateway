@@ -30,15 +30,15 @@ func NewEngineStatus() *EngineStatus {
 	}
 }
 
-func (e *EngineStatus) IsReady() <-chan struct{} {
+func (e *EngineStatus) Ready() <-chan struct{} {
 	return e.ready
 }
 
-func (e *EngineStatus) IsStopped() <-chan struct{} {
+func (e *EngineStatus) Stopped() <-chan struct{} {
 	return e.stop
 }
 
-func (e *EngineStatus) IsDone() <-chan struct{} {
+func (e *EngineStatus) Done() <-chan struct{} {
 	return e.done
 }
 
