@@ -3,6 +3,7 @@ package models_test
 import (
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -31,15 +32,15 @@ func Test_Stream(t *testing.T) {
 
 		p.Publish(mockData{})
 
-		require.Equal(t, uint(1), s1.callCount)
-		require.Equal(t, uint(1), s2.callCount)
+		require.Equal(t, uint64(1), s1.CallCount())
+		require.Equal(t, uint64(1), s2.CallCount())
 
 		p.Unsubscribe(s1)
 
 		p.Publish(mockData{})
 
-		require.Equal(t, uint(1), s1.callCount)
-		require.Equal(t, uint(2), s2.callCount)
+		require.Equal(t, uint64(1), s1.CallCount())
+		require.Equal(t, uint64(2), s2.CallCount())
 	})
 
 	t.Run("concurrent subscribe, publish, unsubscribe, publish", func(t *testing.T) {
@@ -86,7 +87,7 @@ func Test_Stream(t *testing.T) {
 
 				// there should be at least 50 calls
 				for j := 0; j < 10; j++ {
-					require.Greater(t, subscriptions[j].callCount, uint(50))
+					require.Greater(t, subscriptions[j].CallCount(), uint64(50))
 				}
 			}()
 		}
@@ -101,7 +102,7 @@ func Test_Stream(t *testing.T) {
 		errContent := fmt.Errorf("failed to process data")
 
 		s.Subscription = models.NewSubscription[mockData](func(data mockData) error {
-			s.callCount++
+			s.callCount.Add(1)
 			return errContent
 		})
 
@@ -127,16 +128,20 @@ type mockData struct{}
 
 type mockSubscription struct {
 	*models.Subscription[mockData]
-	callCount uint
+	callCount atomic.Uint64
 }
 
 func newMockSubscription() *mockSubscription {
 	s := &mockSubscription{}
 	s.Subscription = models.NewSubscription[mockData](func(data mockData) error {
-		s.callCount++
+		s.callCount.Add(1)
 		return nil
 	})
 	return s
+}
+
+func (s *mockSubscription) CallCount() uint64 {
+	return s.callCount.Load()
 }
 
 func newMockPublisher() *models.Publisher[mockData] {
