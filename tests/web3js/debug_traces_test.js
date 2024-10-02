@@ -19,8 +19,36 @@ it('should retrieve call traces', async () => {
         }
     }
 
-    let callData = deployed.contract.methods.retrieve().encodeABI()
+    let callData = deployed.contract.methods.store(100).encodeABI()
     let traceCall = {
+        from: conf.eoa.address,
+        to: contractAddress,
+        data: callData,
+        value: '0x0',
+        gasPrice: web3.utils.toHex(conf.minGasPrice),
+        gas: '0x95ab'
+    }
+    response = await helpers.callRPCMethod(
+        'debug_traceCall',
+        [traceCall, 'latest', callTracer]
+    )
+    assert.equal(response.status, 200)
+    assert.isDefined(response.body)
+
+    let updateTrace = response.body.result
+    assert.equal(updateTrace.from, '0xfacf71692421039876a5bb4f10ef7a439d8ef61e')
+    assert.equal(updateTrace.gas, '0x95ab')
+    assert.equal(updateTrace.gasUsed, '0x72c3')
+    assert.equal(updateTrace.to, '0x99a64c993965f8d69f985b5171bc20065cc32fab')
+    assert.equal(
+        updateTrace.input,
+        '0x6057361d0000000000000000000000000000000000000000000000000000000000000064'
+    )
+    assert.equal(updateTrace.value, '0x0')
+    assert.equal(updateTrace.type, 'CALL')
+
+    callData = deployed.contract.methods.retrieve().encodeABI()
+    traceCall = {
         from: conf.eoa.address,
         to: contractAddress,
         gas: '0x75ab',
