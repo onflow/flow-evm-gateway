@@ -16,7 +16,7 @@ require (
 	github.com/onflow/go-ethereum v1.14.7
 	github.com/prometheus/client_golang v1.18.0
 	github.com/rs/cors v1.8.0
-	github.com/rs/zerolog v1.31.0
+	github.com/rs/zerolog v1.33.0
 	github.com/samber/slog-zerolog v1.0.0
 	github.com/sethvargo/go-limiter v1.0.0
 	github.com/sethvargo/go-retry v0.2.3

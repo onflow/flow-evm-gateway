@@ -2,12 +2,13 @@ package requester
 
 import (
 	"fmt"
+	"sync"
+	"testing"
+
 	"github.com/onflow/flow-go-sdk/crypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/exp/maps"
-	"sync"
-	"testing"
 )
 
 func Test_KeyRotation(t *testing.T) {
