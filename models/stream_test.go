@@ -49,6 +49,8 @@ func Test_Stream(t *testing.T) {
 
 		stopPublishing := make(chan struct{})
 
+		published := make(chan struct{})
+
 		// publishing
 		go func() {
 			for {
@@ -57,42 +59,54 @@ func Test_Stream(t *testing.T) {
 					return
 				case <-time.After(time.Millisecond * 1):
 					p.Publish(mockData{})
+
+					select {
+					case published <- struct{}{}:
+					default:
+					}
 				}
 			}
 		}()
 
-		wg := sync.WaitGroup{}
+		waitAllSubscribed := sync.WaitGroup{}
+		waitAllUnsubscribed := sync.WaitGroup{}
 
 		// 10 goroutines adding 10 subscribers each
-		// waiting for 100 ms to make sure all goroutines are added
 		// and then unsubscribe all
-		wg.Add(10)
+		waitAllSubscribed.Add(10)
+		waitAllUnsubscribed.Add(10)
 		for i := 0; i < 10; i++ {
 			go func() {
-				defer wg.Done()
-
 				subscriptions := make([]*mockSubscription, 10)
 
 				for j := 0; j < 10; j++ {
 					s := newMockSubscription()
 					subscriptions[j] = s
 					p.Subscribe(s)
-				}
 
-				<-time.After(time.Millisecond * 100)
+				}
+				waitAllSubscribed.Done()
+				waitAllSubscribed.Wait()
+
+				// wait for all subscribers to receive data
+				for i := 0; i < 10; i++ {
+					<-published
+				}
 
 				for _, s := range subscriptions {
 					p.Unsubscribe(s)
 				}
 
-				// there should be at least 50 calls
+				// there should be at least 1 call
 				for j := 0; j < 10; j++ {
-					require.Greater(t, subscriptions[j].CallCount(), uint64(50))
+					require.GreaterOrEqual(t, subscriptions[j].CallCount(), uint64(10))
 				}
+
+				waitAllUnsubscribed.Done()
 			}()
 		}
 
-		wg.Wait()
+		waitAllUnsubscribed.Wait()
 		close(stopPublishing)
 	})
 
@@ -108,19 +122,21 @@ func Test_Stream(t *testing.T) {
 
 		p.Subscribe(s)
 
+		shouldReceiveError := make(chan struct{})
+		ready := make(chan struct{})
 		go func() {
+			close(ready)
 			select {
 			case err := <-s.Error():
 				require.ErrorIs(t, err, errContent)
-			case <-time.After(time.Millisecond * 10):
+			case <-shouldReceiveError:
 				require.Fail(t, "should have received error")
 			}
 		}()
-
-		// wait for the goroutine to subscribe to error channel
-		<-time.After(time.Millisecond * 1)
+		<-ready
 
 		p.Publish(mockData{})
+		close(shouldReceiveError)
 	})
 }
 
