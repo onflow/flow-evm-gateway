@@ -150,16 +150,26 @@ func (s *BlockExecutor) blockContext(receipt *models.Receipt) (types.BlockContex
 		DirectCallGasPrice:     types.DefaultDirectCallGasPrice,
 		GasFeeCollector:        types.CoinbaseAddress,
 		GetHashFunc: func(n uint64) common.Hash {
-			b, err := s.blocks.GetByHeight(n)
+			// For future block heights, return an empty block hash.
+			if n > s.block.Height {
+				return common.Hash{}
+			}
+			// If the given block height, is more than 256 blocks
+			// in the past, return an empty block hash.
+			if s.block.Height-n > 256 {
+				return common.Hash{}
+			}
+
+			block, err := s.blocks.GetByHeight(n)
 			if err != nil {
 				panic(err)
 			}
-			h, err := b.Hash()
+			blockHash, err := block.Hash()
 			if err != nil {
 				panic(err)
 			}
 
-			return h
+			return blockHash
 		},
 		Random:            s.block.PrevRandao,
 		TxCountSoFar:      s.txIndex,
