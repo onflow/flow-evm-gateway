@@ -1,9 +1,10 @@
 package models
 
 import (
-	"github.com/stretchr/testify/require"
 	"math"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestSequentialHeight(t *testing.T) {
