@@ -31,6 +31,8 @@ var _ models.Engine = &Engine{}
 // it will just overwrite the current indexed data. Idempotency is an important
 // requirement of the implementation of this engine.
 type Engine struct {
+	*models.EngineStatus
+
 	subscriber      EventSubscriber
 	store           *pebble.Storage
 	blocks          storage.BlockIndexer
@@ -39,7 +41,6 @@ type Engine struct {
 	accounts        storage.AccountIndexer
 	log             zerolog.Logger
 	evmLastHeight   *models.SequentialHeight
-	status          *models.EngineStatus
 	blocksPublisher *models.Publisher
 	logsPublisher   *models.Publisher
 	collector       metrics.Collector
@@ -60,6 +61,8 @@ func NewEventIngestionEngine(
 	log = log.With().Str("component", "ingestion").Logger()
 
 	return &Engine{
+		EngineStatus: models.NewEngineStatus(),
+
 		subscriber:      subscriber,
 		store:           store,
 		blocks:          blocks,
@@ -67,22 +70,10 @@ func NewEventIngestionEngine(
 		transactions:    transactions,
 		accounts:        accounts,
 		log:             log,
-		status:          models.NewEngineStatus(),
 		blocksPublisher: blocksPublisher,
 		logsPublisher:   logsPublisher,
 		collector:       collector,
 	}
-}
-
-// Ready signals when the engine has started.
-func (e *Engine) Ready() <-chan struct{} {
-	return e.status.IsReady()
-}
-
-// Done signals when the engine has stopped.
-func (e *Engine) Done() <-chan struct{} {
-	// return e.status.IsDone()
-	return nil
 }
 
 // Stop the engine.
@@ -113,7 +104,7 @@ func (e *Engine) Run(ctx context.Context) error {
 
 	e.log.Info().Uint64("start-cadence-height", latestCadence).Msg("starting ingestion")
 
-	e.status.MarkReady()
+	e.MarkReady()
 
 	for events := range e.subscriber.Subscribe(ctx, latestCadence) {
 		if events.Err != nil {
