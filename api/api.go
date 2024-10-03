@@ -3,12 +3,14 @@ package api
 import (
 	"context"
 	_ "embed"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
 	"strings"
 
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/onflow/go-ethereum/common"
 	"github.com/onflow/go-ethereum/common/hexutil"
 	"github.com/onflow/go-ethereum/common/math"
@@ -91,6 +93,8 @@ type BlockChainAPI struct {
 	indexingResumedHeight uint64
 	limiter               limiter.Store
 	collector             metrics.Collector
+
+	balanceCache *lru.TwoQueueCache[common.Hash, *hexutil.Big]
 }
 
 func NewBlockChainAPI(
@@ -110,6 +114,11 @@ func NewBlockChainAPI(
 		return nil, fmt.Errorf("failed to retrieve the indexing resumed height: %w", err)
 	}
 
+	balanceCache, err := lru.New2Q[common.Hash, *hexutil.Big](10_000)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create balance cache: %w", err)
+	}
+
 	return &BlockChainAPI{
 		logger:                logger,
 		config:                config,
@@ -121,6 +130,7 @@ func NewBlockChainAPI(
 		indexingResumedHeight: indexingResumedHeight,
 		limiter:               ratelimiter,
 		collector:             collector,
+		balanceCache:          balanceCache,
 	}, nil
 }
 
@@ -219,12 +229,29 @@ func (b *BlockChainAPI) GetBalance(
 		return handleError[*hexutil.Big](err, l, b.collector)
 	}
 
+	cacheKey := getCacheKey(address, evmHeight)
+	if balance, ok := b.balanceCache.Get(cacheKey); ok {
+		return balance, nil
+	}
+
 	balance, err := b.evm.GetBalance(ctx, address, evmHeight)
 	if err != nil {
 		return handleError[*hexutil.Big](err, l, b.collector)
 	}
 
-	return (*hexutil.Big)(balance), nil
+	response := (*hexutil.Big)(balance)
+
+	b.balanceCache.Add(cacheKey, response)
+
+	return response, nil
+}
+
+func getCacheKey(address common.Address, evmHeight int64) common.Hash {
+	// hash is 32 bytes
+	// address (20 bytes) + int64 (8 bytes) = 28 bytes total
+	keyData := address.Bytes()
+	binary.BigEndian.AppendUint64(keyData, uint64(evmHeight))
+	return common.BytesToHash(keyData)
 }
 
 // GetTransactionByHash returns the transaction for the given hash
