@@ -250,7 +250,7 @@ func getCacheKey(address common.Address, evmHeight int64) common.Hash {
 	// hash is 32 bytes
 	// address (20 bytes) + int64 (8 bytes) = 28 bytes total
 	keyData := address.Bytes()
-	binary.BigEndian.AppendUint64(keyData, uint64(evmHeight))
+	keyData = binary.BigEndian.AppendUint64(keyData, uint64(evmHeight))
 	return common.BytesToHash(keyData)
 }
 
