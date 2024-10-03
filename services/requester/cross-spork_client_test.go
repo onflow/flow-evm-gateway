@@ -34,6 +34,7 @@ func Test_CrossSporkClient(t *testing.T) {
 }
 
 func Test_CrossSporkClients(t *testing.T) {
+	logger := zerolog.Nop()
 	t.Run("add and validate", func(t *testing.T) {
 		clients := &sporkClients{}
 
@@ -41,9 +42,9 @@ func Test_CrossSporkClients(t *testing.T) {
 		client2 := testutils.SetupClientForRange(101, 200)
 		client3 := testutils.SetupClientForRange(201, 300)
 
-		require.NoError(t, clients.add(client2))
-		require.NoError(t, clients.add(client3))
-		require.NoError(t, clients.add(client1))
+		require.NoError(t, clients.add(logger, client2))
+		require.NoError(t, clients.add(logger, client3))
+		require.NoError(t, clients.add(logger, client1))
 
 		require.True(t, clients.continuous())
 
@@ -58,14 +59,14 @@ func Test_CrossSporkClients(t *testing.T) {
 		require.Equal(t, nil, clients.get(310))
 	})
 
-	t.Run("add and validate not-continues", func(t *testing.T) {
+	t.Run("add and validate not-continuous", func(t *testing.T) {
 		clients := &sporkClients{}
 
 		client1 := testutils.SetupClientForRange(10, 30)
 		client2 := testutils.SetupClientForRange(50, 80)
 
-		require.NoError(t, clients.add(client1))
-		require.NoError(t, clients.add(client2))
+		require.NoError(t, clients.add(logger, client1))
+		require.NoError(t, clients.add(logger, client2))
 
 		require.False(t, clients.continuous())
 	})
