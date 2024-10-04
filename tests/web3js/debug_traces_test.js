@@ -68,6 +68,7 @@ it('should retrieve call traces', async () => {
     assert.equal(callTrace.gas, '0x75ab')
     assert.equal(callTrace.gasUsed, '0x664b')
     assert.equal(callTrace.to, '0x99a64c993965f8d69f985b5171bc20065cc32fab')
+    assert.equal(callTrace.input, '0x2e64cec1')
     assert.equal(
         callTrace.output,
         '0x0000000000000000000000000000000000000000000000000000000000000539'
@@ -119,7 +120,6 @@ it('should retrieve call traces', async () => {
 
     // Assert proper response for custom JavaScript tracer
     txTrace = response.body.result
-    console.log('Tx Trace: ', txTrace)
     assert.deepEqual(
         txTrace,
         {
@@ -181,10 +181,51 @@ it('should retrieve call traces', async () => {
     assert.equal(callTrace.gas, '0x75ab')
     assert.equal(callTrace.gasUsed, '0x664b')
     assert.equal(callTrace.to, '0x99a64c993965f8d69f985b5171bc20065cc32fab')
+    assert.equal(callTrace.input, '0x2e64cec1')
     assert.equal(
         callTrace.output,
         '0x00000000000000000000000000000000000000000000000000000000000003e8'
     )
     assert.equal(callTrace.value, '0x0')
     assert.equal(callTrace.type, 'CALL')
+
+    let updateData = deployed.contract.methods.store(1500).encodeABI()
+    let res = await helpers.signAndSend({
+        from: conf.eoa.address,
+        to: contractAddress,
+        data: updateData,
+        value: '0',
+        gasPrice: conf.minGasPrice,
+    })
+    assert.equal(res.receipt.status, conf.successStatus)
+
+    let latestHeight = await web3.eth.getBlockNumber()
+
+    // Assert value on previous block
+    response = await helpers.callRPCMethod(
+        'debug_traceCall',
+        [traceCall, web3.utils.toHex(latestHeight - 1n), callTracer]
+    )
+    assert.equal(response.status, 200)
+    assert.isDefined(response.body)
+
+    callTrace = response.body.result
+    assert.equal(
+        callTrace.output,
+        '0x0000000000000000000000000000000000000000000000000000000000000539'
+    )
+
+    // Assert value on latest block
+    response = await helpers.callRPCMethod(
+        'debug_traceCall',
+        [traceCall, web3.utils.toHex(latestHeight), callTracer]
+    )
+    assert.equal(response.status, 200)
+    assert.isDefined(response.body)
+
+    callTrace = response.body.result
+    assert.equal(
+        callTrace.output,
+        '0x00000000000000000000000000000000000000000000000000000000000005dc'
+    )
 })
