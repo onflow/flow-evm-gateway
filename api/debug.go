@@ -224,8 +224,16 @@ func (d *DebugAPI) TraceCall(
 }
 
 func (d *DebugAPI) executorAtBlock(block *models.Block) (*evm.BlockExecutor, error) {
-	blockHeight := block.Height
-	client, err := d.client.GetClientForHeight(blockHeight)
+	cadenceHeight, err := d.blocks.GetCadenceHeight(block.Height)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"failed to map evm height: %d to cadence height: %w",
+			block.Height,
+			err,
+		)
+	}
+
+	client, err := d.client.GetClientForHeight(cadenceHeight)
 	if err != nil {
 		return nil, err
 	}
@@ -235,9 +243,13 @@ func (d *DebugAPI) executorAtBlock(block *models.Block) (*evm.BlockExecutor, err
 		return nil, fmt.Errorf("could not convert to execution client")
 	}
 
-	ledger, err := evm.NewRemoteLedger(exeClient.ExecutionDataRPCClient(), blockHeight)
+	ledger, err := evm.NewRemoteLedger(exeClient.ExecutionDataRPCClient(), cadenceHeight)
 	if err != nil {
-		return nil, fmt.Errorf("could not create remote ledger for height: %d, with: %w", blockHeight, err)
+		return nil, fmt.Errorf(
+			"could not create remote ledger for height: %d, with: %w",
+			cadenceHeight,
+			err,
+		)
 	}
 
 	return evm.NewBlockExecutor(
