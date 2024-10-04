@@ -2,7 +2,9 @@ package evm
 
 import (
 	"fmt"
+	"math/big"
 
+	"github.com/holiman/uint256"
 	"github.com/onflow/atree"
 	"github.com/onflow/flow-go/fvm/evm"
 	"github.com/onflow/flow-go/fvm/evm/emulator"
@@ -11,6 +13,7 @@ import (
 	"github.com/onflow/flow-go/fvm/evm/types"
 	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/onflow/go-ethereum/common"
+	"github.com/onflow/go-ethereum/core/tracing"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/onflow/go-ethereum/eth/tracers"
 	"github.com/rs/zerolog"
@@ -136,6 +139,56 @@ func (s *BlockExecutor) Call(
 	}
 
 	return bv.DryRunTransaction(tx, from)
+}
+
+func (s *BlockExecutor) ApplyStateOverrides(config *tracers.TraceCallConfig) error {
+	if config == nil || config.StateOverrides == nil {
+		return nil
+	}
+
+	diff := *config.StateOverrides
+	for addr, account := range diff {
+		// Override account nonce.
+		if account.Nonce != nil {
+			s.StateDB.SetNonce(addr, uint64(*account.Nonce))
+		}
+		// Override account(contract) code.
+		if account.Code != nil {
+			s.StateDB.SetCode(addr, *account.Code)
+		}
+		// Override account balance.
+		if account.Balance != nil {
+			u256Balance, _ := uint256.FromBig((*big.Int)(*account.Balance))
+			currentBalance := s.StateDB.GetBalance(addr)
+			// If given balance is greater-or-equal than the current balance,
+			// we need to add the diff to the current balance. Otherwise,
+			// we need to sub the diff from the current balance.
+			if u256Balance.Cmp(currentBalance) >= 0 {
+				diff := u256Balance.Sub(u256Balance, currentBalance)
+				s.StateDB.AddBalance(addr, diff, tracing.BalanceChangeUnspecified)
+			} else {
+				diff := currentBalance.Sub(currentBalance, u256Balance)
+				s.StateDB.SubBalance(addr, diff, tracing.BalanceChangeUnspecified)
+			}
+		}
+		if account.State != nil && account.StateDiff != nil {
+			return fmt.Errorf("account %s has both 'state' and 'stateDiff'", addr.Hex())
+		}
+		// Replace entire state if caller requires.
+		if account.State != nil {
+			for key, value := range *account.State {
+				s.StateDB.SetState(addr, key, value)
+			}
+		}
+		// Apply state diff into specified accounts.
+		if account.StateDiff != nil {
+			for key, value := range *account.StateDiff {
+				s.StateDB.SetState(addr, key, value)
+			}
+		}
+	}
+
+	return s.StateDB.Commit(true)
 }
 
 // blockContext produces a context that is used by the block view during the execution.
