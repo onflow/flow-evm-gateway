@@ -63,60 +63,6 @@ func NewBlockExecutor(
 	}, nil
 }
 
-func (s *BlockExecutor) Run(
-	tx models.Transaction,
-	tracer *tracers.Tracer,
-) (*gethTypes.Receipt, error) {
-	l := s.logger.With().Str("tx-hash", tx.Hash().String()).Logger()
-	l.Info().Msg("executing new transaction")
-
-	receipt, err := s.receipts.GetByTransactionID(tx.Hash())
-	if err != nil {
-		return nil, err
-	}
-
-	ctx, err := s.blockContext(receipt)
-	ctx.Tracer = tracer
-	if err != nil {
-		return nil, err
-	}
-
-	bv, err := s.emulator.NewBlockView(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	var res *types.Result
-
-	switch t := tx.(type) {
-	case models.DirectCall:
-		res, err = bv.DirectCall(t.DirectCall)
-	case models.TransactionCall:
-		res, err = bv.RunTransaction(t.Transaction)
-	default:
-		return nil, fmt.Errorf("invalid transaction type")
-	}
-
-	if err != nil {
-		// todo is this ok, the service would restart and retry?
-		return nil, err
-	}
-
-	// we should never produce invalid transaction, since if the transaction was emitted from the evm core
-	// it must have either been successful or failed, invalid transactions are not emitted
-	if res.Invalid() {
-		return nil, fmt.Errorf("invalid transaction %s: %w", tx.Hash(), res.ValidationError)
-	}
-
-	// increment values as part of a virtual block
-	s.gasUsed += res.GasConsumed
-	s.txIndex++
-
-	l.Debug().Msg("transaction executed successfully")
-
-	return res.LightReceipt().ToReceipt(), nil
-}
-
 func (s *BlockExecutor) Call(
 	from common.Address,
 	data []byte,
