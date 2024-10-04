@@ -25,7 +25,7 @@ import (
 type BlockExecutor struct {
 	types.StateDB // todo change to types.ReadOnlyView
 	emulator      types.Emulator
-	chainID       flowGo.ChainID
+	evmChainID    *big.Int
 	block         *models.Block
 	blocks        storage.BlockIndexer
 	logger        zerolog.Logger
@@ -53,13 +53,13 @@ func NewBlockExecutor(
 	}
 
 	return &BlockExecutor{
-		emulator: emulator.NewEmulator(ledger, storageAddress),
-		StateDB:  stateDB,
-		chainID:  chainID,
-		block:    block,
-		blocks:   blocks,
-		receipts: receipts,
-		logger:   logger,
+		emulator:   emulator.NewEmulator(ledger, storageAddress),
+		StateDB:    stateDB,
+		evmChainID: types.EVMChainIDFromFlowChainID(chainID),
+		block:      block,
+		blocks:     blocks,
+		receipts:   receipts,
+		logger:     logger,
 	}, nil
 }
 
@@ -142,7 +142,7 @@ func (s *BlockExecutor) ApplyStateOverrides(config *tracers.TraceCallConfig) err
 // producing the context for calls.
 func (s *BlockExecutor) blockContext(receipt *models.Receipt) (types.BlockContext, error) {
 	ctx := types.BlockContext{
-		ChainID:                types.EVMChainIDFromFlowChainID(s.chainID),
+		ChainID:                s.evmChainID,
 		BlockNumber:            s.block.Height,
 		BlockTimestamp:         s.block.Timestamp,
 		DirectCallBaseGasUsage: types.DefaultDirectCallBaseGasUsage, // todo check
