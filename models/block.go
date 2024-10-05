@@ -16,6 +16,7 @@ import (
 var (
 	LatestBlockNumber   = big.NewInt(-2)
 	EarliestBlockNumber = big.NewInt(0)
+	zeroGethHash        = gethCommon.HexToHash("0x0")
 )
 
 func GenesisBlock(chainID flow.ChainID) *Block {
@@ -73,11 +74,20 @@ func (b *Block) Hash() (gethCommon.Hash, error) {
 func decodeBlockEvent(event cadence.Event) (*Block, error) {
 	payload, err := events.DecodeBlockEventPayload(event)
 	if err != nil {
-		if block, err := decodeLegacyBlockEvent(event); err == nil {
-			return block, nil
-		}
+		return nil, fmt.Errorf(
+			"failed to Cadence-decode EVM block event [%s]: %w",
+			event.String(),
+			err,
+		)
+	}
 
-		return nil, fmt.Errorf("failed to cadence decode block [%s]: %w", event.String(), err)
+	var fixedHash *string
+	// If the `PrevRandao` field is the zero hash, we know that
+	// this is a block with the legacy format, and we need to
+	// fix its hash, due to the hash calculation breaking change.
+	if payload.PrevRandao == zeroGethHash {
+		hash := payload.Hash.String()
+		fixedHash = &hash
 	}
 
 	return &Block{
@@ -91,41 +101,7 @@ func decodeBlockEvent(event cadence.Event) (*Block, error) {
 			TotalGasUsed:        payload.TotalGasUsed,
 			PrevRandao:          payload.PrevRandao,
 		},
-	}, nil
-}
-
-// todo remove this after updated in flow-go
-type blockEventPayloadV0 struct {
-	Height              uint64          `cadence:"height"`
-	Hash                gethCommon.Hash `cadence:"hash"`
-	Timestamp           uint64          `cadence:"timestamp"`
-	TotalSupply         cadence.Int     `cadence:"totalSupply"`
-	TotalGasUsed        uint64          `cadence:"totalGasUsed"`
-	ParentBlockHash     gethCommon.Hash `cadence:"parentHash"`
-	ReceiptRoot         gethCommon.Hash `cadence:"receiptRoot"`
-	TransactionHashRoot gethCommon.Hash `cadence:"transactionHashRoot"`
-}
-
-// DecodeBlockEventPayload decodes Cadence event into block event payload.
-func decodeLegacyBlockEvent(event cadence.Event) (*Block, error) {
-	var block blockEventPayloadV0
-	err := cadence.DecodeFields(event, &block)
-	if err != nil {
-		return nil, err
-	}
-
-	h := block.Hash.String()
-	return &Block{
-		Block: &types.Block{
-			ParentBlockHash:     block.ParentBlockHash,
-			Height:              block.Height,
-			Timestamp:           block.Timestamp,
-			TotalSupply:         block.TotalSupply.Value,
-			ReceiptRoot:         block.ReceiptRoot,
-			TransactionHashRoot: block.TransactionHashRoot,
-			TotalGasUsed:        block.TotalGasUsed,
-		},
-		FixedHash: &h,
+		FixedHash: fixedHash,
 	}, nil
 }
 
