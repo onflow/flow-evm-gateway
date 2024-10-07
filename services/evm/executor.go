@@ -134,7 +134,8 @@ func (s *BlockExecutor) ApplyStateOverrides(config *tracers.TraceCallConfig) err
 		}
 	}
 
-	return s.StateDB.Commit(true)
+	_, err := s.StateDB.Commit(true)
+	return err
 }
 
 // blockContext produces a context that is used by the block view during the execution.
