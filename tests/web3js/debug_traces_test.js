@@ -93,7 +93,19 @@ it('should retrieve call traces', async () => {
     txTrace = response.body.result
     assert.deepEqual(
         txTrace,
-        { post: {}, pre: {} }
+        {
+            post: {
+                '0xfacf71692421039876a5bb4f10ef7a439d8ef61e': {
+                    nonce: 2
+                }
+            },
+            pre: {
+                '0xfacf71692421039876a5bb4f10ef7a439d8ef61e': {
+                    balance: '0x456391823ad876a0',
+                    nonce: 1
+                }
+            }
+        }
     )
 
     response = await helpers.callRPCMethod(
