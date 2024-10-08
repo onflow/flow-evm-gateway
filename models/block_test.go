@@ -150,7 +150,7 @@ func Test_DecodingLegacyBlockExecutedEvent(t *testing.T) {
 		hashToCadenceArrayValue(block.TransactionHashRoot),
 	}).WithType(eventType)
 
-	b, err := decodeLegacyBlockEvent(legacyEvent)
+	b, err := decodeBlockEvent(legacyEvent)
 	require.NoError(t, err)
 
 	require.Equal(t, block.ParentBlockHash, b.ParentBlockHash)
@@ -161,9 +161,7 @@ func Test_DecodingLegacyBlockExecutedEvent(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, bh, dech)
 
-	b2, err := decodeBlockEvent(legacyEvent)
-	require.NoError(t, err)
-	require.Equal(t, b, b2)
+	require.NotNil(t, b.FixedHash)
 }
 
 func Test_Hash(t *testing.T) {

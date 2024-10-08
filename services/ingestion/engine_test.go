@@ -549,12 +549,13 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 }
 
 func newBlock(height uint64, txHashes []gethCommon.Hash) (cadence.Event, *models.Block, *events.Event, error) {
-	gethBlock := &types.Block{
-		ParentBlockHash: gethCommon.HexToHash("0x1"),
-		Height:          height,
-		TotalSupply:     big.NewInt(100),
-		ReceiptRoot:     gethCommon.HexToHash("0x2"),
-	}
+	gethBlock := types.NewBlock(
+		gethCommon.HexToHash("0x1"),
+		height,
+		uint64(1337),
+		big.NewInt(100),
+		gethCommon.HexToHash("0x15"),
+	)
 	gethBlock.TransactionHashRoot = types.TransactionHashes(txHashes).RootHash()
 	block := &models.Block{
 		Block:             gethBlock,
