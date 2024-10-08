@@ -147,7 +147,10 @@ func newSubscription[T any](
 
 	subs := models.NewSubscription(callback(notifier, rpcSub))
 
-	l := logger.With().Str("subscription-id", fmt.Sprintf("%p", subs)).Logger()
+	l := logger.With().
+		Str("gateway-subscription-id", fmt.Sprintf("%p", subs)).
+		Str("ethereum-subscription-id", string(rpcSub.ID)).
+		Logger()
 
 	publisher.Subscribe(subs)
 
