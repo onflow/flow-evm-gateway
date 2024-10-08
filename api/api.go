@@ -70,6 +70,11 @@ var validMethods = map[string]struct{}{
 	"eth_getProof":                            {},
 	"eth_createAccessList":                    {},
 
+	// debug namespace
+	"debug_traceTransaction":   {},
+	"debug_traceBlockByNumber": {},
+	"debug_traceBlockByHash":   {},
+
 	// web3 namespace
 	"web3_clientVersion": {},
 	"web3_sha3":          {},
