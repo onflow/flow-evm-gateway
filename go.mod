@@ -10,7 +10,7 @@ require (
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/onflow/atree v0.8.0-rc.6
 	github.com/onflow/cadence v1.0.0
-	github.com/onflow/flow-go v0.38.0-preview.0.0.20241002124048-21cfe5aea5a8
+	github.com/onflow/flow-go v0.38.0-preview.0.0.20241007124218-3602aeb7dfec
 	github.com/onflow/flow-go-sdk v1.0.0
 	github.com/onflow/flow/protobuf/go/flow v0.4.7
 	github.com/onflow/go-ethereum v1.14.7
