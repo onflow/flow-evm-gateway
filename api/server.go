@@ -246,16 +246,22 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	requestBody := make(map[string]any)
-	// Check if WebSocket request and serve if JSON-RPC over WebSocket is enabled
 	if b, err := io.ReadAll(r.Body); err == nil {
 		_ = json.Unmarshal(b, &requestBody)
 
-		h.logger.Debug().
-			Str("IP", r.RemoteAddr).
-			Str("url", r.URL.String()).
-			Fields(requestBody).
-			Bool("is-ws", isWebSocket(r)).
-			Msg("API request")
+		// Do not log any debug info for methods that are not valid
+		// JSON-RPC methods.
+		if methodValue, ok := requestBody["method"]; ok {
+			if methodStr, ok := methodValue.(string); ok && IsValidMethod(methodStr) {
+				h.logger.Debug().
+					Str("IP", r.RemoteAddr).
+					Str("url", r.URL.String()).
+					Fields(requestBody).
+					Bool("is-ws", isWebSocket(r)).
+					Msg("API request")
+
+			}
+		}
 
 		r.Body = io.NopCloser(bytes.NewBuffer(b))
 		r.Body.Close()
@@ -270,6 +276,7 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ws := h.wsHandler
+	// Check if WebSocket request and serve if JSON-RPC over WebSocket is enabled
 	if ws != nil && isWebSocket(r) {
 		ws.ServeHTTP(w, r)
 		return
@@ -480,7 +487,10 @@ func (w *responseHandler) Write(data []byte) (int, error) {
 	if message.Error == nil {
 		r, _ := message.Result.MarshalJSON()
 		log.RawJSON("result", r).Msg("API response")
-	} else { // still debug output all errors even known ones
+	}
+
+	// still debug output all errors even known ones
+	if message.Error != nil && message.Error.Code != errMethodNotFound {
 		l.Debug().
 			Str("error", message.Error.Message).
 			Int("code", message.Error.Code).
