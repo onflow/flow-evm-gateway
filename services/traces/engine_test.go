@@ -27,7 +27,7 @@ import (
 // downloaded and stored.
 func TestTraceIngestion(t *testing.T) {
 	t.Run("successful single block ingestion", func(t *testing.T) {
-		blockPublisher := models.NewPublisher()
+		blockPublisher := models.NewPublisher[*models.Block]()
 		blocks := &storageMock.BlockIndexer{}
 		trace := &storageMock.TraceIndexer{}
 		downloader := &mocks.Downloader{}
@@ -113,7 +113,7 @@ func TestTraceIngestion(t *testing.T) {
 	})
 
 	t.Run("successful multiple blocks ingestion", func(t *testing.T) {
-		blocksPublisher := models.NewPublisher()
+		blocksPublisher := models.NewPublisher[*models.Block]()
 		blocks := &storageMock.BlockIndexer{}
 		trace := &storageMock.TraceIndexer{}
 		downloader := &mocks.Downloader{}
@@ -230,7 +230,7 @@ func TestTraceIngestion(t *testing.T) {
 	})
 
 	t.Run("failed download retries", func(t *testing.T) {
-		blockBroadcaster := models.NewPublisher()
+		blockBroadcaster := models.NewPublisher[*models.Block]()
 		blocks := &storageMock.BlockIndexer{}
 		downloader := &mocks.Downloader{}
 		trace := &storageMock.TraceIndexer{}

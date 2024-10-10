@@ -5,7 +5,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/onflow/flow-go-sdk"
 	gethCommon "github.com/onflow/go-ethereum/common"
 	"github.com/rs/zerolog"
@@ -30,7 +29,7 @@ type Engine struct {
 	*models.EngineStatus
 
 	logger          zerolog.Logger
-	blocksPublisher *models.Publisher
+	blocksPublisher *models.Publisher[*models.Block]
 	blocks          storage.BlockIndexer
 	traces          storage.TraceIndexer
 	downloader      Downloader
@@ -39,7 +38,7 @@ type Engine struct {
 
 // NewTracesIngestionEngine creates a new instance of the engine.
 func NewTracesIngestionEngine(
-	blocksPublisher *models.Publisher,
+	blocksPublisher *models.Publisher[*models.Block],
 	blocks storage.BlockIndexer,
 	traces storage.TraceIndexer,
 	downloader Downloader,
@@ -70,13 +69,7 @@ func (e *Engine) Run(ctx context.Context) error {
 
 // Notify is a handler that is being used to subscribe for new EVM block notifications.
 // This method should be non-blocking.
-func (e *Engine) Notify(data any) {
-	block, ok := data.(*models.Block)
-	if !ok {
-		e.logger.Error().Msg("invalid event type sent to trace ingestion")
-		return
-	}
-
+func (e *Engine) Notify(block *models.Block) {
 	// If the block has no transactions, we simply return early
 	// as there are no transaction traces to index.
 	if len(block.TransactionHashes) == 0 {
@@ -126,7 +119,6 @@ func (e *Engine) indexBlockTraces(evmBlock *models.Block, cadenceBlockID flow.Id
 
 				return e.traces.StoreTransaction(h, trace, nil)
 			})
-
 			if err != nil {
 				e.collector.TraceDownloadFailed()
 				l.Error().Err(err).Msg("failed to download trace")
@@ -137,12 +129,6 @@ func (e *Engine) indexBlockTraces(evmBlock *models.Block, cadenceBlockID flow.Id
 	}
 
 	wg.Wait()
-}
-
-// ID is required by the publisher interface and we return a random uuid since the
-// subscription will only happen once by this engine
-func (e *Engine) ID() uuid.UUID {
-	return uuid.New()
 }
 
 // Error is required by the publisher, and we just return a nil,

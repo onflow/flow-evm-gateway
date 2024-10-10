@@ -6,6 +6,7 @@ import (
 
 	pebbleDB "github.com/cockroachdb/pebble"
 	"github.com/onflow/flow-go-sdk"
+	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/rs/zerolog"
 
 	"github.com/onflow/flow-evm-gateway/metrics"
@@ -41,8 +42,8 @@ type Engine struct {
 	accounts        storage.AccountIndexer
 	log             zerolog.Logger
 	evmLastHeight   *models.SequentialHeight
-	blocksPublisher *models.Publisher
-	logsPublisher   *models.Publisher
+	blocksPublisher *models.Publisher[*models.Block]
+	logsPublisher   *models.Publisher[[]*gethTypes.Log]
 	collector       metrics.Collector
 }
 
@@ -53,8 +54,8 @@ func NewEventIngestionEngine(
 	receipts storage.ReceiptIndexer,
 	transactions storage.TransactionIndexer,
 	accounts storage.AccountIndexer,
-	blocksPublisher *models.Publisher,
-	logsPublisher *models.Publisher,
+	blocksPublisher *models.Publisher[*models.Block],
+	logsPublisher *models.Publisher[[]*gethTypes.Log],
 	log zerolog.Logger,
 	collector metrics.Collector,
 ) *Engine {

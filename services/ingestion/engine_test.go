@@ -68,8 +68,8 @@ func TestSerialBlockIngestion(t *testing.T) {
 			receipts,
 			transactions,
 			accounts,
-			models.NewPublisher(),
-			models.NewPublisher(),
+			models.NewPublisher[*models.Block](),
+			models.NewPublisher[[]*gethTypes.Log](),
 			zerolog.Nop(),
 			metrics.NopCollector,
 		)
@@ -148,8 +148,8 @@ func TestSerialBlockIngestion(t *testing.T) {
 			receipts,
 			transactions,
 			accounts,
-			models.NewPublisher(),
-			models.NewPublisher(),
+			models.NewPublisher[*models.Block](),
+			models.NewPublisher[[]*gethTypes.Log](),
 			zerolog.Nop(),
 			metrics.NopCollector,
 		)
@@ -210,11 +210,9 @@ func TestSerialBlockIngestion(t *testing.T) {
 		close(eventsChan)
 		<-waitErr
 	})
-
 }
 
 func TestBlockAndTransactionIngestion(t *testing.T) {
-
 	t.Run("successfully ingest transaction and block", func(t *testing.T) {
 		receipts := &storageMock.ReceiptIndexer{}
 		transactions := &storageMock.TransactionIndexer{}
@@ -265,8 +263,8 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			receipts,
 			transactions,
 			accounts,
-			models.NewPublisher(),
-			models.NewPublisher(),
+			models.NewPublisher[*models.Block](),
+			models.NewPublisher[[]*gethTypes.Log](),
 			zerolog.Nop(),
 			metrics.NopCollector,
 		)
@@ -368,8 +366,8 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			receipts,
 			transactions,
 			accounts,
-			models.NewPublisher(),
-			models.NewPublisher(),
+			models.NewPublisher[*models.Block](),
+			models.NewPublisher[[]*gethTypes.Log](),
 			zerolog.Nop(),
 			metrics.NopCollector,
 		)
@@ -417,7 +415,8 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 				{
 					Type:  string(blockEvent.Etype),
 					Value: blockCdc,
-				}},
+				},
+			},
 			Height: nextHeight,
 		})
 
@@ -463,8 +462,8 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			receipts,
 			transactions,
 			accounts,
-			models.NewPublisher(),
-			models.NewPublisher(),
+			models.NewPublisher[*models.Block](),
+			models.NewPublisher[[]*gethTypes.Log](),
 			zerolog.Nop(),
 			metrics.NopCollector,
 		)

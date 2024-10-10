@@ -6,7 +6,6 @@ require (
 	cloud.google.com/go/storage v1.36.0
 	github.com/cockroachdb/pebble v1.1.1
 	github.com/goccy/go-json v0.10.2
-	github.com/google/uuid v1.6.0
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/onflow/atree v0.8.0-rc.6
 	github.com/onflow/cadence v1.0.0
@@ -82,6 +81,7 @@ require (
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/golang/snappy v0.0.5-0.20220116011046-fa5810519dcb // indirect
 	github.com/google/s2a-go v0.1.7 // indirect
+	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.2 // indirect
 	github.com/googleapis/gax-go/v2 v2.12.0 // indirect
 	github.com/gorilla/websocket v1.5.0 // indirect

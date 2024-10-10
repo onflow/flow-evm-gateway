@@ -1,76 +1,74 @@
 package models
 
 import (
+	"fmt"
 	"sync"
-
-	"github.com/google/uuid"
 )
 
-type Publisher struct {
+type Publisher[T any] struct {
 	mux         sync.RWMutex
-	subscribers map[uuid.UUID]Subscriber
+	subscribers map[Subscriber[T]]struct{}
 }
 
-func NewPublisher() *Publisher {
-	return &Publisher{
+func NewPublisher[T any]() *Publisher[T] {
+	return &Publisher[T]{
 		mux:         sync.RWMutex{},
-		subscribers: make(map[uuid.UUID]Subscriber),
+		subscribers: make(map[Subscriber[T]]struct{}),
 	}
 }
 
-func (p *Publisher) Publish(data any) {
+func (p *Publisher[T]) Publish(data T) {
 	p.mux.RLock()
 	defer p.mux.RUnlock()
 
-	for _, s := range p.subscribers {
+	for s := range p.subscribers {
 		s.Notify(data)
 	}
 }
 
-func (p *Publisher) Subscribe(s Subscriber) {
+func (p *Publisher[T]) Subscribe(s Subscriber[T]) {
 	p.mux.Lock()
 	defer p.mux.Unlock()
 
-	p.subscribers[s.ID()] = s
+	p.subscribers[s] = struct{}{}
 }
 
-func (p *Publisher) Unsubscribe(s Subscriber) {
+func (p *Publisher[T]) Unsubscribe(s Subscriber[T]) {
 	p.mux.Lock()
 	defer p.mux.Unlock()
 
-	delete(p.subscribers, s.ID())
+	delete(p.subscribers, s)
 }
 
-type Subscriber interface {
-	ID() uuid.UUID
-	Notify(data any)
+type Subscriber[T any] interface {
+	Notify(data T)
 	Error() <-chan error
 }
 
-type Subscription struct {
+type Subscription[T any] struct {
 	err      chan error
-	callback func(data any) error
-	uuid     uuid.UUID
+	callback func(data T) error
 }
 
-func NewSubscription(callback func(any) error) *Subscription {
-	return &Subscription{
+func NewSubscription[T any](callback func(T) error) *Subscription[T] {
+	return &Subscription[T]{
 		callback: callback,
-		uuid:     uuid.New(),
+		err:      make(chan error),
 	}
 }
 
-func (b *Subscription) Notify(data any) {
+func (b *Subscription[T]) Notify(data T) {
 	err := b.callback(data)
 	if err != nil {
-		b.err <- err
+		select {
+		case b.err <- err:
+		default:
+			// TODO: handle this better!
+			panic(fmt.Sprintf("failed to send error to subscription %v", err))
+		}
 	}
 }
 
-func (b *Subscription) ID() uuid.UUID {
-	return b.uuid
-}
-
-func (b *Subscription) Error() <-chan error {
+func (b *Subscription[T]) Error() <-chan error {
 	return b.err
 }
