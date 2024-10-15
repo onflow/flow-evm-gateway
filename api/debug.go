@@ -3,13 +3,10 @@ package api
 import (
 	"context"
 	"fmt"
-	"math/big"
 
 	"github.com/goccy/go-json"
 	"github.com/onflow/flow-go-sdk/access/grpc"
-	"github.com/onflow/flow-go/fvm/evm/emulator"
 	gethCommon "github.com/onflow/go-ethereum/common"
-	"github.com/onflow/go-ethereum/core/tracing"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/onflow/go-ethereum/eth/tracers"
 	"github.com/onflow/go-ethereum/eth/tracers/logger"
@@ -179,45 +176,14 @@ func (d *DebugAPI) TraceCall(
 		return nil, err
 	}
 
-	// call tracer
-	head := &gethTypes.Header{
-		Number: big.NewInt(int64(block.Height)),
-		Time:   block.Timestamp,
-	}
-	emulatorConfig := emulator.NewConfig(
-		emulator.WithChainID(d.config.EVMNetworkID),
-		emulator.WithBlockNumber(head.Number),
-		emulator.WithBlockTime(head.Time),
-	)
-	random := block.PrevRandao
-	stateDB := blockExecutor.StateDB
-	tracer.OnTxStart(
-		&tracing.VMContext{
-			Coinbase:    d.config.Coinbase,
-			BlockNumber: head.Number,
-			Time:        head.Time,
-			Random:      &random,
-			GasPrice:    d.config.GasPrice,
-			ChainConfig: emulatorConfig.ChainConfig,
-			StateDB:     stateDB,
-		},
-		tx,
-		from,
-	)
-
 	err = blockExecutor.ApplyStateOverrides(config)
 	if err != nil {
 		return nil, err
 	}
 
-	result, err := blockExecutor.Call(from, txEncoded, tracer)
+	_, err = blockExecutor.Call(from, txEncoded, tracer)
 	if err != nil {
 		return nil, err
-	}
-
-	// call tracer on tx end
-	if tracer.OnTxEnd != nil {
-		tracer.OnTxEnd(result.Receipt(), result.ValidationError)
 	}
 
 	return tracer.GetResult()
