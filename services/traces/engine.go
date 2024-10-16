@@ -84,11 +84,11 @@ func (e *Engine) Notify(block *models.Block) {
 		return
 	}
 
-	go e.indexBlockTraces(block, cadenceID)
+	go e.indexBlockTraces(block, cadenceID, false)
 }
 
 // indexBlockTraces iterates the block transaction hashes and tries to download the traces
-func (e *Engine) indexBlockTraces(evmBlock *models.Block, cadenceBlockID flow.Identifier) {
+func (e *Engine) indexBlockTraces(evmBlock *models.Block, cadenceBlockID flow.Identifier, skipExisting bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), downloadTimeout)
 	defer cancel()
 
@@ -107,8 +107,16 @@ func (e *Engine) indexBlockTraces(evmBlock *models.Block, cadenceBlockID flow.Id
 
 			l := e.logger.With().
 				Str("tx-id", h.String()).
+				Uint64("evm-height", evmBlock.Height).
 				Str("cadence-block-id", cadenceBlockID.String()).
 				Logger()
+
+			if skipExisting {
+				if _, err := e.traces.GetTransaction(h); err == nil {
+					l.Debug().Msg("trace already downloaded")
+					return
+				}
+			}
 
 			err := retry.Fibonacci(ctx, time.Second*1, func(ctx context.Context) error {
 				trace, err := e.downloader.Download(h, cadenceBlockID)
@@ -139,4 +147,45 @@ func (e *Engine) Error() <-chan error {
 
 func (e *Engine) Stop() {
 	e.MarkStopped()
+}
+
+// Backfill redownloads traces for blocks from EVM start to end height.
+func (e *Engine) Backfill(start uint64, end uint64) {
+	select {
+	case <-e.Ready():
+	case <-e.Done():
+		return
+	}
+
+	e.logger.Info().Uint64("start", start).Uint64("end", end).Msg("backfilling traces")
+	for height := start; height <= end; height++ {
+		select {
+		case <-e.Done():
+			return
+		case <-e.Stopped():
+			return
+		default:
+		}
+
+		l := e.logger.With().Uint64("evm-height", height).Logger()
+
+		block, err := e.blocks.GetByHeight(height)
+		if err != nil {
+			l.Error().Err(err).Msg("failed to get block by height")
+			return
+		}
+
+		if len(block.TransactionHashes) == 0 {
+			continue
+		}
+
+		cadenceID, err := e.blocks.GetCadenceID(block.Height)
+		if err != nil {
+			l.Error().Err(err).Msg("failed to get cadence block ID")
+			return
+		}
+
+		e.indexBlockTraces(block, cadenceID, true)
+	}
+	e.logger.Info().Uint64("start", start).Uint64("end", end).Msg("done backfilling traces")
 }

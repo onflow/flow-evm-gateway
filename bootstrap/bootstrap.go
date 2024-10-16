@@ -163,6 +163,18 @@ func (b *Bootstrap) StartTraceDownloader(ctx context.Context) error {
 	)
 
 	StartEngine(ctx, b.traces, l)
+
+	if b.config.TracesBackfillStartHeight > 0 {
+		endHeight := b.config.TracesBackfillEndHeight
+		if endHeight == 0 {
+			endHeight, err = b.storages.Blocks.LatestEVMHeight()
+			if err != nil {
+				return fmt.Errorf("failed to get latest EVM height: %w", err)
+			}
+		}
+		go b.traces.Backfill(b.config.TracesBackfillStartHeight, endHeight)
+	}
+
 	return nil
 }
 
