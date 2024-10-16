@@ -316,6 +316,10 @@ func FromFlags() (*Config, error) {
 
 	cfg.TracesEnabled = cfg.TracesBucketName != ""
 
+	if cfg.TracesBackfillStartHeight > 0 && cfg.TracesBackfillEndHeight > 0 && cfg.TracesBackfillStartHeight > cfg.TracesBackfillEndHeight {
+		return nil, fmt.Errorf("traces backfill start height must be less than the end height")
+	}
+
 	if walletKey != "" {
 		k, err := gethCrypto.HexToECDSA(walletKey)
 		if err != nil {

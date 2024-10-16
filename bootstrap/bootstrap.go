@@ -165,14 +165,22 @@ func (b *Bootstrap) StartTraceDownloader(ctx context.Context) error {
 	StartEngine(ctx, b.traces, l)
 
 	if b.config.TracesBackfillStartHeight > 0 {
+		startHeight := b.config.TracesBackfillStartHeight
+		if _, err := b.storages.Blocks.GetByHeight(startHeight); err != nil {
+			return fmt.Errorf("failed to get provided start height %d in db: %w", startHeight, err)
+		}
+
 		endHeight := b.config.TracesBackfillEndHeight
 		if endHeight == 0 {
 			endHeight, err = b.storages.Blocks.LatestEVMHeight()
 			if err != nil {
 				return fmt.Errorf("failed to get latest EVM height: %w", err)
 			}
+		} else if _, err := b.storages.Blocks.GetByHeight(endHeight); err != nil {
+			return fmt.Errorf("failed to get provided end height %d in db: %w", endHeight, err)
 		}
-		go b.traces.Backfill(b.config.TracesBackfillStartHeight, endHeight)
+
+		go b.traces.Backfill(startHeight, endHeight)
 	}
 
 	return nil
