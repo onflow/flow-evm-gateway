@@ -172,41 +172,43 @@ Running the EVM gateway for mainnet requires additional security and stability m
 
 The application can be configured using the following flags at runtime:
 
-| Flag                         | Default Value                   | Description                                                                              |
-|------------------------------|---------------------------------|------------------------------------------------------------------------------------------|
-| `database-dir`               | `./db`                          | Path to the directory for the database                                                   |
-| `rpc-host`                   | `""`                            | Host for the RPC API server                                                              |
-| `rpc-port`                   | `8545`                          | Port for the RPC API server                                                              |
-| `ws-enabled`                 | `false`                         | Enable websocket connections                                                             |
-| `access-node-grpc-host`      | `localhost:3569`                | Host to the flow access node gRPC API                                                    |
-| `access-node-spork-hosts`    | `""`                            | Previous spork AN hosts, defined as a comma-separated list (e.g. `"host-1.com,host2.com"`) |
-| `flow-network-id`            | `flow-emulator`                 | Flow network ID (options: `flow-emulator`, `flow-testnet`, `flow-mainnet`)               |
-| `coinbase`                   | `""`                            | Coinbase address to use for fee collection                                               |
-| `init-cadence-height`        | `0`                             | Cadence block height to start indexing; avoid using on a new network                     |
-| `gas-price`                  | `1`                             | Static gas price for EVM transactions                                                    |
-| `coa-address`                | `""`                            | Flow address holding COA account for submitting transactions                             |
-| `coa-key`                    | `""`                            | Private key for the COA address used for transactions                                    |
-| `coa-key-file`               | `""`                            | Path to a JSON file of COA keys for key-rotation (exclusive with `coa-key` flag)         |
-| `coa-resource-create`        | `false`                         | Auto-create the COA resource if it doesn't exist in the Flow COA account                 |
-| `coa-cloud-kms-project-id`   | `""`                            | Project ID for KMS keys (e.g. `flow-evm-gateway`)                                        |
-| `coa-cloud-kms-location-id`  | `""`                            | Location ID for KMS key ring (e.g. 'global')                                             |
-| `coa-cloud-kms-key-ring-id`  | `""`                            | Key ring ID for KMS keys (e.g. 'tx-signing')                                             |
-| `coa-cloud-kms-keys`         | `""`                            | KMS keys and versions, comma-separated (e.g. `"gw-key-6@1,gw-key-7@1"`)                  |
-| `log-level`                  | `debug`                         | Log verbosity level (`debug`, `info`, `warn`, `error`, `fatal`, `panic`)                 |
-| `log-writer`                 | `stderr`                        | Output method for logs (`stderr`, `console`)                                             |
-| `stream-limit`               | `10`                            | Rate-limit for client events sent per second                                             |
-| `rate-limit`                 | `50`                            | Requests per second limit for clients over any protocol (ws/http)                        |
-| `address-header`             | `""`                            | Header for client IP when server is behind a proxy                                       |
-| `heartbeat-interval`         | `100`                           | Interval for AN event subscription heartbeats                                            |
-| `stream-timeout`             | `3`                             | Timeout in seconds for sending events to clients                                         |
-| `force-start-height`         | `0`                             | Force-set starting Cadence height (local/testing use only)                               |
-| `wallet-api-key`             | `""`                            | ECDSA private key for wallet APIs (local/testing use only)                               |
-| `filter-expiry`              | `5m`                            | Expiry time for idle filters                                                             |
-| `traces-gcp-bucket`          | `""`                            | GCP bucket name for transaction traces                                                   |
-| `index-only`                 | `false`                         | Run in index-only mode, allowing state queries and indexing but no transaction sending   |
-| `profiler-enabled`           | `false`                         | Enable the pprof profiler server                                                         |
-| `profiler-host`              | `localhost`                     | Host for the pprof profiler                                                              |
-| `profiler-port`              | `6060`                          | Port for the pprof profiler                                                              |
+| Flag                           | Default Value                 | Description                                                                              |
+|--------------------------------|-------------------------------|------------------------------------------------------------------------------------------|
+| `database-dir`                 | `./db`                        | Path to the directory for the database                                                   |
+| `rpc-host`                     | `""`                          | Host for the RPC API server                                                              |
+| `rpc-port`                     | `8545`                        | Port for the RPC API server                                                              |
+| `ws-enabled`                   | `false`                       | Enable websocket connections                                                             |
+| `access-node-grpc-host`        | `localhost:3569`              | Host to the flow access node gRPC API                                                    |
+| `access-node-spork-hosts`      | `""`                          | Previous spork AN hosts, defined as a comma-separated list (e.g. `"host-1.com,host2.com"`) |
+| `flow-network-id`              | `flow-emulator`               | Flow network ID (options: `flow-emulator`, `flow-testnet`, `flow-mainnet`)               |
+| `coinbase`                     | `""`                          | Coinbase address to use for fee collection                                               |
+| `init-cadence-height`          | `0`                           | Cadence block height to start indexing; avoid using on a new network                     |
+| `gas-price`                    | `1`                           | Static gas price for EVM transactions                                                    |
+| `coa-address`                  | `""`                          | Flow address holding COA account for submitting transactions                             |
+| `coa-key`                      | `""`                          | Private key for the COA address used for transactions                                    |
+| `coa-key-file`                 | `""`                          | Path to a JSON file of COA keys for key-rotation (exclusive with `coa-key` flag)         |
+| `coa-resource-create`          | `false`                       | Auto-create the COA resource if it doesn't exist in the Flow COA account                 |
+| `coa-cloud-kms-project-id`     | `""`                          | Project ID for KMS keys (e.g. `flow-evm-gateway`)                                        |
+| `coa-cloud-kms-location-id`    | `""`                          | Location ID for KMS key ring (e.g. 'global')                                             |
+| `coa-cloud-kms-key-ring-id`    | `""`                          | Key ring ID for KMS keys (e.g. 'tx-signing')                                             |
+| `coa-cloud-kms-keys`           | `""`                          | KMS keys and versions, comma-separated (e.g. `"gw-key-6@1,gw-key-7@1"`)                  |
+| `log-level`                    | `debug`                       | Log verbosity level (`debug`, `info`, `warn`, `error`, `fatal`, `panic`)                 |
+| `log-writer`                   | `stderr`                      | Output method for logs (`stderr`, `console`)                                             |
+| `stream-limit`                 | `10`                          | Rate-limit for client events sent per second                                             |
+| `rate-limit`                   | `50`                          | Requests per second limit for clients over any protocol (ws/http)                        |
+| `address-header`               | `""`                          | Header for client IP when server is behind a proxy                                       |
+| `heartbeat-interval`           | `100`                         | Interval for AN event subscription heartbeats                                            |
+| `stream-timeout`               | `3`                           | Timeout in seconds for sending events to clients                                         |
+| `force-start-height`           | `0`                           | Force-set starting Cadence height (local/testing use only)                               |
+| `wallet-api-key`               | `""`                          | ECDSA private key for wallet APIs (local/testing use only)                               |
+| `filter-expiry`                | `5m`                          | Expiry time for idle filters                                                             |
+| `traces-gcp-bucket`            | `""`                          | GCP bucket name for transaction traces                                                   |
+| `traces-backfill-start-height` | `0`                           | Start height for backfilling transaction traces                                          |
+| `traces-backfill-end-height`   | `0`                           | End height for backfilling transaction traces                                            |
+| `index-only`                   | `false`                       | Run in index-only mode, allowing state queries and indexing but no transaction sending   |
+| `profiler-enabled`             | `false`                       | Enable the pprof profiler server                                                         | 
+| `profiler-host`                | `localhost`                   | Host for the pprof profiler                                                              |
+| `profiler-port`                | `6060`                        | Port for the pprof profiler                                                              |
 
 # Deploying
 Deploying the EVM Gateway node comes with some prerequisites as well as expectations and they are best explained in the WIP document: https://flowfoundation.notion.site/EVM-Gateway-Deployment-3c41da6710af40acbaf971e22ce0a9fd
