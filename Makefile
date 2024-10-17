@@ -18,6 +18,12 @@ check-tidy:
 	go mod tidy
 	git diff --exit-code
 
+.PHONY: build
+build:
+	git fetch origin --tags
+	CGO_ENABLED=1 go build -o flow-evm-gateway -ldflags="-X github.com/onflow/flow-evm-gateway/api.Version=$(shell git describe --tags --abbrev=0 2>/dev/null || echo 'unknown')" cmd/main.go
+	chmod a+x flow-evm-gateway
+
 .PHONY: fix-lint
 fix-lint:
 	golangci-lint run -v --fix ./...
@@ -45,7 +51,7 @@ start:
 start-local:
 	rm -rf db/
 	rm -rf metrics/data/
-	go run cmd/main/main.go \
+	go run cmd/main.go run \
 		--flow-network-id=flow-emulator \
 		--coinbase=FACF71692421039876a5BB4F10EF7A439D8ef61E \
 		--coa-address=f8d6e0586b0a20c7 \
