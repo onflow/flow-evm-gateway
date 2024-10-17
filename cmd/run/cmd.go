@@ -138,7 +138,7 @@ func parseConfigFromFlags() error {
 	case "flow-previewnet":
 		cfg.FlowNetworkID = flowGo.Previewnet
 		cfg.EVMNetworkID = types.FlowEVMPreviewNetChainID
-		cfg.InitCadenceHeight = config.LiveNetworkInitCadenceHeght
+		cfg.InitCadenceHeight = config.LiveNetworkInitCadenceHeight
 	case "flow-emulator":
 		cfg.FlowNetworkID = flowGo.Emulator
 		cfg.EVMNetworkID = types.FlowEVMPreviewNetChainID
@@ -146,11 +146,11 @@ func parseConfigFromFlags() error {
 	case "flow-testnet":
 		cfg.FlowNetworkID = flowGo.Testnet
 		cfg.EVMNetworkID = types.FlowEVMTestNetChainID
-		cfg.InitCadenceHeight = config.LiveNetworkInitCadenceHeght
+		cfg.InitCadenceHeight = config.LiveNetworkInitCadenceHeight
 	case "flow-mainnet":
 		cfg.FlowNetworkID = flowGo.Mainnet
 		cfg.EVMNetworkID = types.FlowEVMMainNetChainID
-		cfg.InitCadenceHeight = config.LiveNetworkInitCadenceHeght
+		cfg.InitCadenceHeight = config.LiveNetworkInitCadenceHeight
 	default:
 		return fmt.Errorf(
 			"flow network ID: %s not supported, valid values are ('flow-emulator', 'flow-previewnet', 'flow-testnet', 'flow-mainnet')",
