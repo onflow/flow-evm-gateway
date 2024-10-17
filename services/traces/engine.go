@@ -157,7 +157,9 @@ func (e *Engine) Backfill(start uint64, end uint64) {
 		return
 	}
 
-	e.logger.Info().Uint64("start", start).Uint64("end", end).Msg("backfilling traces")
+	lg := e.logger.With().Uint64("start", start).Uint64("end", end).Logger()
+
+	lg.Info().Msg("backfilling traces")
 	for height := start; height <= end; height++ {
 		select {
 		case <-e.Done():
@@ -167,7 +169,7 @@ func (e *Engine) Backfill(start uint64, end uint64) {
 		default:
 		}
 
-		l := e.logger.With().Uint64("evm-height", height).Logger()
+		l := lg.With().Uint64("evm-height", height).Logger()
 
 		block, err := e.blocks.GetByHeight(height)
 		if err != nil {
@@ -187,5 +189,5 @@ func (e *Engine) Backfill(start uint64, end uint64) {
 
 		e.indexBlockTraces(block, cadenceID, true)
 	}
-	e.logger.Info().Uint64("start", start).Uint64("end", end).Msg("done backfilling traces")
+	lg.Info().Msg("done backfilling traces")
 }
