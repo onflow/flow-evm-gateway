@@ -45,9 +45,10 @@ var Cmd = &cobra.Command{
 
 		ready := make(chan struct{})
 		go func() {
-			err = bootstrap.Run(ctx, cfg, ready)
-			if err != nil {
-				panic(err)
+			if err = bootstrap.Run(ctx, cfg, ready); err != nil {
+				log.Err(err).Msg("Failed to run bootstrap")
+				cancel()
+				os.Exit(1)
 			}
 		}()
 
