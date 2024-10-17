@@ -1,11 +1,11 @@
 package main
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/onflow/flow-evm-gateway/cmd/run"
 	"github.com/onflow/flow-evm-gateway/cmd/version"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
 
@@ -16,7 +16,7 @@ var rootCmd = &cobra.Command{
 
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
+		log.Err(err).Msg("")
 		os.Exit(1)
 	}
 }
