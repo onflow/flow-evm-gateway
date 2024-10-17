@@ -177,6 +177,9 @@ func parseConfigFromFlags() error {
 		cfg.LogLevel = zerolog.FatalLevel
 	case "panic":
 		cfg.LogLevel = zerolog.PanicLevel
+	default:
+		return fmt.Errorf("invalid log level: %s", logLevel)
+
 	}
 
 	if logWriter == "stderr" {
