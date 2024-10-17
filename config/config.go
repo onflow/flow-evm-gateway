@@ -21,7 +21,7 @@ const EmulatorInitCadenceHeight = uint64(0)
 
 // Default InitCadenceHeight for initializing the database on a live network.
 // We don't use 0 as it has a special meaning to represent latest block in the AN API context.
-const LiveNetworkInitCadenceHeght = uint64(1)
+const LiveNetworkInitCadenceHeight = uint64(1)
 
 type Config struct {
 	// DatabaseDir is where the database should be stored.
