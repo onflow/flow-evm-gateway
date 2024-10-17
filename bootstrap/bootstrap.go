@@ -163,6 +163,39 @@ func (b *Bootstrap) StartTraceDownloader(ctx context.Context) error {
 	)
 
 	StartEngine(ctx, b.traces, l)
+
+	if b.config.TracesBackfillStartHeight > 0 {
+		startHeight := b.config.TracesBackfillStartHeight
+		if _, err := b.storages.Blocks.GetByHeight(startHeight); err != nil {
+			return fmt.Errorf("failed to get provided start height %d in db: %w", startHeight, err)
+		}
+
+		cadenceStartHeight, err := b.storages.Blocks.GetCadenceHeight(startHeight)
+		if err != nil {
+			return fmt.Errorf("failed to get cadence height for backfill start height %d: %w", startHeight, err)
+		}
+
+		if cadenceStartHeight < b.config.InitCadenceHeight {
+			b.logger.Warn().
+				Uint64("evm-start-height", startHeight).
+				Uint64("cadence-start-height", cadenceStartHeight).
+				Uint64("init-cadence-height", b.config.InitCadenceHeight).
+				Msg("backfill start height is before initial cadence height. data may be missing from configured traces bucket")
+		}
+
+		endHeight := b.config.TracesBackfillEndHeight
+		if endHeight == 0 {
+			endHeight, err = b.storages.Blocks.LatestEVMHeight()
+			if err != nil {
+				return fmt.Errorf("failed to get latest EVM height: %w", err)
+			}
+		} else if _, err := b.storages.Blocks.GetByHeight(endHeight); err != nil {
+			return fmt.Errorf("failed to get provided end height %d in db: %w", endHeight, err)
+		}
+
+		go b.traces.Backfill(startHeight, endHeight)
+	}
+
 	return nil
 }
 

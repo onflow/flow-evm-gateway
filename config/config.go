@@ -87,6 +87,10 @@ type Config struct {
 	TracesBucketName string
 	// TracesEnabled sets whether the node is supporting transaction traces.
 	TracesEnabled bool
+	// TracesBackfillStartHeight sets the starting block height for backfilling missing traces.
+	TracesBackfillStartHeight uint64
+	// TracesBackfillEndHeight sets the ending block height for backfilling missing traces.
+	TracesBackfillEndHeight uint64
 	// WalletEnabled sets whether wallet APIs are enabled
 	WalletEnabled bool
 	// WalletKey used for signing transactions
@@ -158,6 +162,8 @@ func FromFlags() (*Config, error) {
 	flag.Uint64Var(&forceStartHeight, "force-start-height", 0, "Force set starting Cadence height. WARNING: This should only be used locally or for testing, never in production.")
 	flag.StringVar(&filterExpiry, "filter-expiry", "5m", "Filter defines the time it takes for an idle filter to expire")
 	flag.StringVar(&cfg.TracesBucketName, "traces-gcp-bucket", "", "GCP bucket name where transaction traces are stored")
+	flag.Uint64Var(&cfg.TracesBackfillStartHeight, "traces-backfill-start-height", 0, "evm block height from which to start backfilling missing traces.")
+	flag.Uint64Var(&cfg.TracesBackfillEndHeight, "traces-backfill-end-height", 0, "evm block height until which to backfill missing traces. If 0, backfill until the latest block")
 	flag.StringVar(&cloudKMSProjectID, "coa-cloud-kms-project-id", "", "The project ID containing the KMS keys, e.g. 'flow-evm-gateway'")
 	flag.StringVar(&cloudKMSLocationID, "coa-cloud-kms-location-id", "", "The location ID where the key ring is grouped into, e.g. 'global'")
 	flag.StringVar(&cloudKMSKeyRingID, "coa-cloud-kms-key-ring-id", "", "The key ring ID where the KMS keys exist, e.g. 'tx-signing'")
@@ -309,6 +315,10 @@ func FromFlags() (*Config, error) {
 	}
 
 	cfg.TracesEnabled = cfg.TracesBucketName != ""
+
+	if cfg.TracesBackfillStartHeight > 0 && cfg.TracesBackfillEndHeight > 0 && cfg.TracesBackfillStartHeight > cfg.TracesBackfillEndHeight {
+		return nil, fmt.Errorf("traces backfill start height must be less than the end height")
+	}
 
 	if walletKey != "" {
 		k, err := gethCrypto.HexToECDSA(walletKey)
