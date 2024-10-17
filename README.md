@@ -26,13 +26,35 @@ The basic design of the EVM Gateway consists of a couple of components:
 
 We recommend using Docker to run the EVM Gateway, as detailed in the subsequent section. Alternatively, if you decide to build the binaries manually, you can do so by running:
 
-```
-go build -o evm-gateway cmd/main/main.go
+```bash
+# Make sure you pull the latest changes before build
+git pull origin main
+
+make build
 ```
 
-The binary can then be run using the correct flags (see the table below or the example in the "running" section).
+To view the binary version:
+
+```bash
+./flow-evm-gateway version
 ```
-./evm-gateway {flags}
+
+To view all the available flags for running the EVM Gateway Node:
+
+```bash
+./flow-evm-gateway help run
+```
+
+The binary can then be run using the appropriate flags:
+
+```bash
+./flow-evm-gateway run {flags}
+```
+
+To run a local version, for development:
+
+```bash
+make start-local-bin
 ```
 
 # Running
