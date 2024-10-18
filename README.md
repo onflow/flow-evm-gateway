@@ -29,6 +29,7 @@ We recommend using Docker to run the EVM Gateway, as detailed in the subsequent 
 ```bash
 # Make sure you pull the latest changes before running `make build`
 git pull origin main
+git fetch origin --tags
 
 make build
 ```
