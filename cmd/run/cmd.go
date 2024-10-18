@@ -18,7 +18,7 @@ import (
 	flowGoKMS "github.com/onflow/flow-go-sdk/crypto/cloudkms"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	flowGo "github.com/onflow/flow-go/model/flow"
-	"github.com/onflow/go-ethereum/common"
+	gethCommon "github.com/onflow/go-ethereum/common"
 	gethCrypto "github.com/onflow/go-ethereum/crypto"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -35,18 +35,16 @@ var Cmd = &cobra.Command{
 			return
 		}
 
-		err := parseConfigFromFlags()
-		if err != nil {
-			log.Err(err).Msg("")
+		if err := parseConfigFromFlags(); err != nil {
+			log.Err(err).Msg("failed to parse flags")
 			os.Exit(1)
 		}
 
 		ctx, cancel := context.WithCancel(context.Background())
-
 		ready := make(chan struct{})
 		go func() {
-			if err = bootstrap.Run(ctx, cfg, ready); err != nil {
-				log.Err(err).Msg("Failed to run bootstrap")
+			if err := bootstrap.Run(ctx, cfg, ready); err != nil {
+				log.Err(err).Msg("failed to run bootstrap")
 				cancel()
 				os.Exit(1)
 			}
@@ -58,7 +56,7 @@ var Cmd = &cobra.Command{
 		signal.Notify(osSig, syscall.SIGINT, syscall.SIGTERM)
 
 		<-osSig
-		fmt.Println("OS Signal to shutdown received, shutting down")
+		log.Info().Msg("OS Signal to shutdown received, shutting down")
 		cancel()
 	},
 }
@@ -67,7 +65,7 @@ func parseConfigFromFlags() error {
 	if coinbase == "" {
 		return fmt.Errorf("coinbase EVM address required")
 	}
-	cfg.Coinbase = common.HexToAddress(coinbase)
+	cfg.Coinbase = gethCommon.HexToAddress(coinbase)
 
 	if g, ok := new(big.Int).SetString(gas, 10); ok {
 		cfg.GasPrice = g
