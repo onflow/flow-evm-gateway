@@ -66,6 +66,9 @@ func parseConfigFromFlags() error {
 		return fmt.Errorf("coinbase EVM address required")
 	}
 	cfg.Coinbase = gethCommon.HexToAddress(coinbase)
+	if cfg.Coinbase == (gethCommon.Address{}) {
+		return fmt.Errorf("invalid coinbase address: %s", coinbase)
+	}
 
 	if g, ok := new(big.Int).SetString(gas, 10); ok {
 		cfg.GasPrice = g
@@ -80,6 +83,9 @@ func parseConfigFromFlags() error {
 
 	if key != "" {
 		sigAlgo := crypto.StringToSignatureAlgorithm(keyAlg)
+		if sigAlgo == crypto.UnknownSignatureAlgorithm {
+			return fmt.Errorf("invalid signature algorithm: %s", keyAlg)
+		}
 		pkey, err := crypto.DecodePrivateKeyHex(sigAlgo, key)
 		if err != nil {
 			return fmt.Errorf("invalid COA private key: %w", err)
@@ -97,6 +103,9 @@ func parseConfigFromFlags() error {
 
 		cfg.COAKeys = make([]crypto.PrivateKey, len(keysJSON))
 		sigAlgo := crypto.StringToSignatureAlgorithm(keyAlg)
+		if sigAlgo == crypto.UnknownSignatureAlgorithm {
+			return fmt.Errorf("invalid signature algorithm: %s", keyAlg)
+		}
 		for i, k := range keysJSON {
 			pk, err := crypto.DecodePrivateKeyHex(sigAlgo, k)
 			if err != nil {
@@ -163,23 +172,11 @@ func parseConfigFromFlags() error {
 	}
 
 	// configure logging
-	switch logLevel {
-	case "debug":
-		cfg.LogLevel = zerolog.DebugLevel
-	case "info":
-		cfg.LogLevel = zerolog.InfoLevel
-	case "warn":
-		cfg.LogLevel = zerolog.WarnLevel
-	case "error":
-		cfg.LogLevel = zerolog.ErrorLevel
-	case "fatal":
-		cfg.LogLevel = zerolog.FatalLevel
-	case "panic":
-		cfg.LogLevel = zerolog.PanicLevel
-	default:
+	level, err := zerolog.ParseLevel(logLevel)
+	if err != nil {
 		return fmt.Errorf("invalid log level: %s", logLevel)
-
 	}
+	cfg.LogLevel = level
 
 	if logWriter == "stderr" {
 		cfg.LogWriter = os.Stderr
@@ -218,6 +215,7 @@ func parseConfigFromFlags() error {
 
 		cfg.WalletKey = k
 		cfg.WalletEnabled = true
+		log.Warn().Msg("wallet API is enabled. Ensure this is not used in production environments.")
 	}
 
 	return nil
