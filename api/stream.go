@@ -3,10 +3,7 @@ package api
 import (
 	"context"
 	"fmt"
-	"math/big"
 
-	"github.com/onflow/go-ethereum/common"
-	"github.com/onflow/go-ethereum/common/hexutil"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/onflow/go-ethereum/eth/filters"
 	"github.com/onflow/go-ethereum/rpc"
@@ -20,6 +17,7 @@ import (
 
 type StreamAPI struct {
 	logger                zerolog.Logger
+	api                   *BlockChainAPI
 	config                *config.Config
 	blocks                storage.BlockIndexer
 	transactions          storage.TransactionIndexer
@@ -32,6 +30,7 @@ type StreamAPI struct {
 func NewStreamAPI(
 	logger zerolog.Logger,
 	config *config.Config,
+	api *BlockChainAPI,
 	blocks storage.BlockIndexer,
 	transactions storage.TransactionIndexer,
 	receipts storage.ReceiptIndexer,
@@ -42,6 +41,7 @@ func NewStreamAPI(
 	return &StreamAPI{
 		logger:                logger,
 		config:                config,
+		api:                   api,
 		blocks:                blocks,
 		transactions:          transactions,
 		receipts:              receipts,
@@ -59,23 +59,12 @@ func (s *StreamAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
 		s.blocksPublisher,
 		func(notifier *rpc.Notifier, sub *rpc.Subscription) func(block *models.Block) error {
 			return func(block *models.Block) error {
-				h, err := block.Hash()
+				response, err := s.api.prepareBlockResponse(block, false)
 				if err != nil {
-					return err
+					return fmt.Errorf("failed to get block response: %w", err)
 				}
 
-				return notifier.Notify(sub.ID, &Block{
-					Hash:          h,
-					Number:        hexutil.Uint64(block.Height),
-					ParentHash:    block.ParentBlockHash,
-					ReceiptsRoot:  block.ReceiptRoot,
-					Transactions:  block.TransactionHashes,
-					Uncles:        []common.Hash{},
-					GasLimit:      hexutil.Uint64(blockGasLimit),
-					Nonce:         gethTypes.BlockNonce{0x1},
-					Timestamp:     hexutil.Uint64(block.Timestamp),
-					BaseFeePerGas: hexutil.Big(*big.NewInt(0)),
-				})
+				return notifier.Notify(sub.ID, response)
 			}
 		},
 	)
