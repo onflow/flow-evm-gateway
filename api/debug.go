@@ -2,16 +2,27 @@ package api
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/goccy/go-json"
+	"github.com/onflow/flow-go-sdk/access/grpc"
 	gethCommon "github.com/onflow/go-ethereum/common"
+	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/onflow/go-ethereum/eth/tracers"
+	"github.com/onflow/go-ethereum/eth/tracers/logger"
 	"github.com/onflow/go-ethereum/rpc"
 	"github.com/rs/zerolog"
+	"github.com/sethvargo/go-limiter"
 
+	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/storage"
+
+	evm "github.com/onflow/flow-evm-gateway/services/evm"
+	// Force-load native and js packages, to trigger registration
+	_ "github.com/onflow/go-ethereum/eth/tracers/js"
+	_ "github.com/onflow/go-ethereum/eth/tracers/native"
 )
 
 // txTraceResult is the result of a single transaction trace.
@@ -22,18 +33,35 @@ type txTraceResult struct {
 }
 
 type DebugAPI struct {
-	logger    zerolog.Logger
-	tracer    storage.TraceIndexer
-	blocks    storage.BlockIndexer
-	collector metrics.Collector
+	client      *evm.CrossSporkClient
+	tracer      storage.TraceIndexer
+	blocks      storage.BlockIndexer
+	receipts    storage.ReceiptIndexer
+	config      *config.Config
+	logger      zerolog.Logger
+	collector   metrics.Collector
+	ratelimiter limiter.Store
 }
 
-func NewDebugAPI(tracer storage.TraceIndexer, blocks storage.BlockIndexer, logger zerolog.Logger, collector metrics.Collector) *DebugAPI {
+func NewDebugAPI(
+	client *evm.CrossSporkClient,
+	tracer storage.TraceIndexer,
+	blocks storage.BlockIndexer,
+	receipts storage.ReceiptIndexer,
+	config *config.Config,
+	logger zerolog.Logger,
+	collector metrics.Collector,
+	ratelimiter limiter.Store,
+) *DebugAPI {
 	return &DebugAPI{
-		logger:    logger,
-		tracer:    tracer,
-		blocks:    blocks,
-		collector: collector,
+		client:      client,
+		tracer:      tracer,
+		blocks:      blocks,
+		receipts:    receipts,
+		config:      config,
+		logger:      logger,
+		collector:   collector,
+		ratelimiter: ratelimiter,
 	}
 }
 
@@ -95,4 +123,138 @@ func (d *DebugAPI) traceBlock(
 	}
 
 	return results, nil
+}
+
+func (d *DebugAPI) TraceCall(
+	ctx context.Context,
+	args TransactionArgs,
+	blockNrOrHash rpc.BlockNumberOrHash,
+	config *tracers.TraceCallConfig,
+) (interface{}, error) {
+	if err := rateLimit(ctx, d.ratelimiter, d.logger); err != nil {
+		return nil, err
+	}
+
+	txEncoded, err := encodeTxFromArgs(args)
+	if err != nil {
+		return nil, err
+	}
+
+	// Default address in case user does not provide one
+	from := gethCommon.Address{}
+	if args.From != nil {
+		from = *args.From
+	}
+
+	var traceConfig *tracers.TraceConfig
+	if config != nil {
+		traceConfig = &config.TraceConfig
+	}
+
+	tracer, err := tracerForReceipt(traceConfig, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	height, err := resolveBlockNumberOrHash(&blockNrOrHash, d.blocks)
+	if err != nil {
+		return nil, err
+	}
+
+	block, err := d.blocks.GetByHeight(height)
+	if err != nil {
+		return nil, err
+	}
+
+	blockExecutor, err := d.executorAtBlock(block)
+	if err != nil {
+		return nil, err
+	}
+
+	tx := &gethTypes.Transaction{}
+	if err := tx.UnmarshalBinary(txEncoded); err != nil {
+		return nil, err
+	}
+
+	err = blockExecutor.ApplyStateOverrides(config)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = blockExecutor.Call(from, txEncoded, tracer)
+	if err != nil {
+		return nil, err
+	}
+
+	return tracer.GetResult()
+}
+
+func (d *DebugAPI) executorAtBlock(block *models.Block) (*evm.BlockExecutor, error) {
+	cadenceHeight, err := d.blocks.GetCadenceHeight(block.Height)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"failed to map evm height: %d to cadence height: %w",
+			block.Height,
+			err,
+		)
+	}
+
+	client, err := d.client.GetClientForHeight(cadenceHeight)
+	if err != nil {
+		return nil, err
+	}
+
+	exeClient, ok := client.(*grpc.Client)
+	if !ok {
+		return nil, fmt.Errorf("could not convert to execution client")
+	}
+
+	ledger, err := evm.NewRemoteLedger(exeClient.ExecutionDataRPCClient(), cadenceHeight)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"could not create remote ledger for height: %d, with: %w",
+			cadenceHeight,
+			err,
+		)
+	}
+
+	return evm.NewBlockExecutor(
+		block,
+		ledger,
+		d.config.FlowNetworkID,
+		d.blocks,
+		d.receipts,
+		d.logger,
+	)
+}
+
+func tracerForReceipt(
+	config *tracers.TraceConfig,
+	receipt *models.Receipt,
+) (*tracers.Tracer, error) {
+	tracerCtx := &tracers.Context{}
+	if receipt != nil {
+		tracerCtx = &tracers.Context{
+			BlockHash:   receipt.BlockHash,
+			BlockNumber: receipt.BlockNumber,
+			TxIndex:     int(receipt.TransactionIndex),
+			TxHash:      receipt.TxHash,
+		}
+	}
+
+	if config == nil {
+		config = &tracers.TraceConfig{}
+	}
+
+	// Default tracer is the struct logger
+	if config.Tracer == nil {
+		logger := logger.NewStructLogger(config.Config)
+		return &tracers.Tracer{
+			Hooks:     logger.Hooks(),
+			GetResult: logger.GetResult,
+			Stop:      logger.Stop,
+		}, nil
+	}
+
+	return tracers.DefaultDirectory.New(*config.Tracer, tracerCtx, config.TracerConfig)
 }
