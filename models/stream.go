@@ -1,8 +1,9 @@
 package models
 
 import (
-	"fmt"
 	"sync"
+
+	"github.com/rs/zerolog"
 )
 
 type Publisher[T any] struct {
@@ -46,14 +47,16 @@ type Subscriber[T any] interface {
 }
 
 type Subscription[T any] struct {
+	logger   zerolog.Logger
 	err      chan error
 	callback func(data T) error
 }
 
-func NewSubscription[T any](callback func(T) error) *Subscription[T] {
+func NewSubscription[T any](logger zerolog.Logger, callback func(T) error) *Subscription[T] {
 	return &Subscription[T]{
+		logger:   logger,
 		callback: callback,
-		err:      make(chan error),
+		err:      make(chan error, 1),
 	}
 }
 
@@ -63,8 +66,7 @@ func (b *Subscription[T]) Notify(data T) {
 		select {
 		case b.err <- err:
 		default:
-			// TODO: handle this better!
-			panic(fmt.Sprintf("failed to send error to subscription %v", err))
+			b.logger.Debug().Err(err).Msg("failed to send error to subscription")
 		}
 	}
 }

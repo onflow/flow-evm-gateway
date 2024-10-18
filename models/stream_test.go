@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/onflow/flow-evm-gateway/models"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 )
 
@@ -115,7 +116,7 @@ func Test_Stream(t *testing.T) {
 		s := &mockSubscription{}
 		errContent := fmt.Errorf("failed to process data")
 
-		s.Subscription = models.NewSubscription[mockData](func(data mockData) error {
+		s.Subscription = models.NewSubscription[mockData](zerolog.Nop(), func(data mockData) error {
 			s.callCount.Add(1)
 			return errContent
 		})
@@ -149,7 +150,7 @@ type mockSubscription struct {
 
 func newMockSubscription() *mockSubscription {
 	s := &mockSubscription{}
-	s.Subscription = models.NewSubscription[mockData](func(data mockData) error {
+	s.Subscription = models.NewSubscription[mockData](zerolog.Nop(), func(data mockData) error {
 		s.callCount.Add(1)
 		return nil
 	})
