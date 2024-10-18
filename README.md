@@ -139,8 +139,10 @@ Below is an example configuration for running against testnet, with an already c
 --gas-price=100
 ```
 
-If you wish to test this out with your own Access Node, simply point `--access-node-grpc-host` to the location where it is hosted.
-*Note:* You need to make sure that your Access Node has indexed up to Flow block height `211176670`. This is the height where the `EVM` contract was first deployed on testnet.
+The `--init-cadence-height` is the Flow block height to start indexing from. To index the full EVM state, from its beginning, the proper value for this flag is `211176670`. This is the height where the `EVM` contract was first deployed on testnet, and this is where the EVM state starts from.
+
+If you wish to test this out with your own Access Node, simply set `--access-node-grpc-host` to the location where it is hosted.
+**Note:** You need to make sure that your Access Node has indexed at least up to Flow block height `211176670`.
 
 For the `--gas-price`, feel free to experiment with different values.
 
@@ -189,6 +191,7 @@ Should return a response similar to:
 
 Running the EVM gateway for mainnet requires additional security and stability measures which are described in this document: https://flowfoundation.notion.site/EVM-Gateway-Deployment-3c41da6710af40acbaf971e22ce0a9fd?pvs=74
 
+For mainnet, the Flow block height where the EVM state starts from is `85981134`. To index the full EVM state, use this value for the `--init-cadence-height` flag.
 
 ## Configuration Flags
 
