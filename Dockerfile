@@ -15,7 +15,7 @@ RUN go mod download
 RUN go mod verify
 
 # Build binary
-RUN CGO_ENABLED=1 go build -o bin -ldflags="-X github.com/onflow/flow-evm-gateway/api.Version=${GATEWAY_VERSION}" ./cmd/main/main.go
+RUN CGO_ENABLED=1 go build -o bin -ldflags="-X github.com/onflow/flow-evm-gateway/api.Version=${GATEWAY_VERSION}" cmd/main.go
 RUN chmod a+x bin
 
 # RUN APP
@@ -30,4 +30,4 @@ COPY --from=app-builder /app/bin /flow-evm-gateway/app
 
 EXPOSE 8545
 
-ENTRYPOINT ["/flow-evm-gateway/app"]
+ENTRYPOINT ["/flow-evm-gateway/app", "run"]
