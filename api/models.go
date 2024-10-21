@@ -291,6 +291,24 @@ type Block struct {
 	BaseFeePerGas    hexutil.Big      `json:"baseFeePerGas"`
 }
 
+type BlockHeader struct {
+	Number           hexutil.Uint64   `json:"number"`
+	Hash             common.Hash      `json:"hash"`
+	ParentHash       common.Hash      `json:"parentHash"`
+	Nonce            types.BlockNonce `json:"nonce"`
+	Sha3Uncles       common.Hash      `json:"sha3Uncles"`
+	LogsBloom        hexutil.Bytes    `json:"logsBloom"`
+	TransactionsRoot common.Hash      `json:"transactionsRoot"`
+	StateRoot        common.Hash      `json:"stateRoot"`
+	ReceiptsRoot     common.Hash      `json:"receiptsRoot"`
+	Miner            common.Address   `json:"miner"`
+	ExtraData        hexutil.Bytes    `json:"extraData"`
+	GasLimit         hexutil.Uint64   `json:"gasLimit"`
+	GasUsed          hexutil.Uint64   `json:"gasUsed"`
+	Timestamp        hexutil.Uint64   `json:"timestamp"`
+	Difficulty       hexutil.Uint64   `json:"difficulty"`
+}
+
 type SyncStatus struct {
 	StartingBlock hexutil.Uint64 `json:"startingBlock"`
 	CurrentBlock  hexutil.Uint64 `json:"currentBlock"`
