@@ -190,12 +190,12 @@ func executeTest(t *testing.T, testFile string) {
 		}
 
 		out, err := cmd.CombinedOutput()
-		t.Log(string(out))
 
 		if err != nil {
+			t.Log(string(out))
 			var exitError *exec.ExitError
 			if errors.As(err, &exitError) {
-				if exitError.ExitCode() == 1 {
+				if exitError.ExitCode() >= 1 {
 					require.Fail(t, err.Error())
 				}
 				t.Fatalf("unknown test issue: %s, output: %s", err.Error(), string(out))
