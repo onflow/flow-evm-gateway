@@ -134,7 +134,7 @@ func newSubscription[T any](
 
 	rpcSub := notifier.CreateSubscription()
 
-	subs := models.NewSubscription(callback(notifier, rpcSub))
+	subs := models.NewSubscription(logger, callback(notifier, rpcSub))
 
 	l := logger.With().
 		Str("gateway-subscription-id", fmt.Sprintf("%p", subs)).
@@ -149,7 +149,7 @@ func newSubscription[T any](
 		for {
 			select {
 			case err := <-subs.Error():
-				fmt.Println(err)
+				l.Debug().Err(err).Msg("subscription returned error")
 				return
 			case err := <-rpcSub.Err():
 				l.Debug().Err(err).Msg("client unsubscribed")
