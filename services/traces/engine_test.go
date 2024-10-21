@@ -62,12 +62,10 @@ func TestTraceIngestion(t *testing.T) {
 				return blockID, nil
 			})
 
-		downloadedHashes := make(map[gethCommon.Hash]struct{})
 		downloader.
 			On("Download", mock.Anything, mock.Anything).
 			Return(func(txID gethCommon.Hash, blkID flow.Identifier) (json.RawMessage, error) {
 				require.Equal(t, blockID, blkID)
-				downloadedHashes[txID] = struct{}{}
 				time.Sleep(time.Millisecond * 200) // simulate download delay
 				return txTrace(txID), nil
 			})

@@ -30,8 +30,8 @@ func NewProfileServer(
 	}
 }
 
-func (h *ProfileServer) ListenAddr() string {
-	return h.endpoint
+func (s *ProfileServer) ListenAddr() string {
+	return s.endpoint
 }
 
 func (s *ProfileServer) Start() {
