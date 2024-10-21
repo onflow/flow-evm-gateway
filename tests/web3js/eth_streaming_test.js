@@ -54,7 +54,7 @@ it('streaming of blocks, transactions, logs using filters', async () => {
     })
 
     // subscribe to events being emitted by a deployed contract and transaction interactions below
-    let logTxHashes = []
+    let logs = []
     let subLog = await ws.eth.subscribe('logs', {
         address: contractAddress,
     })
@@ -62,9 +62,9 @@ it('streaming of blocks, transactions, logs using filters', async () => {
         assert.fail(err.message)
     })
     subLog.on('data', async (log) => {
-        logTxHashes.push(log.transactionHash)
+        logs.push(log)
 
-        if (logTxHashes.length === testValues.length) {
+        if (logs.length === testValues.length) {
             subLog.unsubscribe()
         }
     })
@@ -89,7 +89,6 @@ it('streaming of blocks, transactions, logs using filters', async () => {
     // check that transaction hashes we received when submitting transactions above
     // match array of transaction hashes received from subscriptions
     assert.deepEqual(txHashes, sentHashes)
-    assert.deepEqual(logTxHashes, sentHashes)
 
     assert.lengthOf(blocksHeaders, testValues.length)
     for (let blockHeader of blocksHeaders) {
@@ -110,5 +109,15 @@ it('streaming of blocks, transactions, logs using filters', async () => {
         assert.equal(blockHeader.gasUsed, block.gasUsed)
         assert.equal(blockHeader.timestamp, block.timestamp)
         assert.equal(blockHeader.difficulty, block.difficulty)
+    }
+
+    assert.lengthOf(logs, testValues.length)
+    for (let log of logs) {
+        let matchingLogs = await web3.eth.getPastLogs({
+            address: log.address,
+            blockHash: log.blockHash
+        })
+        assert.lengthOf(matchingLogs, 1)
+        assert.deepEqual(log, matchingLogs[0])
     }
 })
