@@ -292,6 +292,7 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 	streamAPI := api.NewStreamAPI(
 		b.logger,
 		b.config,
+		blockchainAPI,
 		b.storages.Blocks,
 		b.storages.Transactions,
 		b.storages.Receipts,
