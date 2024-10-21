@@ -62,6 +62,7 @@ start-local:
 		--profiler-enabled=true \
 		--profiler-port=6060
 
+# Use this after running `make build`, to test out the binary
 .PHONY: start-local-bin
 start-local-bin:
 	rm -rf db/
