@@ -12,8 +12,8 @@ func NewTxPoolAPI() *TxPool {
 }
 
 type content struct {
-	Pending any
-	Queued  any
+	Pending any `json:"pending"`
+	Queued  any `json:"queued"`
 }
 
 func emptyPool() content {
