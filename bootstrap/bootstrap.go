@@ -11,6 +11,8 @@ import (
 	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/onflow/flow-go-sdk/crypto"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
+
+	"github.com/onflow/flow-go/model/flow"
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-limiter/memorystore"
 	grpcOpts "google.golang.org/grpc"
@@ -20,6 +22,7 @@ import (
 	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/models"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
+	"github.com/onflow/flow-evm-gateway/services/evm"
 	"github.com/onflow/flow-evm-gateway/services/ingestion"
 	"github.com/onflow/flow-evm-gateway/services/requester"
 	"github.com/onflow/flow-evm-gateway/services/traces"
@@ -45,7 +48,7 @@ type Publishers struct {
 type Bootstrap struct {
 	logger     zerolog.Logger
 	config     *config.Config
-	client     *requester.CrossSporkClient
+	client     *evm.CrossSporkClient
 	storages   *Storages
 	publishers *Publishers
 	collector  metrics.Collector
@@ -312,7 +315,16 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 
 	var debugAPI *api.DebugAPI
 	if b.config.TracesEnabled {
-		debugAPI = api.NewDebugAPI(b.storages.Traces, b.storages.Blocks, b.logger, b.collector)
+		debugAPI = api.NewDebugAPI(
+			b.client,
+			b.storages.Traces,
+			b.storages.Blocks,
+			b.storages.Receipts,
+			b.config,
+			b.logger,
+			b.collector,
+			ratelimiter,
+		)
 	}
 
 	var walletAPI *api.WalletAPI
@@ -436,7 +448,7 @@ func StartEngine(
 }
 
 // setupCrossSporkClient sets up a cross-spork AN client.
-func setupCrossSporkClient(config *config.Config, logger zerolog.Logger) (*requester.CrossSporkClient, error) {
+func setupCrossSporkClient(config *config.Config, logger zerolog.Logger) (*evm.CrossSporkClient, error) {
 	// create access client with cross-spork capabilities
 	currentSporkClient, err := grpc.NewClient(
 		config.AccessNodeHost,
@@ -462,7 +474,7 @@ func setupCrossSporkClient(config *config.Config, logger zerolog.Logger) (*reque
 	}
 
 	// initialize cross spork client to the access nodes
-	client, err := requester.NewCrossSporkClient(
+	client, err := evm.NewCrossSporkClient(
 		currentSporkClient,
 		pastSporkClients,
 		logger,
@@ -479,7 +491,7 @@ func setupCrossSporkClient(config *config.Config, logger zerolog.Logger) (*reque
 // in case such a height doesn't already exist in the database.
 func setupStorage(
 	config *config.Config,
-	client *requester.CrossSporkClient,
+	client *evm.CrossSporkClient,
 	logger zerolog.Logger,
 ) (*Storages, error) {
 	// create pebble storage from the provided database root directory
@@ -536,7 +548,9 @@ func Run(ctx context.Context, cfg *config.Config, ready chan struct{}) error {
 		return err
 	}
 
-	if cfg.TracesEnabled {
+	// Disable traces downloader for emulator, as it causes the E2E
+	// tests to fail.
+	if cfg.TracesEnabled && cfg.FlowNetworkID != flow.Emulator {
 		if err := boot.StartTraceDownloader(ctx); err != nil {
 			return fmt.Errorf("failed to start trace downloader engine: %w", err)
 		}

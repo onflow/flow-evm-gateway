@@ -33,6 +33,7 @@ import (
 	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/models"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
+	gwEvm "github.com/onflow/flow-evm-gateway/services/evm"
 	"github.com/onflow/flow-evm-gateway/storage"
 )
 
@@ -118,7 +119,7 @@ type Requester interface {
 var _ Requester = &EVM{}
 
 type EVM struct {
-	client      *CrossSporkClient
+	client      *gwEvm.CrossSporkClient
 	config      *config.Config
 	signer      crypto.Signer
 	txPool      *TxPool
@@ -135,7 +136,7 @@ type EVM struct {
 }
 
 func NewEVM(
-	client *CrossSporkClient,
+	client *gwEvm.CrossSporkClient,
 	config *config.Config,
 	signer crypto.Signer,
 	logger zerolog.Logger,
@@ -452,7 +453,7 @@ func (e *EVM) stateAt(evmHeight int64) (*state.StateDB, error) {
 	if !ok {
 		return nil, fmt.Errorf("could not convert to execution client")
 	}
-	ledger, err := newRemoteLedger(exeClient.ExecutionDataRPCClient(), cadenceHeight)
+	ledger, err := gwEvm.NewRemoteLedger(exeClient.ExecutionDataRPCClient(), cadenceHeight)
 	if err != nil {
 		return nil, fmt.Errorf("could not create remote ledger for height: %d, with: %w", cadenceHeight, err)
 	}
