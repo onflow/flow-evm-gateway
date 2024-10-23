@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
+	"github.com/onflow/go-ethereum/common/hexutil"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/onflow/go-ethereum/eth/filters"
 	"github.com/onflow/go-ethereum/rpc"
@@ -11,13 +13,13 @@ import (
 
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/models"
+	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/services/logs"
 	"github.com/onflow/flow-evm-gateway/storage"
 )
 
 type StreamAPI struct {
 	logger                zerolog.Logger
-	api                   *BlockChainAPI
 	config                *config.Config
 	blocks                storage.BlockIndexer
 	transactions          storage.TransactionIndexer
@@ -30,7 +32,6 @@ type StreamAPI struct {
 func NewStreamAPI(
 	logger zerolog.Logger,
 	config *config.Config,
-	api *BlockChainAPI,
 	blocks storage.BlockIndexer,
 	transactions storage.TransactionIndexer,
 	receipts storage.ReceiptIndexer,
@@ -41,7 +42,6 @@ func NewStreamAPI(
 	return &StreamAPI{
 		logger:                logger,
 		config:                config,
-		api:                   api,
 		blocks:                blocks,
 		transactions:          transactions,
 		receipts:              receipts,
@@ -59,12 +59,12 @@ func (s *StreamAPI) NewHeads(ctx context.Context) (*rpc.Subscription, error) {
 		s.blocksPublisher,
 		func(notifier *rpc.Notifier, sub *rpc.Subscription) func(block *models.Block) error {
 			return func(block *models.Block) error {
-				response, err := s.api.prepareBlockResponse(block, false)
+				blockHeader, err := s.prepareBlockHeader(block)
 				if err != nil {
-					return fmt.Errorf("failed to get block response: %w", err)
+					return fmt.Errorf("failed to get block header response: %w", err)
 				}
 
-				return notifier.Notify(sub.ID, response)
+				return notifier.Notify(sub.ID, blockHeader)
 			}
 		},
 	)
@@ -119,6 +119,49 @@ func (s *StreamAPI) Logs(ctx context.Context, criteria filters.FilterCriteria) (
 			}
 		},
 	)
+}
+
+func (s *StreamAPI) prepareBlockHeader(
+	block *models.Block,
+) (*BlockHeader, error) {
+	h, err := block.Hash()
+	if err != nil {
+		s.logger.Error().Err(err).Msg("failed to calculate hash for block by number")
+		return nil, errs.ErrInternal
+	}
+
+	blockHeader := &BlockHeader{
+		Number:           hexutil.Uint64(block.Height),
+		Hash:             h,
+		ParentHash:       block.ParentBlockHash,
+		Nonce:            gethTypes.BlockNonce{0x1},
+		Sha3Uncles:       gethTypes.EmptyUncleHash,
+		LogsBloom:        gethTypes.LogsBloom([]*gethTypes.Log{}),
+		TransactionsRoot: block.TransactionHashRoot,
+		ReceiptsRoot:     block.ReceiptRoot,
+		Miner:            evmTypes.CoinbaseAddress.ToCommon(),
+		GasLimit:         hexutil.Uint64(blockGasLimit),
+		Timestamp:        hexutil.Uint64(block.Timestamp),
+	}
+
+	txHashes := block.TransactionHashes
+	if len(txHashes) > 0 {
+		totalGasUsed := hexutil.Uint64(0)
+		logs := make([]*gethTypes.Log, 0)
+		for _, txHash := range txHashes {
+			txReceipt, err := s.receipts.GetByTransactionID(txHash)
+			if err != nil {
+				return nil, err
+			}
+			totalGasUsed += hexutil.Uint64(txReceipt.GasUsed)
+			logs = append(logs, txReceipt.Logs...)
+		}
+		blockHeader.GasUsed = totalGasUsed
+		// TODO(m-Peter): Consider if its worthwhile to move this in storage.
+		blockHeader.LogsBloom = gethTypes.LogsBloom(logs)
+	}
+
+	return blockHeader, nil
 }
 
 func newSubscription[T any](
