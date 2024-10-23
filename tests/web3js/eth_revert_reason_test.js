@@ -4,7 +4,7 @@ const helpers = require('./helpers')
 const web3 = conf.web3
 
 it('store revertReason field in transaction receipts', async () => {
-    let deployed = await helpers.deployContract("storage")
+    let deployed = await helpers.deployContract('storage')
     let contractAddress = deployed.receipt.contractAddress
 
     // make sure deploy was successful
@@ -43,7 +43,7 @@ it('store revertReason field in transaction receipts', async () => {
 
     let latestHeight = await web3.eth.getBlockNumber()
     let block = await web3.eth.getBlock(latestHeight)
-    assert.equal(block.number, 4n)
+    assert.equal(block.number, conf.startBlockHeight + 2n)
 
     let revertedTx = await web3.eth.getTransactionFromBlock(latestHeight, 0)
     // Give some time to the engine to ingest the latest transaction
@@ -77,7 +77,7 @@ it('store revertReason field in transaction receipts', async () => {
 
     latestHeight = await web3.eth.getBlockNumber()
     block = await web3.eth.getBlock(latestHeight)
-    assert.equal(block.number, 5n)
+    assert.equal(block.number, conf.startBlockHeight + 3n)
 
     revertedTx = await web3.eth.getTransactionFromBlock(latestHeight, 0)
     // Give some time to the engine to ingest the latest transaction

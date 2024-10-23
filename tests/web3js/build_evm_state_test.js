@@ -6,7 +6,8 @@ const web3 = conf.web3
 
 it('should handle a large number of EVM interactions', async () => {
     let latest = await web3.eth.getBlockNumber()
-    assert.equal(latest, 2n)
+    let expectedBlockHeight = conf.startBlockHeight
+    assert.equal(latest, expectedBlockHeight)
 
     let eoaCount = 20
     let accounts = []
@@ -37,12 +38,15 @@ it('should handle a large number of EVM interactions', async () => {
 
         accounts.push(receiver)
     }
+    // Add 20 to the expected block height, as we did 20 transactions,
+    // which formed 20 blocks.
+    expectedBlockHeight += 20n
 
     let senderBalance = await web3.eth.getBalance(conf.eoa.address)
     assert.equal(senderBalance, 1999999999937000000n)
 
     latest = await web3.eth.getBlockNumber()
-    assert.equal(latest, 22n)
+    assert.equal(latest, expectedBlockHeight)
 
     // Add some calls to test historic heights, for balance and nonce
     let randomEOA = randomItem(accounts)
@@ -85,9 +89,12 @@ it('should handle a large number of EVM interactions', async () => {
             assert.equal(transfer.receipt.to, receiver.address)
         }
     }
+    // Add 60 to the expected block height, as we did 60 transactions,
+    // which formed 60 blocks.
+    expectedBlockHeight += 60n
 
     latest = await web3.eth.getBlockNumber()
-    assert.equal(latest, 82n)
+    assert.equal(latest, expectedBlockHeight)
 
     // Add some calls to test historic heights, for balance and nonce
     randomEOABalance = await web3.eth.getBalance(randomEOA.address, latest)
@@ -133,9 +140,12 @@ it('should handle a large number of EVM interactions', async () => {
         })
         assert.equal(res.receipt.status, conf.successStatus)
     }
+    // Add 60 to the expected block height, as we did 60 transactions,
+    // which formed 60 blocks.
+    expectedBlockHeight += 60n
 
     latest = await web3.eth.getBlockNumber()
-    assert.equal(latest, 142n)
+    assert.equal(latest, expectedBlockHeight)
 
     // Add calls to verify correctness of eth_estimateGas on historical heights
     let storeData = deployed.contract.methods.store(0).encodeABI()

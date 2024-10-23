@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/onflow/cadence/runtime/common"
+	"github.com/onflow/cadence/common"
 	"github.com/onflow/flow-go/fvm/evm/events"
 
 	"github.com/onflow/flow-evm-gateway/models"

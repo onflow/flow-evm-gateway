@@ -190,13 +190,13 @@ func Test_EthClientTest(t *testing.T) {
 	ethClient, err := ethclient.Dial("http://127.0.0.1:8545")
 	require.NoError(t, err)
 
-	blockNumber, err := ethClient.BlockNumber(context.Background())
+	ctx = context.Background()
+	blockNumber, err := ethClient.BlockNumber(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, uint64(3), blockNumber)
 
-	block, err := ethClient.BlockByNumber(context.Background(), big.NewInt(3))
+	block, err := ethClient.BlockByNumber(ctx, big.NewInt(int64(blockNumber)))
 	require.NoError(t, err)
-	assert.Equal(t, big.NewInt(3), block.Number())
+	assert.Equal(t, big.NewInt(int64(blockNumber)), block.Number())
 }
 
 func Test_CloudKMSConcurrentTransactionSubmission(t *testing.T) {
