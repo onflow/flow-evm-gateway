@@ -25,6 +25,8 @@ import (
 	"github.com/onflow/flow-evm-gateway/config"
 )
 
+const startingBlockHeight = uint64(3)
+
 // Test_ConcurrentTransactionSubmission test submits multiple transactions concurrently
 // and makes sure the transactions were submitted successfully. This is using the
 // key-rotation signer that can handle multiple concurrent transactions.
@@ -192,11 +194,11 @@ func Test_EthClientTest(t *testing.T) {
 
 	blockNumber, err := ethClient.BlockNumber(context.Background())
 	require.NoError(t, err)
-	assert.Equal(t, uint64(3), blockNumber)
+	assert.Equal(t, uint64(startingBlockHeight+2), blockNumber)
 
-	block, err := ethClient.BlockByNumber(context.Background(), big.NewInt(3))
+	block, err := ethClient.BlockByNumber(context.Background(), big.NewInt(int64(blockNumber)))
 	require.NoError(t, err)
-	assert.Equal(t, big.NewInt(3), block.Number())
+	assert.Equal(t, big.NewInt(int64(startingBlockHeight)+2), block.Number())
 }
 
 func Test_CloudKMSConcurrentTransactionSubmission(t *testing.T) {

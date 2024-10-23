@@ -203,12 +203,12 @@ it('get block and transactions with COA interactions', async () => {
     }
 
     // get block transaction
-    let tx = await web3.eth.getTransactionFromBlock(2n, 0)
+    let tx = await web3.eth.getTransactionFromBlock(conf.startBlockHeight, 0)
     assert.equal(tx.v, "0xff")
     assert.equal(tx.r, "0x0000000000000000000000000000000000000000000000020000000000000000")
     assert.equal(tx.s, "0x0000000000000000000000000000000000000000000000000000000000000004")
 
-    tx = await web3.eth.getTransactionFromBlock(2n, 1)
+    tx = await web3.eth.getTransactionFromBlock(conf.startBlockHeight, 1)
     assert.equal(tx.v, "0xff")
     assert.equal(tx.r, "0x0000000000000000000000000000000000000000000000010000000000000000")
     assert.equal(tx.s, "0x0000000000000000000000000000000000000000000000000000000000000001")
@@ -314,7 +314,7 @@ it('can make batch requests', async () => {
         jsonrpc: '2.0',
         id: 5,
         method: 'eth_getBlockTransactionCountByNumber',
-        params: ['0x2'],
+        params: ['0x3'],
     }
 
     batch.add(getBlockNumber)
@@ -327,7 +327,7 @@ it('can make batch requests', async () => {
 
     assert.deepEqual(
         results[0],
-        { jsonrpc: '2.0', id: 1, result: '0x2' }
+        { jsonrpc: '2.0', id: 1, result: '0x3' }
     )
     assert.deepEqual(
         results[1],
@@ -378,9 +378,9 @@ it('get fee history', async () => {
         response,
         {
             oldestBlock: 1n,
-            reward: [['0x96'], ['0x96']], // gas price is 150 during testing
-            baseFeePerGas: [0n, 0n],
-            gasUsedRatio: [0, 0.006205458333333334]
+            reward: [['0x96'], ['0x96'], ['0x96']], // gas price is 150 during testing
+            baseFeePerGas: [0n, 0n, 0n],
+            gasUsedRatio: [0, 0, 0.006205458333333334]
         }
     )
 })
