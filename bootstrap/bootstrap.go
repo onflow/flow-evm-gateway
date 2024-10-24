@@ -25,15 +25,20 @@ import (
 	"github.com/onflow/flow-evm-gateway/services/traces"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
+	"github.com/onflow/flow-go/fvm/evm"
+	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
+
+	offchain "github.com/onflow/flow-go/fvm/evm/offchain/blocks"
 )
 
 type Storages struct {
-	Storage      *pebble.Storage
-	Blocks       storage.BlockIndexer
-	Transactions storage.TransactionIndexer
-	Receipts     storage.ReceiptIndexer
-	Accounts     storage.AccountIndexer
-	Traces       storage.TraceIndexer
+	Storage       *pebble.Storage
+	Blocks        storage.BlockIndexer
+	BlockMetadata evmTypes.BackendStorage
+	Transactions  storage.TransactionIndexer
+	Receipts      storage.ReceiptIndexer
+	Accounts      storage.AccountIndexer
+	Traces        storage.TraceIndexer
 }
 
 type Publishers struct {
@@ -116,17 +121,29 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 		Uint64("missed-heights", latestCadenceBlock.Height-latestCadenceHeight).
 		Msg("indexing cadence height information")
 
+	chainID := b.config.FlowNetworkID
+
 	// create event subscriber
 	subscriber := ingestion.NewRPCSubscriber(
 		b.client,
 		b.config.HeartbeatInterval,
-		b.config.FlowNetworkID,
+		chainID,
 		b.logger,
 	)
+
+	blockProvider, err := offchain.NewBasicProvider(
+		chainID,
+		b.storages.BlockMetadata,
+		evm.StorageAccountAddress(chainID),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create blocks BasicProvider")
+	}
 
 	// initialize event ingestion engine
 	b.events = ingestion.NewEventIngestionEngine(
 		subscriber,
+		blockProvider,
 		b.storages.Storage,
 		b.storages.Blocks,
 		b.storages.Receipts,
@@ -517,12 +534,13 @@ func setupStorage(
 	}
 
 	return &Storages{
-		Storage:      store,
-		Blocks:       blocks,
-		Transactions: pebble.NewTransactions(store),
-		Receipts:     pebble.NewReceipts(store),
-		Accounts:     pebble.NewAccounts(store),
-		Traces:       pebble.NewTraces(store),
+		Storage:       store,
+		Blocks:        blocks,
+		BlockMetadata: pebble.NewBlockMetadata(store),
+		Transactions:  pebble.NewTransactions(store),
+		Receipts:      pebble.NewReceipts(store),
+		Accounts:      pebble.NewAccounts(store),
+		Traces:        pebble.NewTraces(store),
 	}, nil
 }
 

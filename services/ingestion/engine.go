@@ -13,6 +13,8 @@ import (
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
+
+	offchain "github.com/onflow/flow-go/fvm/evm/offchain/blocks"
 )
 
 var _ models.Engine = &Engine{}
@@ -35,6 +37,7 @@ type Engine struct {
 	*models.EngineStatus
 
 	subscriber      EventSubscriber
+	blockProvider   *offchain.BasicProvider
 	store           *pebble.Storage
 	blocks          storage.BlockIndexer
 	receipts        storage.ReceiptIndexer
@@ -49,6 +52,7 @@ type Engine struct {
 
 func NewEventIngestionEngine(
 	subscriber EventSubscriber,
+	blockProvider *offchain.BasicProvider,
 	store *pebble.Storage,
 	blocks storage.BlockIndexer,
 	receipts storage.ReceiptIndexer,
@@ -65,6 +69,7 @@ func NewEventIngestionEngine(
 		EngineStatus: models.NewEngineStatus(),
 
 		subscriber:      subscriber,
+		blockProvider:   blockProvider,
 		store:           store,
 		blocks:          blocks,
 		receipts:        receipts,

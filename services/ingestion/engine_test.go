@@ -63,6 +63,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 
 		engine := NewEventIngestionEngine(
 			subscriber,
+			nil,
 			store,
 			blocks,
 			receipts,
@@ -143,6 +144,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 
 		engine := NewEventIngestionEngine(
 			subscriber,
+			nil,
 			store,
 			blocks,
 			receipts,
@@ -258,6 +260,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 
 		engine := NewEventIngestionEngine(
 			subscriber,
+			nil,
 			store,
 			blocks,
 			receipts,
@@ -361,6 +364,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 
 		engine := NewEventIngestionEngine(
 			subscriber,
+			nil,
 			store,
 			blocks,
 			receipts,
@@ -457,6 +461,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 
 		engine := NewEventIngestionEngine(
 			subscriber,
+			nil,
 			store,
 			blocks,
 			receipts,

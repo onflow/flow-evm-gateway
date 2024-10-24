@@ -8,9 +8,11 @@ import (
 	"github.com/onflow/atree"
 
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
+	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 )
 
 var _ atree.Ledger = &BlockMetadata{}
+var _ evmTypes.BackendStorage = &BlockMetadata{}
 
 type BlockMetadata struct {
 	store *Storage
@@ -31,6 +33,10 @@ func (l *BlockMetadata) GetValue(owner, key []byte) ([]byte, error) {
 	id := append(owner, key...)
 	val, err := l.store.get(bmValue, id)
 	if err != nil {
+		if errors.Is(err, errs.ErrEntityNotFound) {
+			return nil, nil
+		}
+
 		return nil, fmt.Errorf(
 			"failed to get block metadata value at owner %x and key %x: %w",
 			owner,
