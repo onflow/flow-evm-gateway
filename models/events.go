@@ -31,10 +31,12 @@ func isTransactionExecutedEvent(event cadence.Event) bool {
 // CadenceEvents contains Flow emitted events containing one or zero evm block executed event,
 // and multiple or zero evm transaction events.
 type CadenceEvents struct {
-	events       flow.BlockEvents // Flow events for a specific flow block
-	block        *Block           // EVM block (at most one per Flow block)
-	transactions []Transaction    // transactions in the EVM block
-	receipts     []*Receipt       // receipts for transactions
+	events            flow.BlockEvents // Flow events for a specific flow block
+	block             *Block           // EVM block (at most one per Flow block)
+	transactions      []Transaction    // transactions in the EVM block
+	receipts          []*Receipt       // receipts for transactions
+	blockEventPayload *events.BlockEventPayload
+	txEventPayloads   []events.TransactionEventPayload
 }
 
 // NewCadenceEvents decodes the events into evm types.
@@ -97,23 +99,25 @@ func decodeCadenceEvents(events flow.BlockEvents) (*CadenceEvents, error) {
 				return nil, fmt.Errorf("EVM block was already set for Flow block: %d", events.Height)
 			}
 
-			block, err := decodeBlockEvent(val)
+			block, blockEventPayload, err := decodeBlockEvent(val)
 			if err != nil {
 				return nil, err
 			}
 
 			e.block = block
+			e.blockEventPayload = blockEventPayload
 			continue
 		}
 
 		if isTransactionExecutedEvent(val) {
-			tx, receipt, err := decodeTransactionEvent(val)
+			tx, receipt, txEventPayload, err := decodeTransactionEvent(val)
 			if err != nil {
 				return nil, err
 			}
 
 			e.transactions = append(e.transactions, tx)
 			e.receipts = append(e.receipts, receipt)
+			e.txEventPayloads = append(e.txEventPayloads, *txEventPayload)
 		}
 	}
 
