@@ -2,7 +2,7 @@ package models
 
 import (
 	"fmt"
-	"strings"
+	"sort"
 
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go-sdk"
@@ -12,12 +12,17 @@ import (
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
 )
 
+const (
+	BlockExecutedQualifiedIdentifier       = string(events.EventTypeBlockExecuted)
+	TransactionExecutedQualifiedIdentifier = string(events.EventTypeTransactionExecuted)
+)
+
 // isBlockExecutedEvent checks whether the given event contains block executed data.
 func isBlockExecutedEvent(event cadence.Event) bool {
 	if event.EventType == nil {
 		return false
 	}
-	return strings.Contains(event.EventType.ID(), string(events.EventTypeBlockExecuted))
+	return event.EventType.QualifiedIdentifier == BlockExecutedQualifiedIdentifier
 }
 
 // isTransactionExecutedEvent checks whether the given event contains transaction executed data.
@@ -25,7 +30,7 @@ func isTransactionExecutedEvent(event cadence.Event) bool {
 	if event.EventType == nil {
 		return false
 	}
-	return strings.Contains(event.EventType.ID(), string(events.EventTypeTransactionExecuted))
+	return event.EventType.QualifiedIdentifier == TransactionExecutedQualifiedIdentifier
 }
 
 // CadenceEvents contains Flow emitted events containing one or zero evm block executed event,
@@ -39,6 +44,15 @@ type CadenceEvents struct {
 
 // NewCadenceEvents decodes the events into evm types.
 func NewCadenceEvents(events flow.BlockEvents) (*CadenceEvents, error) {
+	// first we sort all the events in the block, by their TransactionIndex,
+	// and then we also sort events in the same transaction, by their EventIndex.
+	sort.Slice(events.Events, func(i, j int) bool {
+		if events.Events[i].TransactionIndex != events.Events[j].TransactionIndex {
+			return events.Events[i].TransactionIndex < events.Events[j].TransactionIndex
+		}
+		return events.Events[i].EventIndex < events.Events[j].EventIndex
+	})
+
 	e, err := decodeCadenceEvents(events)
 	if err != nil {
 		return nil, err
