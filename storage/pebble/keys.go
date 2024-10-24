@@ -28,6 +28,10 @@ const (
 	ledgerValue     = byte(50)
 	ledgerSlabIndex = byte(51)
 
+	// block metadata keys
+	bmValue     = byte(60)
+	bmSlabIndex = byte(61)
+
 	// special keys
 	latestEVMHeightKey     = byte(100)
 	latestCadenceHeightKey = byte(102)
