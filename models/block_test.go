@@ -112,7 +112,7 @@ func Test_DecodeBlockExecutedEvent(t *testing.T) {
 	encEv, err := ev.Payload.ToCadence(flowGo.Previewnet)
 	require.NoError(t, err)
 
-	decBlock, err := decodeBlockEvent(encEv)
+	decBlock, _, err := decodeBlockEvent(encEv)
 	require.NoError(t, err)
 
 	assert.Equal(t, decBlock, block)
@@ -150,7 +150,7 @@ func Test_DecodingLegacyBlockExecutedEvent(t *testing.T) {
 		hashToCadenceArrayValue(block.TransactionHashRoot),
 	}).WithType(eventType)
 
-	b, err := decodeBlockEvent(legacyEvent)
+	b, _, err := decodeBlockEvent(legacyEvent)
 	require.NoError(t, err)
 
 	require.Equal(t, block.ParentBlockHash, b.ParentBlockHash)

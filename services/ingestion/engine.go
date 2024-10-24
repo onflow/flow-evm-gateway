@@ -9,10 +9,15 @@ import (
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/rs/zerolog"
 
+	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
+	"github.com/onflow/flow-go/fvm/evm"
+
+	offchain "github.com/onflow/flow-go/fvm/evm/offchain/blocks"
+	"github.com/onflow/flow-go/fvm/evm/offchain/sync"
 )
 
 var _ models.Engine = &Engine{}
@@ -35,6 +40,7 @@ type Engine struct {
 	*models.EngineStatus
 
 	subscriber      EventSubscriber
+	blockProvider   *offchain.BasicProvider
 	store           *pebble.Storage
 	blocks          storage.BlockIndexer
 	receipts        storage.ReceiptIndexer
@@ -45,10 +51,12 @@ type Engine struct {
 	blocksPublisher *models.Publisher[*models.Block]
 	logsPublisher   *models.Publisher[[]*gethTypes.Log]
 	collector       metrics.Collector
+	config          *config.Config
 }
 
 func NewEventIngestionEngine(
 	subscriber EventSubscriber,
+	blockProvider *offchain.BasicProvider,
 	store *pebble.Storage,
 	blocks storage.BlockIndexer,
 	receipts storage.ReceiptIndexer,
@@ -58,6 +66,7 @@ func NewEventIngestionEngine(
 	logsPublisher *models.Publisher[[]*gethTypes.Log],
 	log zerolog.Logger,
 	collector metrics.Collector,
+	config *config.Config,
 ) *Engine {
 	log = log.With().Str("component", "ingestion").Logger()
 
@@ -65,6 +74,7 @@ func NewEventIngestionEngine(
 		EngineStatus: models.NewEngineStatus(),
 
 		subscriber:      subscriber,
+		blockProvider:   blockProvider,
 		store:           store,
 		blocks:          blocks,
 		receipts:        receipts,
@@ -74,6 +84,7 @@ func NewEventIngestionEngine(
 		blocksPublisher: blocksPublisher,
 		logsPublisher:   logsPublisher,
 		collector:       collector,
+		config:          config,
 	}
 }
 
@@ -183,6 +194,38 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 	err = e.indexReceipts(events.Receipts(), batch)
 	if err != nil {
 		return fmt.Errorf("failed to index receipts for block %d event: %w", events.Block().Height, err)
+	}
+
+	if e.blockProvider != nil {
+		err = e.blockProvider.OnBlockReceived(events.BlockEventPayload())
+		if err != nil {
+			return fmt.Errorf("failed to call OnBlockReceived: %w", err)
+		}
+
+		chainID := e.config.FlowNetworkID
+		rootAddr := evm.StorageAccountAddress(chainID)
+		storageProvider := pebble.NewRegister(
+			e.store,
+			events.Block().Height,
+		)
+		cr := sync.NewReplayer(
+			chainID,
+			rootAddr,
+			storageProvider,
+			e.blockProvider,
+			e.log,
+			nil,
+			true,
+		)
+		res, err := cr.ReplayBlock(events.TxEventPayloads(), events.BlockEventPayload())
+		if err != nil {
+			return fmt.Errorf("failed to replay block on height: %d, with: %w", events.Block().Height, err)
+		}
+
+		err = e.blockProvider.OnBlockExecuted(events.Block().Height, res)
+		if err != nil {
+			return fmt.Errorf("failed to call OnBlockExecuted: %w", err)
+		}
 	}
 
 	if err := batch.Commit(pebbleDB.Sync); err != nil {

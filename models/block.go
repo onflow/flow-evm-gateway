@@ -71,10 +71,10 @@ func (b *Block) Hash() (gethCommon.Hash, error) {
 
 // decodeBlockEvent takes a cadence event that contains executed block payload and
 // decodes it into the Block type.
-func decodeBlockEvent(event cadence.Event) (*Block, error) {
+func decodeBlockEvent(event cadence.Event) (*Block, *events.BlockEventPayload, error) {
 	payload, err := events.DecodeBlockEventPayload(event)
 	if err != nil {
-		return nil, fmt.Errorf(
+		return nil, nil, fmt.Errorf(
 			"failed to Cadence-decode EVM block event [%s]: %w",
 			event.String(),
 			err,
@@ -102,7 +102,7 @@ func decodeBlockEvent(event cadence.Event) (*Block, error) {
 			PrevRandao:          payload.PrevRandao,
 		},
 		FixedHash: fixedHash,
-	}, nil
+	}, payload, nil
 }
 
 // blockV0 is the block format, prior to adding the PrevRandao field.
