@@ -153,6 +153,7 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 		b.publishers.Logs,
 		b.logger,
 		b.collector,
+		b.config,
 	)
 
 	StartEngine(ctx, b.events, l)

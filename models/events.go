@@ -186,6 +186,14 @@ func (c *CadenceEvents) Length() int {
 	return len(c.events.Events)
 }
 
+func (c *CadenceEvents) BlockEventPayload() *events.BlockEventPayload {
+	return c.blockEventPayload
+}
+
+func (c *CadenceEvents) TxEventPayloads() []events.TransactionEventPayload {
+	return c.txEventPayloads
+}
+
 // BlockEvents is a wrapper around events streamed, and it also contains an error
 type BlockEvents struct {
 	Events *CadenceEvents
