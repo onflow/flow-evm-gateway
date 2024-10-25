@@ -69,7 +69,7 @@ func TestCadenceEvents_Block(t *testing.T) {
 
 	// generate txs
 	for i := 0; i < txCount; i++ {
-		tx, _, txEvent, err := newTransaction(uint64(i))
+		tx, _, txEvent, err := newTransaction(uint64(i), uint16(i))
 		require.NoError(t, err)
 		hashes[i] = tx.Hash()
 		events = append(events, txEvent)
@@ -131,7 +131,7 @@ func TestCadenceEvents_Block(t *testing.T) {
 	})
 
 	t.Run("block with more transaction hashes", func(t *testing.T) {
-		tx, _, _, err := newTransaction(1)
+		tx, _, _, err := newTransaction(1, 0)
 		require.NoError(t, err)
 
 		// generate single block
@@ -153,6 +153,78 @@ func TestCadenceEvents_Block(t *testing.T) {
 			"block 1 references missing transaction/s",
 		)
 	})
+
+	t.Run("EVM events are ordered by Flow TransactionIndex & EventIndex", func(t *testing.T) {
+		txCount := 3
+		blockEvents := flow.BlockEvents{
+			BlockID: flow.Identifier{0x1},
+			Height:  1,
+		}
+
+		// tx1 and tx2 are EVM transactions executed on a single Flow transaction.
+		tx1, _, txEvent1, err := newTransaction(0, 0)
+		require.NoError(t, err)
+		txEvent1.TransactionIndex = 0
+		txEvent1.EventIndex = 2
+
+		tx2, _, txEvent2, err := newTransaction(1, 1)
+		require.NoError(t, err)
+		txEvent2.TransactionIndex = 0
+		txEvent2.EventIndex = 5
+
+		// tx3 is a Flow transaction with a single EVM transaction on EventIndex=1
+		tx3, _, txEvent3, err := newTransaction(2, 0)
+		require.NoError(t, err)
+		txEvent3.TransactionIndex = 2
+		txEvent3.EventIndex = 1
+
+		// needed for computing the `TransactionHashRoot` field on
+		// EVM.BlockExecuted event payload. the order is sensitive.
+		hashes = []gethCommon.Hash{
+			tx1.Hash(),
+			tx2.Hash(),
+			tx3.Hash(),
+		}
+
+		// add the tx events in a shuffled order
+		blockEvents.Events = []flow.Event{
+			txEvent3,
+			txEvent1,
+			txEvent2,
+		}
+
+		// generate single block
+		_, blockEvent, err := newBlock(1, hashes)
+		require.NoError(t, err)
+		blockEvent.TransactionIndex = 4
+		blockEvent.EventIndex = 0
+		blockEvents.Events = append(blockEvents.Events, blockEvent)
+
+		// parse the EventStreaming API response
+		cdcEvents, err := NewCadenceEvents(blockEvents)
+		require.NoError(t, err)
+
+		// assert that Flow events are sorted by their TransactionIndex and EventIndex fields
+		assert.Equal(
+			t,
+			[]flow.Event{
+				txEvent1,
+				txEvent2,
+				txEvent3,
+				blockEvent,
+			},
+			cdcEvents.events.Events,
+		)
+
+		// assert that EVM transactions & receipts are sorted by their
+		// TransactionIndex field
+		for i := 0; i < txCount; i++ {
+			tx := cdcEvents.transactions[i]
+			receipt := cdcEvents.receipts[i]
+			assert.Equal(t, tx.Hash(), receipt.TxHash)
+			assert.Equal(t, uint(i), receipt.TransactionIndex)
+		}
+	})
 }
 
 func Test_EventDecoding(t *testing.T) {
@@ -171,7 +243,7 @@ func Test_EventDecoding(t *testing.T) {
 	// generate txs
 	for i := 0; i < txCount; i++ {
 		var err error
-		txs[i], results[i], txEvents[i], err = newTransaction(uint64(i))
+		txs[i], results[i], txEvents[i], err = newTransaction(uint64(i), uint16(i))
 		require.NoError(t, err)
 		hashes[i] = txs[i].Hash()
 		blockEvents.Events = append(blockEvents.Events, txEvents[i])
@@ -224,12 +296,22 @@ func Test_EventDecoding(t *testing.T) {
 	}
 }
 
-func newTransaction(nonce uint64) (Transaction, *types.Result, flow.Event, error) {
-	tx := gethTypes.NewTransaction(nonce, gethCommon.HexToAddress("0x1"), big.NewInt(10), uint64(100), big.NewInt(123), nil)
+func newTransaction(nonce uint64, txIndex uint16) (Transaction, *types.Result, flow.Event, error) {
+	tx := gethTypes.NewTransaction(
+		nonce,
+		gethCommon.HexToAddress("0x1"),
+		big.NewInt(10),
+		uint64(100),
+		big.NewInt(123),
+		nil,
+	)
 	res := &types.Result{
+		ValidationError:         nil,
 		VMError:                 nil,
 		TxType:                  tx.Type(),
 		GasConsumed:             1,
+		CumulativeGasUsed:       1,
+		GasRefund:               0,
 		DeployedContractAddress: &types.Address{0x5, 0x6, 0x7},
 		ReturnedData:            []byte{0x55},
 		Logs: []*gethTypes.Log{{
@@ -239,7 +321,10 @@ func newTransaction(nonce uint64) (Transaction, *types.Result, flow.Event, error
 			Address: gethCommon.Address{0x3, 0x5},
 			Topics:  []gethCommon.Hash{{0x2, 0x66}, {0x7, 0x1}},
 		}},
-		TxHash: tx.Hash(),
+		TxHash:                tx.Hash(),
+		Index:                 txIndex,
+		PrecompiledCalls:      []byte{},
+		StateChangeCommitment: []byte{},
 	}
 
 	txEncoded, err := tx.MarshalBinary()
