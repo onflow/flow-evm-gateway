@@ -11,6 +11,7 @@ import (
 
 	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/models"
+	"github.com/onflow/flow-evm-gateway/services/replayer"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
 )
@@ -35,6 +36,7 @@ type Engine struct {
 	*models.EngineStatus
 
 	subscriber      EventSubscriber
+	blocksProvider  *replayer.BlocksProvider
 	store           *pebble.Storage
 	blocks          storage.BlockIndexer
 	receipts        storage.ReceiptIndexer
@@ -49,6 +51,7 @@ type Engine struct {
 
 func NewEventIngestionEngine(
 	subscriber EventSubscriber,
+	blocksProvider *replayer.BlocksProvider,
 	store *pebble.Storage,
 	blocks storage.BlockIndexer,
 	receipts storage.ReceiptIndexer,
@@ -65,6 +68,7 @@ func NewEventIngestionEngine(
 		EngineStatus: models.NewEngineStatus(),
 
 		subscriber:      subscriber,
+		blocksProvider:  blocksProvider,
 		store:           store,
 		blocks:          blocks,
 		receipts:        receipts,
@@ -177,6 +181,14 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 	err = e.indexReceipts(events.Receipts(), batch)
 	if err != nil {
 		return fmt.Errorf("failed to index receipts for block %d event: %w", events.Block().Height, err)
+	}
+
+	if err := e.blocksProvider.OnBlockReceived(events.Block()); err != nil {
+		return fmt.Errorf(
+			"failed to call OnBlockReceived for block %d, with: %w",
+			events.Block().Height,
+			err,
+		)
 	}
 
 	if err := batch.Commit(pebbleDB.Sync); err != nil {
