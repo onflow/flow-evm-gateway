@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -11,6 +12,7 @@ import (
 	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/onflow/flow-go-sdk/crypto"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
+	"github.com/onflow/go-ethereum/eth/tracers"
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-limiter/memorystore"
 	grpcOpts "google.golang.org/grpc"
@@ -21,10 +23,20 @@ import (
 	"github.com/onflow/flow-evm-gateway/models"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/services/ingestion"
+	"github.com/onflow/flow-evm-gateway/services/replayer"
 	"github.com/onflow/flow-evm-gateway/services/requester"
 	"github.com/onflow/flow-evm-gateway/services/traces"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
+
+	// this import is needed for side-effects, because the
+	// tracers.DefaultDirectory is relying on the init function
+	_ "github.com/onflow/go-ethereum/eth/tracers/native"
+)
+
+const (
+	callTracerConfig = `{ "onlyTopCall": true }`
+	callTracerName   = "callTracer"
 )
 
 type Storages struct {
@@ -124,9 +136,24 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 		latestCadenceHeight,
 	)
 
+	tracer, err := tracers.DefaultDirectory.New(
+		callTracerName,
+		&tracers.Context{},
+		json.RawMessage(callTracerConfig),
+	)
+	if err != nil {
+		return err
+	}
+	blocksProvider := replayer.NewBlocksProvider(
+		b.storages.Blocks,
+		b.config.FlowNetworkID,
+		tracer,
+	)
+
 	// initialize event ingestion engine
 	b.events = ingestion.NewEventIngestionEngine(
 		subscriber,
+		blocksProvider,
 		b.storages.Storage,
 		b.storages.Blocks,
 		b.storages.Receipts,

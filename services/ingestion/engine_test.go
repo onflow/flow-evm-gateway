@@ -12,6 +12,7 @@ import (
 
 	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/services/ingestion/mocks"
+	"github.com/onflow/flow-evm-gateway/services/replayer"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
 
 	"github.com/onflow/cadence"
@@ -63,6 +64,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 
 		engine := NewEventIngestionEngine(
 			subscriber,
+			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
 			store,
 			blocks,
 			receipts,
@@ -143,6 +145,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 
 		engine := NewEventIngestionEngine(
 			subscriber,
+			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
 			store,
 			blocks,
 			receipts,
@@ -258,6 +261,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 
 		engine := NewEventIngestionEngine(
 			subscriber,
+			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
 			store,
 			blocks,
 			receipts,
@@ -361,6 +365,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 
 		engine := NewEventIngestionEngine(
 			subscriber,
+			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
 			store,
 			blocks,
 			receipts,
@@ -456,6 +461,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 
 		engine := NewEventIngestionEngine(
 			subscriber,
+			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
 			store,
 			blocks,
 			receipts,
