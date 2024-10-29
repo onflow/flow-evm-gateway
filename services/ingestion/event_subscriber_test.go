@@ -43,7 +43,7 @@ func Test_Subscribing(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	subscriber := NewRPCSubscriber(client, 100, flowGo.Previewnet, zerolog.Nop())
+	subscriber := NewRPCEventSubscriber(client, 100, flowGo.Previewnet, zerolog.Nop())
 
 	events := subscriber.Subscribe(context.Background(), 1)
 
@@ -83,7 +83,7 @@ func Test_MissingBlockEvent(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	subscriber := NewRPCSubscriber(client, 100, flowGo.Previewnet, zerolog.Nop())
+	subscriber := NewRPCEventSubscriber(client, 100, flowGo.Previewnet, zerolog.Nop())
 
 	events := subscriber.Subscribe(context.Background(), 1)
 
@@ -185,7 +185,7 @@ func Test_SubscribingWithRetryOnError(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	subscriber := NewRPCSubscriber(client, 100, flowGo.Previewnet, zerolog.Nop())
+	subscriber := NewRPCEventSubscriber(client, 100, flowGo.Previewnet, zerolog.Nop())
 
 	events := subscriber.Subscribe(context.Background(), 1)
 
@@ -248,7 +248,7 @@ func Test_SubscribingWithRetryOnErrorMultipleBlocks(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	subscriber := NewRPCSubscriber(client, 100, flowGo.Previewnet, zerolog.Nop())
+	subscriber := NewRPCEventSubscriber(client, 100, flowGo.Previewnet, zerolog.Nop())
 
 	events := subscriber.Subscribe(context.Background(), 1)
 
@@ -310,7 +310,7 @@ func Test_SubscribingWithRetryOnErrorEmptyBlocks(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	subscriber := NewRPCSubscriber(client, 100, flowGo.Previewnet, zerolog.Nop())
+	subscriber := NewRPCEventSubscriber(client, 100, flowGo.Previewnet, zerolog.Nop())
 
 	events := subscriber.Subscribe(context.Background(), 1)
 
