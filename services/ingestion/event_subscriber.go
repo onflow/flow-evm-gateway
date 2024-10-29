@@ -24,7 +24,7 @@ type EventSubscriber interface {
 	//
 	// The BlockEvents type will contain an optional error in case
 	// the error happens, the consumer of the chanel should handle it.
-	Subscribe(ctx context.Context, height uint64) <-chan models.BlockEvents
+	Subscribe(ctx context.Context) <-chan models.BlockEvents
 }
 
 var _ EventSubscriber = &RPCEventSubscriber{}
@@ -40,16 +40,18 @@ type RPCEventSubscriber struct {
 
 	client *requester.CrossSporkClient
 	chain  flowGo.ChainID
+	height uint64
 
 	recovery        bool
 	recoveredEvents []flow.Event
 }
 
 func NewRPCEventSubscriber(
-	client *requester.CrossSporkClient,
-	heartbeatInterval uint64,
-	chainID flowGo.ChainID,
 	logger zerolog.Logger,
+	client *requester.CrossSporkClient,
+	chainID flowGo.ChainID,
+	startHeight uint64,
+	heartbeatInterval uint64,
 ) *RPCEventSubscriber {
 	logger = logger.With().Str("component", "subscriber").Logger()
 	return &RPCEventSubscriber{
@@ -61,6 +63,7 @@ func NewRPCEventSubscriber(
 
 		client: client,
 		chain:  chainID,
+		height: startHeight,
 	}
 }
 
@@ -69,7 +72,7 @@ func NewRPCEventSubscriber(
 // to listen all new events in the current spork.
 //
 // If error is encountered during backfill the subscription will end and the response chanel will be closed.
-func (r *RPCEventSubscriber) Subscribe(ctx context.Context, height uint64) <-chan models.BlockEvents {
+func (r *RPCEventSubscriber) Subscribe(ctx context.Context) <-chan models.BlockEvents {
 	eventsChan := make(chan models.BlockEvents)
 
 	go func() {
@@ -78,13 +81,13 @@ func (r *RPCEventSubscriber) Subscribe(ctx context.Context, height uint64) <-cha
 		}()
 
 		// if the height is from the previous spork, backfill all the eventsChan from previous sporks first
-		if r.client.IsPastSpork(height) {
+		if r.client.IsPastSpork(r.height) {
 			r.logger.Info().
-				Uint64("height", height).
+				Uint64("height", r.height).
 				Msg("height found in previous spork, starting to backfill")
 
 			// backfill all the missed eventsChan, handling of context cancellation is done by the producer
-			for ev := range r.backfill(ctx, height) {
+			for ev := range r.backfill(ctx, r.height) {
 				eventsChan <- ev
 
 				if ev.Err != nil {
@@ -93,21 +96,21 @@ func (r *RPCEventSubscriber) Subscribe(ctx context.Context, height uint64) <-cha
 
 				// keep updating height, so after we are done back-filling
 				// it will be at the first height in the current spork
-				height = ev.Events.CadenceHeight()
+				r.height = ev.Events.CadenceHeight()
 			}
 
 			// after back-filling is done, increment height by one,
 			// so we start with the height in the current spork
-			height = height + 1
+			r.height = r.height + 1
 		}
 
 		r.logger.Info().
-			Uint64("next-height", height).
+			Uint64("next-height", r.height).
 			Msg("backfilling done, subscribe for live data")
 
 		// subscribe in the current spork, handling of context cancellation is done by the producer
 		// TODO(JanezP): I think the heartbeat interval should always be 1 here
-		for ev := range r.subscribe(ctx, height, access.WithHeartbeatInterval(r.HeartbeatInterval)) {
+		for ev := range r.subscribe(ctx, r.height, access.WithHeartbeatInterval(r.HeartbeatInterval)) {
 			eventsChan <- ev
 		}
 

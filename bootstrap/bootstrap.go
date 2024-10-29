@@ -117,12 +117,7 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 		Msg("indexing cadence height information")
 
 	// create event subscriber
-	subscriber := ingestion.NewRPCEventSubscriber(
-		b.client,
-		b.config.HeartbeatInterval,
-		b.config.FlowNetworkID,
-		b.logger,
-	)
+	subscriber := ingestion.NewRPCEventSubscriber(b.logger, b.client, b.config.FlowNetworkID, latestCadenceHeight, b.config.HeartbeatInterval)
 
 	// initialize event ingestion engine
 	b.events = ingestion.NewEventIngestionEngine(

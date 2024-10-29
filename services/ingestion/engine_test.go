@@ -56,8 +56,8 @@ func TestSerialBlockIngestion(t *testing.T) {
 
 		subscriber := &mocks.EventSubscriber{}
 		subscriber.
-			On("Subscribe", mock.Anything, mock.AnythingOfType("uint64")).
-			Return(func(ctx context.Context, latest uint64) <-chan models.BlockEvents {
+			On("Subscribe", mock.Anything).
+			Return(func(ctx context.Context) <-chan models.BlockEvents {
 				return eventsChan
 			})
 
@@ -136,8 +136,8 @@ func TestSerialBlockIngestion(t *testing.T) {
 		eventsChan := make(chan models.BlockEvents)
 		subscriber := &mocks.EventSubscriber{}
 		subscriber.
-			On("Subscribe", mock.Anything, mock.AnythingOfType("uint64")).
-			Return(func(ctx context.Context, latest uint64) <-chan models.BlockEvents {
+			On("Subscribe", mock.Anything).
+			Return(func(ctx context.Context) <-chan models.BlockEvents {
 				return eventsChan
 			})
 
@@ -246,8 +246,8 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		eventsChan := make(chan models.BlockEvents)
 		subscriber := &mocks.EventSubscriber{}
 		subscriber.
-			On("Subscribe", mock.Anything, mock.AnythingOfType("uint64")).
-			Return(func(ctx context.Context, latest uint64) <-chan models.BlockEvents {
+			On("Subscribe", mock.Anything).
+			Return(func(ctx context.Context) <-chan models.BlockEvents {
 				return eventsChan
 			})
 
@@ -349,8 +349,8 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		eventsChan := make(chan models.BlockEvents)
 		subscriber := &mocks.EventSubscriber{}
 		subscriber.
-			On("Subscribe", mock.Anything, mock.AnythingOfType("uint64")).
-			Return(func(ctx context.Context, latest uint64) <-chan models.BlockEvents {
+			On("Subscribe", mock.Anything).
+			Return(func(ctx context.Context) <-chan models.BlockEvents {
 				return eventsChan
 			})
 
@@ -448,9 +448,8 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		eventsChan := make(chan models.BlockEvents)
 		subscriber := &mocks.EventSubscriber{}
 		subscriber.
-			On("Subscribe", mock.Anything, mock.AnythingOfType("uint64")).
-			Return(func(ctx context.Context, latest uint64) <-chan models.BlockEvents {
-				assert.Equal(t, latestCadenceHeight, latest)
+			On("Subscribe", mock.Anything).
+			Return(func(ctx context.Context) <-chan models.BlockEvents {
 				return eventsChan
 			}).
 			Once()
