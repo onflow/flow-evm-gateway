@@ -14,6 +14,7 @@ import (
 	"github.com/onflow/go-ethereum/rpc"
 
 	"github.com/onflow/flow-evm-gateway/config"
+	ethTypes "github.com/onflow/flow-evm-gateway/eth/types"
 )
 
 type WalletAPI struct {
@@ -66,8 +67,8 @@ func (w *WalletAPI) Sign(
 // the given from address and it needs to be unlocked.
 func (w *WalletAPI) SignTransaction(
 	ctx context.Context,
-	args TransactionArgs,
-) (*SignTransactionResult, error) {
+	args ethTypes.TransactionArgs,
+) (*ethTypes.SignTransactionResult, error) {
 	if args.Gas == nil {
 		return nil, errors.New("gas not specified")
 	}
@@ -117,7 +118,7 @@ func (w *WalletAPI) SignTransaction(
 		return nil, err
 	}
 
-	return &SignTransactionResult{
+	return &ethTypes.SignTransactionResult{
 		Raw: raw,
 		Tx:  tx,
 	}, nil
@@ -127,7 +128,7 @@ func (w *WalletAPI) SignTransaction(
 // and submit it to the transaction pool.
 func (w *WalletAPI) SendTransaction(
 	ctx context.Context,
-	args TransactionArgs,
+	args ethTypes.TransactionArgs,
 ) (common.Hash, error) {
 	signed, err := w.SignTransaction(ctx, args)
 	if err != nil {

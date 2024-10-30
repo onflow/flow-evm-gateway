@@ -74,16 +74,6 @@ type Config struct {
 	FilterExpiry time.Duration
 	// ForceStartCadenceHeight will force set the starting Cadence height, this should be only used for testing or locally.
 	ForceStartCadenceHeight uint64
-	// HeartbeatInterval sets custom heartbeat interval for events
-	HeartbeatInterval uint64
-	// TracesBucketName sets the GCP bucket name where transaction traces are being stored.
-	TracesBucketName string
-	// TracesEnabled sets whether the node is supporting transaction traces.
-	TracesEnabled bool
-	// TracesBackfillStartHeight sets the starting block height for backfilling missing traces.
-	TracesBackfillStartHeight uint64
-	// TracesBackfillEndHeight sets the ending block height for backfilling missing traces.
-	TracesBackfillEndHeight uint64
 	// WalletEnabled sets whether wallet APIs are enabled
 	WalletEnabled bool
 	// WalletKey used for signing transactions
@@ -92,8 +82,6 @@ type Config struct {
 	MetricsPort int
 	// IndexOnly configures the gateway to not accept any transactions but only queries of the state
 	IndexOnly bool
-	// Cache size in units of items in cache, one unit in cache takes approximately 64 bytes
-	CacheSize uint
 	// ProfilerEnabled sets whether the profiler server is enabled
 	ProfilerEnabled bool
 	// ProfilerHost is the host for the profiler server will listen to (e.g. localhost, 0.0.0.0)

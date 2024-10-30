@@ -28,8 +28,7 @@ func GenesisBlock(chainID flow.ChainID) *Block {
 
 func NewBlockFromBytes(data []byte) (*Block, error) {
 	var b *Block
-	err := rlp.DecodeBytes(data, &b)
-	if err != nil {
+	if err := rlp.DecodeBytes(data, &b); err != nil {
 		pastBlock, err := decodeBlockBreakingChanges(data)
 		if err != nil {
 			return nil, err
@@ -37,10 +36,6 @@ func NewBlockFromBytes(data []byte) (*Block, error) {
 		b = pastBlock
 	}
 
-	// this is added because RLP decoding will decode into an empty string
-	if b.FixedHash != nil && *b.FixedHash == "" {
-		b.FixedHash = nil
-	}
 	return b, nil
 }
 
@@ -51,10 +46,8 @@ type Block struct {
 	// will have more fields than before, so we make sure the hash we calculated
 	// with the previous format is fixed by assigning it to this field and then
 	// on hash calculation we check if this field is set we just return it.
-	// We must make the FixedHash exported so RLP encoding preserve it, and
-	// we must use string not common.Hash since RLP decoding has an issue
-	// with decoding into nil pointer slice.
-	FixedHash         *string
+	// We must make the FixedHash exported so RLP encoding preserves it.
+	FixedHash         gethCommon.Hash
 	TransactionHashes []gethCommon.Hash
 }
 
@@ -63,31 +56,30 @@ func (b *Block) ToBytes() ([]byte, error) {
 }
 
 func (b *Block) Hash() (gethCommon.Hash, error) {
-	if b.FixedHash != nil && *b.FixedHash != "" {
-		return gethCommon.HexToHash(*b.FixedHash), nil
+	if b.FixedHash != zeroGethHash {
+		return b.FixedHash, nil
 	}
 	return b.Block.Hash()
 }
 
 // decodeBlockEvent takes a cadence event that contains executed block payload and
 // decodes it into the Block type.
-func decodeBlockEvent(event cadence.Event) (*Block, error) {
+func decodeBlockEvent(event cadence.Event) (*Block, *events.BlockEventPayload, error) {
 	payload, err := events.DecodeBlockEventPayload(event)
 	if err != nil {
-		return nil, fmt.Errorf(
+		return nil, nil, fmt.Errorf(
 			"failed to Cadence-decode EVM block event [%s]: %w",
 			event.String(),
 			err,
 		)
 	}
 
-	var fixedHash *string
+	fixedHash := gethCommon.Hash{}
 	// If the `PrevRandao` field is the zero hash, we know that
 	// this is a block with the legacy format, and we need to
 	// fix its hash, due to the hash calculation breaking change.
 	if payload.PrevRandao == zeroGethHash {
-		hash := payload.Hash.String()
-		fixedHash = &hash
+		fixedHash = payload.Hash
 	}
 
 	return &Block{
@@ -102,7 +94,7 @@ func decodeBlockEvent(event cadence.Event) (*Block, error) {
 			PrevRandao:          payload.PrevRandao,
 		},
 		FixedHash: fixedHash,
-	}, nil
+	}, payload, nil
 }
 
 // blockV0 is the block format, prior to adding the PrevRandao field.
@@ -115,7 +107,10 @@ type blockV0 struct {
 // the fields from the blockV0Fields type.
 func (b *blockV0) Hash() (gethCommon.Hash, error) {
 	data, err := b.Block.ToBytes()
-	return gethCrypto.Keccak256Hash(data), err
+	if err != nil {
+		return gethCommon.Hash{}, err
+	}
+	return gethCrypto.Keccak256Hash(data), nil
 }
 
 // blockV0Fields needed for decoding & computing the hash of blocks
@@ -136,12 +131,11 @@ func (b *blockV0Fields) ToBytes() ([]byte, error) {
 }
 
 // decodeBlockBreakingChanges will try to decode the bytes into all
-// previous versions of block type, if it succeeds it will return the
+// previous versions of block type. If it succeeds it will return the
 // migrated block, otherwise it will return the decoding error.
 func decodeBlockBreakingChanges(encoded []byte) (*Block, error) {
 	b0 := &blockV0{}
-	err := rlp.DecodeBytes(encoded, b0)
-	if err != nil {
+	if err := rlp.DecodeBytes(encoded, b0); err != nil {
 		return nil, err
 	}
 
@@ -149,7 +143,6 @@ func decodeBlockBreakingChanges(encoded []byte) (*Block, error) {
 	if err != nil {
 		return nil, err
 	}
-	h := blockHash.String()
 
 	return &Block{
 		Block: &types.Block{
@@ -161,7 +154,7 @@ func decodeBlockBreakingChanges(encoded []byte) (*Block, error) {
 			TransactionHashRoot: b0.Block.TransactionHashRoot,
 			TotalGasUsed:        b0.Block.TotalGasUsed,
 		},
-		FixedHash:         &h,
+		FixedHash:         blockHash,
 		TransactionHashes: b0.TransactionHashes,
 	}, nil
 }
