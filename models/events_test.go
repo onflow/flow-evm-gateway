@@ -194,7 +194,7 @@ func TestCadenceEvents_Block(t *testing.T) {
 		}
 
 		// generate single block
-		_, blockEvent, err := newBlock(1, hashes)
+		block, blockEvent, err := newBlock(1, hashes)
 		require.NoError(t, err)
 		blockEvent.TransactionIndex = 4
 		blockEvent.EventIndex = 0
@@ -216,6 +216,12 @@ func TestCadenceEvents_Block(t *testing.T) {
 			cdcEvents.events.Events,
 		)
 
+		// assert we have collected the EVM.BlockExecuted event payload
+		blockEventPayload := cdcEvents.BlockEventPayload()
+		blockHash, err := block.Hash()
+		require.NoError(t, err)
+		assert.Equal(t, blockHash, blockEventPayload.Hash)
+
 		// assert that EVM transactions & receipts are sorted by their
 		// TransactionIndex field
 		for i := 0; i < txCount; i++ {
@@ -223,6 +229,12 @@ func TestCadenceEvents_Block(t *testing.T) {
 			receipt := cdcEvents.receipts[i]
 			assert.Equal(t, tx.Hash(), receipt.TxHash)
 			assert.Equal(t, uint(i), receipt.TransactionIndex)
+
+			// assert we have collected the EVM.TransactionExecuted event payloads
+			// in their correct order.
+			txEventPayload := cdcEvents.TxEventPayloads()[i]
+			assert.Equal(t, tx.Hash(), txEventPayload.Hash)
+			assert.Equal(t, blockEventPayload.Height, txEventPayload.BlockHeight)
 		}
 	})
 }

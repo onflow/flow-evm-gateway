@@ -222,14 +222,10 @@ The application can be configured using the following flags at runtime:
 | `stream-limit`                 | `10`                          | Rate-limit for client events sent per second                                             |
 | `rate-limit`                   | `50`                          | Requests per second limit for clients over any protocol (ws/http)                        |
 | `address-header`               | `""`                          | Header for client IP when server is behind a proxy                                       |
-| `heartbeat-interval`           | `100`                         | Interval for AN event subscription heartbeats                                            |
 | `stream-timeout`               | `3`                           | Timeout in seconds for sending events to clients                                         |
 | `force-start-height`           | `0`                           | Force-set starting Cadence height (local/testing use only)                               |
 | `wallet-api-key`               | `""`                          | ECDSA private key for wallet APIs (local/testing use only)                               |
 | `filter-expiry`                | `5m`                          | Expiry time for idle filters                                                             |
-| `traces-gcp-bucket`            | `""`                          | GCP bucket name for transaction traces                                                   |
-| `traces-backfill-start-height` | `0`                           | Start height for backfilling transaction traces                                          |
-| `traces-backfill-end-height`   | `0`                           | End height for backfilling transaction traces                                            |
 | `index-only`                   | `false`                       | Run in index-only mode, allowing state queries and indexing but no transaction sending   |
 | `profiler-enabled`             | `false`                       | Enable the pprof profiler server                                                         |
 | `profiler-host`                | `localhost`                   | Host for the pprof profiler                                                              |
