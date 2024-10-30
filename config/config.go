@@ -74,8 +74,6 @@ type Config struct {
 	FilterExpiry time.Duration
 	// ForceStartCadenceHeight will force set the starting Cadence height, this should be only used for testing or locally.
 	ForceStartCadenceHeight uint64
-	// HeartbeatInterval sets custom heartbeat interval for events
-	HeartbeatInterval uint64
 	// TracesBucketName sets the GCP bucket name where transaction traces are being stored.
 	TracesBucketName string
 	// TracesEnabled sets whether the node is supporting transaction traces.
