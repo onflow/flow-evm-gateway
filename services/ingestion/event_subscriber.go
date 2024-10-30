@@ -29,13 +29,7 @@ type EventSubscriber interface {
 
 var _ EventSubscriber = &RPCEventSubscriber{}
 
-type RPCEventSubscriberConfig struct {
-	HeartbeatInterval uint64
-}
-
 type RPCEventSubscriber struct {
-	RPCEventSubscriberConfig
-
 	logger zerolog.Logger
 
 	client *requester.CrossSporkClient
@@ -51,14 +45,9 @@ func NewRPCEventSubscriber(
 	client *requester.CrossSporkClient,
 	chainID flowGo.ChainID,
 	startHeight uint64,
-	heartbeatInterval uint64,
 ) *RPCEventSubscriber {
 	logger = logger.With().Str("component", "subscriber").Logger()
 	return &RPCEventSubscriber{
-		RPCEventSubscriberConfig: RPCEventSubscriberConfig{
-			HeartbeatInterval: heartbeatInterval,
-		},
-
 		logger: logger,
 
 		client: client,
@@ -86,7 +75,7 @@ func (r *RPCEventSubscriber) Subscribe(ctx context.Context) <-chan models.BlockE
 				Uint64("height", r.height).
 				Msg("height found in previous spork, starting to backfill")
 
-			// backfill all the missed eventsChan, handling of context cancellation is done by the producer
+			// backfill all the missed events, handling of context cancellation is done by the producer
 			for ev := range r.backfill(ctx, r.height) {
 				eventsChan <- ev
 
@@ -109,8 +98,7 @@ func (r *RPCEventSubscriber) Subscribe(ctx context.Context) <-chan models.BlockE
 			Msg("backfilling done, subscribe for live data")
 
 		// subscribe in the current spork, handling of context cancellation is done by the producer
-		// TODO(JanezP): I think the heartbeat interval should always be 1 here
-		for ev := range r.subscribe(ctx, r.height, access.WithHeartbeatInterval(r.HeartbeatInterval)) {
+		for ev := range r.subscribe(ctx, r.height) {
 			eventsChan <- ev
 		}
 
@@ -124,7 +112,7 @@ func (r *RPCEventSubscriber) Subscribe(ctx context.Context) <-chan models.BlockE
 //
 // Subscribing to EVM specific events and handle any disconnection errors
 // as well as context cancellations.
-func (r *RPCEventSubscriber) subscribe(ctx context.Context, height uint64, opts ...access.SubscribeOption) <-chan models.BlockEvents {
+func (r *RPCEventSubscriber) subscribe(ctx context.Context, height uint64) <-chan models.BlockEvents {
 	eventsChan := make(chan models.BlockEvents)
 
 	_, err := r.client.GetBlockHeaderByHeight(ctx, height)
@@ -134,7 +122,13 @@ func (r *RPCEventSubscriber) subscribe(ctx context.Context, height uint64, opts 
 		return eventsChan
 	}
 
-	eventStream, errChan, err := r.client.SubscribeEventsByBlockHeight(ctx, height, blocksFilter(r.chain), opts...)
+	// we always use heartbeat interval of 1 to have the least amount of delay from the access node
+	eventStream, errChan, err := r.client.SubscribeEventsByBlockHeight(
+		ctx,
+		height,
+		blocksFilter(r.chain),
+		access.WithHeartbeatInterval(1),
+	)
 	if err != nil {
 		eventsChan <- models.NewBlockEventsError(
 			fmt.Errorf("failed to subscribe to events by block height: %d, with: %w", height, err),
@@ -230,7 +224,7 @@ func (r *RPCEventSubscriber) backfill(ctx context.Context, height uint64) <-chan
 				Uint64("last-spork-height", latestHeight).
 				Msg("backfilling spork")
 
-			for ev := range r.subscribe(ctx, height, access.WithHeartbeatInterval(1)) {
+			for ev := range r.subscribe(ctx, height) {
 				eventsChan <- ev
 
 				if ev.Err != nil {
