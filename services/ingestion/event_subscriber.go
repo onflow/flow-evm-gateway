@@ -24,33 +24,35 @@ type EventSubscriber interface {
 	//
 	// The BlockEvents type will contain an optional error in case
 	// the error happens, the consumer of the chanel should handle it.
-	Subscribe(ctx context.Context, height uint64) <-chan models.BlockEvents
+	Subscribe(ctx context.Context) <-chan models.BlockEvents
 }
 
-var _ EventSubscriber = &RPCSubscriber{}
+var _ EventSubscriber = &RPCEventSubscriber{}
 
-type RPCSubscriber struct {
-	client            *requester.CrossSporkClient
-	chain             flowGo.ChainID
-	heartbeatInterval uint64
-	logger            zerolog.Logger
+type RPCEventSubscriber struct {
+	logger zerolog.Logger
+
+	client *requester.CrossSporkClient
+	chain  flowGo.ChainID
+	height uint64
 
 	recovery        bool
 	recoveredEvents []flow.Event
 }
 
-func NewRPCSubscriber(
-	client *requester.CrossSporkClient,
-	heartbeatInterval uint64,
-	chainID flowGo.ChainID,
+func NewRPCEventSubscriber(
 	logger zerolog.Logger,
-) *RPCSubscriber {
+	client *requester.CrossSporkClient,
+	chainID flowGo.ChainID,
+	startHeight uint64,
+) *RPCEventSubscriber {
 	logger = logger.With().Str("component", "subscriber").Logger()
-	return &RPCSubscriber{
-		client:            client,
-		heartbeatInterval: heartbeatInterval,
-		chain:             chainID,
-		logger:            logger,
+	return &RPCEventSubscriber{
+		logger: logger,
+
+		client: client,
+		chain:  chainID,
+		height: startHeight,
 	}
 }
 
@@ -59,23 +61,23 @@ func NewRPCSubscriber(
 // to listen all new events in the current spork.
 //
 // If error is encountered during backfill the subscription will end and the response chanel will be closed.
-func (r *RPCSubscriber) Subscribe(ctx context.Context, height uint64) <-chan models.BlockEvents {
-	events := make(chan models.BlockEvents)
+func (r *RPCEventSubscriber) Subscribe(ctx context.Context) <-chan models.BlockEvents {
+	eventsChan := make(chan models.BlockEvents)
 
 	go func() {
 		defer func() {
-			close(events)
+			close(eventsChan)
 		}()
 
-		// if the height is from the previous spork, backfill all the events from previous sporks first
-		if r.client.IsPastSpork(height) {
+		// if the height is from the previous spork, backfill all the eventsChan from previous sporks first
+		if r.client.IsPastSpork(r.height) {
 			r.logger.Info().
-				Uint64("height", height).
+				Uint64("height", r.height).
 				Msg("height found in previous spork, starting to backfill")
 
 			// backfill all the missed events, handling of context cancellation is done by the producer
-			for ev := range r.backfill(ctx, height) {
-				events <- ev
+			for ev := range r.backfill(ctx, r.height) {
+				eventsChan <- ev
 
 				if ev.Err != nil {
 					return
@@ -83,34 +85,34 @@ func (r *RPCSubscriber) Subscribe(ctx context.Context, height uint64) <-chan mod
 
 				// keep updating height, so after we are done back-filling
 				// it will be at the first height in the current spork
-				height = ev.Events.CadenceHeight()
+				r.height = ev.Events.CadenceHeight()
 			}
 
 			// after back-filling is done, increment height by one,
 			// so we start with the height in the current spork
-			height = height + 1
+			r.height = r.height + 1
 		}
 
 		r.logger.Info().
-			Uint64("next-height", height).
+			Uint64("next-height", r.height).
 			Msg("backfilling done, subscribe for live data")
 
 		// subscribe in the current spork, handling of context cancellation is done by the producer
-		for ev := range r.subscribe(ctx, height, access.WithHeartbeatInterval(r.heartbeatInterval)) {
-			events <- ev
+		for ev := range r.subscribe(ctx, r.height) {
+			eventsChan <- ev
 		}
 
 		r.logger.Warn().Msg("ended subscription for events")
 	}()
 
-	return events
+	return eventsChan
 }
 
 // subscribe to events by the provided height and handle any errors.
 //
 // Subscribing to EVM specific events and handle any disconnection errors
 // as well as context cancellations.
-func (r *RPCSubscriber) subscribe(ctx context.Context, height uint64, opts ...access.SubscribeOption) <-chan models.BlockEvents {
+func (r *RPCEventSubscriber) subscribe(ctx context.Context, height uint64) <-chan models.BlockEvents {
 	eventsChan := make(chan models.BlockEvents)
 
 	_, err := r.client.GetBlockHeaderByHeight(ctx, height)
@@ -120,7 +122,13 @@ func (r *RPCSubscriber) subscribe(ctx context.Context, height uint64, opts ...ac
 		return eventsChan
 	}
 
-	eventStream, errChan, err := r.client.SubscribeEventsByBlockHeight(ctx, height, r.blocksFilter(), opts...)
+	// we always use heartbeat interval of 1 to have the least amount of delay from the access node
+	eventStream, errChan, err := r.client.SubscribeEventsByBlockHeight(
+		ctx,
+		height,
+		blocksFilter(r.chain),
+		access.WithHeartbeatInterval(1),
+	)
 	if err != nil {
 		eventsChan <- models.NewBlockEventsError(
 			fmt.Errorf("failed to subscribe to events by block height: %d, with: %w", height, err),
@@ -187,12 +195,12 @@ func (r *RPCSubscriber) subscribe(ctx context.Context, height uint64, opts ...ac
 // and check for each event it receives whether we reached the end, if we reach the end it will increase
 // the height by one (next height), and check if we are still in previous sporks, if so repeat everything,
 // otherwise return.
-func (r *RPCSubscriber) backfill(ctx context.Context, height uint64) <-chan models.BlockEvents {
-	events := make(chan models.BlockEvents)
+func (r *RPCEventSubscriber) backfill(ctx context.Context, height uint64) <-chan models.BlockEvents {
+	eventsChan := make(chan models.BlockEvents)
 
 	go func() {
 		defer func() {
-			close(events)
+			close(eventsChan)
 		}()
 
 		for {
@@ -207,7 +215,7 @@ func (r *RPCSubscriber) backfill(ctx context.Context, height uint64) <-chan mode
 
 			latestHeight, err := r.client.GetLatestHeightForSpork(ctx, height)
 			if err != nil {
-				events <- models.NewBlockEventsError(err)
+				eventsChan <- models.NewBlockEventsError(err)
 				return
 			}
 
@@ -216,8 +224,8 @@ func (r *RPCSubscriber) backfill(ctx context.Context, height uint64) <-chan mode
 				Uint64("last-spork-height", latestHeight).
 				Msg("backfilling spork")
 
-			for ev := range r.subscribe(ctx, height, access.WithHeartbeatInterval(1)) {
-				events <- ev
+			for ev := range r.subscribe(ctx, height) {
+				eventsChan <- ev
 
 				if ev.Err != nil {
 					return
@@ -238,33 +246,7 @@ func (r *RPCSubscriber) backfill(ctx context.Context, height uint64) <-chan mode
 		}
 	}()
 
-	return events
-}
-
-// blockFilter define events we subscribe to:
-// A.{evm}.EVM.BlockExecuted and A.{evm}.EVM.TransactionExecuted,
-// where {evm} is EVM deployed contract address, which depends on the chain ID we configure.
-func (r *RPCSubscriber) blocksFilter() flow.EventFilter {
-	evmAddress := common.Address(systemcontracts.SystemContractsForChain(r.chain).EVMContract.Address)
-
-	blockExecutedEvent := common.NewAddressLocation(
-		nil,
-		evmAddress,
-		string(events.EventTypeBlockExecuted),
-	).ID()
-
-	transactionExecutedEvent := common.NewAddressLocation(
-		nil,
-		evmAddress,
-		string(events.EventTypeTransactionExecuted),
-	).ID()
-
-	return flow.EventFilter{
-		EventTypes: []string{
-			blockExecutedEvent,
-			transactionExecutedEvent,
-		},
-	}
+	return eventsChan
 }
 
 // fetchMissingData is used as a backup mechanism for fetching EVM-related
@@ -272,14 +254,14 @@ func (r *RPCSubscriber) blocksFilter() flow.EventFilter {
 // An inconsistent response could be an EVM block that references EVM
 // transactions which are not present in the response. It falls back
 // to using grpc requests instead of streaming.
-func (r *RPCSubscriber) fetchMissingData(
+func (r *RPCEventSubscriber) fetchMissingData(
 	ctx context.Context,
 	blockEvents flow.BlockEvents,
 ) models.BlockEvents {
 	// remove existing events
 	blockEvents.Events = nil
 
-	for _, eventType := range r.blocksFilter().EventTypes {
+	for _, eventType := range blocksFilter(r.chain).EventTypes {
 		recoveredEvents, err := r.client.GetEventsForHeightRange(
 			ctx,
 			eventType,
@@ -309,7 +291,7 @@ func (r *RPCSubscriber) fetchMissingData(
 // accumulateEventsMissingBlock will keep receiving transaction events until it can produce a valid
 // EVM block event containing a block and transactions. At that point it will reset the recovery mode
 // and return the valid block events.
-func (r *RPCSubscriber) accumulateEventsMissingBlock(events flow.BlockEvents) models.BlockEvents {
+func (r *RPCEventSubscriber) accumulateEventsMissingBlock(events flow.BlockEvents) models.BlockEvents {
 	r.recoveredEvents = append(r.recoveredEvents, events.Events...)
 	events.Events = r.recoveredEvents
 
@@ -329,7 +311,7 @@ func (r *RPCSubscriber) accumulateEventsMissingBlock(events flow.BlockEvents) mo
 // in which case we might miss one of the events (missing transaction), or it can be
 // due to a failure from the system transaction which commits an EVM block, which results
 // in missing EVM block event but present transactions.
-func (r *RPCSubscriber) recover(
+func (r *RPCEventSubscriber) recover(
 	ctx context.Context,
 	events flow.BlockEvents,
 	err error,
@@ -348,4 +330,30 @@ func (r *RPCSubscriber) recover(
 	}
 
 	return models.NewBlockEventsError(err)
+}
+
+// blockFilter define events we subscribe to:
+// A.{evm}.EVM.BlockExecuted and A.{evm}.EVM.TransactionExecuted,
+// where {evm} is EVM deployed contract address, which depends on the chain ID we configure.
+func blocksFilter(chainId flowGo.ChainID) flow.EventFilter {
+	evmAddress := common.Address(systemcontracts.SystemContractsForChain(chainId).EVMContract.Address)
+
+	blockExecutedEvent := common.NewAddressLocation(
+		nil,
+		evmAddress,
+		string(events.EventTypeBlockExecuted),
+	).ID()
+
+	transactionExecutedEvent := common.NewAddressLocation(
+		nil,
+		evmAddress,
+		string(events.EventTypeTransactionExecuted),
+	).ID()
+
+	return flow.EventFilter{
+		EventTypes: []string{
+			blockExecutedEvent,
+			transactionExecutedEvent,
+		},
+	}
 }

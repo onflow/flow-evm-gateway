@@ -3,7 +3,6 @@ package pebble
 import (
 	"encoding/binary"
 	"fmt"
-	"sync"
 
 	"github.com/cockroachdb/pebble"
 	"github.com/onflow/go-ethereum/common"
@@ -19,13 +18,11 @@ var _ storage.ReceiptIndexer = &Receipts{}
 
 type Receipts struct {
 	store *Storage
-	mux   sync.RWMutex
 }
 
 func NewReceipts(store *Storage) *Receipts {
 	return &Receipts{
 		store: store,
-		mux:   sync.RWMutex{},
 	}
 }
 
@@ -37,9 +34,6 @@ func NewReceipts(store *Storage) *Receipts {
 // - receipt block height => list of encoded receipts (1+ per block)
 // - receipt block height => list of bloom filters (1+ per block)
 func (r *Receipts) Store(receipts []*models.Receipt, batch *pebble.Batch) error {
-	r.mux.Lock()
-	defer r.mux.Unlock()
-
 	var blooms []*gethTypes.Bloom
 	var height uint64
 
@@ -91,15 +85,12 @@ func (r *Receipts) Store(receipts []*models.Receipt, batch *pebble.Batch) error 
 }
 
 func (r *Receipts) GetByTransactionID(ID common.Hash) (*models.Receipt, error) {
-	r.mux.RLock()
-	defer r.mux.RUnlock()
-
 	height, err := r.store.get(receiptTxIDToHeightKey, ID.Bytes())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get receipt by tx ID: %s, with: %w", ID, err)
 	}
 
-	receipts, err := r.getByBlockHeight(height, nil)
+	receipts, err := r.getByBlockHeight(height)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"failed to get receipt by height: %d, with: %w",
@@ -118,21 +109,12 @@ func (r *Receipts) GetByTransactionID(ID common.Hash) (*models.Receipt, error) {
 }
 
 func (r *Receipts) GetByBlockHeight(height uint64) ([]*models.Receipt, error) {
-	r.mux.RLock()
-	defer r.mux.RUnlock()
-
-	return r.getByBlockHeight(uint64Bytes(height), nil)
+	return r.getByBlockHeight(uint64Bytes(height))
 }
 
-func (r *Receipts) getByBlockHeight(height []byte, batch *pebble.Batch) ([]*models.Receipt, error) {
-	var val []byte
-	var err error
+func (r *Receipts) getByBlockHeight(height []byte) ([]*models.Receipt, error) {
 
-	if batch != nil {
-		val, err = r.store.batchGet(batch, receiptHeightKey, height)
-	} else {
-		val, err = r.store.get(receiptHeightKey, height)
-	}
+	val, err := r.store.get(receiptHeightKey, height)
 	if err != nil {
 		return nil, err
 	}
@@ -161,9 +143,6 @@ func (r *Receipts) getByBlockHeight(height []byte, batch *pebble.Batch) ([]*mode
 }
 
 func (r *Receipts) BloomsForBlockRange(start, end uint64) ([]*models.BloomsHeight, error) {
-	r.mux.RLock()
-	defer r.mux.RUnlock()
-
 	if start > end {
 		return nil, fmt.Errorf(
 			"%w: start value %d is bigger than end value %d",

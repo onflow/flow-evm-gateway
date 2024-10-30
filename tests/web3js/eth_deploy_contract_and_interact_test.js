@@ -235,4 +235,65 @@ it('deploy contract and interact', async () => {
     )
     assert.equal(gasEstimate, 27398n)
 
+    // check that `eth_call` can handle state overrides
+    let stateOverrides = {
+        [contractAddress]: {
+            stateDiff: {
+                '0x0000000000000000000000000000000000000000000000000000000000000000': '0x00000000000000000000000000000000000000000000000000000000000003e8'
+            }
+        }
+    }
+    let response = await helpers.callRPCMethod(
+        'eth_call',
+        [{ to: contractAddress, data: callRetrieve }, 'latest', stateOverrides]
+    )
+    assert.equal(response.status, 200)
+    assert.isDefined(response.body)
+
+    result = response.body.result
+    assert.equal(
+        result,
+        '0x00000000000000000000000000000000000000000000000000000000000003e8'
+    )
+
+    // check that `eth_estimateGas` can handle state overrides
+    stateOverrides = {
+        [contractAddress]: {
+            stateDiff: {
+                '0x0000000000000000000000000000000000000000000000000000000000000000': '0x00000000000000000000000000000000000000000000000000000000000003e8'
+            }
+        }
+    }
+
+    updateData = deployed.contract.methods.store(100n).encodeABI()
+    response = await helpers.callRPCMethod(
+        'eth_estimateGas',
+        [{ to: contractAddress, data: updateData }, 'latest', stateOverrides]
+    )
+    assert.equal(response.status, 200)
+    assert.isDefined(response.body)
+
+    result = response.body.result
+    assert.equal(result, '0x72c3')
+
+    stateOverrides = {
+        [contractAddress]: {
+            stateDiff: {
+                '0x0000000000000000000000000000000000000000000000000000000000000000': '0x0000000000000000000000000000000000000000000000000000000000000000'
+            }
+        }
+    }
+
+    updateData = deployed.contract.methods.store(100n).encodeABI()
+    response = await helpers.callRPCMethod(
+        'eth_estimateGas',
+        [{ to: contractAddress, data: updateData }, 'latest', stateOverrides]
+    )
+    assert.equal(response.status, 200)
+    assert.isDefined(response.body)
+
+    // setting a storage slot from a zero-value, to a non-zero value has an
+    // increase of about 20,000 gas. Which is quite different to `0x72c3`.
+    result = response.body.result
+    assert.equal(result, '0xb69a')
 })

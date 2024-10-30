@@ -15,17 +15,17 @@ type EventSubscriber struct {
 	mock.Mock
 }
 
-// Subscribe provides a mock function with given fields: ctx, height
-func (_m *EventSubscriber) Subscribe(ctx context.Context, height uint64) <-chan models.BlockEvents {
-	ret := _m.Called(ctx, height)
+// Subscribe provides a mock function with given fields: ctx
+func (_m *EventSubscriber) Subscribe(ctx context.Context) <-chan models.BlockEvents {
+	ret := _m.Called(ctx)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Subscribe")
 	}
 
 	var r0 <-chan models.BlockEvents
-	if rf, ok := ret.Get(0).(func(context.Context, uint64) <-chan models.BlockEvents); ok {
-		r0 = rf(ctx, height)
+	if rf, ok := ret.Get(0).(func(context.Context) <-chan models.BlockEvents); ok {
+		r0 = rf(ctx)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(<-chan models.BlockEvents)
