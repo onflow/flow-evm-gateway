@@ -98,25 +98,19 @@ func (e *Engine) Stop() {
 // drops.
 // All other errors are unexpected.
 func (e *Engine) Run(ctx context.Context) error {
-	latestCadence, err := e.blocks.LatestCadenceHeight()
-	if err != nil {
-		return fmt.Errorf("failed to get latest cadence height: %w", err)
-	}
-
-	e.log.Info().Uint64("start-cadence-height", latestCadence).Msg("starting ingestion")
+	e.log.Info().Msg("starting ingestion")
 
 	e.MarkReady()
 
-	for events := range e.subscriber.Subscribe(ctx, latestCadence) {
+	for events := range e.subscriber.Subscribe(ctx) {
 		if events.Err != nil {
 			return fmt.Errorf(
-				"failure in event subscription at height %d, with: %w",
-				latestCadence,
+				"failure in event subscription with: %w",
 				events.Err,
 			)
 		}
 
-		err = e.processEvents(events.Events)
+		err := e.processEvents(events.Events)
 		if err != nil {
 			e.log.Error().Err(err).Msg("failed to process EVM events")
 			return err
