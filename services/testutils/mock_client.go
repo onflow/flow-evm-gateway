@@ -15,6 +15,9 @@ type MockClient struct {
 	GetBlockHeaderByHeightFunc       func(context.Context, uint64) (*flow.BlockHeader, error)
 	SubscribeEventsByBlockHeightFunc func(context.Context, uint64, flow.EventFilter, ...access.SubscribeOption) (<-chan flow.BlockEvents, <-chan error, error)
 	GetNodeVersionInfoFunc           func(ctx context.Context) (*flow.NodeVersionInfo, error)
+	GetEventsForHeightRangeFunc      func(
+		ctx context.Context, eventType string, startHeight uint64, endHeight uint64,
+	) ([]flow.BlockEvents, error)
 }
 
 func (c *MockClient) GetBlockHeaderByHeight(ctx context.Context, height uint64) (*flow.BlockHeader, error) {
@@ -36,6 +39,15 @@ func (c *MockClient) SubscribeEventsByBlockHeight(
 	opts ...access.SubscribeOption,
 ) (<-chan flow.BlockEvents, <-chan error, error) {
 	return c.SubscribeEventsByBlockHeightFunc(ctx, startHeight, filter, opts...)
+}
+
+func (c *MockClient) GetEventsForHeightRange(
+	ctx context.Context, eventType string, startHeight uint64, endHeight uint64,
+) ([]flow.BlockEvents, error) {
+	if c.GetEventsForHeightRangeFunc != nil {
+		return c.GetEventsForHeightRangeFunc(ctx, eventType, startHeight, endHeight)
+	}
+	return c.Client.GetEventsForHeightRange(ctx, eventType, startHeight, endHeight)
 }
 
 func SetupClientForRange(startHeight uint64, endHeight uint64) *MockClient {
@@ -84,6 +96,25 @@ func SetupClient(startHeight uint64, endHeight uint64) (*MockClient, chan flow.B
 			opts ...access.SubscribeOption,
 		) (<-chan flow.BlockEvents, <-chan error, error) {
 			return events, make(chan error), nil
+		},
+		GetEventsForHeightRangeFunc: func(
+			ctx context.Context, eventType string, sh uint64, eh uint64,
+		) ([]flow.BlockEvents, error) {
+			if sh < startHeight || sh > endHeight {
+				return nil, storage.ErrNotFound
+			}
+			if eh < startHeight || eh > endHeight {
+				return nil, storage.ErrNotFound
+			}
+
+			evts := make([]flow.BlockEvents, 0, eh-sh+1)
+			for i := uint64(0); i <= eh-sh; i++ {
+				evts = append(evts, flow.BlockEvents{
+					Height: sh + i,
+				})
+			}
+
+			return evts, nil
 		},
 	}, events
 }

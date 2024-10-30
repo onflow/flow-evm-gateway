@@ -1,8 +1,6 @@
 package storage
 
 import (
-	"math/big"
-
 	"github.com/cockroachdb/pebble"
 	"github.com/goccy/go-json"
 	"github.com/onflow/flow-go-sdk"
@@ -44,7 +42,6 @@ type BlockIndexer interface {
 	LatestCadenceHeight() (uint64, error)
 
 	// SetLatestCadenceHeight sets the latest Cadence height.
-	// Batch is required to batch multiple indexer operations, skipped if nil.
 	SetLatestCadenceHeight(cadenceHeight uint64, batch *pebble.Batch) error
 
 	// GetCadenceHeight returns the Cadence height that matches the
@@ -95,19 +92,6 @@ type TransactionIndexer interface {
 	// Expected errors:
 	// - errors.NotFound if the transaction with the ID is not found.
 	Get(ID common.Hash) (models.Transaction, error)
-}
-
-type AccountIndexer interface {
-	// Update account with executed transactions.
-	// Batch is required to batch multiple indexer operations, skipped if nil.
-	Update(tx models.Transaction, receipt *models.Receipt, batch *pebble.Batch) error
-
-	// GetNonce gets an account nonce. If no nonce was indexed it returns 0.
-	// todo add getting nonce at provided block height / hash
-	GetNonce(address common.Address) (uint64, error)
-
-	// GetBalance gets an account balance. If no balance was indexed it returns 0.
-	GetBalance(address common.Address) (*big.Int, error)
 }
 
 type TraceIndexer interface {
