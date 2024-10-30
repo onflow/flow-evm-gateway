@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	flowGo "github.com/onflow/flow-go/model/flow"
+
 	pebbleDB "github.com/cockroachdb/pebble"
 	"github.com/onflow/flow-go-sdk"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
@@ -11,8 +13,11 @@ import (
 
 	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/models"
+	"github.com/onflow/flow-evm-gateway/services/replayer"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
+
+	"github.com/onflow/flow-go/fvm/evm/offchain/sync"
 )
 
 var _ models.Engine = &Engine{}
@@ -35,29 +40,37 @@ type Engine struct {
 	*models.EngineStatus
 
 	subscriber      EventSubscriber
+	blocksProvider  *replayer.BlocksProvider
 	store           *pebble.Storage
+	registerStore   *pebble.RegisterStorage
 	blocks          storage.BlockIndexer
 	receipts        storage.ReceiptIndexer
 	transactions    storage.TransactionIndexer
 	accounts        storage.AccountIndexer
+	traces          storage.TraceIndexer
 	log             zerolog.Logger
 	evmLastHeight   *models.SequentialHeight
 	blocksPublisher *models.Publisher[*models.Block]
 	logsPublisher   *models.Publisher[[]*gethTypes.Log]
 	collector       metrics.Collector
+	replayerConfig  replayer.Config
 }
 
 func NewEventIngestionEngine(
 	subscriber EventSubscriber,
+	blocksProvider *replayer.BlocksProvider,
 	store *pebble.Storage,
+	registerStore *pebble.RegisterStorage,
 	blocks storage.BlockIndexer,
 	receipts storage.ReceiptIndexer,
 	transactions storage.TransactionIndexer,
 	accounts storage.AccountIndexer,
+	traces storage.TraceIndexer,
 	blocksPublisher *models.Publisher[*models.Block],
 	logsPublisher *models.Publisher[[]*gethTypes.Log],
 	log zerolog.Logger,
 	collector metrics.Collector,
+	replayerConfig replayer.Config,
 ) *Engine {
 	log = log.With().Str("component", "ingestion").Logger()
 
@@ -65,15 +78,19 @@ func NewEventIngestionEngine(
 		EngineStatus: models.NewEngineStatus(),
 
 		subscriber:      subscriber,
+		blocksProvider:  blocksProvider,
 		store:           store,
+		registerStore:   registerStore,
 		blocks:          blocks,
 		receipts:        receipts,
 		transactions:    transactions,
 		accounts:        accounts,
+		traces:          traces,
 		log:             log,
 		blocksPublisher: blocksPublisher,
 		logsPublisher:   logsPublisher,
 		collector:       collector,
+		replayerConfig:  replayerConfig,
 	}
 }
 
@@ -98,25 +115,19 @@ func (e *Engine) Stop() {
 // drops.
 // All other errors are unexpected.
 func (e *Engine) Run(ctx context.Context) error {
-	latestCadence, err := e.blocks.LatestCadenceHeight()
-	if err != nil {
-		return fmt.Errorf("failed to get latest cadence height: %w", err)
-	}
-
-	e.log.Info().Uint64("start-cadence-height", latestCadence).Msg("starting ingestion")
+	e.log.Info().Msg("starting ingestion")
 
 	e.MarkReady()
 
-	for events := range e.subscriber.Subscribe(ctx, latestCadence) {
+	for events := range e.subscriber.Subscribe(ctx) {
 		if events.Err != nil {
 			return fmt.Errorf(
-				"failure in event subscription at height %d, with: %w",
-				latestCadence,
+				"failure in event subscription with: %w",
 				events.Err,
 			)
 		}
 
-		err = e.processEvents(events.Events)
+		err := e.processEvents(events.Events)
 		if err != nil {
 			e.log.Error().Err(err).Msg("failed to process EVM events")
 			return err
@@ -157,11 +168,52 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 		return nil // nothing else to do this was heartbeat event with not event payloads
 	}
 
-	batch := e.store.NewBatch()
-	defer batch.Close()
+	// TODO(JanezP): accounts need an indexed batch. Investigate why and try to switch to non-indexed batch
+	batch := e.store.NewIndexedBatch()
+	defer func(batch *pebbleDB.Batch) {
+		err := batch.Close()
+		if err != nil {
+			e.log.Fatal().Err(err).Msg("failed to close batch")
+		}
+	}(batch)
 
-	// we first index the block
-	err := e.indexBlock(
+	// Step 1: Re-execute all transactions on the latest EVM block
+
+	// Step 1.1: Notify the `BlocksProvider` of the newly received EVM block
+	if err := e.blocksProvider.OnBlockReceived(events.Block()); err != nil {
+		return err
+	}
+
+	replayer := sync.NewReplayer(
+		e.replayerConfig.ChainID,
+		e.replayerConfig.RootAddr,
+		e.registerStore,
+		e.blocksProvider,
+		e.log,
+		e.replayerConfig.CallTracerCollector.TxTracer(),
+		e.replayerConfig.ValidateResults,
+	)
+
+	// Step 1.2: Replay all block transactions
+	// If `ReplayBlock` returns any error, we abort the EVM events processing
+	blockEvents := events.BlockEventPayload()
+	res, err := replayer.ReplayBlock(events.TxEventPayloads(), blockEvents)
+	if err != nil {
+		return fmt.Errorf("failed to replay block on height: %d, with: %w", events.Block().Height, err)
+	}
+
+	// Step 2: Write all the necessary changes to each storage
+
+	// Step 2.1: Write all the EVM state changes to `StorageProvider`
+	err = e.registerStore.Store(registerEntriesFromKeyValue(res.StorageRegisterUpdates()), blockEvents.Height, batch)
+	if err != nil {
+		return fmt.Errorf("failed to store state changes on block: %d", events.Block().Height)
+	}
+
+	// Step 2.2: Write the latest EVM block to `Blocks` storage
+	// This verifies the EVM height is sequential, and if not it will return an error
+	// TODO(janezp): can we do this before re-execution of the block?
+	err = e.indexBlock(
 		events.CadenceHeight(),
 		events.CadenceBlockID(),
 		events.Block(),
@@ -171,6 +223,8 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 		return fmt.Errorf("failed to index block %d event: %w", events.Block().Height, err)
 	}
 
+	// Step 2.3: Write all EVM transactions of the current block,
+	// to `Transactions` storage
 	for i, tx := range events.Transactions() {
 		receipt := events.Receipts()[i]
 
@@ -180,9 +234,25 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 		}
 	}
 
+	// Step 2.4: Write all EVM transaction receipts of the current block,
+	// to `Receipts` storage
 	err = e.indexReceipts(events.Receipts(), batch)
 	if err != nil {
 		return fmt.Errorf("failed to index receipts for block %d event: %w", events.Block().Height, err)
+	}
+
+	traceCollector := e.replayerConfig.CallTracerCollector
+	for _, tx := range events.Transactions() {
+		txHash := tx.Hash()
+		traceResult, err := traceCollector.Collect(txHash)
+		if err != nil {
+			return err
+		}
+
+		err = e.traces.StoreTransaction(txHash, traceResult, batch)
+		if err != nil {
+			return err
+		}
 	}
 
 	if err := batch.Commit(pebbleDB.Sync); err != nil {
@@ -277,4 +347,15 @@ func (e *Engine) indexReceipts(
 	}
 
 	return nil
+}
+
+func registerEntriesFromKeyValue(keyValue map[flowGo.RegisterID]flowGo.RegisterValue) []flowGo.RegisterEntry {
+	entries := make([]flowGo.RegisterEntry, 0, len(keyValue))
+	for k, v := range keyValue {
+		entries = append(entries, flowGo.RegisterEntry{
+			Key:   k,
+			Value: v,
+		})
+	}
+	return entries
 }
