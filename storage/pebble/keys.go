@@ -1,6 +1,10 @@
 package pebble
 
-import "encoding/binary"
+import (
+	"encoding/binary"
+
+	"github.com/cockroachdb/pebble"
+)
 
 const (
 	// block keys
@@ -17,16 +21,11 @@ const (
 	receiptHeightKey       = byte(21)
 	bloomHeightKey         = byte(22)
 
-	// account keys
-	accountNonceKey   = byte(30)
-	accountBalanceKey = byte(31)
-
 	// traces keys
 	traceTxIDKey = byte(40)
 
-	// ledger value
-	ledgerValue     = byte(50)
-	ledgerSlabIndex = byte(51)
+	// registers
+	registerKeyMarker = byte(50)
 
 	// special keys
 	latestEVMHeightKey     = byte(100)
@@ -59,4 +58,23 @@ func uint64Bytes(height uint64) []byte {
 	b := make([]byte, 8)
 	binary.BigEndian.PutUint64(b, height)
 	return b
+}
+
+func NewMVCCComparer() *pebble.Comparer {
+	comparer := *pebble.DefaultComparer
+	comparer.Split = func(a []byte) int {
+		if len(a) == 0 {
+			// edge case. Not sure if this is possible, but just in case
+			return 0
+		}
+		if a[0] == registerKeyMarker {
+			// special case for registers
+			return len(a) - 8
+		}
+		// default comparer
+		return len(a)
+	}
+	comparer.Name = "flow.MVCCComparer"
+
+	return &comparer
 }

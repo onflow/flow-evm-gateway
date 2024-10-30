@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	flowGo "github.com/onflow/flow-go/model/flow"
+
 	pebbleDB "github.com/cockroachdb/pebble"
 	"github.com/onflow/flow-go-sdk"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
@@ -11,8 +13,11 @@ import (
 
 	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/models"
+	"github.com/onflow/flow-evm-gateway/services/replayer"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
+
+	"github.com/onflow/flow-go/fvm/evm/offchain/sync"
 )
 
 var _ models.Engine = &Engine{}
@@ -35,29 +40,35 @@ type Engine struct {
 	*models.EngineStatus
 
 	subscriber      EventSubscriber
+	blocksProvider  *replayer.BlocksProvider
 	store           *pebble.Storage
+	registerStore   *pebble.RegisterStorage
 	blocks          storage.BlockIndexer
 	receipts        storage.ReceiptIndexer
 	transactions    storage.TransactionIndexer
-	accounts        storage.AccountIndexer
+	traces          storage.TraceIndexer
 	log             zerolog.Logger
 	evmLastHeight   *models.SequentialHeight
 	blocksPublisher *models.Publisher[*models.Block]
 	logsPublisher   *models.Publisher[[]*gethTypes.Log]
 	collector       metrics.Collector
+	replayerConfig  replayer.Config
 }
 
 func NewEventIngestionEngine(
 	subscriber EventSubscriber,
+	blocksProvider *replayer.BlocksProvider,
 	store *pebble.Storage,
+	registerStore *pebble.RegisterStorage,
 	blocks storage.BlockIndexer,
 	receipts storage.ReceiptIndexer,
 	transactions storage.TransactionIndexer,
-	accounts storage.AccountIndexer,
+	traces storage.TraceIndexer,
 	blocksPublisher *models.Publisher[*models.Block],
 	logsPublisher *models.Publisher[[]*gethTypes.Log],
 	log zerolog.Logger,
 	collector metrics.Collector,
+	replayerConfig replayer.Config,
 ) *Engine {
 	log = log.With().Str("component", "ingestion").Logger()
 
@@ -65,21 +76,25 @@ func NewEventIngestionEngine(
 		EngineStatus: models.NewEngineStatus(),
 
 		subscriber:      subscriber,
+		blocksProvider:  blocksProvider,
 		store:           store,
+		registerStore:   registerStore,
 		blocks:          blocks,
 		receipts:        receipts,
 		transactions:    transactions,
-		accounts:        accounts,
+		traces:          traces,
 		log:             log,
 		blocksPublisher: blocksPublisher,
 		logsPublisher:   logsPublisher,
 		collector:       collector,
+		replayerConfig:  replayerConfig,
 	}
 }
 
 // Stop the engine.
 func (e *Engine) Stop() {
-	// todo
+	e.MarkDone()
+	<-e.Stopped()
 }
 
 // Run the Cadence event ingestion engine.
@@ -98,29 +113,56 @@ func (e *Engine) Stop() {
 // drops.
 // All other errors are unexpected.
 func (e *Engine) Run(ctx context.Context) error {
-	latestCadence, err := e.blocks.LatestCadenceHeight()
-	if err != nil {
-		return fmt.Errorf("failed to get latest cadence height: %w", err)
-	}
-
-	e.log.Info().Uint64("start-cadence-height", latestCadence).Msg("starting ingestion")
+	e.log.Info().Msg("starting ingestion")
 
 	e.MarkReady()
+	defer e.MarkStopped()
 
-	for events := range e.subscriber.Subscribe(ctx, latestCadence) {
-		if events.Err != nil {
-			return fmt.Errorf(
-				"failure in event subscription at height %d, with: %w",
-				latestCadence,
-				events.Err,
-			)
+	events := e.subscriber.Subscribe(ctx)
+
+	for {
+		select {
+		case <-e.Done():
+			// stop the engine
+			return nil
+		case events, ok := <-events:
+			if !ok {
+				return nil
+			}
+			if events.Err != nil {
+				return fmt.Errorf(
+					"failure in event subscription with: %w",
+					events.Err,
+				)
+			}
+
+			err := e.processEvents(events.Events)
+			if err != nil {
+				e.log.Error().Err(err).Msg("failed to process EVM events")
+				return err
+			}
 		}
+	}
+}
 
-		err = e.processEvents(events.Events)
+// withBatch will execute the provided function with a new batch, and commit the batch
+// afterwards if no error is returned.
+func (e *Engine) withBatch(f func(batch *pebbleDB.Batch) error) error {
+	batch := e.store.NewBatch()
+	defer func(batch *pebbleDB.Batch) {
+		err := batch.Close()
 		if err != nil {
-			e.log.Error().Err(err).Msg("failed to process EVM events")
-			return err
+			e.log.Fatal().Err(err).Msg("failed to close batch")
 		}
+	}(batch)
+
+	err := f(batch)
+	if err != nil {
+		return err
+	}
+
+	if err := batch.Commit(pebbleDB.Sync); err != nil {
+		return fmt.Errorf("failed to commit batch: %w", err)
 	}
 
 	return nil
@@ -144,24 +186,85 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 		Int("cadence-event-length", events.Length()).
 		Msg("received new cadence evm events")
 
+	err := e.withBatch(
+		func(batch *pebbleDB.Batch) error {
+			return e.indexEvents(events, batch)
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to index events for cadence block %d: %w", events.CadenceHeight(), err)
+	}
+
+	e.collector.CadenceHeightIndexed(events.CadenceHeight())
+
+	if events.Empty() {
+		return nil // nothing else to do this was heartbeat event with not event payloads
+	}
+
+	// emit block event and logs, only after we successfully commit the data
+	e.blocksPublisher.Publish(events.Block())
+	for _, r := range events.Receipts() {
+		if len(r.Logs) > 0 {
+			e.logsPublisher.Publish(r.Logs)
+		}
+	}
+
+	e.collector.EVMTransactionIndexed(len(events.Transactions()))
+	e.collector.EVMHeightIndexed(events.Block().Height)
+	return nil
+}
+
+// indexEvents will replay the evm transactions using the block events and index all results.
+func (e *Engine) indexEvents(events *models.CadenceEvents, batch *pebbleDB.Batch) error {
 	// if heartbeat interval with no data still update the cadence height
 	if events.Empty() {
-		if err := e.blocks.SetLatestCadenceHeight(events.CadenceHeight(), nil); err != nil {
+		if err := e.blocks.SetLatestCadenceHeight(events.CadenceHeight(), batch); err != nil {
 			return fmt.Errorf(
 				"failed to update to latest cadence height: %d, during events ingestion: %w",
 				events.CadenceHeight(),
 				err,
 			)
 		}
-		e.collector.CadenceHeightIndexed(events.CadenceHeight())
 		return nil // nothing else to do this was heartbeat event with not event payloads
 	}
 
-	batch := e.store.NewBatch()
-	defer batch.Close()
+	// Step 1: Re-execute all transactions on the latest EVM block
 
-	// we first index the block
-	err := e.indexBlock(
+	// Step 1.1: Notify the `BlocksProvider` of the newly received EVM block
+	if err := e.blocksProvider.OnBlockReceived(events.Block()); err != nil {
+		return err
+	}
+
+	replayer := sync.NewReplayer(
+		e.replayerConfig.ChainID,
+		e.replayerConfig.RootAddr,
+		e.registerStore,
+		e.blocksProvider,
+		e.log,
+		e.replayerConfig.CallTracerCollector.TxTracer(),
+		e.replayerConfig.ValidateResults,
+	)
+
+	// Step 1.2: Replay all block transactions
+	// If `ReplayBlock` returns any error, we abort the EVM events processing
+	blockEvents := events.BlockEventPayload()
+	res, err := replayer.ReplayBlock(events.TxEventPayloads(), blockEvents)
+	if err != nil {
+		return fmt.Errorf("failed to replay block on height: %d, with: %w", events.Block().Height, err)
+	}
+
+	// Step 2: Write all the necessary changes to each storage
+
+	// Step 2.1: Write all the EVM state changes to `StorageProvider`
+	err = e.registerStore.Store(registerEntriesFromKeyValue(res.StorageRegisterUpdates()), blockEvents.Height, batch)
+	if err != nil {
+		return fmt.Errorf("failed to store state changes on block: %d", events.Block().Height)
+	}
+
+	// Step 2.2: Write the latest EVM block to `Blocks` storage
+	// This verifies the EVM height is sequential, and if not it will return an error
+	// TODO(janezp): can we do this before re-execution of the block?
+	err = e.indexBlock(
 		events.CadenceHeight(),
 		events.CadenceBlockID(),
 		events.Block(),
@@ -171,6 +274,8 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 		return fmt.Errorf("failed to index block %d event: %w", events.Block().Height, err)
 	}
 
+	// Step 2.3: Write all EVM transactions of the current block,
+	// to `Transactions` storage
 	for i, tx := range events.Transactions() {
 		receipt := events.Receipts()[i]
 
@@ -180,27 +285,27 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 		}
 	}
 
+	// Step 2.4: Write all EVM transaction receipts of the current block,
+	// to `Receipts` storage
 	err = e.indexReceipts(events.Receipts(), batch)
 	if err != nil {
 		return fmt.Errorf("failed to index receipts for block %d event: %w", events.Block().Height, err)
 	}
 
-	if err := batch.Commit(pebbleDB.Sync); err != nil {
-		return fmt.Errorf("failed to commit indexed data for Cadence block %d: %w", events.CadenceHeight(), err)
-	}
+	traceCollector := e.replayerConfig.CallTracerCollector
+	for _, tx := range events.Transactions() {
+		txHash := tx.Hash()
+		traceResult, err := traceCollector.Collect(txHash)
+		if err != nil {
+			return err
+		}
 
-	// emit block event and logs, only after we successfully commit the data
-	e.blocksPublisher.Publish(events.Block())
-
-	for _, r := range events.Receipts() {
-		if len(r.Logs) > 0 {
-			e.logsPublisher.Publish(r.Logs)
+		err = e.traces.StoreTransaction(txHash, traceResult, batch)
+		if err != nil {
+			return err
 		}
 	}
 
-	e.collector.EVMTransactionIndexed(len(events.Transactions()))
-	e.collector.EVMHeightIndexed(events.Block().Height)
-	e.collector.CadenceHeightIndexed(events.CadenceHeight())
 	return nil
 }
 
@@ -257,10 +362,6 @@ func (e *Engine) indexTransaction(
 		return fmt.Errorf("failed to store tx: %s, with: %w", tx.Hash(), err)
 	}
 
-	if err := e.accounts.Update(tx, receipt, batch); err != nil {
-		return fmt.Errorf("failed to update accounts for tx: %s, with: %w", tx.Hash(), err)
-	}
-
 	return nil
 }
 
@@ -277,4 +378,15 @@ func (e *Engine) indexReceipts(
 	}
 
 	return nil
+}
+
+func registerEntriesFromKeyValue(keyValue map[flowGo.RegisterID]flowGo.RegisterValue) []flowGo.RegisterEntry {
+	entries := make([]flowGo.RegisterEntry, 0, len(keyValue))
+	for k, v := range keyValue {
+		entries = append(entries, flowGo.RegisterEntry{
+			Key:   k,
+			Value: v,
+		})
+	}
+	return entries
 }
