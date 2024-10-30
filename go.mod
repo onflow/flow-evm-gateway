@@ -3,7 +3,6 @@ module github.com/onflow/flow-evm-gateway
 go 1.22
 
 require (
-	cloud.google.com/go/storage v1.36.0
 	github.com/cockroachdb/pebble v1.1.1
 	github.com/goccy/go-json v0.10.2
 	github.com/hashicorp/golang-lru/v2 v2.0.7
@@ -23,7 +22,6 @@ require (
 	github.com/stretchr/testify v1.9.0
 	golang.org/x/exp v0.0.0-20240119083558-1b970713d09a
 	golang.org/x/sync v0.8.0
-	google.golang.org/api v0.162.0
 	google.golang.org/grpc v1.63.2
 )
 
@@ -33,6 +31,7 @@ require (
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
 	cloud.google.com/go/iam v1.1.6 // indirect
 	cloud.google.com/go/kms v1.15.7 // indirect
+	cloud.google.com/go/storage v1.36.0 // indirect
 	github.com/DataDog/zstd v1.5.2 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/SaveTheRbtz/mph v0.1.1-0.20240117162131-4166ec7869bc // indirect
@@ -200,6 +199,7 @@ require (
 	golang.org/x/time v0.5.0 // indirect
 	golang.org/x/xerrors v0.0.0-20231012003039-104605ab7028 // indirect
 	gonum.org/v1/gonum v0.14.0 // indirect
+	google.golang.org/api v0.162.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/genproto v0.0.0-20240227224415-6ceb2ff114de // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20240227224415-6ceb2ff114de // indirect
