@@ -7,9 +7,14 @@ import (
 	"math"
 	"time"
 
+	pebbleDB "github.com/cockroachdb/pebble"
+
 	"github.com/onflow/flow-go-sdk/access"
 	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/onflow/flow-go-sdk/crypto"
+	"github.com/onflow/flow-go/fvm/environment"
+	"github.com/onflow/flow-go/fvm/evm"
+	flowGo "github.com/onflow/flow-go/model/flow"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-limiter/memorystore"
@@ -21,18 +26,18 @@ import (
 	"github.com/onflow/flow-evm-gateway/models"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/services/ingestion"
+	"github.com/onflow/flow-evm-gateway/services/replayer"
 	"github.com/onflow/flow-evm-gateway/services/requester"
-	"github.com/onflow/flow-evm-gateway/services/traces"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
 )
 
 type Storages struct {
 	Storage      *pebble.Storage
+	Registers    *pebble.RegisterStorage
 	Blocks       storage.BlockIndexer
 	Transactions storage.TransactionIndexer
 	Receipts     storage.ReceiptIndexer
-	Accounts     storage.AccountIndexer
 	Traces       storage.TraceIndexer
 }
 
@@ -52,7 +57,6 @@ type Bootstrap struct {
 	server     *api.Server
 	metrics    *metrics.Server
 	events     *ingestion.Engine
-	traces     *traces.Engine
 	profiler   *api.ProfileServer
 }
 
@@ -116,95 +120,51 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 		Uint64("missed-heights", latestCadenceBlock.Height-latestCadenceHeight).
 		Msg("indexing cadence height information")
 
+	chainID := b.config.FlowNetworkID
+
 	// create event subscriber
-	subscriber := ingestion.NewRPCSubscriber(
-		b.client,
-		b.config.HeartbeatInterval,
-		b.config.FlowNetworkID,
+	subscriber := ingestion.NewRPCEventSubscriber(
 		b.logger,
+		b.client,
+		chainID,
+		latestCadenceHeight,
 	)
+
+	callTracerCollector, err := replayer.NewCallTracerCollector(b.logger)
+	if err != nil {
+		return err
+	}
+	blocksProvider := replayer.NewBlocksProvider(
+		b.storages.Blocks,
+		chainID,
+		callTracerCollector.TxTracer(),
+	)
+	replayerConfig := replayer.Config{
+		ChainID:             chainID,
+		RootAddr:            evm.StorageAccountAddress(chainID),
+		CallTracerCollector: callTracerCollector,
+		ValidateResults:     true,
+	}
 
 	// initialize event ingestion engine
 	b.events = ingestion.NewEventIngestionEngine(
 		subscriber,
+		blocksProvider,
 		b.storages.Storage,
+		b.storages.Registers,
 		b.storages.Blocks,
 		b.storages.Receipts,
 		b.storages.Transactions,
-		b.storages.Accounts,
+		b.storages.Traces,
 		b.publishers.Block,
 		b.publishers.Logs,
 		b.logger,
 		b.collector,
+		replayerConfig,
 	)
 
 	StartEngine(ctx, b.events, l)
 	return nil
-}
-
-func (b *Bootstrap) StartTraceDownloader(ctx context.Context) error {
-	l := b.logger.With().Str("component", "bootstrap-traces").Logger()
-	l.Info().Msg("starting engine")
-
-	// create gcp downloader
-	downloader, err := traces.NewGCPDownloader(b.config.TracesBucketName, b.logger)
-	if err != nil {
-		return err
-	}
-
-	// initialize trace downloader engine
-	b.traces = traces.NewTracesIngestionEngine(
-		b.publishers.Block,
-		b.storages.Blocks,
-		b.storages.Traces,
-		downloader,
-		b.logger,
-		b.collector,
-	)
-
-	StartEngine(ctx, b.traces, l)
-
-	if b.config.TracesBackfillStartHeight > 0 {
-		startHeight := b.config.TracesBackfillStartHeight
-		if _, err := b.storages.Blocks.GetByHeight(startHeight); err != nil {
-			return fmt.Errorf("failed to get provided start height %d in db: %w", startHeight, err)
-		}
-
-		cadenceStartHeight, err := b.storages.Blocks.GetCadenceHeight(startHeight)
-		if err != nil {
-			return fmt.Errorf("failed to get cadence height for backfill start height %d: %w", startHeight, err)
-		}
-
-		if cadenceStartHeight < b.config.InitCadenceHeight {
-			b.logger.Warn().
-				Uint64("evm-start-height", startHeight).
-				Uint64("cadence-start-height", cadenceStartHeight).
-				Uint64("init-cadence-height", b.config.InitCadenceHeight).
-				Msg("backfill start height is before initial cadence height. data may be missing from configured traces bucket")
-		}
-
-		endHeight := b.config.TracesBackfillEndHeight
-		if endHeight == 0 {
-			endHeight, err = b.storages.Blocks.LatestEVMHeight()
-			if err != nil {
-				return fmt.Errorf("failed to get latest EVM height: %w", err)
-			}
-		} else if _, err := b.storages.Blocks.GetByHeight(endHeight); err != nil {
-			return fmt.Errorf("failed to get provided end height %d in db: %w", endHeight, err)
-		}
-
-		go b.traces.Backfill(startHeight, endHeight)
-	}
-
-	return nil
-}
-
-func (b *Bootstrap) StopTraceDownloader() {
-	if b.traces == nil {
-		return
-	}
-	b.logger.Warn().Msg("stopping trace downloader engine")
-	b.traces.Stop()
 }
 
 func (b *Bootstrap) StopEventIngestion() {
@@ -249,7 +209,15 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 		b.logger,
 	)
 
+	blocksProvider := replayer.NewBlocksProvider(
+		b.storages.Blocks,
+		b.config.FlowNetworkID,
+		nil,
+	)
+
 	evm, err := requester.NewEVM(
+		b.storages.Registers,
+		blocksProvider,
 		b.client,
 		b.config,
 		signer,
@@ -281,7 +249,6 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 		b.storages.Blocks,
 		b.storages.Transactions,
 		b.storages.Receipts,
-		b.storages.Accounts,
 		ratelimiter,
 		b.collector,
 	)
@@ -309,10 +276,17 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 		ratelimiter,
 	)
 
-	var debugAPI *api.DebugAPI
-	if b.config.TracesEnabled {
-		debugAPI = api.NewDebugAPI(b.storages.Traces, b.storages.Blocks, b.logger, b.collector)
-	}
+	debugAPI := api.NewDebugAPI(
+		b.storages.Registers,
+		b.storages.Traces,
+		b.storages.Blocks,
+		b.storages.Transactions,
+		b.storages.Receipts,
+		b.client,
+		b.config,
+		b.logger,
+		b.collector,
+	)
 
 	var walletAPI *api.WalletAPI
 	if b.config.WalletEnabled {
@@ -411,6 +385,16 @@ func (b *Bootstrap) StopProfilerServer() {
 	}
 }
 
+func (b *Bootstrap) StopDB() {
+	if b.storages == nil || b.storages.Storage == nil {
+		return
+	}
+	err := b.storages.Storage.Close()
+	if err != nil {
+		b.logger.Err(err).Msg("PebbleDB graceful shutdown failed")
+	}
+}
+
 // StartEngine starts provided engine and panics if there are startup errors.
 func StartEngine(
 	ctx context.Context,
@@ -488,6 +472,8 @@ func setupStorage(
 	}
 
 	blocks := pebble.NewBlocks(store, config.FlowNetworkID)
+	storageAddress := evm.StorageAccountAddress(config.FlowNetworkID)
+	registerStore := pebble.NewRegisterStorage(store, storageAddress)
 
 	// hard set the start cadence height, this is used when force reindexing
 	if config.ForceStartCadenceHeight != 0 {
@@ -499,13 +485,44 @@ func setupStorage(
 
 	// if database is not initialized require init height
 	if _, err := blocks.LatestCadenceHeight(); errors.Is(err, errs.ErrStorageNotInitialized) {
+		batch := store.NewBatch()
+		defer func(batch *pebbleDB.Batch) {
+			err := batch.Close()
+			if err != nil {
+				// we don't know what went wrong, so this is fatal
+				logger.Fatal().Err(err).Msg("failed to close batch")
+			}
+		}(batch)
+
 		cadenceHeight := config.InitCadenceHeight
+		evmBlokcHeight := uint64(0)
 		cadenceBlock, err := client.GetBlockHeaderByHeight(context.Background(), cadenceHeight)
 		if err != nil {
 			return nil, fmt.Errorf("could not fetch provided cadence height, make sure it's correct: %w", err)
 		}
 
-		if err := blocks.InitHeights(cadenceHeight, cadenceBlock.ID); err != nil {
+		snapshot, err := registerStore.GetSnapshotAt(evmBlokcHeight)
+		if err != nil {
+			return nil, fmt.Errorf("could not get register snapshot at block height %d: %w", 0, err)
+		}
+
+		delta := storage.NewRegisterDelta(snapshot)
+		accountStatus := environment.NewAccountStatus()
+		err = delta.SetValue(
+			storageAddress[:],
+			[]byte(flowGo.AccountStatusKey),
+			accountStatus.ToBytes(),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("could not set account status: %w", err)
+		}
+
+		err = registerStore.Store(delta.GetUpdates(), evmBlokcHeight, batch)
+		if err != nil {
+			return nil, fmt.Errorf("could not store register updates: %w", err)
+		}
+
+		if err := blocks.InitHeights(cadenceHeight, cadenceBlock.ID, batch); err != nil {
 			return nil, fmt.Errorf(
 				"failed to init the database for block height: %d and ID: %s, with : %w",
 				cadenceHeight,
@@ -513,15 +530,26 @@ func setupStorage(
 				err,
 			)
 		}
-		logger.Info().Msgf("database initialized with cadence height: %d", cadenceHeight)
+
+		err = batch.Commit(pebbleDB.Sync)
+		if err != nil {
+			return nil, fmt.Errorf("could not commit register updates: %w", err)
+		}
+
+		logger.Info().
+			Stringer("fvm_address_for_evm_storage_account", storageAddress).
+			Msgf("database initialized with cadence height: %d", cadenceHeight)
 	}
+	//else {
+	//	// TODO(JanezP): verify storage account owner is correct
+	//}
 
 	return &Storages{
 		Storage:      store,
 		Blocks:       blocks,
+		Registers:    registerStore,
 		Transactions: pebble.NewTransactions(store),
 		Receipts:     pebble.NewReceipts(store),
-		Accounts:     pebble.NewAccounts(store),
 		Traces:       pebble.NewTraces(store),
 	}, nil
 }
@@ -533,12 +561,6 @@ func Run(ctx context.Context, cfg *config.Config, ready chan struct{}) error {
 	boot, err := New(cfg)
 	if err != nil {
 		return err
-	}
-
-	if cfg.TracesEnabled {
-		if err := boot.StartTraceDownloader(ctx); err != nil {
-			return fmt.Errorf("failed to start trace downloader engine: %w", err)
-		}
 	}
 
 	if err := boot.StartEventIngestion(ctx); err != nil {
@@ -566,8 +588,8 @@ func Run(ctx context.Context, cfg *config.Config, ready chan struct{}) error {
 
 	boot.StopEventIngestion()
 	boot.StopMetricsServer()
-	boot.StopTraceDownloader()
 	boot.StopAPIServer()
+	boot.StopDB()
 
 	return nil
 }

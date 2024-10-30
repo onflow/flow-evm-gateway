@@ -32,6 +32,14 @@ func Test_DecodePastBlockFormat(t *testing.T) {
 	block, err := NewBlockFromBytes(blockBytes)
 	require.NoError(t, err)
 
+	blockHash, err := block.Hash()
+	require.NoError(t, err)
+
+	assert.Equal(
+		t,
+		gethCommon.HexToHash("0xcad79e3019da8014f623f351f01c88d1bcb4613352d4801548c6b07992fd1393"),
+		blockHash,
+	)
 	assert.Equal(
 		t,
 		gethCommon.HexToHash("0x05aa4a6edbcf6fa81178566596be1c7fff7b721615c8b3bbd14ff76d9c81ec9b"),
@@ -66,12 +74,12 @@ func Test_DecodePastBlockFormat(t *testing.T) {
 }
 
 func Test_FixedHashBlock(t *testing.T) {
-	fixed := gethCommon.HexToHash("0x2").String()
+	fixed := gethCommon.HexToHash("0x2")
 	block := Block{
 		Block: &types.Block{
 			Height: 1,
 		},
-		FixedHash: &fixed,
+		FixedHash: fixed,
 		TransactionHashes: []gethCommon.Hash{
 			gethCommon.HexToHash("0x3"),
 			gethCommon.HexToHash("0x4"),
@@ -80,7 +88,7 @@ func Test_FixedHashBlock(t *testing.T) {
 
 	h, err := block.Hash()
 	require.NoError(t, err)
-	assert.Equal(t, fixed, h.String())
+	assert.Equal(t, fixed, h)
 
 	data, err := block.ToBytes()
 	require.NoError(t, err)
@@ -91,7 +99,7 @@ func Test_FixedHashBlock(t *testing.T) {
 	// make sure fixed hash and transaction hashes persists after decoding
 	h, err = decoded.Hash()
 	require.NoError(t, err)
-	require.Equal(t, fixed, h.String())
+	require.Equal(t, fixed, h)
 	require.Equal(t, block.TransactionHashes, decoded.TransactionHashes)
 }
 
@@ -112,7 +120,7 @@ func Test_DecodeBlockExecutedEvent(t *testing.T) {
 	encEv, err := ev.Payload.ToCadence(flowGo.Previewnet)
 	require.NoError(t, err)
 
-	decBlock, err := decodeBlockEvent(encEv)
+	decBlock, _, err := decodeBlockEvent(encEv)
 	require.NoError(t, err)
 
 	assert.Equal(t, decBlock, block)
@@ -150,7 +158,7 @@ func Test_DecodingLegacyBlockExecutedEvent(t *testing.T) {
 		hashToCadenceArrayValue(block.TransactionHashRoot),
 	}).WithType(eventType)
 
-	b, err := decodeBlockEvent(legacyEvent)
+	b, _, err := decodeBlockEvent(legacyEvent)
 	require.NoError(t, err)
 
 	require.Equal(t, block.ParentBlockHash, b.ParentBlockHash)
