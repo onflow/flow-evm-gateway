@@ -74,14 +74,6 @@ type Config struct {
 	FilterExpiry time.Duration
 	// ForceStartCadenceHeight will force set the starting Cadence height, this should be only used for testing or locally.
 	ForceStartCadenceHeight uint64
-	// TracesBucketName sets the GCP bucket name where transaction traces are being stored.
-	TracesBucketName string
-	// TracesEnabled sets whether the node is supporting transaction traces.
-	TracesEnabled bool
-	// TracesBackfillStartHeight sets the starting block height for backfilling missing traces.
-	TracesBackfillStartHeight uint64
-	// TracesBackfillEndHeight sets the ending block height for backfilling missing traces.
-	TracesBackfillEndHeight uint64
 	// WalletEnabled sets whether wallet APIs are enabled
 	WalletEnabled bool
 	// WalletKey used for signing transactions
