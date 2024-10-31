@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/onflow/flow-go/storage/pebble/registers"
+
 	"github.com/cockroachdb/pebble"
 	"github.com/rs/zerolog"
 
@@ -38,6 +40,7 @@ func New(dir string, log zerolog.Logger) (*Storage, error) {
 		MemTableStopWritesThreshold: 4,
 		// The default is 1.
 		MaxConcurrentCompactions: func() int { return 4 },
+		Comparer:                 registers.NewMVCCComparer(),
 	}
 
 	for i := 0; i < len(opts.Levels); i++ {
