@@ -72,7 +72,7 @@ func parseConfigFromFlags() error {
 
 	if g, ok := new(big.Int).SetString(gas, 10); ok {
 		cfg.GasPrice = g
-	} else if !ok {
+	} else {
 		return fmt.Errorf("invalid gas price")
 	}
 
@@ -201,12 +201,6 @@ func parseConfigFromFlags() error {
 		cfg.ForceStartCadenceHeight = forceStartHeight
 	}
 
-	cfg.TracesEnabled = cfg.TracesBucketName != ""
-
-	if cfg.TracesBackfillStartHeight > 0 && cfg.TracesBackfillEndHeight > 0 && cfg.TracesBackfillStartHeight > cfg.TracesBackfillEndHeight {
-		return fmt.Errorf("traces backfill start height must be less than the end height")
-	}
-
 	if walletKey != "" {
 		k, err := gethCrypto.HexToECDSA(walletKey)
 		if err != nil {
@@ -272,9 +266,6 @@ func init() {
 	Cmd.Flags().IntVar(&streamTimeout, "stream-timeout", 3, "Defines the timeout in seconds the server waits for the event to be sent to the client")
 	Cmd.Flags().Uint64Var(&forceStartHeight, "force-start-height", 0, "Force set starting Cadence height. WARNING: This should only be used locally or for testing, never in production.")
 	Cmd.Flags().StringVar(&filterExpiry, "filter-expiry", "5m", "Filter defines the time it takes for an idle filter to expire")
-	Cmd.Flags().StringVar(&cfg.TracesBucketName, "traces-gcp-bucket", "", "GCP bucket name where transaction traces are stored")
-	Cmd.Flags().Uint64Var(&cfg.TracesBackfillStartHeight, "traces-backfill-start-height", 0, "evm block height from which to start backfilling missing traces.")
-	Cmd.Flags().Uint64Var(&cfg.TracesBackfillEndHeight, "traces-backfill-end-height", 0, "evm block height until which to backfill missing traces. If 0, backfill until the latest block")
 	Cmd.Flags().StringVar(&cloudKMSProjectID, "coa-cloud-kms-project-id", "", "The project ID containing the KMS keys, e.g. 'flow-evm-gateway'")
 	Cmd.Flags().StringVar(&cloudKMSLocationID, "coa-cloud-kms-location-id", "", "The location ID where the key ring is grouped into, e.g. 'global'")
 	Cmd.Flags().StringVar(&cloudKMSKeyRingID, "coa-cloud-kms-key-ring-id", "", "The key ring ID where the KMS keys exist, e.g. 'tx-signing'")

@@ -25,7 +25,6 @@ import (
 	"github.com/onflow/flow-evm-gateway/services/ingestion"
 	"github.com/onflow/flow-evm-gateway/services/replayer"
 	"github.com/onflow/flow-evm-gateway/services/requester"
-	"github.com/onflow/flow-evm-gateway/services/traces"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
 
@@ -64,7 +63,6 @@ type Bootstrap struct {
 	server     *api.Server
 	metrics    *metrics.Server
 	events     *ingestion.Engine
-	traces     *traces.Engine
 	profiler   *api.ProfileServer
 }
 
@@ -169,71 +167,6 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 	return nil
 }
 
-func (b *Bootstrap) StartTraceDownloader(ctx context.Context) error {
-	l := b.logger.With().Str("component", "bootstrap-traces").Logger()
-	l.Info().Msg("starting engine")
-
-	// create gcp downloader
-	downloader, err := traces.NewGCPDownloader(b.config.TracesBucketName, b.logger)
-	if err != nil {
-		return err
-	}
-
-	// initialize trace downloader engine
-	b.traces = traces.NewTracesIngestionEngine(
-		b.publishers.Block,
-		b.storages.Blocks,
-		b.storages.Traces,
-		downloader,
-		b.logger,
-		b.collector,
-	)
-
-	StartEngine(ctx, b.traces, l)
-
-	if b.config.TracesBackfillStartHeight > 0 {
-		startHeight := b.config.TracesBackfillStartHeight
-		if _, err := b.storages.Blocks.GetByHeight(startHeight); err != nil {
-			return fmt.Errorf("failed to get provided start height %d in db: %w", startHeight, err)
-		}
-
-		cadenceStartHeight, err := b.storages.Blocks.GetCadenceHeight(startHeight)
-		if err != nil {
-			return fmt.Errorf("failed to get cadence height for backfill start height %d: %w", startHeight, err)
-		}
-
-		if cadenceStartHeight < b.config.InitCadenceHeight {
-			b.logger.Warn().
-				Uint64("evm-start-height", startHeight).
-				Uint64("cadence-start-height", cadenceStartHeight).
-				Uint64("init-cadence-height", b.config.InitCadenceHeight).
-				Msg("backfill start height is before initial cadence height. data may be missing from configured traces bucket")
-		}
-
-		endHeight := b.config.TracesBackfillEndHeight
-		if endHeight == 0 {
-			endHeight, err = b.storages.Blocks.LatestEVMHeight()
-			if err != nil {
-				return fmt.Errorf("failed to get latest EVM height: %w", err)
-			}
-		} else if _, err := b.storages.Blocks.GetByHeight(endHeight); err != nil {
-			return fmt.Errorf("failed to get provided end height %d in db: %w", endHeight, err)
-		}
-
-		go b.traces.Backfill(startHeight, endHeight)
-	}
-
-	return nil
-}
-
-func (b *Bootstrap) StopTraceDownloader() {
-	if b.traces == nil {
-		return
-	}
-	b.logger.Warn().Msg("stopping trace downloader engine")
-	b.traces.Stop()
-}
-
 func (b *Bootstrap) StopEventIngestion() {
 	if b.events == nil {
 		return
@@ -336,10 +269,7 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 		ratelimiter,
 	)
 
-	var debugAPI *api.DebugAPI
-	if b.config.TracesEnabled {
-		debugAPI = api.NewDebugAPI(b.storages.Traces, b.storages.Blocks, b.logger, b.collector)
-	}
+	var debugAPI = api.NewDebugAPI(b.storages.Traces, b.storages.Blocks, b.logger, b.collector)
 
 	var walletAPI *api.WalletAPI
 	if b.config.WalletEnabled {
@@ -562,12 +492,6 @@ func Run(ctx context.Context, cfg *config.Config, ready chan struct{}) error {
 		return err
 	}
 
-	if cfg.TracesEnabled {
-		if err := boot.StartTraceDownloader(ctx); err != nil {
-			return fmt.Errorf("failed to start trace downloader engine: %w", err)
-		}
-	}
-
 	if err := boot.StartEventIngestion(ctx); err != nil {
 		return fmt.Errorf("failed to start event ingestion engine: %w", err)
 	}
@@ -593,7 +517,6 @@ func Run(ctx context.Context, cfg *config.Config, ready chan struct{}) error {
 
 	boot.StopEventIngestion()
 	boot.StopMetricsServer()
-	boot.StopTraceDownloader()
 	boot.StopAPIServer()
 
 	return nil
