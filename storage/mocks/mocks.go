@@ -3,6 +3,7 @@ package mocks
 import (
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/go-ethereum/common"
@@ -20,10 +21,14 @@ func NewBlock(height uint64) *models.Block {
 
 	return &models.Block{
 		Block: &types.Block{
-			ParentBlockHash: parent,
-			Height:          height,
-			TotalSupply:     big.NewInt(1000),
-			ReceiptRoot:     common.HexToHash(fmt.Sprintf("0x1337%d", height)),
+			ParentBlockHash:     parent,
+			Height:              height,
+			Timestamp:           uint64(time.Now().Second()),
+			TotalSupply:         big.NewInt(1000),
+			ReceiptRoot:         common.HexToHash(fmt.Sprintf("0x100%d", height)),
+			TransactionHashRoot: common.HexToHash(fmt.Sprintf("0x200%d", height)),
+			TotalGasUsed:        uint64(30_000),
+			PrevRandao:          common.HexToHash(fmt.Sprintf("0x300%d", height)),
 		},
 		TransactionHashes: make([]common.Hash, 0),
 	}
