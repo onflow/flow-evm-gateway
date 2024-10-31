@@ -226,9 +226,6 @@ The application can be configured using the following flags at runtime:
 | `force-start-height`           | `0`                           | Force-set starting Cadence height (local/testing use only)                               |
 | `wallet-api-key`               | `""`                          | ECDSA private key for wallet APIs (local/testing use only)                               |
 | `filter-expiry`                | `5m`                          | Expiry time for idle filters                                                             |
-| `traces-gcp-bucket`            | `""`                          | GCP bucket name for transaction traces                                                   |
-| `traces-backfill-start-height` | `0`                           | Start height for backfilling transaction traces                                          |
-| `traces-backfill-end-height`   | `0`                           | End height for backfilling transaction traces                                            |
 | `index-only`                   | `false`                       | Run in index-only mode, allowing state queries and indexing but no transaction sending   |
 | `profiler-enabled`             | `false`                       | Enable the pprof profiler server                                                         |
 | `profiler-host`                | `localhost`                   | Host for the pprof profiler                                                              |
