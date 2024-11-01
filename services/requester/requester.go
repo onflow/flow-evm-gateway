@@ -82,6 +82,7 @@ const coaFundingBalance = minFlowBalance - 1
 
 const LatestBlockHeight uint64 = math.MaxUint64 - 1
 
+// TODO(janezp): Requester does need to know about special EVM block heights. evmHeight should be uint64.
 type Requester interface {
 	// SendRawTransaction will submit signed transaction data to the network.
 	// The submitted EVM transaction hash is returned.
