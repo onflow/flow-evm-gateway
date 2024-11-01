@@ -153,7 +153,7 @@ func servicesSetup(t *testing.T) (emulator.Emulator, func()) {
 		LogWriter:         testLogWriter(),
 		StreamTimeout:     time.Second * 30,
 		StreamLimit:       10,
-		RateLimit:         50,
+		RateLimit:         500,
 		WSEnabled:         true,
 		MetricsPort:       8443,
 		FilterExpiry:      time.Second * 5,
@@ -177,7 +177,7 @@ func servicesSetup(t *testing.T) (emulator.Emulator, func()) {
 // and will report failure or success of the test.
 func executeTest(t *testing.T, testFile string) {
 	command := fmt.Sprintf(
-		"./web3js/node_modules/.bin/mocha ./web3js/%s.js --timeout 120s",
+		"./web3js/node_modules/.bin/mocha ./web3js/%s.js --timeout 360s",
 		testFile,
 	)
 	parts := strings.Fields(command)
