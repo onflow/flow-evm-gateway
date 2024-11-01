@@ -287,7 +287,7 @@ func (b *BlockChainAPI) GetBalance(
 		return handleError[*hexutil.Big](err, l, b.collector)
 	}
 
-	balance, err := b.evm.GetBalance(ctx, address, evmHeight)
+	balance, err := b.evm.GetBalance(ctx, address, int64(evmHeight))
 	if err != nil {
 		return handleError[*hexutil.Big](err, l, b.collector)
 	}
@@ -518,21 +518,12 @@ func (b *BlockChainAPI) GetBlockReceipts(
 		return nil, err
 	}
 
-	var (
-		block *models.Block
-		err   error
-	)
-	if blockNumberOrHash.BlockHash != nil {
-		block, err = b.blocks.GetByID(*blockNumberOrHash.BlockHash)
-	} else if blockNumberOrHash.BlockNumber != nil {
-		block, err = b.blocks.GetByHeight(uint64(blockNumberOrHash.BlockNumber.Int64()))
-	} else {
-		return handleError[[]map[string]interface{}](
-			fmt.Errorf("%w: block number or hash not provided", errs.ErrInvalid),
-			l,
-			b.collector,
-		)
+	evmHeight, err := b.getBlockNumber(&blockNumberOrHash)
+	if err != nil {
+		return handleError[[]map[string]interface{}](err, l, b.collector)
 	}
+
+	block, err := b.blocks.GetByHeight(evmHeight)
 	if err != nil {
 		return handleError[[]map[string]interface{}](err, l, b.collector)
 	}
@@ -660,7 +651,7 @@ func (b *BlockChainAPI) Call(
 		from = *args.From
 	}
 
-	res, err := b.evm.Call(ctx, tx, from, evmHeight)
+	res, err := b.evm.Call(ctx, tx, from, int64(evmHeight))
 	if err != nil {
 		return handleError[hexutil.Bytes](err, l, b.collector)
 	}
@@ -767,7 +758,7 @@ func (b *BlockChainAPI) GetTransactionCount(
 		return handleError[*hexutil.Uint64](err, l, b.collector)
 	}
 
-	networkNonce, err := b.evm.GetNonce(ctx, address, evmHeight)
+	networkNonce, err := b.evm.GetNonce(ctx, address, int64(evmHeight))
 	if err != nil {
 		return handleError[*hexutil.Uint64](err, l, b.collector)
 	}
@@ -833,7 +824,7 @@ func (b *BlockChainAPI) EstimateGas(
 		return handleError[hexutil.Uint64](err, l, b.collector)
 	}
 
-	estimatedGas, err := b.evm.EstimateGas(ctx, tx, from, evmHeight)
+	estimatedGas, err := b.evm.EstimateGas(ctx, tx, from, int64(evmHeight))
 	if err != nil {
 		return handleError[hexutil.Uint64](err, l, b.collector)
 	}
@@ -862,7 +853,7 @@ func (b *BlockChainAPI) GetCode(
 		return handleError[hexutil.Bytes](err, l, b.collector)
 	}
 
-	code, err := b.evm.GetCode(ctx, address, evmHeight)
+	code, err := b.evm.GetCode(ctx, address, int64(evmHeight))
 	if err != nil {
 		return handleError[hexutil.Bytes](err, l, b.collector)
 	}
@@ -987,7 +978,7 @@ func (b *BlockChainAPI) GetStorageAt(
 		return handleError[hexutil.Bytes](err, l, b.collector)
 	}
 
-	result, err := b.evm.GetStorageAt(ctx, address, key, evmHeight)
+	result, err := b.evm.GetStorageAt(ctx, address, key, int64(evmHeight))
 	if err != nil {
 		return handleError[hexutil.Bytes](err, l, b.collector)
 	}
@@ -1097,25 +1088,60 @@ func (b *BlockChainAPI) prepareBlockResponse(
 	return blockResponse, nil
 }
 
-func (b *BlockChainAPI) getBlockNumber(blockNumberOrHash *rpc.BlockNumberOrHash) (int64, error) {
+func (b *BlockChainAPI) getBlockNumber(blockNumberOrHash *rpc.BlockNumberOrHash) (uint64, error) {
 	err := fmt.Errorf("%w: neither block number nor hash specified", errs.ErrInvalid)
 	if blockNumberOrHash == nil {
 		return 0, err
 	}
 	if number, ok := blockNumberOrHash.Number(); ok {
-		return number.Int64(), nil
+		height, err := resolveBlockNumber(number, b.blocks)
+		if err != nil {
+			b.logger.Error().Err(err).
+				Stringer("block_number", number).
+				Msg("failed to resolve block by hash")
+			return 0, err
+		}
+		return height, nil
 	}
 
 	if hash, ok := blockNumberOrHash.Hash(); ok {
 		evmHeight, err := b.blocks.GetHeightByID(hash)
 		if err != nil {
-			b.logger.Error().Err(err).Msg("failed to get block by hash")
+			b.logger.Error().Err(err).
+				Stringer("block_hash", hash).
+				Msg("failed to get block by hash")
 			return 0, err
 		}
-		return int64(evmHeight), nil
+		return evmHeight, nil
 	}
 
 	return 0, err
+}
+
+func resolveBlockNumber(
+	number rpc.BlockNumber,
+	blocksDB storage.BlockIndexer,
+) (uint64, error) {
+	height := number.Int64()
+
+	// if special values (latest) we return latest executed height
+	//
+	// all the special values are:
+	//	SafeBlockNumber      = BlockNumber(-4)
+	//	FinalizedBlockNumber = BlockNumber(-3)
+	//	LatestBlockNumber    = BlockNumber(-2)
+	//	PendingBlockNumber   = BlockNumber(-1)
+	//
+	// EVM on Flow does not have these concepts, but the latest block is the closest fit
+	if height < 0 {
+		executed, err := blocksDB.LatestEVMHeight()
+		if err != nil {
+			return 0, err
+		}
+		height = int64(executed)
+	}
+
+	return uint64(height), nil
 }
 
 // handleError takes in an error and in case the error is of type ErrEntityNotFound
