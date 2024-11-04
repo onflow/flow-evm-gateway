@@ -28,6 +28,16 @@ func TestWeb3_E2E(t *testing.T) {
 		runWeb3Test(t, "build_evm_state_test")
 	})
 
+	t.Run("verify Cadence arch calls", func(t *testing.T) {
+		t.Skip("not implemented yet")
+		runWeb3Test(t, "verify_cadence_arch_calls_test")
+	})
+
+	t.Run("test transaction traces", func(t *testing.T) {
+		t.Skip("not yet added back")
+		runWeb3Test(t, "debug_traces_test")
+	})
+
 	t.Run("test setup sanity check", func(t *testing.T) {
 		runWeb3Test(t, "setup_test")
 	})
@@ -54,6 +64,10 @@ func TestWeb3_E2E(t *testing.T) {
 
 	t.Run("deploy contract and call methods", func(t *testing.T) {
 		runWeb3Test(t, "eth_deploy_contract_and_interact_test")
+	})
+
+	t.Run("test retrieval of contract storage slots", func(t *testing.T) {
+		runWeb3Test(t, "eth_get_storage_at_test")
 	})
 
 	t.Run("deploy multicall3 contract and call methods", func(t *testing.T) {

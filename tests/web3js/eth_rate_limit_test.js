@@ -10,10 +10,10 @@ it('rate limit after X requests', async function () {
     await new Promise(res => setTimeout(res, 1500))
 
     // this should be synced with the value on server config
-    let requestLimit = 50
+    let requestLimit = 500
     let requestsMade = 0
     let requestsFailed = 0
-    let requests = 60
+    let requests = 1000
 
     for (let i = 0; i < requests; i++) {
         try {
