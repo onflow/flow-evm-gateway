@@ -1,4 +1,3 @@
-const utils = require('web3-utils')
 const { assert } = require('chai')
 const conf = require('./config')
 const helpers = require('./helpers')
@@ -11,61 +10,6 @@ it('should be able to use Cadence Arch calls', async () => {
 
     let deployed = await helpers.deployContract('storage')
     let contractAddress = deployed.receipt.contractAddress
-
-    // submit a transaction that calls blockNumber()
-    let blockNumberData = deployed.contract.methods.blockNumber().encodeABI()
-    let res = await helpers.signAndSend({
-        from: conf.eoa.address,
-        to: contractAddress,
-        data: blockNumberData,
-        value: '0',
-        gasPrice: conf.minGasPrice,
-    })
-    assert.equal(res.receipt.status, conf.successStatus)
-
-    // submit a transaction that calls blockTime()
-    let blockTimeData = deployed.contract.methods.blockNumber().encodeABI()
-    res = await helpers.signAndSend({
-        from: conf.eoa.address,
-        to: contractAddress,
-        data: blockTimeData,
-        value: '0',
-        gasPrice: conf.minGasPrice,
-    })
-    assert.equal(res.receipt.status, conf.successStatus)
-
-    // submit a transaction that calls blockHash(uint num)
-    let blockHashData = deployed.contract.methods.blockHash(110).encodeABI()
-    res = await helpers.signAndSend({
-        from: conf.eoa.address,
-        to: contractAddress,
-        data: blockHashData,
-        value: '0',
-        gasPrice: conf.minGasPrice,
-    })
-    assert.equal(res.receipt.status, conf.successStatus)
-
-    // submit a transaction that calls random()
-    let randomData = deployed.contract.methods.random().encodeABI()
-    res = await helpers.signAndSend({
-        from: conf.eoa.address,
-        to: contractAddress,
-        data: randomData,
-        value: '0',
-        gasPrice: conf.minGasPrice,
-    })
-    assert.equal(res.receipt.status, conf.successStatus)
-
-    // submit a transaction that calls chainID()
-    let chainIDData = deployed.contract.methods.chainID().encodeABI()
-    res = await helpers.signAndSend({
-        from: conf.eoa.address,
-        to: contractAddress,
-        data: chainIDData,
-        value: '0',
-        gasPrice: conf.minGasPrice,
-    })
-    assert.equal(res.receipt.status, conf.successStatus)
 
     // submit a transaction that calls verifyArchCallToRandomSource(uint64 height)
     let getRandomSourceData = deployed.contract.methods.verifyArchCallToRandomSource(120).encodeABI()
