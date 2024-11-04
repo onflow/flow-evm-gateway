@@ -2,7 +2,6 @@ package bootstrap
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -11,8 +10,10 @@ import (
 	"github.com/onflow/flow-go-sdk/access"
 	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/onflow/flow-go-sdk/crypto"
+	"github.com/onflow/flow-go/fvm/environment"
+	"github.com/onflow/flow-go/fvm/evm"
+	flowGo "github.com/onflow/flow-go/model/flow"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
-	"github.com/onflow/go-ethereum/eth/tracers"
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-limiter/memorystore"
 	grpcOpts "google.golang.org/grpc"
@@ -27,15 +28,6 @@ import (
 	"github.com/onflow/flow-evm-gateway/services/requester"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
-
-	// this import is needed for side-effects, because the
-	// tracers.DefaultDirectory is relying on the init function
-	_ "github.com/onflow/go-ethereum/eth/tracers/native"
-)
-
-const (
-	callTracerConfig = `{ "onlyTopCall": true }`
-	callTracerName   = "callTracer"
 )
 
 type Storages struct {
@@ -126,27 +118,31 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 		Uint64("missed-heights", latestCadenceBlock.Height-latestCadenceHeight).
 		Msg("indexing cadence height information")
 
+	chainID := b.config.FlowNetworkID
+
 	// create event subscriber
 	subscriber := ingestion.NewRPCEventSubscriber(
 		b.logger,
 		b.client,
-		b.config.FlowNetworkID,
+		chainID,
 		latestCadenceHeight,
 	)
 
-	tracer, err := tracers.DefaultDirectory.New(
-		callTracerName,
-		&tracers.Context{},
-		json.RawMessage(callTracerConfig),
-	)
+	callTracerCollector, err := replayer.NewCallTracerCollector(b.logger)
 	if err != nil {
 		return err
 	}
 	blocksProvider := replayer.NewBlocksProvider(
 		b.storages.Blocks,
-		b.config.FlowNetworkID,
-		tracer,
+		chainID,
+		callTracerCollector.TxTracer(),
 	)
+	replayerConfig := replayer.Config{
+		ChainID:             chainID,
+		RootAddr:            evm.StorageAccountAddress(chainID),
+		CallTracerCollector: callTracerCollector,
+		ValidateResults:     true,
+	}
 
 	// initialize event ingestion engine
 	b.events = ingestion.NewEventIngestionEngine(
@@ -157,10 +153,12 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 		b.storages.Receipts,
 		b.storages.Transactions,
 		b.storages.Accounts,
+		b.storages.Traces,
 		b.publishers.Block,
 		b.publishers.Logs,
 		b.logger,
 		b.collector,
+		replayerConfig,
 	)
 
 	StartEngine(ctx, b.events, l)
@@ -209,7 +207,19 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 		b.logger,
 	)
 
+	tracer, err := replayer.DefaultCallTracer()
+	if err != nil {
+		return err
+	}
+	blocksProvider := replayer.NewBlocksProvider(
+		b.storages.Blocks,
+		b.config.FlowNetworkID,
+		tracer,
+	)
+
 	evm, err := requester.NewEVM(
+		b.storages.Storage,
+		blocksProvider,
 		b.client,
 		b.config,
 		signer,
@@ -269,7 +279,16 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 		ratelimiter,
 	)
 
-	var debugAPI = api.NewDebugAPI(b.storages.Traces, b.storages.Blocks, b.logger, b.collector)
+	debugAPI := api.NewDebugAPI(
+		b.storages.Storage,
+		b.storages.Traces,
+		b.storages.Blocks,
+		b.storages.Transactions,
+		b.storages.Receipts,
+		b.config,
+		b.logger,
+		b.collector,
+	)
 
 	var walletAPI *api.WalletAPI
 	if b.config.WalletEnabled {
@@ -460,6 +479,18 @@ func setupStorage(
 		cadenceBlock, err := client.GetBlockHeaderByHeight(context.Background(), cadenceHeight)
 		if err != nil {
 			return nil, fmt.Errorf("could not fetch provided cadence height, make sure it's correct: %w", err)
+		}
+
+		storageProvider := pebble.NewRegister(store, 0, nil)
+		storageAddress := evm.StorageAccountAddress(config.FlowNetworkID)
+		accountStatus := environment.NewAccountStatus()
+		err = storageProvider.SetValue(
+			storageAddress[:],
+			[]byte(flowGo.AccountStatusKey),
+			accountStatus.ToBytes(),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("could not initialize state index: %w", err)
 		}
 
 		if err := blocks.InitHeights(cadenceHeight, cadenceBlock.ID); err != nil {
