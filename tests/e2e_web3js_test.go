@@ -34,7 +34,6 @@ func TestWeb3_E2E(t *testing.T) {
 	})
 
 	t.Run("test transaction traces", func(t *testing.T) {
-		t.Skip("not yet added back")
 		runWeb3Test(t, "debug_traces_test")
 	})
 

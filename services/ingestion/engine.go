@@ -14,6 +14,8 @@ import (
 	"github.com/onflow/flow-evm-gateway/services/replayer"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
+
+	"github.com/onflow/flow-go/fvm/evm/offchain/sync"
 )
 
 var _ models.Engine = &Engine{}
@@ -42,11 +44,13 @@ type Engine struct {
 	receipts        storage.ReceiptIndexer
 	transactions    storage.TransactionIndexer
 	accounts        storage.AccountIndexer
+	traces          storage.TraceIndexer
 	log             zerolog.Logger
 	evmLastHeight   *models.SequentialHeight
 	blocksPublisher *models.Publisher[*models.Block]
 	logsPublisher   *models.Publisher[[]*gethTypes.Log]
 	collector       metrics.Collector
+	replayerConfig  replayer.Config
 }
 
 func NewEventIngestionEngine(
@@ -57,10 +61,12 @@ func NewEventIngestionEngine(
 	receipts storage.ReceiptIndexer,
 	transactions storage.TransactionIndexer,
 	accounts storage.AccountIndexer,
+	traces storage.TraceIndexer,
 	blocksPublisher *models.Publisher[*models.Block],
 	logsPublisher *models.Publisher[[]*gethTypes.Log],
 	log zerolog.Logger,
 	collector metrics.Collector,
+	replayerConfig replayer.Config,
 ) *Engine {
 	log = log.With().Str("component", "ingestion").Logger()
 
@@ -74,10 +80,12 @@ func NewEventIngestionEngine(
 		receipts:        receipts,
 		transactions:    transactions,
 		accounts:        accounts,
+		traces:          traces,
 		log:             log,
 		blocksPublisher: blocksPublisher,
 		logsPublisher:   logsPublisher,
 		collector:       collector,
+		replayerConfig:  replayerConfig,
 	}
 }
 
@@ -158,8 +166,47 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 	batch := e.store.NewBatch()
 	defer batch.Close()
 
-	// we first index the block
-	err := e.indexBlock(
+	// Step 1: Re-execute all transactions on the latest EVM block
+
+	// Step 1.1: Notify the `BlocksProvider` of the newly received EVM block
+	if err := e.blocksProvider.OnBlockReceived(events.Block()); err != nil {
+		return err
+	}
+
+	storageProvider := pebble.NewRegister(
+		e.store,
+		events.Block().Height,
+		batch,
+	)
+	cr := sync.NewReplayer(
+		e.replayerConfig.ChainID,
+		e.replayerConfig.RootAddr,
+		storageProvider,
+		e.blocksProvider,
+		e.log,
+		e.replayerConfig.CallTracerCollector.TxTracer(),
+		e.replayerConfig.ValidateResults,
+	)
+
+	// Step 1.2: Replay all block transactions
+	// If `ReplayBlock` returns any error, we abort the EVM events processing
+	res, err := cr.ReplayBlock(events.TxEventPayloads(), events.BlockEventPayload())
+	if err != nil {
+		return fmt.Errorf("failed to replay block on height: %d, with: %w", events.Block().Height, err)
+	}
+
+	// Step 2: Write all the necessary changes to each storage
+
+	// Step 2.1: Write all the EVM state changes to `StorageProvider`
+	for k, v := range res.StorageRegisterUpdates() {
+		err = storageProvider.SetValue([]byte(k.Owner), []byte(k.Key), v)
+		if err != nil {
+			return fmt.Errorf("failed to commit state changes on block: %d", events.Block().Height)
+		}
+	}
+
+	// Step 2.2: Write the latest EVM block to `Blocks` storage
+	err = e.indexBlock(
 		events.CadenceHeight(),
 		events.CadenceBlockID(),
 		events.Block(),
@@ -169,6 +216,8 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 		return fmt.Errorf("failed to index block %d event: %w", events.Block().Height, err)
 	}
 
+	// Step 2.3: Write all EVM transactions of the current block,
+	// to `Transactions` storage
 	for i, tx := range events.Transactions() {
 		receipt := events.Receipts()[i]
 
@@ -178,17 +227,25 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 		}
 	}
 
+	// Step 2.4: Write all EVM transaction receipts of the current block,
+	// to `Receipts` storage
 	err = e.indexReceipts(events.Receipts(), batch)
 	if err != nil {
 		return fmt.Errorf("failed to index receipts for block %d event: %w", events.Block().Height, err)
 	}
 
-	if err := e.blocksProvider.OnBlockReceived(events.Block()); err != nil {
-		return fmt.Errorf(
-			"failed to call OnBlockReceived for block %d, with: %w",
-			events.Block().Height,
-			err,
-		)
+	traceCollector := e.replayerConfig.CallTracerCollector
+	for _, tx := range events.Transactions() {
+		txHash := tx.Hash()
+		traceResult, err := traceCollector.Collect(txHash)
+		if err != nil {
+			return err
+		}
+
+		err = e.traces.StoreTransaction(txHash, traceResult, batch)
+		if err != nil {
+			return err
+		}
 	}
 
 	if err := batch.Commit(pebbleDB.Sync); err != nil {

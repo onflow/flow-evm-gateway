@@ -1,12 +1,9 @@
 package api
 
 import (
-	"fmt"
 	"math/big"
 
 	"github.com/onflow/go-ethereum/core/types"
-
-	errs "github.com/onflow/flow-evm-gateway/models/errors"
 )
 
 const blockGasLimit uint64 = 120_000_000
@@ -16,7 +13,7 @@ const blockGasLimit uint64 = 120_000_000
 // `EVM.dryRun` inside Cadence scripts, meaning that no state change
 // will occur.
 // This is only useful for `eth_estimateGas` and `eth_call` endpoints.
-func encodeTxFromArgs(args TransactionArgs) ([]byte, error) {
+func encodeTxFromArgs(args TransactionArgs) (*types.LegacyTx, error) {
 	var data []byte
 	if args.Data != nil {
 		data = *args.Data
@@ -36,21 +33,12 @@ func encodeTxFromArgs(args TransactionArgs) ([]byte, error) {
 		value = args.Value.ToInt()
 	}
 
-	tx := types.NewTx(
-		&types.LegacyTx{
-			Nonce:    0,
-			To:       args.To,
-			Value:    value,
-			Gas:      gasLimit,
-			GasPrice: big.NewInt(0),
-			Data:     data,
-		},
-	)
-
-	enc, err := tx.MarshalBinary()
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", errs.ErrInvalid, err)
-	}
-
-	return enc, nil
+	return &types.LegacyTx{
+		Nonce:    0,
+		To:       args.To,
+		Value:    value,
+		Gas:      gasLimit,
+		GasPrice: big.NewInt(0),
+		Data:     data,
+	}, nil
 }
