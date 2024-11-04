@@ -398,12 +398,18 @@ func (e *EVM) Call(
 	if tx.To != nil {
 		to = *tx.To
 	}
+	cdcHeight, err := e.evmToCadenceHeight(evmHeight)
+	if err != nil {
+		return nil, err
+	}
+	rca := NewRemoteCadenceArch(cdcHeight, e.client, e.config.FlowNetworkID)
 	result, err := view.DryCall(
 		from,
 		to,
 		tx.Data,
 		tx.Value,
 		tx.Gas,
+		query.WithExtraPrecompiledContracts([]evmTypes.PrecompiledContract{rca}),
 	)
 
 	resultSummary := result.ResultSummary()
@@ -432,12 +438,18 @@ func (e *EVM) EstimateGas(
 	if tx.To != nil {
 		to = *tx.To
 	}
+	cdcHeight, err := e.evmToCadenceHeight(evmHeight)
+	if err != nil {
+		return 0, err
+	}
+	rca := NewRemoteCadenceArch(cdcHeight, e.client, e.config.FlowNetworkID)
 	result, err := view.DryCall(
 		from,
 		to,
 		tx.Data,
 		tx.Value,
 		tx.Gas,
+		query.WithExtraPrecompiledContracts([]evmTypes.PrecompiledContract{rca}),
 	)
 	if err != nil {
 		return 0, err
@@ -668,4 +680,17 @@ func cacheKey(scriptType scriptType, height uint64, args []cadence.Value) string
 func AddOne64th(n uint64) uint64 {
 	// NOTE: Go's integer division floors, but that is desirable here
 	return n + (n / 64)
+}
+
+func (e *EVM) evmToCadenceHeight(height int64) (uint64, error) {
+	cadenceHeight, err := e.blocks.GetCadenceHeight(uint64(height))
+	if err != nil {
+		return 0, fmt.Errorf(
+			"failed to map evm height: %d to cadence height: %w",
+			height,
+			err,
+		)
+	}
+
+	return cadenceHeight, nil
 }

@@ -12,7 +12,7 @@ it('should be able to use Cadence Arch calls', async () => {
     let contractAddress = deployed.receipt.contractAddress
 
     // submit a transaction that calls verifyArchCallToRandomSource(uint64 height)
-    let getRandomSourceData = deployed.contract.methods.verifyArchCallToRandomSource(120).encodeABI()
+    let getRandomSourceData = deployed.contract.methods.verifyArchCallToRandomSource(2).encodeABI()
     res = await helpers.signAndSend({
         from: conf.eoa.address,
         to: contractAddress,
@@ -23,7 +23,7 @@ it('should be able to use Cadence Arch calls', async () => {
     assert.equal(res.receipt.status, conf.successStatus)
 
     // make a contract call for verifyArchCallToRandomSource(uint64 height)
-    res = await web3.eth.call({ to: contractAddress, data: getRandomSourceData }, latest)
+    res = await web3.eth.call({ to: contractAddress, data: getRandomSourceData }, 'latest')
     assert.notEqual(
         res,
         '0x0000000000000000000000000000000000000000000000000000000000000000'
@@ -42,7 +42,7 @@ it('should be able to use Cadence Arch calls', async () => {
     assert.equal(res.receipt.status, conf.successStatus)
 
     // make a contract call for verifyArchCallToRevertibleRandom()
-    res = await web3.eth.call({ to: contractAddress, data: revertibleRandomData }, latest)
+    res = await web3.eth.call({ to: contractAddress, data: revertibleRandomData }, 'latest')
     assert.notEqual(
         res,
         '0x0000000000000000000000000000000000000000000000000000000000000000'
@@ -61,10 +61,10 @@ it('should be able to use Cadence Arch calls', async () => {
     assert.equal(res.receipt.status, conf.successStatus)
 
     // make a contract call for verifyArchCallToFlowBlockHeight()
-    res = await web3.eth.call({ to: contractAddress, data: flowBlockHeightData }, latest)
+    res = await web3.eth.call({ to: contractAddress, data: flowBlockHeightData }, 'latest')
     assert.equal(
         web3.eth.abi.decodeParameter('uint64', res),
-        latest,
+        7n,
     )
 
     // submit a transaction that calls verifyArchCallToVerifyCOAOwnershipProof(address,bytes32,bytes)
@@ -84,7 +84,7 @@ it('should be able to use Cadence Arch calls', async () => {
     assert.equal(res.receipt.status, conf.successStatus)
 
     // make a contract call for verifyArchCallToVerifyCOAOwnershipProof(address,bytes32,bytes)
-    res = await web3.eth.call({ to: contractAddress, data: verifyCOAOwnershipProofData }, latest)
+    res = await web3.eth.call({ to: contractAddress, data: verifyCOAOwnershipProofData }, 'latest')
     assert.equal(
         web3.eth.abi.decodeParameter('bool', res),
         false,
