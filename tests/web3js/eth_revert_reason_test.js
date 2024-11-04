@@ -43,6 +43,8 @@ it('store revertReason field in transaction receipts', async () => {
     let txHash = response.body.result
 
     let rcp = null
+    // wait until the transaction is executed & indexed, and its
+    // receipt becomes available.
     while (rcp == null) {
         rcp = await helpers.callRPCMethod(
             'eth_getTransactionReceipt',
@@ -78,6 +80,8 @@ it('store revertReason field in transaction receipts', async () => {
     txHash = response.body.result
 
     rcp = null
+    // wait until the transaction is executed & indexed, and its
+    // receipt becomes available.
     while (rcp == null) {
         rcp = await helpers.callRPCMethod(
             'eth_getTransactionReceipt',
