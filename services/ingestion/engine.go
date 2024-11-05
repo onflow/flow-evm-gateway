@@ -155,7 +155,7 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 		return nil // nothing else to do this was heartbeat event with not event payloads
 	}
 
-	batch := e.store.NewBatch()
+	batch := e.store.NewIndexedBatch()
 	defer batch.Close()
 
 	// we first index the block
