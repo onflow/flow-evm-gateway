@@ -1,6 +1,7 @@
 package storage_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/cockroachdb/pebble"
@@ -103,11 +104,27 @@ func Test_RegisterDeltaWithStorage(t *testing.T) {
 		err = commit(t, db, r, s)
 		require.NoError(t, err)
 
-		r = storage.NewRegistersDelta(1, s)
+		r.Reset(1)
 
 		v, err := r.GetValue(owner, key)
 		require.NoError(t, err)
 		require.Equal(t, value1, v)
+	})
+
+	runDB("set-dont-commit-get register", t, func(t *testing.T, db *pebbleStorage.Storage) {
+		t.Parallel()
+
+		s := pebbleStorage.NewRegisters(db, ownerAddress)
+		r := storage.NewRegistersDelta(0, s)
+
+		err := r.SetValue(owner, key, value1)
+		require.NoError(t, err)
+
+		r.Reset(1)
+
+		v, err := r.GetValue(owner, key)
+		require.NoError(t, err)
+		require.Empty(t, v)
 	})
 
 	runDB("set-next-set-next-get register", t, func(t *testing.T, db *pebbleStorage.Storage) {
@@ -122,7 +139,7 @@ func Test_RegisterDeltaWithStorage(t *testing.T) {
 		err = commit(t, db, r, s)
 		require.NoError(t, err)
 
-		r = storage.NewRegistersDelta(1, s)
+		r.Reset(1)
 
 		err = r.SetValue(owner, key, value2)
 		require.NoError(t, err)
@@ -130,7 +147,7 @@ func Test_RegisterDeltaWithStorage(t *testing.T) {
 		err = commit(t, db, r, s)
 		require.NoError(t, err)
 
-		r = storage.NewRegistersDelta(2, s)
+		r.Reset(2)
 
 		v, err := r.GetValue(owner, key)
 		require.NoError(t, err)
@@ -149,7 +166,7 @@ func Test_RegisterDeltaWithStorage(t *testing.T) {
 		err = commit(t, db, r, s)
 		require.NoError(t, err)
 
-		r = storage.NewRegistersDelta(0, s)
+		r.Reset(1)
 
 		err = r.SetValue(owner, key, nil)
 		require.NoError(t, err)
@@ -157,7 +174,7 @@ func Test_RegisterDeltaWithStorage(t *testing.T) {
 		err = commit(t, db, r, s)
 		require.NoError(t, err)
 
-		r = storage.NewRegistersDelta(1, s)
+		r.Reset(2)
 
 		v, err := r.GetValue(owner, key)
 		require.NoError(t, err)
@@ -169,7 +186,7 @@ func Test_RegisterDeltaWithStorage(t *testing.T) {
 		t.Parallel()
 
 		s := pebbleStorage.NewRegisters(db, ownerAddress)
-		r := storage.NewRegistersDelta(0, s)
+		r := storage.NewRegistersDelta(1, s)
 
 		_, err := r.GetValue(owner2, key)
 		require.Error(t, err)
@@ -187,6 +204,79 @@ func Test_RegisterDeltaWithStorage(t *testing.T) {
 		err = commit(t, db, r, s)
 		require.Error(t, err)
 	})
+
+	runDB("cache db values", t, func(t *testing.T, db *pebbleStorage.Storage) {
+		t.Parallel()
+
+		s := &mockRegisterIndex{
+			callback: func(id flowGo.RegisterID, height uint64) (flowGo.RegisterValue, error) {
+				return value1, nil
+			},
+		}
+		r := storage.NewRegistersDelta(1, s)
+
+		v, err := r.GetValue(owner, key)
+		require.NoError(t, err)
+		require.Equal(t, value1, v)
+
+		v, err = r.GetValue(owner, key)
+		require.NoError(t, err)
+		require.Equal(t, value1, v)
+
+		// only one call to the index
+		require.Equal(t, uint(1), s.callCount)
+	})
+
+	runDB("cache nil db values", t, func(t *testing.T, db *pebbleStorage.Storage) {
+		t.Parallel()
+
+		s := &mockRegisterIndex{
+			callback: func(id flowGo.RegisterID, height uint64) (flowGo.RegisterValue, error) {
+				return nil, nil
+			},
+		}
+		r := storage.NewRegistersDelta(1, s)
+
+		v, err := r.GetValue(owner, key)
+		require.NoError(t, err)
+		require.Empty(t, v)
+
+		v, err = r.GetValue(owner, key)
+		require.NoError(t, err)
+		require.Empty(t, v)
+
+		// only one call to the index
+		require.Equal(t, uint(1), s.callCount)
+	})
+
+	runDB("dont cache err", t, func(t *testing.T, db *pebbleStorage.Storage) {
+		t.Parallel()
+
+		s := &mockRegisterIndex{
+			callback: func(id flowGo.RegisterID, height uint64) (flowGo.RegisterValue, error) {
+				return nil, fmt.Errorf("error")
+			},
+		}
+		r := storage.NewRegistersDelta(1, s)
+
+		_, err := r.GetValue(owner, key)
+		require.Error(t, err)
+
+		_, err = r.GetValue(owner, key)
+		require.Error(t, err)
+
+		require.Equal(t, uint(2), s.callCount)
+	})
+}
+
+type mockRegisterIndex struct {
+	callCount uint
+	callback  func(id flowGo.RegisterID, height uint64) (flowGo.RegisterValue, error)
+}
+
+func (m *mockRegisterIndex) Get(id flowGo.RegisterID, height uint64) (flowGo.RegisterValue, error) {
+	m.callCount++
+	return m.callback(id, height)
 }
 
 func runDB(name string, t *testing.T, f func(t *testing.T, db *pebbleStorage.Storage)) {
