@@ -21,13 +21,13 @@ type RegisterValueAtHeight interface {
 //
 // To avoid creating a new instance of RegistersDelta for every block, use the `Reset` method.
 type RegistersDelta struct {
-	// the cache is used to cache register reads for the current height.
-	cache map[flow.RegisterID]flow.RegisterValue
-
 	// deltas is a map of register IDs to their respective deltas.
 	deltas map[flow.RegisterID]flow.RegisterEntry
-	// height is the height at which the deltas were applied.
+	// height is the height at which the deltas are to be applied.
 	height uint64
+
+	// The cache is used to cache register reads from the registers storage (RegisterValueAtHeight)
+	cache map[flow.RegisterID]flow.RegisterValue
 
 	registers RegisterValueAtHeight
 }
@@ -48,6 +48,11 @@ func NewRegistersDelta(
 	}
 }
 
+// GetValue gets the value for the given register ID.
+//  1. It checks if the value was changed at this height, it then returns the value from the delta.
+//  2. If the value was not changed at this height, it checks if the value was read from storage at height-1
+//     and returns it from the cache.
+//  3. It reads the value from storage at the current height and caches it.
 func (r *RegistersDelta) GetValue(owner []byte, key []byte) ([]byte, error) {
 	id := flow.CadenceRegisterID(owner, key)
 
@@ -61,8 +66,13 @@ func (r *RegistersDelta) GetValue(owner []byte, key []byte) ([]byte, error) {
 		return value, nil
 	}
 
-	// get from storage
-	value, err := r.registers.Get(id, r.height)
+	// if height is 0, there should be nothing in storage
+	if r.height == 0 {
+		return nil, nil
+	}
+
+	// get from storage at height-1. This is because we are currently building registers at height
+	value, err := r.registers.Get(id, r.height-1)
 	if err != nil {
 		return nil, err
 	}
@@ -71,6 +81,8 @@ func (r *RegistersDelta) GetValue(owner []byte, key []byte) ([]byte, error) {
 	return value, nil
 }
 
+// SetValue sets the value for the given register ID. It sets it in the delta and not in the storage.
+// To set the value in the storage, use the `GetUpdates` to get the updates and apply them to storage.
 func (r *RegistersDelta) SetValue(owner, key, value []byte) error {
 	id := flow.CadenceRegisterID(owner, key)
 
@@ -79,6 +91,7 @@ func (r *RegistersDelta) SetValue(owner, key, value []byte) error {
 	return nil
 }
 
+// ValueExists checks if the value for the given register ID exists.
 func (r *RegistersDelta) ValueExists(owner []byte, key []byte) (bool, error) {
 	value, err := r.GetValue(owner, key)
 	if err != nil {
