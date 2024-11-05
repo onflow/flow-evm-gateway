@@ -140,7 +140,7 @@ func TestBatch(t *testing.T) {
 		blocks := NewBlocks(db, flowGo.Emulator)
 		trace := NewTraces(db)
 
-		batch := db.NewBatch()
+		batch := db.NewIndexedBatch()
 		defer func() {
 			require.NoError(t, batch.Close())
 		}()
@@ -168,7 +168,7 @@ func TestBatch(t *testing.T) {
 	runDB("should not contain data without committing", t, func(t *testing.T, db *Storage) {
 		blocks := NewBlocks(db, flowGo.Emulator)
 
-		batch := db.NewBatch()
+		batch := db.NewIndexedBatch()
 		defer func() {
 			require.NoError(t, batch.Close())
 		}()
@@ -189,7 +189,7 @@ func TestBatch(t *testing.T) {
 			evmHeight := uint64(10 + i)
 			bl := mocks.NewBlock(evmHeight)
 
-			batch := db.NewBatch()
+			batch := db.NewIndexedBatch()
 
 			err := blocks.Store(cadenceHeight, flow.HexToID("0x1"), bl, batch)
 			require.NoError(t, err)

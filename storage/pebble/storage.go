@@ -127,6 +127,10 @@ func (s *Storage) batchGet(batch *pebble.Batch, keyCode byte, key ...[]byte) ([]
 	return s.get(keyCode, key...)
 }
 
-func (s *Storage) NewBatch() *pebble.Batch {
+func (s *Storage) NewIndexedBatch() *pebble.Batch {
 	return s.db.NewIndexedBatch()
+}
+
+func (s *Storage) NewBatch() *pebble.Batch {
+	return s.db.NewBatch()
 }

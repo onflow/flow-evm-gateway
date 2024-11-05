@@ -8,9 +8,6 @@ import (
 	"github.com/onflow/flow-go/storage/pebble/registers"
 
 	"github.com/cockroachdb/pebble"
-	"github.com/onflow/atree"
-
-	"github.com/onflow/flow-go/fvm/evm/types"
 )
 
 var (
@@ -28,82 +25,64 @@ var (
 	MinLookupKeyLen = 1 + registers.HeightSuffixLen
 )
 
-var _ types.BackendStorage = &Register{}
-
-type Register struct {
-	store  *Storage
-	height uint64
-	owner  flow.Address
-
-	batch *pebble.Batch
+type RegisterIndex struct {
+	store *Storage
+	owner flow.Address
 }
 
-// NewRegister creates a new index instance at the provided height, all reads and
+// NewRegisters creates a new index instance at the provided height, all reads and
 // writes of the registers will happen at that height.
 // this is not concurrency safe.
-func NewRegister(
+//
+// The register store does verify that the owner supplied is the one that was used before,
+// or that the heights are sequential.
+// This should be done by the caller.
+func NewRegisters(
 	store *Storage,
-	height uint64,
 	owner flow.Address,
-	batch *pebble.Batch,
-) *Register {
-	return &Register{
-		store:  store,
-		height: height,
-		owner:  owner,
-
-		batch: batch,
+) *RegisterIndex {
+	return &RegisterIndex{
+		store: store,
+		owner: owner,
 	}
 }
 
-func (r *Register) GetValue(owner, key []byte) ([]byte, error) {
-	if r.owner != flow.BytesToAddress(owner) {
-		return nil, fmt.Errorf("owner mismatch. Storage expects a single owner %s, given %s", r.owner.Hex(), flow.BytesToAddress(owner).Hex())
+// Get returns the register value for the given register ID at the given height.
+// Get will check that the owner is the same as the one used to create the index.
+func (r *RegisterIndex) Get(id flow.RegisterID, height uint64) (flow.RegisterValue, error) {
+	owner := flow.BytesToAddress([]byte(id.Owner))
+	if r.owner != flow.BytesToAddress([]byte(id.Owner)) {
+		return nil, registerOwnerMismatch(r.owner, owner)
 	}
 
-	lookupKey := newLookupKey(r.height, key)
+	lookupKey := newLookupKey(height, []byte(id.Key))
 	return r.lookupRegister(lookupKey.Bytes())
 }
 
-func (r *Register) SetValue(owner, key, value []byte) error {
-	if r.owner != flow.BytesToAddress(owner) {
-		return fmt.Errorf("owner mismatch. Storage expects a single owner %s, given %s", r.owner.Hex(), flow.BytesToAddress(owner).Hex())
-	}
+// Store stores the register entries for the given height to the given batch.
+// The batch does need to be indexed.
+//
+// Store will check that all the register entries are for the same owner.
+func (r *RegisterIndex) Store(entries flow.RegisterEntries, height uint64, batch *pebble.Batch) error {
+	for _, entry := range entries {
+		owner := flow.BytesToAddress([]byte(entry.Key.Owner))
+		if r.owner != owner {
+			return registerOwnerMismatch(r.owner, owner)
+		}
 
-	encoded := newLookupKey(r.height, key).Bytes()
+		encoded := newLookupKey(height, []byte(entry.Key.Key)).Bytes()
 
-	var db pebble.Writer = r.store.db
-	if r.batch != nil {
-		db = r.batch
-	}
-	err := db.Set(encoded, value, nil)
-	if err != nil {
-		return fmt.Errorf("failed to set key: %w", err)
+		err := batch.Set(encoded, entry.Value, nil)
+		if err != nil {
+			return fmt.Errorf("failed to set key: %w", err)
+		}
 	}
 
 	return nil
 }
 
-func (r *Register) ValueExists(owner, key []byte) (bool, error) {
-	val, err := r.GetValue(owner, key)
-	if err != nil {
-		return false, err
-	}
-
-	return len(val) == 0, nil
-}
-
-func (r *Register) AllocateSlabIndex(_ []byte) (atree.SlabIndex, error) {
-	return atree.SlabIndexUndefined, fmt.Errorf(
-		"unexpected call to allocate slab index",
-	)
-}
-
-func (r *Register) lookupRegister(key []byte) (flow.RegisterValue, error) {
-	var db pebble.Reader = r.store.db
-	if r.batch != nil {
-		db = r.batch
-	}
+func (r *RegisterIndex) lookupRegister(key []byte) (flow.RegisterValue, error) {
+	db := r.store.db
 
 	iter, err := db.NewIter(&pebble.IterOptions{
 		UseL6Filters: true,
@@ -167,7 +146,7 @@ func newLookupKey(height uint64, key []byte) *lookupKey {
 
 	// Encode the height getting it to 1s compliment (all bits flipped) and big-endian byte order.
 	//
-	// Registers are a sparse dataset stored with a single entry per update. To find the value at a particular
+	// RegisterIndex are a sparse dataset stored with a single entry per update. To find the value at a particular
 	// height, we need to do a scan across the entries to find the highest height that is less than or equal
 	// to the target height.
 	//
@@ -178,4 +157,8 @@ func newLookupKey(height uint64, key []byte) *lookupKey {
 	lookupKey.encoded = binary.BigEndian.AppendUint64(lookupKey.encoded, onesCompliment)
 
 	return &lookupKey
+}
+
+func registerOwnerMismatch(expected flow.Address, owner flow.Address) error {
+	return fmt.Errorf("owner mismatch. Storage expects a single owner %s, given %s", expected.Hex(), owner.Hex())
 }
