@@ -37,6 +37,14 @@ type RegisterIndex struct {
 // The register store does verify that the owner supplied is the one that was used before,
 // or that the heights are sequential.
 // This should be done by the caller.
+//
+// The RegisterIndex is modeled after `pebble.Registers` from `flow-go` but there are a few differences:
+//  1. The `flow-go` implementation creates its own independent batch when saving registers.
+//     The gateway needs to save the registers together with blocks and transaction so the batch
+//     is shared with that.
+//  2. The gateway does not need to store the owner address as all the registers are for the same owner.
+//  3. The gateway does not need pruning (yet) as the db is supposed to be much smaller.
+//  4. The owner and height checks are expected to be performed by the caller.
 func NewRegisters(
 	store *Storage,
 	owner flow.Address,
