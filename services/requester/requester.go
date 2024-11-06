@@ -83,7 +83,6 @@ const coaFundingBalance = minFlowBalance - 1
 
 const LatestBlockHeight uint64 = math.MaxUint64 - 1
 
-// TODO(janezp): Requester does need to know about special EVM block heights. evmHeight should be uint64.
 type Requester interface {
 	// SendRawTransaction will submit signed transaction data to the network.
 	// The submitted EVM transaction hash is returned.
@@ -91,30 +90,30 @@ type Requester interface {
 
 	// GetBalance returns the amount of wei for the given address in the state of the
 	// given EVM block height.
-	GetBalance(ctx context.Context, address common.Address, evmHeight int64) (*big.Int, error)
+	GetBalance(ctx context.Context, address common.Address, evmHeight uint64) (*big.Int, error)
 
 	// Call executes the given signed transaction data on the state for the given EVM block height.
 	// Note, this function doesn't make and changes in the state/blockchain and is
 	// useful to execute and retrieve values.
-	Call(ctx context.Context, tx *types.LegacyTx, from common.Address, evmHeight int64) ([]byte, error)
+	Call(ctx context.Context, tx *types.LegacyTx, from common.Address, evmHeight uint64) ([]byte, error)
 
 	// EstimateGas executes the given signed transaction data on the state for the given EVM block height.
 	// Note, this function doesn't make any changes in the state/blockchain and is
 	// useful to executed and retrieve the gas consumption and possible failures.
-	EstimateGas(ctx context.Context, tx *types.LegacyTx, from common.Address, evmHeight int64) (uint64, error)
+	EstimateGas(ctx context.Context, tx *types.LegacyTx, from common.Address, evmHeight uint64) (uint64, error)
 
 	// GetNonce gets nonce from the network at the given EVM block height.
-	GetNonce(ctx context.Context, address common.Address, evmHeight int64) (uint64, error)
+	GetNonce(ctx context.Context, address common.Address, evmHeight uint64) (uint64, error)
 
 	// GetCode returns the code stored at the given address in
 	// the state for the given EVM block height.
-	GetCode(ctx context.Context, address common.Address, evmHeight int64) ([]byte, error)
+	GetCode(ctx context.Context, address common.Address, evmHeight uint64) ([]byte, error)
 
 	// GetLatestEVMHeight returns the latest EVM height of the network.
 	GetLatestEVMHeight(ctx context.Context) (uint64, error)
 
 	// GetStorageAt returns the storage from the state at the given address, key and block number.
-	GetStorageAt(ctx context.Context, address common.Address, hash common.Hash, evmHeight int64) (common.Hash, error)
+	GetStorageAt(ctx context.Context, address common.Address, hash common.Hash, evmHeight uint64) (common.Hash, error)
 }
 
 var _ Requester = &EVM{}
@@ -346,9 +345,9 @@ func (e *EVM) buildTransaction(ctx context.Context, script []byte, args ...caden
 func (e *EVM) GetBalance(
 	ctx context.Context,
 	address common.Address,
-	evmHeight int64,
+	evmHeight uint64,
 ) (*big.Int, error) {
-	view, err := e.getBlockView(uint64(evmHeight))
+	view, err := e.getBlockView(evmHeight)
 	if err != nil {
 		return nil, err
 	}
@@ -359,9 +358,9 @@ func (e *EVM) GetBalance(
 func (e *EVM) GetNonce(
 	ctx context.Context,
 	address common.Address,
-	evmHeight int64,
+	evmHeight uint64,
 ) (uint64, error) {
-	view, err := e.getBlockView(uint64(evmHeight))
+	view, err := e.getBlockView(evmHeight)
 	if err != nil {
 		return 0, err
 	}
@@ -370,12 +369,12 @@ func (e *EVM) GetNonce(
 }
 
 func (e *EVM) GetStorageAt(
-	ctx context.Context,
+	_ context.Context,
 	address common.Address,
 	hash common.Hash,
-	evmHeight int64,
+	evmHeight uint64,
 ) (common.Hash, error) {
-	view, err := e.getBlockView(uint64(evmHeight))
+	view, err := e.getBlockView(evmHeight)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -384,12 +383,12 @@ func (e *EVM) GetStorageAt(
 }
 
 func (e *EVM) Call(
-	ctx context.Context,
+	_ context.Context,
 	tx *types.LegacyTx,
 	from common.Address,
-	evmHeight int64,
+	evmHeight uint64,
 ) ([]byte, error) {
-	view, err := e.getBlockView(uint64(evmHeight))
+	view, err := e.getBlockView(evmHeight)
 	if err != nil {
 		return nil, err
 	}
@@ -412,6 +411,10 @@ func (e *EVM) Call(
 		query.WithExtraPrecompiledContracts([]evmTypes.PrecompiledContract{rca}),
 	)
 
+	if err != nil {
+		return nil, fmt.Errorf("failed to dry-run transaction: %w", err)
+	}
+
 	resultSummary := result.ResultSummary()
 	if resultSummary.ErrorCode != 0 {
 		if resultSummary.ErrorCode == evmTypes.ExecutionErrCodeExecutionReverted {
@@ -424,12 +427,12 @@ func (e *EVM) Call(
 }
 
 func (e *EVM) EstimateGas(
-	ctx context.Context,
+	_ context.Context,
 	tx *types.LegacyTx,
 	from common.Address,
-	evmHeight int64,
+	evmHeight uint64,
 ) (uint64, error) {
-	view, err := e.getBlockView(uint64(evmHeight))
+	view, err := e.getBlockView(evmHeight)
 	if err != nil {
 		return 0, err
 	}
@@ -488,11 +491,11 @@ func (e *EVM) EstimateGas(
 }
 
 func (e *EVM) GetCode(
-	ctx context.Context,
+	_ context.Context,
 	address common.Address,
-	evmHeight int64,
+	evmHeight uint64,
 ) ([]byte, error) {
-	view, err := e.getBlockView(uint64(evmHeight))
+	view, err := e.getBlockView(evmHeight)
 	if err != nil {
 		return nil, err
 	}
@@ -634,7 +637,7 @@ func (e *EVM) executeScriptAtHeight(
 }
 
 func (e *EVM) getBlockView(evmHeight uint64) (*query.View, error) {
-	ledger := pebble.NewRegister(e.store, uint64(evmHeight), nil)
+	ledger := pebble.NewRegister(e.store, evmHeight, nil)
 	blocksProvider := replayer.NewBlocksProvider(
 		e.blocks,
 		e.config.FlowNetworkID,
@@ -648,7 +651,7 @@ func (e *EVM) getBlockView(evmHeight uint64) (*query.View, error) {
 		120_000_000,
 	)
 
-	return viewProvider.GetBlockView(uint64(evmHeight))
+	return viewProvider.GetBlockView(evmHeight)
 }
 
 // cacheKey builds the cache key from the script type, height and arguments.
@@ -682,8 +685,8 @@ func AddOne64th(n uint64) uint64 {
 	return n + (n / 64)
 }
 
-func (e *EVM) evmToCadenceHeight(height int64) (uint64, error) {
-	cadenceHeight, err := e.blocks.GetCadenceHeight(uint64(height))
+func (e *EVM) evmToCadenceHeight(height uint64) (uint64, error) {
+	cadenceHeight, err := e.blocks.GetCadenceHeight(height)
 	if err != nil {
 		return 0, fmt.Errorf(
 			"failed to map evm height: %d to cadence height: %w",
