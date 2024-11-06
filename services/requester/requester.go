@@ -121,6 +121,7 @@ var _ Requester = &EVM{}
 
 type EVM struct {
 	store          *pebble.Storage
+	registerStore  *pebble.RegisterStorage
 	blocksProvider *replayer.BlocksProvider
 	client         *CrossSporkClient
 	config         *config.Config
@@ -140,6 +141,7 @@ type EVM struct {
 
 func NewEVM(
 	store *pebble.Storage,
+	registerStore *pebble.RegisterStorage,
 	blocksProvider *replayer.BlocksProvider,
 	client *CrossSporkClient,
 	config *config.Config,
@@ -200,6 +202,7 @@ func NewEVM(
 
 	evm := &EVM{
 		store:             store,
+		registerStore:     registerStore,
 		blocksProvider:    blocksProvider,
 		client:            client,
 		config:            config,
@@ -634,7 +637,6 @@ func (e *EVM) executeScriptAtHeight(
 }
 
 func (e *EVM) getBlockView(evmHeight uint64) (*query.View, error) {
-	ledger := pebble.NewRegister(e.store, uint64(evmHeight), nil)
 	blocksProvider := replayer.NewBlocksProvider(
 		e.blocks,
 		e.config.FlowNetworkID,
@@ -643,12 +645,12 @@ func (e *EVM) getBlockView(evmHeight uint64) (*query.View, error) {
 	viewProvider := query.NewViewProvider(
 		e.config.FlowNetworkID,
 		evm.StorageAccountAddress(e.config.FlowNetworkID),
-		ledger,
+		e.registerStore,
 		blocksProvider,
 		120_000_000,
 	)
 
-	return viewProvider.GetBlockView(uint64(evmHeight))
+	return viewProvider.GetBlockView(evmHeight)
 }
 
 // cacheKey builds the cache key from the script type, height and arguments.
