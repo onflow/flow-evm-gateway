@@ -19,7 +19,7 @@ func Test_RegisterIndex(t *testing.T) {
 	runDB("get register", t, func(t *testing.T, db *Storage) {
 		t.Parallel()
 
-		r := NewRegisters(db, ownerAddress)
+		r := NewRegisterStorage(db, ownerAddress)
 
 		v, err := r.Get(flow.RegisterID{Owner: owner, Key: key}, 0)
 		require.NoError(t, err)
@@ -29,7 +29,7 @@ func Test_RegisterIndex(t *testing.T) {
 	runDB("get register - owner2", t, func(t *testing.T, db *Storage) {
 		t.Parallel()
 
-		r := NewRegisters(db, ownerAddress)
+		r := NewRegisterStorage(db, ownerAddress)
 
 		_, err := r.Get(flow.RegisterID{Owner: owner2, Key: key}, 0)
 		require.Error(t, err)
@@ -38,7 +38,7 @@ func Test_RegisterIndex(t *testing.T) {
 	runDB("store registers", t, func(t *testing.T, db *Storage) {
 		t.Parallel()
 
-		r := NewRegisters(db, ownerAddress)
+		r := NewRegisterStorage(db, ownerAddress)
 
 		batch := db.NewBatch()
 
@@ -72,7 +72,7 @@ func Test_RegisterIndex(t *testing.T) {
 	runDB("store registers - owner2", t, func(t *testing.T, db *Storage) {
 		t.Parallel()
 
-		r := NewRegisters(db, ownerAddress)
+		r := NewRegisterStorage(db, ownerAddress)
 
 		batch := db.NewBatch()
 
@@ -87,5 +87,74 @@ func Test_RegisterIndex(t *testing.T) {
 			batch,
 		)
 		require.Error(t, err)
+	})
+}
+
+func Test_StorageSnapshot(t *testing.T) {
+
+	t.Parallel()
+	owner := []byte("0x1")
+	ownerAddress := flow.BytesToAddress(owner)
+	key := []byte("0x3")
+	value := []byte{0x4}
+
+	runDB("get register", t, func(t *testing.T, db *Storage) {
+		t.Parallel()
+
+		r := NewRegisterStorage(db, ownerAddress)
+		s, err := r.GetSnapshotAt(0)
+		require.NoError(t, err)
+
+		v, err := s.GetValue(owner, key)
+		require.NoError(t, err)
+		require.Empty(t, v)
+	})
+
+	runDB("get register", t, func(t *testing.T, db *Storage) {
+		t.Parallel()
+
+		count := uint64(0)
+
+		storageGet := func(id flow.RegisterID, height uint64) (flow.RegisterValue, error) {
+			count++
+			return value, nil
+		}
+
+		s := NewStorageSnapshot(storageGet, 0)
+
+		v, err := s.GetValue(owner, key)
+		require.NoError(t, err)
+		require.Equal(t, value, v)
+
+		v, err = s.GetValue(owner, key)
+		require.NoError(t, err)
+		require.Equal(t, value, v)
+
+		// value should be cached
+		require.Equal(t, uint64(1), count)
+	})
+
+	runDB("get register - cache nil", t, func(t *testing.T, db *Storage) {
+		t.Parallel()
+
+		count := uint64(0)
+
+		storageGet := func(id flow.RegisterID, height uint64) (flow.RegisterValue, error) {
+			count++
+			return nil, nil
+		}
+
+		s := NewStorageSnapshot(storageGet, 0)
+
+		v, err := s.GetValue(owner, key)
+		require.NoError(t, err)
+		require.Empty(t, v)
+
+		v, err = s.GetValue(owner, key)
+		require.NoError(t, err)
+		require.Empty(t, v)
+
+		// value should be cached
+		require.Equal(t, uint64(1), count)
 	})
 }
