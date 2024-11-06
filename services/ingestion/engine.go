@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	flowGo "github.com/onflow/flow-go/model/flow"
+
 	pebbleDB "github.com/cockroachdb/pebble"
 	"github.com/onflow/flow-go-sdk"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
@@ -40,6 +42,7 @@ type Engine struct {
 	subscriber      EventSubscriber
 	blocksProvider  *replayer.BlocksProvider
 	store           *pebble.Storage
+	registerStore   *pebble.RegisterStorage
 	blocks          storage.BlockIndexer
 	receipts        storage.ReceiptIndexer
 	transactions    storage.TransactionIndexer
@@ -57,6 +60,7 @@ func NewEventIngestionEngine(
 	subscriber EventSubscriber,
 	blocksProvider *replayer.BlocksProvider,
 	store *pebble.Storage,
+	registerStore *pebble.RegisterStorage,
 	blocks storage.BlockIndexer,
 	receipts storage.ReceiptIndexer,
 	transactions storage.TransactionIndexer,
@@ -76,6 +80,7 @@ func NewEventIngestionEngine(
 		subscriber:      subscriber,
 		blocksProvider:  blocksProvider,
 		store:           store,
+		registerStore:   registerStore,
 		blocks:          blocks,
 		receipts:        receipts,
 		transactions:    transactions,
@@ -173,15 +178,11 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 		return err
 	}
 
-	storageProvider := pebble.NewRegister(
-		e.store,
-		events.Block().Height,
-		batch,
-	)
+	blockEvents := events.BlockEventPayload()
 	cr := sync.NewReplayer(
 		e.replayerConfig.ChainID,
 		e.replayerConfig.RootAddr,
-		storageProvider,
+		e.registerStore,
 		e.blocksProvider,
 		e.log,
 		e.replayerConfig.CallTracerCollector.TxTracer(),
@@ -190,7 +191,7 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 
 	// Step 1.2: Replay all block transactions
 	// If `ReplayBlock` returns any error, we abort the EVM events processing
-	res, err := cr.ReplayBlock(events.TxEventPayloads(), events.BlockEventPayload())
+	res, err := cr.ReplayBlock(events.TxEventPayloads(), blockEvents)
 	if err != nil {
 		return fmt.Errorf("failed to replay block on height: %d, with: %w", events.Block().Height, err)
 	}
@@ -198,11 +199,9 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 	// Step 2: Write all the necessary changes to each storage
 
 	// Step 2.1: Write all the EVM state changes to `StorageProvider`
-	for k, v := range res.StorageRegisterUpdates() {
-		err = storageProvider.SetValue([]byte(k.Owner), []byte(k.Key), v)
-		if err != nil {
-			return fmt.Errorf("failed to commit state changes on block: %d", events.Block().Height)
-		}
+	err = e.registerStore.Store(registerEntriesFromKeyValue(res.StorageRegisterUpdates()), blockEvents.Height, batch)
+	if err != nil {
+		return fmt.Errorf("failed to store state changes on block: %d", events.Block().Height)
 	}
 
 	// Step 2.2: Write the latest EVM block to `Blocks` storage
@@ -340,4 +339,15 @@ func (e *Engine) indexReceipts(
 	}
 
 	return nil
+}
+
+func registerEntriesFromKeyValue(keyValue map[flowGo.RegisterID]flowGo.RegisterValue) []flowGo.RegisterEntry {
+	entries := make([]flowGo.RegisterEntry, 0, len(keyValue))
+	for k, v := range keyValue {
+		entries = append(entries, flowGo.RegisterEntry{
+			Key:   k,
+			Value: v,
+		})
+	}
+	return entries
 }
