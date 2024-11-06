@@ -32,6 +32,8 @@ import (
 
 const maxFeeHistoryBlockCount = 1024
 
+var baseFeesPerGas = big.NewInt(1)
+
 // A map containing all the valid method names that are found
 // in the Ethereum JSON-RPC API specification.
 // Update accordingly if any new methods are added/removed.
@@ -937,7 +939,7 @@ func (b *BlockChainAPI) FeeHistory(
 			oldestBlock = (*hexutil.Big)(big.NewInt(int64(block.Height)))
 		}
 
-		baseFees = append(baseFees, (*hexutil.Big)(big.NewInt(0)))
+		baseFees = append(baseFees, (*hexutil.Big)(baseFeesPerGas))
 
 		rewards = append(rewards, blockRewards)
 
@@ -1053,7 +1055,7 @@ func (b *BlockChainAPI) prepareBlockResponse(
 		GasLimit:         hexutil.Uint64(blockGasLimit),
 		Nonce:            types.BlockNonce{0x1},
 		Timestamp:        hexutil.Uint64(block.Timestamp),
-		BaseFeePerGas:    hexutil.Big(*big.NewInt(0)),
+		BaseFeePerGas:    hexutil.Big(*baseFeesPerGas),
 		LogsBloom:        types.LogsBloom([]*types.Log{}),
 		Miner:            evmTypes.CoinbaseAddress.ToCommon(),
 		Sha3Uncles:       types.EmptyUncleHash,
@@ -1230,8 +1232,7 @@ func (b *BlockChainAPI) GetUncleByBlockNumberAndIndex(
 
 // MaxPriorityFeePerGas returns a suggestion for a gas tip cap for dynamic fee transactions.
 func (b *BlockChainAPI) MaxPriorityFeePerGas(ctx context.Context) (*hexutil.Big, error) {
-	fee := hexutil.Big(*big.NewInt(1))
-	return &fee, nil
+	return (*hexutil.Big)(b.config.GasPrice), nil
 }
 
 // Mining returns true if client is actively mining new blocks.
