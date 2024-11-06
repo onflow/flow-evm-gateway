@@ -7,6 +7,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/onflow/flow-evm-gateway/storage"
+
 	pebbleDB "github.com/cockroachdb/pebble"
 	"github.com/onflow/flow-go/fvm/environment"
 	"github.com/onflow/flow-go/fvm/evm"
@@ -41,7 +43,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 		transactions := &storageMock.TransactionIndexer{}
 		latestHeight := uint64(10)
 
-		store := setupStore(t)
+		store, registerStore := setupStore(t)
 
 		blocks := &storageMock.BlockIndexer{}
 		blocks.
@@ -71,6 +73,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 			subscriber,
 			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
 			store,
+			registerStore,
 			blocks,
 			receipts,
 			transactions,
@@ -126,7 +129,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 		transactions := &storageMock.TransactionIndexer{}
 		latestHeight := uint64(10)
 
-		store := setupStore(t)
+		store, registerStore := setupStore(t)
 
 		blocks := &storageMock.BlockIndexer{}
 		blocks.
@@ -155,6 +158,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 			subscriber,
 			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
 			store,
+			registerStore,
 			blocks,
 			receipts,
 			transactions,
@@ -234,7 +238,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		nextHeight := latestHeight + 1
 		blockID := flow.Identifier{0x01}
 
-		store := setupStore(t)
+		store, registerStore := setupStore(t)
 
 		blocks := &storageMock.BlockIndexer{}
 		blocks.
@@ -281,6 +285,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			subscriber,
 			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
 			store,
+			registerStore,
 			blocks,
 			receipts,
 			transactions,
@@ -353,7 +358,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		latestHeight := uint64(10)
 		nextHeight := latestHeight + 1
 
-		store := setupStore(t)
+		store, registerStore := setupStore(t)
 
 		blocks := &storageMock.BlockIndexer{}
 		blocks.
@@ -394,6 +399,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			subscriber,
 			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
 			store,
+			registerStore,
 			blocks,
 			receipts,
 			transactions,
@@ -463,7 +469,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		transactions := &storageMock.TransactionIndexer{}
 		latestCadenceHeight := uint64(0)
 
-		store := setupStore(t)
+		store, registerStore := setupStore(t)
 
 		blocks := &storageMock.BlockIndexer{}
 		blocks.
@@ -493,6 +499,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			subscriber,
 			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
 			store,
+			registerStore,
 			blocks,
 			receipts,
 			transactions,
@@ -658,19 +665,31 @@ func defaultReplayerConfig() replayer.Config {
 	}
 }
 
-func setupStore(t *testing.T) *pebble.Storage {
+func setupStore(t *testing.T) (*pebble.Storage, *pebble.RegisterStorage) {
 	store, err := pebble.New(t.TempDir(), zerolog.Nop())
 	require.NoError(t, err)
 
-	storageProvider := pebble.NewRegister(store, 0, nil)
 	storageAddress := evm.StorageAccountAddress(flowGo.Emulator)
+	registerStore := pebble.NewRegisterStorage(store, storageAddress)
+	snapshot, err := registerStore.GetSnapshotAt(0)
+	require.NoError(t, err)
+	delta := storage.NewRegisterDelta(snapshot)
 	accountStatus := environment.NewAccountStatus()
-	err = storageProvider.SetValue(
+	err = delta.SetValue(
 		storageAddress[:],
 		[]byte(flowGo.AccountStatusKey),
 		accountStatus.ToBytes(),
 	)
 	require.NoError(t, err)
 
-	return store
+	batch := store.NewBatch()
+	defer func() {
+		require.NoError(t, batch.Close())
+	}()
+	err = registerStore.Store(delta.GetUpdates(), 0, batch)
+	require.NoError(t, err)
+	err = batch.Commit(pebbleDB.Sync)
+	require.NoError(t, err)
+
+	return store, registerStore
 }

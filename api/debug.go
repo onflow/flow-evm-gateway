@@ -38,18 +38,20 @@ type txTraceResult struct {
 }
 
 type DebugAPI struct {
-	store        *pebble.Storage
-	logger       zerolog.Logger
-	tracer       storage.TraceIndexer
-	blocks       storage.BlockIndexer
-	transactions storage.TransactionIndexer
-	receipts     storage.ReceiptIndexer
-	config       *config.Config
-	collector    metrics.Collector
+	store         *pebble.Storage
+	registerStore *pebble.RegisterStorage
+	logger        zerolog.Logger
+	tracer        storage.TraceIndexer
+	blocks        storage.BlockIndexer
+	transactions  storage.TransactionIndexer
+	receipts      storage.ReceiptIndexer
+	config        *config.Config
+	collector     metrics.Collector
 }
 
 func NewDebugAPI(
 	store *pebble.Storage,
+	registerStore *pebble.RegisterStorage,
 	tracer storage.TraceIndexer,
 	blocks storage.BlockIndexer,
 	transactions storage.TransactionIndexer,
@@ -59,14 +61,15 @@ func NewDebugAPI(
 	collector metrics.Collector,
 ) *DebugAPI {
 	return &DebugAPI{
-		store:        store,
-		logger:       logger,
-		tracer:       tracer,
-		blocks:       blocks,
-		transactions: transactions,
-		receipts:     receipts,
-		config:       config,
-		collector:    collector,
+		store:         store,
+		registerStore: registerStore,
+		logger:        logger,
+		tracer:        tracer,
+		blocks:        blocks,
+		transactions:  transactions,
+		receipts:      receipts,
+		config:        config,
+		collector:     collector,
 	}
 }
 
@@ -270,7 +273,6 @@ func (d *DebugAPI) TraceCall(
 		return nil, err
 	}
 
-	ledger := pebble.NewRegister(d.store, block.Height, nil)
 	blocksProvider := replayer.NewBlocksProvider(
 		d.blocks,
 		d.config.FlowNetworkID,
@@ -279,7 +281,7 @@ func (d *DebugAPI) TraceCall(
 	viewProvider := query.NewViewProvider(
 		d.config.FlowNetworkID,
 		flowEVM.StorageAccountAddress(d.config.FlowNetworkID),
-		ledger,
+		d.registerStore,
 		blocksProvider,
 		120_000_000,
 	)
@@ -331,7 +333,11 @@ func (d *DebugAPI) TraceCall(
 }
 
 func (d *DebugAPI) executorAtBlock(block *models.Block) (*evm.BlockExecutor, error) {
-	ledger := pebble.NewRegister(d.store, block.Height, d.store.NewBatch())
+	snapshot, err := d.registerStore.GetSnapshotAt(block.Height)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get register snapshot at block height %d: %w", block.Height, err)
+	}
+	ledger := storage.NewRegisterDelta(snapshot)
 
 	return evm.NewBlockExecutor(
 		block,
