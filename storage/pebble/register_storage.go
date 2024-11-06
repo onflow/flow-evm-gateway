@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"fmt"
 
+	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/flow-go/model/flow"
 	"github.com/onflow/flow-go/storage/pebble/registers"
 
@@ -25,12 +26,14 @@ var (
 	MinLookupKeyLen = 1 + registers.HeightSuffixLen
 )
 
-type RegisterIndex struct {
+type RegisterStorage struct {
 	store *Storage
 	owner flow.Address
 }
 
-// NewRegisters creates a new index instance at the provided height, all reads and
+var _ types.StorageProvider = &RegisterStorage{}
+
+// NewRegisterStorage creates a new index instance at the provided height, all reads and
 // writes of the registers will happen at that height.
 // this is not concurrency safe.
 //
@@ -38,18 +41,18 @@ type RegisterIndex struct {
 // or that the heights are sequential.
 // This should be done by the caller.
 //
-// The RegisterIndex is modeled after `pebble.Registers` from `flow-go` but there are a few differences:
+// The RegisterStorage is modeled after `pebble.Registers` from `flow-go` but there are a few differences:
 //  1. The `flow-go` implementation creates its own independent batch when saving registers.
 //     The gateway needs to save the registers together with blocks and transaction so the batch
 //     is shared with that.
 //  2. The gateway does not need to store the owner address as all the registers are for the same owner.
 //  3. The gateway does not need pruning (yet) as the db is supposed to be much smaller.
 //  4. The owner and height checks are expected to be performed by the caller.
-func NewRegisters(
+func NewRegisterStorage(
 	store *Storage,
 	owner flow.Address,
-) *RegisterIndex {
-	return &RegisterIndex{
+) *RegisterStorage {
+	return &RegisterStorage{
 		store: store,
 		owner: owner,
 	}
@@ -57,7 +60,7 @@ func NewRegisters(
 
 // Get returns the register value for the given register ID at the given height.
 // Get will check that the owner is the same as the one used to create the index.
-func (r *RegisterIndex) Get(id flow.RegisterID, height uint64) (flow.RegisterValue, error) {
+func (r *RegisterStorage) Get(id flow.RegisterID, height uint64) (flow.RegisterValue, error) {
 	owner := flow.BytesToAddress([]byte(id.Owner))
 	if r.owner != flow.BytesToAddress([]byte(id.Owner)) {
 		return nil, registerOwnerMismatch(r.owner, owner)
@@ -71,7 +74,7 @@ func (r *RegisterIndex) Get(id flow.RegisterID, height uint64) (flow.RegisterVal
 // The batch does need to be indexed.
 //
 // Store will check that all the register entries are for the same owner.
-func (r *RegisterIndex) Store(entries flow.RegisterEntries, height uint64, batch *pebble.Batch) error {
+func (r *RegisterStorage) Store(entries flow.RegisterEntries, height uint64, batch *pebble.Batch) error {
 	for _, entry := range entries {
 		owner := flow.BytesToAddress([]byte(entry.Key.Owner))
 		if r.owner != owner {
@@ -89,7 +92,7 @@ func (r *RegisterIndex) Store(entries flow.RegisterEntries, height uint64, batch
 	return nil
 }
 
-func (r *RegisterIndex) lookupRegister(key []byte) (flow.RegisterValue, error) {
+func (r *RegisterStorage) lookupRegister(key []byte) (flow.RegisterValue, error) {
 	db := r.store.db
 
 	iter, err := db.NewIter(&pebble.IterOptions{
@@ -154,7 +157,7 @@ func newLookupKey(height uint64, key []byte) *lookupKey {
 
 	// Encode the height getting it to 1s compliment (all bits flipped) and big-endian byte order.
 	//
-	// RegisterIndex are a sparse dataset stored with a single entry per update. To find the value at a particular
+	// RegisterStorage are a sparse dataset stored with a single entry per update. To find the value at a particular
 	// height, we need to do a scan across the entries to find the highest height that is less than or equal
 	// to the target height.
 	//
@@ -167,6 +170,52 @@ func newLookupKey(height uint64, key []byte) *lookupKey {
 	return &lookupKey
 }
 
+// GetSnapshotAt returns a snapshot of the register index at the given block height.
+// the snapshot has a cache. Nil values are cached.
+func (r *RegisterStorage) GetSnapshotAt(evmBlockHeight uint64) (types.BackendStorageSnapshot, error) {
+	return NewStorageSnapshot(r.Get, evmBlockHeight), nil
+}
+
 func registerOwnerMismatch(expected flow.Address, owner flow.Address) error {
 	return fmt.Errorf("owner mismatch. Storage expects a single owner %s, given %s", expected.Hex(), owner.Hex())
 }
+
+type GetAtHeightFunc func(id flow.RegisterID, height uint64) (flow.RegisterValue, error)
+
+type StorageSnapshot struct {
+	cache map[flow.RegisterID]flow.RegisterValue
+
+	evmBlockHeight uint64
+	storageGet     GetAtHeightFunc
+}
+
+// NewStorageSnapshot creates a new snapshot of the register index at the given block height.
+// the snapshot has a cache. Nil values are cached.
+func NewStorageSnapshot(get GetAtHeightFunc, evmBlockHeight uint64) *StorageSnapshot {
+	return &StorageSnapshot{
+		cache:          make(map[flow.RegisterID]flow.RegisterValue),
+		storageGet:     get,
+		evmBlockHeight: evmBlockHeight,
+	}
+}
+
+// GetValue returns the value for the given register ID at the snapshot block height.
+// If the value is not found in the cache, it is fetched from the register index.
+func (s StorageSnapshot) GetValue(owner []byte, key []byte) ([]byte, error) {
+	id := flow.CadenceRegisterID(owner, key)
+	value, ok := s.cache[id]
+	if ok {
+		return value, nil
+	}
+
+	// get from index
+	val, err := s.storageGet(id, s.evmBlockHeight)
+	if err != nil {
+		return nil, err
+	}
+
+	s.cache[id] = val
+	return val, nil
+}
+
+var _ types.BackendStorageSnapshot = &StorageSnapshot{}
