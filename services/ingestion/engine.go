@@ -168,7 +168,8 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 		return nil // nothing else to do this was heartbeat event with not event payloads
 	}
 
-	batch := e.store.NewBatch()
+	// TODO(JanezP): accounts need an indexed batch. Investigate why and try to switch to non-indexed batch
+	batch := e.store.NewIndexedBatch()
 	defer func(batch *pebbleDB.Batch) {
 		err := batch.Close()
 		if err != nil {
