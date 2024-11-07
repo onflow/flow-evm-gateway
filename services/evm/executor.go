@@ -10,7 +10,6 @@ import (
 	"github.com/onflow/flow-go/fvm/evm/types"
 	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/onflow/go-ethereum/common"
-	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/onflow/go-ethereum/eth/tracers"
 	"github.com/rs/zerolog"
 
@@ -55,23 +54,23 @@ func NewBlockExecutor(
 func (s *BlockExecutor) Run(
 	tx models.Transaction,
 	tracer *tracers.Tracer,
-) (*gethTypes.Receipt, error) {
+) error {
 	l := s.logger.With().Str("tx-hash", tx.Hash().String()).Logger()
 	l.Info().Msg("executing new transaction")
 
 	receipt, err := s.receipts.GetByTransactionID(tx.Hash())
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	ctx, err := s.blockContext(receipt, tracer)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	bv, err := s.emulator.NewBlockView(ctx)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	var res *types.Result
@@ -82,17 +81,17 @@ func (s *BlockExecutor) Run(
 	case models.TransactionCall:
 		res, err = bv.RunTransaction(t.Transaction)
 	default:
-		return nil, fmt.Errorf("invalid transaction type")
+		return fmt.Errorf("invalid transaction type")
 	}
 
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// we should never produce invalid transaction, since if the transaction was emitted from the evm core
 	// it must have either been successful or failed, invalid transactions are not emitted
 	if res.Invalid() {
-		return nil, fmt.Errorf("invalid transaction %s: %w", tx.Hash(), res.ValidationError)
+		return fmt.Errorf("invalid transaction %s: %w", tx.Hash(), res.ValidationError)
 	}
 
 	// increment values as part of a virtual block
@@ -101,7 +100,7 @@ func (s *BlockExecutor) Run(
 
 	l.Debug().Msg("transaction executed successfully")
 
-	return res.LightReceipt().ToReceipt(), nil
+	return nil
 }
 
 // blockContext produces a context that is used by the block view during the execution.

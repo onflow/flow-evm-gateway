@@ -140,8 +140,7 @@ func (d *DebugAPI) TraceTransaction(
 			txExecuted = true
 		}
 
-		_, err = blockExecutor.Run(tx, txTracer)
-		if err != nil {
+		if err = blockExecutor.Run(tx, txTracer); err != nil {
 			return nil, err
 		}
 	}
@@ -206,14 +205,12 @@ func (d *DebugAPI) TraceBlockByNumber(
 			return nil, err
 		}
 
-		_, err = blockExecutor.Run(tx, tracer)
-		if err != nil {
+		if err = blockExecutor.Run(tx, tracer); err != nil {
 			results[i] = &txTraceResult{TxHash: h, Error: err.Error()}
 			continue
 		}
 
-		txTrace, err := tracer.GetResult()
-		if err != nil {
+		if txTrace, err := tracer.GetResult(); err != nil {
 			results[i] = &txTraceResult{TxHash: h, Error: err.Error()}
 		} else {
 			results[i] = &txTraceResult{TxHash: h, Result: txTrace}
