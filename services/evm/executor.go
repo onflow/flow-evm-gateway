@@ -6,7 +6,6 @@ import (
 	"github.com/onflow/atree"
 	"github.com/onflow/flow-go/fvm/evm"
 	"github.com/onflow/flow-go/fvm/evm/emulator"
-	"github.com/onflow/flow-go/fvm/evm/emulator/state"
 	"github.com/onflow/flow-go/fvm/evm/precompiles"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	flowGo "github.com/onflow/flow-go/model/flow"
@@ -20,13 +19,12 @@ import (
 )
 
 type BlockExecutor struct {
-	types.StateDB // todo change to types.ReadOnlyView
-	emulator      types.Emulator
-	chainID       flowGo.ChainID
-	block         *models.Block
-	blocks        storage.BlockIndexer
-	logger        zerolog.Logger
-	receipts      storage.ReceiptIndexer
+	emulator types.Emulator
+	chainID  flowGo.ChainID
+	block    *models.Block
+	blocks   storage.BlockIndexer
+	logger   zerolog.Logger
+	receipts storage.ReceiptIndexer
 
 	// block dynamic data
 	txIndex uint
@@ -44,14 +42,8 @@ func NewBlockExecutor(
 	logger = logger.With().Str("component", "state-execution").Logger()
 	storageAddress := evm.StorageAccountAddress(chainID)
 
-	stateDB, err := state.NewStateDB(ledger, storageAddress)
-	if err != nil {
-		return nil, err
-	}
-
 	return &BlockExecutor{
 		emulator: emulator.NewEmulator(ledger, storageAddress),
-		StateDB:  stateDB,
 		chainID:  chainID,
 		block:    block,
 		blocks:   blocks,
