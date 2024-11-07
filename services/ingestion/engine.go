@@ -168,8 +168,13 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 		return nil // nothing else to do this was heartbeat event with not event payloads
 	}
 
-	batch := e.store.NewIndexedBatch()
-	defer batch.Close()
+	batch := e.store.NewBatch()
+	defer func(batch *pebbleDB.Batch) {
+		err := batch.Close()
+		if err != nil {
+			e.log.Fatal().Err(err).Msg("failed to close batch")
+		}
+	}(batch)
 
 	// Step 1: Re-execute all transactions on the latest EVM block
 
@@ -205,6 +210,8 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 	}
 
 	// Step 2.2: Write the latest EVM block to `Blocks` storage
+	// This verifies the EVM height is sequential, and if not it will return an error
+	// TODO(janezp): can we do this before re-execution of the block?
 	err = e.indexBlock(
 		events.CadenceHeight(),
 		events.CadenceBlockID(),
