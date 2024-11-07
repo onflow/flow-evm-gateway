@@ -145,7 +145,11 @@ func (d *DebugAPI) TraceTransaction(
 		}
 	}
 
-	return txTracer.GetResult()
+	if txTracer != nil {
+		return txTracer.GetResult()
+	}
+
+	return nil, fmt.Errorf("failed to trace transaction with hash: %s", hash)
 }
 
 func (d *DebugAPI) TraceBlockByNumber(
