@@ -214,6 +214,7 @@ func (s StorageSnapshot) GetValue(owner []byte, key []byte) ([]byte, error) {
 		return nil, err
 	}
 
+	// non-existing key will also be cached with `nil` value.
 	s.cache[id] = val
 	return val, nil
 }
