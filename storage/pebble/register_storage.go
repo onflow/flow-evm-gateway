@@ -191,6 +191,7 @@ type StorageSnapshot struct {
 
 // NewStorageSnapshot creates a new snapshot of the register index at the given block height.
 // the snapshot has a cache. Nil values are cached.
+// The snapshot is not concurrency-safe.
 func NewStorageSnapshot(get GetAtHeightFunc, evmBlockHeight uint64) *StorageSnapshot {
 	return &StorageSnapshot{
 		cache:          make(map[flow.RegisterID]flow.RegisterValue),
