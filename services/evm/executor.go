@@ -64,8 +64,7 @@ func (s *BlockExecutor) Run(
 		return nil, err
 	}
 
-	ctx, err := s.blockContext(receipt)
-	ctx.Tracer = tracer
+	ctx, err := s.blockContext(receipt, tracer)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +107,10 @@ func (s *BlockExecutor) Run(
 // blockContext produces a context that is used by the block view during the execution.
 // It can be used for transaction execution and calls. Receipt is not required when
 // producing the context for calls.
-func (s *BlockExecutor) blockContext(receipt *models.Receipt) (types.BlockContext, error) {
+func (s *BlockExecutor) blockContext(
+	receipt *models.Receipt,
+	tracer *tracers.Tracer,
+) (types.BlockContext, error) {
 	ctx := types.BlockContext{
 		ChainID:                types.EVMChainIDFromFlowChainID(s.chainID),
 		BlockNumber:            s.block.Height,
@@ -142,7 +144,7 @@ func (s *BlockExecutor) blockContext(receipt *models.Receipt) (types.BlockContex
 		Random:            s.block.PrevRandao,
 		TxCountSoFar:      s.txIndex,
 		TotalGasUsedSoFar: s.gasUsed,
-		Tracer:            nil,
+		Tracer:            tracer,
 	}
 
 	// only add precompile cadence arch contract if we have a receipt
