@@ -38,7 +38,6 @@ type Storages struct {
 	Blocks       storage.BlockIndexer
 	Transactions storage.TransactionIndexer
 	Receipts     storage.ReceiptIndexer
-	Accounts     storage.AccountIndexer
 	Traces       storage.TraceIndexer
 }
 
@@ -156,7 +155,6 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 		b.storages.Blocks,
 		b.storages.Receipts,
 		b.storages.Transactions,
-		b.storages.Accounts,
 		b.storages.Traces,
 		b.publishers.Block,
 		b.publishers.Logs,
@@ -251,7 +249,6 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 		b.storages.Blocks,
 		b.storages.Transactions,
 		b.storages.Receipts,
-		b.storages.Accounts,
 		ratelimiter,
 		b.collector,
 	)
@@ -388,6 +385,16 @@ func (b *Bootstrap) StopProfilerServer() {
 	}
 }
 
+func (b *Bootstrap) StopDB() {
+	if b.storages == nil || b.storages.Storage == nil {
+		return
+	}
+	err := b.storages.Storage.Close()
+	if err != nil {
+		b.logger.Err(err).Msg("PebbleDB graceful shutdown failed")
+	}
+}
+
 // StartEngine starts provided engine and panics if there are startup errors.
 func StartEngine(
 	ctx context.Context,
@@ -488,12 +495,13 @@ func setupStorage(
 		}(batch)
 
 		cadenceHeight := config.InitCadenceHeight
+		evmBlokcHeight := uint64(0)
 		cadenceBlock, err := client.GetBlockHeaderByHeight(context.Background(), cadenceHeight)
 		if err != nil {
 			return nil, fmt.Errorf("could not fetch provided cadence height, make sure it's correct: %w", err)
 		}
 
-		snapshot, err := registerStore.GetSnapshotAt(0)
+		snapshot, err := registerStore.GetSnapshotAt(evmBlokcHeight)
 		if err != nil {
 			return nil, fmt.Errorf("could not get register snapshot at block height %d: %w", 0, err)
 		}
@@ -509,7 +517,7 @@ func setupStorage(
 			return nil, fmt.Errorf("could not set account status: %w", err)
 		}
 
-		err = registerStore.Store(delta.GetUpdates(), cadenceHeight, batch)
+		err = registerStore.Store(delta.GetUpdates(), evmBlokcHeight, batch)
 		if err != nil {
 			return nil, fmt.Errorf("could not store register updates: %w", err)
 		}
@@ -528,7 +536,9 @@ func setupStorage(
 			return nil, fmt.Errorf("could not commit register updates: %w", err)
 		}
 
-		logger.Info().Msgf("database initialized with cadence height: %d", cadenceHeight)
+		logger.Info().
+			Stringer("fvm_address_for_evm_storage_account", storageAddress).
+			Msgf("database initialized with cadence height: %d", cadenceHeight)
 	}
 	//else {
 	//	// TODO(JanezP): verify storage account owner is correct
@@ -540,7 +550,6 @@ func setupStorage(
 		Registers:    registerStore,
 		Transactions: pebble.NewTransactions(store),
 		Receipts:     pebble.NewReceipts(store),
-		Accounts:     pebble.NewAccounts(store),
 		Traces:       pebble.NewTraces(store),
 	}, nil
 }
@@ -580,6 +589,7 @@ func Run(ctx context.Context, cfg *config.Config, ready chan struct{}) error {
 	boot.StopEventIngestion()
 	boot.StopMetricsServer()
 	boot.StopAPIServer()
+	boot.StopDB()
 
 	return nil
 }

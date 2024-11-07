@@ -3,7 +3,6 @@ package ingestion
 import (
 	"context"
 	"fmt"
-
 	flowGo "github.com/onflow/flow-go/model/flow"
 
 	pebbleDB "github.com/cockroachdb/pebble"
@@ -46,7 +45,6 @@ type Engine struct {
 	blocks          storage.BlockIndexer
 	receipts        storage.ReceiptIndexer
 	transactions    storage.TransactionIndexer
-	accounts        storage.AccountIndexer
 	traces          storage.TraceIndexer
 	log             zerolog.Logger
 	evmLastHeight   *models.SequentialHeight
@@ -64,7 +62,6 @@ func NewEventIngestionEngine(
 	blocks storage.BlockIndexer,
 	receipts storage.ReceiptIndexer,
 	transactions storage.TransactionIndexer,
-	accounts storage.AccountIndexer,
 	traces storage.TraceIndexer,
 	blocksPublisher *models.Publisher[*models.Block],
 	logsPublisher *models.Publisher[[]*gethTypes.Log],
@@ -84,7 +81,6 @@ func NewEventIngestionEngine(
 		blocks:          blocks,
 		receipts:        receipts,
 		transactions:    transactions,
-		accounts:        accounts,
 		traces:          traces,
 		log:             log,
 		blocksPublisher: blocksPublisher,
@@ -120,6 +116,13 @@ func (e *Engine) Run(ctx context.Context) error {
 	e.MarkReady()
 
 	for events := range e.subscriber.Subscribe(ctx) {
+		select {
+		case <-ctx.Done():
+			// stop the engine
+			return nil
+		default:
+		}
+
 		if events.Err != nil {
 			return fmt.Errorf(
 				"failure in event subscription with: %w",
@@ -127,7 +130,7 @@ func (e *Engine) Run(ctx context.Context) error {
 			)
 		}
 
-		err := e.processEvents(events.Events)
+		err := e.processEvents(ctx, events.Events)
 		if err != nil {
 			e.log.Error().Err(err).Msg("failed to process EVM events")
 			return err
@@ -149,7 +152,7 @@ func (e *Engine) Run(ctx context.Context) error {
 // https://github.com/onflow/flow-go/blob/master/fvm/evm/types/events.go
 //
 // Any error is unexpected and fatal.
-func (e *Engine) processEvents(events *models.CadenceEvents) error {
+func (e *Engine) processEvents(ctx context.Context, events *models.CadenceEvents) error {
 	e.log.Info().
 		Uint64("cadence-height", events.CadenceHeight()).
 		Int("cadence-event-length", events.Length()).
@@ -168,8 +171,7 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 		return nil // nothing else to do this was heartbeat event with not event payloads
 	}
 
-	// TODO(JanezP): accounts need an indexed batch. Investigate why and try to switch to non-indexed batch
-	batch := e.store.NewIndexedBatch()
+	batch := e.store.NewBatch()
 	defer func(batch *pebbleDB.Batch) {
 		err := batch.Close()
 		if err != nil {
@@ -255,6 +257,14 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 		}
 	}
 
+	select {
+	case <-ctx.Done():
+		// Temporary solution to avoid committing the batch when the DB is closed
+		// TODO(JanezP): handle this better
+		return nil
+	default:
+	}
+
 	if err := batch.Commit(pebbleDB.Sync); err != nil {
 		return fmt.Errorf("failed to commit indexed data for Cadence block %d: %w", events.CadenceHeight(), err)
 	}
@@ -325,10 +335,6 @@ func (e *Engine) indexTransaction(
 
 	if err := e.transactions.Store(tx, batch); err != nil {
 		return fmt.Errorf("failed to store tx: %s, with: %w", tx.Hash(), err)
-	}
-
-	if err := e.accounts.Update(tx, receipt, batch); err != nil {
-		return fmt.Errorf("failed to update accounts for tx: %s, with: %w", tx.Hash(), err)
 	}
 
 	return nil

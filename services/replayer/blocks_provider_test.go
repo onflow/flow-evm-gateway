@@ -28,7 +28,8 @@ import (
 func TestOnBlockReceived(t *testing.T) {
 
 	t.Run("without latest block", func(t *testing.T) {
-		blocks := setupBlocksDB(t)
+		_, blocks := setupBlocksDB(t)
+
 		blocksProvider := NewBlocksProvider(blocks, flowGo.Emulator, nil)
 
 		block := mocks.NewBlock(1)
@@ -37,7 +38,7 @@ func TestOnBlockReceived(t *testing.T) {
 	})
 
 	t.Run("with new block non-sequential to latest block", func(t *testing.T) {
-		blocks := setupBlocksDB(t)
+		_, blocks := setupBlocksDB(t)
 		blocksProvider := NewBlocksProvider(blocks, flowGo.Emulator, nil)
 
 		block1 := mocks.NewBlock(1)
@@ -55,7 +56,7 @@ func TestOnBlockReceived(t *testing.T) {
 	})
 
 	t.Run("with new block non-sequential to latest block", func(t *testing.T) {
-		blocks := setupBlocksDB(t)
+		_, blocks := setupBlocksDB(t)
 		blocksProvider := NewBlocksProvider(blocks, flowGo.Emulator, nil)
 
 		block1 := mocks.NewBlock(10)
@@ -71,7 +72,7 @@ func TestOnBlockReceived(t *testing.T) {
 func TestBlockContext(t *testing.T) {
 
 	t.Run("for latest block", func(t *testing.T) {
-		blocks := setupBlocksDB(t)
+		_, blocks := setupBlocksDB(t)
 		tracer := newCallTracer(t)
 		blocksProvider := NewBlocksProvider(blocks, flowGo.Emulator, tracer)
 
@@ -99,7 +100,7 @@ func TestBlockContext(t *testing.T) {
 }
 
 func TestGetHashFunc(t *testing.T) {
-	blocks := setupBlocksDB(t)
+	db, blocks := setupBlocksDB(t)
 	missingHeight := uint64(100)
 
 	blockMapping := make(map[uint64]*models.Block, 0)
@@ -110,8 +111,13 @@ func TestGetHashFunc(t *testing.T) {
 		}
 
 		block := mocks.NewBlock(i)
-		err := blocks.Store(i, flow.Identifier{0x1}, block, nil)
+		batch := db.NewBatch()
+		err := blocks.Store(i, flow.Identifier{0x1}, block, batch)
 		require.NoError(t, err)
+
+		err = batch.Commit(pebble2.Sync)
+		require.NoError(t, err)
+
 		blockMapping[i] = block
 	}
 
@@ -202,7 +208,7 @@ func TestGetHashFunc(t *testing.T) {
 func TestGetSnapshotAt(t *testing.T) {
 
 	t.Run("for latest block", func(t *testing.T) {
-		blocks := setupBlocksDB(t)
+		_, blocks := setupBlocksDB(t)
 		tracer := newCallTracer(t)
 		blocksProvider := NewBlocksProvider(blocks, flowGo.Emulator, tracer)
 
@@ -222,12 +228,16 @@ func TestGetSnapshotAt(t *testing.T) {
 	})
 
 	t.Run("for historic block", func(t *testing.T) {
-		blocks := setupBlocksDB(t)
+		db, blocks := setupBlocksDB(t)
 		tracer := newCallTracer(t)
 		blocksProvider := NewBlocksProvider(blocks, flowGo.Emulator, tracer)
 
 		block1 := mocks.NewBlock(1)
-		err := blocks.Store(1, flow.Identifier{0x1}, block1, nil)
+		batch := db.NewBatch()
+		err := blocks.Store(1, flow.Identifier{0x1}, block1, batch)
+		require.NoError(t, err)
+
+		err = batch.Commit(pebble2.Sync)
 		require.NoError(t, err)
 
 		block2 := mocks.NewBlock(2)
@@ -246,7 +256,7 @@ func TestGetSnapshotAt(t *testing.T) {
 	})
 
 	t.Run("for missing historic block", func(t *testing.T) {
-		blocks := setupBlocksDB(t)
+		_, blocks := setupBlocksDB(t)
 		tracer := newCallTracer(t)
 		blocksProvider := NewBlocksProvider(blocks, flowGo.Emulator, tracer)
 
@@ -267,7 +277,7 @@ func TestGetSnapshotAt(t *testing.T) {
 	})
 }
 
-func setupBlocksDB(t *testing.T) storage.BlockIndexer {
+func setupBlocksDB(t *testing.T) (*pebble.Storage, storage.BlockIndexer) {
 	dir := t.TempDir()
 	db, err := pebble.New(dir, zerolog.Nop())
 	require.NoError(t, err)
@@ -282,7 +292,7 @@ func setupBlocksDB(t *testing.T) storage.BlockIndexer {
 	err = batch.Commit(pebble2.Sync)
 	require.NoError(t, err)
 
-	return blocks
+	return db, blocks
 }
 
 func newCallTracer(t *testing.T) *tracers.Tracer {
