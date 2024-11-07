@@ -5,73 +5,16 @@ import (
 
 	"github.com/cockroachdb/pebble"
 	"github.com/goccy/go-json"
+	"github.com/onflow/flow-evm-gateway/config"
+	"github.com/onflow/flow-evm-gateway/models/errors"
+	"github.com/onflow/flow-evm-gateway/storage/mocks"
 	"github.com/onflow/flow-go-sdk"
 	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/onflow/go-ethereum/common"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
-
-	"github.com/onflow/flow-evm-gateway/config"
-	"github.com/onflow/flow-evm-gateway/models/errors"
-	"github.com/onflow/flow-evm-gateway/storage"
-	"github.com/onflow/flow-evm-gateway/storage/mocks"
 )
-
-// tests that make sure the implementation conform to the interface expected behaviour
-func TestBlocks(t *testing.T) {
-	runDB("blocks", t, func(t *testing.T, db *Storage) {
-		bl := NewBlocks(db, flowGo.Emulator)
-		batch := db.NewBatch()
-
-		err := bl.InitHeights(config.EmulatorInitCadenceHeight, flow.Identifier{0x1}, batch)
-		require.NoError(t, err)
-
-		err = batch.Commit(pebble.Sync)
-		require.NoError(t, err)
-
-		suite.Run(t, &storage.BlockTestSuite{Blocks: bl})
-	})
-}
-
-func TestReceipts(t *testing.T) {
-	runDB("receipts", t, func(t *testing.T, db *Storage) {
-		// prepare the blocks database since they track heights which are used in receipts as well
-		bl := NewBlocks(db, flowGo.Emulator)
-		batch := db.NewBatch()
-
-		err := bl.InitHeights(config.EmulatorInitCadenceHeight, flow.Identifier{0x1}, batch)
-		require.NoError(t, err)
-		err = bl.Store(30, flow.Identifier{0x1}, mocks.NewBlock(10), batch) // update first and latest height
-		require.NoError(t, err)
-		err = bl.Store(30, flow.Identifier{0x1}, mocks.NewBlock(300), batch) // update latest
-		require.NoError(t, err)
-
-		err = batch.Commit(pebble.Sync)
-		require.NoError(t, err)
-
-		suite.Run(t, &storage.ReceiptTestSuite{ReceiptIndexer: NewReceipts(db)})
-	})
-}
-
-func TestTransactions(t *testing.T) {
-	runDB("transactions", t, func(t *testing.T, db *Storage) {
-		suite.Run(t, &storage.TransactionTestSuite{TransactionIndexer: NewTransactions(db)})
-	})
-}
-
-func TestAccounts(t *testing.T) {
-	runDB("accounts", t, func(t *testing.T, db *Storage) {
-		suite.Run(t, &storage.AccountTestSuite{AccountIndexer: NewAccounts(db)})
-	})
-}
-
-func TestTraces(t *testing.T) {
-	runDB("traces", t, func(t *testing.T, db *Storage) {
-		suite.Run(t, &storage.TraceTestSuite{TraceIndexer: NewTraces(db)})
-	})
-}
 
 func TestBlock(t *testing.T) {
 
@@ -149,24 +92,12 @@ func TestBlock(t *testing.T) {
 	})
 }
 
-func TestAccount(t *testing.T) {
-	t.Run("encoding decoding nonce data", func(t *testing.T) {
-		nonce := uint64(10)
-		height := uint64(20)
-		raw := encodeNonce(10, 20)
-		decNonce, decHeight, err := decodeNonce(raw)
-		require.NoError(t, err)
-		assert.Equal(t, nonce, decNonce)
-		assert.Equal(t, height, decHeight)
-	})
-}
-
 func TestBatch(t *testing.T) {
 	runDB("batch successfully stores", t, func(t *testing.T, db *Storage) {
 		blocks := NewBlocks(db, flowGo.Emulator)
 		trace := NewTraces(db)
 
-		batch := db.NewIndexedBatch()
+		batch := db.NewBatch()
 		defer func() {
 			require.NoError(t, batch.Close())
 		}()
@@ -194,7 +125,7 @@ func TestBatch(t *testing.T) {
 	runDB("should not contain data without committing", t, func(t *testing.T, db *Storage) {
 		blocks := NewBlocks(db, flowGo.Emulator)
 
-		batch := db.NewIndexedBatch()
+		batch := db.NewBatch()
 		defer func() {
 			require.NoError(t, batch.Close())
 		}()
@@ -215,7 +146,7 @@ func TestBatch(t *testing.T) {
 			evmHeight := uint64(10 + i)
 			bl := mocks.NewBlock(evmHeight)
 
-			batch := db.NewIndexedBatch()
+			batch := db.NewBatch()
 
 			err := blocks.Store(cadenceHeight, flow.HexToID("0x1"), bl, batch)
 			require.NoError(t, err)

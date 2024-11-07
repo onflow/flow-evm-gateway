@@ -53,11 +53,6 @@ func TestSerialBlockIngestion(t *testing.T) {
 			}).
 			Once() // make sure this isn't called multiple times
 
-		accounts := &storageMock.AccountIndexer{}
-		accounts.
-			On("Update").
-			Return(func() error { return nil })
-
 		traces := &storageMock.TraceIndexer{}
 
 		eventsChan := make(chan models.BlockEvents)
@@ -77,7 +72,6 @@ func TestSerialBlockIngestion(t *testing.T) {
 			blocks,
 			receipts,
 			transactions,
-			accounts,
 			traces,
 			models.NewPublisher[*models.Block](),
 			models.NewPublisher[[]*gethTypes.Log](),
@@ -139,11 +133,6 @@ func TestSerialBlockIngestion(t *testing.T) {
 			}).
 			Once() // make sure this isn't called multiple times
 
-		accounts := &storageMock.AccountIndexer{}
-		accounts.
-			On("Update", mock.Anything, mock.Anything).
-			Return(func(t models.TransactionCall, r *gethTypes.Receipt) error { return nil })
-
 		traces := &storageMock.TraceIndexer{}
 
 		eventsChan := make(chan models.BlockEvents)
@@ -162,7 +151,6 @@ func TestSerialBlockIngestion(t *testing.T) {
 			blocks,
 			receipts,
 			transactions,
-			accounts,
 			traces,
 			models.NewPublisher[*models.Block](),
 			models.NewPublisher[[]*gethTypes.Log](),
@@ -255,11 +243,6 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 				return nil
 			})
 
-		accounts := &storageMock.AccountIndexer{}
-		accounts.
-			On("Update", mock.AnythingOfType("models.TransactionCall"), mock.AnythingOfType("*models.Receipt"), mock.Anything).
-			Return(func(tx models.Transaction, receipt *models.Receipt, _ *pebbleDB.Batch) error { return nil })
-
 		eventsChan := make(chan models.BlockEvents)
 		subscriber := &mocks.EventSubscriber{}
 		subscriber.
@@ -289,7 +272,6 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			blocks,
 			receipts,
 			transactions,
-			accounts,
 			traces,
 			models.NewPublisher[*models.Block](),
 			models.NewPublisher[[]*gethTypes.Log](),
@@ -369,11 +351,6 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			On("SetLatestCadenceHeight", mock.AnythingOfType("uint64")).
 			Return(func(h uint64) error { return nil })
 
-		accounts := &storageMock.AccountIndexer{}
-		accounts.
-			On("Update", mock.AnythingOfType("models.TransactionCall"), mock.AnythingOfType("*models.Receipt"), mock.Anything).
-			Return(func(tx models.Transaction, receipt *models.Receipt, _ *pebbleDB.Batch) error { return nil })
-
 		eventsChan := make(chan models.BlockEvents)
 		subscriber := &mocks.EventSubscriber{}
 		subscriber.
@@ -403,7 +380,6 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			blocks,
 			receipts,
 			transactions,
-			accounts,
 			traces,
 			models.NewPublisher[*models.Block](),
 			models.NewPublisher[[]*gethTypes.Log](),
@@ -479,11 +455,6 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			}).
 			Once() // make sure this isn't called multiple times
 
-		accounts := &storageMock.AccountIndexer{}
-		accounts.
-			On("Update", mock.Anything, mock.AnythingOfType("*models.Receipt"), mock.Anything).
-			Return(func(t models.Transaction, r *models.Receipt, _ *pebbleDB.Batch) error { return nil })
-
 		traces := &storageMock.TraceIndexer{}
 
 		eventsChan := make(chan models.BlockEvents)
@@ -503,7 +474,6 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			blocks,
 			receipts,
 			transactions,
-			accounts,
 			traces,
 			models.NewPublisher[*models.Block](),
 			models.NewPublisher[[]*gethTypes.Log](),

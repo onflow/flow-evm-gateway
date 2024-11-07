@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/onflow/flow-go/storage/pebble/registers"
+	"github.com/cockroachdb/pebble/bloom"
 
 	"github.com/cockroachdb/pebble"
 	"github.com/rs/zerolog"
@@ -28,6 +28,7 @@ func New(dir string, log zerolog.Logger) (*Storage, error) {
 	// currently pebble is only used for registers
 	opts := &pebble.Options{
 		Cache:                 cache,
+		Comparer:              NewMVCCComparer(),
 		FormatMajorVersion:    pebble.FormatNewest,
 		L0CompactionThreshold: 2,
 		L0StopWritesThreshold: 1000,
@@ -40,7 +41,6 @@ func New(dir string, log zerolog.Logger) (*Storage, error) {
 		MemTableStopWritesThreshold: 4,
 		// The default is 1.
 		MaxConcurrentCompactions: func() int { return 4 },
-		Comparer:                 registers.NewMVCCComparer(),
 	}
 
 	for i := 0; i < len(opts.Levels); i++ {
@@ -49,6 +49,12 @@ func New(dir string, log zerolog.Logger) (*Storage, error) {
 		// for good performance (esp. on stripped storage).
 		l.BlockSize = 32 << 10       // 32 KB
 		l.IndexBlockSize = 256 << 10 // 256 KB
+
+		// The bloom filter speedsup our SeekPrefixGE by skipping
+		// sstables that do not contain the prefix
+		l.FilterPolicy = bloom.FilterPolicy(MinLookupKeyLen)
+		l.FilterType = pebble.TableFilter
+
 		if i > 0 {
 			// L0 starts at 2MiB, each level is 2x the previous.
 			l.TargetFileSize = opts.Levels[i-1].TargetFileSize * 2
@@ -79,12 +85,7 @@ func New(dir string, log zerolog.Logger) (*Storage, error) {
 func (s *Storage) set(keyCode byte, key []byte, value []byte, batch *pebble.Batch) error {
 	prefixedKey := makePrefix(keyCode, key)
 
-	if batch != nil {
-		// set the value on batch and return
-		return batch.Set(prefixedKey, value, nil)
-	}
-
-	return s.db.Set(prefixedKey, value, nil)
+	return batch.Set(prefixedKey, value, nil)
 }
 
 func (s *Storage) get(keyCode byte, key ...[]byte) ([]byte, error) {
@@ -112,25 +113,10 @@ func (s *Storage) get(keyCode byte, key ...[]byte) ([]byte, error) {
 	return cp, nil
 }
 
-// batchGet loads the value from an indexed batch if data is found, else it loads the value from the storage.
-func (s *Storage) batchGet(batch *pebble.Batch, keyCode byte, key ...[]byte) ([]byte, error) {
-	if batch == nil || !batch.Indexed() {
-		return nil, fmt.Errorf("batch must not be nil and it must be indexed")
-	}
-
-	data, closer, err := batch.Get(makePrefix(keyCode, key...))
-	if err == nil {
-		_ = closer.Close()
-		return data, nil
-	}
-
-	return s.get(keyCode, key...)
-}
-
-func (s *Storage) NewIndexedBatch() *pebble.Batch {
-	return s.db.NewIndexedBatch()
-}
-
 func (s *Storage) NewBatch() *pebble.Batch {
 	return s.db.NewBatch()
+}
+
+func (s *Storage) Close() error {
+	return s.db.Close()
 }
