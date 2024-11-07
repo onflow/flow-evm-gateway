@@ -379,7 +379,7 @@ it('get fee history', async () => {
         {
             oldestBlock: 1n,
             reward: [['0x96'], ['0x96'], ['0x96']], // gas price is 150 during testing
-            baseFeePerGas: [0n, 0n, 0n],
+            baseFeePerGas: [1n, 1n, 1n],
             gasUsedRatio: [0, 0, 0.006205458333333334]
         }
     )
