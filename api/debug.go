@@ -211,10 +211,7 @@ func (d *DebugAPI) TraceBlockByNumber(
 
 		if err = blockExecutor.Run(tx, tracer); err != nil {
 			results[i] = &txTraceResult{TxHash: h, Error: err.Error()}
-			continue
-		}
-
-		if txTrace, err := tracer.GetResult(); err != nil {
+		} else if txTrace, err := tracer.GetResult(); err != nil {
 			results[i] = &txTraceResult{TxHash: h, Error: err.Error()}
 		} else {
 			results[i] = &txTraceResult{TxHash: h, Result: txTrace}
