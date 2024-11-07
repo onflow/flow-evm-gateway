@@ -145,12 +145,7 @@ func (s *BlockExecutor) blockContext(receipt *models.Receipt) (types.BlockContex
 		Tracer:            nil,
 	}
 
-	// only add precompile cadence arch mocks if we have a receipt,
-	// in case of call and dry run we don't produce receipts
-	// todo when a call is made that uses cadence arch precompiles, it will fail, because
-	// the precompiled contracts won't be set since we don't have a receipt for them
-	// this failure should be detected and we should in such a case execute a call against the
-	// EN using an AN
+	// only add precompile cadence arch contract if we have a receipt
 	if receipt != nil {
 		calls, err := types.AggregatedPrecompileCallsFromEncoded(receipt.PrecompiledCalls)
 		if err != nil {
