@@ -80,13 +80,13 @@ func (d *DebugAPI) TraceTransaction(
 	hash gethCommon.Hash,
 	config *tracers.TraceConfig,
 ) (json.RawMessage, error) {
-	if config != nil {
-		if *config.Tracer == replayer.TracerName &&
-			slices.Equal(config.TracerConfig, json.RawMessage(replayer.TracerConfig)) {
-			trace, err := d.tracer.GetTransaction(hash)
-			if err == nil {
-				return trace, nil
-			}
+	// If the given trace config is equal to the default call tracer used
+	// in block replay during ingestion, then we fetch the trace result
+	// from the Traces DB.
+	if isDefaultCallTracer(config) {
+		trace, err := d.tracer.GetTransaction(hash)
+		if err == nil {
+			return trace, nil
 		}
 	}
 
@@ -161,21 +161,21 @@ func (d *DebugAPI) TraceBlockByNumber(
 
 	results := make([]*txTraceResult, len(block.TransactionHashes))
 
-	if config != nil {
-		if *config.Tracer == replayer.TracerName &&
-			slices.Equal(config.TracerConfig, json.RawMessage(replayer.TracerConfig)) {
-			for i, hash := range block.TransactionHashes {
-				trace, err := d.tracer.GetTransaction(hash)
+	// If the given trace config is equal to the default call tracer used
+	// in block replay during ingestion, then we fetch the trace result
+	// from the Traces DB.
+	if isDefaultCallTracer(config) {
+		for i, hash := range block.TransactionHashes {
+			trace, err := d.tracer.GetTransaction(hash)
 
-				if err != nil {
-					results[i] = &txTraceResult{TxHash: hash, Error: err.Error()}
-				} else {
-					results[i] = &txTraceResult{TxHash: hash, Result: trace}
-				}
+			if err != nil {
+				results[i] = &txTraceResult{TxHash: hash, Error: err.Error()}
+			} else {
+				results[i] = &txTraceResult{TxHash: hash, Result: trace}
 			}
-
-			return results, nil
 		}
+
+		return results, nil
 	}
 
 	// We need to re-execute all the transactions from the given block,
@@ -413,4 +413,17 @@ func tracerForReceipt(
 	}
 
 	return tracers.DefaultDirectory.New(*config.Tracer, tracerCtx, config.TracerConfig)
+}
+
+func isDefaultCallTracer(config *tracers.TraceConfig) bool {
+	if config == nil {
+		return false
+	}
+
+	if *config.Tracer != replayer.TracerName {
+		return false
+	}
+
+	tracerConfig := json.RawMessage(replayer.TracerConfig)
+	return slices.Equal(config.TracerConfig, tracerConfig)
 }
