@@ -519,7 +519,7 @@ func setupStorage(
 			return nil, fmt.Errorf("could not store register updates: %w", err)
 		}
 
-		if err := blocks.InitHeights(cadenceHeight, cadenceBlock.ID); err != nil {
+		if err := blocks.InitHeights(cadenceHeight, cadenceBlock.ID, batch); err != nil {
 			return nil, fmt.Errorf(
 				"failed to init the database for block height: %d and ID: %s, with : %w",
 				cadenceHeight,

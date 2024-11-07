@@ -273,7 +273,7 @@ func setupBlocksDB(t *testing.T) storage.BlockIndexer {
 	chainID := flowGo.Emulator
 	blocks := pebble.NewBlocks(db, chainID)
 
-	err = blocks.InitHeights(config.EmulatorInitCadenceHeight, flow.Identifier{0x1})
+	err = blocks.InitHeights(config.EmulatorInitCadenceHeight, flow.Identifier{0x1}, nil)
 	require.NoError(t, err)
 
 	return blocks
