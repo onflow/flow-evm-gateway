@@ -52,25 +52,21 @@ func (rca *RemoteCadenceArch) RequiredGas(input []byte) uint64 {
 		return 0
 	}
 
-	key := hex.EncodeToString(crypto.Keccak256(input))
-	rca.cachedCalls[key] = evmResult.ReturnedData
-
 	return evmResult.GasConsumed
 }
 
 func (rca *RemoteCadenceArch) Run(input []byte) ([]byte, error) {
 	key := hex.EncodeToString(crypto.Keccak256(input))
-	result, ok := rca.cachedCalls[key]
 
-	if !ok {
-		evmResult, err := rca.runCall(input)
-		if err != nil {
-			return nil, err
-		}
-		return evmResult.ReturnedData, nil
+	if result, ok := rca.cachedCalls[key]; ok {
+		return result, nil
 	}
 
-	return result, nil
+	evmResult, err := rca.runCall(input)
+	if err != nil {
+		return nil, err
+	}
+	return evmResult.ReturnedData, nil
 }
 
 func (rca *RemoteCadenceArch) replaceAddresses(script []byte) []byte {
@@ -110,7 +106,7 @@ func (rca *RemoteCadenceArch) runCall(input []byte) (*evmTypes.ResultSummary, er
 		return nil, err
 	}
 
-	hexEncodedAddress, err := addressToCadenceString(evmTypes.CoinbaseAddress.ToCommon())
+	hexEncodedAddress, err := cadence.NewString(evmTypes.CoinbaseAddress.String())
 	if err != nil {
 		return nil, err
 	}
@@ -130,11 +126,10 @@ func (rca *RemoteCadenceArch) runCall(input []byte) (*evmTypes.ResultSummary, er
 		return nil, err
 	}
 
-	return evmResult, nil
-}
+	key := hex.EncodeToString(crypto.Keccak256(input))
+	rca.cachedCalls[key] = evmResult.ReturnedData
 
-func addressToCadenceString(address gethCommon.Address) (cadence.String, error) {
-	return cadence.NewString(strings.TrimPrefix(address.Hex(), "0x"))
+	return evmResult, nil
 }
 
 func parseResult(res cadence.Value) (*evmTypes.ResultSummary, error) {
