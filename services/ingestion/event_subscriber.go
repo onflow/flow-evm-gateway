@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
+	"time"
 
 	"github.com/onflow/cadence/common"
 	"github.com/onflow/flow-go/fvm/evm/events"
@@ -62,7 +64,8 @@ func NewRPCEventSubscriber(
 //
 // If error is encountered during backfill the subscription will end and the response chanel will be closed.
 func (r *RPCEventSubscriber) Subscribe(ctx context.Context) <-chan models.BlockEvents {
-	eventsChan := make(chan models.BlockEvents)
+	// buffered channel so that the decoding of the events can happen in parallel to other operations
+	eventsChan := make(chan models.BlockEvents, 1000)
 
 	go func() {
 		defer func() {
@@ -196,6 +199,7 @@ func (r *RPCEventSubscriber) subscribe(ctx context.Context, height uint64) <-cha
 // the height by one (next height), and check if we are still in previous sporks, if so repeat everything,
 // otherwise return.
 func (r *RPCEventSubscriber) backfill(ctx context.Context, height uint64) <-chan models.BlockEvents {
+	// TODO(JanezP): if we are backfilling, its more efficient to request events in a batch
 	eventsChan := make(chan models.BlockEvents)
 
 	go func() {
@@ -224,25 +228,82 @@ func (r *RPCEventSubscriber) backfill(ctx context.Context, height uint64) <-chan
 				Uint64("last-spork-height", latestHeight).
 				Msg("backfilling spork")
 
-			for ev := range r.subscribe(ctx, height) {
-				eventsChan <- ev
+			ticker := time.NewTicker(time.Millisecond * 10)
 
-				if ev.Err != nil {
+			maxRange := uint64(249)
+			for height < latestHeight {
+
+				// TODO: do rate limiting better
+				<-ticker.C
+
+				startHeight := height
+				r.logger.Debug().Msg(fmt.Sprintf("backfilling [%d / %d]...", startHeight, latestHeight))
+				endHeight := height + maxRange
+				if endHeight > latestHeight {
+					endHeight = latestHeight
+				}
+
+				evmAddress := common.Address(systemcontracts.SystemContractsForChain(r.chain).EVMContract.Address)
+				blockExecutedEvent := common.NewAddressLocation(
+					nil,
+					evmAddress,
+					string(events.EventTypeBlockExecuted),
+				).ID()
+
+				transactionExecutedEvent := common.NewAddressLocation(
+					nil,
+					evmAddress,
+					string(events.EventTypeTransactionExecuted),
+				).ID()
+
+				//
+				blocks, err := r.client.GetEventsForHeightRange(ctx, blockExecutedEvent, startHeight, endHeight)
+				if err != nil {
+					r.logger.Error().Err(err).Msg("failed to get block events")
+					eventsChan <- models.NewBlockEventsError(err)
+					return
+				}
+				sort.Slice(blocks, func(i, j int) bool {
+					return blocks[i].Height < blocks[j].Height
+				})
+
+				transactions, err := r.client.GetEventsForHeightRange(ctx, transactionExecutedEvent, startHeight, endHeight)
+				if err != nil {
+					r.logger.Error().Err(err).Msg("failed to get block events")
+					eventsChan <- models.NewBlockEventsError(err)
 					return
 				}
 
-				r.logger.Debug().Msg(fmt.Sprintf("backfilling [%d / %d]...", ev.Events.CadenceHeight(), latestHeight))
+				sort.Slice(transactions, func(i, j int) bool {
+					return transactions[i].Height < transactions[j].Height
+				})
 
-				if ev.Events != nil && ev.Events.CadenceHeight() == latestHeight {
-					height = ev.Events.CadenceHeight() + 1 // go to next height in the next spork
-
-					r.logger.Info().
-						Uint64("next-height", height).
-						Msg("reached the end of spork, checking next spork")
-
-					break
+				if len(transactions) != len(blocks) {
+					r.logger.Error().Msg("transactions and blocks have different length")
+					eventsChan <- models.NewBlockEventsError(err)
+					return
 				}
+
+				for i := range transactions {
+					if transactions[i].Height != blocks[i].Height {
+						r.logger.Error().Msg("transactions and blocks have different height")
+						eventsChan <- models.NewBlockEventsError(err)
+						return
+					}
+					// append the transaction events to the block events
+					blocks[i].Events = append(blocks[i].Events, transactions[i].Events...)
+
+					evmEvents := models.NewBlockEvents(blocks[i])
+					height = evmEvents.Events.CadenceHeight() + 1
+
+				}
+
 			}
+			ticker.Stop()
+
+			r.logger.Info().
+				Uint64("next-height", height).
+				Msg("reached the end of spork, checking next spork")
 		}
 	}()
 

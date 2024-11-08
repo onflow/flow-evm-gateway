@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"os"
 	"os/signal"
+	"runtime/pprof"
 	"strings"
 	"syscall"
 	"time"
@@ -29,6 +30,14 @@ var Cmd = &cobra.Command{
 	Use:   "run",
 	Short: "Runs the EVM Gateway Node",
 	Run: func(*cobra.Command, []string) {
+
+		f, err := os.Create("cpu.pprof")
+		if err != nil {
+			log.Fatal().Err(err).Msg("could not create cpu profile")
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+
 		// create multi-key account
 		if _, exists := os.LookupEnv("MULTIKEY_MODE"); exists {
 			bootstrap.RunCreateMultiKeyAccount()
