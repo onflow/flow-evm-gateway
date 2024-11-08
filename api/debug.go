@@ -17,7 +17,6 @@ import (
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/models"
-	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/services/evm"
 	"github.com/onflow/flow-evm-gateway/services/replayer"
 	"github.com/onflow/flow-evm-gateway/storage"
@@ -261,7 +260,7 @@ func (d *DebugAPI) TraceCall(
 		return nil, err
 	}
 
-	height, err := d.resolveBlockNumberOrHash(&blockNrOrHash)
+	height, err := resolveBlockTag(&blockNrOrHash, d.blocks, d.logger)
 	if err != nil {
 		return nil, err
 	}
@@ -345,41 +344,6 @@ func (d *DebugAPI) executorAtBlock(block *models.Block) (*evm.BlockExecutor, err
 		d.receipts,
 		d.logger,
 	)
-}
-
-func (d *DebugAPI) resolveBlockNumberOrHash(block *rpc.BlockNumberOrHash) (uint64, error) {
-	err := fmt.Errorf("%w: neither block number nor hash specified", errs.ErrInvalid)
-	if block == nil {
-		return 0, err
-	}
-	if number, ok := block.Number(); ok {
-		return d.resolveBlockNumber(number)
-	}
-
-	if hash, ok := block.Hash(); ok {
-		evmHeight, err := d.blocks.GetHeightByID(hash)
-		if err != nil {
-			return 0, err
-		}
-		return evmHeight, nil
-	}
-
-	return 0, err
-}
-
-func (d *DebugAPI) resolveBlockNumber(number rpc.BlockNumber) (uint64, error) {
-	height := number.Int64()
-
-	// if special values (latest) we return latest executed height
-	if height < 0 {
-		executed, err := d.blocks.LatestEVMHeight()
-		if err != nil {
-			return 0, err
-		}
-		height = int64(executed)
-	}
-
-	return uint64(height), nil
 }
 
 func tracerForReceipt(
