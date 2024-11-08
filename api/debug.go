@@ -350,16 +350,6 @@ func tracerForReceipt(
 	config *tracers.TraceConfig,
 	receipt *models.Receipt,
 ) (*tracers.Tracer, error) {
-	tracerCtx := &tracers.Context{}
-	if receipt != nil {
-		tracerCtx = &tracers.Context{
-			BlockHash:   receipt.BlockHash,
-			BlockNumber: receipt.BlockNumber,
-			TxIndex:     int(receipt.TransactionIndex),
-			TxHash:      receipt.TxHash,
-		}
-	}
-
 	if config == nil {
 		config = &tracers.TraceConfig{}
 	}
@@ -372,6 +362,16 @@ func tracerForReceipt(
 			GetResult: logger.GetResult,
 			Stop:      logger.Stop,
 		}, nil
+	}
+
+	tracerCtx := &tracers.Context{}
+	if receipt != nil {
+		tracerCtx = &tracers.Context{
+			BlockHash:   receipt.BlockHash,
+			BlockNumber: receipt.BlockNumber,
+			TxIndex:     int(receipt.TransactionIndex),
+			TxHash:      receipt.TxHash,
+		}
 	}
 
 	return tracers.DefaultDirectory.New(*config.Tracer, tracerCtx, config.TracerConfig)
