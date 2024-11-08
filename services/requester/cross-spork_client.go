@@ -214,3 +214,14 @@ func (c *CrossSporkClient) SubscribeEventsByBlockHeight(
 	}
 	return client.SubscribeEventsByBlockHeight(ctx, startHeight, filter, opts...)
 }
+
+func (c *CrossSporkClient) GetEventsForHeightRange(
+	ctx context.Context, eventType string, startHeight uint64, endHeight uint64,
+) ([]flow.BlockEvents, error) {
+	// TODO: also make sure the endHeight is not too high
+	client, err := c.getClientForHeight(startHeight)
+	if err != nil {
+		return nil, err
+	}
+	return client.GetEventsForHeightRange(ctx, eventType, startHeight, endHeight)
+}
