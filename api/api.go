@@ -285,7 +285,7 @@ func (b *BlockChainAPI) GetBalance(
 		return handleError[*hexutil.Big](err, l, b.collector)
 	}
 
-	balance, err := b.evm.GetBalance(ctx, address, int64(evmHeight))
+	balance, err := b.evm.GetBalance(ctx, address, evmHeight)
 	if err != nil {
 		return handleError[*hexutil.Big](err, l, b.collector)
 	}
@@ -649,7 +649,7 @@ func (b *BlockChainAPI) Call(
 		from = *args.From
 	}
 
-	res, err := b.evm.Call(ctx, tx, from, int64(evmHeight))
+	res, err := b.evm.Call(ctx, tx, from, evmHeight)
 	if err != nil {
 		return handleError[hexutil.Bytes](err, l, b.collector)
 	}
@@ -756,7 +756,7 @@ func (b *BlockChainAPI) GetTransactionCount(
 		return handleError[*hexutil.Uint64](err, l, b.collector)
 	}
 
-	networkNonce, err := b.evm.GetNonce(ctx, address, int64(evmHeight))
+	networkNonce, err := b.evm.GetNonce(ctx, address, evmHeight)
 	if err != nil {
 		return handleError[*hexutil.Uint64](err, l, b.collector)
 	}
@@ -822,7 +822,7 @@ func (b *BlockChainAPI) EstimateGas(
 		return handleError[hexutil.Uint64](err, l, b.collector)
 	}
 
-	estimatedGas, err := b.evm.EstimateGas(ctx, tx, from, int64(evmHeight))
+	estimatedGas, err := b.evm.EstimateGas(ctx, tx, from, evmHeight)
 	if err != nil {
 		return handleError[hexutil.Uint64](err, l, b.collector)
 	}
@@ -851,7 +851,7 @@ func (b *BlockChainAPI) GetCode(
 		return handleError[hexutil.Bytes](err, l, b.collector)
 	}
 
-	code, err := b.evm.GetCode(ctx, address, int64(evmHeight))
+	code, err := b.evm.GetCode(ctx, address, evmHeight)
 	if err != nil {
 		return handleError[hexutil.Bytes](err, l, b.collector)
 	}
@@ -976,7 +976,7 @@ func (b *BlockChainAPI) GetStorageAt(
 		return handleError[hexutil.Bytes](err, l, b.collector)
 	}
 
-	result, err := b.evm.GetStorageAt(ctx, address, key, int64(evmHeight))
+	result, err := b.evm.GetStorageAt(ctx, address, key, evmHeight)
 	if err != nil {
 		return handleError[hexutil.Bytes](err, l, b.collector)
 	}
