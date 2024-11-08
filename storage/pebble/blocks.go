@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"sync"
 
 	"github.com/cockroachdb/pebble"
 	"github.com/onflow/flow-go-sdk"
@@ -27,7 +26,6 @@ var _ storage.BlockIndexer = &Blocks{}
 
 type Blocks struct {
 	store   *Storage
-	mux     sync.RWMutex
 	chainID flowGo.ChainID
 }
 
@@ -35,7 +33,6 @@ func NewBlocks(store *Storage, chainID flowGo.ChainID) *Blocks {
 	return &Blocks{
 		store:   store,
 		chainID: chainID,
-		mux:     sync.RWMutex{},
 	}
 }
 
@@ -45,8 +42,6 @@ func (b *Blocks) Store(
 	block *models.Block,
 	batch *pebble.Batch,
 ) error {
-	b.mux.Lock()
-	defer b.mux.Unlock()
 	// dev note: please be careful if any store reads are added here,
 	// store.batchGet must be used instead and batch must be used
 
@@ -122,9 +117,6 @@ func (b *Blocks) Store(
 }
 
 func (b *Blocks) GetByHeight(height uint64) (*models.Block, error) {
-	b.mux.RLock()
-	defer b.mux.RUnlock()
-
 	last, err := b.latestEVMHeight()
 	if err != nil {
 		return nil, err
@@ -144,9 +136,6 @@ func (b *Blocks) GetByHeight(height uint64) (*models.Block, error) {
 }
 
 func (b *Blocks) GetByID(ID common.Hash) (*models.Block, error) {
-	b.mux.RLock()
-	defer b.mux.RUnlock()
-
 	height, err := b.store.get(blockIDToHeightKey, ID.Bytes())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get EVM block by ID: %s, with: %w", ID, err)
@@ -165,9 +154,6 @@ func (b *Blocks) GetByID(ID common.Hash) (*models.Block, error) {
 }
 
 func (b *Blocks) GetHeightByID(ID common.Hash) (uint64, error) {
-	b.mux.RLock()
-	defer b.mux.RUnlock()
-
 	height, err := b.store.get(blockIDToHeightKey, ID.Bytes())
 	if err != nil {
 		return 0, fmt.Errorf("failed to get EVM block by ID: %s, with: %w", ID, err)
@@ -177,9 +163,6 @@ func (b *Blocks) GetHeightByID(ID common.Hash) (uint64, error) {
 }
 
 func (b *Blocks) LatestEVMHeight() (uint64, error) {
-	b.mux.RLock()
-	defer b.mux.RUnlock()
-
 	return b.latestEVMHeight()
 }
 
@@ -196,9 +179,6 @@ func (b *Blocks) latestEVMHeight() (uint64, error) {
 }
 
 func (b *Blocks) LatestCadenceHeight() (uint64, error) {
-	b.mux.RLock()
-	defer b.mux.RUnlock()
-
 	val, err := b.store.get(latestCadenceHeightKey)
 	if err != nil {
 		if errors.Is(err, errs.ErrEntityNotFound) {
@@ -211,9 +191,6 @@ func (b *Blocks) LatestCadenceHeight() (uint64, error) {
 }
 
 func (b *Blocks) SetLatestCadenceHeight(height uint64, batch *pebble.Batch) error {
-	b.mux.Lock()
-	defer b.mux.Unlock()
-
 	if err := b.store.set(latestCadenceHeightKey, nil, uint64Bytes(height), batch); err != nil {
 		return fmt.Errorf("failed to store latest Cadence height: %d, with: %w", height, err)
 	}
@@ -247,9 +224,6 @@ func (b *Blocks) InitHeights(cadenceHeight uint64, cadenceID flow.Identifier, ba
 }
 
 func (b *Blocks) GetCadenceHeight(evmHeight uint64) (uint64, error) {
-	b.mux.RLock()
-	defer b.mux.RUnlock()
-
 	val, err := b.store.get(evmHeightToCadenceHeightKey, uint64Bytes(evmHeight))
 	if err != nil {
 		return 0, err
@@ -259,9 +233,6 @@ func (b *Blocks) GetCadenceHeight(evmHeight uint64) (uint64, error) {
 }
 
 func (b *Blocks) GetCadenceID(evmHeight uint64) (flow.Identifier, error) {
-	b.mux.RLock()
-	defer b.mux.RUnlock()
-
 	val, err := b.store.get(evmHeightToCadenceIDKey, uint64Bytes(evmHeight))
 	if err != nil {
 		return flow.Identifier{}, err
