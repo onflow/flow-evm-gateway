@@ -30,21 +30,21 @@ func resolveBlockTag(
 		if err != nil {
 			logger.Error().Err(err).
 				Stringer("block_number", number).
-				Msg("failed to resolve block by hash")
+				Msg("failed to resolve block by number")
 			return 0, err
 		}
 		return height, nil
 	}
 
 	if hash, ok := blockNumberOrHash.Hash(); ok {
-		evmHeight, err := blocksDB.GetHeightByID(hash)
+		height, err := blocksDB.GetHeightByID(hash)
 		if err != nil {
 			logger.Error().Err(err).
 				Stringer("block_hash", hash).
-				Msg("failed to get block by hash")
+				Msg("failed to resolve block by hash")
 			return 0, err
 		}
-		return evmHeight, nil
+		return height, nil
 	}
 
 	return 0, fmt.Errorf(
