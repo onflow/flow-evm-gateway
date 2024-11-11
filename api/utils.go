@@ -81,7 +81,7 @@ func resolveBlockNumber(
 
 // decodeHash parses a hex-encoded 32-byte hash. The input may optionally
 // be prefixed by 0x and can have a byte length up to 32.
-func decodeHash(s string) (h common.Hash, inputLength int, err error) {
+func decodeHash(s string) (h common.Hash, err error) {
 	if strings.HasPrefix(s, "0x") || strings.HasPrefix(s, "0X") {
 		s = s[2:]
 	}
@@ -90,15 +90,15 @@ func decodeHash(s string) (h common.Hash, inputLength int, err error) {
 	}
 	b, err := hex.DecodeString(s)
 	if err != nil {
-		return common.Hash{}, 0, fmt.Errorf("invalid hex string: %s", s)
+		return common.Hash{}, fmt.Errorf("invalid hex string: %s", s)
 	}
 	if len(b) > common.HashLength {
-		return common.Hash{}, len(b), fmt.Errorf(
+		return common.Hash{}, fmt.Errorf(
 			"hex string too long, want at most 32 bytes, have %d bytes",
 			len(b),
 		)
 	}
-	return common.BytesToHash(b), len(b), nil
+	return common.BytesToHash(b), nil
 }
 
 // handleError takes in an error and in case the error is of type ErrEntityNotFound
