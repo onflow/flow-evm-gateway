@@ -6,13 +6,11 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
-	"strings"
 
 	"github.com/onflow/cadence"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	evmImpl "github.com/onflow/flow-go/fvm/evm/impl"
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
-	"github.com/onflow/flow-go/fvm/systemcontracts"
 	"github.com/onflow/flow-go/model/flow"
 	gethCommon "github.com/onflow/go-ethereum/common"
 	"github.com/onflow/go-ethereum/core/types"
@@ -75,23 +73,6 @@ func (rca *RemoteCadenceArch) Run(input []byte) ([]byte, error) {
 	return evmResult.ReturnedData, nil
 }
 
-func (rca *RemoteCadenceArch) replaceAddresses(script []byte) []byte {
-	// make the list of all contracts we should replace address for
-	sc := systemcontracts.SystemContractsForChain(rca.chainID)
-	contracts := []systemcontracts.SystemContract{sc.EVMContract, sc.FungibleToken, sc.FlowToken}
-
-	s := string(script)
-	// iterate over all the import name and address pairs and replace them in script
-	for _, contract := range contracts {
-		s = strings.ReplaceAll(s,
-			fmt.Sprintf("import %s", contract.Name),
-			fmt.Sprintf("import %s from %s", contract.Name, contract.Address.HexWithPrefix()),
-		)
-	}
-
-	return []byte(s)
-}
-
 func (rca *RemoteCadenceArch) runCall(input []byte) (*evmTypes.ResultSummary, error) {
 	tx := types.NewTx(
 		&types.LegacyTx{
@@ -120,7 +101,7 @@ func (rca *RemoteCadenceArch) runCall(input []byte) (*evmTypes.ResultSummary, er
 	scriptResult, err := rca.client.ExecuteScriptAtBlockHeight(
 		context.Background(),
 		rca.blockHeight,
-		rca.replaceAddresses(dryRunScript),
+		replaceAddresses(dryRunScript, rca.chainID),
 		[]cadence.Value{hexEncodedTx, hexEncodedAddress},
 	)
 	if err != nil {
@@ -151,5 +132,5 @@ func parseResult(res cadence.Value) (*evmTypes.ResultSummary, error) {
 		return nil, errs.NewFailedTransactionError(result.ErrorMessage)
 	}
 
-	return result, err
+	return result, nil
 }
