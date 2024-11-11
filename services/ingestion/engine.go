@@ -184,8 +184,7 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 		return err
 	}
 
-	blockEvents := events.BlockEventPayload()
-	cr := sync.NewReplayer(
+	replayer := sync.NewReplayer(
 		e.replayerConfig.ChainID,
 		e.replayerConfig.RootAddr,
 		e.registerStore,
@@ -197,7 +196,8 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 
 	// Step 1.2: Replay all block transactions
 	// If `ReplayBlock` returns any error, we abort the EVM events processing
-	res, err := cr.ReplayBlock(events.TxEventPayloads(), blockEvents)
+	blockEvents := events.BlockEventPayload()
+	res, err := replayer.ReplayBlock(events.TxEventPayloads(), blockEvents)
 	if err != nil {
 		return fmt.Errorf("failed to replay block on height: %d, with: %w", events.Block().Height, err)
 	}
