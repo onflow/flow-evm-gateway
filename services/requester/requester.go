@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/crypto"
@@ -56,27 +55,27 @@ type Requester interface {
 
 	// GetBalance returns the amount of wei for the given address in the state of the
 	// given EVM block height.
-	GetBalance(address common.Address, evmHeight uint64) (*big.Int, error)
+	GetBalance(address common.Address, height uint64) (*big.Int, error)
 
 	// Call executes the given signed transaction data on the state for the given EVM block height.
 	// Note, this function doesn't make and changes in the state/blockchain and is
 	// useful to execute and retrieve values.
-	Call(tx *types.LegacyTx, from common.Address, evmHeight uint64) ([]byte, error)
+	Call(tx *types.LegacyTx, from common.Address, height uint64) ([]byte, error)
 
 	// EstimateGas executes the given signed transaction data on the state for the given EVM block height.
 	// Note, this function doesn't make any changes in the state/blockchain and is
 	// useful to executed and retrieve the gas consumption and possible failures.
-	EstimateGas(tx *types.LegacyTx, from common.Address, evmHeight uint64) (uint64, error)
+	EstimateGas(tx *types.LegacyTx, from common.Address, height uint64) (uint64, error)
 
 	// GetNonce gets nonce from the network at the given EVM block height.
-	GetNonce(address common.Address, evmHeight uint64) (uint64, error)
+	GetNonce(address common.Address, height uint64) (uint64, error)
 
 	// GetCode returns the code stored at the given address in
 	// the state for the given EVM block height.
-	GetCode(address common.Address, evmHeight uint64) ([]byte, error)
+	GetCode(address common.Address, height uint64) ([]byte, error)
 
 	// GetStorageAt returns the storage from the state at the given address, key and block number.
-	GetStorageAt(address common.Address, hash common.Hash, evmHeight uint64) (common.Hash, error)
+	GetStorageAt(address common.Address, hash common.Hash, height uint64) (common.Hash, error)
 
 	// GetLatestEVMHeight returns the latest EVM height of the network.
 	GetLatestEVMHeight(ctx context.Context) (uint64, error)
@@ -94,7 +93,6 @@ type EVM struct {
 	logger         zerolog.Logger
 	blocks         storage.BlockIndexer
 	mux            sync.Mutex
-	scriptCache    *expirable.LRU[string, cadence.Value]
 
 	head              *types.Header
 	evmSigner         types.Signer
@@ -158,11 +156,6 @@ func NewEVM(
 		MinTip:  new(big.Int),
 	}
 
-	var cache *expirable.LRU[string, cadence.Value]
-	if config.CacheSize != 0 {
-		cache = expirable.NewLRU[string, cadence.Value](int(config.CacheSize), nil, time.Second)
-	}
-
 	evm := &EVM{
 		registerStore:     registerStore,
 		blocksProvider:    blocksProvider,
@@ -176,7 +169,6 @@ func NewEVM(
 		evmSigner:         evmSigner,
 		validationOptions: validationOptions,
 		collector:         collector,
-		scriptCache:       cache,
 	}
 
 	// create COA on the account
@@ -309,9 +301,9 @@ func (e *EVM) buildTransaction(ctx context.Context, script []byte, args ...caden
 
 func (e *EVM) GetBalance(
 	address common.Address,
-	evmHeight uint64,
+	height uint64,
 ) (*big.Int, error) {
-	view, err := e.getBlockView(evmHeight)
+	view, err := e.getBlockView(height)
 	if err != nil {
 		return nil, err
 	}
@@ -321,9 +313,9 @@ func (e *EVM) GetBalance(
 
 func (e *EVM) GetNonce(
 	address common.Address,
-	evmHeight uint64,
+	height uint64,
 ) (uint64, error) {
-	view, err := e.getBlockView(evmHeight)
+	view, err := e.getBlockView(height)
 	if err != nil {
 		return 0, err
 	}
@@ -334,9 +326,9 @@ func (e *EVM) GetNonce(
 func (e *EVM) GetStorageAt(
 	address common.Address,
 	hash common.Hash,
-	evmHeight uint64,
+	height uint64,
 ) (common.Hash, error) {
-	view, err := e.getBlockView(evmHeight)
+	view, err := e.getBlockView(height)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -347,9 +339,9 @@ func (e *EVM) GetStorageAt(
 func (e *EVM) Call(
 	tx *types.LegacyTx,
 	from common.Address,
-	evmHeight uint64,
+	height uint64,
 ) ([]byte, error) {
-	view, err := e.getBlockView(evmHeight)
+	view, err := e.getBlockView(height)
 	if err != nil {
 		return nil, err
 	}
@@ -358,7 +350,7 @@ func (e *EVM) Call(
 	if tx.To != nil {
 		to = *tx.To
 	}
-	cdcHeight, err := e.evmToCadenceHeight(evmHeight)
+	cdcHeight, err := e.evmToCadenceHeight(height)
 	if err != nil {
 		return nil, err
 	}
@@ -386,9 +378,9 @@ func (e *EVM) Call(
 func (e *EVM) EstimateGas(
 	tx *types.LegacyTx,
 	from common.Address,
-	evmHeight uint64,
+	height uint64,
 ) (uint64, error) {
-	view, err := e.getBlockView(evmHeight)
+	view, err := e.getBlockView(height)
 	if err != nil {
 		return 0, err
 	}
@@ -397,7 +389,7 @@ func (e *EVM) EstimateGas(
 	if tx.To != nil {
 		to = *tx.To
 	}
-	cdcHeight, err := e.evmToCadenceHeight(evmHeight)
+	cdcHeight, err := e.evmToCadenceHeight(height)
 	if err != nil {
 		return 0, err
 	}
@@ -448,9 +440,9 @@ func (e *EVM) EstimateGas(
 
 func (e *EVM) GetCode(
 	address common.Address,
-	evmHeight uint64,
+	height uint64,
 ) ([]byte, error) {
-	view, err := e.getBlockView(evmHeight)
+	view, err := e.getBlockView(height)
 	if err != nil {
 		return nil, err
 	}
@@ -509,7 +501,7 @@ func (e *EVM) getSignerNetworkInfo(ctx context.Context) (uint32, uint64, error) 
 	)
 }
 
-func (e *EVM) getBlockView(evmHeight uint64) (*query.View, error) {
+func (e *EVM) getBlockView(height uint64) (*query.View, error) {
 	viewProvider := query.NewViewProvider(
 		e.config.FlowNetworkID,
 		evm.StorageAccountAddress(e.config.FlowNetworkID),
@@ -518,7 +510,7 @@ func (e *EVM) getBlockView(evmHeight uint64) (*query.View, error) {
 		blockGasLimit,
 	)
 
-	return viewProvider.GetBlockView(evmHeight)
+	return viewProvider.GetBlockView(height)
 }
 
 func (e *EVM) evmToCadenceHeight(height uint64) (uint64, error) {
