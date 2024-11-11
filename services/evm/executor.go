@@ -37,8 +37,8 @@ func NewBlockExecutor(
 	blocks storage.BlockIndexer,
 	receipts storage.ReceiptIndexer,
 	logger zerolog.Logger,
-) (*BlockExecutor, error) {
-	logger = logger.With().Str("component", "state-execution").Logger()
+) *BlockExecutor {
+	logger = logger.With().Str("component", "trace-generation").Logger()
 	storageAddress := evm.StorageAccountAddress(chainID)
 
 	return &BlockExecutor{
@@ -48,7 +48,7 @@ func NewBlockExecutor(
 		blocks:   blocks,
 		receipts: receipts,
 		logger:   logger,
-	}, nil
+	}
 }
 
 func (s *BlockExecutor) Run(
