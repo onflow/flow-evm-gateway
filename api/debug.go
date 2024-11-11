@@ -8,6 +8,7 @@ import (
 
 	"github.com/goccy/go-json"
 	"github.com/onflow/flow-go/fvm/evm/offchain/query"
+	"github.com/onflow/flow-go/fvm/evm/types"
 	gethCommon "github.com/onflow/go-ethereum/common"
 	"github.com/onflow/go-ethereum/eth/tracers"
 	"github.com/onflow/go-ethereum/eth/tracers/logger"
@@ -19,6 +20,7 @@ import (
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/services/evm"
 	"github.com/onflow/flow-evm-gateway/services/replayer"
+	"github.com/onflow/flow-evm-gateway/services/requester"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
 	flowEVM "github.com/onflow/flow-go/fvm/evm"
@@ -43,6 +45,7 @@ type DebugAPI struct {
 	blocks        storage.BlockIndexer
 	transactions  storage.TransactionIndexer
 	receipts      storage.ReceiptIndexer
+	client        *requester.CrossSporkClient
 	config        *config.Config
 	collector     metrics.Collector
 }
@@ -53,6 +56,7 @@ func NewDebugAPI(
 	blocks storage.BlockIndexer,
 	transactions storage.TransactionIndexer,
 	receipts storage.ReceiptIndexer,
+	client *requester.CrossSporkClient,
 	config *config.Config,
 	logger zerolog.Logger,
 	collector metrics.Collector,
@@ -64,6 +68,7 @@ func NewDebugAPI(
 		blocks:        blocks,
 		transactions:  transactions,
 		receipts:      receipts,
+		client:        client,
 		config:        config,
 		collector:     collector,
 	}
@@ -261,6 +266,11 @@ func (d *DebugAPI) TraceCall(
 		return nil, err
 	}
 
+	cdcHeight, err := d.blocks.GetCadenceHeight(height)
+	if err != nil {
+		return nil, err
+	}
+
 	block, err := d.blocks.GetByHeight(height)
 	if err != nil {
 		return nil, err
@@ -288,8 +298,11 @@ func (d *DebugAPI) TraceCall(
 	if tx.To != nil {
 		to = *tx.To
 	}
+	rca := requester.NewRemoteCadenceArch(cdcHeight, d.client, d.config.FlowNetworkID)
+
 	opts := []query.DryCallOption{}
 	opts = append(opts, query.WithTracer(tracer))
+	opts = append(opts, query.WithExtraPrecompiledContracts([]types.PrecompiledContract{rca}))
 	if config.StateOverrides != nil {
 		for addr, account := range *config.StateOverrides {
 			// Override account nonce.

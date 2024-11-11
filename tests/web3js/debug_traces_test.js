@@ -511,4 +511,54 @@ it('should retrieve call traces', async () => {
         callTrace.output,
         '0x00000000000000000000000000000000000000000000000000000000000005dc'
     )
+
+    let flowBlockHeightData = deployed.contract.methods.verifyArchCallToFlowBlockHeight().encodeABI()
+    traceCall = {
+        from: conf.eoa.address,
+        to: contractAddress,
+        gas: '0xcdd4',
+        data: flowBlockHeightData,
+        value: '0x0',
+        gasPrice: web3.utils.toHex(conf.minGasPrice),
+    }
+
+    callTracer = {
+        tracer: 'callTracer',
+        tracerConfig: {
+            onlyTopCall: false
+        }
+    }
+
+    response = await helpers.callRPCMethod(
+        'debug_traceCall',
+        [traceCall, web3.utils.toHex(latestHeight), callTracer]
+    )
+    assert.equal(response.status, 200)
+    assert.isDefined(response.body)
+
+    callTrace = response.body.result
+    assert.deepEqual(
+        callTrace,
+        {
+            from: conf.eoa.address.toLowerCase(),
+            gas: '0xcdd4',
+            gasUsed: '0xbdd4',
+            to: contractAddress.toLowerCase(),
+            input: '0xc550f90f',
+            output: '0x0000000000000000000000000000000000000000000000000000000000000007',
+            calls: [
+                {
+                    from: contractAddress.toLowerCase(),
+                    gas: '0x6d44',
+                    gasUsed: '0x5c8f',
+                    to: '0x0000000000000000000000010000000000000001',
+                    input: '0x53e87d66',
+                    output: '0x0000000000000000000000000000000000000000000000000000000000000007',
+                    type: 'STATICCALL'
+                }
+            ],
+            value: '0x0',
+            type: 'CALL'
+        }
+    )
 })
