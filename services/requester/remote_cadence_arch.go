@@ -2,6 +2,7 @@ package requester
 
 import (
 	"context"
+	_ "embed"
 	"encoding/hex"
 	"fmt"
 	"math/big"
@@ -12,10 +13,15 @@ import (
 	evmImpl "github.com/onflow/flow-go/fvm/evm/impl"
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/flow-go/fvm/systemcontracts"
-	flowGo "github.com/onflow/flow-go/model/flow"
+	"github.com/onflow/flow-go/model/flow"
 	gethCommon "github.com/onflow/go-ethereum/common"
 	"github.com/onflow/go-ethereum/core/types"
 	"github.com/onflow/go-ethereum/crypto"
+)
+
+var (
+	//go:embed cadence/dry_run.cdc
+	dryRunScript []byte
 )
 
 var cadenceArchAddress = gethCommon.HexToAddress("0x0000000000000000000000010000000000000001")
@@ -23,7 +29,7 @@ var cadenceArchAddress = gethCommon.HexToAddress("0x0000000000000000000000010000
 type RemoteCadenceArch struct {
 	blockHeight uint64
 	client      *CrossSporkClient
-	chainID     flowGo.ChainID
+	chainID     flow.ChainID
 	cachedCalls map[string]evmTypes.Data
 }
 
@@ -32,7 +38,7 @@ var _ evmTypes.PrecompiledContract = (*RemoteCadenceArch)(nil)
 func NewRemoteCadenceArch(
 	blockHeight uint64,
 	client *CrossSporkClient,
-	chainID flowGo.ChainID,
+	chainID flow.ChainID,
 ) *RemoteCadenceArch {
 	return &RemoteCadenceArch{
 		blockHeight: blockHeight,
@@ -92,7 +98,7 @@ func (rca *RemoteCadenceArch) runCall(input []byte) (*evmTypes.ResultSummary, er
 			Nonce:    0,
 			To:       &cadenceArchAddress,
 			Value:    big.NewInt(0),
-			Gas:      55_000,
+			Gas:      155_000,
 			GasPrice: big.NewInt(0),
 			Data:     input,
 		},
