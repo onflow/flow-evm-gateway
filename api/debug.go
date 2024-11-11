@@ -277,7 +277,7 @@ func (d *DebugAPI) TraceCall(
 		flowEVM.StorageAccountAddress(d.config.FlowNetworkID),
 		d.registerStore,
 		blocksProvider,
-		120_000_000,
+		BlockGasLimit,
 	)
 
 	view, err := viewProvider.GetBlockView(block.Height)

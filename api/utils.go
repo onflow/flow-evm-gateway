@@ -4,12 +4,14 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math/big"
 	"strings"
 
 	"github.com/onflow/flow-evm-gateway/metrics"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/go-ethereum/common"
+	"github.com/onflow/go-ethereum/core/types"
 	"github.com/onflow/go-ethereum/rpc"
 	"github.com/rs/zerolog"
 )
@@ -126,4 +128,39 @@ func handleError[T any](err error, log zerolog.Logger, collector metrics.Collect
 		log.Error().Err(err).Msg("api error")
 		return zero, errs.ErrInternal
 	}
+}
+
+// encodeTxFromArgs will create a transaction from the given arguments.
+// The resulting unsigned transaction is only supposed to be used through
+// `EVM.dryRun` inside Cadence scripts, meaning that no state change
+// will occur.
+// This is only useful for `eth_estimateGas` and `eth_call` endpoints.
+func encodeTxFromArgs(args TransactionArgs) (*types.LegacyTx, error) {
+	var data []byte
+	if args.Data != nil {
+		data = *args.Data
+	} else if args.Input != nil {
+		data = *args.Input
+	}
+
+	// provide a high enough gas for the tx to be able to execute,
+	// capped by the gas set in transaction args.
+	gasLimit := BlockGasLimit
+	if args.Gas != nil {
+		gasLimit = uint64(*args.Gas)
+	}
+
+	value := big.NewInt(0)
+	if args.Value != nil {
+		value = args.Value.ToInt()
+	}
+
+	return &types.LegacyTx{
+		Nonce:    0,
+		To:       args.To,
+		Value:    value,
+		Gas:      gasLimit,
+		GasPrice: big.NewInt(0),
+		Data:     data,
+	}, nil
 }
