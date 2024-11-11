@@ -74,7 +74,7 @@ func (ct *CallTracerCollector) Collect(txID common.Hash) (json.RawMessage, error
 	// collect the trace result
 	result, found := ct.resultsByTxID[txID]
 	if !found {
-		return nil, fmt.Errorf("trace result not found")
+		return nil, fmt.Errorf("trace result for tx:  %s, not found", txID.String())
 	}
 
 	// remove the result
@@ -197,7 +197,7 @@ func NewSafeTxTracer(ct *CallTracerCollector) *tracers.Tracer {
 
 var NopTracer = &nopTracer{}
 
-var _ EVMTracer = &nopTracer{}
+var _ EVMTracer = (*nopTracer)(nil)
 
 type nopTracer struct{}
 
