@@ -349,7 +349,7 @@ func (d *DebugAPI) executorAtBlock(block *models.Block) (*evm.BlockExecutor, err
 		d.blocks,
 		d.receipts,
 		d.logger,
-	)
+	), nil
 }
 
 func tracerForReceipt(
