@@ -37,7 +37,6 @@ type txTraceResult struct {
 }
 
 type DebugAPI struct {
-	store         *pebble.Storage
 	registerStore *pebble.RegisterStorage
 	logger        zerolog.Logger
 	tracer        storage.TraceIndexer
@@ -49,7 +48,6 @@ type DebugAPI struct {
 }
 
 func NewDebugAPI(
-	store *pebble.Storage,
 	registerStore *pebble.RegisterStorage,
 	tracer storage.TraceIndexer,
 	blocks storage.BlockIndexer,
@@ -60,7 +58,6 @@ func NewDebugAPI(
 	collector metrics.Collector,
 ) *DebugAPI {
 	return &DebugAPI{
-		store:         store,
 		registerStore: registerStore,
 		logger:        logger,
 		tracer:        tracer,
