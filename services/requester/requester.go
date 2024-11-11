@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
-	"strings"
 	"sync"
 	"time"
 
@@ -18,7 +17,6 @@ import (
 	"github.com/onflow/flow-go/fvm/evm/emulator"
 	"github.com/onflow/flow-go/fvm/evm/offchain/query"
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
-	"github.com/onflow/flow-go/fvm/systemcontracts"
 	"github.com/onflow/go-ethereum/common"
 	"github.com/onflow/go-ethereum/core/txpool"
 	"github.com/onflow/go-ethereum/core/types"
@@ -187,7 +185,7 @@ func NewEVM(
 	if config.CreateCOAResource {
 		tx, err := evm.buildTransaction(
 			context.Background(),
-			evm.replaceAddresses(createCOAScript),
+			replaceAddresses(createCOAScript, config.FlowNetworkID),
 			cadence.UFix64(coaFundingBalance),
 		)
 		if err != nil {
@@ -232,7 +230,7 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 		return common.Hash{}, err
 	}
 
-	script := e.replaceAddresses(runTxScript)
+	script := replaceAddresses(runTxScript, e.config.FlowNetworkID)
 	flowTx, err := e.buildTransaction(ctx, script, hexEncodedTx, coinbaseAddress)
 	if err != nil {
 		e.logger.Error().Err(err).Str("data", txData).Msg("failed to build transaction")
@@ -466,7 +464,7 @@ func (e *EVM) GetCode(
 func (e *EVM) GetLatestEVMHeight(ctx context.Context) (uint64, error) {
 	val, err := e.client.ExecuteScriptAtLatestBlock(
 		ctx,
-		e.replaceAddresses(getLatestEVMHeight),
+		replaceAddresses(getLatestEVMHeight, e.config.FlowNetworkID),
 		nil,
 	)
 	if err != nil {
@@ -512,27 +510,6 @@ func (e *EVM) getSignerNetworkInfo(ctx context.Context) (uint32, uint64, error) 
 		e.config.COAAddress,
 		signerPub.String(),
 	)
-}
-
-// replaceAddresses replace the addresses based on the network
-func (e *EVM) replaceAddresses(script []byte) []byte {
-	// make the list of all contracts we should replace address for
-	sc := systemcontracts.SystemContractsForChain(e.config.FlowNetworkID)
-	contracts := []systemcontracts.SystemContract{sc.EVMContract, sc.FungibleToken, sc.FlowToken}
-
-	s := string(script)
-	// iterate over all the import name and address pairs and replace them in script
-	for _, contract := range contracts {
-		s = strings.ReplaceAll(s,
-			fmt.Sprintf("import %s", contract.Name),
-			fmt.Sprintf("import %s from %s", contract.Name, contract.Address.HexWithPrefix()),
-		)
-	}
-
-	// also replace COA address if used (in scripts)
-	s = strings.ReplaceAll(s, "0xCOA", e.config.COAAddress.HexWithPrefix())
-
-	return []byte(s)
 }
 
 func (e *EVM) getBlockView(evmHeight uint64) (*query.View, error) {
