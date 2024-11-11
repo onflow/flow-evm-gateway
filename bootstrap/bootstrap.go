@@ -280,7 +280,6 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 	)
 
 	debugAPI := api.NewDebugAPI(
-		b.storages.Storage,
 		b.storages.Registers,
 		b.storages.Traces,
 		b.storages.Blocks,
