@@ -5,7 +5,6 @@ import (
 	_ "embed"
 	"encoding/hex"
 	"fmt"
-	"math"
 	"math/big"
 	"strings"
 	"sync"
@@ -53,8 +52,6 @@ var (
 
 const minFlowBalance = 2
 const coaFundingBalance = minFlowBalance - 1
-
-const LatestBlockHeight uint64 = math.MaxUint64 - 1
 
 type Requester interface {
 	// SendRawTransaction will submit signed transaction data to the network.
