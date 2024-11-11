@@ -37,9 +37,6 @@ import (
 )
 
 var (
-	//go:embed cadence/dry_run.cdc
-	dryRunScript []byte
-
 	//go:embed cadence/run.cdc
 	runTxScript []byte
 
