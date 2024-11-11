@@ -285,6 +285,7 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 		b.storages.Blocks,
 		b.storages.Transactions,
 		b.storages.Receipts,
+		b.client,
 		b.config,
 		b.logger,
 		b.collector,
