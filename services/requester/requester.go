@@ -47,6 +47,7 @@ var (
 
 const minFlowBalance = 2
 const coaFundingBalance = minFlowBalance - 1
+const blockGasLimit = 120_000_000
 
 type Requester interface {
 	// SendRawTransaction will submit signed transaction data to the network.
@@ -138,7 +139,7 @@ func NewEVM(
 	head := &types.Header{
 		Number:   big.NewInt(20_182_324),
 		Time:     uint64(time.Now().Unix()),
-		GasLimit: 30_000_000,
+		GasLimit: blockGasLimit,
 	}
 	emulatorConfig := emulator.NewConfig(
 		emulator.WithChainID(config.EVMNetworkID),
@@ -515,7 +516,7 @@ func (e *EVM) getBlockView(evmHeight uint64) (*query.View, error) {
 		evm.StorageAccountAddress(e.config.FlowNetworkID),
 		e.registerStore,
 		e.blocksProvider,
-		120_000_000,
+		blockGasLimit,
 	)
 
 	return viewProvider.GetBlockView(evmHeight)

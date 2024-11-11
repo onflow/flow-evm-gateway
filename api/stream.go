@@ -140,7 +140,7 @@ func (s *StreamAPI) prepareBlockHeader(
 		TransactionsRoot: block.TransactionHashRoot,
 		ReceiptsRoot:     block.ReceiptRoot,
 		Miner:            evmTypes.CoinbaseAddress.ToCommon(),
-		GasLimit:         hexutil.Uint64(blockGasLimit),
+		GasLimit:         hexutil.Uint64(BlockGasLimit),
 		Timestamp:        hexutil.Uint64(block.Timestamp),
 	}
 

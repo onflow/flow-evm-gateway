@@ -27,6 +27,8 @@ import (
 	"github.com/onflow/flow-evm-gateway/storage"
 )
 
+const BlockGasLimit uint64 = 120_000_000
+
 const maxFeeHistoryBlockCount = 1024
 
 var baseFeesPerGas = big.NewInt(1)
@@ -804,7 +806,7 @@ func (b *BlockChainAPI) EstimateGas(
 
 	tx, err := encodeTxFromArgs(args)
 	if err != nil {
-		return hexutil.Uint64(blockGasLimit), nil // return block gas limit
+		return hexutil.Uint64(BlockGasLimit), nil // return block gas limit
 	}
 
 	// Default address in case user does not provide one
@@ -932,7 +934,7 @@ func (b *BlockChainAPI) FeeHistory(
 
 		rewards = append(rewards, blockRewards)
 
-		gasUsedRatio := float64(block.TotalGasUsed) / float64(blockGasLimit)
+		gasUsedRatio := float64(block.TotalGasUsed) / float64(BlockGasLimit)
 		gasUsedRatios = append(gasUsedRatios, gasUsedRatio)
 	}
 
@@ -1041,7 +1043,7 @@ func (b *BlockChainAPI) prepareBlockResponse(
 		TransactionsRoot: block.TransactionHashRoot,
 		Transactions:     block.TransactionHashes,
 		Uncles:           []common.Hash{},
-		GasLimit:         hexutil.Uint64(blockGasLimit),
+		GasLimit:         hexutil.Uint64(BlockGasLimit),
 		Nonce:            types.BlockNonce{0x1},
 		Timestamp:        hexutil.Uint64(block.Timestamp),
 		BaseFeePerGas:    hexutil.Big(*baseFeesPerGas),
