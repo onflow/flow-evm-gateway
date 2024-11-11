@@ -225,6 +225,58 @@ it('should retrieve transaction traces', async () => {
             }
         ]
     )
+
+    callTracer = {
+        tracer: 'callTracer',
+        tracerConfig: {
+            onlyTopCall: false
+        }
+    }
+
+    // submit a transaction that calls verifyArchCallToFlowBlockHeight()
+    let flowBlockHeightData = deployed.contract.methods.verifyArchCallToFlowBlockHeight().encodeABI()
+    res = await helpers.signAndSend({
+        from: conf.eoa.address,
+        to: contractAddress,
+        data: flowBlockHeightData,
+        value: '0',
+        gasPrice: conf.minGasPrice,
+    })
+    assert.equal(res.receipt.status, conf.successStatus)
+
+    response = await helpers.callRPCMethod(
+        'debug_traceTransaction',
+        [web3.utils.toHex(res.receipt.transactionHash), callTracer]
+    )
+    assert.equal(response.status, 200)
+    assert.isDefined(response.body.result)
+
+    txTrace = response.body.result
+
+    assert.deepEqual(
+        txTrace,
+        {
+            from: conf.eoa.address.toLowerCase(),
+            gas: '0xc9c7',
+            gasUsed: '0x6147',
+            to: contractAddress.toLowerCase(),
+            input: '0xc550f90f',
+            output: '0x0000000000000000000000000000000000000000000000000000000000000006',
+            calls: [
+                {
+                    from: contractAddress.toLowerCase(),
+                    gas: '0x6948',
+                    gasUsed: '0x2',
+                    to: '0x0000000000000000000000010000000000000001',
+                    input: '0x53e87d66',
+                    output: '0x0000000000000000000000000000000000000000000000000000000000000006',
+                    type: 'STATICCALL'
+                }
+            ],
+            value: '0x0',
+            type: 'CALL'
+        }
+    )
 })
 
 it('should retrieve call traces', async () => {
@@ -313,9 +365,16 @@ it('should retrieve call traces', async () => {
     assert.deepEqual(
         txTrace,
         {
-            post: { '0xfacf71692421039876a5bb4f10ef7a439d8ef61e': { nonce: 3 } },
+            post: {
+                '0xfacf71692421039876a5bb4f10ef7a439d8ef61e': {
+                    nonce: 4
+                }
+            },
             pre: {
-                '0xfacf71692421039876a5bb4f10ef7a439d8ef61e': { balance: '0x456391823a9b6fc6', nonce: 2 }
+                '0xfacf71692421039876a5bb4f10ef7a439d8ef61e': {
+                    balance: '0x456391823a62702c',
+                    nonce: 3
+                }
             }
         }
     )
