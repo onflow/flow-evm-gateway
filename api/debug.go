@@ -247,12 +247,11 @@ func (d *DebugAPI) TraceCall(
 		from = *args.From
 	}
 
-	var traceConfig *tracers.TraceConfig
-	if config != nil {
-		traceConfig = &config.TraceConfig
+	if config == nil {
+		config = &tracers.TraceCallConfig{}
 	}
 
-	tracer, err := tracerForReceipt(traceConfig, nil)
+	tracer, err := tracerForReceipt(&config.TraceConfig, nil)
 	if err != nil {
 		return nil, err
 	}
