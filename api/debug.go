@@ -69,10 +69,9 @@ func NewDebugAPI(
 	}
 }
 
-// TraceTransaction will return a debug execution trace of a transaction if it exists,
-// currently we only support CALL traces, so the config is ignored.
+// TraceTransaction will return a debug execution trace of a transaction, if it exists.
 func (d *DebugAPI) TraceTransaction(
-	ctx context.Context,
+	_ context.Context,
 	hash gethCommon.Hash,
 	config *tracers.TraceConfig,
 ) (json.RawMessage, error) {
@@ -91,15 +90,11 @@ func (d *DebugAPI) TraceTransaction(
 		return nil, err
 	}
 
-	tracer, err := tracerForReceipt(config, receipt)
-	if err != nil {
-		return nil, err
-	}
-
 	block, err := d.blocks.GetByHeight(receipt.BlockNumber.Uint64())
 	if err != nil {
 		return nil, err
 	}
+
 	// We need to re-execute the given transaction and all the
 	// transactions that precede it in the same block, based on
 	// the previous block state, to generate the correct trace.
@@ -109,6 +104,11 @@ func (d *DebugAPI) TraceTransaction(
 	}
 
 	blockExecutor, err := d.executorAtBlock(previousBlock)
+	if err != nil {
+		return nil, err
+	}
+
+	tracer, err := tracerForReceipt(config, receipt)
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +149,7 @@ func (d *DebugAPI) TraceTransaction(
 }
 
 func (d *DebugAPI) TraceBlockByNumber(
-	ctx context.Context,
+	_ context.Context,
 	number rpc.BlockNumber,
 	config *tracers.TraceConfig,
 ) ([]*txTraceResult, error) {
@@ -231,7 +231,7 @@ func (d *DebugAPI) TraceBlockByHash(
 }
 
 func (d *DebugAPI) TraceCall(
-	ctx context.Context,
+	_ context.Context,
 	args TransactionArgs,
 	blockNrOrHash rpc.BlockNumberOrHash,
 	config *tracers.TraceCallConfig,
@@ -292,21 +292,26 @@ func (d *DebugAPI) TraceCall(
 	opts := []query.DryCallOption{}
 	opts = append(opts, query.WithTracer(tracer))
 	if config.StateOverrides != nil {
-		for addr, overrideAccount := range *config.StateOverrides {
-			if overrideAccount.Nonce != nil {
-				opts = append(opts, query.WithStateOverrideNonce(addr, uint64(*overrideAccount.Nonce)))
+		for addr, account := range *config.StateOverrides {
+			// Override account nonce.
+			if account.Nonce != nil {
+				opts = append(opts, query.WithStateOverrideNonce(addr, uint64(*account.Nonce)))
 			}
-			if overrideAccount.Code != nil {
-				opts = append(opts, query.WithStateOverrideCode(addr, *overrideAccount.Code))
+			// Override account(contract) code.
+			if account.Code != nil {
+				opts = append(opts, query.WithStateOverrideCode(addr, *account.Code))
 			}
-			if overrideAccount.Balance != nil {
-				opts = append(opts, query.WithStateOverrideBalance(addr, (*big.Int)(*overrideAccount.Balance)))
+			// Override account balance.
+			if account.Balance != nil {
+				opts = append(opts, query.WithStateOverrideBalance(addr, (*big.Int)(*account.Balance)))
 			}
-			if overrideAccount.State != nil {
-				opts = append(opts, query.WithStateOverrideState(addr, *overrideAccount.State))
+			// Replace entire state if caller requires.
+			if account.State != nil {
+				opts = append(opts, query.WithStateOverrideState(addr, *account.State))
 			}
-			if overrideAccount.StateDiff != nil {
-				opts = append(opts, query.WithStateOverrideStateDiff(addr, *overrideAccount.StateDiff))
+			// Apply state diff into specified accounts.
+			if account.StateDiff != nil {
+				opts = append(opts, query.WithStateOverrideStateDiff(addr, *account.StateDiff))
 			}
 		}
 	}
@@ -329,7 +334,11 @@ func (d *DebugAPI) TraceCall(
 func (d *DebugAPI) executorAtBlock(block *models.Block) (*evm.BlockExecutor, error) {
 	snapshot, err := d.registerStore.GetSnapshotAt(block.Height)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get register snapshot at block height %d: %w", block.Height, err)
+		return nil, fmt.Errorf(
+			"failed to get register snapshot at block height %d: %w",
+			block.Height,
+			err,
+		)
 	}
 	ledger := storage.NewRegisterDelta(snapshot)
 
