@@ -90,30 +90,30 @@ type Requester interface {
 
 	// GetBalance returns the amount of wei for the given address in the state of the
 	// given EVM block height.
-	GetBalance(ctx context.Context, address common.Address, evmHeight uint64) (*big.Int, error)
+	GetBalance(address common.Address, evmHeight uint64) (*big.Int, error)
 
 	// Call executes the given signed transaction data on the state for the given EVM block height.
 	// Note, this function doesn't make and changes in the state/blockchain and is
 	// useful to execute and retrieve values.
-	Call(ctx context.Context, tx *types.LegacyTx, from common.Address, evmHeight uint64) ([]byte, error)
+	Call(tx *types.LegacyTx, from common.Address, evmHeight uint64) ([]byte, error)
 
 	// EstimateGas executes the given signed transaction data on the state for the given EVM block height.
 	// Note, this function doesn't make any changes in the state/blockchain and is
 	// useful to executed and retrieve the gas consumption and possible failures.
-	EstimateGas(ctx context.Context, tx *types.LegacyTx, from common.Address, evmHeight uint64) (uint64, error)
+	EstimateGas(tx *types.LegacyTx, from common.Address, evmHeight uint64) (uint64, error)
 
 	// GetNonce gets nonce from the network at the given EVM block height.
-	GetNonce(ctx context.Context, address common.Address, evmHeight uint64) (uint64, error)
+	GetNonce(address common.Address, evmHeight uint64) (uint64, error)
 
 	// GetCode returns the code stored at the given address in
 	// the state for the given EVM block height.
-	GetCode(ctx context.Context, address common.Address, evmHeight uint64) ([]byte, error)
+	GetCode(address common.Address, evmHeight uint64) ([]byte, error)
+
+	// GetStorageAt returns the storage from the state at the given address, key and block number.
+	GetStorageAt(address common.Address, hash common.Hash, evmHeight uint64) (common.Hash, error)
 
 	// GetLatestEVMHeight returns the latest EVM height of the network.
 	GetLatestEVMHeight(ctx context.Context) (uint64, error)
-
-	// GetStorageAt returns the storage from the state at the given address, key and block number.
-	GetStorageAt(ctx context.Context, address common.Address, hash common.Hash, evmHeight uint64) (common.Hash, error)
 }
 
 var _ Requester = &EVM{}
@@ -346,7 +346,6 @@ func (e *EVM) buildTransaction(ctx context.Context, script []byte, args ...caden
 }
 
 func (e *EVM) GetBalance(
-	ctx context.Context,
 	address common.Address,
 	evmHeight uint64,
 ) (*big.Int, error) {
@@ -359,7 +358,6 @@ func (e *EVM) GetBalance(
 }
 
 func (e *EVM) GetNonce(
-	ctx context.Context,
 	address common.Address,
 	evmHeight uint64,
 ) (uint64, error) {
@@ -372,7 +370,6 @@ func (e *EVM) GetNonce(
 }
 
 func (e *EVM) GetStorageAt(
-	ctx context.Context,
 	address common.Address,
 	hash common.Hash,
 	evmHeight uint64,
@@ -386,7 +383,6 @@ func (e *EVM) GetStorageAt(
 }
 
 func (e *EVM) Call(
-	ctx context.Context,
 	tx *types.LegacyTx,
 	from common.Address,
 	evmHeight uint64,
@@ -426,7 +422,6 @@ func (e *EVM) Call(
 }
 
 func (e *EVM) EstimateGas(
-	ctx context.Context,
 	tx *types.LegacyTx,
 	from common.Address,
 	evmHeight uint64,
@@ -490,7 +485,6 @@ func (e *EVM) EstimateGas(
 }
 
 func (e *EVM) GetCode(
-	ctx context.Context,
 	address common.Address,
 	evmHeight uint64,
 ) ([]byte, error) {
@@ -652,6 +646,19 @@ func (e *EVM) getBlockView(evmHeight uint64) (*query.View, error) {
 	return viewProvider.GetBlockView(evmHeight)
 }
 
+func (e *EVM) evmToCadenceHeight(height uint64) (uint64, error) {
+	cadenceHeight, err := e.blocks.GetCadenceHeight(height)
+	if err != nil {
+		return 0, fmt.Errorf(
+			"failed to map evm height: %d to cadence height: %w",
+			height,
+			err,
+		)
+	}
+
+	return cadenceHeight, nil
+}
+
 // cacheKey builds the cache key from the script type, height and arguments.
 func cacheKey(scriptType scriptType, height uint64, args []cadence.Value) string {
 	key := fmt.Sprintf("%d%d", scriptType, height)
@@ -681,17 +688,4 @@ func cacheKey(scriptType scriptType, height uint64, args []cadence.Value) string
 func AddOne64th(n uint64) uint64 {
 	// NOTE: Go's integer division floors, but that is desirable here
 	return n + (n / 64)
-}
-
-func (e *EVM) evmToCadenceHeight(height uint64) (uint64, error) {
-	cadenceHeight, err := e.blocks.GetCadenceHeight(height)
-	if err != nil {
-		return 0, fmt.Errorf(
-			"failed to map evm height: %d to cadence height: %w",
-			height,
-			err,
-		)
-	}
-
-	return cadenceHeight, nil
 }
