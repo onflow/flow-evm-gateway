@@ -84,7 +84,6 @@ type Requester interface {
 var _ Requester = &EVM{}
 
 type EVM struct {
-	store          *pebble.Storage
 	registerStore  *pebble.RegisterStorage
 	blocksProvider *replayer.BlocksProvider
 	client         *CrossSporkClient
@@ -104,7 +103,6 @@ type EVM struct {
 }
 
 func NewEVM(
-	store *pebble.Storage,
 	registerStore *pebble.RegisterStorage,
 	blocksProvider *replayer.BlocksProvider,
 	client *CrossSporkClient,
@@ -165,7 +163,6 @@ func NewEVM(
 	}
 
 	evm := &EVM{
-		store:             store,
 		registerStore:     registerStore,
 		blocksProvider:    blocksProvider,
 		client:            client,
@@ -513,16 +510,11 @@ func (e *EVM) getSignerNetworkInfo(ctx context.Context) (uint32, uint64, error) 
 }
 
 func (e *EVM) getBlockView(evmHeight uint64) (*query.View, error) {
-	blocksProvider := replayer.NewBlocksProvider(
-		e.blocks,
-		e.config.FlowNetworkID,
-		nil,
-	)
 	viewProvider := query.NewViewProvider(
 		e.config.FlowNetworkID,
 		evm.StorageAccountAddress(e.config.FlowNetworkID),
 		e.registerStore,
-		blocksProvider,
+		e.blocksProvider,
 		120_000_000,
 	)
 

@@ -211,18 +211,13 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 		b.logger,
 	)
 
-	tracer, err := replayer.DefaultCallTracer()
-	if err != nil {
-		return err
-	}
 	blocksProvider := replayer.NewBlocksProvider(
 		b.storages.Blocks,
 		b.config.FlowNetworkID,
-		tracer,
+		nil,
 	)
 
 	evm, err := requester.NewEVM(
-		b.storages.Storage,
 		b.storages.Registers,
 		blocksProvider,
 		b.client,
