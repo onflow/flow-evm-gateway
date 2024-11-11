@@ -44,39 +44,12 @@ var (
 	//go:embed cadence/run.cdc
 	runTxScript []byte
 
-	//go:embed cadence/get_balance.cdc
-	getBalanceScript []byte
-
 	//go:embed cadence/create_coa.cdc
 	createCOAScript []byte
-
-	//go:embed cadence/get_nonce.cdc
-	getNonceScript []byte
-
-	//go:embed cadence/get_code.cdc
-	getCodeScript []byte
 
 	//go:embed cadence/get_latest_evm_height.cdc
 	getLatestEVMHeight []byte
 )
-
-type scriptType int
-
-const (
-	dryRun scriptType = iota
-	getBalance
-	getNonce
-	getCode
-	getLatest
-)
-
-var scripts = map[scriptType][]byte{
-	dryRun:     dryRunScript,
-	getBalance: getBalanceScript,
-	getNonce:   getNonceScript,
-	getCode:    getCodeScript,
-	getLatest:  getLatestEVMHeight,
-}
 
 const minFlowBalance = 2
 const coaFundingBalance = minFlowBalance - 1
@@ -497,10 +470,9 @@ func (e *EVM) GetCode(
 }
 
 func (e *EVM) GetLatestEVMHeight(ctx context.Context) (uint64, error) {
-	val, err := e.executeScriptAtHeight(
+	val, err := e.client.ExecuteScriptAtLatestBlock(
 		ctx,
-		getLatest,
-		LatestBlockHeight,
+		e.replaceAddresses(getLatestEVMHeight),
 		nil,
 	)
 	if err != nil {
@@ -569,66 +541,6 @@ func (e *EVM) replaceAddresses(script []byte) []byte {
 	return []byte(s)
 }
 
-// executeScriptAtHeight will execute the given script, at the given
-// block height, with the given arguments. A height of `LatestBlockHeight`
-// (math.MaxUint64 - 1) is a special value, which means the script will be
-// executed at the latest sealed block.
-func (e *EVM) executeScriptAtHeight(
-	ctx context.Context,
-	scriptType scriptType,
-	height uint64,
-	arguments []cadence.Value,
-) (cadence.Value, error) {
-	script, ok := scripts[scriptType]
-	if !ok {
-		return nil, fmt.Errorf("unknown script type")
-	}
-
-	// try and get the value from the cache if key is supported
-	key := cacheKey(scriptType, height, arguments)
-	if key != "" && e.scriptCache != nil {
-		val, ok := e.scriptCache.Get(key)
-		if ok {
-			e.logger.Info().
-				Uint64("evm-height", height).
-				Int("script", int(scriptType)).
-				Str("result", val.String()).
-				Msg("cache hit")
-			return val, nil
-		}
-	}
-
-	var res cadence.Value
-	var err error
-
-	if height == LatestBlockHeight {
-		res, err = e.client.ExecuteScriptAtLatestBlock(
-			ctx,
-			e.replaceAddresses(script),
-			arguments,
-		)
-	} else {
-		res, err = e.client.ExecuteScriptAtBlockHeight(
-			ctx,
-			height,
-			e.replaceAddresses(script),
-			arguments,
-		)
-	}
-	if err != nil {
-		// if snapshot doesn't exist on EN, the height at which script was executed is out
-		// of the boundaries the EN keeps state, so return out of range
-		const storageError = "failed to create storage snapshot"
-		if strings.Contains(err.Error(), storageError) {
-			return nil, errs.NewHeightOutOfRangeError(height)
-		}
-	} else if key != "" && e.scriptCache != nil { // if error is nil and key is supported add to cache
-		e.scriptCache.Add(key, res)
-	}
-
-	return res, err
-}
-
 func (e *EVM) getBlockView(evmHeight uint64) (*query.View, error) {
 	blocksProvider := replayer.NewBlocksProvider(
 		e.blocks,
@@ -657,32 +569,6 @@ func (e *EVM) evmToCadenceHeight(height uint64) (uint64, error) {
 	}
 
 	return cadenceHeight, nil
-}
-
-// cacheKey builds the cache key from the script type, height and arguments.
-func cacheKey(scriptType scriptType, height uint64, args []cadence.Value) string {
-	key := fmt.Sprintf("%d%d", scriptType, height)
-
-	switch scriptType {
-	case getBalance:
-		if len(args) != 1 {
-			return ""
-		}
-		v := args[0].(cadence.String)
-		key = fmt.Sprintf("%s%s", key, string(v))
-	case getNonce:
-		if len(args) != 1 {
-			return ""
-		}
-		v := args[0].(cadence.String)
-		key = fmt.Sprintf("%s%s", key, string(v))
-	case getLatest:
-		// no additional arguments
-	default:
-		return ""
-	}
-
-	return key
 }
 
 func AddOne64th(n uint64) uint64 {
