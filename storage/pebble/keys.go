@@ -67,12 +67,12 @@ func NewMVCCComparer() *pebble.Comparer {
 			// edge case. Not sure if this is possible, but just in case
 			return 0
 		}
-		if a[0] != registerKeyMarker {
-			// default comparer
-			return len(a)
+		if a[0] == registerKeyMarker {
+			// special case for registers
+			return len(a) - 8
 		}
-		// special case for registers
-		return len(a) - 8
+		// default comparer
+		return len(a)
 	}
 	comparer.Name = "flow.MVCCComparer"
 

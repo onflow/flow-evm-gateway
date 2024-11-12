@@ -93,7 +93,8 @@ func NewEventIngestionEngine(
 
 // Stop the engine.
 func (e *Engine) Stop() {
-	// todo
+	e.MarkDone()
+	<-e.Stopped()
 }
 
 // Run the Cadence event ingestion engine.
@@ -115,30 +116,33 @@ func (e *Engine) Run(ctx context.Context) error {
 	e.log.Info().Msg("starting ingestion")
 
 	e.MarkReady()
+	defer e.MarkStopped()
 
-	for events := range e.subscriber.Subscribe(ctx) {
+	events := e.subscriber.Subscribe(ctx)
+
+	for {
 		select {
-		case <-ctx.Done():
+		case <-e.Done():
 			// stop the engine
 			return nil
-		default:
-		}
+		case events, ok := <-events:
+			if !ok {
+				return nil
+			}
+			if events.Err != nil {
+				return fmt.Errorf(
+					"failure in event subscription with: %w",
+					events.Err,
+				)
+			}
 
-		if events.Err != nil {
-			return fmt.Errorf(
-				"failure in event subscription with: %w",
-				events.Err,
-			)
-		}
-
-		err := e.processEvents(ctx, events.Events)
-		if err != nil {
-			e.log.Error().Err(err).Msg("failed to process EVM events")
-			return err
+			err := e.processEvents(events.Events)
+			if err != nil {
+				e.log.Error().Err(err).Msg("failed to process EVM events")
+				return err
+			}
 		}
 	}
-
-	return nil
 }
 
 // processEvents converts the events to block and transactions and indexes them.
@@ -153,7 +157,7 @@ func (e *Engine) Run(ctx context.Context) error {
 // https://github.com/onflow/flow-go/blob/master/fvm/evm/types/events.go
 //
 // Any error is unexpected and fatal.
-func (e *Engine) processEvents(ctx context.Context, events *models.CadenceEvents) error {
+func (e *Engine) processEvents(events *models.CadenceEvents) error {
 	e.log.Info().
 		Uint64("cadence-height", events.CadenceHeight()).
 		Int("cadence-event-length", events.Length()).
@@ -256,14 +260,6 @@ func (e *Engine) processEvents(ctx context.Context, events *models.CadenceEvents
 		if err != nil {
 			return err
 		}
-	}
-
-	select {
-	case <-ctx.Done():
-		// Temporary solution to avoid committing the batch when the DB is closed
-		// TODO(JanezP): handle this better
-		return nil
-	default:
 	}
 
 	if err := batch.Commit(pebbleDB.Sync); err != nil {
