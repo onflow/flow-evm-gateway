@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	_ "embed"
 	"fmt"
 	"math/big"
 
