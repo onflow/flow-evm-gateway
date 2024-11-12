@@ -2,17 +2,20 @@ package bootstrap
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
 	"time"
 
+	pebbleDB "github.com/cockroachdb/pebble"
+
 	"github.com/onflow/flow-go-sdk/access"
 	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/onflow/flow-go-sdk/crypto"
+	"github.com/onflow/flow-go/fvm/environment"
+	"github.com/onflow/flow-go/fvm/evm"
+	flowGo "github.com/onflow/flow-go/model/flow"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
-	"github.com/onflow/go-ethereum/eth/tracers"
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-limiter/memorystore"
 	grpcOpts "google.golang.org/grpc"
@@ -27,19 +30,11 @@ import (
 	"github.com/onflow/flow-evm-gateway/services/requester"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
-
-	// this import is needed for side-effects, because the
-	// tracers.DefaultDirectory is relying on the init function
-	_ "github.com/onflow/go-ethereum/eth/tracers/native"
-)
-
-const (
-	callTracerConfig = `{ "onlyTopCall": true }`
-	callTracerName   = "callTracer"
 )
 
 type Storages struct {
 	Storage      *pebble.Storage
+	Registers    *pebble.RegisterStorage
 	Blocks       storage.BlockIndexer
 	Transactions storage.TransactionIndexer
 	Receipts     storage.ReceiptIndexer
@@ -126,41 +121,48 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 		Uint64("missed-heights", latestCadenceBlock.Height-latestCadenceHeight).
 		Msg("indexing cadence height information")
 
+	chainID := b.config.FlowNetworkID
+
 	// create event subscriber
 	subscriber := ingestion.NewRPCEventSubscriber(
 		b.logger,
 		b.client,
-		b.config.FlowNetworkID,
+		chainID,
 		latestCadenceHeight,
 	)
 
-	tracer, err := tracers.DefaultDirectory.New(
-		callTracerName,
-		&tracers.Context{},
-		json.RawMessage(callTracerConfig),
-	)
+	callTracerCollector, err := replayer.NewCallTracerCollector(b.logger)
 	if err != nil {
 		return err
 	}
 	blocksProvider := replayer.NewBlocksProvider(
 		b.storages.Blocks,
-		b.config.FlowNetworkID,
-		tracer,
+		chainID,
+		callTracerCollector.TxTracer(),
 	)
+	replayerConfig := replayer.Config{
+		ChainID:             chainID,
+		RootAddr:            evm.StorageAccountAddress(chainID),
+		CallTracerCollector: callTracerCollector,
+		ValidateResults:     true,
+	}
 
 	// initialize event ingestion engine
 	b.events = ingestion.NewEventIngestionEngine(
 		subscriber,
 		blocksProvider,
 		b.storages.Storage,
+		b.storages.Registers,
 		b.storages.Blocks,
 		b.storages.Receipts,
 		b.storages.Transactions,
 		b.storages.Accounts,
+		b.storages.Traces,
 		b.publishers.Block,
 		b.publishers.Logs,
 		b.logger,
 		b.collector,
+		replayerConfig,
 	)
 
 	StartEngine(ctx, b.events, l)
@@ -209,7 +211,15 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 		b.logger,
 	)
 
+	blocksProvider := replayer.NewBlocksProvider(
+		b.storages.Blocks,
+		b.config.FlowNetworkID,
+		nil,
+	)
+
 	evm, err := requester.NewEVM(
+		b.storages.Registers,
+		blocksProvider,
 		b.client,
 		b.config,
 		signer,
@@ -269,7 +279,17 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 		ratelimiter,
 	)
 
-	var debugAPI = api.NewDebugAPI(b.storages.Traces, b.storages.Blocks, b.logger, b.collector)
+	debugAPI := api.NewDebugAPI(
+		b.storages.Registers,
+		b.storages.Traces,
+		b.storages.Blocks,
+		b.storages.Transactions,
+		b.storages.Receipts,
+		b.client,
+		b.config,
+		b.logger,
+		b.collector,
+	)
 
 	var walletAPI *api.WalletAPI
 	if b.config.WalletEnabled {
@@ -445,6 +465,8 @@ func setupStorage(
 	}
 
 	blocks := pebble.NewBlocks(store, config.FlowNetworkID)
+	storageAddress := evm.StorageAccountAddress(config.FlowNetworkID)
+	registerStore := pebble.NewRegisterStorage(store, storageAddress)
 
 	// hard set the start cadence height, this is used when force reindexing
 	if config.ForceStartCadenceHeight != 0 {
@@ -456,13 +478,43 @@ func setupStorage(
 
 	// if database is not initialized require init height
 	if _, err := blocks.LatestCadenceHeight(); errors.Is(err, errs.ErrStorageNotInitialized) {
+		batch := store.NewBatch()
+		defer func(batch *pebbleDB.Batch) {
+			err := batch.Close()
+			if err != nil {
+				// we don't know what went wrong, so this is fatal
+				logger.Fatal().Err(err).Msg("failed to close batch")
+			}
+		}(batch)
+
 		cadenceHeight := config.InitCadenceHeight
 		cadenceBlock, err := client.GetBlockHeaderByHeight(context.Background(), cadenceHeight)
 		if err != nil {
 			return nil, fmt.Errorf("could not fetch provided cadence height, make sure it's correct: %w", err)
 		}
 
-		if err := blocks.InitHeights(cadenceHeight, cadenceBlock.ID); err != nil {
+		snapshot, err := registerStore.GetSnapshotAt(0)
+		if err != nil {
+			return nil, fmt.Errorf("could not get register snapshot at block height %d: %w", 0, err)
+		}
+
+		delta := storage.NewRegisterDelta(snapshot)
+		accountStatus := environment.NewAccountStatus()
+		err = delta.SetValue(
+			storageAddress[:],
+			[]byte(flowGo.AccountStatusKey),
+			accountStatus.ToBytes(),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("could not set account status: %w", err)
+		}
+
+		err = registerStore.Store(delta.GetUpdates(), cadenceHeight, batch)
+		if err != nil {
+			return nil, fmt.Errorf("could not store register updates: %w", err)
+		}
+
+		if err := blocks.InitHeights(cadenceHeight, cadenceBlock.ID, batch); err != nil {
 			return nil, fmt.Errorf(
 				"failed to init the database for block height: %d and ID: %s, with : %w",
 				cadenceHeight,
@@ -470,12 +522,22 @@ func setupStorage(
 				err,
 			)
 		}
+
+		err = batch.Commit(pebbleDB.Sync)
+		if err != nil {
+			return nil, fmt.Errorf("could not commit register updates: %w", err)
+		}
+
 		logger.Info().Msgf("database initialized with cadence height: %d", cadenceHeight)
 	}
+	//else {
+	//	// TODO(JanezP): verify storage account owner is correct
+	//}
 
 	return &Storages{
 		Storage:      store,
 		Blocks:       blocks,
+		Registers:    registerStore,
 		Transactions: pebble.NewTransactions(store),
 		Receipts:     pebble.NewReceipts(store),
 		Accounts:     pebble.NewAccounts(store),

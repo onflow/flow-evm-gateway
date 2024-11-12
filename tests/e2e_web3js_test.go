@@ -29,12 +29,10 @@ func TestWeb3_E2E(t *testing.T) {
 	})
 
 	t.Run("verify Cadence arch calls", func(t *testing.T) {
-		t.Skip("not implemented yet")
 		runWeb3Test(t, "verify_cadence_arch_calls_test")
 	})
 
 	t.Run("test transaction traces", func(t *testing.T) {
-		t.Skip("not yet added back")
 		runWeb3Test(t, "debug_traces_test")
 	})
 

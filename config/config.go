@@ -82,8 +82,6 @@ type Config struct {
 	MetricsPort int
 	// IndexOnly configures the gateway to not accept any transactions but only queries of the state
 	IndexOnly bool
-	// Cache size in units of items in cache, one unit in cache takes approximately 64 bytes
-	CacheSize uint
 	// ProfilerEnabled sets whether the profiler server is enabled
 	ProfilerEnabled bool
 	// ProfilerHost is the host for the profiler server will listen to (e.g. localhost, 0.0.0.0)

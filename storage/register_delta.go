@@ -69,6 +69,5 @@ func (r *RegisterDelta) GetUpdates() flow.RegisterEntries {
 }
 
 func (r *RegisterDelta) AllocateSlabIndex(_ []byte) (atree.SlabIndex, error) {
-	// TODO: If needed add later
-	panic("should not be called")
+	return atree.SlabIndex{}, nil
 }

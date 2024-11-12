@@ -222,24 +222,24 @@ func (b *Blocks) SetLatestCadenceHeight(height uint64, batch *pebble.Batch) erro
 }
 
 // InitHeights sets the Cadence height to zero as well as EVM heights. Used for empty database init.
-func (b *Blocks) InitHeights(cadenceHeight uint64, cadenceID flow.Identifier) error {
+func (b *Blocks) InitHeights(cadenceHeight uint64, cadenceID flow.Identifier, batch *pebble.Batch) error {
 	// sanity check, make sure we don't have any heights stored, disable overwriting the database
 	_, err := b.LatestEVMHeight()
 	if !errors.Is(err, errs.ErrStorageNotInitialized) {
 		return fmt.Errorf("can't init the database that already has data stored")
 	}
 
-	if err := b.store.set(latestCadenceHeightKey, nil, uint64Bytes(cadenceHeight), nil); err != nil {
+	if err := b.store.set(latestCadenceHeightKey, nil, uint64Bytes(cadenceHeight), batch); err != nil {
 		return fmt.Errorf("failed to init latest Cadence height at: %d, with: %w", cadenceHeight, err)
 	}
 
-	if err := b.store.set(latestEVMHeightKey, nil, uint64Bytes(0), nil); err != nil {
+	if err := b.store.set(latestEVMHeightKey, nil, uint64Bytes(0), batch); err != nil {
 		return fmt.Errorf("failed to init latest EVM height at: %d, with: %w", 0, err)
 	}
 
 	// we store genesis block because it isn't emitted over the network
 	genesisBlock := models.GenesisBlock(b.chainID)
-	if err := b.Store(cadenceHeight, cadenceID, genesisBlock, nil); err != nil {
+	if err := b.Store(cadenceHeight, cadenceID, genesisBlock, batch); err != nil {
 		return fmt.Errorf("failed to store genesis block at Cadence height: %d, with: %w", cadenceHeight, err)
 	}
 

@@ -1,10 +1,10 @@
 const { assert } = require('chai')
-const {Web3} = require("web3")
+const { Web3 } = require('web3')
 
 it('rate limit after X requests', async function () {
     this.timeout(0)
     setTimeout(() => process.exit(0), 5000) // make sure the process exits
-    let ws = new Web3("ws://127.0.0.1:8545")
+    let ws = new Web3('ws://127.0.0.1:8545')
 
     // wait for ws connection to establish and reset rate-limit timer
     await new Promise(res => setTimeout(res, 1500))
@@ -19,14 +19,14 @@ it('rate limit after X requests', async function () {
         try {
             await ws.eth.getBlockNumber()
             requestsMade++
-        } catch(e) {
+        } catch (e) {
             assert.equal(e.innerError.message, 'limit of requests per second reached')
             requestsFailed++
         }
     }
 
-    assert.equal(requestsMade, requestLimit, "more requests made than the limit")
-    assert.equal(requestsFailed, requests-requestLimit, "failed requests don't match expected value")
+    assert.equal(requestsMade, requestLimit, 'more requests made than the limit')
+    assert.equal(requestsFailed, requests - requestLimit, 'failed requests don\'t match expected value')
 
     await new Promise(res => setTimeout(res, 1000))
 
@@ -38,14 +38,14 @@ it('rate limit after X requests', async function () {
         try {
             await ws.eth.getBlockNumber()
             requestsMade++
-        } catch(e) {
+        } catch (e) {
             assert.equal(e.innerError.message, 'limit of requests per second reached')
             requestsFailed++
         }
     }
 
-    assert.equal(requestsMade, requestLimit, "more requests made than the limit")
-    assert.equal(requestsFailed, requests-requestLimit, "failed requests don't match expected value")
+    assert.equal(requestsMade, requestLimit, 'more requests made than the limit')
+    assert.equal(requestsFailed, requests - requestLimit, 'failed requests don\'t match expected value')
 
     await ws.currentProvider.disconnect()
 })

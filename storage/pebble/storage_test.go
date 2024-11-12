@@ -23,8 +23,14 @@ import (
 func TestBlocks(t *testing.T) {
 	runDB("blocks", t, func(t *testing.T, db *Storage) {
 		bl := NewBlocks(db, flowGo.Emulator)
-		err := bl.InitHeights(config.EmulatorInitCadenceHeight, flow.Identifier{0x1})
+		batch := db.NewBatch()
+
+		err := bl.InitHeights(config.EmulatorInitCadenceHeight, flow.Identifier{0x1}, batch)
 		require.NoError(t, err)
+
+		err = batch.Commit(pebble.Sync)
+		require.NoError(t, err)
+
 		suite.Run(t, &storage.BlockTestSuite{Blocks: bl})
 	})
 }
@@ -33,11 +39,16 @@ func TestReceipts(t *testing.T) {
 	runDB("receipts", t, func(t *testing.T, db *Storage) {
 		// prepare the blocks database since they track heights which are used in receipts as well
 		bl := NewBlocks(db, flowGo.Emulator)
-		err := bl.InitHeights(config.EmulatorInitCadenceHeight, flow.Identifier{0x1})
+		batch := db.NewBatch()
+
+		err := bl.InitHeights(config.EmulatorInitCadenceHeight, flow.Identifier{0x1}, batch)
 		require.NoError(t, err)
-		err = bl.Store(30, flow.Identifier{0x1}, mocks.NewBlock(10), nil) // update first and latest height
+		err = bl.Store(30, flow.Identifier{0x1}, mocks.NewBlock(10), batch) // update first and latest height
 		require.NoError(t, err)
-		err = bl.Store(30, flow.Identifier{0x1}, mocks.NewBlock(300), nil) // update latest
+		err = bl.Store(30, flow.Identifier{0x1}, mocks.NewBlock(300), batch) // update latest
+		require.NoError(t, err)
+
+		err = batch.Commit(pebble.Sync)
 		require.NoError(t, err)
 
 		suite.Run(t, &storage.ReceiptTestSuite{ReceiptIndexer: NewReceipts(db)})
@@ -67,10 +78,15 @@ func TestBlock(t *testing.T) {
 	runDB("store block", t, func(t *testing.T, db *Storage) {
 		bl := mocks.NewBlock(10)
 		blocks := NewBlocks(db, flowGo.Emulator)
-		err := blocks.InitHeights(config.EmulatorInitCadenceHeight, flow.Identifier{0x1})
+		batch := db.NewBatch()
+
+		err := blocks.InitHeights(config.EmulatorInitCadenceHeight, flow.Identifier{0x1}, batch)
 		require.NoError(t, err)
 
-		err = blocks.Store(20, flow.Identifier{0x1}, bl, nil)
+		err = blocks.Store(20, flow.Identifier{0x1}, bl, batch)
+		require.NoError(t, err)
+
+		err = batch.Commit(pebble.Sync)
 		require.NoError(t, err)
 	})
 
@@ -81,10 +97,14 @@ func TestBlock(t *testing.T) {
 		bl := mocks.NewBlock(height)
 
 		blocks := NewBlocks(db, flowGo.Emulator)
-		err := blocks.InitHeights(config.EmulatorInitCadenceHeight, flow.Identifier{0x1})
+		batch := db.NewBatch()
+		err := blocks.InitHeights(config.EmulatorInitCadenceHeight, flow.Identifier{0x1}, batch)
 		require.NoError(t, err)
 
-		err = blocks.Store(cadenceHeight, cadenceID, bl, nil)
+		err = blocks.Store(cadenceHeight, cadenceID, bl, batch)
+		require.NoError(t, err)
+
+		err = batch.Commit(pebble.Sync)
 		require.NoError(t, err)
 
 		block, err := blocks.GetByHeight(height)
@@ -109,9 +129,15 @@ func TestBlock(t *testing.T) {
 
 	runDB("get not found block error", t, func(t *testing.T, db *Storage) {
 		blocks := NewBlocks(db, flowGo.Emulator)
-		err := blocks.InitHeights(config.EmulatorInitCadenceHeight, flow.Identifier{0x1})
+
+		batch := db.NewBatch()
+		err := blocks.InitHeights(config.EmulatorInitCadenceHeight, flow.Identifier{0x1}, batch)
 		require.NoError(t, err)
-		_ = blocks.Store(2, flow.Identifier{0x1}, mocks.NewBlock(1), nil) // init
+		err = blocks.Store(2, flow.Identifier{0x1}, mocks.NewBlock(1), batch) // init
+		require.NoError(t, err)
+
+		err = batch.Commit(pebble.Sync)
+		require.NoError(t, err)
 
 		bl, err := blocks.GetByHeight(11)
 		require.ErrorIs(t, err, errors.ErrEntityNotFound)

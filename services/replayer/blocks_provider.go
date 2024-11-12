@@ -78,7 +78,8 @@ func NewBlocksProvider(
 func (bp *BlocksProvider) OnBlockReceived(block *models.Block) error {
 	if bp.latestBlock != nil && bp.latestBlock.Height != (block.Height-1) {
 		return fmt.Errorf(
-			"received new block: %d, non-sequential of latest block: %d",
+			"%w: received new block: %d, non-sequential of latest block: %d",
+			models.ErrInvalidHeight,
 			block.Height,
 			bp.latestBlock.Height,
 		)

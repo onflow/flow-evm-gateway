@@ -3,6 +3,8 @@ package replayer
 import (
 	"testing"
 
+	pebble2 "github.com/cockroachdb/pebble"
+
 	"github.com/goccy/go-json"
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/models"
@@ -269,11 +271,15 @@ func setupBlocksDB(t *testing.T) storage.BlockIndexer {
 	dir := t.TempDir()
 	db, err := pebble.New(dir, zerolog.Nop())
 	require.NoError(t, err)
+	batch := db.NewBatch()
 
 	chainID := flowGo.Emulator
 	blocks := pebble.NewBlocks(db, chainID)
 
-	err = blocks.InitHeights(config.EmulatorInitCadenceHeight, flow.Identifier{0x1})
+	err = blocks.InitHeights(config.EmulatorInitCadenceHeight, flow.Identifier{0x1}, batch)
+	require.NoError(t, err)
+
+	err = batch.Commit(pebble2.Sync)
 	require.NoError(t, err)
 
 	return blocks
