@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 	"slices"
@@ -18,6 +19,7 @@ import (
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/models"
+	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/services/evm"
 	"github.com/onflow/flow-evm-gateway/services/replayer"
 	"github.com/onflow/flow-evm-gateway/services/requester"
@@ -85,8 +87,20 @@ func (d *DebugAPI) TraceTransaction(
 	// from the Traces DB.
 	if isDefaultCallTracer(config) {
 		trace, err := d.tracer.GetTransaction(hash)
+		// If there is no error, we return the trace result from the DB.
 		if err == nil {
 			return trace, nil
+		}
+
+		// If we got an error of `ErrEntityNotFound`, for whatever reason,
+		// we simply re-compute the trace below. If we got any other error,
+		// we return it.
+		if !errors.Is(err, errs.ErrEntityNotFound) {
+			d.logger.Error().Err(err).Msgf(
+				"failed to retrieve default call trace for tx: %s",
+				hash,
+			)
+			return nil, err
 		}
 	}
 
@@ -154,7 +168,7 @@ func (d *DebugAPI) TraceTransaction(
 }
 
 func (d *DebugAPI) TraceBlockByNumber(
-	_ context.Context,
+	ctx context.Context,
 	number rpc.BlockNumber,
 	config *tracers.TraceConfig,
 ) ([]*txTraceResult, error) {
@@ -170,7 +184,7 @@ func (d *DebugAPI) TraceBlockByNumber(
 	// from the Traces DB.
 	if isDefaultCallTracer(config) {
 		for i, hash := range block.TransactionHashes {
-			trace, err := d.tracer.GetTransaction(hash)
+			trace, err := d.TraceTransaction(ctx, hash, config)
 
 			if err != nil {
 				results[i] = &txTraceResult{TxHash: hash, Error: err.Error()}
