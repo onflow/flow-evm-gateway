@@ -73,10 +73,17 @@ func (r *RegisterDelta) GetUpdates() flow.RegisterEntries {
 }
 
 func (r *RegisterDelta) AllocateSlabIndex(owner []byte) (atree.SlabIndex, error) {
+	return allocateSlabIndex(owner, r)
+
+}
+
+// allocateSlabIndex allocates a new slab index for the given owner and key.
+// this method only uses the storage get/set methods.
+func allocateSlabIndex(owner []byte, storage types.BackendStorage) (atree.SlabIndex, error) {
 	// get status
 	address := flow.BytesToAddress(owner)
 	id := flow.AccountStatusRegisterID(address)
-	statusBytes, err := r.GetValue(owner, []byte(id.Key))
+	statusBytes, err := storage.GetValue(owner, []byte(id.Key))
 	if err != nil {
 		return atree.SlabIndex{}, fmt.Errorf(
 			"failed to load account status for the account (%s): %w",
@@ -100,7 +107,7 @@ func (r *RegisterDelta) AllocateSlabIndex(owner []byte) (atree.SlabIndex, error)
 	// compute storage size changes)
 	// this way the getValue would load this value from deltas
 	key := atree.SlabIndexToLedgerKey(index)
-	err = r.SetValue(owner, key, []byte{})
+	err = storage.SetValue(owner, key, []byte{})
 	if err != nil {
 		return atree.SlabIndex{}, fmt.Errorf(
 			"failed to allocate an storage index: %w",
@@ -110,7 +117,7 @@ func (r *RegisterDelta) AllocateSlabIndex(owner []byte) (atree.SlabIndex, error)
 	// update the storageIndex bytes
 	status.SetStorageIndex(newIndexBytes)
 
-	err = r.SetValue(owner, []byte(id.Key), status.ToBytes())
+	err = storage.SetValue(owner, []byte(id.Key), status.ToBytes())
 	if err != nil {
 		return atree.SlabIndex{}, fmt.Errorf(
 			"failed to store the account status for account (%s): %w",
