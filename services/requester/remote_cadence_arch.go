@@ -17,6 +17,8 @@ import (
 	"github.com/onflow/go-ethereum/crypto"
 )
 
+const cadenceArchCallGasLimit = 155_000
+
 var (
 	//go:embed cadence/dry_run.cdc
 	dryRunScript []byte
@@ -79,7 +81,7 @@ func (rca *RemoteCadenceArch) runCall(input []byte) (*evmTypes.ResultSummary, er
 			Nonce:    0,
 			To:       &cadenceArchAddress,
 			Value:    big.NewInt(0),
-			Gas:      155_000,
+			Gas:      cadenceArchCallGasLimit,
 			GasPrice: big.NewInt(0),
 			Data:     input,
 		},
