@@ -353,64 +353,9 @@ func (e *EVM) Call(
 	height uint64,
 	stateOverrides *ethTypes.StateOverride,
 ) ([]byte, error) {
-	view, err := e.getBlockView(height)
+	result, err := e.dryRunTx(tx, from, height, stateOverrides)
 	if err != nil {
 		return nil, err
-	}
-
-	to := common.Address{}
-	if tx.To != nil {
-		to = *tx.To
-	}
-	cdcHeight, err := e.evmToCadenceHeight(height)
-	if err != nil {
-		return nil, err
-	}
-	rca := NewRemoteCadenceArch(cdcHeight, e.client, e.config.FlowNetworkID)
-	opts := []query.DryCallOption{}
-	opts = append(opts, query.WithExtraPrecompiledContracts([]evmTypes.PrecompiledContract{rca}))
-	if stateOverrides != nil {
-		for addr, account := range *stateOverrides {
-			// Override account nonce.
-			if account.Nonce != nil {
-				opts = append(opts, query.WithStateOverrideNonce(addr, uint64(*account.Nonce)))
-			}
-			// Override account(contract) code.
-			if account.Code != nil {
-				opts = append(opts, query.WithStateOverrideCode(addr, *account.Code))
-			}
-			// Override account balance.
-			if account.Balance != nil {
-				opts = append(opts, query.WithStateOverrideBalance(addr, (*big.Int)(*account.Balance)))
-			}
-			if account.State != nil && account.StateDiff != nil {
-				return nil, fmt.Errorf("account %s has both 'state' and 'stateDiff'", addr.Hex())
-			}
-			// Replace entire state if caller requires.
-			if account.State != nil {
-				opts = append(opts, query.WithStateOverrideState(addr, *account.State))
-			}
-			// Apply state diff into specified accounts.
-			if account.StateDiff != nil {
-				opts = append(opts, query.WithStateOverrideStateDiff(addr, *account.StateDiff))
-			}
-		}
-	}
-	result, err := view.DryCall(
-		from,
-		to,
-		tx.Data,
-		tx.Value,
-		tx.Gas,
-		opts...,
-	)
-
-	resultSummary := result.ResultSummary()
-	if resultSummary.ErrorCode != 0 {
-		if resultSummary.ErrorCode == evmTypes.ExecutionErrCodeExecutionReverted {
-			return nil, errs.NewRevertError(resultSummary.ReturnedData)
-		}
-		return nil, errs.NewFailedTransactionError(resultSummary.ErrorMessage)
 	}
 
 	return result.ReturnedData, err
@@ -422,67 +367,9 @@ func (e *EVM) EstimateGas(
 	height uint64,
 	stateOverrides *ethTypes.StateOverride,
 ) (uint64, error) {
-	view, err := e.getBlockView(height)
+	result, err := e.dryRunTx(tx, from, height, stateOverrides)
 	if err != nil {
 		return 0, err
-	}
-
-	to := common.Address{}
-	if tx.To != nil {
-		to = *tx.To
-	}
-	cdcHeight, err := e.evmToCadenceHeight(height)
-	if err != nil {
-		return 0, err
-	}
-	rca := NewRemoteCadenceArch(cdcHeight, e.client, e.config.FlowNetworkID)
-	opts := []query.DryCallOption{}
-	opts = append(opts, query.WithExtraPrecompiledContracts([]evmTypes.PrecompiledContract{rca}))
-	if stateOverrides != nil {
-		for addr, account := range *stateOverrides {
-			// Override account nonce.
-			if account.Nonce != nil {
-				opts = append(opts, query.WithStateOverrideNonce(addr, uint64(*account.Nonce)))
-			}
-			// Override account(contract) code.
-			if account.Code != nil {
-				opts = append(opts, query.WithStateOverrideCode(addr, *account.Code))
-			}
-			// Override account balance.
-			if account.Balance != nil {
-				opts = append(opts, query.WithStateOverrideBalance(addr, (*big.Int)(*account.Balance)))
-			}
-			if account.State != nil && account.StateDiff != nil {
-				return 0, fmt.Errorf("account %s has both 'state' and 'stateDiff'", addr.Hex())
-			}
-			// Replace entire state if caller requires.
-			if account.State != nil {
-				opts = append(opts, query.WithStateOverrideState(addr, *account.State))
-			}
-			// Apply state diff into specified accounts.
-			if account.StateDiff != nil {
-				opts = append(opts, query.WithStateOverrideStateDiff(addr, *account.StateDiff))
-			}
-		}
-	}
-	result, err := view.DryCall(
-		from,
-		to,
-		tx.Data,
-		tx.Value,
-		tx.Gas,
-		opts...,
-	)
-	if err != nil {
-		return 0, err
-	}
-
-	resultSummary := result.ResultSummary()
-	if resultSummary.ErrorCode != 0 {
-		if resultSummary.ErrorCode == evmTypes.ExecutionErrCodeExecutionReverted {
-			return 0, errs.NewRevertError(resultSummary.ReturnedData)
-		}
-		return 0, errs.NewFailedTransactionError(resultSummary.ErrorMessage)
 	}
 
 	if result.Successful() {
@@ -595,6 +482,78 @@ func (e *EVM) evmToCadenceHeight(height uint64) (uint64, error) {
 	}
 
 	return cadenceHeight, nil
+}
+
+func (e *EVM) dryRunTx(
+	tx *types.LegacyTx,
+	from common.Address,
+	height uint64,
+	stateOverrides *ethTypes.StateOverride,
+) (*evmTypes.Result, error) {
+	view, err := e.getBlockView(height)
+	if err != nil {
+		return nil, err
+	}
+
+	to := common.Address{}
+	if tx.To != nil {
+		to = *tx.To
+	}
+	cdcHeight, err := e.evmToCadenceHeight(height)
+	if err != nil {
+		return nil, err
+	}
+	rca := NewRemoteCadenceArch(cdcHeight, e.client, e.config.FlowNetworkID)
+	opts := []query.DryCallOption{}
+	opts = append(opts, query.WithExtraPrecompiledContracts([]evmTypes.PrecompiledContract{rca}))
+	if stateOverrides != nil {
+		for addr, account := range *stateOverrides {
+			// Override account nonce.
+			if account.Nonce != nil {
+				opts = append(opts, query.WithStateOverrideNonce(addr, uint64(*account.Nonce)))
+			}
+			// Override account(contract) code.
+			if account.Code != nil {
+				opts = append(opts, query.WithStateOverrideCode(addr, *account.Code))
+			}
+			// Override account balance.
+			if account.Balance != nil {
+				opts = append(opts, query.WithStateOverrideBalance(addr, (*big.Int)(*account.Balance)))
+			}
+			if account.State != nil && account.StateDiff != nil {
+				return nil, fmt.Errorf("account %s has both 'state' and 'stateDiff'", addr.Hex())
+			}
+			// Replace entire state if caller requires.
+			if account.State != nil {
+				opts = append(opts, query.WithStateOverrideState(addr, *account.State))
+			}
+			// Apply state diff into specified accounts.
+			if account.StateDiff != nil {
+				opts = append(opts, query.WithStateOverrideStateDiff(addr, *account.StateDiff))
+			}
+		}
+	}
+	result, err := view.DryCall(
+		from,
+		to,
+		tx.Data,
+		tx.Value,
+		tx.Gas,
+		opts...,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	resultSummary := result.ResultSummary()
+	if resultSummary.ErrorCode != 0 {
+		if resultSummary.ErrorCode == evmTypes.ExecutionErrCodeExecutionReverted {
+			return nil, errs.NewRevertError(resultSummary.ReturnedData)
+		}
+		return nil, errs.NewFailedTransactionError(resultSummary.ErrorMessage)
+	}
+
+	return result, nil
 }
 
 func AddOne64th(n uint64) uint64 {
