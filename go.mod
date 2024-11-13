@@ -18,6 +18,7 @@ require (
 	github.com/sethvargo/go-retry v0.2.3
 	github.com/spf13/cobra v1.8.1
 	github.com/stretchr/testify v1.9.0
+	go.uber.org/ratelimit v0.3.1
 	golang.org/x/exp v0.0.0-20240119083558-1b970713d09a
 	golang.org/x/sync v0.8.0
 	google.golang.org/grpc v1.63.2
@@ -35,6 +36,7 @@ require (
 	github.com/SaveTheRbtz/mph v0.1.1-0.20240117162131-4166ec7869bc // indirect
 	github.com/StackExchange/wmi v1.2.1 // indirect
 	github.com/VictoriaMetrics/fastcache v1.12.2 // indirect
+	github.com/benbjohnson/clock v1.3.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bits-and-blooms/bitset v1.10.0 // indirect
 	github.com/btcsuite/btcd/btcec/v2 v2.3.4 // indirect
