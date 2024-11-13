@@ -15,6 +15,9 @@ type MockClient struct {
 	GetBlockHeaderByHeightFunc       func(context.Context, uint64) (*flow.BlockHeader, error)
 	SubscribeEventsByBlockHeightFunc func(context.Context, uint64, flow.EventFilter, ...access.SubscribeOption) (<-chan flow.BlockEvents, <-chan error, error)
 	GetNodeVersionInfoFunc           func(ctx context.Context) (*flow.NodeVersionInfo, error)
+	GetEventsForHeightRangeFunc      func(
+		ctx context.Context, eventType string, startHeight uint64, endHeight uint64,
+	) ([]flow.BlockEvents, error)
 }
 
 func (c *MockClient) GetBlockHeaderByHeight(ctx context.Context, height uint64) (*flow.BlockHeader, error) {
@@ -36,6 +39,12 @@ func (c *MockClient) SubscribeEventsByBlockHeight(
 	opts ...access.SubscribeOption,
 ) (<-chan flow.BlockEvents, <-chan error, error) {
 	return c.SubscribeEventsByBlockHeightFunc(ctx, startHeight, filter, opts...)
+}
+
+func (c *MockClient) GetEventsForHeightRange(
+	ctx context.Context, eventType string, startHeight uint64, endHeight uint64,
+) ([]flow.BlockEvents, error) {
+	return c.GetEventsForHeightRangeFunc(ctx, eventType, startHeight, endHeight)
 }
 
 func SetupClientForRange(startHeight uint64, endHeight uint64) *MockClient {
@@ -84,6 +93,11 @@ func SetupClient(startHeight uint64, endHeight uint64) (*MockClient, chan flow.B
 			opts ...access.SubscribeOption,
 		) (<-chan flow.BlockEvents, <-chan error, error) {
 			return events, make(chan error), nil
+		},
+		GetEventsForHeightRangeFunc: func(
+			ctx context.Context, eventType string, startHeight uint64, endHeight uint64,
+		) ([]flow.BlockEvents, error) {
+			return []flow.BlockEvents{}, nil
 		},
 	}, events
 }

@@ -163,9 +163,17 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 		Int("cadence-event-length", events.Length()).
 		Msg("received new cadence evm events")
 
+	batch := e.store.NewBatch()
+	defer func(batch *pebbleDB.Batch) {
+		err := batch.Close()
+		if err != nil {
+			e.log.Fatal().Err(err).Msg("failed to close batch")
+		}
+	}(batch)
+
 	// if heartbeat interval with no data still update the cadence height
 	if events.Empty() {
-		if err := e.blocks.SetLatestCadenceHeight(events.CadenceHeight(), nil); err != nil {
+		if err := e.blocks.SetLatestCadenceHeight(events.CadenceHeight(), batch); err != nil {
 			return fmt.Errorf(
 				"failed to update to latest cadence height: %d, during events ingestion: %w",
 				events.CadenceHeight(),
@@ -175,14 +183,6 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 		e.collector.CadenceHeightIndexed(events.CadenceHeight())
 		return nil // nothing else to do this was heartbeat event with not event payloads
 	}
-
-	batch := e.store.NewBatch()
-	defer func(batch *pebbleDB.Batch) {
-		err := batch.Close()
-		if err != nil {
-			e.log.Fatal().Err(err).Msg("failed to close batch")
-		}
-	}(batch)
 
 	// Step 1: Re-execute all transactions on the latest EVM block
 

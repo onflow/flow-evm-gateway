@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"time"
 
 	"github.com/onflow/cadence/common"
 	"github.com/onflow/flow-go/fvm/evm/events"
@@ -198,8 +197,7 @@ func (r *RPCEventSubscriber) subscribe(ctx context.Context, height uint64) <-cha
 // and check for each event it receives whether we reached the end, if we reach the end it will increase
 // the height by one (next height), and check if we are still in previous sporks, if so repeat everything,
 // otherwise return.
-func (r *RPCEventSubscriber) backfill(ctx context.Context, height uint64) <-chan models.BlockEvents {
-	// TODO(JanezP): if we are backfilling, its more efficient to request events in a batch
+func (r *RPCEventSubscriber) backfill(ctx context.Context, currentHeight uint64) <-chan models.BlockEvents {
 	eventsChan := make(chan models.BlockEvents)
 
 	go func() {
@@ -208,106 +206,108 @@ func (r *RPCEventSubscriber) backfill(ctx context.Context, height uint64) <-chan
 		}()
 
 		for {
-			// check if the current height is still in past sporks, and if not return since we are done with backfilling
-			if !r.client.IsPastSpork(height) {
+			// check if the current currentHeight is still in past sporks, and if not return since we are done with backfilling
+			if !r.client.IsPastSpork(currentHeight) {
 				r.logger.Info().
-					Uint64("height", height).
+					Uint64("height", currentHeight).
 					Msg("completed backfilling")
 
 				return
 			}
 
-			latestHeight, err := r.client.GetLatestHeightForSpork(ctx, height)
+			currentHeight, err := r.backfillSpork(ctx, currentHeight, eventsChan)
 			if err != nil {
+				r.logger.Error().Err(err).Msg("error backfilling spork")
 				eventsChan <- models.NewBlockEventsError(err)
 				return
 			}
 
 			r.logger.Info().
-				Uint64("start-height", height).
-				Uint64("last-spork-height", latestHeight).
-				Msg("backfilling spork")
-
-			ticker := time.NewTicker(time.Millisecond * 10)
-
-			maxRange := uint64(249)
-			for height < latestHeight {
-
-				// TODO: do rate limiting better
-				<-ticker.C
-
-				startHeight := height
-				r.logger.Debug().Msg(fmt.Sprintf("backfilling [%d / %d]...", startHeight, latestHeight))
-				endHeight := height + maxRange
-				if endHeight > latestHeight {
-					endHeight = latestHeight
-				}
-
-				evmAddress := common.Address(systemcontracts.SystemContractsForChain(r.chain).EVMContract.Address)
-				blockExecutedEvent := common.NewAddressLocation(
-					nil,
-					evmAddress,
-					string(events.EventTypeBlockExecuted),
-				).ID()
-
-				transactionExecutedEvent := common.NewAddressLocation(
-					nil,
-					evmAddress,
-					string(events.EventTypeTransactionExecuted),
-				).ID()
-
-				//
-				blocks, err := r.client.GetEventsForHeightRange(ctx, blockExecutedEvent, startHeight, endHeight)
-				if err != nil {
-					r.logger.Error().Err(err).Msg("failed to get block events")
-					eventsChan <- models.NewBlockEventsError(err)
-					return
-				}
-				sort.Slice(blocks, func(i, j int) bool {
-					return blocks[i].Height < blocks[j].Height
-				})
-
-				transactions, err := r.client.GetEventsForHeightRange(ctx, transactionExecutedEvent, startHeight, endHeight)
-				if err != nil {
-					r.logger.Error().Err(err).Msg("failed to get block events")
-					eventsChan <- models.NewBlockEventsError(err)
-					return
-				}
-
-				sort.Slice(transactions, func(i, j int) bool {
-					return transactions[i].Height < transactions[j].Height
-				})
-
-				if len(transactions) != len(blocks) {
-					r.logger.Error().Msg("transactions and blocks have different length")
-					eventsChan <- models.NewBlockEventsError(err)
-					return
-				}
-
-				for i := range transactions {
-					if transactions[i].Height != blocks[i].Height {
-						r.logger.Error().Msg("transactions and blocks have different height")
-						eventsChan <- models.NewBlockEventsError(err)
-						return
-					}
-					// append the transaction events to the block events
-					blocks[i].Events = append(blocks[i].Events, transactions[i].Events...)
-
-					evmEvents := models.NewBlockEvents(blocks[i])
-					height = evmEvents.Events.CadenceHeight() + 1
-
-				}
-
-			}
-			ticker.Stop()
-
-			r.logger.Info().
-				Uint64("next-height", height).
+				Uint64("next-height", currentHeight).
 				Msg("reached the end of spork, checking next spork")
 		}
 	}()
 
 	return eventsChan
+}
+
+// maxRangeForGetEvents is the maximum range of blocks that can be fetched using the GetEventsForHeightRange method.
+const maxRangeForGetEvents = uint64(249)
+
+func (r *RPCEventSubscriber) backfillSpork(ctx context.Context, fromHeight uint64, eventsChan chan<- models.BlockEvents) (uint64, error) {
+	evmAddress := common.Address(systemcontracts.SystemContractsForChain(r.chain).EVMContract.Address)
+
+	lastHeight, err := r.client.GetLatestHeightForSpork(ctx, fromHeight)
+	if err != nil {
+		eventsChan <- models.NewBlockEventsError(err)
+		return 0, err
+	}
+
+	r.logger.Info().
+		Uint64("start-height", fromHeight).
+		Uint64("last-spork-height", lastHeight).
+		Msg("backfilling spork")
+
+	for fromHeight < lastHeight {
+		r.logger.Debug().Msg(fmt.Sprintf("backfilling [%d / %d] ...", fromHeight, lastHeight))
+
+		startHeight := fromHeight
+		endHeight := fromHeight + maxRangeForGetEvents
+		if endHeight > lastHeight {
+			endHeight = lastHeight
+		}
+
+		blockExecutedEvent := common.NewAddressLocation(
+			nil,
+			evmAddress,
+			string(events.EventTypeBlockExecuted),
+		).ID()
+
+		transactionExecutedEvent := common.NewAddressLocation(
+			nil,
+			evmAddress,
+			string(events.EventTypeTransactionExecuted),
+		).ID()
+
+		blocks, err := r.client.GetEventsForHeightRange(ctx, blockExecutedEvent, startHeight, endHeight)
+		if err != nil {
+			return 0, fmt.Errorf("failed to get block events: %w", err)
+		}
+
+		transactions, err := r.client.GetEventsForHeightRange(ctx, transactionExecutedEvent, startHeight, endHeight)
+		if err != nil {
+			return 0, fmt.Errorf("failed to get block events: %w", err)
+		}
+
+		// sort both, just in case
+		sort.Slice(blocks, func(i, j int) bool {
+			return blocks[i].Height < blocks[j].Height
+		})
+		sort.Slice(transactions, func(i, j int) bool {
+			return transactions[i].Height < transactions[j].Height
+		})
+
+		if len(transactions) != len(blocks) {
+			return 0, fmt.Errorf("transactions and blocks have different length")
+		}
+
+		for i := range transactions {
+			if transactions[i].Height != blocks[i].Height {
+				return 0, fmt.Errorf("transactions and blocks have different height")
+			}
+
+			// append the transaction events to the block events
+			blocks[i].Events = append(blocks[i].Events, transactions[i].Events...)
+
+			evmEvents := models.NewBlockEvents(blocks[i])
+			eventsChan <- evmEvents
+
+			// advance the height
+			fromHeight = evmEvents.Events.CadenceHeight() + 1
+		}
+
+	}
+	return fromHeight, nil
 }
 
 // fetchMissingData is used as a backup mechanism for fetching EVM-related

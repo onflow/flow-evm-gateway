@@ -5,24 +5,33 @@ import (
 	"fmt"
 
 	"github.com/onflow/cadence"
+	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access"
 	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/rs/zerolog"
+	"go.uber.org/ratelimit"
 	"golang.org/x/exp/slices"
-
-	errs "github.com/onflow/flow-evm-gateway/models/errors"
 )
 
 type sporkClient struct {
-	firstHeight uint64
-	lastHeight  uint64
-	client      access.Client
+	firstHeight                    uint64
+	lastHeight                     uint64
+	client                         access.Client
+	getEventsForHeightRangeLimiter ratelimit.Limiter
 }
 
 // contains checks if the provided height is withing the range of available heights
 func (s *sporkClient) contains(height uint64) bool {
 	return height >= s.firstHeight && height <= s.lastHeight
+}
+
+func (s *sporkClient) GetEventsForHeightRange(
+	ctx context.Context, eventType string, startHeight uint64, endHeight uint64,
+) ([]flow.BlockEvents, error) {
+	s.getEventsForHeightRangeLimiter.Take()
+
+	return s.client.GetEventsForHeightRange(ctx, eventType, startHeight, endHeight)
 }
 
 type sporkClients []*sporkClient
@@ -48,6 +57,8 @@ func (s *sporkClients) add(logger zerolog.Logger, client access.Client) error {
 		firstHeight: info.NodeRootBlockHeight,
 		lastHeight:  header.Height,
 		client:      client,
+		// TODO (JanezP): Make this configurable
+		getEventsForHeightRangeLimiter: ratelimit.New(100, ratelimit.WithoutSlack),
 	})
 
 	// make sure clients are always sorted
@@ -218,10 +229,17 @@ func (c *CrossSporkClient) SubscribeEventsByBlockHeight(
 func (c *CrossSporkClient) GetEventsForHeightRange(
 	ctx context.Context, eventType string, startHeight uint64, endHeight uint64,
 ) ([]flow.BlockEvents, error) {
-	// TODO: also make sure the endHeight is not too high
 	client, err := c.getClientForHeight(startHeight)
 	if err != nil {
 		return nil, err
+	}
+	endClient, err := c.getClientForHeight(endHeight)
+	if err != nil {
+		return nil, err
+	}
+	// there is one client reference per spork, so we can compare the clients
+	if endClient != client {
+		return nil, fmt.Errorf("invalid height range, end height %d is not in the same spork as start height %d", endHeight, startHeight)
 	}
 	return client.GetEventsForHeightRange(ctx, eventType, startHeight, endHeight)
 }
