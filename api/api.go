@@ -154,7 +154,6 @@ type BlockChainAPI struct {
 	blocks                storage.BlockIndexer
 	transactions          storage.TransactionIndexer
 	receipts              storage.ReceiptIndexer
-	accounts              storage.AccountIndexer
 	indexingResumedHeight uint64
 	limiter               limiter.Store
 	collector             metrics.Collector
@@ -167,7 +166,6 @@ func NewBlockChainAPI(
 	blocks storage.BlockIndexer,
 	transactions storage.TransactionIndexer,
 	receipts storage.ReceiptIndexer,
-	accounts storage.AccountIndexer,
 	ratelimiter limiter.Store,
 	collector metrics.Collector,
 ) (*BlockChainAPI, error) {
@@ -184,7 +182,6 @@ func NewBlockChainAPI(
 		blocks:                blocks,
 		transactions:          transactions,
 		receipts:              receipts,
-		accounts:              accounts,
 		indexingResumedHeight: indexingResumedHeight,
 		limiter:               ratelimiter,
 		collector:             collector,
@@ -760,19 +757,6 @@ func (b *BlockChainAPI) GetTransactionCount(
 	networkNonce, err := b.evm.GetNonce(address, height)
 	if err != nil {
 		return handleError[*hexutil.Uint64](err, l, b.collector)
-	}
-
-	nonce, err := b.accounts.GetNonce(address)
-	if err != nil {
-		return handleError[*hexutil.Uint64](errs.ErrInternal, l, b.collector)
-	}
-
-	// compare both until we gain confidence in db nonce tracking working correctly
-	if nonce != networkNonce {
-		l.Error().
-			Uint64("network-nonce", networkNonce).
-			Uint64("db-nonce", nonce).
-			Msg("network nonce does not equal db nonce")
 	}
 
 	return (*hexutil.Uint64)(&networkNonce), nil

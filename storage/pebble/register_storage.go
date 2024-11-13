@@ -15,15 +15,16 @@ var (
 	// MinLookupKeyLen defines the minimum length for a valid lookup key
 	//
 	// Lookup keys use the following format:
-	//     [key] / [height]
+	//    [marker] [key] / [height]
 	// Where:
+	// - marker: 1 byte marking that this is a register key
 	// - key: optional variable length field
 	// - height: 8 bytes representing the block height (uint64)
 	// - separator: '/' is used to separate variable length field
 	//
-	// Therefore the minimum key would be 1 byte + # of bytes for height
-	//     / [height]
-	MinLookupKeyLen = 1 + registers.HeightSuffixLen
+	// Therefore the minimum key would be 2 bytes + # of bytes for height
+	//    [marker]  / [height]
+	MinLookupKeyLen = 2 + registers.HeightSuffixLen
 )
 
 type RegisterStorage struct {
@@ -60,7 +61,13 @@ func NewRegisterStorage(
 
 // Get returns the register value for the given register ID at the given height.
 // Get will check that the owner is the same as the one used to create the index.
-func (r *RegisterStorage) Get(id flow.RegisterID, height uint64) (flow.RegisterValue, error) {
+func (r *RegisterStorage) Get(id flow.RegisterID, height uint64) (value flow.RegisterValue, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("panic: %v", r)
+		}
+	}()
+
 	owner := flow.BytesToAddress([]byte(id.Owner))
 	if r.owner != flow.BytesToAddress([]byte(id.Owner)) {
 		return nil, registerOwnerMismatch(r.owner, owner)
@@ -152,6 +159,7 @@ func newLookupKey(height uint64, key []byte) *lookupKey {
 	// The "<lookupKey>" part is the register lookupKey, which is used as a prefix to filter and iterate
 	// through updated values at different heights, and find the most recent updated value at or below
 	// a certain height.
+	lookupKey.encoded = append(lookupKey.encoded, registerKeyMarker)
 	lookupKey.encoded = append(lookupKey.encoded, key...)
 	lookupKey.encoded = append(lookupKey.encoded, '/')
 

@@ -1,7 +1,11 @@
 package storage
 
 import (
+	"fmt"
+
 	"github.com/onflow/atree"
+	"github.com/onflow/flow-go/fvm/environment"
+	"github.com/onflow/flow-go/fvm/errors"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/flow-go/model/flow"
 )
@@ -68,6 +72,58 @@ func (r *RegisterDelta) GetUpdates() flow.RegisterEntries {
 	return entries
 }
 
-func (r *RegisterDelta) AllocateSlabIndex(_ []byte) (atree.SlabIndex, error) {
-	return atree.SlabIndex{}, nil
+func (r *RegisterDelta) AllocateSlabIndex(owner []byte) (atree.SlabIndex, error) {
+	return allocateSlabIndex(owner, r)
+
+}
+
+// allocateSlabIndex allocates a new slab index for the given owner and key.
+// this method only uses the storage get/set methods.
+func allocateSlabIndex(owner []byte, storage types.BackendStorage) (atree.SlabIndex, error) {
+	// get status
+	address := flow.BytesToAddress(owner)
+	id := flow.AccountStatusRegisterID(address)
+	statusBytes, err := storage.GetValue(owner, []byte(id.Key))
+	if err != nil {
+		return atree.SlabIndex{}, fmt.Errorf(
+			"failed to load account status for the account (%s): %w",
+			address.String(),
+			err)
+	}
+	if len(statusBytes) == 0 {
+		return atree.SlabIndex{}, errors.NewAccountNotFoundError(address)
+	}
+	status, err := environment.AccountStatusFromBytes(statusBytes)
+	if err != nil {
+		return atree.SlabIndex{}, err
+	}
+
+	// get and increment the index
+	index := status.SlabIndex()
+	newIndexBytes := index.Next()
+
+	// store nil so that the setValue for new allocated slabs would be faster
+	// and won't do ledger getValue for every new slabs (currently happening to
+	// compute storage size changes)
+	// this way the getValue would load this value from deltas
+	key := atree.SlabIndexToLedgerKey(index)
+	err = storage.SetValue(owner, key, []byte{})
+	if err != nil {
+		return atree.SlabIndex{}, fmt.Errorf(
+			"failed to allocate an storage index: %w",
+			err)
+	}
+
+	// update the storageIndex bytes
+	status.SetStorageIndex(newIndexBytes)
+
+	err = storage.SetValue(owner, []byte(id.Key), status.ToBytes())
+	if err != nil {
+		return atree.SlabIndex{}, fmt.Errorf(
+			"failed to store the account status for account (%s): %w",
+			address.String(),
+			err)
+	}
+	return index, nil
+
 }

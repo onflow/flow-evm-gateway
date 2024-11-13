@@ -46,7 +46,6 @@ type Engine struct {
 	blocks          storage.BlockIndexer
 	receipts        storage.ReceiptIndexer
 	transactions    storage.TransactionIndexer
-	accounts        storage.AccountIndexer
 	traces          storage.TraceIndexer
 	log             zerolog.Logger
 	evmLastHeight   *models.SequentialHeight
@@ -64,7 +63,6 @@ func NewEventIngestionEngine(
 	blocks storage.BlockIndexer,
 	receipts storage.ReceiptIndexer,
 	transactions storage.TransactionIndexer,
-	accounts storage.AccountIndexer,
 	traces storage.TraceIndexer,
 	blocksPublisher *models.Publisher[*models.Block],
 	logsPublisher *models.Publisher[[]*gethTypes.Log],
@@ -84,7 +82,6 @@ func NewEventIngestionEngine(
 		blocks:          blocks,
 		receipts:        receipts,
 		transactions:    transactions,
-		accounts:        accounts,
 		traces:          traces,
 		log:             log,
 		blocksPublisher: blocksPublisher,
@@ -96,7 +93,8 @@ func NewEventIngestionEngine(
 
 // Stop the engine.
 func (e *Engine) Stop() {
-	// todo
+	e.MarkDone()
+	<-e.Stopped()
 }
 
 // Run the Cadence event ingestion engine.
@@ -118,23 +116,33 @@ func (e *Engine) Run(ctx context.Context) error {
 	e.log.Info().Msg("starting ingestion")
 
 	e.MarkReady()
+	defer e.MarkStopped()
 
-	for events := range e.subscriber.Subscribe(ctx) {
-		if events.Err != nil {
-			return fmt.Errorf(
-				"failure in event subscription with: %w",
-				events.Err,
-			)
-		}
+	events := e.subscriber.Subscribe(ctx)
 
-		err := e.processEvents(events.Events)
-		if err != nil {
-			e.log.Error().Err(err).Msg("failed to process EVM events")
-			return err
+	for {
+		select {
+		case <-e.Done():
+			// stop the engine
+			return nil
+		case events, ok := <-events:
+			if !ok {
+				return nil
+			}
+			if events.Err != nil {
+				return fmt.Errorf(
+					"failure in event subscription with: %w",
+					events.Err,
+				)
+			}
+
+			err := e.processEvents(events.Events)
+			if err != nil {
+				e.log.Error().Err(err).Msg("failed to process EVM events")
+				return err
+			}
 		}
 	}
-
-	return nil
 }
 
 // processEvents converts the events to block and transactions and indexes them.
@@ -168,8 +176,7 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 		return nil // nothing else to do this was heartbeat event with not event payloads
 	}
 
-	// TODO(JanezP): accounts need an indexed batch. Investigate why and try to switch to non-indexed batch
-	batch := e.store.NewIndexedBatch()
+	batch := e.store.NewBatch()
 	defer func(batch *pebbleDB.Batch) {
 		err := batch.Close()
 		if err != nil {
@@ -325,10 +332,6 @@ func (e *Engine) indexTransaction(
 
 	if err := e.transactions.Store(tx, batch); err != nil {
 		return fmt.Errorf("failed to store tx: %s, with: %w", tx.Hash(), err)
-	}
-
-	if err := e.accounts.Update(tx, receipt, batch); err != nil {
-		return fmt.Errorf("failed to update accounts for tx: %s, with: %w", tx.Hash(), err)
 	}
 
 	return nil
