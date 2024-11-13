@@ -17,6 +17,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/onflow/flow-evm-gateway/config"
+	ethTypes "github.com/onflow/flow-evm-gateway/eth/types"
 	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/models"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
@@ -251,7 +252,7 @@ func (d *DebugAPI) TraceBlockByHash(
 
 func (d *DebugAPI) TraceCall(
 	_ context.Context,
-	args TransactionArgs,
+	args ethTypes.TransactionArgs,
 	blockNrOrHash rpc.BlockNumberOrHash,
 	config *tracers.TraceCallConfig,
 ) (interface{}, error) {

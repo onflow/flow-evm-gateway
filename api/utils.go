@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"strings"
 
+	ethTypes "github.com/onflow/flow-evm-gateway/eth/types"
 	"github.com/onflow/flow-evm-gateway/metrics"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/storage"
@@ -135,7 +136,7 @@ func handleError[T any](err error, log zerolog.Logger, collector metrics.Collect
 // `EVM.dryRun` inside Cadence scripts, meaning that no state change
 // will occur.
 // This is only useful for `eth_estimateGas` and `eth_call` endpoints.
-func encodeTxFromArgs(args TransactionArgs) (*types.LegacyTx, error) {
+func encodeTxFromArgs(args ethTypes.TransactionArgs) (*types.LegacyTx, error) {
 	var data []byte
 	if args.Data != nil {
 		data = *args.Data
