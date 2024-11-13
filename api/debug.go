@@ -17,6 +17,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/onflow/flow-evm-gateway/config"
+	ethTypes "github.com/onflow/flow-evm-gateway/eth/types"
 	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/models"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
@@ -251,7 +252,7 @@ func (d *DebugAPI) TraceBlockByHash(
 
 func (d *DebugAPI) TraceCall(
 	_ context.Context,
-	args TransactionArgs,
+	args ethTypes.TransactionArgs,
 	blockNrOrHash rpc.BlockNumberOrHash,
 	config *tracers.TraceCallConfig,
 ) (interface{}, error) {
@@ -330,6 +331,9 @@ func (d *DebugAPI) TraceCall(
 			// Override account balance.
 			if account.Balance != nil {
 				opts = append(opts, query.WithStateOverrideBalance(addr, (*big.Int)(*account.Balance)))
+			}
+			if account.State != nil && account.StateDiff != nil {
+				return nil, fmt.Errorf("account %s has both 'state' and 'stateDiff'", addr.Hex())
 			}
 			// Replace entire state if caller requires.
 			if account.State != nil {
