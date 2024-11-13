@@ -215,7 +215,8 @@ func (r *RPCEventSubscriber) backfill(ctx context.Context, currentHeight uint64)
 				return
 			}
 
-			currentHeight, err := r.backfillSpork(ctx, currentHeight, eventsChan)
+			var err error
+			currentHeight, err = r.backfillSpork(ctx, currentHeight, eventsChan)
 			if err != nil {
 				r.logger.Error().Err(err).Msg("error backfilling spork")
 				eventsChan <- models.NewBlockEventsError(err)
