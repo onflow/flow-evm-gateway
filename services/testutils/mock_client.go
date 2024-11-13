@@ -95,9 +95,23 @@ func SetupClient(startHeight uint64, endHeight uint64) (*MockClient, chan flow.B
 			return events, make(chan error), nil
 		},
 		GetEventsForHeightRangeFunc: func(
-			ctx context.Context, eventType string, startHeight uint64, endHeight uint64,
+			ctx context.Context, eventType string, sh uint64, eh uint64,
 		) ([]flow.BlockEvents, error) {
-			return []flow.BlockEvents{}, nil
+			if sh < startHeight || sh > endHeight {
+				return nil, storage.ErrNotFound
+			}
+			if eh < startHeight || eh > endHeight {
+				return nil, storage.ErrNotFound
+			}
+
+			evts := make([]flow.BlockEvents, 0, eh-sh+1)
+			for i := uint64(0); i <= eh-sh; i++ {
+				evts = append(evts, flow.BlockEvents{
+					Height: sh + i,
+				})
+			}
+
+			return evts, nil
 		},
 	}, events
 }
