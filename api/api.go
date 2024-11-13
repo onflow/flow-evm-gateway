@@ -648,7 +648,7 @@ func (b *BlockChainAPI) Call(
 		from = *args.From
 	}
 
-	res, err := b.evm.Call(tx, from, height)
+	res, err := b.evm.Call(tx, from, height, stateOverrides)
 	if err != nil {
 		return handleError[hexutil.Bytes](err, l, b.collector)
 	}
@@ -772,7 +772,7 @@ func (b *BlockChainAPI) EstimateGas(
 	ctx context.Context,
 	args ethTypes.TransactionArgs,
 	blockNumberOrHash *rpc.BlockNumberOrHash,
-	overrides *ethTypes.StateOverride,
+	stateOverrides *ethTypes.StateOverride,
 ) (hexutil.Uint64, error) {
 	l := b.logger.With().
 		Str("endpoint", "estimateGas").
@@ -808,7 +808,7 @@ func (b *BlockChainAPI) EstimateGas(
 		return handleError[hexutil.Uint64](err, l, b.collector)
 	}
 
-	estimatedGas, err := b.evm.EstimateGas(tx, from, height)
+	estimatedGas, err := b.evm.EstimateGas(tx, from, height, stateOverrides)
 	if err != nil {
 		return handleError[hexutil.Uint64](err, l, b.collector)
 	}

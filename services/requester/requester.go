@@ -23,6 +23,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/onflow/flow-evm-gateway/config"
+	ethTypes "github.com/onflow/flow-evm-gateway/eth/types"
 	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/models"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
@@ -60,12 +61,22 @@ type Requester interface {
 	// Call executes the given signed transaction data on the state for the given EVM block height.
 	// Note, this function doesn't make and changes in the state/blockchain and is
 	// useful to execute and retrieve values.
-	Call(tx *types.LegacyTx, from common.Address, height uint64) ([]byte, error)
+	Call(
+		tx *types.LegacyTx,
+		from common.Address,
+		height uint64,
+		stateOverrides *ethTypes.StateOverride,
+	) ([]byte, error)
 
 	// EstimateGas executes the given signed transaction data on the state for the given EVM block height.
 	// Note, this function doesn't make any changes in the state/blockchain and is
 	// useful to executed and retrieve the gas consumption and possible failures.
-	EstimateGas(tx *types.LegacyTx, from common.Address, height uint64) (uint64, error)
+	EstimateGas(
+		tx *types.LegacyTx,
+		from common.Address,
+		height uint64,
+		stateOverrides *ethTypes.StateOverride,
+	) (uint64, error)
 
 	// GetNonce gets nonce from the network at the given EVM block height.
 	GetNonce(address common.Address, height uint64) (uint64, error)
@@ -340,6 +351,7 @@ func (e *EVM) Call(
 	tx *types.LegacyTx,
 	from common.Address,
 	height uint64,
+	stateOverrides *ethTypes.StateOverride,
 ) ([]byte, error) {
 	view, err := e.getBlockView(height)
 	if err != nil {
@@ -355,13 +367,42 @@ func (e *EVM) Call(
 		return nil, err
 	}
 	rca := NewRemoteCadenceArch(cdcHeight, e.client, e.config.FlowNetworkID)
+	opts := []query.DryCallOption{}
+	opts = append(opts, query.WithExtraPrecompiledContracts([]evmTypes.PrecompiledContract{rca}))
+	if stateOverrides != nil {
+		for addr, account := range *stateOverrides {
+			// Override account nonce.
+			if account.Nonce != nil {
+				opts = append(opts, query.WithStateOverrideNonce(addr, uint64(*account.Nonce)))
+			}
+			// Override account(contract) code.
+			if account.Code != nil {
+				opts = append(opts, query.WithStateOverrideCode(addr, *account.Code))
+			}
+			// Override account balance.
+			if account.Balance != nil {
+				opts = append(opts, query.WithStateOverrideBalance(addr, (*big.Int)(*account.Balance)))
+			}
+			if account.State != nil && account.StateDiff != nil {
+				return nil, fmt.Errorf("account %s has both 'state' and 'stateDiff'", addr.Hex())
+			}
+			// Replace entire state if caller requires.
+			if account.State != nil {
+				opts = append(opts, query.WithStateOverrideState(addr, *account.State))
+			}
+			// Apply state diff into specified accounts.
+			if account.StateDiff != nil {
+				opts = append(opts, query.WithStateOverrideStateDiff(addr, *account.StateDiff))
+			}
+		}
+	}
 	result, err := view.DryCall(
 		from,
 		to,
 		tx.Data,
 		tx.Value,
 		tx.Gas,
-		query.WithExtraPrecompiledContracts([]evmTypes.PrecompiledContract{rca}),
+		opts...,
 	)
 
 	resultSummary := result.ResultSummary()
@@ -379,6 +420,7 @@ func (e *EVM) EstimateGas(
 	tx *types.LegacyTx,
 	from common.Address,
 	height uint64,
+	stateOverrides *ethTypes.StateOverride,
 ) (uint64, error) {
 	view, err := e.getBlockView(height)
 	if err != nil {
@@ -394,13 +436,42 @@ func (e *EVM) EstimateGas(
 		return 0, err
 	}
 	rca := NewRemoteCadenceArch(cdcHeight, e.client, e.config.FlowNetworkID)
+	opts := []query.DryCallOption{}
+	opts = append(opts, query.WithExtraPrecompiledContracts([]evmTypes.PrecompiledContract{rca}))
+	if stateOverrides != nil {
+		for addr, account := range *stateOverrides {
+			// Override account nonce.
+			if account.Nonce != nil {
+				opts = append(opts, query.WithStateOverrideNonce(addr, uint64(*account.Nonce)))
+			}
+			// Override account(contract) code.
+			if account.Code != nil {
+				opts = append(opts, query.WithStateOverrideCode(addr, *account.Code))
+			}
+			// Override account balance.
+			if account.Balance != nil {
+				opts = append(opts, query.WithStateOverrideBalance(addr, (*big.Int)(*account.Balance)))
+			}
+			if account.State != nil && account.StateDiff != nil {
+				return 0, fmt.Errorf("account %s has both 'state' and 'stateDiff'", addr.Hex())
+			}
+			// Replace entire state if caller requires.
+			if account.State != nil {
+				opts = append(opts, query.WithStateOverrideState(addr, *account.State))
+			}
+			// Apply state diff into specified accounts.
+			if account.StateDiff != nil {
+				opts = append(opts, query.WithStateOverrideStateDiff(addr, *account.StateDiff))
+			}
+		}
+	}
 	result, err := view.DryCall(
 		from,
 		to,
 		tx.Data,
 		tx.Value,
 		tx.Gas,
-		query.WithExtraPrecompiledContracts([]evmTypes.PrecompiledContract{rca}),
+		opts...,
 	)
 	if err != nil {
 		return 0, err

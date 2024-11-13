@@ -332,6 +332,9 @@ func (d *DebugAPI) TraceCall(
 			if account.Balance != nil {
 				opts = append(opts, query.WithStateOverrideBalance(addr, (*big.Int)(*account.Balance)))
 			}
+			if account.State != nil && account.StateDiff != nil {
+				return nil, fmt.Errorf("account %s has both 'state' and 'stateDiff'", addr.Hex())
+			}
 			// Replace entire state if caller requires.
 			if account.State != nil {
 				opts = append(opts, query.WithStateOverrideState(addr, *account.State))
