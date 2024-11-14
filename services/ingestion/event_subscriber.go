@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 
 	"github.com/onflow/cadence/common"
 	"github.com/onflow/flow-go/fvm/evm/events"
@@ -62,7 +63,8 @@ func NewRPCEventSubscriber(
 //
 // If error is encountered during backfill the subscription will end and the response chanel will be closed.
 func (r *RPCEventSubscriber) Subscribe(ctx context.Context) <-chan models.BlockEvents {
-	eventsChan := make(chan models.BlockEvents)
+	// buffered channel so that the decoding of the events can happen in parallel to other operations
+	eventsChan := make(chan models.BlockEvents, 1000)
 
 	go func() {
 		defer func() {
@@ -190,12 +192,9 @@ func (r *RPCEventSubscriber) subscribe(ctx context.Context, height uint64) <-cha
 	return eventsChan
 }
 
-// backfill will use the provided height and with the client for the provided spork will start backfilling
-// events. Before subscribing, it will check what is the latest block in the current spork (defined by height)
-// and check for each event it receives whether we reached the end, if we reach the end it will increase
-// the height by one (next height), and check if we are still in previous sporks, if so repeat everything,
-// otherwise return.
-func (r *RPCEventSubscriber) backfill(ctx context.Context, height uint64) <-chan models.BlockEvents {
+// backfill returns a channel that is filled with block events from the provided fromCadenceHeight up to the first
+// height in the current spork.
+func (r *RPCEventSubscriber) backfill(ctx context.Context, fromCadenceHeight uint64) <-chan models.BlockEvents {
 	eventsChan := make(chan models.BlockEvents)
 
 	go func() {
@@ -204,49 +203,111 @@ func (r *RPCEventSubscriber) backfill(ctx context.Context, height uint64) <-chan
 		}()
 
 		for {
-			// check if the current height is still in past sporks, and if not return since we are done with backfilling
-			if !r.client.IsPastSpork(height) {
+			// check if the current fromCadenceHeight is still in past sporks, and if not return since we are done with backfilling
+			if !r.client.IsPastSpork(fromCadenceHeight) {
 				r.logger.Info().
-					Uint64("height", height).
+					Uint64("height", fromCadenceHeight).
 					Msg("completed backfilling")
 
 				return
 			}
 
-			latestHeight, err := r.client.GetLatestHeightForSpork(ctx, height)
+			var err error
+			fromCadenceHeight, err = r.backfillSporkFromHeight(ctx, fromCadenceHeight, eventsChan)
 			if err != nil {
+				r.logger.Error().Err(err).Msg("error backfilling spork")
 				eventsChan <- models.NewBlockEventsError(err)
 				return
 			}
 
 			r.logger.Info().
-				Uint64("start-height", height).
-				Uint64("last-spork-height", latestHeight).
-				Msg("backfilling spork")
-
-			for ev := range r.subscribe(ctx, height) {
-				eventsChan <- ev
-
-				if ev.Err != nil {
-					return
-				}
-
-				r.logger.Debug().Msg(fmt.Sprintf("backfilling [%d / %d]...", ev.Events.CadenceHeight(), latestHeight))
-
-				if ev.Events != nil && ev.Events.CadenceHeight() == latestHeight {
-					height = ev.Events.CadenceHeight() + 1 // go to next height in the next spork
-
-					r.logger.Info().
-						Uint64("next-height", height).
-						Msg("reached the end of spork, checking next spork")
-
-					break
-				}
-			}
+				Uint64("next-cadence-height", fromCadenceHeight).
+				Msg("reached the end of spork, checking next spork")
 		}
 	}()
 
 	return eventsChan
+}
+
+// maxRangeForGetEvents is the maximum range of blocks that can be fetched using the GetEventsForHeightRange method.
+const maxRangeForGetEvents = uint64(249)
+
+// / backfillSporkFromHeight will fill the eventsChan with block events from the provided fromHeight up to the first height in the spork that comes
+// after the spork of the provided fromHeight.
+func (r *RPCEventSubscriber) backfillSporkFromHeight(ctx context.Context, fromCadenceHeight uint64, eventsChan chan<- models.BlockEvents) (uint64, error) {
+	evmAddress := common.Address(systemcontracts.SystemContractsForChain(r.chain).EVMContract.Address)
+
+	lastHeight, err := r.client.GetLatestHeightForSpork(ctx, fromCadenceHeight)
+	if err != nil {
+		eventsChan <- models.NewBlockEventsError(err)
+		return 0, err
+	}
+
+	r.logger.Info().
+		Uint64("start-height", fromCadenceHeight).
+		Uint64("last-spork-height", lastHeight).
+		Msg("backfilling spork")
+
+	for fromCadenceHeight < lastHeight {
+		r.logger.Debug().Msg(fmt.Sprintf("backfilling [%d / %d] ...", fromCadenceHeight, lastHeight))
+
+		startHeight := fromCadenceHeight
+		endHeight := fromCadenceHeight + maxRangeForGetEvents
+		if endHeight > lastHeight {
+			endHeight = lastHeight
+		}
+
+		blockExecutedEvent := common.NewAddressLocation(
+			nil,
+			evmAddress,
+			string(events.EventTypeBlockExecuted),
+		).ID()
+
+		transactionExecutedEvent := common.NewAddressLocation(
+			nil,
+			evmAddress,
+			string(events.EventTypeTransactionExecuted),
+		).ID()
+
+		blocks, err := r.client.GetEventsForHeightRange(ctx, blockExecutedEvent, startHeight, endHeight)
+		if err != nil {
+			return 0, fmt.Errorf("failed to get block events: %w", err)
+		}
+
+		transactions, err := r.client.GetEventsForHeightRange(ctx, transactionExecutedEvent, startHeight, endHeight)
+		if err != nil {
+			return 0, fmt.Errorf("failed to get block events: %w", err)
+		}
+
+		if len(transactions) != len(blocks) {
+			return 0, fmt.Errorf("transactions and blocks have different length")
+		}
+
+		// sort both, just in case
+		sort.Slice(blocks, func(i, j int) bool {
+			return blocks[i].Height < blocks[j].Height
+		})
+		sort.Slice(transactions, func(i, j int) bool {
+			return transactions[i].Height < transactions[j].Height
+		})
+
+		for i := range transactions {
+			if transactions[i].Height != blocks[i].Height {
+				return 0, fmt.Errorf("transactions and blocks have different height")
+			}
+
+			// append the transaction events to the block events
+			blocks[i].Events = append(blocks[i].Events, transactions[i].Events...)
+
+			evmEvents := models.NewBlockEvents(blocks[i])
+			eventsChan <- evmEvents
+
+			// advance the height
+			fromCadenceHeight = evmEvents.Events.CadenceHeight() + 1
+		}
+
+	}
+	return fromCadenceHeight, nil
 }
 
 // fetchMissingData is used as a backup mechanism for fetching EVM-related

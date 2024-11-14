@@ -28,7 +28,7 @@ import (
 var Cmd = &cobra.Command{
 	Use:   "run",
 	Short: "Runs the EVM Gateway Node",
-	Run: func(*cobra.Command, []string) {
+	Run: func(command *cobra.Command, _ []string) {
 		// create multi-key account
 		if _, exists := os.LookupEnv("MULTIKEY_MODE"); exists {
 			bootstrap.RunCreateMultiKeyAccount()
@@ -40,13 +40,15 @@ var Cmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(command.Context())
+		done := make(chan struct{})
 		ready := make(chan struct{})
 		go func() {
-			if err := bootstrap.Run(ctx, cfg, ready); err != nil {
+			defer close(done)
+			err := bootstrap.Run(ctx, cfg, ready)
+			if err != nil {
 				log.Err(err).Msg("failed to run bootstrap")
 				cancel()
-				os.Exit(1)
 			}
 		}()
 
@@ -55,7 +57,15 @@ var Cmd = &cobra.Command{
 		osSig := make(chan os.Signal, 1)
 		signal.Notify(osSig, syscall.SIGINT, syscall.SIGTERM)
 
-		<-osSig
+		select {
+		case <-osSig:
+			log.Info().Msg("OS Signal to shutdown received, shutting down")
+			cancel()
+		case <-done:
+			log.Info().Msg("done, shutting down")
+			cancel()
+		}
+
 		log.Info().Msg("OS Signal to shutdown received, shutting down")
 		cancel()
 	},

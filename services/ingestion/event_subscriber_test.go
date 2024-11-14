@@ -205,10 +205,10 @@ func Test_SubscribingWithRetryOnError(t *testing.T) {
 		prevHeight = eventHeight
 
 		if eventHeight == cadenceHeight {
-			assert.Equal(t, evmBlock, ev.Events.Block())
+			require.Equal(t, evmBlock, ev.Events.Block())
 			for i := 0; i < len(txHashes); i++ {
 				tx := ev.Events.Transactions()[i]
-				assert.Equal(t, txHashes[i], tx.Hash())
+				require.Equal(t, txHashes[i], tx.Hash())
 			}
 		}
 	}
@@ -416,6 +416,8 @@ func setupClientForBackupEventFetching(
 		cadenceHeight,
 		cadenceHeight,
 	).Return([]flow.BlockEvents{evmTxEvents}, nil).Once()
+
+	client.GetEventsForHeightRangeFunc = nil
 
 	client.SubscribeEventsByBlockHeightFunc = func(
 		ctx context.Context,
