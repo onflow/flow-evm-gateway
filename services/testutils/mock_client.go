@@ -44,7 +44,10 @@ func (c *MockClient) SubscribeEventsByBlockHeight(
 func (c *MockClient) GetEventsForHeightRange(
 	ctx context.Context, eventType string, startHeight uint64, endHeight uint64,
 ) ([]flow.BlockEvents, error) {
-	return c.GetEventsForHeightRangeFunc(ctx, eventType, startHeight, endHeight)
+	if c.GetEventsForHeightRangeFunc != nil {
+		return c.GetEventsForHeightRangeFunc(ctx, eventType, startHeight, endHeight)
+	}
+	return c.Client.GetEventsForHeightRange(ctx, eventType, startHeight, endHeight)
 }
 
 func SetupClientForRange(startHeight uint64, endHeight uint64) *MockClient {
