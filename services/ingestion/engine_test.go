@@ -164,7 +164,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 		go func() {
 			err := engine.Run(context.Background())
 			assert.ErrorIs(t, err, models.ErrInvalidHeight)
-			assert.EqualError(t, err, "invalid height: received new block: 20, non-sequential of latest block: 11")
+			assert.ErrorContains(t, err, "invalid height: received new block: 20, non-sequential of latest block: 11")
 			close(waitErr)
 		}()
 

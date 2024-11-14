@@ -145,6 +145,29 @@ func (e *Engine) Run(ctx context.Context) error {
 	}
 }
 
+// withBatch will execute the provided function with a new batch, and commit the batch
+// afterwards if no error is returned.
+func (e *Engine) withBatch(f func(batch *pebbleDB.Batch) error) error {
+	batch := e.store.NewBatch()
+	defer func(batch *pebbleDB.Batch) {
+		err := batch.Close()
+		if err != nil {
+			e.log.Fatal().Err(err).Msg("failed to close batch")
+		}
+	}(batch)
+
+	err := f(batch)
+	if err != nil {
+		return err
+	}
+
+	if err := batch.Commit(pebbleDB.Sync); err != nil {
+		return fmt.Errorf("failed to commit batch: %w", err)
+	}
+
+	return nil
+}
+
 // processEvents converts the events to block and transactions and indexes them.
 //
 // BlockEvents are received by the access node API and contain Cadence height (always a single Flow block),
@@ -163,14 +186,36 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 		Int("cadence-event-length", events.Length()).
 		Msg("received new cadence evm events")
 
-	batch := e.store.NewBatch()
-	defer func(batch *pebbleDB.Batch) {
-		err := batch.Close()
-		if err != nil {
-			e.log.Fatal().Err(err).Msg("failed to close batch")
-		}
-	}(batch)
+	err := e.withBatch(
+		func(batch *pebbleDB.Batch) error {
+			return e.indexEvents(events, batch)
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to index events for cadence block %d: %w", events.CadenceHeight(), err)
+	}
 
+	e.collector.CadenceHeightIndexed(events.CadenceHeight())
+
+	if events.Empty() {
+		return nil // nothing else to do this was heartbeat event with not event payloads
+	}
+
+	// emit block event and logs, only after we successfully commit the data
+	e.blocksPublisher.Publish(events.Block())
+	for _, r := range events.Receipts() {
+		if len(r.Logs) > 0 {
+			e.logsPublisher.Publish(r.Logs)
+		}
+	}
+
+	e.collector.EVMTransactionIndexed(len(events.Transactions()))
+	e.collector.EVMHeightIndexed(events.Block().Height)
+	return nil
+}
+
+// indexEvents will replay the evm transactions using the block events and index all results.
+func (e *Engine) indexEvents(events *models.CadenceEvents, batch *pebbleDB.Batch) error {
 	// if heartbeat interval with no data still update the cadence height
 	if events.Empty() {
 		if err := e.blocks.SetLatestCadenceHeight(events.CadenceHeight(), batch); err != nil {
@@ -180,7 +225,6 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 				err,
 			)
 		}
-		e.collector.CadenceHeightIndexed(events.CadenceHeight())
 		return nil // nothing else to do this was heartbeat event with not event payloads
 	}
 
@@ -262,22 +306,6 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 		}
 	}
 
-	if err := batch.Commit(pebbleDB.Sync); err != nil {
-		return fmt.Errorf("failed to commit indexed data for Cadence block %d: %w", events.CadenceHeight(), err)
-	}
-
-	// emit block event and logs, only after we successfully commit the data
-	e.blocksPublisher.Publish(events.Block())
-
-	for _, r := range events.Receipts() {
-		if len(r.Logs) > 0 {
-			e.logsPublisher.Publish(r.Logs)
-		}
-	}
-
-	e.collector.EVMTransactionIndexed(len(events.Transactions()))
-	e.collector.EVMHeightIndexed(events.Block().Height)
-	e.collector.CadenceHeightIndexed(events.CadenceHeight())
 	return nil
 }
 

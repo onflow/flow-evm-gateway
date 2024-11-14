@@ -42,7 +42,6 @@ type BlockIndexer interface {
 	LatestCadenceHeight() (uint64, error)
 
 	// SetLatestCadenceHeight sets the latest Cadence height.
-	// Batch is required to batch multiple indexer operations, skipped if nil.
 	SetLatestCadenceHeight(cadenceHeight uint64, batch *pebble.Batch) error
 
 	// GetCadenceHeight returns the Cadence height that matches the
