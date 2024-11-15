@@ -297,7 +297,16 @@ func (r *RPCEventSubscriber) backfillSporkFromHeight(ctx context.Context, fromCa
 			}
 
 			// append the transaction events to the block events
-			blocks[i].Events = append(blocks[i].Events, transactions[i].Events...)
+			// first we sort all the events in the block, by their TransactionIndex,
+			// and then we also sort events in the same transaction, by their EventIndex.
+			txEvents := transactions[i].Events
+			sort.Slice(txEvents, func(i, j int) bool {
+				if txEvents[i].TransactionIndex != txEvents[j].TransactionIndex {
+					return txEvents[i].TransactionIndex < txEvents[j].TransactionIndex
+				}
+				return txEvents[i].EventIndex < txEvents[j].EventIndex
+			})
+			blocks[i].Events = append(blocks[i].Events, txEvents...)
 
 			evmEvents := models.NewBlockEvents(blocks[i])
 			eventsChan <- evmEvents
