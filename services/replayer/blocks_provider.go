@@ -52,7 +52,7 @@ func (bs *blockSnapshot) BlockContext() (evmTypes.BlockContext, error) {
 			} else if bs.chainID == flowGo.Testnet || bs.chainID == flowGo.Mainnet {
 				// For testnet & mainnet, we fetch the block hash from the hard-coded
 				// array of hashes.
-				return bs.fixedHashes[bs.block.Height%256]
+				return bs.fixedHashes[n%256]
 			} else {
 				return gethCommon.Hash{}
 			}
