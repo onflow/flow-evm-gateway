@@ -19,13 +19,17 @@ type blockSnapshot struct {
 var _ evmTypes.BlockSnapshot = (*blockSnapshot)(nil)
 
 func (bs *blockSnapshot) BlockContext() (evmTypes.BlockContext, error) {
+	miner := evmTypes.CoinbaseAddress
+	if bs.chainID == flowGo.Testnet && bs.block.Height < 1385490 {
+		miner = evmTypes.Address{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+	}
 	return evmTypes.BlockContext{
 		ChainID:                evmTypes.EVMChainIDFromFlowChainID(bs.chainID),
 		BlockNumber:            bs.block.Height,
 		BlockTimestamp:         bs.block.Timestamp,
 		DirectCallBaseGasUsage: evmTypes.DefaultDirectCallBaseGasUsage,
 		DirectCallGasPrice:     evmTypes.DefaultDirectCallGasPrice,
-		GasFeeCollector:        evmTypes.CoinbaseAddress,
+		GasFeeCollector:        miner,
 		GetHashFunc: func(n uint64) gethCommon.Hash {
 			// For block heights greater than or equal to the current,
 			// return an empty block hash.
