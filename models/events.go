@@ -2,7 +2,6 @@ package models
 
 import (
 	"fmt"
-	"sort"
 
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go-sdk"
@@ -48,12 +47,14 @@ type CadenceEvents struct {
 func NewCadenceEvents(events flow.BlockEvents) (*CadenceEvents, error) {
 	// first we sort all the events in the block, by their TransactionIndex,
 	// and then we also sort events in the same transaction, by their EventIndex.
-	sort.Slice(events.Events, func(i, j int) bool {
-		if events.Events[i].TransactionIndex != events.Events[j].TransactionIndex {
-			return events.Events[i].TransactionIndex < events.Events[j].TransactionIndex
-		}
-		return events.Events[i].EventIndex < events.Events[j].EventIndex
-	})
+	// Remove sorting temporarily, for the special case where the system chunk
+	// transaction failure.
+	// sort.Slice(events.Events, func(i, j int) bool {
+	// 	if events.Events[i].TransactionIndex != events.Events[j].TransactionIndex {
+	// 		return events.Events[i].TransactionIndex < events.Events[j].TransactionIndex
+	// 	}
+	// 	return events.Events[i].EventIndex < events.Events[j].EventIndex
+	// })
 
 	e, err := decodeCadenceEvents(events)
 	if err != nil {
