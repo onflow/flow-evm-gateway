@@ -8,6 +8,7 @@ import (
 
 	pebbleDB "github.com/cockroachdb/pebble"
 	"github.com/onflow/flow-go-sdk"
+	gethCommon "github.com/onflow/go-ethereum/common"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/rs/zerolog"
 
@@ -17,6 +18,8 @@ import (
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
 
+	evmState "github.com/onflow/flow-go/fvm/evm/emulator/state"
+	evmStorage "github.com/onflow/flow-go/fvm/evm/offchain/storage"
 	"github.com/onflow/flow-go/fvm/evm/offchain/sync"
 )
 
@@ -204,6 +207,20 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 	// Step 1.2: Replay all block transactions
 	// If `ReplayBlock` returns any error, we abort the EVM events processing
 	blockEvents := events.BlockEventPayload()
+	if events.Block().Height == 8008603 && e.replayerConfig.ChainID == flowGo.Testnet {
+		// prepare storage
+		st, err := e.registerStore.GetSnapshotAt(events.Block().Height)
+		if err != nil {
+			return err
+		}
+		// create storage
+		state := evmStorage.NewEphemeralStorage(evmStorage.NewReadOnlyStorage(st))
+
+		//delete 0 address to fix gasUsage issue on testnet
+		base, _ := evmState.NewBaseView(state, e.replayerConfig.RootAddr)
+		base.DeleteAccount(gethCommon.Address{})
+		base.Commit()
+	}
 	res, err := replayer.ReplayBlock(events.TxEventPayloads(), blockEvents)
 	if err != nil {
 		return fmt.Errorf("failed to replay block on height: %d, with: %w", events.Block().Height, err)
