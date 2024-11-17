@@ -221,8 +221,12 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 		if err != nil {
 			return err
 		}
-		base.DeleteAccount(gethCommon.Address{})
-		base.Commit()
+		if err := base.DeleteAccount(gethCommon.Address{}); err != nil {
+			return err
+		}
+		if err := base.Commit(); err != nil {
+			return err
+		}
 	}
 	res, err := replayer.ReplayBlock(events.TxEventPayloads(), blockEvents)
 	if err != nil {
