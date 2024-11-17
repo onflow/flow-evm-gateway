@@ -261,7 +261,10 @@ func (e *Engine) indexEvents(events *models.CadenceEvents, batch *pebbleDB.Batch
 		state := evmStorage.NewEphemeralStorage(evmStorage.NewReadOnlyStorage(st))
 
 		//delete 0 address to fix gasUsage issue on testnet
-		base, _ := evmState.NewBaseView(state, e.replayerConfig.RootAddr)
+		base, err := evmState.NewBaseView(state, e.replayerConfig.RootAddr)
+		if err != nil {
+			return err
+		}
 		base.DeleteAccount(gethCommon.Address{})
 		base.Commit()
 	}
