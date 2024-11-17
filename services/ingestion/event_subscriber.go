@@ -237,6 +237,18 @@ const maxRangeForGetEvents = uint64(249)
 func (r *RPCEventSubscriber) backfillSporkFromHeight(ctx context.Context, fromCadenceHeight uint64, eventsChan chan<- models.BlockEvents) (uint64, error) {
 	evmAddress := common.Address(systemcontracts.SystemContractsForChain(r.chain).EVMContract.Address)
 
+	blockExecutedEvent := common.NewAddressLocation(
+		nil,
+		evmAddress,
+		string(events.EventTypeBlockExecuted),
+	).ID()
+
+	transactionExecutedEvent := common.NewAddressLocation(
+		nil,
+		evmAddress,
+		string(events.EventTypeTransactionExecuted),
+	).ID()
+
 	lastHeight, err := r.client.GetLatestHeightForSpork(ctx, fromCadenceHeight)
 	if err != nil {
 		eventsChan <- models.NewBlockEventsError(err)
@@ -256,18 +268,6 @@ func (r *RPCEventSubscriber) backfillSporkFromHeight(ctx context.Context, fromCa
 		if endHeight > lastHeight {
 			endHeight = lastHeight
 		}
-
-		blockExecutedEvent := common.NewAddressLocation(
-			nil,
-			evmAddress,
-			string(events.EventTypeBlockExecuted),
-		).ID()
-
-		transactionExecutedEvent := common.NewAddressLocation(
-			nil,
-			evmAddress,
-			string(events.EventTypeTransactionExecuted),
-		).ID()
 
 		blocks, err := r.client.GetEventsForHeightRange(ctx, blockExecutedEvent, startHeight, endHeight)
 		if err != nil {
@@ -309,6 +309,21 @@ func (r *RPCEventSubscriber) backfillSporkFromHeight(ctx context.Context, fromCa
 			blocks[i].Events = append(blocks[i].Events, txEvents...)
 
 			evmEvents := models.NewBlockEvents(blocks[i])
+			if evmEvents.Err != nil && errors.Is(evmEvents.Err, errs.ErrMissingBlock) {
+				evmEvents, err = r.accumulateBlockEvents(
+					ctx,
+					blocks[i],
+					blockExecutedEvent,
+					transactionExecutedEvent,
+				)
+				if err != nil {
+					return 0, err
+				}
+				eventsChan <- evmEvents
+				// advance the height
+				fromCadenceHeight = evmEvents.Events.CadenceHeight() + 1
+				break
+			}
 			eventsChan <- evmEvents
 
 			// advance the height
@@ -317,6 +332,75 @@ func (r *RPCEventSubscriber) backfillSporkFromHeight(ctx context.Context, fromCa
 
 	}
 	return fromCadenceHeight, nil
+}
+
+func (r *RPCEventSubscriber) accumulateBlockEvents(
+	ctx context.Context,
+	block flow.BlockEvents,
+	blockExecutedEventType string,
+	txExecutedEventType string,
+) (models.BlockEvents, error) {
+	evmEvents := models.NewBlockEvents(block)
+	currentHeight := block.Height
+	transactionEvents := make([]flow.Event, 0)
+
+	for evmEvents.Err != nil && errors.Is(evmEvents.Err, errs.ErrMissingBlock) {
+		blocks, err := r.client.GetEventsForHeightRange(
+			ctx,
+			blockExecutedEventType,
+			currentHeight,
+			currentHeight+maxRangeForGetEvents,
+		)
+		if err != nil {
+			return models.BlockEvents{}, fmt.Errorf("failed to get block events: %w", err)
+		}
+
+		transactions, err := r.client.GetEventsForHeightRange(
+			ctx,
+			txExecutedEventType,
+			currentHeight,
+			currentHeight+maxRangeForGetEvents,
+		)
+		if err != nil {
+			return models.BlockEvents{}, fmt.Errorf("failed to get block events: %w", err)
+		}
+
+		if len(transactions) != len(blocks) {
+			return models.BlockEvents{}, fmt.Errorf("transactions and blocks have different length")
+		}
+
+		// sort both, just in case
+		sort.Slice(blocks, func(i, j int) bool {
+			return blocks[i].Height < blocks[j].Height
+		})
+		sort.Slice(transactions, func(i, j int) bool {
+			return transactions[i].Height < transactions[j].Height
+		})
+
+		for i := range blocks {
+			if transactions[i].Height != blocks[i].Height {
+				return models.BlockEvents{}, fmt.Errorf("transactions and blocks have different height")
+			}
+
+			// If no EVM.BlockExecuted event, keep accumulating the incoming
+			// EVM.TransactionExecuted events, until we find the EVM.BlockExecuted
+			// event that includes them.
+			if len(blocks[i].Events) == 0 {
+				txEvents := transactions[i].Events
+				transactionEvents = append(transactionEvents, txEvents...)
+			} else {
+				blocks[i].Events = append(blocks[i].Events, transactionEvents...)
+				evmEvents = models.NewBlockEvents(blocks[i])
+				if evmEvents.Err == nil {
+					return evmEvents, nil
+				}
+				break
+			}
+
+			currentHeight = blocks[i].Height + 1
+		}
+	}
+	return evmEvents, nil
 }
 
 // fetchMissingData is used as a backup mechanism for fetching EVM-related
