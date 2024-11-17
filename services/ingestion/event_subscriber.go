@@ -310,10 +310,19 @@ func (r *RPCEventSubscriber) backfillSporkFromHeight(ctx context.Context, fromCa
 
 			evmEvents := models.NewBlockEvents(blocks[i])
 			if evmEvents.Err != nil && errors.Is(evmEvents.Err, errs.ErrMissingBlock) {
-				evmEvents, err = r.accumulateBlockEvents(ctx, blocks[i], blockExecutedEvent, transactionExecutedEvent)
+				evmEvents, err = r.accumulateBlockEvents(
+					ctx,
+					blocks[i],
+					blockExecutedEvent,
+					transactionExecutedEvent,
+				)
 				if err != nil {
-					return fromCadenceHeight, err
+					return 0, err
 				}
+				eventsChan <- evmEvents
+				// advance the height
+				fromCadenceHeight = evmEvents.Events.CadenceHeight() + 1
+				break
 			}
 			eventsChan <- evmEvents
 
@@ -340,7 +349,7 @@ func (r *RPCEventSubscriber) accumulateBlockEvents(
 			ctx,
 			blockExecutedEventType,
 			currentHeight,
-			currentHeight,
+			currentHeight+maxRangeForGetEvents,
 		)
 		if err != nil {
 			return models.BlockEvents{}, fmt.Errorf("failed to get block events: %w", err)
@@ -350,7 +359,7 @@ func (r *RPCEventSubscriber) accumulateBlockEvents(
 			ctx,
 			txExecutedEventType,
 			currentHeight,
-			currentHeight,
+			currentHeight+maxRangeForGetEvents,
 		)
 		if err != nil {
 			return models.BlockEvents{}, fmt.Errorf("failed to get block events: %w", err)
@@ -368,30 +377,29 @@ func (r *RPCEventSubscriber) accumulateBlockEvents(
 			return transactions[i].Height < transactions[j].Height
 		})
 
-		for i := range transactions {
+		for i := range blocks {
 			if transactions[i].Height != blocks[i].Height {
 				return models.BlockEvents{}, fmt.Errorf("transactions and blocks have different height")
 			}
 
-			// append the transaction events to the block events
-			// first we sort all the events in the block, by their TransactionIndex,
-			// and then we also sort events in the same transaction, by their EventIndex.
-			txEvents := transactions[i].Events
-			sort.Slice(txEvents, func(i, j int) bool {
-				if txEvents[i].TransactionIndex != txEvents[j].TransactionIndex {
-					return txEvents[i].TransactionIndex < txEvents[j].TransactionIndex
+			// If no EVM.BlockExecuted event, keep accumulating the incoming
+			// EVM.TransactionExecuted events, until we find the EVM.BlockExecuted
+			// event that includes them.
+			if len(blocks[i].Events) == 0 {
+				txEvents := transactions[i].Events
+				transactionEvents = append(transactionEvents, txEvents...)
+			} else {
+				blocks[i].Events = append(blocks[i].Events, transactionEvents...)
+				evmEvents = models.NewBlockEvents(blocks[i])
+				if evmEvents.Err == nil {
+					return evmEvents, nil
 				}
-				return txEvents[i].EventIndex < txEvents[j].EventIndex
-			})
-			transactionEvents = append(transactionEvents, txEvents...)
-			blocks[i].Events = transactionEvents
-			block = blocks[i]
-			evmEvents = models.NewBlockEvents(block)
+				break
+			}
 
-			currentHeight = block.Height + 1
+			currentHeight = blocks[i].Height + 1
 		}
 	}
-
 	return evmEvents, nil
 }
 
