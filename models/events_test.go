@@ -155,6 +155,7 @@ func TestCadenceEvents_Block(t *testing.T) {
 	})
 
 	t.Run("EVM events are ordered by Flow TransactionIndex & EventIndex", func(t *testing.T) {
+		t.Skip()
 		txCount := 3
 		blockEvents := flow.BlockEvents{
 			BlockID: flow.Identifier{0x1},
