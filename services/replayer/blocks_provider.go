@@ -21,7 +21,7 @@ var _ evmTypes.BlockSnapshot = (*blockSnapshot)(nil)
 func (bs *blockSnapshot) BlockContext() (evmTypes.BlockContext, error) {
 	miner := evmTypes.CoinbaseAddress
 	if bs.chainID == flowGo.Testnet && bs.block.Height < 1385490 {
-		miner = evmTypes.Address{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+		miner = evmTypes.Address(gethCommon.HexToAddress("0000000000000000000000021169100eecb7c1a6"))
 	}
 	return evmTypes.BlockContext{
 		ChainID:                evmTypes.EVMChainIDFromFlowChainID(bs.chainID),
