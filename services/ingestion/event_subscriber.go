@@ -160,7 +160,7 @@ func (r *RPCEventSubscriber) subscribe(ctx context.Context, height uint64) <-cha
 					return
 				}
 
-				evmEvents := models.NewBlockEvents(blockEvents)
+				evmEvents := models.NewSingleBlockEvents(blockEvents)
 				// if events contain an error, or we are in a recovery mode
 				if evmEvents.Err != nil || r.recovery {
 					evmEvents = r.recover(ctx, blockEvents, evmEvents.Err)
@@ -237,6 +237,18 @@ const maxRangeForGetEvents = uint64(249)
 func (r *RPCEventSubscriber) backfillSporkFromHeight(ctx context.Context, fromCadenceHeight uint64, eventsChan chan<- models.BlockEvents) (uint64, error) {
 	evmAddress := common.Address(systemcontracts.SystemContractsForChain(r.chain).EVMContract.Address)
 
+	blockExecutedEvent := common.NewAddressLocation(
+		nil,
+		evmAddress,
+		string(events.EventTypeBlockExecuted),
+	).ID()
+
+	transactionExecutedEvent := common.NewAddressLocation(
+		nil,
+		evmAddress,
+		string(events.EventTypeTransactionExecuted),
+	).ID()
+
 	lastHeight, err := r.client.GetLatestHeightForSpork(ctx, fromCadenceHeight)
 	if err != nil {
 		eventsChan <- models.NewBlockEventsError(err)
@@ -256,18 +268,6 @@ func (r *RPCEventSubscriber) backfillSporkFromHeight(ctx context.Context, fromCa
 		if endHeight > lastHeight {
 			endHeight = lastHeight
 		}
-
-		blockExecutedEvent := common.NewAddressLocation(
-			nil,
-			evmAddress,
-			string(events.EventTypeBlockExecuted),
-		).ID()
-
-		transactionExecutedEvent := common.NewAddressLocation(
-			nil,
-			evmAddress,
-			string(events.EventTypeTransactionExecuted),
-		).ID()
 
 		blocks, err := r.client.GetEventsForHeightRange(ctx, blockExecutedEvent, startHeight, endHeight)
 		if err != nil {
@@ -299,7 +299,22 @@ func (r *RPCEventSubscriber) backfillSporkFromHeight(ctx context.Context, fromCa
 			// append the transaction events to the block events
 			blocks[i].Events = append(blocks[i].Events, transactions[i].Events...)
 
-			evmEvents := models.NewBlockEvents(blocks[i])
+			evmEvents := models.NewSingleBlockEvents(blocks[i])
+			if evmEvents.Err != nil && errors.Is(evmEvents.Err, errs.ErrMissingBlock) {
+				evmEvents, err = r.accumulateBlockEvents(
+					ctx,
+					blocks[i],
+					blockExecutedEvent,
+					transactionExecutedEvent,
+				)
+				if err != nil {
+					return 0, err
+				}
+				eventsChan <- evmEvents
+				// advance the height
+				fromCadenceHeight = evmEvents.Events.CadenceHeight() + 1
+				break
+			}
 			eventsChan <- evmEvents
 
 			// advance the height
@@ -308,6 +323,86 @@ func (r *RPCEventSubscriber) backfillSporkFromHeight(ctx context.Context, fromCa
 
 	}
 	return fromCadenceHeight, nil
+}
+
+// accumulateBlockEvents will keep fetching `EVM.TransactionExecuted` events
+// until it finds their `EVM.BlockExecuted` event.
+// At that point it will return the valid models.BlockEvents.
+func (r *RPCEventSubscriber) accumulateBlockEvents(
+	ctx context.Context,
+	block flow.BlockEvents,
+	blockExecutedEventType string,
+	txExecutedEventType string,
+) (models.BlockEvents, error) {
+	evmEvents := models.NewSingleBlockEvents(block)
+	currentHeight := block.Height
+	transactionEvents := make([]flow.Event, 0)
+
+	for evmEvents.Err != nil && errors.Is(evmEvents.Err, errs.ErrMissingBlock) {
+		blocks, err := r.client.GetEventsForHeightRange(
+			ctx,
+			blockExecutedEventType,
+			currentHeight,
+			currentHeight+maxRangeForGetEvents,
+		)
+		if err != nil {
+			return models.BlockEvents{}, fmt.Errorf("failed to get block events: %w", err)
+		}
+
+		transactions, err := r.client.GetEventsForHeightRange(
+			ctx,
+			txExecutedEventType,
+			currentHeight,
+			currentHeight+maxRangeForGetEvents,
+		)
+		if err != nil {
+			return models.BlockEvents{}, fmt.Errorf("failed to get block events: %w", err)
+		}
+
+		if len(transactions) != len(blocks) {
+			return models.BlockEvents{}, fmt.Errorf("transactions and blocks have different length")
+		}
+
+		// sort both, just in case
+		sort.Slice(blocks, func(i, j int) bool {
+			return blocks[i].Height < blocks[j].Height
+		})
+		sort.Slice(transactions, func(i, j int) bool {
+			return transactions[i].Height < transactions[j].Height
+		})
+
+		for i := range blocks {
+			if transactions[i].Height != blocks[i].Height {
+				return models.BlockEvents{}, fmt.Errorf("transactions and blocks have different height")
+			}
+
+			// If no EVM.BlockExecuted event found, keep accumulating the incoming
+			// EVM.TransactionExecuted events, until we find the EVM.BlockExecuted
+			// event that includes them.
+			if len(blocks[i].Events) == 0 {
+				txEvents := transactions[i].Events
+				// Sort `EVM.TransactionExecuted` events
+				sort.Slice(txEvents, func(i, j int) bool {
+					if txEvents[i].TransactionIndex != txEvents[j].TransactionIndex {
+						return txEvents[i].TransactionIndex < txEvents[j].TransactionIndex
+					}
+					return txEvents[i].EventIndex < txEvents[j].EventIndex
+				})
+				transactionEvents = append(transactionEvents, txEvents...)
+			} else {
+				blocks[i].Events = append(blocks[i].Events, transactionEvents...)
+				// We use `models.NewMultiBlockEvents`, as the `transactionEvents`
+				// are coming from different Flow blocks.
+				evmEvents = models.NewMultiBlockEvents(blocks[i])
+				if evmEvents.Err == nil {
+					return evmEvents, nil
+				}
+			}
+
+			currentHeight = blocks[i].Height + 1
+		}
+	}
+	return evmEvents, nil
 }
 
 // fetchMissingData is used as a backup mechanism for fetching EVM-related
@@ -346,17 +441,27 @@ func (r *RPCEventSubscriber) fetchMissingData(
 		blockEvents.Events = append(blockEvents.Events, recoveredEvents[0].Events...)
 	}
 
-	return models.NewBlockEvents(blockEvents)
+	return models.NewSingleBlockEvents(blockEvents)
 }
 
 // accumulateEventsMissingBlock will keep receiving transaction events until it can produce a valid
 // EVM block event containing a block and transactions. At that point it will reset the recovery mode
 // and return the valid block events.
 func (r *RPCEventSubscriber) accumulateEventsMissingBlock(events flow.BlockEvents) models.BlockEvents {
-	r.recoveredEvents = append(r.recoveredEvents, events.Events...)
+	txEvents := events.Events
+	// Sort `EVM.TransactionExecuted` events
+	sort.Slice(txEvents, func(i, j int) bool {
+		if txEvents[i].TransactionIndex != txEvents[j].TransactionIndex {
+			return txEvents[i].TransactionIndex < txEvents[j].TransactionIndex
+		}
+		return txEvents[i].EventIndex < txEvents[j].EventIndex
+	})
+	r.recoveredEvents = append(r.recoveredEvents, txEvents...)
 	events.Events = r.recoveredEvents
 
-	recovered := models.NewBlockEvents(events)
+	// We use `models.NewMultiBlockEvents`, as the `transactionEvents`
+	// are coming from different Flow blocks.
+	recovered := models.NewMultiBlockEvents(events)
 	r.recovery = recovered.Err != nil
 
 	if !r.recovery {

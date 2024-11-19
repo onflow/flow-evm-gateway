@@ -104,7 +104,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 				}).
 				Once()
 
-			eventsChan <- models.NewBlockEvents(flow.BlockEvents{
+			eventsChan <- models.NewSingleBlockEvents(flow.BlockEvents{
 				Events: []flow.Event{{
 					Type:  string(blockEvent.Etype),
 					Value: blockCdc,
@@ -318,7 +318,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			}).
 			Once()
 
-		eventsChan <- models.NewBlockEvents(flow.BlockEvents{
+		eventsChan <- models.NewSingleBlockEvents(flow.BlockEvents{
 			Events: []flow.Event{{
 				Type:  string(blockEvent.Etype),
 				Value: blockCdc,
@@ -420,7 +420,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			}).
 			Once()
 
-		eventsChan <- models.NewBlockEvents(flow.BlockEvents{
+		eventsChan <- models.NewSingleBlockEvents(flow.BlockEvents{
 			Events: []flow.Event{
 				// first transaction
 				{
@@ -557,7 +557,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		// and it will make the first block be swapped with second block out-of-order
 		events[1], events[2] = events[2], events[1]
 
-		eventsChan <- models.NewBlockEvents(flow.BlockEvents{
+		eventsChan <- models.NewSingleBlockEvents(flow.BlockEvents{
 			Events: events,
 			Height: latestCadenceHeight + 1,
 		})

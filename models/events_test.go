@@ -201,8 +201,9 @@ func TestCadenceEvents_Block(t *testing.T) {
 		blockEvents.Events = append(blockEvents.Events, blockEvent)
 
 		// parse the EventStreaming API response
-		cdcEvents, err := NewCadenceEvents(blockEvents)
-		require.NoError(t, err)
+		blkEvents := NewSingleBlockEvents(blockEvents)
+		require.NoError(t, blkEvents.Err)
+		cdcEvents := blkEvents.Events
 
 		// assert that Flow events are sorted by their TransactionIndex and EventIndex fields
 		assert.Equal(
