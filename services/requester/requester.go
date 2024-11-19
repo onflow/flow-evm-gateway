@@ -315,8 +315,7 @@ func (e *EVM) buildTransaction(ctx context.Context, script []byte, args ...caden
 		SetScript(script).
 		SetProposalKey(address, index, seqNum).
 		SetReferenceBlockID(latestBlock.ID).
-		SetPayer(address).
-		AddAuthorizer(address)
+		SetPayer(address)
 
 	for _, arg := range args {
 		if err := flowTx.AddArgument(arg); err != nil {
