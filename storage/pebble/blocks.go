@@ -253,6 +253,15 @@ func (b *Blocks) getBlock(keyCode byte, key []byte) (*models.Block, error) {
 	}
 
 	if b.chainID == flowGo.Testnet && slices.Contains(testnetBrokenParentHashBlockHeights, block.Height) {
+		// Since we are going to modify the `block.ParentBlockHash` field,
+		// we need to set the `block.FixedHash` field. If we don't do so,
+		// `block.Hash()` will return a different hash.
+		blockHash, err := block.Hash()
+		if err != nil {
+			return nil, err
+		}
+		block.FixedHash = blockHash
+
 		parentBlock, err := b.getBlock(blockHeightKey, uint64Bytes(block.Height-1))
 		if err != nil {
 			return nil, err
