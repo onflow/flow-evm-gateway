@@ -1,8 +1,9 @@
 const { assert } = require('chai')
 const helpers = require('./helpers')
+const conf = require('./config')
 
 it('should retrieve flow height', async () => {
-    response = await helpers.callRPCMethod(
+    let response = await helpers.callRPCMethod(
         'debug_flowHeight',
         ['latest']
     )
@@ -10,5 +11,5 @@ it('should retrieve flow height', async () => {
     assert.isDefined(response.body)
 
     let height = response.body.result
-    assert.isTrue(height > 0)
+    assert.equal(height, conf.startBlockHeight)
 })

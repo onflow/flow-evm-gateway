@@ -36,7 +36,7 @@ func TestWeb3_E2E(t *testing.T) {
 		runWeb3Test(t, "debug_traces_test")
 	})
 
-	t.Run("test transaction traces", func(t *testing.T) {
+	t.Run("test debug utils", func(t *testing.T) {
 		runWeb3Test(t, "debug_util_test")
 	})
 
