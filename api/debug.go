@@ -361,9 +361,9 @@ func (d *DebugAPI) TraceCall(
 	return tracer.GetResult()
 }
 
-// FlowHeight returns the Flow height for the given EVM block specified either by EVM
+// FlowHeightByBlock returns the Flow height for the given EVM block specified either by EVM
 // block height or EVM block hash.
-func (d *DebugAPI) FlowHeight(
+func (d *DebugAPI) FlowHeightByBlock(
 	_ context.Context,
 	blockNrOrHash rpc.BlockNumberOrHash,
 ) (uint64, error) {

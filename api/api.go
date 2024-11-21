@@ -76,6 +76,7 @@ var validMethods = map[string]struct{}{
 	"debug_traceBlockByNumber": {},
 	"debug_traceBlockByHash":   {},
 	"debug_traceCall":          {},
+	"debug_flowHeightByBlock":  {},
 
 	// web3 namespace
 	"web3_clientVersion": {},

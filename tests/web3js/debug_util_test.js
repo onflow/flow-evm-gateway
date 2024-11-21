@@ -4,7 +4,7 @@ const conf = require('./config')
 
 it('should retrieve flow height', async () => {
     let response = await helpers.callRPCMethod(
-        'debug_flowHeight',
+        'debug_flowHeightByBlock',
         ['latest']
     )
     assert.equal(response.status, 200)
