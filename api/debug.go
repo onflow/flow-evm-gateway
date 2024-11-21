@@ -361,6 +361,25 @@ func (d *DebugAPI) TraceCall(
 	return tracer.GetResult()
 }
 
+// FlowHeightByBlock returns the Flow height for the given EVM block specified either by EVM
+// block height or EVM block hash.
+func (d *DebugAPI) FlowHeightByBlock(
+	_ context.Context,
+	blockNrOrHash rpc.BlockNumberOrHash,
+) (uint64, error) {
+	height, err := resolveBlockTag(&blockNrOrHash, d.blocks, d.logger)
+	if err != nil {
+		return 0, err
+	}
+
+	cdcHeight, err := d.blocks.GetCadenceHeight(height)
+	if err != nil {
+		return 0, err
+	}
+
+	return cdcHeight, nil
+}
+
 func (d *DebugAPI) executorAtBlock(block *models.Block) (*evm.BlockExecutor, error) {
 	snapshot, err := d.registerStore.GetSnapshotAt(block.Height)
 	if err != nil {
