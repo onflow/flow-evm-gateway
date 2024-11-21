@@ -7,7 +7,7 @@ require (
 	github.com/goccy/go-json v0.10.2
 	github.com/onflow/atree v0.8.0
 	github.com/onflow/cadence v1.2.2
-	github.com/onflow/flow-go v0.38.0-preview.0.0.20241121133145-f880fe7b2090
+	github.com/onflow/flow-go v0.38.0-preview.0.0.20241121162719-f4654c80fa17
 	github.com/onflow/flow-go-sdk v1.2.3
 	github.com/onflow/go-ethereum v1.14.7
 	github.com/prometheus/client_golang v1.18.0
