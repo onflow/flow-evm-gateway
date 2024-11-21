@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestCadenceEvents_Block(t *testing.T) {
+func TestNewSingleBlockEvents(t *testing.T) {
 	invalid := cadence.String("invalid")
 
 	b0, e0, err := newBlock(0, nil)
@@ -47,17 +47,18 @@ func TestCadenceEvents_Block(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			e, err := NewCadenceEvents(tt.events)
-			require.NoError(t, err)
+			evmEvents := NewSingleBlockEvents(tt.events)
+			require.NoError(t, evmEvents.Err)
 
+			cdcEvents := evmEvents.Events
 			if tt.block != nil {
 				ttHash, err := tt.block.Hash()
 				require.NoError(t, err)
-				hash, err := e.Block().Hash()
+				hash, err := cdcEvents.Block().Hash()
 				require.NoError(t, err)
 				assert.Equal(t, ttHash, hash)
 			} else {
-				assert.Nil(t, e.Block())
+				assert.Nil(t, cdcEvents.Block())
 			}
 		})
 	}
@@ -75,6 +76,26 @@ func TestCadenceEvents_Block(t *testing.T) {
 		events = append(events, txEvent)
 	}
 
+	t.Run("missing block with transactions", func(t *testing.T) {
+		// generate single block
+		_, _, err := newBlock(cadenceHeight, hashes)
+		require.NoError(t, err)
+
+		blockEvents := flow.BlockEvents{
+			BlockID: flow.Identifier{0x1},
+			Height:  cadenceHeight,
+			Events:  events,
+		}
+
+		evmEvents := NewSingleBlockEvents(blockEvents)
+		require.Error(t, evmEvents.Err)
+		assert.ErrorContains(
+			t,
+			evmEvents.Err,
+			"missing block EVM block nil at flow block: 1",
+		)
+	})
+
 	t.Run("block with less transaction hashes", func(t *testing.T) {
 		// generate single block
 		_, blockEvent, err := newBlock(cadenceHeight, hashes[:txCount-2])
@@ -88,11 +109,11 @@ func TestCadenceEvents_Block(t *testing.T) {
 
 		blockEvents.Events = append(blockEvents.Events, blockEvent)
 
-		_, err = NewCadenceEvents(blockEvents)
-		require.Error(t, err)
+		evmEvents := NewSingleBlockEvents(blockEvents)
+		require.Error(t, evmEvents.Err)
 		assert.ErrorContains(
 			t,
-			err,
+			evmEvents.Err,
 			"block 1 references missing transaction/s",
 		)
 	})
@@ -110,8 +131,8 @@ func TestCadenceEvents_Block(t *testing.T) {
 
 		blockEvents.Events = append(blockEvents.Events, blockEvent)
 
-		_, err = NewCadenceEvents(blockEvents)
-		require.NoError(t, err)
+		evmEvents := NewSingleBlockEvents(blockEvents)
+		require.NoError(t, evmEvents.Err)
 	})
 
 	t.Run("block with empty transaction hashes", func(t *testing.T) {
@@ -126,8 +147,8 @@ func TestCadenceEvents_Block(t *testing.T) {
 
 		blockEvents.Events = append(blockEvents.Events, blockEvent)
 
-		_, err = NewCadenceEvents(blockEvents)
-		require.NoError(t, err)
+		evmEvents := NewSingleBlockEvents(blockEvents)
+		require.NoError(t, evmEvents.Err)
 	})
 
 	t.Run("block with more transaction hashes", func(t *testing.T) {
@@ -145,11 +166,11 @@ func TestCadenceEvents_Block(t *testing.T) {
 
 		blockEvents.Events = append(blockEvents.Events, blockEvent)
 
-		_, err = NewCadenceEvents(blockEvents)
-		require.Error(t, err)
+		evmEvents := NewSingleBlockEvents(blockEvents)
+		require.Error(t, evmEvents.Err)
 		assert.ErrorContains(
 			t,
-			err,
+			evmEvents.Err,
 			"block 1 references missing transaction/s",
 		)
 	})
@@ -201,8 +222,9 @@ func TestCadenceEvents_Block(t *testing.T) {
 		blockEvents.Events = append(blockEvents.Events, blockEvent)
 
 		// parse the EventStreaming API response
-		cdcEvents, err := NewCadenceEvents(blockEvents)
-		require.NoError(t, err)
+		evmEvents := NewSingleBlockEvents(blockEvents)
+		require.NoError(t, evmEvents.Err)
+		cdcEvents := evmEvents.Events
 
 		// assert that Flow events are sorted by their TransactionIndex and EventIndex fields
 		assert.Equal(
@@ -236,6 +258,239 @@ func TestCadenceEvents_Block(t *testing.T) {
 			assert.Equal(t, tx.Hash(), txEventPayload.Hash)
 			assert.Equal(t, blockEventPayload.Height, txEventPayload.BlockHeight)
 		}
+	})
+}
+
+func TestNewMultiBlockEvents(t *testing.T) {
+	invalid := cadence.String("invalid")
+
+	b0, e0, err := newBlock(0, nil)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name   string
+		events flow.BlockEvents
+		block  *Block
+		err    error
+	}{
+		{
+			name:   "BlockExecutedEventExists",
+			events: flow.BlockEvents{Events: []flow.Event{e0}},
+			block:  b0,
+		}, {
+			name:   "BlockExecutedEventEmpty",
+			events: flow.BlockEvents{Events: []flow.Event{}},
+			block:  nil,
+		}, {
+			name: "BlockExecutedNotFound",
+			events: flow.BlockEvents{Events: []flow.Event{{
+				Type:  e0.Type,
+				Value: cadence.NewEvent([]cadence.Value{invalid}),
+			}}},
+			block: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			evmEvents := NewMultiBlockEvents(tt.events)
+			require.NoError(t, evmEvents.Err)
+
+			cdcEvents := evmEvents.Events
+			if tt.block != nil {
+				ttHash, err := tt.block.Hash()
+				require.NoError(t, err)
+				hash, err := cdcEvents.Block().Hash()
+				require.NoError(t, err)
+				assert.Equal(t, ttHash, hash)
+			} else {
+				assert.Nil(t, cdcEvents.Block())
+			}
+		})
+	}
+
+	cadenceHeight := uint64(15)
+	txCount := 10
+	hashes := make([]gethCommon.Hash, txCount)
+	evmTxEvents := make([]flow.BlockEvents, txCount)
+
+	// generate txs
+	for i := 0; i < txCount; i++ {
+		tx, _, txEvent, err := newTransaction(uint64(i), uint16(i))
+		require.NoError(t, err)
+		hashes[i] = tx.Hash()
+		evmTxEvents[i] = flow.BlockEvents{
+			BlockID: flow.BytesToID([]byte{uint8(i + 1)}),
+			Height:  uint64(i + 1),
+			Events:  []flow.Event{txEvent},
+		}
+	}
+
+	t.Run("missing block with transactions", func(t *testing.T) {
+		// generate single block
+		_, _, err := newBlock(cadenceHeight, hashes)
+		require.NoError(t, err)
+
+		blockEvents := flow.BlockEvents{
+			BlockID: flow.Identifier{0x1},
+			Height:  cadenceHeight,
+		}
+
+		// Below we add all the EVM transaction events, but we have omitted
+		// the EVM.BlockExecuted event.
+		for i := 0; i < txCount; i++ {
+			blockEvents.Events = append(blockEvents.Events, evmTxEvents[i].Events...)
+		}
+
+		evmEvents := NewSingleBlockEvents(blockEvents)
+		require.Error(t, evmEvents.Err)
+		assert.ErrorContains(
+			t,
+			evmEvents.Err,
+			"missing block EVM block nil at flow block: 1",
+		)
+	})
+
+	t.Run("block with less transaction hashes", func(t *testing.T) {
+		// generate single block
+		_, blockEvent, err := newBlock(cadenceHeight, hashes)
+		require.NoError(t, err)
+
+		blockEvents := flow.BlockEvents{
+			BlockID: flow.Identifier{0x1},
+			Height:  cadenceHeight,
+		}
+
+		// Below we omit 2 EVM transactions from the events
+		for i := 0; i < txCount-2; i++ {
+			blockEvents.Events = append(blockEvents.Events, evmTxEvents[i].Events...)
+		}
+
+		blockEvents.Events = append(blockEvents.Events, blockEvent)
+
+		evmEvents := NewMultiBlockEvents(blockEvents)
+		require.Error(t, evmEvents.Err)
+		assert.ErrorContains(
+			t,
+			evmEvents.Err,
+			"block 15 references missing transaction/s",
+		)
+	})
+
+	t.Run("block with equal transaction hashes", func(t *testing.T) {
+		// generate single block
+		_, blockEvent, err := newBlock(cadenceHeight, hashes)
+		require.NoError(t, err)
+
+		blockEvents := flow.BlockEvents{
+			BlockID: flow.Identifier{0x1},
+			Height:  cadenceHeight,
+		}
+
+		// Below we add all the EVM transaction events
+		for i := 0; i < txCount; i++ {
+			blockEvents.Events = append(blockEvents.Events, evmTxEvents[i].Events...)
+		}
+
+		blockEvents.Events = append(blockEvents.Events, blockEvent)
+
+		evmEvents := NewMultiBlockEvents(blockEvents)
+		require.NoError(t, evmEvents.Err)
+	})
+
+	t.Run("block with empty transaction hashes", func(t *testing.T) {
+		// generate single block
+		_, blockEvent, err := newBlock(cadenceHeight, []gethCommon.Hash{})
+		require.NoError(t, err)
+
+		blockEvents := flow.BlockEvents{
+			BlockID: flow.Identifier{0x1},
+			Height:  cadenceHeight,
+		}
+
+		blockEvents.Events = append(blockEvents.Events, blockEvent)
+
+		evmEvents := NewMultiBlockEvents(blockEvents)
+		require.NoError(t, evmEvents.Err)
+	})
+
+	t.Run("block with more transaction hashes", func(t *testing.T) {
+		tx, _, _, err := newTransaction(1, 0)
+		require.NoError(t, err)
+
+		// generate single block
+		_, blockEvent, err := newBlock(cadenceHeight, []gethCommon.Hash{tx.Hash()})
+		require.NoError(t, err)
+
+		blockEvents := flow.BlockEvents{
+			BlockID: flow.Identifier{0x1},
+			Height:  cadenceHeight,
+		}
+
+		blockEvents.Events = append(blockEvents.Events, blockEvent)
+
+		evmEvents := NewMultiBlockEvents(blockEvents)
+		require.Error(t, evmEvents.Err)
+		assert.ErrorContains(
+			t,
+			evmEvents.Err,
+			"block 15 references missing transaction/s",
+		)
+	})
+
+	t.Run("EVM.TransactionExecuted events should be properly ordered", func(t *testing.T) {
+		blockEvents := flow.BlockEvents{
+			BlockID: flow.Identifier{0x1},
+			Height:  cadenceHeight,
+		}
+
+		// tx1 and tx2 are EVM transactions executed on a single Flow transaction.
+		tx1, _, txEvent1, err := newTransaction(0, 0)
+		require.NoError(t, err)
+		txEvent1.TransactionIndex = 0
+		txEvent1.EventIndex = 2
+
+		tx2, _, txEvent2, err := newTransaction(1, 1)
+		require.NoError(t, err)
+		txEvent2.TransactionIndex = 0
+		txEvent2.EventIndex = 5
+
+		// tx3 is a Flow transaction with a single EVM transaction on EventIndex=1
+		tx3, _, txEvent3, err := newTransaction(2, 0)
+		require.NoError(t, err)
+		txEvent3.TransactionIndex = 2
+		txEvent3.EventIndex = 1
+
+		// needed for computing the `TransactionHashRoot` field on
+		// EVM.BlockExecuted event payload. the order is sensitive.
+		hashes = []gethCommon.Hash{
+			tx1.Hash(),
+			tx2.Hash(),
+			tx3.Hash(),
+		}
+
+		// add the tx events in a shuffled order
+		blockEvents.Events = []flow.Event{
+			txEvent3,
+			txEvent1,
+			txEvent2,
+		}
+
+		// generate single block
+		_, blockEvent, err := newBlock(cadenceHeight, hashes)
+		require.NoError(t, err)
+		blockEvent.TransactionIndex = 4
+		blockEvent.EventIndex = 0
+		blockEvents.Events = append(blockEvents.Events, blockEvent)
+
+		// parse the EventStreaming API response
+		evmEvents := NewMultiBlockEvents(blockEvents)
+		require.Error(t, evmEvents.Err)
+		assert.ErrorContains(
+			t,
+			evmEvents.Err,
+			"block 15 references missing transaction/s",
+		)
 	})
 }
 

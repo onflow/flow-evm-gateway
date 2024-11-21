@@ -46,15 +46,6 @@ type CadenceEvents struct {
 
 // NewCadenceEvents decodes the events into evm types.
 func NewCadenceEvents(events flow.BlockEvents) (*CadenceEvents, error) {
-	// first we sort all the events in the block, by their TransactionIndex,
-	// and then we also sort events in the same transaction, by their EventIndex.
-	sort.Slice(events.Events, func(i, j int) bool {
-		if events.Events[i].TransactionIndex != events.Events[j].TransactionIndex {
-			return events.Events[i].TransactionIndex < events.Events[j].TransactionIndex
-		}
-		return events.Events[i].EventIndex < events.Events[j].EventIndex
-	})
-
 	e, err := decodeCadenceEvents(events)
 	if err != nil {
 		return nil, err
@@ -219,11 +210,41 @@ type BlockEvents struct {
 	Err    error
 }
 
-func NewBlockEvents(events flow.BlockEvents) BlockEvents {
-	blockEvents, err := NewCadenceEvents(events)
-
+// NewMultiBlockEvents will decode any possible `EVM.TransactionExecuted` &
+// `EVM.BlockExecuted` events and populate the resulting `Block`, `Transaction` &
+// `Receipt` values.
+// The `EVM.TransactionExecuted` events are expected to be properly sorted by
+// the caller.
+// Use this method when dealing with `flow.BlockEvents` from multiple Flow blocks.
+// The `EVM.TransactionExecuted` events could be produced at a Flow block, that
+// comes prior to the Flow block that produced the `EVM.BlockExecuted` event.
+func NewMultiBlockEvents(events flow.BlockEvents) BlockEvents {
+	cdcEvents, err := NewCadenceEvents(events)
 	return BlockEvents{
-		Events: blockEvents,
+		Events: cdcEvents,
+		Err:    err,
+	}
+}
+
+// NewSingleBlockEvents will decode any possible `EVM.TransactionExecuted` &
+// `EVM.BlockExecuted` events and populate the resulting `Block`, `Transaction` &
+// `Receipt` values.
+// The `EVM.TransactionExecuted` events will be sorted by `TransactionIndex` &
+// `EventIndex`, prior to decoding.
+// Use this method when dealing with `flow.BlockEvents` from a single Flow block.
+func NewSingleBlockEvents(events flow.BlockEvents) BlockEvents {
+	// first we sort all the events in the block, by their TransactionIndex,
+	// and then we also sort events in the same transaction, by their EventIndex.
+	sort.Slice(events.Events, func(i, j int) bool {
+		if events.Events[i].TransactionIndex != events.Events[j].TransactionIndex {
+			return events.Events[i].TransactionIndex < events.Events[j].TransactionIndex
+		}
+		return events.Events[i].EventIndex < events.Events[j].EventIndex
+	})
+
+	cdcEvents, err := NewCadenceEvents(events)
+	return BlockEvents{
+		Events: cdcEvents,
 		Err:    err,
 	}
 }
