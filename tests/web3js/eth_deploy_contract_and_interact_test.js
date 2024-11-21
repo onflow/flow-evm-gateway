@@ -221,7 +221,7 @@ it('deploy contract and interact', async () => {
         },
         '0x1'
     )
-    assert.equal(gasEstimate, 23977n)
+    assert.equal(gasEstimate, 21510n)
 
     gasEstimate = await web3.eth.estimateGas(
         {
@@ -233,7 +233,7 @@ it('deploy contract and interact', async () => {
         },
         'latest'
     )
-    assert.equal(gasEstimate, 27398n)
+    assert.equal(gasEstimate, 25052n)
 
     // check that `eth_call` can handle state overrides
     let stateOverrides = {
@@ -274,7 +274,7 @@ it('deploy contract and interact', async () => {
     assert.isDefined(response.body)
 
     result = response.body.result
-    assert.equal(result, '0x72c3')
+    assert.equal(result, '0x697f')
 
     stateOverrides = {
         [contractAddress]: {
@@ -295,5 +295,5 @@ it('deploy contract and interact', async () => {
     // setting a storage slot from a zero-value, to a non-zero value has an
     // increase of about 20,000 gas. Which is quite different to `0x72c3`.
     result = response.body.result
-    assert.equal(result, '0xb69a')
+    assert.equal(result, '0xac6d')
 })

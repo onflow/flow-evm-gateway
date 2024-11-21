@@ -49,6 +49,10 @@ const minFlowBalance = 2
 const coaFundingBalance = minFlowBalance - 1
 const blockGasLimit = 120_000_000
 
+// estimateGasErrorRatio is the amount of overestimation eth_estimateGas
+// is allowed to produce in order to speed up calculations.
+const estimateGasErrorRatio = 0.015
+
 type Requester interface {
 	// SendRawTransaction will submit signed transaction data to the network.
 	// The submitted EVM transaction hash is returned.
@@ -62,7 +66,7 @@ type Requester interface {
 	// Note, this function doesn't make and changes in the state/blockchain and is
 	// useful to execute and retrieve values.
 	Call(
-		tx *types.LegacyTx,
+		tx *types.DynamicFeeTx,
 		from common.Address,
 		height uint64,
 		stateOverrides *ethTypes.StateOverride,
@@ -72,7 +76,7 @@ type Requester interface {
 	// Note, this function doesn't make any changes in the state/blockchain and is
 	// useful to executed and retrieve the gas consumption and possible failures.
 	EstimateGas(
-		tx *types.LegacyTx,
+		tx *types.DynamicFeeTx,
 		from common.Address,
 		height uint64,
 		stateOverrides *ethTypes.StateOverride,
@@ -348,7 +352,7 @@ func (e *EVM) GetStorageAt(
 }
 
 func (e *EVM) Call(
-	tx *types.LegacyTx,
+	tx *types.DynamicFeeTx,
 	from common.Address,
 	height uint64,
 	stateOverrides *ethTypes.StateOverride,
@@ -358,42 +362,109 @@ func (e *EVM) Call(
 		return nil, err
 	}
 
-	return result.ReturnedData, err
+	resultSummary := result.ResultSummary()
+	if resultSummary.ErrorCode != 0 {
+		if resultSummary.ErrorCode == evmTypes.ExecutionErrCodeExecutionReverted {
+			return nil, errs.NewRevertError(resultSummary.ReturnedData)
+		}
+		return nil, errs.NewFailedTransactionError(resultSummary.ErrorMessage)
+	}
+
+	return result.ReturnedData, nil
 }
 
 func (e *EVM) EstimateGas(
-	tx *types.LegacyTx,
+	tx *types.DynamicFeeTx,
 	from common.Address,
 	height uint64,
 	stateOverrides *ethTypes.StateOverride,
 ) (uint64, error) {
+	// Binary search the gas limit, as it may need to be higher than the amount used
+	var (
+		failingGasLimit uint64 // lowest-known gas limit where tx execution fails
+		passingGasLimit uint64 // lowest-known gas limit where tx execution succeeds
+	)
+	// Determine the highest gas limit that can be used during the estimation.
+	passingGasLimit = blockGasLimit
+	if tx.Gas >= gethParams.TxGas {
+		passingGasLimit = tx.Gas
+	}
+	tx.Gas = passingGasLimit
+	// We first execute the transaction at the highest allowable gas limit,
+	// since if this fails we can return error immediately.
 	result, err := e.dryRunTx(tx, from, height, stateOverrides)
 	if err != nil {
 		return 0, err
 	}
-
-	if result.Successful() {
-		// As mentioned in https://github.com/ethereum/EIPs/blob/master/EIPS/eip-150.md#specification
-		// Define "all but one 64th" of N as N - floor(N / 64).
-		// If a call asks for more gas than the maximum allowed amount
-		// (i.e. the total amount of gas remaining in the parent after subtracting
-		// the gas cost of the call and memory expansion), do not return an OOG error;
-		// instead, if a call asks for more gas than all but one 64th of the maximum
-		// allowed amount, call with all but one 64th of the maximum allowed amount of
-		// gas (this is equivalent to a version of EIP-901 plus EIP-1142).
-		// CREATE only provides all but one 64th of the parent gas to the child call.
-		result.GasConsumed = AddOne64th(result.GasConsumed)
-
-		// Adding `gethParams.SstoreSentryGasEIP2200` is needed for this condition:
-		// https://github.com/onflow/go-ethereum/blob/master/core/vm/operations_acl.go#L29-L32
-		result.GasConsumed += gethParams.SstoreSentryGasEIP2200
-
-		// Take into account any gas refunds, which are calculated only after
-		// transaction execution.
-		result.GasConsumed += result.GasRefund
+	resultSummary := result.ResultSummary()
+	if resultSummary.ErrorCode != 0 {
+		if resultSummary.ErrorCode == evmTypes.ExecutionErrCodeExecutionReverted {
+			return 0, errs.NewRevertError(resultSummary.ReturnedData)
+		}
 	}
 
-	return result.GasConsumed, err
+	// For almost any transaction, the gas consumed by the unconstrained execution
+	// above lower-bounds the gas limit required for it to succeed. One exception
+	// is those that explicitly check gas remaining in order to execute within a
+	// given limit, but we probably don't want to return the lowest possible gas
+	// limit for these cases anyway.
+	failingGasLimit = result.GasConsumed - 1
+
+	// There's a fairly high chance for the transaction to execute successfully
+	// with gasLimit set to the first execution's GasConsumed + GasRefund.
+	// Explicitly check that gas amount and use as a limit for the binary search.
+	optimisticGasLimit := (result.GasConsumed + result.GasRefund + gethParams.CallStipend) * 64 / 63
+	if optimisticGasLimit < passingGasLimit {
+		tx.Gas = optimisticGasLimit
+		result, err = e.dryRunTx(tx, from, height, stateOverrides)
+		if err != nil {
+			// This should not happen under normal conditions since if we make it this far the
+			// transaction had run without error at least once before.
+			return 0, err
+		}
+		resultSummary := result.ResultSummary()
+		if resultSummary.ErrorCode == evmTypes.ExecutionErrCodeOutOfGas {
+			failingGasLimit = optimisticGasLimit
+		} else {
+			passingGasLimit = optimisticGasLimit
+		}
+	}
+
+	// Binary search for the smallest gas limit that allows the tx to execute successfully.
+	for failingGasLimit+1 < passingGasLimit {
+		// It is a bit pointless to return a perfect estimation, as changing
+		// network conditions require the caller to bump it up anyway. Since
+		// wallets tend to use 20-25% bump, allowing a small approximation
+		// error is fine (as long as it's upwards).
+		if float64(passingGasLimit-failingGasLimit)/float64(passingGasLimit) < estimateGasErrorRatio {
+			break
+		}
+		mid := (passingGasLimit + failingGasLimit) / 2
+		if mid > failingGasLimit*2 {
+			// Most txs don't need much higher gas limit than their gas used, and most txs don't
+			// require near the full block limit of gas, so the selection of where to bisect the
+			// range here is skewed to favor the low side.
+			mid = failingGasLimit * 2
+		}
+		tx.Gas = mid
+		result, err = e.dryRunTx(tx, from, height, stateOverrides)
+		if err != nil {
+			return 0, err
+		}
+		resultSummary := result.ResultSummary()
+		if resultSummary.ErrorCode == evmTypes.ExecutionErrCodeOutOfGas {
+			failingGasLimit = mid
+		} else {
+			passingGasLimit = mid
+		}
+	}
+
+	if tx.AccessList != nil {
+		passingGasLimit += uint64(len(tx.AccessList)) * gethParams.TxAccessListAddressGas
+		passingGasLimit += uint64(tx.AccessList.StorageKeys()) * gethParams.TxAccessListStorageKeyGas
+	}
+
+	return passingGasLimit, nil
 }
 
 func (e *EVM) GetCode(
@@ -485,7 +556,7 @@ func (e *EVM) evmToCadenceHeight(height uint64) (uint64, error) {
 }
 
 func (e *EVM) dryRunTx(
-	tx *types.LegacyTx,
+	tx *types.DynamicFeeTx,
 	from common.Address,
 	height uint64,
 	stateOverrides *ethTypes.StateOverride,
@@ -543,14 +614,6 @@ func (e *EVM) dryRunTx(
 	)
 	if err != nil {
 		return nil, err
-	}
-
-	resultSummary := result.ResultSummary()
-	if resultSummary.ErrorCode != 0 {
-		if resultSummary.ErrorCode == evmTypes.ExecutionErrCodeExecutionReverted {
-			return nil, errs.NewRevertError(resultSummary.ReturnedData)
-		}
-		return nil, errs.NewFailedTransactionError(resultSummary.ErrorMessage)
 	}
 
 	return result, nil
