@@ -6,9 +6,9 @@ require (
 	github.com/cockroachdb/pebble v1.1.1
 	github.com/goccy/go-json v0.10.2
 	github.com/onflow/atree v0.8.0
-	github.com/onflow/cadence v1.2.1
-	github.com/onflow/flow-go v0.38.0-preview.0.0.20241022154145-6a254edbec23
-	github.com/onflow/flow-go-sdk v1.2.2
+	github.com/onflow/cadence v1.2.2
+	github.com/onflow/flow-go v0.38.0-preview.0.0.20241122154633-e670c37438eb
+	github.com/onflow/flow-go-sdk v1.2.3
 	github.com/onflow/go-ethereum v1.14.7
 	github.com/prometheus/client_golang v1.18.0
 	github.com/rs/cors v1.8.0
@@ -195,11 +195,11 @@ require (
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.26.0 // indirect
-	golang.org/x/crypto v0.26.0 // indirect
+	golang.org/x/crypto v0.28.0 // indirect
 	golang.org/x/net v0.25.0 // indirect
 	golang.org/x/oauth2 v0.17.0 // indirect
-	golang.org/x/sys v0.23.0 // indirect
-	golang.org/x/text v0.17.0 // indirect
+	golang.org/x/sys v0.26.0 // indirect
+	golang.org/x/text v0.19.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
 	golang.org/x/xerrors v0.0.0-20231012003039-104605ab7028 // indirect
 	gonum.org/v1/gonum v0.14.0 // indirect
