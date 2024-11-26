@@ -3,6 +3,7 @@ package run
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"os"
@@ -28,27 +29,38 @@ import (
 var Cmd = &cobra.Command{
 	Use:   "run",
 	Short: "Runs the EVM Gateway Node",
-	Run: func(command *cobra.Command, _ []string) {
+	RunE: func(command *cobra.Command, _ []string) error {
+
+		ctx, cancel := context.WithCancel(command.Context())
+		defer cancel()
+
 		// create multi-key account
+		// TODO(JanezP): move to separate command
 		if _, exists := os.LookupEnv("MULTIKEY_MODE"); exists {
 			bootstrap.RunCreateMultiKeyAccount()
-			return
+			return nil
 		}
 
 		if err := parseConfigFromFlags(); err != nil {
-			log.Err(err).Msg("failed to parse flags")
-			os.Exit(1)
+			return fmt.Errorf("failed to parse flags: %w", err)
 		}
 
-		ctx, cancel := context.WithCancel(command.Context())
 		done := make(chan struct{})
 		ready := make(chan struct{})
 		go func() {
 			defer close(done)
-			err := bootstrap.Run(ctx, cfg, ready)
-			if err != nil {
-				log.Err(err).Msg("failed to run bootstrap")
-				cancel()
+			// In case an error happens before ready is called we need to close the ready channel
+			defer close(ready)
+
+			err := bootstrap.Run(
+				ctx,
+				cfg,
+				func() {
+					close(ready)
+				},
+			)
+			if err != nil && !errors.Is(err, context.Canceled) {
+				log.Err(err).Msg("Gateway runtime error")
 			}
 		}()
 
@@ -57,17 +69,19 @@ var Cmd = &cobra.Command{
 		osSig := make(chan os.Signal, 1)
 		signal.Notify(osSig, syscall.SIGINT, syscall.SIGTERM)
 
+		// wait for gateway to exit or for a shutdown signal
 		select {
 		case <-osSig:
 			log.Info().Msg("OS Signal to shutdown received, shutting down")
 			cancel()
 		case <-done:
 			log.Info().Msg("done, shutting down")
-			cancel()
 		}
 
-		log.Info().Msg("OS Signal to shutdown received, shutting down")
-		cancel()
+		// Wait for the gateway to completely stop
+		<-done
+
+		return nil
 	},
 }
 
