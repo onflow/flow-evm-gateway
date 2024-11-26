@@ -161,7 +161,9 @@ func servicesSetup(t *testing.T) (emulator.Emulator, func()) {
 
 	bootstrapDone := make(chan struct{})
 	go func() {
-		err = bootstrap.Run(ctx, cfg, bootstrapDone)
+		err = bootstrap.Run(ctx, cfg, func() {
+			close(bootstrapDone)
+		})
 		require.NoError(t, err)
 	}()
 

@@ -83,7 +83,9 @@ func Test_ConcurrentTransactionSubmission(t *testing.T) {
 
 	ready := make(chan struct{})
 	go func() {
-		err := bootstrap.Run(ctx, cfg, ready)
+		err := bootstrap.Run(ctx, cfg, func() {
+			close(ready)
+		})
 		require.NoError(t, err)
 	}()
 
@@ -181,7 +183,9 @@ func Test_EthClientTest(t *testing.T) {
 
 	ready := make(chan struct{})
 	go func() {
-		err := bootstrap.Run(ctx, cfg, ready)
+		err := bootstrap.Run(ctx, cfg, func() {
+			close(ready)
+		})
 		require.NoError(t, err)
 	}()
 
@@ -288,7 +292,9 @@ func Test_CloudKMSConcurrentTransactionSubmission(t *testing.T) {
 
 	ready := make(chan struct{})
 	go func() {
-		err := bootstrap.Run(ctx, cfg, ready)
+		err := bootstrap.Run(ctx, cfg, func() {
+			close(ready)
+		})
 		require.NoError(t, err)
 	}()
 

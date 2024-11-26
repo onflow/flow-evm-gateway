@@ -7,6 +7,8 @@ import (
 	"math"
 	"time"
 
+	"github.com/onflow/flow-go/module/component"
+
 	pebbleDB "github.com/cockroachdb/pebble"
 
 	"github.com/onflow/flow-go-sdk/access"
@@ -557,7 +559,7 @@ func setupStorage(
 // Run will run complete bootstrap of the EVM gateway with all the engines.
 // Run is a blocking call, but it does signal readiness of the service
 // through a channel provided as an argument.
-func Run(ctx context.Context, cfg *config.Config, ready chan struct{}) error {
+func Run(ctx context.Context, cfg *config.Config, ready component.ReadyFunc) error {
 	boot, err := New(cfg)
 	if err != nil {
 		return err
@@ -580,7 +582,7 @@ func Run(ctx context.Context, cfg *config.Config, ready chan struct{}) error {
 	}
 
 	// mark ready
-	close(ready)
+	ready()
 
 	// if context is canceled start shutdown
 	<-ctx.Done()
