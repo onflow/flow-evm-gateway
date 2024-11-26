@@ -85,7 +85,6 @@ This will be improved soon.
 _In the example above we set `coa-address` value to the service account of the emulator, the same as `coa-key`.
 This account will by default be funded with Flow which is a requirement. For `coinbase` we can
 use whichever valid EVM address. It's not really useful when running locally besides collecting fees. We also allow for the
-`coa-resource-create` to auto-create resources needed on start-up on the `coa` account in order to operate the gateway.
 `gas-price` is set at 0 so we don't have to fund EOA accounts. We can set it higher but keep in mind you will then
 need funded accounts for interacting with EVM._
 
@@ -132,7 +131,6 @@ Below is an example configuration for running against testnet, with an already c
 --flow-network-id=flow-testnet \
 --init-cadence-height=211176670 \
 --ws-enabled=true \
---coa-resource-create=false \
 --coinbase=FACF71692421039876a5BB4F10EF7A439D8ef61E \
 --coa-address=0x62631c28c9fc5a91 \
 --coa-key=2892fba444f1d5787739708874e3b01160671924610411ac787ac1379d420f49 \
@@ -212,7 +210,6 @@ The application can be configured using the following flags at runtime:
 | `coa-address`                  | `""`                          | Flow address holding COA account for submitting transactions                             |
 | `coa-key`                      | `""`                          | Private key for the COA address used for transactions                                    |
 | `coa-key-file`                 | `""`                          | Path to a JSON file of COA keys for key-rotation (exclusive with `coa-key` flag)         |
-| `coa-resource-create`          | `false`                       | Auto-create the COA resource if it doesn't exist in the Flow COA account                 |
 | `coa-cloud-kms-project-id`     | `""`                          | Project ID for KMS keys (e.g. `flow-evm-gateway`)                                        |
 | `coa-cloud-kms-location-id`    | `""`                          | Location ID for KMS key ring (e.g. 'global')                                             |
 | `coa-cloud-kms-key-ring-id`    | `""`                          | Key ring ID for KMS keys (e.g. 'tx-signing')                                             |

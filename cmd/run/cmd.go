@@ -280,7 +280,6 @@ func init() {
 	Cmd.Flags().StringVar(&key, "coa-key", "", "Private key value for the COA address used for submitting transactions")
 	Cmd.Flags().StringVar(&keyAlg, "coa-key-alg", "ECDSA_P256", "Private key algorithm for the COA private key, only effective if coa-key/coa-key-file is present. Available values (ECDSA_P256 / ECDSA_secp256k1 / BLS_BLS12_381), defaults to ECDSA_P256.")
 	Cmd.Flags().StringVar(&keysPath, "coa-key-file", "", "File path that contains JSON array of COA keys used in key-rotation mechanism, this is exclusive with coa-key flag.")
-	Cmd.Flags().BoolVar(&cfg.CreateCOAResource, "coa-resource-create", false, "Auto-create the COA resource in the Flow COA account provided if one doesn't exist")
 	Cmd.Flags().StringVar(&logLevel, "log-level", "debug", "Define verbosity of the log output ('debug', 'info', 'warn', 'error', 'fatal', 'panic')")
 	Cmd.Flags().StringVar(&logWriter, "log-writer", "stderr", "Log writer used for output ('stderr', 'console')")
 	Cmd.Flags().Float64Var(&cfg.StreamLimit, "stream-limit", 10, "Rate-limits the events sent to the client within one second")
