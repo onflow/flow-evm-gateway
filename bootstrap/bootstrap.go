@@ -7,16 +7,17 @@ import (
 	"math"
 	"time"
 
-	"github.com/onflow/flow-go/module/component"
-
 	pebbleDB "github.com/cockroachdb/pebble"
-
+	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-go-sdk/access"
 	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/onflow/flow-go-sdk/crypto"
 	"github.com/onflow/flow-go/fvm/environment"
 	"github.com/onflow/flow-go/fvm/evm"
 	flowGo "github.com/onflow/flow-go/model/flow"
+	"github.com/onflow/flow-go/module/component"
+	metrics2 "github.com/onflow/flow-go/module/metrics"
+	"github.com/onflow/flow-go/module/util"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-limiter/memorystore"
@@ -24,7 +25,6 @@ import (
 
 	"github.com/onflow/flow-evm-gateway/api"
 	"github.com/onflow/flow-evm-gateway/config"
-	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/models"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/services/ingestion"
@@ -57,7 +57,7 @@ type Bootstrap struct {
 	publishers *Publishers
 	collector  metrics.Collector
 	server     *api.Server
-	metrics    *metrics.Server
+	metrics    *metrics2.Server
 	events     *ingestion.Engine
 	profiler   *api.ProfileServer
 }
@@ -334,15 +334,14 @@ func (b *Bootstrap) StopAPIServer() {
 	b.server.Stop()
 }
 
-func (b *Bootstrap) StartMetricsServer(_ context.Context) error {
+func (b *Bootstrap) StartMetricsServer(ctx context.Context) error {
 	b.logger.Info().Msg("bootstrap starting metrics server")
 
-	b.metrics = metrics.NewServer(b.logger, b.config.MetricsPort)
-	started, err := b.metrics.Start()
+	b.metrics = metrics2.NewServer(b.logger, uint(b.config.MetricsPort))
+	err := util.WaitClosed(ctx, b.metrics.Ready())
 	if err != nil {
 		return fmt.Errorf("failed to start metrics server: %w", err)
 	}
-	<-started
 
 	return nil
 }
@@ -352,7 +351,7 @@ func (b *Bootstrap) StopMetricsServer() {
 		return
 	}
 	b.logger.Warn().Msg("shutting down metrics server")
-	b.metrics.Stop()
+	<-b.metrics.Done()
 }
 
 func (b *Bootstrap) StartProfilerServer(_ context.Context) error {
