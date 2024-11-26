@@ -404,6 +404,7 @@ func (e *EVM) EstimateGas(
 		if resultSummary.ErrorCode == evmTypes.ExecutionErrCodeExecutionReverted {
 			return 0, errs.NewRevertError(resultSummary.ReturnedData)
 		}
+		return 0, errs.NewFailedTransactionError(resultSummary.ErrorMessage)
 	}
 
 	// For almost any transaction, the gas consumed by the unconstrained execution
