@@ -172,8 +172,9 @@ func TestBatch(t *testing.T) {
 func runDB(name string, t *testing.T, f func(t *testing.T, db *Storage)) {
 	dir := t.TempDir()
 
-	db, err := New(dir, zerolog.New(zerolog.NewTestWriter(t)))
+	pebbleDB, err := OpenDB(dir)
 	require.NoError(t, err)
+	db := New(pebbleDB, zerolog.New(zerolog.NewTestWriter(t)))
 
 	t.Run(name, func(t *testing.T) {
 		f(t, db)
