@@ -215,8 +215,9 @@ func Test_RegisterDeltaWithStorage(t *testing.T) {
 func runDB(name string, t *testing.T, f func(t *testing.T, db *pebbleStorage.Storage)) {
 	dir := t.TempDir()
 
-	db, err := pebbleStorage.New(dir, zerolog.New(zerolog.NewTestWriter(t)))
+	pebbleDB, err := pebbleStorage.OpenDB(dir)
 	require.NoError(t, err)
+	db := pebbleStorage.New(pebbleDB, zerolog.New(zerolog.NewTestWriter(t)))
 
 	t.Run(name, func(t *testing.T) {
 		f(t, db)

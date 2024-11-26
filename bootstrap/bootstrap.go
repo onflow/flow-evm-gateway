@@ -60,6 +60,7 @@ type Bootstrap struct {
 	metrics    *metrics2.Server
 	events     *ingestion.Engine
 	profiler   *api.ProfileServer
+	db         *pebbleDB.DB
 }
 
 func New(config *config.Config) (*Bootstrap, error) {
@@ -72,7 +73,7 @@ func New(config *config.Config) (*Bootstrap, error) {
 		return nil, err
 	}
 
-	storages, err := setupStorage(config, client, logger)
+	db, storages, err := setupStorage(config, client, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -83,6 +84,7 @@ func New(config *config.Config) (*Bootstrap, error) {
 			Transaction: models.NewPublisher[*gethTypes.Transaction](),
 			Logs:        models.NewPublisher[[]*gethTypes.Log](),
 		},
+		db:        db,
 		storages:  storages,
 		logger:    logger,
 		config:    config,
@@ -387,10 +389,10 @@ func (b *Bootstrap) StopProfilerServer() {
 }
 
 func (b *Bootstrap) StopDB() {
-	if b.storages == nil || b.storages.Storage == nil {
+	if b.db == nil {
 		return
 	}
-	err := b.storages.Storage.Close()
+	err := b.db.Close()
 	if err != nil {
 		b.logger.Err(err).Msg("PebbleDB graceful shutdown failed")
 	}
@@ -465,12 +467,13 @@ func setupStorage(
 	config *config.Config,
 	client *requester.CrossSporkClient,
 	logger zerolog.Logger,
-) (*Storages, error) {
+) (*pebbleDB.DB, *Storages, error) {
 	// create pebble storage from the provided database root directory
-	store, err := pebble.New(config.DatabaseDir, logger)
+	db, err := pebble.OpenDB(config.DatabaseDir)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
+	store := pebble.New(db, logger)
 
 	blocks := pebble.NewBlocks(store, config.FlowNetworkID)
 	storageAddress := evm.StorageAccountAddress(config.FlowNetworkID)
@@ -480,7 +483,7 @@ func setupStorage(
 	if config.ForceStartCadenceHeight != 0 {
 		logger.Warn().Uint64("height", config.ForceStartCadenceHeight).Msg("force setting starting Cadence height!!!")
 		if err := blocks.SetLatestCadenceHeight(config.ForceStartCadenceHeight, nil); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
@@ -499,12 +502,12 @@ func setupStorage(
 		evmBlokcHeight := uint64(0)
 		cadenceBlock, err := client.GetBlockHeaderByHeight(context.Background(), cadenceHeight)
 		if err != nil {
-			return nil, fmt.Errorf("could not fetch provided cadence height, make sure it's correct: %w", err)
+			return nil, nil, fmt.Errorf("could not fetch provided cadence height, make sure it's correct: %w", err)
 		}
 
 		snapshot, err := registerStore.GetSnapshotAt(evmBlokcHeight)
 		if err != nil {
-			return nil, fmt.Errorf("could not get register snapshot at block height %d: %w", 0, err)
+			return nil, nil, fmt.Errorf("could not get register snapshot at block height %d: %w", 0, err)
 		}
 
 		delta := storage.NewRegisterDelta(snapshot)
@@ -515,16 +518,16 @@ func setupStorage(
 			accountStatus.ToBytes(),
 		)
 		if err != nil {
-			return nil, fmt.Errorf("could not set account status: %w", err)
+			return nil, nil, fmt.Errorf("could not set account status: %w", err)
 		}
 
 		err = registerStore.Store(delta.GetUpdates(), evmBlokcHeight, batch)
 		if err != nil {
-			return nil, fmt.Errorf("could not store register updates: %w", err)
+			return nil, nil, fmt.Errorf("could not store register updates: %w", err)
 		}
 
 		if err := blocks.InitHeights(cadenceHeight, cadenceBlock.ID, batch); err != nil {
-			return nil, fmt.Errorf(
+			return nil, nil, fmt.Errorf(
 				"failed to init the database for block height: %d and ID: %s, with : %w",
 				cadenceHeight,
 				cadenceBlock.ID,
@@ -534,7 +537,7 @@ func setupStorage(
 
 		err = batch.Commit(pebbleDB.Sync)
 		if err != nil {
-			return nil, fmt.Errorf("could not commit register updates: %w", err)
+			return nil, nil, fmt.Errorf("could not commit register updates: %w", err)
 		}
 
 		logger.Info().
@@ -545,7 +548,7 @@ func setupStorage(
 	//	// TODO(JanezP): verify storage account owner is correct
 	//}
 
-	return &Storages{
+	return db, &Storages{
 		Storage:      store,
 		Blocks:       blocks,
 		Registers:    registerStore,

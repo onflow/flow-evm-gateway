@@ -636,8 +636,9 @@ func defaultReplayerConfig() replayer.Config {
 }
 
 func setupStore(t *testing.T) (*pebble.Storage, *pebble.RegisterStorage) {
-	store, err := pebble.New(t.TempDir(), zerolog.Nop())
+	db, err := pebble.OpenDB(t.TempDir())
 	require.NoError(t, err)
+	store := pebble.New(db, zerolog.Nop())
 
 	storageAddress := evm.StorageAccountAddress(flowGo.Emulator)
 	registerStore := pebble.NewRegisterStorage(store, storageAddress)
