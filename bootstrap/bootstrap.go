@@ -398,6 +398,16 @@ func (b *Bootstrap) StopDB() {
 	}
 }
 
+func (b *Bootstrap) StopClient() {
+	if b.client == nil {
+		return
+	}
+	err := b.client.Close()
+	if err != nil {
+		b.logger.Err(err).Msg("CrossSporkClient graceful shutdown failed")
+	}
+}
+
 // StartEngine starts provided engine and panics if there are startup errors.
 func StartEngine(
 	ctx context.Context,
@@ -593,6 +603,7 @@ func Run(ctx context.Context, cfg *config.Config, ready component.ReadyFunc) err
 	boot.StopEventIngestion()
 	boot.StopMetricsServer()
 	boot.StopAPIServer()
+	boot.StopClient()
 	boot.StopDB()
 
 	return nil

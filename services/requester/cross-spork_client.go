@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/hashicorp/go-multierror"
 	"github.com/onflow/cadence"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-go-sdk"
@@ -32,6 +33,10 @@ func (s *sporkClient) GetEventsForHeightRange(
 	s.getEventsForHeightRangeLimiter.Take()
 
 	return s.client.GetEventsForHeightRange(ctx, eventType, startHeight, endHeight)
+}
+
+func (s *sporkClient) Close() error {
+	return s.client.Close()
 }
 
 type sporkClients []*sporkClient
@@ -102,7 +107,7 @@ func (s *sporkClients) continuous() bool {
 // that shadows the original access Client function.
 type CrossSporkClient struct {
 	logger                  zerolog.Logger
-	sporkClients            *sporkClients
+	sporkClients            sporkClients
 	currentSporkFirstHeight uint64
 	access.Client
 }
@@ -127,7 +132,7 @@ func NewCrossSporkClient(
 		nodeRootBlockHeight = info.NodeRootBlockHeight
 	}
 
-	clients := &sporkClients{}
+	clients := sporkClients{}
 	for _, c := range pastSporks {
 		if err := clients.add(logger, c); err != nil {
 			return nil, err
@@ -242,4 +247,20 @@ func (c *CrossSporkClient) GetEventsForHeightRange(
 		return nil, fmt.Errorf("invalid height range, end height %d is not in the same spork as start height %d", endHeight, startHeight)
 	}
 	return client.GetEventsForHeightRange(ctx, eventType, startHeight, endHeight)
+}
+
+func (c *CrossSporkClient) Close() error {
+	var merr *multierror.Error
+
+	for _, client := range c.sporkClients {
+		if err := client.Close(); err != nil {
+			merr = multierror.Append(merr, err)
+		}
+	}
+	err := c.Client.Close()
+	if err != nil {
+		merr = multierror.Append(merr, err)
+	}
+
+	return merr.ErrorOrNil()
 }
