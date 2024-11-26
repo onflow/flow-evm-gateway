@@ -379,6 +379,9 @@ func (e *EVM) EstimateGas(
 	height uint64,
 	stateOverrides *ethTypes.StateOverride,
 ) (uint64, error) {
+	// Note: The following algorithm, is largely inspired from
+	// https://github.com/onflow/go-ethereum/blob/master/eth/gasestimator/gasestimator.go#L49-L192,
+	// and adapted to fit our use-case.
 	// Binary search the gas limit, as it may need to be higher than the amount used
 	var (
 		failingGasLimit uint64 // lowest-known gas limit where tx execution fails
