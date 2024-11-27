@@ -170,13 +170,8 @@ func NewBlockChainAPI(
 	receipts storage.ReceiptIndexer,
 	ratelimiter limiter.Store,
 	collector metrics.Collector,
-) (*BlockChainAPI, error) {
-	// get the height from which the indexing resumed since the last restart, this is needed for syncing status.
-	indexingResumedHeight, err := blocks.LatestEVMHeight()
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve the indexing resumed height: %w", err)
-	}
-
+	indexingResumedHeight uint64,
+) *BlockChainAPI {
 	return &BlockChainAPI{
 		logger:                logger,
 		config:                config,
@@ -187,7 +182,7 @@ func NewBlockChainAPI(
 		indexingResumedHeight: indexingResumedHeight,
 		limiter:               ratelimiter,
 		collector:             collector,
-	}, nil
+	}
 }
 
 // BlockNumber returns the block number of the chain head.

@@ -244,7 +244,14 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 		return fmt.Errorf("failed to create rate limiter: %w", err)
 	}
 
-	blockchainAPI, err := api.NewBlockChainAPI(
+	// get the height from which the indexing resumed since the last restart,
+	// this is needed for the `eth_syncing` endpoint.
+	indexingResumedHeight, err := b.storages.Blocks.LatestEVMHeight()
+	if err != nil {
+		return fmt.Errorf("failed to retrieve the indexing resumed height: %w", err)
+	}
+
+	blockchainAPI := api.NewBlockChainAPI(
 		b.logger,
 		b.config,
 		evm,
@@ -253,10 +260,8 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 		b.storages.Receipts,
 		ratelimiter,
 		b.collector,
+		indexingResumedHeight,
 	)
-	if err != nil {
-		return err
-	}
 
 	streamAPI := api.NewStreamAPI(
 		b.logger,
@@ -565,12 +570,14 @@ func Run(ctx context.Context, cfg *config.Config, ready component.ReadyFunc) err
 		return err
 	}
 
-	if err := boot.StartEventIngestion(ctx); err != nil {
-		return fmt.Errorf("failed to start event ingestion engine: %w", err)
-	}
-
+	// Start the API Server first, to avoid any races with incoming
+	// EVM events, that might affect the starting state.
 	if err := boot.StartAPIServer(ctx); err != nil {
 		return fmt.Errorf("failed to start API server: %w", err)
+	}
+
+	if err := boot.StartEventIngestion(ctx); err != nil {
+		return fmt.Errorf("failed to start event ingestion engine: %w", err)
 	}
 
 	if err := boot.StartMetricsServer(ctx); err != nil {
