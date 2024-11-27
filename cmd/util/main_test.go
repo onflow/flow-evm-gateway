@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
-	"github.com/onflow/flow-go-sdk"
 
 	"github.com/onflow/flow-go/fvm/evm"
 	"github.com/onflow/flow-go/fvm/evm/emulator/state"
@@ -19,9 +18,9 @@ import (
 
 func TestStateDiff(t *testing.T) {
 
-	state1 := ExtractEVMState(t, flow.Testnet,
+	state1 := ExtractEVMState(t, flowGo.Testnet,
 		"/var/flow/gw/data/db", uint64(218215348))
-	state2 := state.EVMStateFromReplayGobDir(t,
+	state2 := EVMStateFromReplayGobDir(t,
 		"/var/flow2/evm-state-from-gobs-218215348/", uint64(218215348))
 	// state2 := state.EVMStateFromCheckpointExtract(t, "/var/flow2/evm-state-from-checkpoint-218215348/")
 
@@ -63,7 +62,7 @@ func EVMStateFromCheckpointExtract(t *testing.T, dir string) *state.EVMState {
 
 func EVMStateFromReplayGobDir(t *testing.T, gobDir string, flowHeight uint64) *state.EVMState {
 	valueFileName, allocatorFileName := evmStateGobFileNamesByEndHeight(gobDir, flowHeight)
-	chainID := flow.Testnet
+	chainID := flowGo.Testnet
 
 	allocatorGobs, err := testutils.DeserializeAllocator(allocatorFileName)
 	require.NoError(t, err)
