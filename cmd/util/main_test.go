@@ -45,7 +45,7 @@ func ExtractEVMState(
 	snapshot, err := registerStore.GetSnapshotAt(flowHeight)
 	require.NoError(t, err)
 
-	ledger := storage.NewReadOnlyStorage(snapshot)
+	ledger := storage.NewEphemeralStorage(storage.NewReadOnlyStorage(snapshot))
 	bv, err := state.NewBaseView(ledger, storageRoot)
 	require.NoError(t, err)
 
