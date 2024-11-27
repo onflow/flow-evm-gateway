@@ -86,3 +86,27 @@ func evmStateGobFileNamesByEndHeight(evmStateGobDir string, endHeight uint64) (s
 	allocatorFileName := filepath.Join(evmStateGobDir, fmt.Sprintf("allocators-%d.gob", endHeight))
 	return valueFileName, allocatorFileName
 }
+
+func TestReadPebbleRootAccountStorageKeyID(t *testing.T) {
+	chainID := flowGo.Testnet
+	registerStoreDir := "/var/flow/gw/data/db"
+	flowHeight := uint64(218215348)
+
+	store, err := pebble.New(registerStoreDir, log.Logger)
+	require.NoError(t, err)
+
+	storageRoot := evm.StorageAccountAddress(chainID)
+	registerStore := pebble.NewRegisterStorage(store, storageRoot)
+	regID := flowGo.RegisterID{
+		Owner: string(storageRoot.Bytes()),
+		Key:   state.AccountsStorageIDKey,
+	}
+	regVal, err := registerStore.Get(regID, flowHeight)
+	require.NoError(t, err)
+
+	require.NotNil(t, regVal)
+	fmt.Printf("Register value: %x\n", regVal)
+
+	_, err = registerStore.GetSnapshotAt(flowHeight)
+	require.NoError(t, err)
+}
