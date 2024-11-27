@@ -49,7 +49,7 @@ type DebugAPI struct {
 	transactions  storage.TransactionIndexer
 	receipts      storage.ReceiptIndexer
 	client        *requester.CrossSporkClient
-	config        *config.Config
+	config        config.Config
 	collector     metrics.Collector
 }
 
@@ -60,7 +60,7 @@ func NewDebugAPI(
 	transactions storage.TransactionIndexer,
 	receipts storage.ReceiptIndexer,
 	client *requester.CrossSporkClient,
-	config *config.Config,
+	config config.Config,
 	logger zerolog.Logger,
 	collector metrics.Collector,
 ) *DebugAPI {

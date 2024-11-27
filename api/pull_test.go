@@ -60,7 +60,7 @@ func TestFilterExpiryChecker(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			api := &PullAPI{
 				filters: make(map[rpc.ID]filter),
-				config:  &config.Config{FilterExpiry: time.Millisecond * 5},
+				config:  config.Config{FilterExpiry: time.Millisecond * 5},
 			}
 
 			tc.setup(api)

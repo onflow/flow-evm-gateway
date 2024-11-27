@@ -137,7 +137,7 @@ func servicesSetup(t *testing.T) (emulator.Emulator, func()) {
 	service := emu.ServiceKey()
 
 	// default config
-	cfg := &config.Config{
+	cfg := config.Config{
 		DatabaseDir:       t.TempDir(),
 		AccessNodeHost:    "localhost:3569", // emulator
 		RPCPort:           8545,
