@@ -1,15 +1,11 @@
 package run
 
 import (
-	"context"
-	"errors"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"os"
-	"os/signal"
 	"strings"
-	"sync"
-	"syscall"
 	"time"
 
 	"github.com/onflow/flow-evm-gateway/bootstrap"
@@ -30,10 +26,6 @@ var Cmd = &cobra.Command{
 	Use:   "run",
 	Short: "Runs the EVM Gateway Node",
 	RunE: func(command *cobra.Command, _ []string) error {
-
-		ctx, cancel := context.WithCancel(command.Context())
-		defer cancel()
-
 		// create multi-key account
 		// TODO(JanezP): move to separate command
 		if _, exists := os.LookupEnv("MULTIKEY_MODE"); exists {
@@ -45,46 +37,19 @@ var Cmd = &cobra.Command{
 			return fmt.Errorf("failed to parse flags: %w", err)
 		}
 
-		done := make(chan struct{})
-		ready := make(chan struct{})
-		once := sync.Once{}
-		closeReady := func() {
-			once.Do(func() {
-				close(ready)
-			})
-		}
-		go func() {
-			defer close(done)
-			// In case an error happens before ready is called we need to close the ready channel
-			defer closeReady()
+		builder := bootstrap.NewEVMGatewayNodeBuilder(cfg)
 
-			err := bootstrap.Run(
-				ctx,
-				cfg,
-				closeReady,
-			)
-			if err != nil && !errors.Is(err, context.Canceled) {
-				log.Err(err).Msg("Gateway runtime error")
-			}
-		}()
-
-		<-ready
-
-		osSig := make(chan os.Signal, 1)
-		signal.Notify(osSig, syscall.SIGINT, syscall.SIGTERM)
-
-		// wait for gateway to exit or for a shutdown signal
-		select {
-		case <-osSig:
-			log.Info().Msg("OS Signal to shutdown received, shutting down")
-			cancel()
-		case <-done:
-			log.Info().Msg("done, shutting down")
+		if err := builder.Initialize(); err != nil {
+			builder.Logger.Fatal().Err(err).Send()
 		}
 
-		// Wait for the gateway to completely stop
-		<-done
+		builder.LoadComponentsAndModules()
 
+		node, err := builder.Build()
+		if err != nil {
+			builder.Logger.Fatal().Err(err).Send()
+		}
+		node.Run()
 		return nil
 	},
 }

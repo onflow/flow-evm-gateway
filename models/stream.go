@@ -3,27 +3,50 @@ package models
 import (
 	"sync"
 
+	"github.com/onflow/flow-go/module/component"
+	"github.com/onflow/flow-go/module/irrecoverable"
 	"github.com/rs/zerolog"
 )
 
 type Publisher[T any] struct {
+	component.Component
+	cm *component.ComponentManager
+
+	log zerolog.Logger
+
 	mux         sync.RWMutex
 	subscribers map[Subscriber[T]]struct{}
+
+	publishChan chan T
+
+	publisherExited chan struct{}
 }
 
-func NewPublisher[T any]() *Publisher[T] {
-	return &Publisher[T]{
-		mux:         sync.RWMutex{},
-		subscribers: make(map[Subscriber[T]]struct{}),
+func NewPublisher[T any](log zerolog.Logger) *Publisher[T] {
+	p := &Publisher[T]{
+		mux:             sync.RWMutex{},
+		log:             log,
+		subscribers:     make(map[Subscriber[T]]struct{}),
+		publishChan:     make(chan T),
+		publisherExited: make(chan struct{}),
 	}
+
+	builder := component.NewComponentManagerBuilder()
+
+	builder.AddWorker(p.publishWorker)
+
+	p.cm = builder.Build()
+	p.Component = p.cm
+
+	return p
 }
 
 func (p *Publisher[T]) Publish(data T) {
-	p.mux.RLock()
-	defer p.mux.RUnlock()
-
-	for s := range p.subscribers {
-		s.Notify(data)
+	select {
+	case <-p.publisherExited:
+		return
+	default:
+		p.publishChan <- data
 	}
 }
 
@@ -41,36 +64,53 @@ func (p *Publisher[T]) Unsubscribe(s Subscriber[T]) {
 	delete(p.subscribers, s)
 }
 
-type Subscriber[T any] interface {
-	Notify(data T)
-	Error() <-chan error
-}
+func (p *Publisher[T]) publishWorker(ctx irrecoverable.SignalerContext, ready component.ReadyFunc) {
+	defer func() {
+		close(p.publisherExited)
+		close(p.publishChan)
+	}()
+	ready()
 
-type Subscription[T any] struct {
-	logger   zerolog.Logger
-	err      chan error
-	callback func(data T) error
-}
-
-func NewSubscription[T any](logger zerolog.Logger, callback func(T) error) *Subscription[T] {
-	return &Subscription[T]{
-		logger:   logger,
-		callback: callback,
-		err:      make(chan error, 1),
-	}
-}
-
-func (b *Subscription[T]) Notify(data T) {
-	err := b.callback(data)
-	if err != nil {
+	for {
 		select {
-		case b.err <- err:
-		default:
-			b.logger.Debug().Err(err).Msg("failed to send error to subscription")
+		case <-ctx.Done():
+			return
+		case data := <-p.publishChan:
+			stop := func() bool {
+				p.mux.RLock()
+				defer p.mux.RUnlock()
+
+				for s := range p.subscribers {
+					err := s.Notify(data)
+					if err != nil {
+						p.log.Error().Err(err).Msg("failed to notify subscriber")
+						ctx.Throw(err)
+						return true
+					}
+				}
+				return false
+			}()
+			if stop {
+				return
+			}
 		}
 	}
 }
 
-func (b *Subscription[T]) Error() <-chan error {
-	return b.err
+type Subscriber[T any] interface {
+	Notify(data T) error
+}
+
+type Subscription[T any] struct {
+	callback func(data T) error
+}
+
+func NewSubscription[T any](callback func(T) error) *Subscription[T] {
+	return &Subscription[T]{
+		callback: callback,
+	}
+}
+
+func (b *Subscription[T]) Notify(data T) error {
+	return b.callback(data)
 }
