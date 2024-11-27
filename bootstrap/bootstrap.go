@@ -7,16 +7,17 @@ import (
 	"math"
 	"time"
 
-	"github.com/onflow/flow-go/module/component"
-
 	pebbleDB "github.com/cockroachdb/pebble"
-
+	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-go-sdk/access"
 	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/onflow/flow-go-sdk/crypto"
 	"github.com/onflow/flow-go/fvm/environment"
 	"github.com/onflow/flow-go/fvm/evm"
 	flowGo "github.com/onflow/flow-go/model/flow"
+	"github.com/onflow/flow-go/module/component"
+	flowMetrics "github.com/onflow/flow-go/module/metrics"
+	"github.com/onflow/flow-go/module/util"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-limiter/memorystore"
@@ -24,7 +25,6 @@ import (
 
 	"github.com/onflow/flow-evm-gateway/api"
 	"github.com/onflow/flow-evm-gateway/config"
-	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/models"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/services/ingestion"
@@ -57,9 +57,10 @@ type Bootstrap struct {
 	publishers *Publishers
 	collector  metrics.Collector
 	server     *api.Server
-	metrics    *metrics.Server
+	metrics    *flowMetrics.Server
 	events     *ingestion.Engine
 	profiler   *api.ProfileServer
+	db         *pebbleDB.DB
 }
 
 func New(config *config.Config) (*Bootstrap, error) {
@@ -72,7 +73,7 @@ func New(config *config.Config) (*Bootstrap, error) {
 		return nil, err
 	}
 
-	storages, err := setupStorage(config, client, logger)
+	db, storages, err := setupStorage(config, client, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -83,6 +84,7 @@ func New(config *config.Config) (*Bootstrap, error) {
 			Transaction: models.NewPublisher[*gethTypes.Transaction](),
 			Logs:        models.NewPublisher[[]*gethTypes.Log](),
 		},
+		db:        db,
 		storages:  storages,
 		logger:    logger,
 		config:    config,
@@ -334,15 +336,14 @@ func (b *Bootstrap) StopAPIServer() {
 	b.server.Stop()
 }
 
-func (b *Bootstrap) StartMetricsServer(_ context.Context) error {
+func (b *Bootstrap) StartMetricsServer(ctx context.Context) error {
 	b.logger.Info().Msg("bootstrap starting metrics server")
 
-	b.metrics = metrics.NewServer(b.logger, b.config.MetricsPort)
-	started, err := b.metrics.Start()
+	b.metrics = flowMetrics.NewServer(b.logger, uint(b.config.MetricsPort))
+	err := util.WaitClosed(ctx, b.metrics.Ready())
 	if err != nil {
 		return fmt.Errorf("failed to start metrics server: %w", err)
 	}
-	<-started
 
 	return nil
 }
@@ -352,7 +353,7 @@ func (b *Bootstrap) StopMetricsServer() {
 		return
 	}
 	b.logger.Warn().Msg("shutting down metrics server")
-	b.metrics.Stop()
+	<-b.metrics.Done()
 }
 
 func (b *Bootstrap) StartProfilerServer(_ context.Context) error {
@@ -388,12 +389,22 @@ func (b *Bootstrap) StopProfilerServer() {
 }
 
 func (b *Bootstrap) StopDB() {
-	if b.storages == nil || b.storages.Storage == nil {
+	if b.db == nil {
 		return
 	}
-	err := b.storages.Storage.Close()
+	err := b.db.Close()
 	if err != nil {
 		b.logger.Err(err).Msg("PebbleDB graceful shutdown failed")
+	}
+}
+
+func (b *Bootstrap) StopClient() {
+	if b.client == nil {
+		return
+	}
+	err := b.client.Close()
+	if err != nil {
+		b.logger.Err(err).Msg("CrossSporkClient graceful shutdown failed")
 	}
 }
 
@@ -466,12 +477,13 @@ func setupStorage(
 	config *config.Config,
 	client *requester.CrossSporkClient,
 	logger zerolog.Logger,
-) (*Storages, error) {
+) (*pebbleDB.DB, *Storages, error) {
 	// create pebble storage from the provided database root directory
-	store, err := pebble.New(config.DatabaseDir, logger)
+	db, err := pebble.OpenDB(config.DatabaseDir)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
+	store := pebble.New(db, logger)
 
 	blocks := pebble.NewBlocks(store, config.FlowNetworkID)
 	storageAddress := evm.StorageAccountAddress(config.FlowNetworkID)
@@ -481,7 +493,7 @@ func setupStorage(
 	if config.ForceStartCadenceHeight != 0 {
 		logger.Warn().Uint64("height", config.ForceStartCadenceHeight).Msg("force setting starting Cadence height!!!")
 		if err := blocks.SetLatestCadenceHeight(config.ForceStartCadenceHeight, nil); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
@@ -500,12 +512,12 @@ func setupStorage(
 		evmBlokcHeight := uint64(0)
 		cadenceBlock, err := client.GetBlockHeaderByHeight(context.Background(), cadenceHeight)
 		if err != nil {
-			return nil, fmt.Errorf("could not fetch provided cadence height, make sure it's correct: %w", err)
+			return nil, nil, fmt.Errorf("could not fetch provided cadence height, make sure it's correct: %w", err)
 		}
 
 		snapshot, err := registerStore.GetSnapshotAt(evmBlokcHeight)
 		if err != nil {
-			return nil, fmt.Errorf("could not get register snapshot at block height %d: %w", 0, err)
+			return nil, nil, fmt.Errorf("could not get register snapshot at block height %d: %w", 0, err)
 		}
 
 		delta := storage.NewRegisterDelta(snapshot)
@@ -516,16 +528,16 @@ func setupStorage(
 			accountStatus.ToBytes(),
 		)
 		if err != nil {
-			return nil, fmt.Errorf("could not set account status: %w", err)
+			return nil, nil, fmt.Errorf("could not set account status: %w", err)
 		}
 
 		err = registerStore.Store(delta.GetUpdates(), evmBlokcHeight, batch)
 		if err != nil {
-			return nil, fmt.Errorf("could not store register updates: %w", err)
+			return nil, nil, fmt.Errorf("could not store register updates: %w", err)
 		}
 
 		if err := blocks.InitHeights(cadenceHeight, cadenceBlock.ID, batch); err != nil {
-			return nil, fmt.Errorf(
+			return nil, nil, fmt.Errorf(
 				"failed to init the database for block height: %d and ID: %s, with : %w",
 				cadenceHeight,
 				cadenceBlock.ID,
@@ -535,7 +547,7 @@ func setupStorage(
 
 		err = batch.Commit(pebbleDB.Sync)
 		if err != nil {
-			return nil, fmt.Errorf("could not commit register updates: %w", err)
+			return nil, nil, fmt.Errorf("could not commit register updates: %w", err)
 		}
 
 		logger.Info().
@@ -546,7 +558,7 @@ func setupStorage(
 	//	// TODO(JanezP): verify storage account owner is correct
 	//}
 
-	return &Storages{
+	return db, &Storages{
 		Storage:      store,
 		Blocks:       blocks,
 		Registers:    registerStore,
@@ -591,6 +603,7 @@ func Run(ctx context.Context, cfg *config.Config, ready component.ReadyFunc) err
 	boot.StopEventIngestion()
 	boot.StopMetricsServer()
 	boot.StopAPIServer()
+	boot.StopClient()
 	boot.StopDB()
 
 	return nil

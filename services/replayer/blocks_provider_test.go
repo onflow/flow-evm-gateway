@@ -279,8 +279,9 @@ func TestGetSnapshotAt(t *testing.T) {
 
 func setupBlocksDB(t *testing.T) (*pebble.Storage, storage.BlockIndexer) {
 	dir := t.TempDir()
-	db, err := pebble.New(dir, zerolog.Nop())
+	pebbleDB, err := pebble.OpenDB(dir)
 	require.NoError(t, err)
+	db := pebble.New(pebbleDB, zerolog.Nop())
 	batch := db.NewBatch()
 
 	chainID := flowGo.Emulator
