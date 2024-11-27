@@ -20,6 +20,7 @@ import (
 	"github.com/onflow/go-ethereum/core/txpool"
 	"github.com/onflow/go-ethereum/core/types"
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/onflow/flow-evm-gateway/config"
@@ -299,7 +300,13 @@ func (e *EVM) GetBalance(
 		return nil, err
 	}
 
-	return view.GetBalance(address)
+	balance, err := view.GetBalance(address)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Info().Msgf("view getting balance for %s is %v", address.String(), balance)
+	return balance, nil
 }
 
 func (e *EVM) GetNonce(

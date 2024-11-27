@@ -285,6 +285,8 @@ func (b *BlockChainAPI) GetBalance(
 		return handleError[*hexutil.Big](err, l, b.collector)
 	}
 
+	l.Info().Msgf("get balance is %v", balance)
+
 	return (*hexutil.Big)(balance), nil
 }
 
