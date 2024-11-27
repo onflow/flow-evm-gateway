@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -47,17 +48,21 @@ var Cmd = &cobra.Command{
 
 		done := make(chan struct{})
 		ready := make(chan struct{})
+		once := sync.Once{}
+		closeReady := func() {
+			once.Do(func() {
+				close(ready)
+			})
+		}
 		go func() {
 			defer close(done)
 			// In case an error happens before ready is called we need to close the ready channel
-			defer close(ready)
+			defer closeReady()
 
 			err := bootstrap.Run(
 				ctx,
 				cfg,
-				func() {
-					close(ready)
-				},
+				closeReady,
 			)
 			if err != nil && !errors.Is(err, context.Canceled) {
 				log.Err(err).Msg("Gateway runtime error")
