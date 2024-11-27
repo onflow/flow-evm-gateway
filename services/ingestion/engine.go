@@ -1,8 +1,10 @@
 package ingestion
 
 import (
-	"context"
 	"fmt"
+
+	"github.com/onflow/flow-go/module/component"
+	"github.com/onflow/flow-go/module/irrecoverable"
 
 	flowGo "github.com/onflow/flow-go/model/flow"
 
@@ -20,8 +22,6 @@ import (
 	"github.com/onflow/flow-go/fvm/evm/offchain/sync"
 )
 
-var _ models.Engine = &Engine{}
-
 // Engine is an implementation of the event ingestion engine.
 //
 // This engine monitors the Flow network for two types of EVM events:
@@ -37,7 +37,8 @@ var _ models.Engine = &Engine{}
 // it will just overwrite the current indexed data. Idempotency is an important
 // requirement of the implementation of this engine.
 type Engine struct {
-	*models.EngineStatus
+	component.Component
+	cm *component.ComponentManager
 
 	subscriber      EventSubscriber
 	blocksProvider  *replayer.BlocksProvider
@@ -72,8 +73,7 @@ func NewEventIngestionEngine(
 ) *Engine {
 	log = log.With().Str("component", "ingestion").Logger()
 
-	return &Engine{
-		EngineStatus: models.NewEngineStatus(),
+	e := &Engine{
 
 		subscriber:      subscriber,
 		blocksProvider:  blocksProvider,
@@ -89,12 +89,13 @@ func NewEventIngestionEngine(
 		collector:       collector,
 		replayerConfig:  replayerConfig,
 	}
-}
 
-// Stop the engine.
-func (e *Engine) Stop() {
-	e.MarkDone()
-	<-e.Stopped()
+	builder := component.NewComponentManagerBuilder()
+	builder.AddWorker(e.run)
+	e.cm = builder.Build()
+	e.Component = e.cm
+
+	return e
 }
 
 // Run the Cadence event ingestion engine.
@@ -112,34 +113,29 @@ func (e *Engine) Stop() {
 // handled by restarting the engine. This can happen if the client connection to the event subscription
 // drops.
 // All other errors are unexpected.
-func (e *Engine) Run(ctx context.Context) error {
+func (e *Engine) run(ctx irrecoverable.SignalerContext, ready component.ReadyFunc) {
 	e.log.Info().Msg("starting ingestion")
-
-	e.MarkReady()
-	defer e.MarkStopped()
 
 	events := e.subscriber.Subscribe(ctx)
 
+	ready()
+
 	for {
 		select {
-		case <-e.Done():
-			// stop the engine
-			return nil
+		case <-ctx.Done():
+			return
 		case events, ok := <-events:
 			if !ok {
-				return nil
+				return
 			}
 			if events.Err != nil {
-				return fmt.Errorf(
-					"failure in event subscription with: %w",
-					events.Err,
-				)
+				return
 			}
 
 			err := e.processEvents(events.Events)
 			if err != nil {
 				e.log.Error().Err(err).Msg("failed to process EVM events")
-				return err
+				return
 			}
 		}
 	}
