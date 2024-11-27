@@ -16,7 +16,7 @@ import (
 	"github.com/onflow/flow-go/fvm/evm"
 	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/onflow/flow-go/module/component"
-	metrics2 "github.com/onflow/flow-go/module/metrics"
+	flowMetrics "github.com/onflow/flow-go/module/metrics"
 	"github.com/onflow/flow-go/module/util"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/rs/zerolog"
@@ -57,7 +57,7 @@ type Bootstrap struct {
 	publishers *Publishers
 	collector  metrics.Collector
 	server     *api.Server
-	metrics    *metrics2.Server
+	metrics    *flowMetrics.Server
 	events     *ingestion.Engine
 	profiler   *api.ProfileServer
 	db         *pebbleDB.DB
@@ -339,7 +339,7 @@ func (b *Bootstrap) StopAPIServer() {
 func (b *Bootstrap) StartMetricsServer(ctx context.Context) error {
 	b.logger.Info().Msg("bootstrap starting metrics server")
 
-	b.metrics = metrics2.NewServer(b.logger, uint(b.config.MetricsPort))
+	b.metrics = flowMetrics.NewServer(b.logger, uint(b.config.MetricsPort))
 	err := util.WaitClosed(ctx, b.metrics.Ready())
 	if err != nil {
 		return fmt.Errorf("failed to start metrics server: %w", err)
