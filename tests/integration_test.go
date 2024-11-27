@@ -60,19 +60,18 @@ func Test_ConcurrentTransactionSubmission(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &config.Config{
-		DatabaseDir:       t.TempDir(),
-		AccessNodeHost:    grpcHost,
-		RPCPort:           8545,
-		RPCHost:           "127.0.0.1",
-		FlowNetworkID:     "flow-emulator",
-		EVMNetworkID:      types.FlowEVMPreviewNetChainID,
-		Coinbase:          eoaTestAccount,
-		COAAddress:        *createdAddr,
-		COAKeys:           keys,
-		CreateCOAResource: true,
-		GasPrice:          new(big.Int).SetUint64(0),
-		LogLevel:          zerolog.DebugLevel,
-		LogWriter:         testLogWriter(),
+		DatabaseDir:    t.TempDir(),
+		AccessNodeHost: grpcHost,
+		RPCPort:        8545,
+		RPCHost:        "127.0.0.1",
+		FlowNetworkID:  "flow-emulator",
+		EVMNetworkID:   types.FlowEVMPreviewNetChainID,
+		Coinbase:       eoaTestAccount,
+		COAAddress:     *createdAddr,
+		COAKeys:        keys,
+		GasPrice:       new(big.Int).SetUint64(0),
+		LogLevel:       zerolog.DebugLevel,
+		LogWriter:      testLogWriter(),
 	}
 
 	// todo change this test to use ingestion and emulator directly so we can completely remove
@@ -166,19 +165,18 @@ func Test_EthClientTest(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &config.Config{
-		DatabaseDir:       t.TempDir(),
-		AccessNodeHost:    grpcHost,
-		RPCPort:           8545,
-		RPCHost:           "127.0.0.1",
-		FlowNetworkID:     "flow-emulator",
-		EVMNetworkID:      types.FlowEVMPreviewNetChainID,
-		Coinbase:          eoaTestAccount,
-		COAAddress:        *createdAddr,
-		COAKeys:           keys,
-		CreateCOAResource: true,
-		GasPrice:          new(big.Int).SetUint64(150),
-		LogLevel:          zerolog.DebugLevel,
-		LogWriter:         testLogWriter(),
+		DatabaseDir:    t.TempDir(),
+		AccessNodeHost: grpcHost,
+		RPCPort:        8545,
+		RPCHost:        "127.0.0.1",
+		FlowNetworkID:  "flow-emulator",
+		EVMNetworkID:   types.FlowEVMPreviewNetChainID,
+		Coinbase:       eoaTestAccount,
+		COAAddress:     *createdAddr,
+		COAKeys:        keys,
+		GasPrice:       new(big.Int).SetUint64(150),
+		LogLevel:       zerolog.DebugLevel,
+		LogWriter:      testLogWriter(),
 	}
 
 	ready := make(chan struct{})
@@ -269,19 +267,18 @@ func Test_CloudKMSConcurrentTransactionSubmission(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := &config.Config{
-		DatabaseDir:       t.TempDir(),
-		AccessNodeHost:    grpcHost,
-		RPCPort:           8545,
-		RPCHost:           "127.0.0.1",
-		FlowNetworkID:     "flow-emulator",
-		EVMNetworkID:      types.FlowEVMPreviewNetChainID,
-		Coinbase:          eoaTestAccount,
-		COAAddress:        *createdAddr,
-		COACloudKMSKeys:   kmsKeys,
-		CreateCOAResource: true,
-		GasPrice:          new(big.Int).SetUint64(0),
-		LogLevel:          zerolog.DebugLevel,
-		LogWriter:         testLogWriter(),
+		DatabaseDir:     t.TempDir(),
+		AccessNodeHost:  grpcHost,
+		RPCPort:         8545,
+		RPCHost:         "127.0.0.1",
+		FlowNetworkID:   "flow-emulator",
+		EVMNetworkID:    types.FlowEVMPreviewNetChainID,
+		Coinbase:        eoaTestAccount,
+		COAAddress:      *createdAddr,
+		COACloudKMSKeys: kmsKeys,
+		GasPrice:        new(big.Int).SetUint64(0),
+		LogLevel:        zerolog.DebugLevel,
+		LogWriter:       testLogWriter(),
 	}
 
 	// todo change this test to use ingestion and emulator directly so we can completely remove

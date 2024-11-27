@@ -38,15 +38,11 @@ var (
 	//go:embed cadence/run.cdc
 	runTxScript []byte
 
-	//go:embed cadence/create_coa.cdc
-	createCOAScript []byte
-
 	//go:embed cadence/get_latest_evm_height.cdc
 	getLatestEVMHeight []byte
 )
 
 const minFlowBalance = 2
-const coaFundingBalance = minFlowBalance - 1
 const blockGasLimit = 120_000_000
 
 type Requester interface {
@@ -124,9 +120,6 @@ func NewEVM(
 	collector metrics.Collector,
 ) (*EVM, error) {
 	logger = logger.With().Str("component", "requester").Logger()
-	// check that the address stores already created COA resource in the "evm" storage path.
-	// if it doesn't check if the auto-creation boolean is true and if so create it
-	// otherwise fail. COA resource is required by the EVM requester to be able to submit transactions.
 	address := config.COAAddress
 	acc, err := client.GetAccount(context.Background(), address)
 	if err != nil {
@@ -180,23 +173,6 @@ func NewEVM(
 		evmSigner:         evmSigner,
 		validationOptions: validationOptions,
 		collector:         collector,
-	}
-
-	// create COA on the account
-	if config.CreateCOAResource {
-		tx, err := evm.buildTransaction(
-			context.Background(),
-			replaceAddresses(createCOAScript, config.FlowNetworkID),
-			cadence.UFix64(coaFundingBalance),
-		)
-		if err != nil {
-			logger.Warn().Err(err).Msg("COA resource auto-creation failure")
-			return nil, fmt.Errorf("COA resource auto-creation failure: %w", err)
-		}
-		if err := evm.client.SendTransaction(context.Background(), *tx); err != nil {
-			logger.Warn().Err(err).Msg("failed to send COA resource auto-creation transaction")
-			return nil, fmt.Errorf("failed to send COA resource auto-creation transaction: %w", err)
-		}
 	}
 
 	return evm, nil

@@ -51,9 +51,6 @@ type Config struct {
 	COAKeys []crypto.PrivateKey
 	// COACloudKMSKeys is a slice of all the keys and their versions that will be used in Cloud KMS key-rotation mechanism.
 	COACloudKMSKeys []flowGoKMS.Key
-	// CreateCOAResource indicates if the COA resource should be auto-created on
-	// startup if one doesn't exist in the COA Flow address account
-	CreateCOAResource bool
 	// GasPrice is a fixed gas price that will be used when submitting transactions.
 	GasPrice *big.Int
 	// InitCadenceHeight is used for initializing the database on a local emulator or a live network.
