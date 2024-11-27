@@ -185,7 +185,7 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 	b.server = api.NewServer(b.logger, b.collector, b.config)
 
 	// create the signer based on either a single coa key being provided and using a simple in-memory
-	// signer, or multiple keys being provided and using signer with key-rotation mechanism.
+	// signer, or multiple keys being provided and using signer with key-rotation mechanism.bootstrap/bootstrap.go
 	var signer crypto.Signer
 	var err error
 	switch {
