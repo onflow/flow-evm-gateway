@@ -18,7 +18,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/onflow/go-ethereum/core"
+	"github.com/onflow/flow-go/module/component"
+	"github.com/onflow/flow-go/module/irrecoverable"
+
 	gethVM "github.com/onflow/go-ethereum/core/vm"
 	gethLog "github.com/onflow/go-ethereum/log"
 	"github.com/onflow/go-ethereum/rpc"
@@ -57,7 +59,11 @@ type Server struct {
 
 	config    config.Config
 	collector metrics.Collector
+
+	startupCompleted chan struct{}
 }
+
+var _ component.Component = (*Server)(nil)
 
 const (
 	shutdownTimeout      = 5 * time.Second
@@ -79,10 +85,11 @@ func NewServer(
 	gethLog.SetDefault(gethLog.NewLogger(zeroSlog))
 
 	return &Server{
-		logger:    logger,
-		timeouts:  rpc.DefaultHTTPTimeouts,
-		config:    cfg,
-		collector: collector,
+		logger:           logger,
+		timeouts:         rpc.DefaultHTTPTimeouts,
+		config:           cfg,
+		collector:        collector,
+		startupCompleted: make(chan struct{}),
 	}
 }
 
@@ -179,9 +186,10 @@ func (h *Server) disableWS() bool {
 }
 
 // Start starts the HTTP server if it is enabled and not already running.
-func (h *Server) Start() error {
+func (h *Server) Start(ctx irrecoverable.SignalerContext) {
+	defer close(h.startupCompleted)
 	if h.endpoint == "" || h.listener != nil {
-		return nil // already running or not configured
+		return // already running or not configured
 	}
 
 	// Initialize the server.
@@ -192,16 +200,21 @@ func (h *Server) Start() error {
 		h.server.ReadHeaderTimeout = h.timeouts.ReadHeaderTimeout
 		h.server.WriteTimeout = h.timeouts.WriteTimeout
 		h.server.IdleTimeout = h.timeouts.IdleTimeout
+		h.server.BaseContext = func(_ net.Listener) context.Context {
+			return ctx
+		}
 	}
 
+	listenConfig := net.ListenConfig{}
 	// Start the server.
-	listener, err := net.Listen("tcp", h.endpoint)
+	listener, err := listenConfig.Listen(ctx, "tcp", h.endpoint)
 	if err != nil {
 		// If the server fails to start, we need to clear out the RPC and WS
 		// configurations so they can be configured another time.
 		h.disableRPC()
 		h.disableWS()
-		return err
+		ctx.Throw(err)
+		return
 	}
 
 	h.listener = listener
@@ -213,7 +226,7 @@ func (h *Server) Start() error {
 				return
 			}
 			h.logger.Err(err).Msg("failed to start API server")
-			panic(err)
+			ctx.Throw(err)
 		}
 	}()
 
@@ -225,8 +238,17 @@ func (h *Server) Start() error {
 		url := fmt.Sprintf("ws://%v", listener.Addr())
 		h.logger.Info().Msgf("JSON-RPC over WebSocket enabled: %s", url)
 	}
+}
 
-	return nil
+func (h *Server) Ready() <-chan struct{} {
+	ready := make(chan struct{})
+
+	go func() {
+		<-h.startupCompleted
+		close(ready)
+	}()
+
+	return ready
 }
 
 // disableRPC stops the JSON-RPC over HTTP handler.
@@ -296,41 +318,50 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotFound)
 }
 
-// Stop shuts down the HTTP server.
-func (h *Server) Stop() {
-	if h.listener == nil {
-		return // not running
-	}
+// Done shuts down the HTTP server.
+func (h *Server) Done() <-chan struct{} {
+	done := make(chan struct{})
 
-	// Shut down the server.
-	httpHandler := h.httpHandler
-	if httpHandler != nil {
-		httpHandler.server.Stop()
-		h.httpHandler = nil
-	}
+	go func() {
+		defer close(done)
 
-	wsHandler := h.wsHandler
-	if wsHandler != nil {
-		wsHandler.server.Stop()
-		h.wsHandler = nil
-	}
+		if h.listener == nil {
+			return // not running
+		}
 
-	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
-	defer cancel()
-	err := h.server.Shutdown(ctx)
-	if err != nil && err == ctx.Err() {
-		h.logger.Warn().Msg("HTTP server graceful shutdown timed out")
-		h.server.Close()
-	}
+		// Shut down the server.
+		httpHandler := h.httpHandler
+		if httpHandler != nil {
+			httpHandler.server.Stop()
+			h.httpHandler = nil
+		}
 
-	h.listener.Close()
-	h.logger.Info().Msgf(
-		"HTTP server stopped, endpoint: %s", h.listener.Addr(),
-	)
+		wsHandler := h.wsHandler
+		if wsHandler != nil {
+			wsHandler.server.Stop()
+			h.wsHandler = nil
+		}
 
-	// Clear out everything to allow re-configuring it later.
-	h.host, h.port, h.endpoint = "", 0, ""
-	h.server, h.listener = nil, nil
+		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer cancel()
+		err := h.server.Shutdown(ctx)
+		if err != nil && err == ctx.Err() {
+			h.logger.Warn().Msg("HTTP server graceful shutdown timed out")
+			h.server.Close()
+		}
+
+		h.listener.Close()
+		h.logger.Info().Msgf(
+			"HTTP server stopped, endpoint: %s", h.listener.Addr(),
+		)
+
+		// Clear out everything to allow re-configuring it later.
+		h.host, h.port, h.endpoint = "", 0, ""
+		h.server, h.listener = nil, nil
+
+	}()
+
+	return done
 }
 
 // CheckTimeouts ensures that timeout values are meaningful
