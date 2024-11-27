@@ -51,7 +51,7 @@ func ExtractEVMState(
 	snapshot, err := registerStore.GetSnapshotAt(flowHeight)
 	require.NoError(t, err)
 
-	ledger := storage.NewEphemeralStorage(storage.NewReadOnlyStorage(snapshot))
+	ledger := storage.NewReadOnlyStorage(snapshot)
 	bv, err := state.NewBaseView(ledger, storageRoot)
 	require.NoError(t, err)
 
@@ -135,11 +135,19 @@ func TestReadAccount(t *testing.T) {
 
 	snapshot, err := registerStore.GetSnapshotAt(flowHeight)
 	require.NoError(t, err)
-	ledger := storage.NewEphemeralStorage(storage.NewReadOnlyStorage(snapshot))
+	ledger := storage.NewReadOnlyStorage(snapshot)
+	bv, err := state.NewBaseView(ledger, storageRoot)
+	require.NoError(t, err)
 
 	stateDB, err := state.NewStateDB(ledger, storageRoot)
 	require.NoError(t, err)
 
 	balance := stateDB.GetBalance(account)
-	fmt.Println("balance: ", balance)
+
+	fmt.Println("balance from stateDB: ", balance)
+
+	balanceFromBaseView, err := bv.GetBalance(account)
+	require.NoError(t, err)
+	fmt.Println("balance from base view: ", balanceFromBaseView)
+
 }
