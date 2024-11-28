@@ -20,7 +20,7 @@ func main() {
 		registerStoreDir string
 	)
 
-	flag.Uint64Var(&height, "height", 0, "Block height for EVM state export")
+	flag.Uint64Var(&height, "evm-height", 0, "EVM Block height for EVM state export")
 	flag.StringVar(&outputDir, "output", "", "Output directory for exported EVM state")
 	flag.StringVar(&registerStoreDir, "register-store", "", "Directory of the register store")
 
