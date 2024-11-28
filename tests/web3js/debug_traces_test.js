@@ -35,7 +35,7 @@ it('should retrieve transaction traces', async () => {
     // Assert proper response for `callTracer`
     let txTrace = response.body.result
     assert.equal(txTrace.from, '0xfacf71692421039876a5bb4f10ef7a439d8ef61e')
-    assert.equal(txTrace.gas, '0x1167ac')
+    assert.equal(txTrace.gas, '0x118e0c')
     assert.equal(txTrace.gasUsed, '0x114010')
     assert.equal(txTrace.to, '0x99a64c993965f8d69f985b5171bc20065cc32fab')
     assert.lengthOf(txTrace.input, 9856n)
@@ -92,7 +92,7 @@ it('should retrieve transaction traces', async () => {
     // Assert proper response for `callTracer`
     txTrace = response.body.result
     assert.equal(txTrace.from, '0xfacf71692421039876a5bb4f10ef7a439d8ef61e')
-    assert.equal(txTrace.gas, '0x697f')
+    assert.equal(txTrace.gas, '0x72c3')
     assert.equal(txTrace.gasUsed, '0x6827')
     assert.equal(txTrace.to, '0x99a64c993965f8d69f985b5171bc20065cc32fab')
     assert.equal(
@@ -161,10 +161,10 @@ it('should retrieve transaction traces', async () => {
         txTraces,
         [
             {
-                txHash: '0xc34f49f9c6b56ebd88095054e2ad42d6854ba818a9657caf3f8500161a5e4ef7',
+                txHash: '0x87449feedc004c75c0e8b12d01656f2e28366c7d73b1b5336beae20aaa5033dd',
                 result: {
                     from: '0xfacf71692421039876a5bb4f10ef7a439d8ef61e',
-                    gas: '0x697f',
+                    gas: '0x72c3',
                     gasUsed: '0x6827',
                     to: '0x99a64c993965f8d69f985b5171bc20065cc32fab',
                     input: '0x6057361d0000000000000000000000000000000000000000000000000000000000000064',
@@ -200,10 +200,10 @@ it('should retrieve transaction traces', async () => {
         txTraces,
         [
             {
-                txHash: '0xc34f49f9c6b56ebd88095054e2ad42d6854ba818a9657caf3f8500161a5e4ef7',
+                txHash: '0x87449feedc004c75c0e8b12d01656f2e28366c7d73b1b5336beae20aaa5033dd',
                 result: {
                     from: '0xfacf71692421039876a5bb4f10ef7a439d8ef61e',
-                    gas: '0x697f',
+                    gas: '0x72c3',
                     gasUsed: '0x6827',
                     to: '0x99a64c993965f8d69f985b5171bc20065cc32fab',
                     input: '0x6057361d0000000000000000000000000000000000000000000000000000000000000064',
@@ -257,7 +257,7 @@ it('should retrieve transaction traces', async () => {
         txTrace,
         {
             from: conf.eoa.address.toLowerCase(),
-            gas: '0xbf57',
+            gas: '0xc9c7',
             gasUsed: '0x6147',
             to: contractAddress.toLowerCase(),
             input: '0xc550f90f',
@@ -265,7 +265,7 @@ it('should retrieve transaction traces', async () => {
             calls: [
                 {
                     from: contractAddress.toLowerCase(),
-                    gas: '0x5f01',
+                    gas: '0x6948',
                     gasUsed: '0x2',
                     to: '0x0000000000000000000000010000000000000001',
                     input: '0x53e87d66',
