@@ -136,7 +136,7 @@ func handleError[T any](err error, log zerolog.Logger, collector metrics.Collect
 // `EVM.dryRun` inside Cadence scripts, meaning that no state change
 // will occur.
 // This is only useful for `eth_estimateGas` and `eth_call` endpoints.
-func encodeTxFromArgs(args ethTypes.TransactionArgs) (*types.DynamicFeeTx, error) {
+func encodeTxFromArgs(args ethTypes.TransactionArgs) (*types.LegacyTx, error) {
 	var data []byte
 	if args.Data != nil {
 		data = *args.Data
@@ -156,19 +156,12 @@ func encodeTxFromArgs(args ethTypes.TransactionArgs) (*types.DynamicFeeTx, error
 		value = args.Value.ToInt()
 	}
 
-	accessList := types.AccessList{}
-	if args.AccessList != nil {
-		accessList = *args.AccessList
-	}
-
-	return &types.DynamicFeeTx{
-		Nonce:      0,
-		To:         args.To,
-		Value:      value,
-		Gas:        gasLimit,
-		Data:       data,
-		GasTipCap:  (*big.Int)(args.MaxPriorityFeePerGas),
-		GasFeeCap:  (*big.Int)(args.MaxFeePerGas),
-		AccessList: accessList,
+	return &types.LegacyTx{
+		Nonce:    0,
+		To:       args.To,
+		Value:    value,
+		Gas:      gasLimit,
+		GasPrice: big.NewInt(0),
+		Data:     data,
 	}, nil
 }
