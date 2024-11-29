@@ -19,10 +19,10 @@ import (
 
 type WalletAPI struct {
 	net    *BlockChainAPI
-	config *config.Config
+	config config.Config
 }
 
-func NewWalletAPI(config *config.Config, net *BlockChainAPI) *WalletAPI {
+func NewWalletAPI(config config.Config, net *BlockChainAPI) *WalletAPI {
 	return &WalletAPI{
 		net:    net,
 		config: config,

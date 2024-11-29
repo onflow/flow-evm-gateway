@@ -244,7 +244,7 @@ func parseConfigFromFlags() error {
 	return nil
 }
 
-var cfg = &config.Config{}
+var cfg = config.Config{}
 var (
 	coinbase,
 	gas,

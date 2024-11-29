@@ -109,7 +109,7 @@ func SupportedAPIs(
 	pullAPI *PullAPI,
 	debugAPI *DebugAPI,
 	walletAPI *WalletAPI,
-	config *config.Config,
+	config config.Config,
 ) []rpc.API {
 	apis := []rpc.API{{
 		Namespace: "eth",
@@ -151,7 +151,7 @@ func SupportedAPIs(
 
 type BlockChainAPI struct {
 	logger                zerolog.Logger
-	config                *config.Config
+	config                config.Config
 	evm                   requester.Requester
 	blocks                storage.BlockIndexer
 	transactions          storage.TransactionIndexer
@@ -163,7 +163,7 @@ type BlockChainAPI struct {
 
 func NewBlockChainAPI(
 	logger zerolog.Logger,
-	config *config.Config,
+	config config.Config,
 	evm requester.Requester,
 	blocks storage.BlockIndexer,
 	transactions storage.TransactionIndexer,
