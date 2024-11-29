@@ -59,7 +59,7 @@ func Test_ConcurrentTransactionSubmission(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	cfg := &config.Config{
+	cfg := config.Config{
 		DatabaseDir:       t.TempDir(),
 		AccessNodeHost:    grpcHost,
 		RPCPort:           8545,
@@ -165,7 +165,7 @@ func Test_EthClientTest(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	cfg := &config.Config{
+	cfg := config.Config{
 		DatabaseDir:       t.TempDir(),
 		AccessNodeHost:    grpcHost,
 		RPCPort:           8545,
@@ -268,7 +268,7 @@ func Test_CloudKMSConcurrentTransactionSubmission(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	cfg := &config.Config{
+	cfg := config.Config{
 		DatabaseDir:       t.TempDir(),
 		AccessNodeHost:    grpcHost,
 		RPCPort:           8545,

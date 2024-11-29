@@ -51,7 +51,7 @@ type Publishers struct {
 
 type Bootstrap struct {
 	logger     zerolog.Logger
-	config     *config.Config
+	config     config.Config
 	client     *requester.CrossSporkClient
 	storages   *Storages
 	publishers *Publishers
@@ -63,7 +63,7 @@ type Bootstrap struct {
 	db         *pebbleDB.DB
 }
 
-func New(config *config.Config) (*Bootstrap, error) {
+func New(config config.Config) (*Bootstrap, error) {
 	logger := zerolog.New(config.LogWriter).
 		With().Timestamp().Str("version", api.Version).
 		Logger().Level(config.LogLevel)
@@ -432,7 +432,7 @@ func StartEngine(
 }
 
 // setupCrossSporkClient sets up a cross-spork AN client.
-func setupCrossSporkClient(config *config.Config, logger zerolog.Logger) (*requester.CrossSporkClient, error) {
+func setupCrossSporkClient(config config.Config, logger zerolog.Logger) (*requester.CrossSporkClient, error) {
 	// create access client with cross-spork capabilities
 	currentSporkClient, err := grpc.NewClient(
 		config.AccessNodeHost,
@@ -474,7 +474,7 @@ func setupCrossSporkClient(config *config.Config, logger zerolog.Logger) (*reque
 // setupStorage creates storage and initializes it with configured starting cadence height
 // in case such a height doesn't already exist in the database.
 func setupStorage(
-	config *config.Config,
+	config config.Config,
 	client *requester.CrossSporkClient,
 	logger zerolog.Logger,
 ) (*pebbleDB.DB, *Storages, error) {
@@ -571,7 +571,7 @@ func setupStorage(
 // Run will run complete bootstrap of the EVM gateway with all the engines.
 // Run is a blocking call, but it does signal readiness of the service
 // through a channel provided as an argument.
-func Run(ctx context.Context, cfg *config.Config, ready component.ReadyFunc) error {
+func Run(ctx context.Context, cfg config.Config, ready component.ReadyFunc) error {
 	boot, err := New(cfg)
 	if err != nil {
 		return err

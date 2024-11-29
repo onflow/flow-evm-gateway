@@ -98,7 +98,7 @@ type EVM struct {
 	registerStore  *pebble.RegisterStorage
 	blocksProvider *replayer.BlocksProvider
 	client         *CrossSporkClient
-	config         *config.Config
+	config         config.Config
 	signer         crypto.Signer
 	txPool         *TxPool
 	logger         zerolog.Logger
@@ -116,7 +116,7 @@ func NewEVM(
 	registerStore *pebble.RegisterStorage,
 	blocksProvider *replayer.BlocksProvider,
 	client *CrossSporkClient,
-	config *config.Config,
+	config config.Config,
 	signer crypto.Signer,
 	logger zerolog.Logger,
 	blocks storage.BlockIndexer,

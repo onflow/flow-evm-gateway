@@ -129,7 +129,7 @@ func newLogsFilter(
 
 type PullAPI struct {
 	logger       zerolog.Logger
-	config       *config.Config
+	config       config.Config
 	blocks       storage.BlockIndexer
 	transactions storage.TransactionIndexer
 	receipts     storage.ReceiptIndexer
@@ -140,7 +140,7 @@ type PullAPI struct {
 
 func NewPullAPI(
 	logger zerolog.Logger,
-	config *config.Config,
+	config config.Config,
 	blocks storage.BlockIndexer,
 	transactions storage.TransactionIndexer,
 	receipts storage.ReceiptIndexer,
