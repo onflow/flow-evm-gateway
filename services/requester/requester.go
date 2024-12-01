@@ -370,7 +370,7 @@ func (e *EVM) EstimateGas(
 	}
 	tx.Gas = passingGasLimit
 	// We first execute the transaction at the highest allowable gas limit,
-	// since if this fails we can return error immediately.
+	// since if this fails we can return the error immediately.
 	result, err := e.dryRunTx(tx, from, height, stateOverrides)
 	if err != nil {
 		return 0, err
@@ -402,8 +402,7 @@ func (e *EVM) EstimateGas(
 			// transaction had run without error at least once before.
 			return 0, err
 		}
-		resultSummary := result.ResultSummary()
-		if resultSummary.ErrorCode == evmTypes.ExecutionErrCodeOutOfGas {
+		if result.Failed() {
 			failingGasLimit = optimisticGasLimit
 		} else {
 			passingGasLimit = optimisticGasLimit
@@ -431,8 +430,7 @@ func (e *EVM) EstimateGas(
 		if err != nil {
 			return 0, err
 		}
-		resultSummary := result.ResultSummary()
-		if resultSummary.ErrorCode == evmTypes.ExecutionErrCodeOutOfGas {
+		if result.Failed() {
 			failingGasLimit = mid
 		} else {
 			passingGasLimit = mid
