@@ -175,11 +175,19 @@ func (d *DebugAPI) TraceCall(
 		return nil, err
 	}
 
-	blocksProvider := replayer.NewBlocksProvider(
+	blocksProvider := requester.NewBlocksProvider(
 		d.blocks,
 		d.config.FlowNetworkID,
-		tracer,
 	)
+	blocksProvider.SetTracer(tracer)
+	if config.BlockOverrides != nil {
+		blocksProvider.SetBlockOverrides(&ethTypes.BlockOverrides{
+			Number:   config.BlockOverrides.Number,
+			Time:     config.BlockOverrides.Time,
+			Coinbase: config.BlockOverrides.Coinbase,
+			Random:   config.BlockOverrides.Random,
+		})
+	}
 	viewProvider := query.NewViewProvider(
 		d.config.FlowNetworkID,
 		flowEVM.StorageAccountAddress(d.config.FlowNetworkID),

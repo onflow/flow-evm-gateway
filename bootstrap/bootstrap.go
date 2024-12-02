@@ -208,10 +208,9 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 		b.config,
 	)
 
-	blocksProvider := replayer.NewBlocksProvider(
+	blocksProvider := requester.NewBlocksProvider(
 		b.storages.Blocks,
 		b.config.FlowNetworkID,
-		nil,
 	)
 
 	accountKeys := make([]*requester.AccountKey, 0)
