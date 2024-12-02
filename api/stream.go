@@ -21,7 +21,7 @@ import (
 
 type StreamAPI struct {
 	logger                zerolog.Logger
-	config                *config.Config
+	config                config.Config
 	blocks                storage.BlockIndexer
 	transactions          storage.TransactionIndexer
 	receipts              storage.ReceiptIndexer
@@ -32,7 +32,7 @@ type StreamAPI struct {
 
 func NewStreamAPI(
 	logger zerolog.Logger,
-	config *config.Config,
+	config config.Config,
 	blocks storage.BlockIndexer,
 	transactions storage.TransactionIndexer,
 	receipts storage.ReceiptIndexer,
