@@ -17,6 +17,7 @@ import (
 	"github.com/onflow/flow-go/fvm/evm/offchain/query"
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/go-ethereum/common"
+	gethCore "github.com/onflow/go-ethereum/core"
 	"github.com/onflow/go-ethereum/core/txpool"
 	"github.com/onflow/go-ethereum/core/types"
 	"github.com/rs/zerolog"
@@ -201,6 +202,12 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 		return common.Hash{}, errs.NewTxGasPriceTooLowError(e.config.GasPrice)
 	}
 
+	if e.config.TxStateValidation == config.LocalIndexValidation {
+		if err := e.validateTransactionWithState(tx, from); err != nil {
+			return common.Hash{}, err
+		}
+	}
+
 	txData := hex.EncodeToString(data)
 	hexEncodedTx, err := cadence.NewString(txData)
 	if err != nil {
@@ -237,57 +244,6 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 		Msg("raw transaction sent")
 
 	return tx.Hash(), nil
-}
-
-// buildTransaction creates a flow transaction from the provided script with the arguments
-// and signs it with the configured COA account.
-func (e *EVM) buildTransaction(ctx context.Context, script []byte, args ...cadence.Value) (*flow.Transaction, error) {
-	// building and signing transactions should be blocking, so we don't have keys conflict
-	e.mux.Lock()
-	defer e.mux.Unlock()
-
-	var (
-		g           = errgroup.Group{}
-		err1, err2  error
-		latestBlock *flow.Block
-		index       uint32
-		seqNum      uint64
-	)
-	// execute concurrently so we can speed up all the information we need for tx
-	g.Go(func() error {
-		latestBlock, err1 = e.client.GetLatestBlock(ctx, true)
-		return err1
-	})
-	g.Go(func() error {
-		index, seqNum, err2 = e.getSignerNetworkInfo(ctx)
-		return err2
-	})
-	if err := g.Wait(); err != nil {
-		return nil, err
-	}
-
-	address := e.config.COAAddress
-	flowTx := flow.NewTransaction().
-		SetScript(script).
-		SetProposalKey(address, index, seqNum).
-		SetReferenceBlockID(latestBlock.ID).
-		SetPayer(address)
-
-	for _, arg := range args {
-		if err := flowTx.AddArgument(arg); err != nil {
-			return nil, fmt.Errorf("failed to add argument: %s, with %w", arg, err)
-		}
-	}
-
-	if err := flowTx.SignEnvelope(address, index, e.signer); err != nil {
-		return nil, fmt.Errorf(
-			"failed to sign transaction envelope for address: %s and index: %d, with: %w",
-			address,
-			index,
-			err)
-	}
-
-	return flowTx, nil
 }
 
 func (e *EVM) GetBalance(
@@ -597,7 +553,104 @@ func (e *EVM) dryRunTx(
 	return result, nil
 }
 
-func AddOne64th(n uint64) uint64 {
-	// NOTE: Go's integer division floors, but that is desirable here
-	return n + (n / 64)
+// buildTransaction creates a flow transaction from the provided script with the arguments
+// and signs it with the configured COA account.
+func (e *EVM) buildTransaction(ctx context.Context, script []byte, args ...cadence.Value) (*flow.Transaction, error) {
+	// building and signing transactions should be blocking, so we don't have keys conflict
+	e.mux.Lock()
+	defer e.mux.Unlock()
+
+	var (
+		g           = errgroup.Group{}
+		err1, err2  error
+		latestBlock *flow.Block
+		index       uint32
+		seqNum      uint64
+	)
+	// execute concurrently so we can speed up all the information we need for tx
+	g.Go(func() error {
+		latestBlock, err1 = e.client.GetLatestBlock(ctx, true)
+		return err1
+	})
+	g.Go(func() error {
+		index, seqNum, err2 = e.getSignerNetworkInfo(ctx)
+		return err2
+	})
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+
+	address := e.config.COAAddress
+	flowTx := flow.NewTransaction().
+		SetScript(script).
+		SetProposalKey(address, index, seqNum).
+		SetReferenceBlockID(latestBlock.ID).
+		SetPayer(address)
+
+	for _, arg := range args {
+		if err := flowTx.AddArgument(arg); err != nil {
+			return nil, fmt.Errorf("failed to add argument: %s, with %w", arg, err)
+		}
+	}
+
+	if err := flowTx.SignEnvelope(address, index, e.signer); err != nil {
+		return nil, fmt.Errorf(
+			"failed to sign transaction envelope for address: %s and index: %d, with: %w",
+			address,
+			index,
+			err)
+	}
+
+	return flowTx, nil
+}
+
+// validateTransactionWithState checks if the given tx has the correct
+// nonce & balance, according to the local state.
+func (e *EVM) validateTransactionWithState(
+	tx *types.Transaction,
+	from common.Address,
+) error {
+	height, err := e.blocks.LatestEVMHeight()
+	if err != nil {
+		return err
+	}
+	view, err := e.getBlockView(height)
+	if err != nil {
+		return err
+	}
+
+	nonce, err := view.GetNonce(from)
+	if err != nil {
+		return err
+	}
+
+	// Ensure the transaction adheres to nonce ordering
+	if tx.Nonce() < nonce {
+		return fmt.Errorf(
+			"%w: address %s, tx: %v, state: %v",
+			gethCore.ErrNonceTooLow,
+			from,
+			tx.Nonce(),
+			nonce,
+		)
+	}
+
+	// Ensure the transactor has enough funds to cover the transaction costs
+	cost := tx.Cost()
+	balance, err := view.GetBalance(from)
+	if err != nil {
+		return err
+	}
+
+	if balance.Cmp(cost) < 0 {
+		return fmt.Errorf(
+			"%w: balance %v, tx cost %v, overshot %v",
+			gethCore.ErrInsufficientFunds,
+			balance,
+			cost,
+			new(big.Int).Sub(cost, balance),
+		)
+	}
+
+	return nil
 }

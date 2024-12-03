@@ -12,6 +12,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-retry"
 
+	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/models"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
 )
@@ -30,6 +31,7 @@ type TxPool struct {
 	client      *CrossSporkClient
 	pool        *sync.Map
 	txPublisher *models.Publisher[*gethTypes.Transaction]
+	config      config.Config
 	// todo add methods to inspect transaction pool state
 }
 
@@ -37,12 +39,14 @@ func NewTxPool(
 	client *CrossSporkClient,
 	transactionsPublisher *models.Publisher[*gethTypes.Transaction],
 	logger zerolog.Logger,
+	config config.Config,
 ) *TxPool {
 	return &TxPool{
 		logger:      logger.With().Str("component", "tx-pool").Logger(),
 		client:      client,
 		txPublisher: transactionsPublisher,
 		pool:        &sync.Map{},
+		config:      config,
 	}
 }
 
@@ -61,37 +65,41 @@ func (t *TxPool) Send(
 		return err
 	}
 
-	// add to pool and delete after transaction is sealed or errored out
-	t.pool.Store(evmTx.Hash(), evmTx)
-	defer t.pool.Delete(evmTx.Hash())
+	if t.config.TxStateValidation == config.TxSealValidation {
+		// add to pool and delete after transaction is sealed or errored out
+		t.pool.Store(evmTx.Hash(), evmTx)
+		defer t.pool.Delete(evmTx.Hash())
 
-	backoff := retry.WithMaxDuration(time.Minute*1, retry.NewConstant(time.Second*1))
-	return retry.Do(ctx, backoff, func(ctx context.Context) error {
-		res, err := t.client.GetTransactionResult(ctx, flowTx.ID())
-		if err != nil {
-			return fmt.Errorf("failed to retrieve flow transaction result %s: %w", flowTx.ID(), err)
-		}
-		// retry until transaction is sealed
-		if res.Status < flow.TransactionStatusSealed {
-			return retry.RetryableError(fmt.Errorf("transaction %s not sealed", flowTx.ID()))
-		}
-
-		if res.Error != nil {
-			if err, ok := parseInvalidError(res.Error); ok {
-				return err
+		backoff := retry.WithMaxDuration(time.Minute*1, retry.NewConstant(time.Second*1))
+		return retry.Do(ctx, backoff, func(ctx context.Context) error {
+			res, err := t.client.GetTransactionResult(ctx, flowTx.ID())
+			if err != nil {
+				return fmt.Errorf("failed to retrieve flow transaction result %s: %w", flowTx.ID(), err)
+			}
+			// retry until transaction is sealed
+			if res.Status < flow.TransactionStatusSealed {
+				return retry.RetryableError(fmt.Errorf("transaction %s not sealed", flowTx.ID()))
 			}
 
-			t.logger.Error().Err(res.Error).
-				Str("flow-id", flowTx.ID().String()).
-				Str("evm-id", evmTx.Hash().Hex()).
-				Msg("flow transaction error")
+			if res.Error != nil {
+				if err, ok := parseInvalidError(res.Error); ok {
+					return err
+				}
 
-			// hide specific cause since it's an implementation issue
-			return fmt.Errorf("failed to submit flow evm transaction %s", evmTx.Hash())
-		}
+				t.logger.Error().Err(res.Error).
+					Str("flow-id", flowTx.ID().String()).
+					Str("evm-id", evmTx.Hash().Hex()).
+					Msg("flow transaction error")
 
-		return nil
-	})
+				// hide specific cause since it's an implementation issue
+				return fmt.Errorf("failed to submit flow evm transaction %s", evmTx.Hash())
+			}
+
+			return nil
+		})
+	}
+
+	return nil
 }
 
 // this will extract the evm specific error from the Flow transaction error message
