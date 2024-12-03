@@ -57,7 +57,8 @@ start-local:
 		--gas-price=0 \
 		--log-writer=console \
 		--profiler-enabled=true \
-		--profiler-port=6060
+		--profiler-port=6060 \
+		--tx-state-validation=local-index
 
 # Use this after running `make build`, to test out the binary
 .PHONY: start-local-bin
@@ -73,4 +74,5 @@ start-local-bin:
 		--gas-price=0 \
 		--log-writer=console \
 		--profiler-enabled=true \
-		--profiler-port=6060
+		--profiler-port=6060 \
+		--tx-state-validation=local-index
