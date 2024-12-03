@@ -241,6 +241,14 @@ func parseConfigFromFlags() error {
 		log.Warn().Msg("wallet API is enabled. Ensure this is not used in production environments.")
 	}
 
+	if txStateValidation == config.LocalIndexValidation {
+		cfg.TxStateValidation = config.LocalIndexValidation
+	} else if txStateValidation == config.TxSealValidation {
+		cfg.TxStateValidation = config.TxSealValidation
+	} else {
+		return fmt.Errorf("unknown tx state validation: %s", txStateValidation)
+	}
+
 	return nil
 }
 
@@ -261,7 +269,8 @@ var (
 	cloudKMSProjectID,
 	cloudKMSLocationID,
 	cloudKMSKeyRingID,
-	walletKey string
+	walletKey,
+	txStateValidation string
 
 	streamTimeout int
 
@@ -303,4 +312,5 @@ func init() {
 	Cmd.Flags().BoolVar(&cfg.ProfilerEnabled, "profiler-enabled", false, "Run the profiler server to capture pprof data.")
 	Cmd.Flags().StringVar(&cfg.ProfilerHost, "profiler-host", "localhost", "Host for the Profiler server")
 	Cmd.Flags().IntVar(&cfg.ProfilerPort, "profiler-port", 6060, "Port for the Profiler server")
+	Cmd.Flags().StringVar(&txStateValidation, "tx-state-validation", "tx-seal", "Sets the transaction validation mechanism. It can validate using the local state index, or wait for the outer Flow transaction to seal. Available values ('local-index' / 'tx-seal'), defaults to 'tx-seal'.")
 }

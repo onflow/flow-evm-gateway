@@ -27,7 +27,8 @@ EMULATOR_ARGS := --flow-network-id=flow-emulator \
 		--log-writer=console \
 		--tx-state-validation=local-index \
 		--profiler-enabled=true \
-		--profiler-port=6060
+		--profiler-port=6060 \
+		--tx-state-validation=local-index
 
 # Set VERSION from command line, environment, or default to SHORT_COMMIT
 VERSION ?= ${SHORT_COMMIT}
