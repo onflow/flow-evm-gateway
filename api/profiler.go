@@ -7,15 +7,23 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"strconv"
+	"time"
+
+	"github.com/onflow/flow-go/module/component"
+	"github.com/onflow/flow-go/module/irrecoverable"
 
 	"github.com/rs/zerolog"
 )
 
 type ProfileServer struct {
-	logger   zerolog.Logger
+	log      zerolog.Logger
 	server   *http.Server
 	endpoint string
+
+	startupCompleted chan struct{}
 }
+
+var _ component.Component = (*ProfileServer)(nil)
 
 func NewProfileServer(
 	logger zerolog.Logger,
@@ -24,37 +32,69 @@ func NewProfileServer(
 ) *ProfileServer {
 	endpoint := net.JoinHostPort(host, strconv.Itoa(port))
 	return &ProfileServer{
-		logger:   logger,
-		server:   &http.Server{Addr: endpoint},
-		endpoint: endpoint,
+		log:              logger,
+		server:           &http.Server{Addr: endpoint},
+		endpoint:         endpoint,
+		startupCompleted: make(chan struct{}),
 	}
 }
 
-func (s *ProfileServer) ListenAddr() string {
-	return s.endpoint
-}
+func (s *ProfileServer) Start(ctx irrecoverable.SignalerContext) {
+	defer close(s.startupCompleted)
 
-func (s *ProfileServer) Start() {
+	s.server.BaseContext = func(_ net.Listener) context.Context {
+		return ctx
+	}
+
 	go func() {
-		err := s.server.ListenAndServe()
-		if err != nil {
+		s.log.Info().Msgf("Profiler server started: %s", s.endpoint)
+
+		if err := s.server.ListenAndServe(); err != nil {
+			// http.ErrServerClosed is returned when Close or Shutdown is called
+			// we don't consider this an error, so print this with debug level instead
 			if errors.Is(err, http.ErrServerClosed) {
-				s.logger.Warn().Msg("Profiler server shutdown")
-				return
+				s.log.Debug().Err(err).Msg("Profiler server shutdown")
+			} else {
+				s.log.Err(err).Msg("error running profiler server")
 			}
-			s.logger.Err(err).Msg("failed to start Profiler server")
-			panic(err)
 		}
 	}()
 }
 
-func (s *ProfileServer) Stop() error {
-	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
-	defer cancel()
+func (s *ProfileServer) Ready() <-chan struct{} {
+	ready := make(chan struct{})
 
-	return s.server.Shutdown(ctx)
+	go func() {
+		<-s.startupCompleted
+		close(ready)
+	}()
+
+	return ready
 }
 
-func (s *ProfileServer) Close() error {
-	return s.server.Close()
+func (s *ProfileServer) Done() <-chan struct{} {
+	done := make(chan struct{})
+	go func() {
+		<-s.startupCompleted
+		defer close(done)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		err := s.server.Shutdown(ctx)
+		if err == nil {
+			s.log.Info().Msg("Profiler server graceful shutdown completed")
+		}
+
+		if errors.Is(err, ctx.Err()) {
+			s.log.Warn().Msg("Profiler server graceful shutdown timed out")
+			err := s.server.Close()
+			if err != nil {
+				s.log.Err(err).Msg("error closing profiler server")
+			}
+		} else {
+			s.log.Err(err).Msg("error shutting down profiler server")
+		}
+	}()
+	return done
 }
