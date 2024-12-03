@@ -211,6 +211,7 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 		b.client,
 		b.publishers.Transaction,
 		b.logger,
+		b.config,
 	)
 
 	blocksProvider := replayer.NewBlocksProvider(
