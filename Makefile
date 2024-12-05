@@ -47,7 +47,7 @@ check-tidy:
 
 .PHONY: build
 build:
-	CGO_ENABLED=1 go build -o flow-evm-gateway -ldflags="-X github.com/onflow/flow-evm-gateway/api.Version=$(shell git describe --tags --abbrev=0 2>/dev/null || echo 'unknown')" cmd/main.go
+	CGO_ENABLED=1 go build -o flow-evm-gateway -ldflags="-X github.com/onflow/flow-evm-gateway/api.Version=$(IMAGE_TAG)" cmd/main.go
 	chmod a+x flow-evm-gateway
 
 .PHONY: fix-lint
@@ -110,9 +110,9 @@ start-local-bin:
 .PHONY: docker-build
 docker-build:
 	git fetch --tags
-	git checkout ${IMAGE_TAG}
-	docker build -f Dockerfile -t "$(CONTAINER_REGISTRY)/evm-gateway:${IMAGE_TAG}" -t "$(CONTAINER_REGISTRY)/evm-gateway:$(IMAGE_TAG)" \
-		--label "git_commit=${COMMIT}" --label "git_tag=${IMAGE_TAG}" .
+	git checkout $(IMAGE_TAG)
+	docker build -f Dockerfile -t "$(CONTAINER_REGISTRY)/evm-gateway:$(IMAGE_TAG)" \
+		--label "git_commit=$(COMMIT)" --label "git_tag=$(IMAGE_TAG)" --build-arg VERSION="$(VERSION)".
 
 # Run GW image
 # -----
@@ -120,6 +120,6 @@ docker-build:
 # https://github.com/onflow/flow-evm-gateway?tab=readme-ov-file#configuration-flags
 .PHONY: docker-run
 docker-run:
-	docker run --access-node-grpc-host=$ACCESS_NODE_GRPC_HOST --flow-network-id=$FLOW_NETWORK_ID \
-		--init-cadence-height=$INIT_CADENCE_HEIGHT --ws-enabled=true --coinbase=$COINBASE --coa-address=$COA_ADDRESS \
-		--coa-key=$COA_KEY --rate-limit=9999999 --rpc-host=0.0.0.0
+	docker run --access-node-grpc-host=$(ACCESS_NODE_GRPC_HOST) --flow-network-id=$(FLOW_NETWORK_ID) \
+		--init-cadence-height=$(INIT_CADENCE_HEIGHT) --ws-enabled=true --coinbase=$(COINBASE) --coa-address=$(COA_ADDRESS) \
+		--coa-key=$(COA_KEY) --rate-limit=9999999 --rpc-host=0.0.0.0

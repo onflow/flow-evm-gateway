@@ -12,8 +12,10 @@ COPY . ./
 RUN go mod download
 RUN go mod verify
 
+ARG VERSION
+
 # Build binary
-RUN CGO_ENABLED=1 go build -o bin cmd/main.go
+RUN CGO_ENABLED=1 go build -o bin -ldflags="-X github.com/onflow/flow-evm-gateway/api.Version=$VERSION" cmd/main.go
 RUN chmod a+x bin
 
 # RUN APP
