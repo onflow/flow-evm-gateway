@@ -248,7 +248,7 @@ func (e *Engine) indexEvents(events *models.CadenceEvents, batch *pebbleDB.Batch
 	// Step 1.2: Replay all block transactions
 	// If `ReplayBlock` returns any error, we abort the EVM events processing
 	blockEvents := events.BlockEventPayload()
-	res, _, err := replayer.ReplayBlock(events.TxEventPayloads(), blockEvents)
+	res, err := replayer.ReplayBlock(events.TxEventPayloads(), blockEvents)
 	if err != nil {
 		return fmt.Errorf("failed to replay block on height: %d, with: %w", events.Block().Height, err)
 	}
