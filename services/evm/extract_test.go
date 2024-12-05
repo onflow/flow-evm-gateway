@@ -30,8 +30,9 @@ func extractEVMState(
 	t *testing.T, chainID flowGo.ChainID,
 	registerStoreDir string, evmHeight uint64) *state.EVMState {
 
-	store, err := pebble.New(registerStoreDir, log.Logger)
+	pebbleDB, err := pebble.OpenDB(registerStoreDir)
 	require.NoError(t, err)
+	store := pebble.New(pebbleDB, log.Logger)
 
 	evmState, err := evmState.ExtractEVMState(chainID, evmHeight, store)
 	require.NoError(t, err)
