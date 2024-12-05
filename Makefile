@@ -109,10 +109,8 @@ start-local-bin:
 # Build docker image
 .PHONY: docker-build
 docker-build:
-	git fetch --tags
-	git checkout $(IMAGE_TAG)
-	docker build -f Dockerfile -t "$(CONTAINER_REGISTRY)/evm-gateway:$(IMAGE_TAG)" \
-		--label "git_commit=$(COMMIT)" --label "git_tag=$(IMAGE_TAG)" --build-arg VERSION="$(VERSION)".
+	docker build --build-arg VERSION="$(VERSION)" -f Dockerfile -t "$(CONTAINER_REGISTRY)/evm-gateway:$(IMAGE_TAG)" \
+		--label "git_commit=$(COMMIT)" --label "git_tag=$(IMAGE_TAG)" .
 
 # Run GW image
 # -----
