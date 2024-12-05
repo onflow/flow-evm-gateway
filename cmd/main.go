@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/onflow/flow-evm-gateway/cmd/export-evm-state"
+	"github.com/onflow/flow-evm-gateway/cmd/export"
 	"github.com/onflow/flow-evm-gateway/cmd/run"
 	"github.com/onflow/flow-evm-gateway/cmd/version"
 	"github.com/rs/zerolog/log"
