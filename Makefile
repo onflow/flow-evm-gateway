@@ -118,6 +118,6 @@ docker-build:
 # Uses ENV variables to configure below
 .PHONY: docker-run
 docker-run:
-	docker run "$(CONTAINER_REGISTRY)/evm-gateway:$(IMAGE_TAG)" --access-node-grpc-host=$(ACCESS_NODE_GRPC_HOST) --flow-network-id=$(FLOW_NETWORK_ID) \
+	docker run -d "$(CONTAINER_REGISTRY)/evm-gateway:$(IMAGE_TAG)" --access-node-grpc-host=$(ACCESS_NODE_GRPC_HOST) --flow-network-id=$(FLOW_NETWORK_ID) \
 		--init-cadence-height=$(INIT_CADENCE_HEIGHT) --ws-enabled=true --coinbase=$(COINBASE) --coa-address=$(COA_ADDRESS) \
 		--coa-key=$(COA_KEY) --rate-limit=9999999 --rpc-host=0.0.0.0
