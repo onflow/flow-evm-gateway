@@ -4,7 +4,7 @@ BRANCH_NAME:=$(shell git rev-parse --abbrev-ref HEAD | tr '/' '-')
 # The Git commit hash
 COMMIT := $(shell git rev-parse HEAD)
 # The tag of the current commit, otherwise empty
-VERSION := $(shell git describe --tags --abbrev=2 --match "v*" --match "secure-cadence*" 2>/dev/null)
+VERSION := $(shell git describe --tags --abbrev=2 2>/dev/null)
 
 # Image tag: if image tag is not set, set it with version (or short commit if empty)
 ifeq (${IMAGE_TAG},)
