@@ -1,3 +1,24 @@
+# The short Git commit hash
+SHORT_COMMIT := $(shell git rev-parse --short HEAD)
+BRANCH_NAME:=$(shell git rev-parse --abbrev-ref HEAD | tr '/' '-')
+# The Git commit hash
+COMMIT := $(shell git rev-parse HEAD)
+# The tag of the current commit, otherwise empty
+VERSION := $(shell git describe --tags --abbrev=2 --match "v*" --match "secure-cadence*" 2>/dev/null)
+
+# Image tag: if image tag is not set, set it with version (or short commit if empty)
+ifeq (${IMAGE_TAG},)
+IMAGE_TAG := ${VERSION}
+endif
+
+ifeq (${IMAGE_TAG},)
+IMAGE_TAG := ${SHORT_COMMIT}
+endif
+
+# docker container registry
+export CONTAINER_REGISTRY := gcr.io/flow-container-registry
+export DOCKER_BUILDKIT := 1
+
 .PHONY: test
 test:
 	# test all packages
@@ -78,3 +99,21 @@ start-local-bin:
 		--log-writer=console \
 		--profiler-enabled=true \
 		--profiler-port=6060
+
+# Build docker image
+.PHONY: docker-build
+docker-build:
+	git fetch --tags
+	git checkout ${IMAGE_TAG}
+	docker build -f Dockerfile -t "$(CONTAINER_REGISTRY)/evm-gateway:${IMAGE_TAG}" -t "$(CONTAINER_REGISTRY)/evm-gateway:$(IMAGE_TAG)" \
+		--label "git_commit=${COMMIT}" --label "git_tag=${IMAGE_TAG}" .
+
+# Run GW image
+# -----
+# Add/change required configs as needed
+# https://github.com/onflow/flow-evm-gateway?tab=readme-ov-file#configuration-flags
+.PHONY: docker-run
+docker-run:
+	docker run --access-node-grpc-host=$ACCESS_NODE_GRPC_HOST --flow-network-id=$FLOW_NETWORK_ID \
+		--init-cadence-height=$INIT_CADENCE_HEIGHT --ws-enabled=true --coinbase=$COINBASE --coa-address=$COA_ADDRESS \
+		--coa-key=$COA_KEY --rate-limit=9999999 --rpc-host=0.0.0.0
