@@ -91,14 +91,21 @@ need funded accounts for interacting with EVM._
 
 **With Docker**
 
-Run the following commands:
+Use the Makefile targets below with the provided ENV variables to build and run a docker image
 
 ```bash
-cd dev
+FLOW_NETWORK_ID=[flow-testnet | flow-mainnet]
+ACCESS_NODE_GRPC_HOST=
+INIT_CADENCE_HEIGHT=211176670 
+COA_ADDRESS=
+COA_KEY=
+COINBASE=
+```
 
-docker build -t onflow/flow-evm-gateway .
+```bash
+make docker-build
 
-docker run -d -p 127.0.0.1:8545:8545 onflow/flow-evm-gateway
+make docker-run
 ```
 
 **Verify**
