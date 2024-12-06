@@ -2,6 +2,7 @@ package pebble
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 
 	"github.com/cockroachdb/pebble"
@@ -113,9 +114,14 @@ func (r *Receipts) GetByBlockHeight(height uint64) ([]*models.Receipt, error) {
 }
 
 func (r *Receipts) getByBlockHeight(height []byte) ([]*models.Receipt, error) {
-
 	val, err := r.store.get(receiptHeightKey, height)
 	if err != nil {
+		// For empty blocks, we do not store transactions & receipts. So when
+		// we encounter an `ErrEntityNotFound`, we should return an empty
+		// Receipts array, instead of an error.
+		if errors.Is(err, errs.ErrEntityNotFound) {
+			return []*models.Receipt{}, nil
+		}
 		return nil, err
 	}
 

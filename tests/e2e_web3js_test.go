@@ -89,7 +89,23 @@ func TestWeb3_E2E(t *testing.T) {
 	})
 
 	t.Run("logs emitting and filtering", func(t *testing.T) {
-		runWeb3Test(t, "eth_logs_filtering_test")
+		runWeb3TestWithSetup(t, "eth_logs_filtering_test", func(emu emulator.Emulator) {
+			// Run an arbitrary transaction, to form an empty EVM block
+			// through the system chunk transaction. This is needed
+			// to emulate the `eth_getLogs` by passing the block hash
+			// of a block without EVM transactions/receipts.
+			res, err := flowSendTransaction(
+				emu,
+				`transaction() {
+					prepare(signer: auth(Storage) &Account) {
+						let currentBlock = getCurrentBlock()
+						assert(currentBlock.height > 0, message: "current block is zero")
+					}
+				}`,
+			)
+			require.NoError(t, err)
+			require.NoError(t, res.Error)
+		})
 	})
 
 	t.Run("test filter-related endpoints", func(t *testing.T) {

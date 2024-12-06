@@ -673,6 +673,16 @@ func (b *BlockChainAPI) GetLogs(
 
 	// if filter provided specific block ID
 	if criteria.BlockHash != nil {
+		// Check if the block exists, and return an error if not.
+		block, err := b.blocks.GetByID(*criteria.BlockHash)
+		if err != nil {
+			return nil, err
+		}
+		// If the block has no transactions, we can simply return an empty Logs array.
+		if len(block.TransactionHashes) == 0 {
+			return []*types.Log{}, nil
+		}
+
 		f, err := logs.NewIDFilter(*criteria.BlockHash, filter, b.blocks, b.receipts)
 		if err != nil {
 			return handleError[[]*types.Log](err, l, b.collector)
@@ -687,7 +697,6 @@ func (b *BlockChainAPI) GetLogs(
 	}
 
 	// otherwise we use the block range as the filter
-
 	// assign default values to latest block number, unless provided
 	from := models.LatestBlockNumber
 	if criteria.FromBlock != nil {
