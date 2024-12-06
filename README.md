@@ -91,7 +91,7 @@ need funded accounts for interacting with EVM._
 
 **With Docker**
 
-Use the Makefile targets below with the provided ENV variables to build and run a docker image
+Set the following ENV variables 
 
 ```bash
 FLOW_NETWORK_ID=[flow-testnet | flow-mainnet]
@@ -102,6 +102,7 @@ COA_KEY=
 COINBASE=
 ```
 
+Use the Makefile targets below
 ```bash
 make docker-build
 
