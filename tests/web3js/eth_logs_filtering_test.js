@@ -117,7 +117,7 @@ it('emit logs and retrieve them using different filters', async () => {
     latestBlockNumber = await web3.eth.getBlockNumber()
     latestBlock = await web3.eth.getBlock(latestBlockNumber)
 
-    filterCriteria = {
+    blockHashFilter = {
         blockHash: latestBlock.hash,
         address: [contractAddress],
         topics: [
@@ -127,7 +127,7 @@ it('emit logs and retrieve them using different filters', async () => {
             '0x0000000000000000000000000000000000000000000000000000000000000190'
         ]
     }
-    response = await helpers.callRPCMethod('eth_getLogs', [filterCriteria])
+    response = await helpers.callRPCMethod('eth_getLogs', [blockHashFilter])
     assert.equal(response.status, 200)
     assert.isDefined(response.body)
     assert.deepEqual(
@@ -152,7 +152,7 @@ it('emit logs and retrieve them using different filters', async () => {
         ]
     )
 
-    blockRangeCriteria = {
+    blockRangeFilter = {
         fromBlock: web3.utils.numberToHex(latestBlock.number),
         toBlock: web3.utils.numberToHex(latestBlock.number),
         address: [contractAddress],
@@ -166,5 +166,25 @@ it('emit logs and retrieve them using different filters', async () => {
     response = await helpers.callRPCMethod('eth_getLogs', [blockRangeFilter])
     assert.equal(response.status, 200)
     assert.isDefined(response.body)
-    assert.deepEqual(response.body.result, [])
+    assert.deepEqual(
+        response.body.result,
+        [
+            {
+                address: '0x99a64c993965f8d69f985b5171bc20065cc32fab',
+                topics: [
+                    '0x76efea95e5da1fa661f235b2921ae1d89b99e457ec73fb88e34a1d150f95c64b',
+                    '0x000000000000000000000000facf71692421039876a5bb4f10ef7a439d8ef61e',
+                    '0x000000000000000000000000000000000000000000000000000000000000000a',
+                    '0x0000000000000000000000000000000000000000000000000000000000000190'
+                ],
+                data: '0x000000000000000000000000000000000000000000000000000000000000019a',
+                blockNumber: '0xa',
+                transactionHash: '0x0c2b2477ab81c9132c5c4fd4f50935bc5807fbf4cf3bf3b69173491b68d2ca8b',
+                transactionIndex: '0x0',
+                blockHash: latestBlock.hash,
+                logIndex: '0x0',
+                removed: false
+            }
+        ]
+    )
 })
