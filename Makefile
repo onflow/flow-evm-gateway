@@ -142,7 +142,7 @@ else
 endif
 ifdef DOCKER_MOUNT
 	$(eval MOUNT=--mount type=bind,src="$(DOCKER_MOUNT)",target=/data)
-	$(call check_and_append,database-dir,DOCKER_MOUNT)
+	$(call check_and_append,database-dir,/data)
 endif
 
 	$(call check_and_append,access-node-grpc-host,ACCESS_NODE_GRPC_HOST)
