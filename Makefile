@@ -142,7 +142,7 @@ else
 	$(eval HOST_PORT=8545)
 endif
 ifdef DOCKER_MOUNT
-	$(eval MOUNT=--mount type=bind,src="$(DOCKER_MOUNT)",target=$(datadir))
+	$(eval MOUNT=--mount type=bind,src="$(DOCKER_MOUNT)",target=$(DATADIR))
 	$(call check_and_append,database-dir,DATADIR)
 endif
 
