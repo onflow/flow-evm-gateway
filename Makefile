@@ -148,14 +148,12 @@ endif
 
 	$(call append_spork_hosts)
 
-	@if [ -z "$(DOCKER_MOUNT)" ]; then \
-	echo \
-	else \
-	MOUNT_ARG="-v $(DOCKER_MOUNT):/flow-evm-gateway"; \
-	fi
-
-ifdef MOUNT_ARG
-	$(eval CMD_ARGS += $(MOUNT_ARG))
+ifdef DOCKER_MOUNT
+	$(eval MOUNT=--mount type=bind,src="$(DOCKER_MOUNT)",target=/flow-evm-gateway)
 endif
 
-	docker run $(MODE) "$(CONTAINER_REGISTRY)/evm-gateway:$(IMAGE_TAG)" $(CMD_ARGS) $(MOUNT_ARG)
+ifdef MOUNT
+	$(eval CMD_ARGS += $(MOUNT))
+endif
+
+	docker run $(MODE) $(MOUNT) "$(CONTAINER_REGISTRY)/evm-gateway:$(IMAGE_TAG)" $(CMD_ARGS)
