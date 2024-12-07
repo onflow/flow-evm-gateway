@@ -158,4 +158,4 @@ endif
 
 	$(call append_spork_hosts)
 
-	docker run $(MODE) -p 127.0.0.1:$(HOST_PORT):8545 $(MOUNT) "$(CONTAINER_REGISTRY)/evm-gateway:$(IMAGE_TAG)" $(CMD_ARGS)
+	docker run $(MODE) -p $(HOST_PORT):8545 $(MOUNT) "$(CONTAINER_REGISTRY)/evm-gateway:$(IMAGE_TAG)" $(CMD_ARGS)
