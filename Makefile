@@ -154,7 +154,7 @@ endif
 	$(call check_and_append,coa-key,COA_KEY)
 	$(call append_spork_hosts)
 
-	$(eval CMD_ARGS += --ws-enabled=true --rate-limit=9999999 --rpc-host=0.0.0.0)
+	$(eval CMD_ARGS += --ws-enabled=true --rate-limit=9999999 --rpc-host=0.0.0.0 --log-level=info)
 
 	$(call append_spork_hosts)
 
