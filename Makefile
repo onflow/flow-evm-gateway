@@ -136,7 +136,7 @@ ifdef DOCKER_RUN_DETACHED
 	$(eval MODE=-d)
 endif
 ifdef DOCKER_MOUNT
-	$(eval MOUNT=--mount type=bind,src="$(DOCKER_MOUNT)",target=/flow-evm-gateway)
+	$(eval MOUNT=--mount type=bind,src="$(DOCKER_MOUNT)",target=/)
 endif
 ifdef DOCKER_HOST_PORT
 	$(eval HOST_PORT=$(DOCKER_HOST_PORT))
