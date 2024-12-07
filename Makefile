@@ -5,6 +5,20 @@ BRANCH_NAME:=$(shell git rev-parse --abbrev-ref HEAD | tr '/' '-')
 COMMIT := $(shell git rev-parse HEAD)
 # The tag of the current commit, otherwise empty
 GIT_VERSION := $(shell git describe --tags --abbrev=2 2>/dev/null)
+CMD_ARGS :=
+# ACCESS_NODE_SPORK_HOSTS are space separated
+ACCESS_NODE_SPORK_HOSTS := access-001.devnet51.nodes.onflow.org:9000
+
+# Function to check and append required arguments
+define check_and_append
+$(if $($(2)),\
+    $(eval CMD_ARGS += --$(1)=$($(2))),\
+    $(error ERROR: $(2) ENV variable is required))
+endef
+
+define append_spork_hosts
+$(foreach host,$(ACCESS_NODE_SPORK_HOSTS),$(eval CMD_ARGS += --access-node-spork-hosts=$(host)))
+endef
 
 # Image tag: if image tag is not set, set it with version (or short commit if empty)
 ifeq (${IMAGE_TAG},)
@@ -18,11 +32,11 @@ endif
 VERSION ?= ${IMAGE_TAG}
 
 ifeq ($(origin VERSION),command line)
-    VERSION = $(VERSION)
+VERSION = $(VERSION)
 endif
 
 # docker container registry
-export CONTAINER_REGISTRY := gcr.io/flow-container-registry
+export CONTAINER_REGISTRY := us-west1-docker.pkg.dev/dl-flow-devex-production/development
 export DOCKER_BUILDKIT := 1
 
 .PHONY: test
@@ -115,9 +129,38 @@ docker-build:
 # Run GW image
 # https://github.com/onflow/flow-evm-gateway?tab=readme-ov-file#configuration-flags
 #
-# Uses ENV variables to configure below
+# IMPORTANT: Ensure these environment variables are properly secured in production
+# Never commit actual values to version control
 .PHONY: docker-run
 docker-run:
-	docker run -d "$(CONTAINER_REGISTRY)/evm-gateway:$(IMAGE_TAG)" --access-node-grpc-host=$(ACCESS_NODE_GRPC_HOST) --flow-network-id=$(FLOW_NETWORK_ID) \
-		--init-cadence-height=$(INIT_CADENCE_HEIGHT) --ws-enabled=true --coinbase=$(COINBASE) --coa-address=$(COA_ADDRESS) \
-		--coa-key=$(COA_KEY) --rate-limit=9999999 --rpc-host=0.0.0.0 --access-node-spork-hosts=access-001.devnet51.nodes.onflow.org:9000
+	MODE=-it
+	$(eval CMD_ARGS :=)
+ifdef DOCKER_RUN_DETACHED
+	$(eval MODE=-d)
+else
+	$(eval MODE=-it)
+endif
+
+	$(call check_and_append,access-node-grpc-host,ACCESS_NODE_GRPC_HOST)
+	$(call check_and_append,flow-network-id,FLOW_NETWORK_ID)
+	$(call check_and_append,init-cadence-height,INIT_CADENCE_HEIGHT)
+	$(call check_and_append,coinbase,COINBASE)
+	$(call check_and_append,coa-address,COA_ADDRESS)
+	$(call check_and_append,coa-key,COA_KEY)
+	$(call append_spork_hosts)
+
+	$(eval CMD_ARGS += --ws-enabled=true --rate-limit=9999999 --rpc-host=0.0.0.0)
+
+	$(call append_spork_hosts)
+
+	@if [ -z "$(DOCKER_MOUNT)" ]; then \
+	echo "Hello" \
+	else \
+	MOUNT_ARG="-v $(DOCKER_MOUNT):/flow-evm-gateway"; \
+	fi
+
+ifdef MOUNT_ARG
+	$(eval CMD_ARGS += $(MOUNT_ARG))
+endif
+
+	docker run $(MODE) "$(CONTAINER_REGISTRY)/evm-gateway:$(IMAGE_TAG)" $(CMD_ARGS) $(MOUNT_ARG)
