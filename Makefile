@@ -129,16 +129,12 @@ docker-build:
 # Run GW image
 # https://github.com/onflow/flow-evm-gateway?tab=readme-ov-file#configuration-flags
 #
-# IMPORTANT: Ensure these environment variables are properly secured in production
-# Never commit actual values to version control
 .PHONY: docker-run
 docker-run:
 	MODE=-it
 	$(eval CMD_ARGS :=)
 ifdef DOCKER_RUN_DETACHED
 	$(eval MODE=-d)
-else
-	$(eval MODE=-it)
 endif
 
 	$(call check_and_append,access-node-grpc-host,ACCESS_NODE_GRPC_HOST)
@@ -154,7 +150,6 @@ endif
 	$(call append_spork_hosts)
 
 	@if [ -z "$(DOCKER_MOUNT)" ]; then \
-	echo "Hello" \
 	else \
 	MOUNT_ARG="-v $(DOCKER_MOUNT):/flow-evm-gateway"; \
 	fi
