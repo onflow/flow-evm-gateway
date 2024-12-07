@@ -135,6 +135,14 @@ docker-run:
 ifdef DOCKER_RUN_DETACHED
 	$(eval MODE=-d)
 endif
+ifdef DOCKER_MOUNT
+	$(eval MOUNT=--mount type=bind,src="$(DOCKER_MOUNT)",target=/flow-evm-gateway)
+endif
+ifdef DOCKER_HOST_PORT
+	$(eval HOST_PORT=$(DOCKER_HOST_PORT))
+else
+	$(eval HOST_PORT=8545)
+endif
 
 	$(call check_and_append,access-node-grpc-host,ACCESS_NODE_GRPC_HOST)
 	$(call check_and_append,flow-network-id,FLOW_NETWORK_ID)
@@ -148,8 +156,4 @@ endif
 
 	$(call append_spork_hosts)
 
-ifdef DOCKER_MOUNT
-	$(eval MOUNT=--mount type=bind,src="$(DOCKER_MOUNT)",target=/flow-evm-gateway)
-endif
-
-	docker run $(MODE) -p 127.0.0.1:8545:8545 -w /flow-evm-gateway $(MOUNT) "$(CONTAINER_REGISTRY)/evm-gateway:$(IMAGE_TAG)" $(CMD_ARGS)
+	docker run $(MODE) -p 127.0.0.1:$(HOST_PORT):8545 $(MOUNT) "$(CONTAINER_REGISTRY)/evm-gateway:$(IMAGE_TAG)" $(CMD_ARGS)
