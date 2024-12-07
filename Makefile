@@ -152,8 +152,4 @@ ifdef DOCKER_MOUNT
 	$(eval MOUNT=--mount type=bind,src="$(DOCKER_MOUNT)",target=/flow-evm-gateway)
 endif
 
-ifdef MOUNT
-	$(eval CMD_ARGS += $(MOUNT))
-endif
-
-	docker run $(MODE) $(MOUNT) "$(CONTAINER_REGISTRY)/evm-gateway:$(IMAGE_TAG)" $(CMD_ARGS)
+	docker run $(MODE) -p 127.0.0.1:8545:8545 -w /flow-evm-gateway $(MOUNT) "$(CONTAINER_REGISTRY)/evm-gateway:$(IMAGE_TAG)" $(CMD_ARGS)
