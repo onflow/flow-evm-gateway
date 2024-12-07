@@ -131,7 +131,6 @@ docker-build:
 #
 .PHONY: docker-run
 docker-run:
-	MODE=-it
 	$(eval CMD_ARGS :=)
 ifdef DOCKER_RUN_DETACHED
 	$(eval MODE=-d)
@@ -150,6 +149,7 @@ endif
 	$(call append_spork_hosts)
 
 	@if [ -z "$(DOCKER_MOUNT)" ]; then \
+	echo \
 	else \
 	MOUNT_ARG="-v $(DOCKER_MOUNT):/flow-evm-gateway"; \
 	fi
