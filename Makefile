@@ -135,13 +135,14 @@ docker-run:
 ifdef DOCKER_RUN_DETACHED
 	$(eval MODE=-d)
 endif
-ifdef DOCKER_MOUNT
-	$(eval MOUNT=--mount type=bind,src="$(DOCKER_MOUNT)",target=/)
-endif
 ifdef DOCKER_HOST_PORT
 	$(eval HOST_PORT=$(DOCKER_HOST_PORT))
 else
 	$(eval HOST_PORT=8545)
+endif
+ifdef DOCKER_MOUNT
+	$(eval MOUNT=--mount type=bind,src="$(DOCKER_MOUNT)",target=/data)
+	$(call check_and_append,database-dir,DOCKER_MOUNT)
 endif
 
 	$(call check_and_append,access-node-grpc-host,ACCESS_NODE_GRPC_HOST)
