@@ -38,6 +38,7 @@ endif
 # docker container registry
 export CONTAINER_REGISTRY := us-west1-docker.pkg.dev/dl-flow-devex-production/development
 export DOCKER_BUILDKIT := 1
+export DATADIR := /data
 
 .PHONY: test
 test:
@@ -141,8 +142,8 @@ else
 	$(eval HOST_PORT=8545)
 endif
 ifdef DOCKER_MOUNT
-	$(eval MOUNT=--mount type=bind,src="$(DOCKER_MOUNT)",target=/data)
-	$(call check_and_append,database-dir,/data)
+	$(eval MOUNT=--mount type=bind,src="$(DOCKER_MOUNT)",target=$(datadir))
+	$(call check_and_append,database-dir,DATADIR)
 endif
 
 	$(call check_and_append,access-node-grpc-host,ACCESS_NODE_GRPC_HOST)
