@@ -127,8 +127,7 @@ start-local-bin:
 # Build docker image from local sources
 .PHONY: docker-local-build
 docker-local-build:
-	docker build --build-arg VERSION="$(VERSION)" -f dev/Dockerfile -t "$(CONTAINER_REGISTRY)/evm-gateway:$(IMAGE_TAG)" \
-		--label "git_commit=$(COMMIT)" --label "git_tag=$(IMAGE_TAG)" .
+	docker build -f dev/Dockerfile .
 
 # Docker run for local development
 .PHONY: docker-run-local
@@ -154,7 +153,7 @@ docker-build:
 # Install image version from container registry
 .PHONY: docker-pull-version
 docker-pull-version:
-
+	docker pull "$(CONTAINER_REGISTRY)/evm-gateway:$(IMAGE_TAG)"
 
 # Run GW image
 # https://github.com/onflow/flow-evm-gateway?tab=readme-ov-file#configuration-flags
