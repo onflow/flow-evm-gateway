@@ -127,7 +127,7 @@ start-local-bin:
 # Build docker image from local sources
 .PHONY: docker-local-build
 docker-local-build:
-	docker build -f dev/Dockerfile .
+	docker build --no-cache -f dev/Dockerfile -t "$(CONTAINER_REGISTRY)/evm-gateway:$(IMAGE_TAG)" .
 
 # Docker run for local development
 .PHONY: docker-run-local
