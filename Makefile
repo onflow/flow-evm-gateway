@@ -8,6 +8,9 @@ GIT_VERSION := $(shell git describe --tags --abbrev=2 2>/dev/null)
 CMD_ARGS :=
 # ACCESS_NODE_SPORK_HOSTS are space separated
 ACCESS_NODE_SPORK_HOSTS := access-001.devnet51.nodes.onflow.org:9000
+EMULATOR_COINBASE := FACF71692421039876a5BB4F10EF7A439D8ef61E
+EMULATOR_COA_ADDRESS := f8d6e0586b0a20c7
+EMULATOR_COA_KEY := 2619878f0e2ff438d17835c2a4561cb87b4d24d72d12ec34569acd0dd4af7c21
 
 # Function to check and append required arguments
 define check_and_append
@@ -94,9 +97,9 @@ start-local:
 	rm -rf metrics/data/
 	go run cmd/main.go run \
 		--flow-network-id=flow-emulator \
-		--coinbase=FACF71692421039876a5BB4F10EF7A439D8ef61E \
-		--coa-address=f8d6e0586b0a20c7 \
-		--coa-key=2619878f0e2ff438d17835c2a4561cb87b4d24d72d12ec34569acd0dd4af7c21 \
+		--coinbase=$(EMULATOR_COINBASE) \
+		--coa-address=$(EMULATOR_COA_ADDRESS)  \
+		--coa-key=$(EMULATOR_COA_KEYE)  \
 		--wallet-api-key=2619878f0e2ff438d17835c2a4561cb87b4d24d72d12ec34569acd0dd4af7c21 \
 		--coa-resource-create=true \
 		--gas-price=0 \
@@ -111,9 +114,9 @@ start-local-bin:
 	rm -rf metrics/data/
 	./flow-evm-gateway run \
 		--flow-network-id=flow-emulator \
-		--coinbase=FACF71692421039876a5BB4F10EF7A439D8ef61E \
-		--coa-address=f8d6e0586b0a20c7 \
-		--coa-key=2619878f0e2ff438d17835c2a4561cb87b4d24d72d12ec34569acd0dd4af7c21 \
+		--coinbase=$(EMULATOR_COINBASE) \
+		--coa-address=$(EMULATOR_COA_ADDRESS)  \
+		--coa-key=$(EMULATOR_COA_KEYE)  \
 		--wallet-api-key=2619878f0e2ff438d17835c2a4561cb87b4d24d72d12ec34569acd0dd4af7c21 \
 		--coa-resource-create=true \
 		--gas-price=0 \
@@ -121,15 +124,52 @@ start-local-bin:
 		--profiler-enabled=true \
 		--profiler-port=6060
 
-# Build docker image
+# Build docker image from local sources
+.PHONY: docker-local-build
+docker-local-build:
+	docker build --build-arg VERSION="$(VERSION)" -f dev/Dockerfile -t "$(CONTAINER_REGISTRY)/evm-gateway:$(IMAGE_TAG)" \
+		--label "git_commit=$(COMMIT)" --label "git_tag=$(IMAGE_TAG)" .
+
+# Docker run for local development
+.PHONY: docker-run-local
+docker-run-local:
+	flow emulator
+	sleep 5
+
+	$(call check_and_append,coinbase,EMULATOR_COINBASE)
+	$(call check_and_append,coa-address,EMULATOR_COA_ADDRESS)
+	$(call check_and_append,coa-key,EMULATOR_COA_KEY)
+
+	$(eval CMD_ARGS += --flow-network-id=flow-emulator --log-level=debug --coa-resource-create=true --gas-price=0 --log-writer=console --rpc-host=0.0.0.0 --profiler-enabled=true)
+
+	docker run -p $(HOST_PORT):8545 "$(CONTAINER_REGISTRY)/evm-gateway:$(IMAGE_TAG)" $(CMD_ARGS)
+
+
+# Build docker image for release
 .PHONY: docker-build
 docker-build:
 	docker build --build-arg VERSION="$(VERSION)" -f Dockerfile -t "$(CONTAINER_REGISTRY)/evm-gateway:$(IMAGE_TAG)" \
 		--label "git_commit=$(COMMIT)" --label "git_tag=$(IMAGE_TAG)" .
 
+# Install image version from container registry
+.PHONY: docker-pull-version
+docker-pull-version:
+
+
 # Run GW image
 # https://github.com/onflow/flow-evm-gateway?tab=readme-ov-file#configuration-flags
+# Requires the following ENV variables:
+#   - ACCESS_NODE_GRPC_HOST: [access.devnet.nodes.onflow.org:9000 | access.mainnet.nodes.onflow.org:9000]
+#   - FLOW_NETWORK_ID: [flow-testnet, flow-mainnet]
+#   - INIT_CADENCE_HEIGHT: [testnet: 211176670, mainnet: 88226267]
+#   - COINBASE: To be set by the operator. This is an EVM EOA or COA address which is set as the receiver of GW transaction fees (remove 0x prefix)
+#   - COA_ADDRESS: To be set by the operator. This is a Cadence address which funds gateway operations (remove 0x prefix)
+#   - COA_KEY: A full weight, private key belonging to operator COA_ADDRESS (remove 0x prefix). NB: For development use only. We recommend using cloud KMS configuration on mainnet
 #
+# Optional make arguments:
+#   - DOCKER_RUN_DETACHED: Runs container in detached mode when true
+#   - DOCKER_HOST_PORT: Sets the exposed container port for the gateway JSON-RPC
+#   - DOCKER_MOUNT: Sets the host mount point for the EVM data dir
 .PHONY: docker-run
 docker-run:
 	$(eval CMD_ARGS :=)
@@ -152,10 +192,10 @@ endif
 	$(call check_and_append,coinbase,COINBASE)
 	$(call check_and_append,coa-address,COA_ADDRESS)
 	$(call check_and_append,coa-key,COA_KEY)
-	$(call append_spork_hosts)
 
 	$(eval CMD_ARGS += --ws-enabled=true --rate-limit=9999999 --rpc-host=0.0.0.0 --log-level=info)
 
 	$(call append_spork_hosts)
 
 	docker run $(MODE) -p $(HOST_PORT):8545 $(MOUNT) "$(CONTAINER_REGISTRY)/evm-gateway:$(IMAGE_TAG)" $(CMD_ARGS)
+

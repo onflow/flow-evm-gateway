@@ -13,7 +13,7 @@ RUN curl -LO https://go.dev/dl/go1.22.2.linux-amd64.tar.gz && \
 ENV PATH="/usr/local/go/bin:${PATH}"
 
 # Install Flow CLI using the installation script
-RUN sh -ci "$(curl -fsSL https://raw.githubusercontent.com/onflow/flow-cli/master/install.sh)" -- v1.17.0-cadence-v1.0.0-preview.18
+RUN sh -ci "$(curl -fsSL https://raw.githubusercontent.com/onflow/flow-cli/master/install.sh)"
 
 # Set the PATH environment variable to include the directory where Flow CLI is installed
 ENV PATH="/root/.local/bin:${PATH}"
@@ -28,11 +28,9 @@ RUN chmod a+x /app/flow-evm-gateway/evm-gateway
 
 # Copy the flow.json file to the directory where the gateway expects to find it
 COPY flow.json /app/flow-evm-gateway/
-COPY run.sh /app/flow-evm-gateway/
-RUN chmod a+x /app/flow-evm-gateway/run.sh
 
 WORKDIR /app/flow-evm-gateway
 
 EXPOSE 8545
 
-CMD ./run.sh
+ENTRYPOINT ["/flow-evm-gateway/app", "run"]

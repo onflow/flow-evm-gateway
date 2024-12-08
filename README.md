@@ -6,33 +6,33 @@
 
 EVM Gateway implements the Ethereum JSON-RPC API for [EVM on Flow](https://developers.flow.com/evm/about) which conforms to the Ethereum [JSON-RPC specification](https://ethereum.github.io/execution-apis/api-documentation/). The EVM Gateway is tailored for integration with the EVM environment on the Flow blockchain. Rather than implementing the full `geth` stack, the JSON-RPC API available in EVM Gateway is a lightweight implementation that uses Flow's underlying consensus and smart contract language, [Cadence](https://cadence-lang.org/docs/), to handle calls received by the EVM Gateway. For those interested in the underlying implementation details, please refer to the [FLIP #243](https://github.com/onflow/flips/issues/243) (EVM Gateway) and [FLIP #223](https://github.com/onflow/flips/issues/223) (EVM on Flow Core) improvement proposals.
 
-EVM Gateway is compatible with the majority of standard Ethereum JSON-RPC APIs allowing seamless integration with existing Ethereum-compatible web3 tools via HTTP. EVM Gateway honors Ethereum's JSON-RPC namespace system, grouping RPC methods into categories based on their specific purpose. Each method name is constructed using the namespace, an underscore, and the specific method name in that namespace. For example, the `eth_call` method is located within the `eth` namespace. See below for details on methods currently supported or planned.
+EVM Gateway is compatible with the majority of standard Ethereum JSON-RPC APIs allowing seamless integration with existing Ethereum-compatible web3 tools via HTTP. EVM Gateway honors Ethereum's JSON-RPC namespace system, grouping RPC methods into categories based on their specific purpose. Each method name is constructed using the namespace, an underscore, and the specific method name in that namespace. For example, the `eth_call` method is located within the `eth` namespace. More details on Ethereum JSON-RPC compatibility are available in our [Using EVM](https://developers.flow.com/evm/using#json-rpc-methods) docs.  
+
+No stake is required to run an EVM Gateway and since they do not participate in consensus they have a lightweight resource footprint. They are recommended as a scaling solution in place of centralized middleware JSON-RPC providers.  
 
 ### Design
 
-![design ](https://github.com/onflow/flow-evm-gateway/assets/75445744/3fd65313-4041-46d1-b263-b848640d019f)
+![design ](./evm-gateway-arch.svg)
 
-The basic design of the EVM Gateway consists of a couple of components:
+The basic design of the EVM Gateway is as follows:
 
-- Event Ingestion Engine: this component listens to all Cadence events that are emitted by the EVM core, which can be identified by the special event type ID `evm.TransactionExecuted` and `evm.BlockExecuted` and decodes and index the data they contain in the payloads.
-- Flow Requester: this component knows how to submit transactions to Flow AN to change the EVM state. What happens behind the scenes is that EVM gateway will receive an EVM transaction payload, which will get wrapped in a Cadence transaction that calls EVM contract with that payload and then the EVM core will execute the transaction and change the state.
-- JSON RPC API: this is the client API component that implements all the API according to the JSON RPC API specification.
+- Event Ingestion Engine: consumes all Cadence events emitted by the EVM core, filtering for special event type IDs `evm.TransactionExecuted` and `evm.BlockExecuted`. These payloads are decoded and indexed locally. The local index serves all read-only requests to the JSON-RPC including `debug_traceXxxx()` requests.
+- Flow Requester: submits Cadence transactions to a Flow Access Node to change the EVM state. EVM transaction payloads received by the JSON-RPC are wrapped in a Cadence transaction. The Cadence transaction execution unwraps the EVM transaction payload and is provided to the EVM core to execute and change state.
+- JSON-RPC: the client API component that implements functions according to the Ethereum JSON-RPC specification.
 
 
 # Building
 
-**Manual Build**
-
-We recommend using Docker to run the EVM Gateway, as detailed in the subsequent section. Alternatively, if you decide to build the binary manually, you can do so by running:
+**Build from source**
 
 ```bash
 # Make sure you pull the latest changes before running `make build`
+cd flow-evm-gateway
 git pull origin main
 git fetch origin --tags
 
 make build
 ```
-
 To view the binary version:
 
 ```bash
@@ -51,7 +51,7 @@ The binary can then be run by passing the necessary flags:
 ./flow-evm-gateway run {flags}
 ```
 
-To run a local version for development, with the necessary flags set:
+To run an emulator based local version for development, with the necessary flags set:
 
 ```bash
 make start-local-bin
@@ -60,16 +60,22 @@ make start-local-bin
 # Running
 Operating an EVM Gateway is straightforward. It can either be deployed locally alongside the Flow emulator or configured to connect with any active Flow networks supporting EVM. Given that the EVM Gateway depends solely on [Access Node APIs](https://developers.flow.com/networks/node-ops/access-onchain-data/access-nodes/accessing-data/access-api), it is compatible with any networks offering this API access.
 
+### Key concepts 
+
+
 
 ### Running Locally
+
+For local development, first install [Flow CLI](https://developers.flow.com/tools/flow-cli/install).
+
 **Start Emulator**
 
-To run the gateway locally you need to start the Flow Emulator:
+Before running the gateway locally you need to start the Flow Emulator:
 
 ```bash
 flow emulator
 ```
-_Make sure flow.json has the emulator account configured to address and private key we will use for starting gateway bellow._
+_Make sure flow.json has the emulator account configured to address and private key we will use for starting gateway below. Use `flow init` in a new folder for example config._
 
 Please refer to the configuration section and read through all the configuration flags before proceeding.
 
