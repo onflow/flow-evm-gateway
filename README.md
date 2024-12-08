@@ -60,15 +60,21 @@ make start-local-bin
 # Running
 Operating an EVM Gateway is straightforward. It can either be deployed locally alongside the Flow emulator or configured to connect with any active Flow networks supporting EVM. Given that the EVM Gateway depends solely on [Access Node APIs](https://developers.flow.com/networks/node-ops/access-onchain-data/access-nodes/accessing-data/access-api), it is compatible with any networks offering this API access.
 
-### Key concepts 
+## Key concepts 
 
+The EVM Gateway's role in mediating EVM transactions over to Cadence means it can accrue fees from handling client transactions. Since 
+the gateway submits Cadence transactions wrapping EVM transaction payloads to the Flow Access Node the transaction fee for that must 
+be paid by the EVM Gateway.
 
+The account used for funding gateway Cadence transactions must be a COA, not an EOA. `--coa-address` is configured with the Cadence address
+of the COA account and the `--coa-key` must belong to the same account. The `--coinbase` account accrues EVM Gateway fees from EVM client
+transactions and can be either an EVM EOA or COA address.
 
 ### Running Locally
 
-For local development, first install [Flow CLI](https://developers.flow.com/tools/flow-cli/install).
+For local development, first install [Flow CLI](https://developers.flow.com/tools/flow-cli/install). The examples below require no configuration and are intended for local development.
 
-**Start Emulator**
+**Run from CLI**
 
 Before running the gateway locally you need to start the Flow Emulator:
 
@@ -88,31 +94,16 @@ make start-local
 Note that the gateway will be starting from the latest emulator block, so if the emulator is run before any transactions happen in the meantime, the gateway will not fetch those historical blocks & transactions.
 This will be improved soon.
 
-_In the example above we set `coa-address` value to the service account of the emulator, the same as `coa-key`.
-This account will by default be funded with Flow which is a requirement. For `coinbase` we can
-use whichever valid EVM address. It's not really useful when running locally besides collecting fees. We also allow for the
-`coa-resource-create` to auto-create resources needed on start-up on the `coa` account in order to operate the gateway.
-`gas-price` is set at 0 so we don't have to fund EOA accounts. We can set it higher but keep in mind you will then
-need funded accounts for interacting with EVM._
+**Run with Docker**
 
-**With Docker**
-
-Set the following ENV variables 
+Using Docker for local development is also supported. The following target builds the current source directory into a docker image
 
 ```bash
-FLOW_NETWORK_ID=[flow-testnet | flow-mainnet]
-ACCESS_NODE_GRPC_HOST=
-INIT_CADENCE_HEIGHT=211176670 
-COA_ADDRESS=
-COA_KEY=
-COINBASE=
+make docker-build-local
 ```
-
-Use the Makefile targets below
+This target starts the flow emulator and then runs the EVM Gateway using the image built by the above `make` target 
 ```bash
-make docker-build
-
-make docker-run
+make docker-run-local
 ```
 
 **Verify**
@@ -137,38 +128,12 @@ it should return:
 Running against the testnet with a local build can be done by pointing the gateway to the testnet ANs and providing the correct configuration.
 Please refer to the configuration section and read through all the configuration flags before proceeding.
 
-Below is an example configuration for running against testnet, with an already created testnet account.
+**Create Flow account to use for COA**
+
+If you don't already have a Flow account you will need to create one to have a COA using the following command. 
 
 ```bash
-./flow-evm-gateway run \
---access-node-grpc-host=access.devnet.nodes.onflow.org:9000 \
---access-node-spork-hosts=access-001.devnet51.nodes.onflow.org:9000 \
---flow-network-id=flow-testnet \
---init-cadence-height=211176670 \
---ws-enabled=true \
---coa-resource-create=false \
---coinbase=FACF71692421039876a5BB4F10EF7A439D8ef61E \
---coa-address=0x62631c28c9fc5a91 \
---coa-key=2892fba444f1d5787739708874e3b01160671924610411ac787ac1379d420f49 \
---gas-price=100
-```
-
-The `--init-cadence-height` is the Flow block height to start indexing from. To index the full EVM state, from its beginning, the proper value for this flag is `211176670`. This is the height where the `EVM` contract was first deployed on testnet, and this is where the EVM state starts from.
-
-If you wish to test this out with your own Access Node, simply set `--access-node-grpc-host` to the location where it is hosted.
-**Note:** You need to make sure that your Access Node has indexed at least up to Flow block height `211176670`.
-
-For the `--gas-price`, feel free to experiment with different values.
-
-The `--coinbase` can be any EOA address.
-
-To generate your own `--coa-key` and `--coa-address`, run:
-
-```bash
-# Install Flow CLI, if you do not already have it installed
-sh -ci "$(curl -fsSL https://raw.githubusercontent.com/onflow/flow-cli/master/install.sh)"
-
-flow-c1 keys generate
+flow keys generate
 ```
 
 This will output something similar to:
@@ -182,8 +147,35 @@ Derivation Path 	 m/44'/539'/0'/0/0
 Signature Algorithm 	 ECDSA_P256
 ```
 
-Visit https://faucet.flow.com/, and use the generated `Public Key`, to create and fund your Flow account.
+Visit https://faucet.flow.com/, and use the generated `Public Key`, to create and fund your Flow testnet account.
 Make sure to use the Flow address and the `Private Key` for the `--coa-address` & `--coa-key` flags.
+
+**Run local EVM Gateway connected to Testnet**
+
+Below is an example configuration for running against testnet, with a preconfigured testnet account.
+
+```bash
+./flow-evm-gateway run \
+--access-node-grpc-host=access.devnet.nodes.onflow.org:9000 \
+--access-node-spork-hosts=access-001.devnet51.nodes.onflow.org:9000 \
+--flow-network-id=flow-testnet \
+--init-cadence-height=211176670 \
+--ws-enabled=true \
+--coa-resource-create=false \
+--coinbase=FACF71692421039876a5BB4F10EF7A439D8ef61E \
+--coa-address=62631c28c9fc5a91 \
+--coa-key=2892fba444f1d5787739708874e3b01160671924610411ac787ac1379d420f49 \
+--gas-price=100
+```
+
+The `--init-cadence-height` is the Flow block height to start indexing from. To index the full EVM state, from its beginning, the proper value for this flag for testnet is `211176670`. This is the height where the `EVM` contract was first deployed on testnet, and this is where the EVM state starts from.
+
+If you wish to test this out with your own Access Node, simply set `--access-node-grpc-host` to the DNS or IP where it is hosted.
+**Note:** You need to make sure that the testnet Access Node which the gateway is connected to has indexed at least up to Flow block height `211176670`.
+
+For the `--gas-price`, feel free to experiment with different values.
+
+The `--coinbase` can be any EOA address.
 
 Once the EVM Gateway is up and running, verify that indexing works with:
 
@@ -201,11 +193,27 @@ Should return a response similar to:
 }
 ```
 
-### Running on Mainnet
+**Run local EVM GW docker container connected to Testnet**
 
-Running the EVM gateway for mainnet requires additional security and stability measures which are described in this document: https://flowfoundation.notion.site/EVM-Gateway-Deployment-3c41da6710af40acbaf971e22ce0a9fd?pvs=74
+To use the `make` target to connect a container based gateway instance to testnet requires the following environment variables to be set. 
 
-For mainnet, the Flow block height where the EVM state starts from is `85981134`. To index the full EVM state, use this value for the `--init-cadence-height` flag.
+* `ACCESS_NODE_GRPC_HOST`: access.devnet.nodes.onflow.org:9000 
+* `FLOW_NETWORK_ID`: flow-testnet
+* `INIT_CADENCE_HEIGHT`: 211176670
+* `COINBASE`: FACF71692421039876a5BB4F10EF7A439D8ef61E
+* `COA_ADDRESS`: 62631c28c9fc5a91
+* `COA_KEY`: 2892fba444f1d5787739708874e3b01160671924610411ac787ac1379d420f49 
+* `VERSION`: [_repo commit hash or tag version used when building with docker_]
+
+Once set, this target starts the EVM Gateway for the specified image version and connects it to testnet
+```bash
+make docker-run
+```
+
+### Mainnet and Node Operations
+
+Guidance for EVM Gateway node operations including considerations for mainnet, hardware specs, profiler or monitoring setup 
+and troubleshooting can be found in the EVM Gateway [node operations docs](https://developers.flow.com/networks/node-ops/access-onchain-data/evm-gateway/evm-gateway-setup).
 
 ## Configuration Flags
 

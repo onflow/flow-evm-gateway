@@ -6,7 +6,7 @@ COMMIT := $(shell git rev-parse HEAD)
 # The tag of the current commit, otherwise empty
 GIT_VERSION := $(shell git describe --tags --abbrev=2 2>/dev/null)
 CMD_ARGS :=
-# ACCESS_NODE_SPORK_HOSTS are space separated
+# ACCESS_NODE_SPORK_HOSTS are comma separated
 ACCESS_NODE_SPORK_HOSTS := access-001.devnet51.nodes.onflow.org:9000
 EMULATOR_COINBASE := FACF71692421039876a5BB4F10EF7A439D8ef61E
 EMULATOR_COA_ADDRESS := f8d6e0586b0a20c7
@@ -19,10 +19,7 @@ $(if $($(2)),\
     $(error ERROR: $(2) ENV variable is required))
 endef
 
-define append_spork_hosts
-$(foreach host,$(ACCESS_NODE_SPORK_HOSTS),$(eval CMD_ARGS += --access-node-spork-hosts=$(host)))
-endef
-
+# Image tag: if image tag is not set, set it with version (or short commit if empty)
 # Image tag: if image tag is not set, set it with version (or short commit if empty)
 ifeq (${IMAGE_TAG},)
 IMAGE_TAG := ${VERSION}
@@ -125,8 +122,8 @@ start-local-bin:
 		--profiler-port=6060
 
 # Build docker image from local sources
-.PHONY: docker-local-build
-docker-local-build:
+.PHONY: docker-build-local
+docker-build-local:
 	docker build --no-cache -f dev/Dockerfile -t "$(CONTAINER_REGISTRY)/evm-gateway:$(COMMIT)" .
 
 # Docker run for local development
@@ -141,7 +138,7 @@ docker-run-local:
 
 	$(eval CMD_ARGS += --flow-network-id=flow-emulator --log-level=debug --coa-resource-create=true --gas-price=0 --log-writer=console --rpc-host=0.0.0.0 --profiler-enabled=true)
 
-	docker run -p $(HOST_PORT):8545 "$(CONTAINER_REGISTRY)/evm-gateway:$(IMAGE_TAG)" $(CMD_ARGS)
+	docker run -p $(HOST_PORT):8545 "$(CONTAINER_REGISTRY)/evm-gateway:$(COMMIT)" $(CMD_ARGS)
 
 
 # Build docker image for release
@@ -153,7 +150,7 @@ docker-build:
 # Install image version from container registry
 .PHONY: docker-pull-version
 docker-pull-version:
-	docker pull "$(CONTAINER_REGISTRY)/evm-gateway:$(IMAGE_TAG)"
+	docker pull "$(CONTAINER_REGISTRY)/evm-gateway:$(IMAGE_VERSION)"
 
 # Run GW image
 # https://github.com/onflow/flow-evm-gateway?tab=readme-ov-file#configuration-flags
@@ -193,8 +190,7 @@ endif
 	$(call check_and_append,coa-key,COA_KEY)
 
 	$(eval CMD_ARGS += --ws-enabled=true --rate-limit=9999999 --rpc-host=0.0.0.0 --log-level=info)
-
-	$(call append_spork_hosts)
+	$(call check_and_append,access-node-spork-hosts,ACCESS_NODE_SPORK_HOSTS)
 
 	docker run $(MODE) -p $(HOST_PORT):8545 $(MOUNT) "$(CONTAINER_REGISTRY)/evm-gateway:$(IMAGE_TAG)" $(CMD_ARGS)
 
