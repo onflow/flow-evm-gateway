@@ -20,7 +20,6 @@ $(if $($(2)),\
 endef
 
 # Image tag: if image tag is not set, set it with version (or short commit if empty)
-# Image tag: if image tag is not set, set it with version (or short commit if empty)
 ifeq (${IMAGE_TAG},)
 IMAGE_TAG := ${VERSION}
 endif
