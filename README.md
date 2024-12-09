@@ -212,8 +212,8 @@ make docker-run
 
 ### Mainnet and Node Operations
 
-Guidance for EVM Gateway node operations including considerations for mainnet, hardware specs, profiler or monitoring setup 
-and troubleshooting can be found in the EVM Gateway [node operations docs](https://developers.flow.com/networks/node-ops/access-onchain-data/evm-gateway/evm-gateway-setup).
+Guidance for EVM Gateway node operations including considerations for mainnet, hardware specs, monitoring setup and troubleshooting 
+can be found in the EVM Gateway [node operations docs](https://developers.flow.com/networks/node-ops/access-onchain-data/evm-gateway/evm-gateway-setup).
 
 ## Configuration Flags
 
@@ -249,7 +249,6 @@ The application can be configured using the following flags at runtime:
 | `force-start-height`           | `0`                           | Force-set starting Cadence height (local/testing use only)                               |
 | `wallet-api-key`               | `""`                          | ECDSA private key for wallet APIs (local/testing use only)                               |
 | `filter-expiry`                | `5m`                          | Expiry time for idle filters                                                             |
-| `traces-gcp-bucket`            | `""`                          | GCP bucket name for transaction traces                                                   |
 | `traces-backfill-start-height` | `0`                           | Start height for backfilling transaction traces                                          |
 | `traces-backfill-end-height`   | `0`                           | End height for backfilling transaction traces                                            |
 | `index-only`                   | `false`                       | Run in index-only mode, allowing state queries and indexing but no transaction sending   |
@@ -285,7 +284,7 @@ EVM Gateway has public RPC endpoints available for the following environments:
 
 
 # JSON-RPC API
-The EVM Gateway implements APIs according to the Ethereum specification: https://ethereum.org/en/developers/docs/apis/json-rpc/#json-rpc-methods
+The EVM Gateway implements APIs according to the Ethereum specification: https://ethereum.org/en/developers/docs/apis/json-rpc/#json-rpc-methods.
 
 **Additional APIs**
 - Tracing APIs allows you to fetch execution traces
@@ -301,6 +300,8 @@ The EVM Gateway implements APIs according to the Ethereum specification: https:/
   and trust the EVM environment. We intend to add access to EVM proofs in the future.
 - Access Lists: we don't yet support creating access lists as they don't affect the fees we charge. We might support this in the future
   to optimize fees, but it currently is not part of our priorities.
+
+A full list of supported methods is available in the [Using EVM](https://developers.flow.com/evm/using#json-rpc-methods) docs.
 
 # Debugging
 
