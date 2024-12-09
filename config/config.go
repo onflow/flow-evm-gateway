@@ -23,6 +23,13 @@ const EmulatorInitCadenceHeight = uint64(0)
 // We don't use 0 as it has a special meaning to represent latest block in the AN API context.
 const LiveNetworkInitCadenceHeight = uint64(1)
 
+type TxStateValidation string
+
+const (
+	LocalIndexValidation = "local-index"
+	TxSealValidation     = "tx-seal"
+)
+
 type Config struct {
 	// DatabaseDir is where the database should be stored.
 	DatabaseDir string
@@ -85,4 +92,7 @@ type Config struct {
 	ProfilerHost string
 	// ProfilerPort is the port for the profiler server
 	ProfilerPort int
+	// TxStateValidation sets the transaction validation mechanism. It can validate
+	// using the local state index, or wait for the outer Flow transaction to seal.
+	TxStateValidation string
 }
