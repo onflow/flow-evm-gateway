@@ -1,5 +1,7 @@
 FROM ubuntu:latest
 
+ARG GOARCH=amd64
+
 # Install curl, Git, and other required dependencies
 RUN apt-get update && apt-get install -y curl git gcc
 
