@@ -11,6 +11,10 @@ ACCESS_NODE_SPORK_HOSTS := access-001.devnet51.nodes.onflow.org:9000
 EMULATOR_COINBASE := FACF71692421039876a5BB4F10EF7A439D8ef61E
 EMULATOR_COA_ADDRESS := f8d6e0586b0a20c7
 EMULATOR_COA_KEY := 2619878f0e2ff438d17835c2a4561cb87b4d24d72d12ec34569acd0dd4af7c21
+UNAME_S := $(shell uname -s)
+# Set default values
+ARCH :=
+OS :=
 
 # Function to check and append required arguments
 define check_and_append
@@ -32,6 +36,17 @@ VERSION ?= ${IMAGE_TAG}
 
 ifeq ($(origin VERSION),command line)
 VERSION = $(VERSION)
+endif
+
+# Determine OS and set ARCH
+ifeq ($(UNAME_S),Darwin)
+    OS := macos
+    ARCH := arm64
+else ifeq ($(UNAME_S),Linux)
+    OS := linux
+    ARCH := amd64
+else
+    $(error Unsupported operating system: $(UNAME_S))
 endif
 
 # docker container registry
@@ -123,7 +138,7 @@ start-local-bin:
 # Build docker image from local sources
 .PHONY: docker-build-local
 docker-build-local:
-	docker build --no-cache -f dev/Dockerfile -t "$(CONTAINER_REGISTRY)/evm-gateway:$(COMMIT)" .
+	docker build --build-arg ARCH=$(ARCH) --no-cache -f dev/Dockerfile -t "$(CONTAINER_REGISTRY)/evm-gateway:$(COMMIT)" .
 
 # Docker run for local development
 .PHONY: docker-run-local
@@ -143,7 +158,7 @@ docker-run-local:
 # Build docker image for release
 .PHONY: docker-build
 docker-build:
-	docker build --build-arg VERSION="$(VERSION)" -f Dockerfile -t "$(CONTAINER_REGISTRY)/evm-gateway:$(IMAGE_TAG)" \
+	docker build --build-arg VERSION="$(VERSION)" --build-arg ARCH=$(ARCH)  -f Dockerfile -t "$(CONTAINER_REGISTRY)/evm-gateway:$(IMAGE_TAG)" \
 		--label "git_commit=$(COMMIT)" --label "git_tag=$(IMAGE_TAG)" .
 
 # Install image version from container registry

@@ -13,10 +13,10 @@ RUN go mod download
 RUN go mod verify
 
 ARG VERSION
-ARG GOARCH=amd64
+ARG ARCH
 
 # Build binary
-RUN CGO_ENABLED=1 go build -o bin -ldflags="-X github.com/onflow/flow-evm-gateway/api.Version=$VERSION" cmd/main.go
+RUN CGO_ENABLED=1 GOOS=linux GOARCH=$ARCH build -o bin -ldflags="-X github.com/onflow/flow-evm-gateway/api.Version=$VERSION" cmd/main.go
 RUN chmod a+x bin
 
 # RUN APP

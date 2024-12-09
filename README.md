@@ -62,13 +62,15 @@ Operating an EVM Gateway is straightforward. It can either be deployed locally a
 
 ## Key concepts 
 
-The EVM Gateway's role in mediating EVM transactions over to Cadence means it can accrue fees from handling client transactions. Since 
+The EVM Gateway's role in mediating EVM transactions over to Cadence is how it accrues fees from handling client transactions. Since 
 the gateway submits Cadence transactions wrapping EVM transaction payloads to the Flow Access Node the transaction fee for that must 
 be paid by the EVM Gateway.
 
 The account used for funding gateway Cadence transactions must be a COA, not an EOA. `--coa-address` is configured with the Cadence address
 of the COA account and the `--coa-key` must belong to the same account. The `--coinbase` account accrues EVM Gateway fees from EVM client
 transactions and can be either an EVM EOA or COA address.
+
+It is acceptable to create a single Cadence account for the COA and use the EVM address associated with that for the COINBASE address.
 
 ### Running Locally
 
@@ -130,7 +132,7 @@ Please refer to the configuration section and read through all the configuration
 
 **Create Flow account to use for COA**
 
-If you don't already have a Flow account you will need to create one to have a COA using the following command. 
+If you don't already have a Flow account you will need to create account keys using the following command. 
 
 ```bash
 flow keys generate
@@ -147,7 +149,7 @@ Derivation Path 	 m/44'/539'/0'/0/0
 Signature Algorithm 	 ECDSA_P256
 ```
 
-Visit https://faucet.flow.com/, and use the generated `Public Key`, to create and fund your Flow testnet account.
+Then visit https://faucet.flow.com/, and use the generated `Public Key`, to create and fund your Flow testnet account.
 Make sure to use the Flow address and the `Private Key` for the `--coa-address` & `--coa-key` flags.
 
 **Run local EVM Gateway connected to Testnet**
