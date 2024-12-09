@@ -128,16 +128,16 @@ docker-build-local:
 # Docker run for local development
 .PHONY: docker-run-local
 docker-run-local:
-	flow emulator
-	sleep 5
+	flow emulator &
+	sleep 2
 
 	$(call check_and_append,coinbase,EMULATOR_COINBASE)
 	$(call check_and_append,coa-address,EMULATOR_COA_ADDRESS)
 	$(call check_and_append,coa-key,EMULATOR_COA_KEY)
 
-	$(eval CMD_ARGS += --flow-network-id=flow-emulator --log-level=debug --coa-resource-create=true --gas-price=0 --log-writer=console --rpc-host=0.0.0.0 --profiler-enabled=true)
+	$(eval CMD_ARGS += --flow-network-id=flow-emulator --log-level=debug --coa-resource-create=true --gas-price=0 --log-writer=console --profiler-enabled=true)
 
-	docker run -p $(HOST_PORT):8545 "$(CONTAINER_REGISTRY)/evm-gateway:$(COMMIT)" $(CMD_ARGS)
+	docker run -p 8545:8545 "$(CONTAINER_REGISTRY)/evm-gateway:$(COMMIT)" $(CMD_ARGS)
 
 
 # Build docker image for release
