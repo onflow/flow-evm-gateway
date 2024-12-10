@@ -54,10 +54,8 @@ type Config struct {
 	COAAddress flow.Address
 	// COAKey is Flow key to the COA account. WARNING: do not use in production
 	COAKey crypto.PrivateKey
-	// COAKeys is a slice of all the keys that will be used in key-rotation mechanism.
-	COAKeys []crypto.PrivateKey
-	// COACloudKMSKeys is a slice of all the keys and their versions that will be used in Cloud KMS key-rotation mechanism.
-	COACloudKMSKeys []flowGoKMS.Key
+	// COACloudKMSKey is a Cloud KMS key that will be used for signing transactions.
+	COACloudKMSKey *flowGoKMS.Key
 	// GasPrice is a fixed gas price that will be used when submitting transactions.
 	GasPrice *big.Int
 	// InitCadenceHeight is used for initializing the database on a local emulator or a live network.

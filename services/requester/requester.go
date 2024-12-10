@@ -11,7 +11,6 @@ import (
 
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go-sdk"
-	"github.com/onflow/flow-go-sdk/crypto"
 	"github.com/onflow/flow-go/fvm/evm"
 	"github.com/onflow/flow-go/fvm/evm/emulator"
 	"github.com/onflow/flow-go/fvm/evm/offchain/query"
@@ -96,21 +95,19 @@ type Requester interface {
 var _ Requester = &EVM{}
 
 type EVM struct {
-	registerStore  *pebble.RegisterStorage
-	blocksProvider *replayer.BlocksProvider
-	client         *CrossSporkClient
-	config         config.Config
-	signer         crypto.Signer
-	txPool         *TxPool
-	logger         zerolog.Logger
-	blocks         storage.BlockIndexer
-	mux            sync.Mutex
-
+	registerStore     *pebble.RegisterStorage
+	blocksProvider    *replayer.BlocksProvider
+	client            *CrossSporkClient
+	config            config.Config
+	txPool            *TxPool
+	logger            zerolog.Logger
+	blocks            storage.BlockIndexer
+	mux               sync.Mutex
+	keystore          *Keystore
 	head              *types.Header
 	evmSigner         types.Signer
 	validationOptions *txpool.ValidationOptions
-
-	collector metrics.Collector
+	collector         metrics.Collector
 }
 
 func NewEVM(
@@ -118,11 +115,11 @@ func NewEVM(
 	blocksProvider *replayer.BlocksProvider,
 	client *CrossSporkClient,
 	config config.Config,
-	signer crypto.Signer,
 	logger zerolog.Logger,
 	blocks storage.BlockIndexer,
 	txPool *TxPool,
 	collector metrics.Collector,
+	keystore *Keystore,
 ) (*EVM, error) {
 	logger = logger.With().Str("component", "requester").Logger()
 	address := config.COAAddress
@@ -170,7 +167,6 @@ func NewEVM(
 		blocksProvider:    blocksProvider,
 		client:            client,
 		config:            config,
-		signer:            signer,
 		logger:            logger,
 		blocks:            blocks,
 		txPool:            txPool,
@@ -178,6 +174,7 @@ func NewEVM(
 		evmSigner:         evmSigner,
 		validationOptions: validationOptions,
 		collector:         collector,
+		keystore:          keystore,
 	}
 
 	return evm, nil
@@ -437,33 +434,6 @@ func (e *EVM) GetLatestEVMHeight(ctx context.Context) (uint64, error) {
 	return height, nil
 }
 
-// getSignerNetworkInfo loads the signer account from network and returns key index and sequence number
-func (e *EVM) getSignerNetworkInfo(ctx context.Context) (uint32, uint64, error) {
-	account, err := e.client.GetAccount(ctx, e.config.COAAddress)
-	if err != nil {
-		return 0, 0, fmt.Errorf(
-			"failed to get signer info account for address: %s, with: %w",
-			e.config.COAAddress,
-			err,
-		)
-	}
-
-	e.collector.OperatorBalance(account)
-
-	signerPub := e.signer.PublicKey()
-	for _, k := range account.Keys {
-		if k.PublicKey.Equals(signerPub) {
-			return k.Index, k.SequenceNumber, nil
-		}
-	}
-
-	return 0, 0, fmt.Errorf(
-		"provided account address: %s and signer public key: %s, do not match",
-		e.config.COAAddress,
-		signerPub.String(),
-	)
-}
-
 func (e *EVM) getBlockView(height uint64) (*query.View, error) {
 	viewProvider := query.NewViewProvider(
 		e.config.FlowNetworkID,
@@ -553,9 +523,13 @@ func (e *EVM) dryRunTx(
 	return result, nil
 }
 
-// buildTransaction creates a flow transaction from the provided script with the arguments
-// and signs it with the configured COA account.
-func (e *EVM) buildTransaction(ctx context.Context, script []byte, args ...cadence.Value) (*flow.Transaction, error) {
+// buildTransaction creates a flow transaction from the provided script,
+// with the arguments and signs it with the configured COA account.
+func (e *EVM) buildTransaction(
+	ctx context.Context,
+	script []byte,
+	args ...cadence.Value,
+) (*flow.Transaction, error) {
 	// building and signing transactions should be blocking, so we don't have keys conflict
 	e.mux.Lock()
 	defer e.mux.Unlock()
@@ -564,8 +538,7 @@ func (e *EVM) buildTransaction(ctx context.Context, script []byte, args ...caden
 		g           = errgroup.Group{}
 		err1, err2  error
 		latestBlock *flow.Block
-		index       uint32
-		seqNum      uint64
+		account     *flow.Account
 	)
 	// execute concurrently so we can speed up all the information we need for tx
 	g.Go(func() error {
@@ -573,19 +546,21 @@ func (e *EVM) buildTransaction(ctx context.Context, script []byte, args ...caden
 		return err1
 	})
 	g.Go(func() error {
-		index, seqNum, err2 = e.getSignerNetworkInfo(ctx)
+		account, err2 = e.client.GetAccount(ctx, e.config.COAAddress)
 		return err2
 	})
 	if err := g.Wait(); err != nil {
 		return nil, err
 	}
 
-	address := e.config.COAAddress
+	accKey, err := e.keystore.GetKey()
+	if err != nil {
+		return nil, err
+	}
+
 	flowTx := flow.NewTransaction().
 		SetScript(script).
-		SetProposalKey(address, index, seqNum).
-		SetReferenceBlockID(latestBlock.ID).
-		SetPayer(address)
+		SetReferenceBlockID(latestBlock.ID)
 
 	for _, arg := range args {
 		if err := flowTx.AddArgument(arg); err != nil {
@@ -593,13 +568,15 @@ func (e *EVM) buildTransaction(ctx context.Context, script []byte, args ...caden
 		}
 	}
 
-	if err := flowTx.SignEnvelope(address, index, e.signer); err != nil {
-		return nil, fmt.Errorf(
-			"failed to sign transaction envelope for address: %s and index: %d, with: %w",
-			address,
-			index,
-			err)
+	if err := accKey.SetProposerPayerAndSign(flowTx); err != nil {
+		return nil, err
 	}
+	if err := accKey.IncrementSequenceNumber(); err != nil {
+		return nil, err
+	}
+	e.keystore.LockKey(flowTx.ID(), accKey)
+
+	e.collector.OperatorBalance(account)
 
 	return flowTx, nil
 }

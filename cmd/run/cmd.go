@@ -2,7 +2,6 @@ package run
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -120,50 +119,24 @@ func parseConfigFromFlags() error {
 			return fmt.Errorf("invalid COA private key: %w", err)
 		}
 		cfg.COAKey = pkey
-	} else if keysPath != "" {
-		raw, err := os.ReadFile(keysPath)
-		if err != nil {
-			return fmt.Errorf("could not read the file containing list of keys for key-rotation mechanism, check if coa-key-file specifies valid path: %w", err)
-		}
-		var keysJSON []string
-		if err := json.Unmarshal(raw, &keysJSON); err != nil {
-			return fmt.Errorf("could not parse file containing the list of keys for key-rotation, make sure keys are in JSON array format: %w", err)
-		}
-
-		cfg.COAKeys = make([]crypto.PrivateKey, len(keysJSON))
-		sigAlgo := crypto.StringToSignatureAlgorithm(keyAlg)
-		if sigAlgo == crypto.UnknownSignatureAlgorithm {
-			return fmt.Errorf("invalid signature algorithm: %s", keyAlg)
-		}
-		for i, k := range keysJSON {
-			pk, err := crypto.DecodePrivateKeyHex(sigAlgo, k)
-			if err != nil {
-				return fmt.Errorf("a key from the COA key list file is not valid, key %s, error: %w", k, err)
-			}
-			cfg.COAKeys[i] = pk
-		}
-	} else if cloudKMSKeys != "" {
+	} else if cloudKMSKey != "" {
 		if cloudKMSProjectID == "" || cloudKMSLocationID == "" || cloudKMSKeyRingID == "" {
 			return fmt.Errorf(
 				"using coa-cloud-kms-keys requires also coa-cloud-kms-project-id & coa-cloud-kms-location-id & coa-cloud-kms-key-ring-id",
 			)
 		}
 
-		kmsKeys := strings.Split(cloudKMSKeys, ",")
-		cfg.COACloudKMSKeys = make([]flowGoKMS.Key, len(kmsKeys))
-		for i, key := range kmsKeys {
-			// key has the form "{keyID}@{keyVersion}"
-			keyParts := strings.Split(key, "@")
-			if len(keyParts) != 2 {
-				return fmt.Errorf("wrong format for Cloud KMS key: %s", key)
-			}
-			cfg.COACloudKMSKeys[i] = flowGoKMS.Key{
-				ProjectID:  cloudKMSProjectID,
-				LocationID: cloudKMSLocationID,
-				KeyRingID:  cloudKMSKeyRingID,
-				KeyID:      keyParts[0],
-				KeyVersion: keyParts[1],
-			}
+		// key has the form "{keyID}@{keyVersion}"
+		keyParts := strings.Split(cloudKMSKey, "@")
+		if len(keyParts) != 2 {
+			return fmt.Errorf("wrong format for Cloud KMS key: %s", key)
+		}
+		cfg.COACloudKMSKey = &flowGoKMS.Key{
+			ProjectID:  cloudKMSProjectID,
+			LocationID: cloudKMSLocationID,
+			KeyRingID:  cloudKMSKeyRingID,
+			KeyID:      keyParts[0],
+			KeyVersion: keyParts[1],
 		}
 	} else {
 		return fmt.Errorf(
@@ -259,13 +232,12 @@ var (
 	coa,
 	key,
 	keyAlg,
-	keysPath,
 	flowNetwork,
 	logLevel,
 	logWriter,
 	filterExpiry,
 	accessSporkHosts,
-	cloudKMSKeys,
+	cloudKMSKey,
 	cloudKMSProjectID,
 	cloudKMSLocationID,
 	cloudKMSKeyRingID,
@@ -293,7 +265,6 @@ func init() {
 	Cmd.Flags().StringVar(&coa, "coa-address", "", "Flow address that holds COA account used for submitting transactions")
 	Cmd.Flags().StringVar(&key, "coa-key", "", "Private key value for the COA address used for submitting transactions")
 	Cmd.Flags().StringVar(&keyAlg, "coa-key-alg", "ECDSA_P256", "Private key algorithm for the COA private key, only effective if coa-key/coa-key-file is present. Available values (ECDSA_P256 / ECDSA_secp256k1 / BLS_BLS12_381), defaults to ECDSA_P256.")
-	Cmd.Flags().StringVar(&keysPath, "coa-key-file", "", "File path that contains JSON array of COA keys used in key-rotation mechanism, this is exclusive with coa-key flag.")
 	Cmd.Flags().StringVar(&logLevel, "log-level", "debug", "Define verbosity of the log output ('debug', 'info', 'warn', 'error', 'fatal', 'panic')")
 	Cmd.Flags().StringVar(&logWriter, "log-writer", "stderr", "Log writer used for output ('stderr', 'console')")
 	Cmd.Flags().Float64Var(&cfg.StreamLimit, "stream-limit", 10, "Rate-limits the events sent to the client within one second")
@@ -305,7 +276,7 @@ func init() {
 	Cmd.Flags().StringVar(&cloudKMSProjectID, "coa-cloud-kms-project-id", "", "The project ID containing the KMS keys, e.g. 'flow-evm-gateway'")
 	Cmd.Flags().StringVar(&cloudKMSLocationID, "coa-cloud-kms-location-id", "", "The location ID where the key ring is grouped into, e.g. 'global'")
 	Cmd.Flags().StringVar(&cloudKMSKeyRingID, "coa-cloud-kms-key-ring-id", "", "The key ring ID where the KMS keys exist, e.g. 'tx-signing'")
-	Cmd.Flags().StringVar(&cloudKMSKeys, "coa-cloud-kms-keys", "", `Names of the KMS keys and their versions as a comma separated list, e.g. "gw-key-6@1,gw-key-7@1,gw-key-8@1"`)
+	Cmd.Flags().StringVar(&cloudKMSKey, "coa-cloud-kms-key", "", `Name of the KMS key and its version, e.g. "gw-key-6@1"`)
 	Cmd.Flags().StringVar(&walletKey, "wallet-api-key", "", "ECDSA private key used for wallet APIs. WARNING: This should only be used locally or for testing, never in production.")
 	Cmd.Flags().IntVar(&cfg.MetricsPort, "metrics-port", 9091, "Port for the metrics server")
 	Cmd.Flags().BoolVar(&cfg.IndexOnly, "index-only", false, "Run the gateway in index-only mode which only allows querying the state and indexing, but disallows sending transactions.")

@@ -48,16 +48,13 @@ func RunCreateMultiKeyAccount() {
 		panic(err)
 	}
 
-	address, keys, err := CreateMultiKeyAccount(client, keyCount, payer, ftFlag, flowFlag, key)
+	address, privateKey, err := CreateMultiKeyAccount(client, keyCount, payer, ftFlag, flowFlag, key)
 	if err != nil {
 		panic(err)
 	}
 
 	fmt.Println("Address: ", address.Hex())
-	fmt.Println("Keys:")
-	for _, pk := range keys {
-		fmt.Println(pk.String())
-	}
+	fmt.Println("Key: ", privateKey.String())
 }
 
 /*
@@ -71,35 +68,25 @@ func CreateMultiKeyAccount(
 	ftAddress string,
 	flowAddress string,
 	key crypto.PrivateKey,
-) (*flow.Address, []crypto.PrivateKey, error) {
+) (*flow.Address, crypto.PrivateKey, error) {
+	privateKey, err := randomPrivateKey()
+	if err != nil {
+		return nil, nil, err
+	}
 
-	privKeys := make([]*flow.AccountKey, keyCount)
-	pks := make([]crypto.PrivateKey, keyCount)
+	accountKeys := make([]*flow.AccountKey, keyCount)
 	for i := 0; i < keyCount; i++ {
-		seed := make([]byte, crypto.MinSeedLength)
-		_, err := rand.Read(seed)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		pk, err := crypto.GeneratePrivateKey(crypto.ECDSA_P256, seed)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		pks[i] = pk
-		privKeys[i] = &flow.AccountKey{
+		accountKeys[i] = &flow.AccountKey{
 			Index:     uint32(i),
-			PublicKey: pk.PublicKey(),
+			PublicKey: privateKey.PublicKey(),
 			SigAlgo:   crypto.ECDSA_P256,
 			HashAlgo:  crypto.SHA3_256,
 			Weight:    1000,
 		}
 	}
 
-	var err error
 	keyList := make([]cadence.Value, keyCount)
-	for i, key := range privKeys {
+	for i, key := range accountKeys {
 		keyList[i], err = templates.AccountKeyToCadenceCryptoKey(key)
 		if err != nil {
 			return nil, nil, err
@@ -197,7 +184,7 @@ func CreateMultiKeyAccount(
 	events := eventsFromTx(res)
 	createdAddrs := events.GetCreatedAddresses()
 
-	return createdAddrs[0], pks, nil
+	return createdAddrs[0], privateKey, nil
 }
 
 func CreateMultiCloudKMSKeysAccount(
@@ -410,3 +397,20 @@ transaction(publicKeys: [Crypto.KeyListEntry], contracts: {String: String}, fund
 	}
 }
 `)
+
+// randomPrivateKey returns a randomly generated ECDSA P-256 private key.
+func randomPrivateKey() (crypto.PrivateKey, error) {
+	seed := make([]byte, crypto.MinSeedLength)
+
+	_, err := rand.Read(seed)
+	if err != nil {
+		return nil, err
+	}
+
+	privateKey, err := crypto.GeneratePrivateKey(crypto.ECDSA_P256, seed)
+	if err != nil {
+		return nil, err
+	}
+
+	return privateKey, nil
+}
