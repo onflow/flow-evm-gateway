@@ -15,6 +15,23 @@ UNAME_S := $(shell uname -s)
 # Set default values
 ARCH :=
 OS :=
+COMPILER_FLAGS := CGO_ENABLED=1
+
+EMULATOR_ARGS := --flow-network-id=flow-emulator \
+		--coinbase=$(EMULATOR_COINBASE) \
+		--coa-address=$(EMULATOR_COA_ADDRESS)  \
+		--coa-key=$(EMULATOR_COA_KEY)  \
+		--wallet-api-key=2619878f0e2ff438d17835c2a4561cb87b4d24d72d12ec34569acd0dd4af7c21 \
+		--gas-price=0 \
+		--log-writer=console \
+		--profiler-enabled=true \
+		--profiler-port=6060
+
+# Set VERSION from command line, environment, or default to SHORT_COMMIT
+VERSION ?= ${SHORT_COMMIT}
+
+# Set IMAGE_TAG from VERSION if not explicitly set
+IMAGE_TAG ?= ${VERSION}
 
 # Function to check and append required arguments
 define check_and_append
@@ -23,25 +40,11 @@ $(if $($(2)),\
     $(error ERROR: $(2) ENV variable is required))
 endef
 
-# Image tag: if image tag is not set, set it with version (or short commit if empty)
-ifeq (${IMAGE_TAG},)
-IMAGE_TAG := ${VERSION}
-endif
-
-ifeq (${IMAGE_TAG},)
-IMAGE_TAG := ${SHORT_COMMIT}
-endif
-
-VERSION ?= ${IMAGE_TAG}
-
-ifeq ($(origin VERSION),command line)
-VERSION = $(VERSION)
-endif
-
 # Determine OS and set ARCH
 ifeq ($(UNAME_S),Darwin)
     OS := macos
     ARCH := arm64
+    $(eval COMPILER_FLAGS += CGO_CFLAGS="-O2 -D__BLST_PORTABLE__")
 else ifeq ($(UNAME_S),Linux)
     OS := linux
     ARCH := amd64
@@ -76,7 +79,7 @@ check-tidy:
 
 .PHONY: build
 build:
-	CGO_ENABLED=1 go build -o flow-evm-gateway -ldflags="-X github.com/onflow/flow-evm-gateway/api.Version=$(IMAGE_TAG)" cmd/main.go
+	$(COMPILER_FLAGS) go build -o flow-evm-gateway -ldflags="-X github.com/onflow/flow-evm-gateway/api.Version=$(IMAGE_TAG)" cmd/main.go
 	chmod a+x flow-evm-gateway
 
 .PHONY: fix-lint
@@ -100,40 +103,20 @@ ci: check-tidy test e2e-test
 
 .PHONY: start
 start:
-	go run ./cmd/server/main.go
+	$(COMPILER_FLAGS) go run ./cmd/main.go
 
 .PHONY: start-local
 start-local:
 	rm -rf db/
 	rm -rf metrics/data/
-	go run cmd/main.go run \
-		--flow-network-id=flow-emulator \
-		--coinbase=$(EMULATOR_COINBASE) \
-		--coa-address=$(EMULATOR_COA_ADDRESS)  \
-		--coa-key=$(EMULATOR_COA_KEYE)  \
-		--wallet-api-key=2619878f0e2ff438d17835c2a4561cb87b4d24d72d12ec34569acd0dd4af7c21 \
-		--coa-resource-create=true \
-		--gas-price=0 \
-		--log-writer=console \
-		--profiler-enabled=true \
-		--profiler-port=6060
+	$(COMPILER_FLAGS) go run cmd/main.go run $(EMULATOR_ARGS)
 
 # Use this after running `make build`, to test out the binary
 .PHONY: start-local-bin
 start-local-bin:
 	rm -rf db/
 	rm -rf metrics/data/
-	./flow-evm-gateway run \
-		--flow-network-id=flow-emulator \
-		--coinbase=$(EMULATOR_COINBASE) \
-		--coa-address=$(EMULATOR_COA_ADDRESS)  \
-		--coa-key=$(EMULATOR_COA_KEYE)  \
-		--wallet-api-key=2619878f0e2ff438d17835c2a4561cb87b4d24d72d12ec34569acd0dd4af7c21 \
-		--coa-resource-create=true \
-		--gas-price=0 \
-		--log-writer=console \
-		--profiler-enabled=true \
-		--profiler-port=6060
+	$(COMPILER_FLAGS) go run cmd/main.go run $(EMULATOR_ARGS)
 
 # Build docker image from local sources
 .PHONY: docker-build-local
@@ -155,7 +138,7 @@ docker-run-local:
 
 	$(eval CMD_ARGS += --flow-network-id=flow-emulator --log-level=debug --gas-price=0 --log-writer=console --profiler-enabled=true)
 
-	docker run -p 8545:8545 "$(CONTAINER_REGISTRY)/evm-gateway:$(COMMIT)" $(CMD_ARGS)
+	docker run -p 8545:8545 --add-host=host.docker.internal:host-gateway "$(CONTAINER_REGISTRY)/evm-gateway:$(COMMIT)" $(CMD_ARGS)
 
 
 # Build docker image for release

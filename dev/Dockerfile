@@ -25,7 +25,7 @@ RUN git clone https://github.com/onflow/flow-evm-gateway.git /app/flow-evm-gatew
 
 RUN cd /app/flow-evm-gateway && go mod download
 RUN cd /app/flow-evm-gateway && go mod verify
-RUN cd /app/flow-evm-gateway && CGO_ENABLED=1 GOOS=linux GOARCH=$ARCH go build -o /app/flow-evm-gateway/app /app/flow-evm-gateway/cmd/main.go
+RUN cd /app/flow-evm-gateway && CGO_ENABLED=1 GOOS=linux GOARCH=$ARCH go build -o /app/flow-evm-gateway/app -ldflags="-s -w -X github.com/onflow/flow-evm-gateway/api.Version=LOCALBUILD" -trimpath /app/flow-evm-gateway/cmd/main.go
 RUN chmod a+x /app/flow-evm-gateway/app
 
 # Copy the flow.json file to the directory where the gateway expects to find it
