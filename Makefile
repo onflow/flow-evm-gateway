@@ -129,7 +129,7 @@ endif
 # Docker run for local development
 .PHONY: docker-run-local
 docker-run-local:
-	flow emulator &
+	flow emulator -f dev/flow.json &
 	sleep 3
 
 	$(call check_and_append,coinbase,EMULATOR_COINBASE)
