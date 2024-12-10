@@ -147,13 +147,13 @@ endif
 .PHONY: docker-run-local
 docker-run-local:
 	flow emulator &
-	sleep 2
+	sleep 3
 
 	$(call check_and_append,coinbase,EMULATOR_COINBASE)
 	$(call check_and_append,coa-address,EMULATOR_COA_ADDRESS)
 	$(call check_and_append,coa-key,EMULATOR_COA_KEY)
 
-	$(eval CMD_ARGS += --flow-network-id=flow-emulator --log-level=debug --coa-resource-create=true --gas-price=0 --log-writer=console --profiler-enabled=true)
+	$(eval CMD_ARGS += --flow-network-id=flow-emulator --log-level=debug --gas-price=0 --log-writer=console --profiler-enabled=true)
 
 	docker run -p 8545:8545 "$(CONTAINER_REGISTRY)/evm-gateway:$(COMMIT)" $(CMD_ARGS)
 
@@ -219,5 +219,5 @@ endif
 	$(eval CMD_ARGS += --ws-enabled=true --rate-limit=9999999 --rpc-host=0.0.0.0 --log-level=info)
 	$(call check_and_append,access-node-spork-hosts,ACCESS_NODE_SPORK_HOSTS)
 
-	docker run $(MODE) -p $(HOST_PORT):8545 $(MOUNT) "$(CONTAINER_REGISTRY)/evm-gateway:$(IMAGE_TAG)" $(CMD_ARGS)
+	docker run $(MODE) -p $(HOST_PORT):8545 -p 8080:8080 $(MOUNT) "$(CONTAINER_REGISTRY)/evm-gateway:$(IMAGE_TAG)" $(CMD_ARGS)
 
