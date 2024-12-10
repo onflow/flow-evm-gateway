@@ -40,5 +40,5 @@ jobs:
       - name: Docker Auth
         run: |-
           gcloud auth configure-docker ${{ vars.GAR_LOCATION }}-docker.pkg.dev
-          docker build --build-arg VERSION="${{ steps.set_version.outputs.GATEWAY_VERSION }}" -t ${{ env.DOCKER_IMAGE_URL }}:${{ steps.set_version.outputs.GATEWAY_VERSION }} --build-arg GATEWAY_VERSION=${{ steps.set_version.outputs.GATEWAY_VERSION }} --file Dockerfile .
+          docker build --build-arg VERSION="${{ steps.set_version.outputs.GATEWAY_VERSION }}" --build-arg ARCH=amd64 -t ${{ env.DOCKER_IMAGE_URL }}:${{ steps.set_version.outputs.GATEWAY_VERSION }} --file Dockerfile .
           docker push ${{ env.DOCKER_IMAGE_URL }}:${{ steps.set_version.outputs.GATEWAY_VERSION }}
