@@ -23,20 +23,11 @@ $(if $($(2)),\
     $(error ERROR: $(2) ENV variable is required))
 endef
 
-# Image tag: if image tag is not set, set it with version (or short commit if empty)
-ifeq (${IMAGE_TAG},)
-IMAGE_TAG := ${VERSION}
-endif
+# Set VERSION from command line, environment, or default to SHORT_COMMIT
+VERSION ?= ${SHORT_COMMIT}
 
-ifeq (${IMAGE_TAG},)
-IMAGE_TAG := ${SHORT_COMMIT}
-endif
-
-VERSION ?= ${IMAGE_TAG}
-
-ifeq ($(origin VERSION),command line)
-VERSION = $(VERSION)
-endif
+# Set IMAGE_TAG from VERSION if not explicitly set
+IMAGE_TAG ?= ${VERSION}
 
 # Determine OS and set ARCH
 ifeq ($(UNAME_S),Darwin)
