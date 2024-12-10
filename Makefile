@@ -136,7 +136,7 @@ docker-run-local:
 	$(call check_and_append,coa-address,EMULATOR_COA_ADDRESS)
 	$(call check_and_append,coa-key,EMULATOR_COA_KEY)
 
-	$(eval CMD_ARGS += --flow-network-id=flow-emulator --log-level=debug --gas-price=0 --log-writer=console --profiler-enabled=true)
+	$(eval CMD_ARGS += --flow-network-id=flow-emulator --log-level=debug --gas-price=0 --log-writer=console --profiler-enabled=true --access-node-grpc-host=host.docker.internal:3569)
 
 	docker run -p 8545:8545 --add-host=host.docker.internal:host-gateway "$(CONTAINER_REGISTRY)/evm-gateway:$(COMMIT)" $(CMD_ARGS)
 
