@@ -5,6 +5,5 @@ tests/e2e-network/node_modules
 tests/e2e-network/package-lock.json
 db
 flow.json
-flow*.json
 .idea
 metrics/data/
