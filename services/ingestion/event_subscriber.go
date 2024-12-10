@@ -33,9 +33,10 @@ var _ EventSubscriber = &RPCEventSubscriber{}
 type RPCEventSubscriber struct {
 	logger zerolog.Logger
 
-	client *requester.CrossSporkClient
-	chain  flowGo.ChainID
-	height uint64
+	client   *requester.CrossSporkClient
+	chain    flowGo.ChainID
+	keystore *requester.Keystore
+	height   uint64
 
 	recovery        bool
 	recoveredEvents []flow.Event
@@ -45,15 +46,17 @@ func NewRPCEventSubscriber(
 	logger zerolog.Logger,
 	client *requester.CrossSporkClient,
 	chainID flowGo.ChainID,
+	keystore *requester.Keystore,
 	startHeight uint64,
 ) *RPCEventSubscriber {
 	logger = logger.With().Str("component", "subscriber").Logger()
 	return &RPCEventSubscriber{
 		logger: logger,
 
-		client: client,
-		chain:  chainID,
-		height: startHeight,
+		client:   client,
+		chain:    chainID,
+		keystore: keystore,
+		height:   startHeight,
 	}
 }
 
@@ -168,6 +171,9 @@ func (r *RPCEventSubscriber) subscribe(ctx context.Context, height uint64) <-cha
 					if r.recovery {
 						continue
 					}
+				}
+				for _, evt := range blockEvents.Events {
+					r.keystore.UnlockKey(evt.TransactionID)
 				}
 
 				eventsChan <- evmEvents

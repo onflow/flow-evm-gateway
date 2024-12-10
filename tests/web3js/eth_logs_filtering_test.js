@@ -142,7 +142,7 @@ it('emit logs and retrieve them using different filters', async () => {
                     '0x0000000000000000000000000000000000000000000000000000000000000190'
                 ],
                 data: '0x000000000000000000000000000000000000000000000000000000000000019a',
-                blockNumber: '0xa',
+                blockNumber: '0xb',
                 transactionHash: '0x0c2b2477ab81c9132c5c4fd4f50935bc5807fbf4cf3bf3b69173491b68d2ca8b',
                 transactionIndex: '0x0',
                 blockHash: latestBlock.hash,
@@ -178,7 +178,7 @@ it('emit logs and retrieve them using different filters', async () => {
                     '0x0000000000000000000000000000000000000000000000000000000000000190'
                 ],
                 data: '0x000000000000000000000000000000000000000000000000000000000000019a',
-                blockNumber: '0xa',
+                blockNumber: '0xb',
                 transactionHash: '0x0c2b2477ab81c9132c5c4fd4f50935bc5807fbf4cf3bf3b69173491b68d2ca8b',
                 transactionIndex: '0x0',
                 blockHash: latestBlock.hash,
