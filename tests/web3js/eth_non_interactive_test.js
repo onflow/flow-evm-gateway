@@ -5,18 +5,20 @@ const helpers = require('./helpers')
 const web3types = require('web3-types')
 const web3 = conf.web3
 
-it('get chain ID', async () => {
+it('should get chain ID', async () => {
     let chainID = await web3.eth.getChainId()
 
     assert.isDefined(chainID)
     assert.equal(chainID, 646n)
 })
 
-it('get block', async () => {
+it('should get latest block number', async () => {
     let height = await web3.eth.getBlockNumber()
     assert.equal(height, conf.startBlockHeight)
+})
 
-    let block = await web3.eth.getBlock(height)
+it('should get block', async () => {
+    let block = await web3.eth.getBlock(conf.coaDeploymentHeight)
     assert.notDeepEqual(block, {})
     assert.isString(block.hash)
     assert.isString(block.parentHash)
@@ -43,8 +45,8 @@ it('get block', async () => {
     assert.deepEqual(block, blockHash)
 
     // get block count and uncle count
-    let txCount = await web3.eth.getBlockTransactionCount(conf.startBlockHeight)
-    let uncleCount = await web3.eth.getBlockUncleCount(conf.startBlockHeight)
+    let txCount = await web3.eth.getBlockTransactionCount(conf.coaDeploymentHeight)
+    let uncleCount = await web3.eth.getBlockUncleCount(conf.coaDeploymentHeight)
 
     assert.equal(txCount, 3n)
     assert.equal(uncleCount, 0n)
@@ -52,7 +54,7 @@ it('get block', async () => {
     let gasUsed = 0n
     // get block transactions & receipts
     for (const txIndex of [0, 1, 2]) {
-        let tx = await web3.eth.getTransactionFromBlock(conf.startBlockHeight, txIndex)
+        let tx = await web3.eth.getTransactionFromBlock(conf.coaDeploymentHeight, txIndex)
         assert.isNotNull(tx)
         assert.equal(tx.blockNumber, block.number)
         assert.equal(tx.blockHash, block.hash)
@@ -88,10 +90,7 @@ it('get block', async () => {
 })
 
 it('should get block receipts', async () => {
-    let height = await web3.eth.getBlockNumber()
-    assert.equal(height, conf.startBlockHeight)
-
-    let block = await web3.eth.getBlock(height)
+    let block = await web3.eth.getBlock(conf.coaDeploymentHeight)
     let response = await helpers.callRPCMethod('eth_getBlockReceipts', [block.hash])
     assert.equal(response.status, 200)
 
@@ -117,11 +116,11 @@ it('should get block receipts', async () => {
 
 it('should get block transaction count', async () => {
     // call endpoint with block number
-    let txCount = await web3.eth.getBlockTransactionCount(conf.startBlockHeight)
+    let txCount = await web3.eth.getBlockTransactionCount(conf.coaDeploymentHeight)
     assert.equal(txCount, 3n)
 
     // call endpoint with block hash
-    let block = await web3.eth.getBlock(conf.startBlockHeight)
+    let block = await web3.eth.getBlock(conf.coaDeploymentHeight)
     txCount = await web3.eth.getBlockTransactionCount(block.hash)
     assert.equal(txCount, 3n)
 
@@ -131,20 +130,20 @@ it('should get block transaction count', async () => {
 
     // call endpoint with 'latest'
     txCount = await web3.eth.getBlockTransactionCount('latest')
-    assert.equal(txCount, 3n)
+    assert.equal(txCount, 0n)
 })
 
 it('should get transactions from block', async () => {
     // call endpoint with block number
     for (const txIndex of [0, 1, 2]) {
-        let tx = await web3.eth.getTransactionFromBlock(conf.startBlockHeight, txIndex)
+        let tx = await web3.eth.getTransactionFromBlock(conf.coaDeploymentHeight, txIndex)
         assert.isNotNull(tx)
-        assert.equal(tx.blockNumber, conf.startBlockHeight)
+        assert.equal(tx.blockNumber, conf.coaDeploymentHeight)
         assert.equal(tx.transactionIndex, txIndex)
     }
 
     // call endpoint with block hash
-    let block = await web3.eth.getBlock(conf.startBlockHeight)
+    let block = await web3.eth.getBlock(conf.coaDeploymentHeight)
     for (const txIndex of [0, 1, 2]) {
         let tx = await web3.eth.getTransactionFromBlock(block.hash, txIndex)
         assert.isNotNull(tx)
@@ -157,16 +156,11 @@ it('should get transactions from block', async () => {
     assert.isNull(tx)
 
     // call endpoint with 'latest'
-    for (const txIndex of [0, 1, 2]) {
-        let tx = await web3.eth.getTransactionFromBlock('latest', txIndex)
-        assert.isNotNull(tx)
-        assert.equal(tx.blockNumber, conf.startBlockHeight)
-        assert.equal(tx.blockHash, block.hash)
-        assert.equal(tx.transactionIndex, txIndex)
-    }
+    tx = await web3.eth.getTransactionFromBlock('latest', 0)
+    assert.isNull(tx)
 })
 
-it('get earliest/genesis block', async () => {
+it('should get earliest/genesis block', async () => {
     let block = await web3.eth.getBlock('earliest')
 
     assert.notDeepEqual(block, {})
@@ -178,8 +172,8 @@ it('get earliest/genesis block', async () => {
     assert.isUndefined(block.transactions)
 })
 
-it('get block and transactions with COA interactions', async () => {
-    let block = await web3.eth.getBlock(conf.startBlockHeight)
+it('should get block and transactions with COA interactions', async () => {
+    let block = await web3.eth.getBlock(conf.coaDeploymentHeight)
     assert.notDeepEqual(block, {})
 
     for (const txIndex of [0, 1]) {
@@ -203,18 +197,18 @@ it('get block and transactions with COA interactions', async () => {
     }
 
     // get block transaction
-    let tx = await web3.eth.getTransactionFromBlock(conf.startBlockHeight, 0)
+    let tx = await web3.eth.getTransactionFromBlock(conf.coaDeploymentHeight, 0)
     assert.equal(tx.v, "0xff")
     assert.equal(tx.r, "0x0000000000000000000000000000000000000000000000020000000000000000")
     assert.equal(tx.s, "0x0000000000000000000000000000000000000000000000000000000000000004")
 
-    tx = await web3.eth.getTransactionFromBlock(conf.startBlockHeight, 1)
+    tx = await web3.eth.getTransactionFromBlock(conf.coaDeploymentHeight, 1)
     assert.equal(tx.v, "0xff")
     assert.equal(tx.r, "0x0000000000000000000000000000000000000000000000010000000000000000")
     assert.equal(tx.s, "0x0000000000000000000000000000000000000000000000000000000000000001")
 })
 
-it('get balance', async () => {
+it('should get balance', async () => {
     let wei = await web3.eth.getBalance(conf.eoa.address)
     assert.isNotNull(wei)
 
@@ -225,29 +219,29 @@ it('get balance', async () => {
     assert.equal(wei, weiAtBlock)
 })
 
-it('get code', async () => {
+it('should get code', async () => {
     let code = await web3.eth.getCode(conf.eoa.address)
     assert.equal(code, "0x") // empty
 })
 
-it('get coinbase', async () => {
+it('should get coinbase', async () => {
     let coinbase = await web3.eth.getCoinbase()
     assert.equal(coinbase, conf.coinbase) // e2e configured account
 })
 
-it('get gas price', async () => {
+it('should get gas price', async () => {
     let gasPrice = await web3.eth.getGasPrice()
     assert.equal(gasPrice, conf.minGasPrice)
 })
 
-it('get transaction', async () => {
-    let blockTx = await web3.eth.getTransactionFromBlock(conf.startBlockHeight, 2)
+it('should get transaction', async () => {
+    let blockTx = await web3.eth.getTransactionFromBlock(conf.coaDeploymentHeight, 2)
     assert.isNotNull(blockTx)
 
     let tx = await web3.eth.getTransaction(blockTx.hash)
     assert.deepEqual(blockTx, tx)
     assert.isString(tx.hash)
-    assert.equal(tx.blockNumber, conf.startBlockHeight)
+    assert.equal(tx.blockNumber, conf.coaDeploymentHeight)
     assert.equal(tx.gas, 300000n)
     assert.isNotEmpty(tx.from)
     assert.isNotEmpty(tx.r)
@@ -257,7 +251,7 @@ it('get transaction', async () => {
     let rcp = await web3.eth.getTransactionReceipt(tx.hash)
     assert.isNotEmpty(rcp)
     assert.equal(rcp.blockHash, blockTx.blockHash)
-    assert.equal(rcp.blockNumber, conf.startBlockHeight)
+    assert.equal(rcp.blockNumber, conf.coaDeploymentHeight)
     assert.equal(rcp.from, tx.from)
     assert.equal(rcp.to, tx.to)
     assert.equal(rcp.gasUsed, 21000n)
@@ -266,20 +260,19 @@ it('get transaction', async () => {
     assert.equal(rcp.status, conf.successStatus)
 })
 
-// it shouldn't fail, but return empty
-it('get not found values', async () => {
+it('should return null for non-existing blocks and receipts', async () => {
     const nonExistingHeight = 9999999999
 
     assert.isNull(await web3.eth.getBlock(nonExistingHeight))
     assert.isNull(await web3.eth.getTransactionFromBlock(nonExistingHeight, 0))
 })
 
-it('get mining status', async () => {
+it('should get mining status', async () => {
     let mining = await web3.eth.isMining()
     assert.isFalse(mining)
 })
 
-it('get syncing status', async () => {
+it('should get syncing status', async () => {
     let isSyncing = await web3.eth.isSyncing()
     assert.isFalse(isSyncing)
 })
@@ -327,7 +320,7 @@ it('can make batch requests', async () => {
 
     assert.deepEqual(
         results[0],
-        { jsonrpc: '2.0', id: 1, result: '0x3' }
+        { jsonrpc: '2.0', id: 1, result: '0x4' }
     )
     assert.deepEqual(
         results[1],
@@ -371,16 +364,16 @@ it('can make batch requests', async () => {
     assert.equal(error.innerError[0].message, 'batch too large')
 })
 
-it('get fee history', async () => {
+it('should get fee history', async () => {
     let response = await web3.eth.getFeeHistory(10, 'latest', [20])
 
     assert.deepEqual(
         response,
         {
             oldestBlock: 1n,
-            reward: [['0x96'], ['0x96'], ['0x96']], // gas price is 150 during testing
-            baseFeePerGas: [1n, 1n, 1n],
-            gasUsedRatio: [0, 0, 0.006205458333333334]
+            reward: [['0x96'], ['0x96'], ['0x96'], ['0x96']], // gas price is 150 during testing
+            baseFeePerGas: [1n, 1n, 1n, 1n],
+            gasUsedRatio: [0, 0, 0.006205458333333334, 0]
         }
     )
 })
