@@ -50,6 +50,7 @@ IMAGE_TAG ?= ${VERSION}
 ifeq ($(UNAME_S),Darwin)
     OS := macos
     ARCH := arm64
+    $(eval COMPILER_FLAGS += CGO_CFLAGS="-O2 -D__BLST_PORTABLE__")
 else ifeq ($(UNAME_S),Linux)
     OS := linux
     ARCH := amd64
