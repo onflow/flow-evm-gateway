@@ -182,6 +182,9 @@ docker-pull-version:
 #   - COA_ADDRESS: To be set by the operator. This is a Cadence address which funds gateway operations (remove 0x prefix)
 #   - COA_KEY: A full weight, private key belonging to operator COA_ADDRESS (remove 0x prefix). NB: For development use only. We recommend using cloud KMS configuration on mainnet
 #
+# Optional
+#   - GAS_PRICE: the attoFlow amount
+#
 # Optional make arguments:
 #   - DOCKER_RUN_DETACHED: Runs container in detached mode when true
 #   - DOCKER_HOST_PORT: Sets the exposed container port for the gateway JSON-RPC
@@ -197,6 +200,9 @@ ifdef DOCKER_HOST_PORT
 else
 	$(eval HOST_PORT=8545)
 endif
+ifndef GAS_PRICE
+	$(eval GAS_PRICE=100)
+endif
 ifdef DOCKER_MOUNT
 	$(eval MOUNT=--mount type=bind,src="$(DOCKER_MOUNT)",target=$(DATADIR))
 	$(call check_and_append,database-dir,DATADIR)
@@ -208,6 +214,7 @@ endif
 	$(call check_and_append,coinbase,COINBASE)
 	$(call check_and_append,coa-address,COA_ADDRESS)
 	$(call check_and_append,coa-key,COA_KEY)
+	$(call check_and_append,gas-price,GAS_PRICE)
 
 	$(eval CMD_ARGS += --ws-enabled=true --rate-limit=9999999 --rpc-host=0.0.0.0 --log-level=info)
 	$(call check_and_append,access-node-spork-hosts,ACCESS_NODE_SPORK_HOSTS)
