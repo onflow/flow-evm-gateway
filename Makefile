@@ -41,10 +41,15 @@ $(if $($(2)),\
 endef
 
 # Determine OS and set ARCH
+# Set VERSION from command line, environment, or default to SHORT_COMMIT
+VERSION ?= ${SHORT_COMMIT}
+
+# Set IMAGE_TAG from VERSION if not explicitly set
+IMAGE_TAG ?= ${VERSION}
+
 ifeq ($(UNAME_S),Darwin)
     OS := macos
     ARCH := arm64
-    $(eval COMPILER_FLAGS += CGO_CFLAGS="-O2 -D__BLST_PORTABLE__")
 else ifeq ($(UNAME_S),Linux)
     OS := linux
     ARCH := amd64
