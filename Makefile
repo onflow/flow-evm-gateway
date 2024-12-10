@@ -138,6 +138,9 @@ start-local-bin:
 # Build docker image from local sources
 .PHONY: docker-build-local
 docker-build-local:
+ifdef GOARCH
+	$(eval ARCH=$(GOARCH))
+endif
 	docker build --build-arg ARCH=$(ARCH) --no-cache -f dev/Dockerfile -t "$(CONTAINER_REGISTRY)/evm-gateway:$(COMMIT)" .
 
 # Docker run for local development
@@ -158,6 +161,9 @@ docker-run-local:
 # Build docker image for release
 .PHONY: docker-build
 docker-build:
+ifdef GOARCH
+	$(eval ARCH=$(GOARCH))
+endif
 	docker build --build-arg VERSION="$(VERSION)" --build-arg ARCH=$(ARCH)  -f Dockerfile -t "$(CONTAINER_REGISTRY)/evm-gateway:$(IMAGE_TAG)" \
 		--label "git_commit=$(COMMIT)" --label "git_tag=$(IMAGE_TAG)" .
 
