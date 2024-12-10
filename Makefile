@@ -41,12 +41,6 @@ $(if $($(2)),\
 endef
 
 # Determine OS and set ARCH
-# Set VERSION from command line, environment, or default to SHORT_COMMIT
-VERSION ?= ${SHORT_COMMIT}
-
-# Set IMAGE_TAG from VERSION if not explicitly set
-IMAGE_TAG ?= ${VERSION}
-
 ifeq ($(UNAME_S),Darwin)
     OS := macos
     ARCH := arm64
