@@ -34,6 +34,6 @@ COPY dev/emulator-account.pkey /app/flow-evm-gateway/
 
 WORKDIR /app/flow-evm-gateway
 
-EXPOSE 8545
+EXPOSE 3569
 
 ENTRYPOINT ["/app/flow-evm-gateway/app", "run"]

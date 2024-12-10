@@ -155,7 +155,7 @@ docker-run-local:
 
 	$(eval CMD_ARGS += --flow-network-id=flow-emulator --log-level=debug --gas-price=0 --log-writer=console --profiler-enabled=true)
 
-	docker run -p 8545:8545 "$(CONTAINER_REGISTRY)/evm-gateway:$(COMMIT)" $(CMD_ARGS)
+	docker run -p 3569:3569 "$(CONTAINER_REGISTRY)/evm-gateway:$(COMMIT)" $(CMD_ARGS)
 
 
 # Build docker image for release
