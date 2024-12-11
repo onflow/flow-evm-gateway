@@ -72,7 +72,7 @@ transactions and can be either an EVM EOA or COA address.
 
 It is acceptable to create a single Cadence account for the COA and use the EVM address associated with that for the COINBASE address.
 
-### Running Locally
+## Running Locally
 
 For local development, first install [Flow CLI](https://developers.flow.com/tools/flow-cli/install). The examples below require no configuration and are intended for local development.
 
@@ -125,7 +125,7 @@ it should return:
 }
 ```
 
-### Running on Testnet
+## Running on Testnet
 
 Running against the testnet with a local build can be done by pointing the gateway to the testnet ANs and providing the correct configuration.
 Please refer to the configuration section and read through all the configuration flags before proceeding.
@@ -163,7 +163,6 @@ Below is an example configuration for running against testnet, with a preconfigu
 --flow-network-id=flow-testnet \
 --init-cadence-height=211176670 \
 --ws-enabled=true \
---coa-resource-create=false \
 --coinbase=FACF71692421039876a5BB4F10EF7A439D8ef61E \
 --coa-address=62631c28c9fc5a91 \
 --coa-key=2892fba444f1d5787739708874e3b01160671924610411ac787ac1379d420f49 \
@@ -212,7 +211,7 @@ Once set, this target starts the EVM Gateway for the specified image version and
 make docker-run
 ```
 
-### Mainnet and Node Operations
+## Mainnet and Node Operations
 
 Guidance for EVM Gateway node operations including considerations for mainnet, hardware specs, monitoring setup and troubleshooting 
 can be found in the EVM Gateway [node operations docs](https://developers.flow.com/networks/node-ops/access-onchain-data/evm-gateway/evm-gateway-setup).
@@ -236,7 +235,6 @@ The application can be configured using the following flags at runtime:
 | `coa-address`                  | `""`             | Flow address holding COA account for submitting transactions                               |
 | `coa-key`                      | `""`             | Private key for the COA address used for transactions                                      |
 | `coa-key-file`                 | `""`             | Path to a JSON file of COA keys for key-rotation (exclusive with `coa-key` flag)           |
-| `coa-resource-create`          | `false`          | Auto-create the COA resource if it doesn't exist in the Flow COA account                   |
 | `coa-cloud-kms-project-id`     | `""`             | Project ID for KMS keys (e.g. `flow-evm-gateway`)                                          |
 | `coa-cloud-kms-location-id`    | `""`             | Location ID for KMS key ring (e.g. 'global')                                               |
 | `coa-cloud-kms-key-ring-id`    | `""`             | Key ring ID for KMS keys (e.g. 'tx-signing')                                               |
@@ -258,9 +256,6 @@ The application can be configured using the following flags at runtime:
 | `profiler-enabled`             | `false`          | Enable the pprof profiler server                                                           |
 | `profiler-host`                | `localhost`      | Host for the pprof profiler                                                                |
 | `profiler-port`                | `6060`           | Port for the pprof profiler                                                                |
-
-# Deploying
-Deploying the EVM Gateway node comes with some prerequisites as well as expectations and they are best explained in the WIP document: https://flowfoundation.notion.site/EVM-Gateway-Deployment-3c41da6710af40acbaf971e22ce0a9fd
 
 
 # EVM Gateway Endpoints
@@ -294,6 +289,7 @@ The EVM Gateway implements APIs according to the Ethereum specification: https:/
     * debug_traceTransaction
     * debug_traceBlockByNumber
     * debug_traceBlockByHash
+- debug_flowHeightByBlock - returns the flow block height for the given EVM block (id or height)
 
 **Unsupported APIs**
 - Wallet APIs: we don't officially support wallet APIs (eth_accounts, eth_sign, eth_signTransaction, eth_sendTransaction) due to security
