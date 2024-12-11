@@ -607,7 +607,7 @@ func (b *BlockChainAPI) Call(
 	args ethTypes.TransactionArgs,
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 	stateOverrides *ethTypes.StateOverride,
-	_ *ethTypes.BlockOverrides,
+	blockOverrides *ethTypes.BlockOverrides,
 ) (hexutil.Bytes, error) {
 	l := b.logger.With().
 		Str("endpoint", "call").
@@ -644,7 +644,7 @@ func (b *BlockChainAPI) Call(
 		from = *args.From
 	}
 
-	res, err := b.evm.Call(tx, from, height, stateOverrides)
+	res, err := b.evm.Call(tx, from, height, stateOverrides, blockOverrides)
 	if err != nil {
 		return handleError[hexutil.Bytes](err, l, b.collector)
 	}
