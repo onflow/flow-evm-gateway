@@ -129,6 +129,7 @@ endif
 # Docker run for local development
 .PHONY: docker-run-local
 docker-run-local:
+	@trap 'kill $$(jobs -p)' EXIT
 	flow emulator -f dev/flow.json &
 	sleep 3
 
