@@ -30,7 +30,6 @@ RUN chmod a+x /app/flow-evm-gateway/app
 
 # Copy the flow.json file to the directory where the gateway expects to find it
 COPY dev/flow.json /app/flow-evm-gateway/
-COPY dev/emulator-account.pkey /app/flow-evm-gateway/
 
 WORKDIR /app/flow-evm-gateway
 
