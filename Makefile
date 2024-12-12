@@ -162,7 +162,7 @@ docker-pull-version:
 # Requires the following ENV variables:
 #   - ACCESS_NODE_GRPC_HOST: [access.devnet.nodes.onflow.org:9000 | access.mainnet.nodes.onflow.org:9000]
 #   - FLOW_NETWORK_ID: [flow-testnet, flow-mainnet]
-#   - INIT_CADENCE_HEIGHT: [testnet: 211176670, mainnet: 88226267]
+#   - INIT_CADENCE_HEIGHT: [testnet: 211176670, mainnet: 85981135]
 #   - COINBASE: To be set by the operator. This is an EVM EOA or COA address which is set as the receiver of GW transaction fees (remove 0x prefix)
 #   - COA_ADDRESS: To be set by the operator. This is a Cadence address which funds gateway operations (remove 0x prefix)
 #   - COA_KEY: A full weight, private key belonging to operator COA_ADDRESS (remove 0x prefix). NB: For development use only. We recommend using cloud KMS configuration on mainnet
@@ -196,7 +196,7 @@ endif
 ifdef FLOW_NETWORK_ID
     ifeq ($(FLOW_NETWORK_ID),flow-testnet)
         ACCESS_NODE_SPORK_HOSTS := TESTNET_ACCESS_NODE_SPORK_HOSTS
-    else ifeq ($(FLOW_NETWORK_ID),flow-testnet)
+    else ifeq ($(FLOW_NETWORK_ID),flow-mainnet)
         ACCESS_NODE_SPORK_HOSTS := MAINNET_ACCESS_NODE_SPORK_HOSTS
     endif
 endif
