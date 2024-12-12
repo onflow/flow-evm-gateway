@@ -3,25 +3,23 @@ package requester
 import (
 	"fmt"
 	"sync"
-	"time"
 
 	flowsdk "github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/crypto"
-	flowGo "github.com/onflow/flow-go/model/flow"
 )
 
 var ErrNoKeysAvailable = fmt.Errorf("no keys available")
 
-const accountKeyExpiry = 10 * time.Second
+const accountKeyBlockExpiration = 1_000
 
 type AccountKey struct {
 	flowsdk.AccountKey
 
-	mu       sync.Mutex
-	ks       *KeyStore
-	Address  flowsdk.Address
-	Signer   crypto.Signer
-	lastUsed time.Time
+	mu            sync.Mutex
+	ks            *KeyStore
+	Address       flowsdk.Address
+	Signer        crypto.Signer
+	lastUsedBlock uint64
 }
 
 // Done unlocks a key after use and puts it back into the pool.
@@ -58,13 +56,14 @@ func (k *AccountKey) SetProposerPayerAndSign(
 		SignEnvelope(k.Address, k.Index, k.Signer)
 }
 
-func (k *AccountKey) expired() bool {
-	return time.Since(k.lastUsed) > flowGo.DefaultTransactionExpiry
-}
-
 type KeyLock interface {
-	LockKey(txID flowsdk.Identifier, key *AccountKey)
+	LockKey(
+		txID flowsdk.Identifier,
+		referenceBlockHeight uint64,
+		key *AccountKey,
+	)
 	UnlockKey(txID flowsdk.Identifier)
+	Notify(blockHeight uint64)
 }
 
 type KeyStore struct {
@@ -88,8 +87,6 @@ func NewKeyStore(keys []*AccountKey) *KeyStore {
 	ks.size = len(keys)
 	ks.availableKeys = availableKeys
 
-	go ks.keyExpiryChecker()
-
 	return ks
 }
 
@@ -106,11 +103,15 @@ func (k *KeyStore) Take() (*AccountKey, error) {
 	}
 }
 
-func (k *KeyStore) LockKey(txID flowsdk.Identifier, key *AccountKey) {
+func (k *KeyStore) LockKey(
+	txID flowsdk.Identifier,
+	referenceBlockHeight uint64,
+	key *AccountKey,
+) {
 	key.mu.Lock()
 	defer key.mu.Unlock()
 
-	key.lastUsed = time.Now()
+	key.lastUsedBlock = referenceBlockHeight
 	k.usedKeys[txID] = key
 }
 
@@ -122,12 +123,10 @@ func (k *KeyStore) UnlockKey(txID flowsdk.Identifier) {
 	}
 }
 
-func (k *KeyStore) keyExpiryChecker() {
-	for range time.Tick(accountKeyExpiry) {
-		for txID, key := range k.usedKeys {
-			if key.expired() {
-				k.UnlockKey(txID)
-			}
+func (k *KeyStore) Notify(blockHeight uint64) {
+	for txID, key := range k.usedKeys {
+		if blockHeight-key.lastUsedBlock >= accountKeyBlockExpiration {
+			k.UnlockKey(txID)
 		}
 	}
 }
