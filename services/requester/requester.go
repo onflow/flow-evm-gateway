@@ -571,7 +571,7 @@ func (e *EVM) buildTransaction(
 	if err := accKey.SetProposerPayerAndSign(flowTx, account); err != nil {
 		return nil, err
 	}
-	e.keystore.LockKey(flowTx.ID(), accKey)
+	e.keystore.LockKey(flowTx.ID(), latestBlock.Height, accKey)
 
 	e.collector.AvailableSigningKeys(e.keystore.AvailableKeys())
 	e.collector.OperatorBalance(account)

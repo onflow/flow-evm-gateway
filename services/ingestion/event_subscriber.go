@@ -175,6 +175,7 @@ func (r *RPCEventSubscriber) subscribe(ctx context.Context, height uint64) <-cha
 				for _, evt := range blockEvents.Events {
 					r.keyLock.UnlockKey(evt.TransactionID)
 				}
+				r.keyLock.Notify(blockEvents.Height)
 
 				eventsChan <- evmEvents
 
