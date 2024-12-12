@@ -83,7 +83,7 @@ type EVMGatewayNodeBuilder struct {
 	config.Config
 	Logger           zerolog.Logger
 	componentBuilder component.ComponentManagerBuilder
-	components       []cmd.NamedComponentFunc[config.Config]
+	components       []cmd.NamedComponentFactory[config.Config]
 	postShutdownFns  []func() error
 	modules          []namedModuleFunc
 
@@ -158,9 +158,9 @@ func (fnb *EVMGatewayNodeBuilder) initDB() error {
 }
 
 func (fnb *EVMGatewayNodeBuilder) Component(name string, f cmd.ReadyDoneFactory[config.Config]) *EVMGatewayNodeBuilder {
-	fnb.components = append(fnb.components, cmd.NamedComponentFunc[config.Config]{
-		FN:   f,
-		Name: name,
+	fnb.components = append(fnb.components, cmd.NamedComponentFactory[config.Config]{
+		ComponentFactory: f,
+		Name:             name,
 	})
 	return fnb
 }
