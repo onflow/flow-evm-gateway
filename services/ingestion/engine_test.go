@@ -3,15 +3,21 @@ package ingestion
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"math/big"
 	"testing"
 
+	"github.com/onflow/flow-evm-gateway/storage"
+
 	pebbleDB "github.com/cockroachdb/pebble"
+	"github.com/onflow/flow-go/fvm/environment"
+	"github.com/onflow/flow-go/fvm/evm"
 	"github.com/onflow/flow-go/fvm/evm/events"
 	flowGo "github.com/onflow/flow-go/model/flow"
 
 	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/services/ingestion/mocks"
+	"github.com/onflow/flow-evm-gateway/services/replayer"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
 
 	"github.com/onflow/cadence"
@@ -31,13 +37,13 @@ import (
 )
 
 func TestSerialBlockIngestion(t *testing.T) {
+
 	t.Run("successfully ingest serial blocks", func(t *testing.T) {
 		receipts := &storageMock.ReceiptIndexer{}
 		transactions := &storageMock.TransactionIndexer{}
 		latestHeight := uint64(10)
 
-		store, err := pebble.New(t.TempDir(), zerolog.Nop())
-		require.NoError(t, err)
+		store, registerStore := setupStore(t)
 
 		blocks := &storageMock.BlockIndexer{}
 		blocks.
@@ -47,31 +53,31 @@ func TestSerialBlockIngestion(t *testing.T) {
 			}).
 			Once() // make sure this isn't called multiple times
 
-		accounts := &storageMock.AccountIndexer{}
-		accounts.
-			On("Update").
-			Return(func() error { return nil })
+		traces := &storageMock.TraceIndexer{}
 
 		eventsChan := make(chan models.BlockEvents)
 
 		subscriber := &mocks.EventSubscriber{}
 		subscriber.
-			On("Subscribe", mock.Anything, mock.AnythingOfType("uint64")).
-			Return(func(ctx context.Context, latest uint64) <-chan models.BlockEvents {
+			On("Subscribe", mock.Anything).
+			Return(func(ctx context.Context) <-chan models.BlockEvents {
 				return eventsChan
 			})
 
 		engine := NewEventIngestionEngine(
 			subscriber,
+			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
 			store,
+			registerStore,
 			blocks,
 			receipts,
 			transactions,
-			accounts,
+			traces,
 			models.NewPublisher[*models.Block](),
 			models.NewPublisher[[]*gethTypes.Log](),
 			zerolog.Nop(),
 			metrics.NopCollector,
+			defaultReplayerConfig(),
 		)
 
 		done := make(chan struct{})
@@ -98,7 +104,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 				}).
 				Once()
 
-			eventsChan <- models.NewBlockEvents(flow.BlockEvents{
+			eventsChan <- models.NewSingleBlockEvents(flow.BlockEvents{
 				Events: []flow.Event{{
 					Type:  string(blockEvent.Etype),
 					Value: blockCdc,
@@ -117,8 +123,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 		transactions := &storageMock.TransactionIndexer{}
 		latestHeight := uint64(10)
 
-		store, err := pebble.New(t.TempDir(), zerolog.Nop())
-		require.NoError(t, err)
+		store, registerStore := setupStore(t)
 
 		blocks := &storageMock.BlockIndexer{}
 		blocks.
@@ -128,30 +133,30 @@ func TestSerialBlockIngestion(t *testing.T) {
 			}).
 			Once() // make sure this isn't called multiple times
 
-		accounts := &storageMock.AccountIndexer{}
-		accounts.
-			On("Update", mock.Anything, mock.Anything).
-			Return(func(t models.TransactionCall, r *gethTypes.Receipt) error { return nil })
+		traces := &storageMock.TraceIndexer{}
 
 		eventsChan := make(chan models.BlockEvents)
 		subscriber := &mocks.EventSubscriber{}
 		subscriber.
-			On("Subscribe", mock.Anything, mock.AnythingOfType("uint64")).
-			Return(func(ctx context.Context, latest uint64) <-chan models.BlockEvents {
+			On("Subscribe", mock.Anything).
+			Return(func(ctx context.Context) <-chan models.BlockEvents {
 				return eventsChan
 			})
 
 		engine := NewEventIngestionEngine(
 			subscriber,
+			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
 			store,
+			registerStore,
 			blocks,
 			receipts,
 			transactions,
-			accounts,
+			traces,
 			models.NewPublisher[*models.Block](),
 			models.NewPublisher[[]*gethTypes.Log](),
 			zerolog.Nop(),
 			metrics.NopCollector,
+			defaultReplayerConfig(),
 		)
 
 		waitErr := make(chan struct{})
@@ -159,7 +164,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 		go func() {
 			err := engine.Run(context.Background())
 			assert.ErrorIs(t, err, models.ErrInvalidHeight)
-			assert.EqualError(t, err, "failed to index block 20 event: invalid block height, expected 11, got 20: invalid height")
+			assert.ErrorContains(t, err, "invalid height: received new block: 20, non-sequential of latest block: 11")
 			close(waitErr)
 		}()
 
@@ -213,6 +218,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 }
 
 func TestBlockAndTransactionIngestion(t *testing.T) {
+
 	t.Run("successfully ingest transaction and block", func(t *testing.T) {
 		receipts := &storageMock.ReceiptIndexer{}
 		transactions := &storageMock.TransactionIndexer{}
@@ -220,8 +226,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		nextHeight := latestHeight + 1
 		blockID := flow.Identifier{0x01}
 
-		store, err := pebble.New(t.TempDir(), zerolog.Nop())
-		require.NoError(t, err)
+		store, registerStore := setupStore(t)
 
 		blocks := &storageMock.BlockIndexer{}
 		blocks.
@@ -238,16 +243,11 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 				return nil
 			})
 
-		accounts := &storageMock.AccountIndexer{}
-		accounts.
-			On("Update", mock.AnythingOfType("models.TransactionCall"), mock.AnythingOfType("*models.Receipt"), mock.Anything).
-			Return(func(tx models.Transaction, receipt *models.Receipt, _ *pebbleDB.Batch) error { return nil })
-
 		eventsChan := make(chan models.BlockEvents)
 		subscriber := &mocks.EventSubscriber{}
 		subscriber.
-			On("Subscribe", mock.Anything, mock.AnythingOfType("uint64")).
-			Return(func(ctx context.Context, latest uint64) <-chan models.BlockEvents {
+			On("Subscribe", mock.Anything).
+			Return(func(ctx context.Context) <-chan models.BlockEvents {
 				return eventsChan
 			})
 
@@ -256,17 +256,28 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		blockCdc, block, blockEvent, err := newBlock(nextHeight, []gethCommon.Hash{result.TxHash})
 		require.NoError(t, err)
 
+		traces := &storageMock.TraceIndexer{}
+		traces.
+			On("StoreTransaction", mock.AnythingOfType("common.Hash"), mock.AnythingOfType("json.RawMessage"), mock.Anything).
+			Return(func(txID gethCommon.Hash, trace json.RawMessage, batch *pebbleDB.Batch) error {
+				assert.Equal(t, transaction.Hash(), txID)
+				return nil
+			})
+
 		engine := NewEventIngestionEngine(
 			subscriber,
+			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
 			store,
+			registerStore,
 			blocks,
 			receipts,
 			transactions,
-			accounts,
+			traces,
 			models.NewPublisher[*models.Block](),
 			models.NewPublisher[[]*gethTypes.Log](),
 			zerolog.Nop(),
 			metrics.NopCollector,
+			defaultReplayerConfig(),
 		)
 
 		done := make(chan struct{})
@@ -307,7 +318,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			}).
 			Once()
 
-		eventsChan <- models.NewBlockEvents(flow.BlockEvents{
+		eventsChan <- models.NewSingleBlockEvents(flow.BlockEvents{
 			Events: []flow.Event{{
 				Type:  string(blockEvent.Etype),
 				Value: blockCdc,
@@ -329,8 +340,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		latestHeight := uint64(10)
 		nextHeight := latestHeight + 1
 
-		store, err := pebble.New(t.TempDir(), zerolog.Nop())
-		require.NoError(t, err)
+		store, registerStore := setupStore(t)
 
 		blocks := &storageMock.BlockIndexer{}
 		blocks.
@@ -341,35 +351,41 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			On("SetLatestCadenceHeight", mock.AnythingOfType("uint64")).
 			Return(func(h uint64) error { return nil })
 
-		accounts := &storageMock.AccountIndexer{}
-		accounts.
-			On("Update", mock.AnythingOfType("models.TransactionCall"), mock.AnythingOfType("*models.Receipt"), mock.Anything).
-			Return(func(tx models.Transaction, receipt *models.Receipt, _ *pebbleDB.Batch) error { return nil })
-
 		eventsChan := make(chan models.BlockEvents)
 		subscriber := &mocks.EventSubscriber{}
 		subscriber.
-			On("Subscribe", mock.Anything, mock.AnythingOfType("uint64")).
-			Return(func(ctx context.Context, latest uint64) <-chan models.BlockEvents {
+			On("Subscribe", mock.Anything).
+			Return(func(ctx context.Context) <-chan models.BlockEvents {
 				return eventsChan
 			})
 
-		txCdc, txEvent, _, res, err := newTransaction(nextHeight)
+		txCdc, txEvent, transaction, res, err := newTransaction(nextHeight)
 		require.NoError(t, err)
 		blockCdc, _, blockEvent, err := newBlock(nextHeight, []gethCommon.Hash{res.TxHash})
 		require.NoError(t, err)
 
+		traces := &storageMock.TraceIndexer{}
+		traces.
+			On("StoreTransaction", mock.AnythingOfType("common.Hash"), mock.AnythingOfType("json.RawMessage"), mock.Anything).
+			Return(func(txID gethCommon.Hash, trace json.RawMessage, batch *pebbleDB.Batch) error {
+				assert.Equal(t, transaction.Hash(), txID)
+				return nil
+			})
+
 		engine := NewEventIngestionEngine(
 			subscriber,
+			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
 			store,
+			registerStore,
 			blocks,
 			receipts,
 			transactions,
-			accounts,
+			traces,
 			models.NewPublisher[*models.Block](),
 			models.NewPublisher[[]*gethTypes.Log](),
 			zerolog.Nop(),
 			metrics.NopCollector,
+			defaultReplayerConfig(),
 		)
 
 		done := make(chan struct{})
@@ -404,7 +420,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			}).
 			Once()
 
-		eventsChan <- models.NewBlockEvents(flow.BlockEvents{
+		eventsChan <- models.NewSingleBlockEvents(flow.BlockEvents{
 			Events: []flow.Event{
 				// first transaction
 				{
@@ -429,8 +445,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		transactions := &storageMock.TransactionIndexer{}
 		latestCadenceHeight := uint64(0)
 
-		store, err := pebble.New(t.TempDir(), zerolog.Nop())
-		require.NoError(t, err)
+		store, registerStore := setupStore(t)
 
 		blocks := &storageMock.BlockIndexer{}
 		blocks.
@@ -440,32 +455,31 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			}).
 			Once() // make sure this isn't called multiple times
 
-		accounts := &storageMock.AccountIndexer{}
-		accounts.
-			On("Update", mock.Anything, mock.AnythingOfType("*models.Receipt"), mock.Anything).
-			Return(func(t models.Transaction, r *models.Receipt, _ *pebbleDB.Batch) error { return nil })
+		traces := &storageMock.TraceIndexer{}
 
 		eventsChan := make(chan models.BlockEvents)
 		subscriber := &mocks.EventSubscriber{}
 		subscriber.
-			On("Subscribe", mock.Anything, mock.AnythingOfType("uint64")).
-			Return(func(ctx context.Context, latest uint64) <-chan models.BlockEvents {
-				assert.Equal(t, latestCadenceHeight, latest)
+			On("Subscribe", mock.Anything).
+			Return(func(ctx context.Context) <-chan models.BlockEvents {
 				return eventsChan
 			}).
 			Once()
 
 		engine := NewEventIngestionEngine(
 			subscriber,
+			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
 			store,
+			registerStore,
 			blocks,
 			receipts,
 			transactions,
-			accounts,
+			traces,
 			models.NewPublisher[*models.Block](),
 			models.NewPublisher[[]*gethTypes.Log](),
 			zerolog.Nop(),
 			metrics.NopCollector,
+			defaultReplayerConfig(),
 		)
 
 		done := make(chan struct{})
@@ -503,6 +517,13 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 				Return(func(receipts []*models.Receipt, _ *pebbleDB.Batch) error { return nil }).
 				Once()
 
+			traces.
+				On("StoreTransaction", mock.AnythingOfType("common.Hash"), mock.AnythingOfType("json.RawMessage"), mock.Anything).
+				Return(func(txID gethCommon.Hash, trace json.RawMessage, batch *pebbleDB.Batch) error {
+					assert.Equal(t, transaction.Hash(), txID)
+					return nil
+				})
+
 			events = append(events, flow.Event{
 				Type:  string(txEvent.Etype),
 				Value: txCdc,
@@ -536,7 +557,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		// and it will make the first block be swapped with second block out-of-order
 		events[1], events[2] = events[2], events[1]
 
-		eventsChan <- models.NewBlockEvents(flow.BlockEvents{
+		eventsChan <- models.NewSingleBlockEvents(flow.BlockEvents{
 			Events: events,
 			Height: latestCadenceHeight + 1,
 		})
@@ -603,4 +624,43 @@ func newTransaction(height uint64) (cadence.Event, *events.Event, models.Transac
 
 	cdcEv, err := ev.Payload.ToCadence(flowGo.Previewnet)
 	return cdcEv, ev, models.TransactionCall{Transaction: tx}, res, err
+}
+
+func defaultReplayerConfig() replayer.Config {
+	return replayer.Config{
+		ChainID:             flowGo.Emulator,
+		RootAddr:            evm.StorageAccountAddress(flowGo.Emulator),
+		CallTracerCollector: replayer.NopTracer,
+		ValidateResults:     false,
+	}
+}
+
+func setupStore(t *testing.T) (*pebble.Storage, *pebble.RegisterStorage) {
+	db, err := pebble.OpenDB(t.TempDir())
+	require.NoError(t, err)
+	store := pebble.New(db, zerolog.Nop())
+
+	storageAddress := evm.StorageAccountAddress(flowGo.Emulator)
+	registerStore := pebble.NewRegisterStorage(store, storageAddress)
+	snapshot, err := registerStore.GetSnapshotAt(0)
+	require.NoError(t, err)
+	delta := storage.NewRegisterDelta(snapshot)
+	accountStatus := environment.NewAccountStatus()
+	err = delta.SetValue(
+		storageAddress[:],
+		[]byte(flowGo.AccountStatusKey),
+		accountStatus.ToBytes(),
+	)
+	require.NoError(t, err)
+
+	batch := store.NewBatch()
+	defer func() {
+		require.NoError(t, batch.Close())
+	}()
+	err = registerStore.Store(delta.GetUpdates(), 0, batch)
+	require.NoError(t, err)
+	err = batch.Commit(pebbleDB.Sync)
+	require.NoError(t, err)
+
+	return store, registerStore
 }

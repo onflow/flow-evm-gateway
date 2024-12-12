@@ -40,18 +40,21 @@ it('store revertReason field in transaction receipts', async () => {
         [signedTx.rawTransaction]
     )
     assert.equal(200, response.status)
+    let txHash = response.body.result
 
-    let latestHeight = await web3.eth.getBlockNumber()
-    let block = await web3.eth.getBlock(latestHeight)
-    assert.equal(block.number, conf.startBlockHeight + 2n)
+    let rcp = null
+    // wait until the transaction is executed & indexed, and its
+    // receipt becomes available.
+    while (rcp == null) {
+        rcp = await helpers.callRPCMethod(
+            'eth_getTransactionReceipt',
+            [txHash]
+        )
+        if (rcp.body.result == null) {
+            rcp = null
+        }
+    }
 
-    let revertedTx = await web3.eth.getTransactionFromBlock(latestHeight, 0)
-    // Give some time to the engine to ingest the latest transaction
-    await new Promise(res => setTimeout(res, 1500))
-    rcp = await helpers.callRPCMethod(
-        'eth_getTransactionReceipt',
-        [revertedTx.hash]
-    )
     // make sure the `revertReason` field is included in the response
     assert.equal(
         rcp.body['result'].revertReason,
@@ -74,22 +77,24 @@ it('store revertReason field in transaction receipts', async () => {
         [signedTx.rawTransaction]
     )
     assert.equal(200, response.status)
+    txHash = response.body.result
 
-    latestHeight = await web3.eth.getBlockNumber()
-    block = await web3.eth.getBlock(latestHeight)
-    assert.equal(block.number, conf.startBlockHeight + 3n)
+    rcp = null
+    // wait until the transaction is executed & indexed, and its
+    // receipt becomes available.
+    while (rcp == null) {
+        rcp = await helpers.callRPCMethod(
+            'eth_getTransactionReceipt',
+            [txHash]
+        )
+        if (rcp.body.result == null) {
+            rcp = null
+        }
+    }
 
-    revertedTx = await web3.eth.getTransactionFromBlock(latestHeight, 0)
-    // Give some time to the engine to ingest the latest transaction
-    await new Promise(res => setTimeout(res, 1500))
-    rcp = await helpers.callRPCMethod(
-        'eth_getTransactionReceipt',
-        [revertedTx.hash]
-    )
     // make sure the `revertReason` field is included in the response
     assert.equal(
         rcp.body['result'].revertReason,
         '0x9195785a00000000000000000000000000000000000000000000000000000000000000050000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000001056616c756520697320746f6f206c6f7700000000000000000000000000000000'
     )
-
 })

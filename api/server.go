@@ -53,7 +53,7 @@ type Server struct {
 	host     string
 	port     int
 
-	config    *config.Config
+	config    config.Config
 	collector metrics.Collector
 }
 
@@ -66,7 +66,7 @@ const (
 func NewServer(
 	logger zerolog.Logger,
 	collector metrics.Collector,
-	cfg *config.Config,
+	cfg config.Config,
 ) *Server {
 	logger = logger.With().Str("component", "API").Logger()
 

@@ -9,10 +9,10 @@ import (
 
 // NetAPI offers network related RPC methods
 type NetAPI struct {
-	config *config.Config
+	config config.Config
 }
 
-func NewNetAPI(config *config.Config) *NetAPI {
+func NewNetAPI(config config.Config) *NetAPI {
 	return &NetAPI{
 		config: config,
 	}

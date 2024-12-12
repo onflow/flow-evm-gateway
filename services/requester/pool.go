@@ -65,8 +65,7 @@ func (t *TxPool) Send(
 	t.pool.Store(evmTx.Hash(), evmTx)
 	defer t.pool.Delete(evmTx.Hash())
 
-	backoff := retry.WithMaxDuration(time.Minute*3, retry.NewFibonacci(time.Millisecond*100))
-
+	backoff := retry.WithMaxDuration(time.Minute*1, retry.NewConstant(time.Second*1))
 	return retry.Do(ctx, backoff, func(ctx context.Context) error {
 		res, err := t.client.GetTransactionResult(ctx, flowTx.ID())
 		if err != nil {

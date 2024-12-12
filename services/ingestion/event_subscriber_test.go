@@ -43,9 +43,9 @@ func Test_Subscribing(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	subscriber := NewRPCSubscriber(client, 100, flowGo.Previewnet, zerolog.Nop())
+	subscriber := NewRPCEventSubscriber(zerolog.Nop(), client, flowGo.Previewnet, 1)
 
-	events := subscriber.Subscribe(context.Background(), 1)
+	events := subscriber.Subscribe(context.Background())
 
 	var prevHeight uint64
 
@@ -83,9 +83,9 @@ func Test_MissingBlockEvent(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	subscriber := NewRPCSubscriber(client, 100, flowGo.Previewnet, zerolog.Nop())
+	subscriber := NewRPCEventSubscriber(zerolog.Nop(), client, flowGo.Previewnet, 1)
 
-	events := subscriber.Subscribe(context.Background(), 1)
+	events := subscriber.Subscribe(context.Background())
 
 	missingHashes := make([]gethCommon.Hash, 0)
 
@@ -160,7 +160,7 @@ func Test_MissingBlockEvent(t *testing.T) {
 // EVM events through the gRPC API, returns the correct data.
 func Test_SubscribingWithRetryOnError(t *testing.T) {
 	endHeight := uint64(10)
-	sporkClients := []access.Client{}
+	var sporkClients []access.Client
 	currentClient := testutils.SetupClientForRange(1, endHeight)
 
 	cadenceHeight := uint64(5)
@@ -185,9 +185,9 @@ func Test_SubscribingWithRetryOnError(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	subscriber := NewRPCSubscriber(client, 100, flowGo.Previewnet, zerolog.Nop())
+	subscriber := NewRPCEventSubscriber(zerolog.Nop(), client, flowGo.Previewnet, 1)
 
-	events := subscriber.Subscribe(context.Background(), 1)
+	events := subscriber.Subscribe(context.Background())
 
 	var prevHeight uint64
 
@@ -205,16 +205,16 @@ func Test_SubscribingWithRetryOnError(t *testing.T) {
 		prevHeight = eventHeight
 
 		if eventHeight == cadenceHeight {
-			assert.Equal(t, evmBlock, ev.Events.Block())
+			require.Equal(t, evmBlock, ev.Events.Block())
 			for i := 0; i < len(txHashes); i++ {
 				tx := ev.Events.Transactions()[i]
-				assert.Equal(t, txHashes[i], tx.Hash())
+				require.Equal(t, txHashes[i], tx.Hash())
 			}
 		}
 	}
 
 	// this makes sure we indexed all the events
-	require.Equal(t, uint64(endHeight), prevHeight)
+	require.Equal(t, endHeight, prevHeight)
 }
 
 // Test that back-up fetching of EVM events is triggered when the
@@ -223,7 +223,7 @@ func Test_SubscribingWithRetryOnError(t *testing.T) {
 // of EVM events through the gRPC API, returns duplicate EVM blocks.
 func Test_SubscribingWithRetryOnErrorMultipleBlocks(t *testing.T) {
 	endHeight := uint64(10)
-	sporkClients := []access.Client{}
+	var sporkClients []access.Client
 	currentClient := testutils.SetupClientForRange(1, endHeight)
 
 	cadenceHeight := uint64(5)
@@ -248,9 +248,9 @@ func Test_SubscribingWithRetryOnErrorMultipleBlocks(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	subscriber := NewRPCSubscriber(client, 100, flowGo.Previewnet, zerolog.Nop())
+	subscriber := NewRPCEventSubscriber(zerolog.Nop(), client, flowGo.Previewnet, 1)
 
-	events := subscriber.Subscribe(context.Background(), 1)
+	events := subscriber.Subscribe(context.Background())
 
 	var prevHeight uint64
 
@@ -286,7 +286,7 @@ func Test_SubscribingWithRetryOnErrorMultipleBlocks(t *testing.T) {
 // of EVM events through the gRPC API, returns no EVM blocks.
 func Test_SubscribingWithRetryOnErrorEmptyBlocks(t *testing.T) {
 	endHeight := uint64(10)
-	sporkClients := []access.Client{}
+	var sporkClients []access.Client
 	currentClient := testutils.SetupClientForRange(1, endHeight)
 
 	cadenceHeight := uint64(5)
@@ -310,9 +310,9 @@ func Test_SubscribingWithRetryOnErrorEmptyBlocks(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	subscriber := NewRPCSubscriber(client, 100, flowGo.Previewnet, zerolog.Nop())
+	subscriber := NewRPCEventSubscriber(zerolog.Nop(), client, flowGo.Previewnet, 1)
 
-	events := subscriber.Subscribe(context.Background(), 1)
+	events := subscriber.Subscribe(context.Background())
 
 	var prevHeight uint64
 
@@ -405,17 +405,19 @@ func setupClientForBackupEventFetching(
 		"GetEventsForHeightRange",
 		mock.AnythingOfType("context.backgroundCtx"),
 		"A.b6763b4399a888c8.EVM.BlockExecuted",
-		uint64(cadenceHeight),
-		uint64(cadenceHeight),
+		cadenceHeight,
+		cadenceHeight,
 	).Return(evmBlockEvents, nil).Once()
 
 	client.On(
 		"GetEventsForHeightRange",
 		mock.AnythingOfType("context.backgroundCtx"),
 		"A.b6763b4399a888c8.EVM.TransactionExecuted",
-		uint64(cadenceHeight),
-		uint64(cadenceHeight),
+		cadenceHeight,
+		cadenceHeight,
 	).Return([]flow.BlockEvents{evmTxEvents}, nil).Once()
+
+	client.GetEventsForHeightRangeFunc = nil
 
 	client.SubscribeEventsByBlockHeightFunc = func(
 		ctx context.Context,

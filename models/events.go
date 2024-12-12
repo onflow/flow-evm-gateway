@@ -36,23 +36,16 @@ func isTransactionExecutedEvent(event cadence.Event) bool {
 // CadenceEvents contains Flow emitted events containing one or zero evm block executed event,
 // and multiple or zero evm transaction events.
 type CadenceEvents struct {
-	events       flow.BlockEvents // Flow events for a specific flow block
-	block        *Block           // EVM block (at most one per Flow block)
-	transactions []Transaction    // transactions in the EVM block
-	receipts     []*Receipt       // receipts for transactions
+	events            flow.BlockEvents                 // Flow events for a specific flow block
+	block             *Block                           // EVM block (at most one per Flow block)
+	blockEventPayload *events.BlockEventPayload        // EVM.BlockExecuted event payload (at most one per Flow block)
+	transactions      []Transaction                    // transactions in the EVM block
+	txEventPayloads   []events.TransactionEventPayload // EVM.TransactionExecuted event payloads
+	receipts          []*Receipt                       // receipts for transactions
 }
 
 // NewCadenceEvents decodes the events into evm types.
 func NewCadenceEvents(events flow.BlockEvents) (*CadenceEvents, error) {
-	// first we sort all the events in the block, by their TransactionIndex,
-	// and then we also sort events in the same transaction, by their EventIndex.
-	sort.Slice(events.Events, func(i, j int) bool {
-		if events.Events[i].TransactionIndex != events.Events[j].TransactionIndex {
-			return events.Events[i].TransactionIndex < events.Events[j].TransactionIndex
-		}
-		return events.Events[i].EventIndex < events.Events[j].EventIndex
-	})
-
 	e, err := decodeCadenceEvents(events)
 	if err != nil {
 		return nil, err
@@ -111,22 +104,24 @@ func decodeCadenceEvents(events flow.BlockEvents) (*CadenceEvents, error) {
 				return nil, fmt.Errorf("EVM block was already set for Flow block: %d", events.Height)
 			}
 
-			block, err := decodeBlockEvent(val)
+			block, blockEventPayload, err := decodeBlockEvent(val)
 			if err != nil {
 				return nil, err
 			}
 
 			e.block = block
+			e.blockEventPayload = blockEventPayload
 			continue
 		}
 
 		if isTransactionExecutedEvent(val) {
-			tx, receipt, err := decodeTransactionEvent(val)
+			tx, receipt, txEventPayload, err := decodeTransactionEvent(val)
 			if err != nil {
 				return nil, err
 			}
 
 			e.transactions = append(e.transactions, tx)
+			e.txEventPayloads = append(e.txEventPayloads, *txEventPayload)
 			e.receipts = append(e.receipts, receipt)
 		}
 	}
@@ -162,10 +157,23 @@ func (c *CadenceEvents) Block() *Block {
 	return c.block
 }
 
+// BlockEventPayload returns the EVM.BlockExecuted event payload. If the Flow block
+// events do not contain an EVM block, the return value is nil.
+func (c *CadenceEvents) BlockEventPayload() *events.BlockEventPayload {
+	return c.blockEventPayload
+}
+
 // Transactions included in the EVM block, if event doesn't
 // contain EVM transactions the return value is nil.
 func (c *CadenceEvents) Transactions() []Transaction {
 	return c.transactions
+}
+
+// TxEventPayloads returns the EVM.TransactionExecuted event payloads for the
+// current EVM block. If the Flow block events do not contain any EVM transactions
+// the return value is nil.
+func (c *CadenceEvents) TxEventPayloads() []events.TransactionEventPayload {
+	return c.txEventPayloads
 }
 
 // Receipts included in the EVM block, if event doesn't
@@ -202,11 +210,41 @@ type BlockEvents struct {
 	Err    error
 }
 
-func NewBlockEvents(events flow.BlockEvents) BlockEvents {
-	blockEvents, err := NewCadenceEvents(events)
-
+// NewMultiBlockEvents will decode any possible `EVM.TransactionExecuted` &
+// `EVM.BlockExecuted` events and populate the resulting `Block`, `Transaction` &
+// `Receipt` values.
+// The `EVM.TransactionExecuted` events are expected to be properly sorted by
+// the caller.
+// Use this method when dealing with `flow.BlockEvents` from multiple Flow blocks.
+// The `EVM.TransactionExecuted` events could be produced at a Flow block, that
+// comes prior to the Flow block that produced the `EVM.BlockExecuted` event.
+func NewMultiBlockEvents(events flow.BlockEvents) BlockEvents {
+	cdcEvents, err := NewCadenceEvents(events)
 	return BlockEvents{
-		Events: blockEvents,
+		Events: cdcEvents,
+		Err:    err,
+	}
+}
+
+// NewSingleBlockEvents will decode any possible `EVM.TransactionExecuted` &
+// `EVM.BlockExecuted` events and populate the resulting `Block`, `Transaction` &
+// `Receipt` values.
+// The `EVM.TransactionExecuted` events will be sorted by `TransactionIndex` &
+// `EventIndex`, prior to decoding.
+// Use this method when dealing with `flow.BlockEvents` from a single Flow block.
+func NewSingleBlockEvents(events flow.BlockEvents) BlockEvents {
+	// first we sort all the events in the block, by their TransactionIndex,
+	// and then we also sort events in the same transaction, by their EventIndex.
+	sort.Slice(events.Events, func(i, j int) bool {
+		if events.Events[i].TransactionIndex != events.Events[j].TransactionIndex {
+			return events.Events[i].TransactionIndex < events.Events[j].TransactionIndex
+		}
+		return events.Events[i].EventIndex < events.Events[j].EventIndex
+	})
+
+	cdcEvents, err := NewCadenceEvents(events)
+	return BlockEvents{
+		Events: cdcEvents,
 		Err:    err,
 	}
 }
