@@ -12,6 +12,7 @@ import (
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/go-ethereum/common"
+	"github.com/onflow/go-ethereum/core"
 	"github.com/onflow/go-ethereum/core/types"
 	"github.com/onflow/go-ethereum/rpc"
 	"github.com/rs/zerolog"
@@ -124,6 +125,12 @@ func handleError[T any](err error, log zerolog.Logger, collector metrics.Collect
 		return zero, err
 	case errors.As(err, &revertedErr):
 		return zero, revertedErr
+	case errors.Is(err, core.ErrNonceTooLow):
+		return zero, err
+	case errors.Is(err, core.ErrNonceTooHigh):
+		return zero, err
+	case errors.Is(err, core.ErrInsufficientFunds):
+		return zero, err
 	default:
 		collector.ApiErrorOccurred()
 		log.Error().Err(err).Msg("api error")

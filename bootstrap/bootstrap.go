@@ -11,7 +11,6 @@ import (
 	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-go-sdk/access"
 	"github.com/onflow/flow-go-sdk/access/grpc"
-	"github.com/onflow/flow-go-sdk/crypto"
 	"github.com/onflow/flow-go/fvm/environment"
 	"github.com/onflow/flow-go/fvm/evm"
 	flowGo "github.com/onflow/flow-go/model/flow"
@@ -61,6 +60,7 @@ type Bootstrap struct {
 	events     *ingestion.Engine
 	profiler   *api.ProfileServer
 	db         *pebbleDB.DB
+	keystore   *requester.KeyStore
 }
 
 func New(config config.Config) (*Bootstrap, error) {
@@ -131,6 +131,7 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 		b.logger,
 		b.client,
 		chainID,
+		b.keystore,
 		latestCadenceHeight,
 	)
 
@@ -184,33 +185,12 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 
 	b.server = api.NewServer(b.logger, b.collector, b.config)
 
-	// create the signer based on either a single coa key being provided and using a simple in-memory
-	// signer, or multiple keys being provided and using signer with key-rotation mechanism.
-	var signer crypto.Signer
-	var err error
-	switch {
-	case b.config.COAKey != nil:
-		signer, err = crypto.NewInMemorySigner(b.config.COAKey, crypto.SHA3_256)
-	case b.config.COAKeys != nil:
-		signer, err = requester.NewKeyRotationSigner(b.config.COAKeys, crypto.SHA3_256)
-	case len(b.config.COACloudKMSKeys) > 0:
-		signer, err = requester.NewKMSKeyRotationSigner(
-			ctx,
-			b.config.COACloudKMSKeys,
-			b.logger,
-		)
-	default:
-		return fmt.Errorf("must provide either single COA / keylist of COA keys / COA cloud KMS keys")
-	}
-	if err != nil {
-		return fmt.Errorf("failed to create a COA signer: %w", err)
-	}
-
 	// create transaction pool
 	txPool := requester.NewTxPool(
 		b.client,
 		b.publishers.Transaction,
 		b.logger,
+		b.config,
 	)
 
 	blocksProvider := replayer.NewBlocksProvider(
@@ -219,16 +199,39 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 		nil,
 	)
 
+	accountKeys := make([]*requester.AccountKey, 0)
+	account, err := b.client.GetAccount(ctx, b.config.COAAddress)
+	if err != nil {
+		return fmt.Errorf(
+			"failed to get signer info account for address: %s, with: %w",
+			b.config.COAAddress,
+			err,
+		)
+	}
+	signer, err := createSigner(ctx, b.config, b.logger)
+	if err != nil {
+		return err
+	}
+	for _, key := range account.Keys {
+		accountKeys = append(accountKeys, &requester.AccountKey{
+			AccountKey: *key,
+			Address:    b.config.COAAddress,
+			Signer:     signer,
+		})
+	}
+
+	b.keystore = requester.NewKeyStore(accountKeys)
+
 	evm, err := requester.NewEVM(
 		b.storages.Registers,
 		blocksProvider,
 		b.client,
 		b.config,
-		signer,
 		b.logger,
 		b.storages.Blocks,
 		txPool,
 		b.collector,
+		b.keystore,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create EVM requester: %w", err)

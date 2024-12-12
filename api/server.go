@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/onflow/go-ethereum/core"
 	gethVM "github.com/onflow/go-ethereum/core/vm"
 	gethLog "github.com/onflow/go-ethereum/log"
 	"github.com/onflow/go-ethereum/rpc"
@@ -427,6 +428,17 @@ type responseHandler struct {
 	metrics     metrics.Collector
 }
 
+var knownErrors = []error{
+	errs.ErrRateLimit,
+	errs.ErrInvalid,
+	errs.ErrFailedTransaction,
+	errs.ErrEndpointNotSupported,
+	gethVM.ErrExecutionReverted,
+	core.ErrNonceTooLow,
+	core.ErrNonceTooHigh,
+	core.ErrInsufficientFunds,
+}
+
 const errMethodNotFound = -32601
 const errCodePanic = -32603
 
@@ -471,11 +483,7 @@ func (w *responseHandler) Write(data []byte) (int, error) {
 			}
 
 			// don't error log known handled errors
-			if !errorIs(errMsg, errs.ErrRateLimit) &&
-				!errorIs(errMsg, errs.ErrInvalid) &&
-				!errorIs(errMsg, errs.ErrFailedTransaction) &&
-				!errorIs(errMsg, errs.ErrEndpointNotSupported) &&
-				!errorIs(errMsg, gethVM.ErrExecutionReverted) {
+			if !isKnownError(errMsg) {
 				// log the response error as a warning
 				l.Warn().Err(errors.New(errMsg)).Msg("API response")
 			}
@@ -505,6 +513,11 @@ func (w *responseHandler) WriteHeader(statusCode int) {
 	w.ResponseWriter.WriteHeader(statusCode)
 }
 
-func errorIs(msg string, err error) bool {
-	return strings.Contains(msg, err.Error())
+func isKnownError(errMsg string) bool {
+	for _, err := range knownErrors {
+		if strings.Contains(errMsg, err.Error()) {
+			return true
+		}
+	}
+	return false
 }

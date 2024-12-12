@@ -23,6 +23,13 @@ const EmulatorInitCadenceHeight = uint64(0)
 // We don't use 0 as it has a special meaning to represent latest block in the AN API context.
 const LiveNetworkInitCadenceHeight = uint64(1)
 
+type TxStateValidation string
+
+const (
+	LocalIndexValidation = "local-index"
+	TxSealValidation     = "tx-seal"
+)
+
 type Config struct {
 	// DatabaseDir is where the database should be stored.
 	DatabaseDir string
@@ -47,10 +54,8 @@ type Config struct {
 	COAAddress flow.Address
 	// COAKey is Flow key to the COA account. WARNING: do not use in production
 	COAKey crypto.PrivateKey
-	// COAKeys is a slice of all the keys that will be used in key-rotation mechanism.
-	COAKeys []crypto.PrivateKey
-	// COACloudKMSKeys is a slice of all the keys and their versions that will be used in Cloud KMS key-rotation mechanism.
-	COACloudKMSKeys []flowGoKMS.Key
+	// COACloudKMSKey is a Cloud KMS key that will be used for signing transactions.
+	COACloudKMSKey *flowGoKMS.Key
 	// GasPrice is a fixed gas price that will be used when submitting transactions.
 	GasPrice *big.Int
 	// InitCadenceHeight is used for initializing the database on a local emulator or a live network.
@@ -85,4 +90,7 @@ type Config struct {
 	ProfilerHost string
 	// ProfilerPort is the port for the profiler server
 	ProfilerPort int
+	// TxStateValidation sets the transaction validation mechanism. It can validate
+	// using the local state index, or wait for the outer Flow transaction to seal.
+	TxStateValidation string
 }
