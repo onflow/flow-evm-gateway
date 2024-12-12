@@ -60,7 +60,7 @@ type Bootstrap struct {
 	events     *ingestion.Engine
 	profiler   *api.ProfileServer
 	db         *pebbleDB.DB
-	keystore   *requester.Keystore
+	keystore   *requester.KeyStore
 }
 
 func New(config config.Config) (*Bootstrap, error) {
@@ -220,7 +220,7 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 		})
 	}
 
-	b.keystore = requester.NewKeystore(accountKeys)
+	b.keystore = requester.NewKeyStore(accountKeys)
 
 	evm, err := requester.NewEVM(
 		b.storages.Registers,

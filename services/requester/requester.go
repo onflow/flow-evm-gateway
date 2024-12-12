@@ -103,7 +103,7 @@ type EVM struct {
 	logger            zerolog.Logger
 	blocks            storage.BlockIndexer
 	mux               sync.Mutex
-	keystore          *Keystore
+	keystore          *KeyStore
 	head              *types.Header
 	evmSigner         types.Signer
 	validationOptions *txpool.ValidationOptions
@@ -119,7 +119,7 @@ func NewEVM(
 	blocks storage.BlockIndexer,
 	txPool *TxPool,
 	collector metrics.Collector,
-	keystore *Keystore,
+	keystore *KeyStore,
 ) (*EVM, error) {
 	logger = logger.With().Str("component", "requester").Logger()
 	address := config.COAAddress
@@ -553,7 +553,7 @@ func (e *EVM) buildTransaction(
 		return nil, err
 	}
 
-	accKey, err := e.keystore.GetKey()
+	accKey, err := e.keystore.Take()
 	if err != nil {
 		return nil, err
 	}
@@ -568,14 +568,12 @@ func (e *EVM) buildTransaction(
 		}
 	}
 
-	if err := accKey.SetProposerPayerAndSign(flowTx); err != nil {
-		return nil, err
-	}
-	if err := accKey.IncrementSequenceNumber(); err != nil {
+	if err := accKey.SetProposerPayerAndSign(flowTx, account); err != nil {
 		return nil, err
 	}
 	e.keystore.LockKey(flowTx.ID(), accKey)
 
+	e.collector.AvailableSigningKeys(e.keystore.AvailableKeys())
 	e.collector.OperatorBalance(account)
 
 	return flowTx, nil

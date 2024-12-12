@@ -19,6 +19,7 @@ type Collector interface {
 	EVMAccountInteraction(address string)
 	MeasureRequestDuration(start time.Time, method string)
 	OperatorBalance(account *flow.Account)
+	AvailableSigningKeys(count int)
 }
 
 var _ Collector = &DefaultCollector{}
@@ -35,6 +36,7 @@ type DefaultCollector struct {
 	operatorBalance           prometheus.Gauge
 	evmAccountCallCounters    *prometheus.CounterVec
 	requestDurations          *prometheus.HistogramVec
+	availableSigningkeys      prometheus.Gauge
 }
 
 func NewCollector(logger zerolog.Logger) Collector {
@@ -90,6 +92,11 @@ func NewCollector(logger zerolog.Logger) Collector {
 		Buckets: prometheus.DefBuckets,
 	}, []string{"method"})
 
+	availableSigningKeys := prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: prefixedName("available_signing_keys"),
+		Help: "Number of keys available for transaction signing",
+	})
+
 	metrics := []prometheus.Collector{
 		apiErrors,
 		traceDownloadErrorCounter,
@@ -101,6 +108,7 @@ func NewCollector(logger zerolog.Logger) Collector {
 		operatorBalance,
 		evmAccountCallCounters,
 		requestDurations,
+		availableSigningKeys,
 	}
 	if err := registerMetrics(logger, metrics...); err != nil {
 		logger.Info().Msg("using noop collector as metric register failed")
@@ -118,6 +126,7 @@ func NewCollector(logger zerolog.Logger) Collector {
 		evmAccountCallCounters:    evmAccountCallCounters,
 		requestDurations:          requestDurations,
 		operatorBalance:           operatorBalance,
+		availableSigningkeys:      availableSigningKeys,
 	}
 }
 
@@ -170,6 +179,10 @@ func (c *DefaultCollector) MeasureRequestDuration(start time.Time, method string
 	c.requestDurations.
 		With(prometheus.Labels{"method": method}).
 		Observe(time.Since(start).Seconds())
+}
+
+func (c *DefaultCollector) AvailableSigningKeys(count int) {
+	c.availableSigningkeys.Set(float64(count))
 }
 
 func prefixedName(name string) string {
