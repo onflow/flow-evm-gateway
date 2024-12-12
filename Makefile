@@ -168,7 +168,7 @@ docker-pull-version:
 #   - COA_KEY: A full weight, private key belonging to operator COA_ADDRESS (remove 0x prefix). NB: For development use only. We recommend using cloud KMS configuration on mainnet
 #
 # Optional
-#   - GAS_PRICE: the attoFlow amount
+#   - GAS_PRICE: the attoFlow amount of gas to charge for transactions
 #
 # Optional make arguments:
 #   - DOCKER_RUN_DETACHED: Runs container in detached mode when true
