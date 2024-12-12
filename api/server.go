@@ -27,6 +27,7 @@ import (
 	slogzerolog "github.com/samber/slog-zerolog"
 
 	"github.com/onflow/flow-evm-gateway/config"
+	"github.com/onflow/flow-evm-gateway/eth"
 	"github.com/onflow/flow-evm-gateway/metrics"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
 )
@@ -253,7 +254,7 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// Do not log any debug info for methods that are not valid
 		// JSON-RPC methods.
 		if methodValue, ok := requestBody["method"]; ok {
-			if methodStr, ok := methodValue.(string); ok && IsValidMethod(methodStr) {
+			if methodStr, ok := methodValue.(string); ok && eth.IsValidMethod(methodStr) {
 				h.logger.Debug().
 					Str("IP", r.RemoteAddr).
 					Str("url", r.URL.String()).
