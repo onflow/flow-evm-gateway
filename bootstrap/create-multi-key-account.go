@@ -13,8 +13,14 @@ import (
 	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/onflow/flow-go-sdk/crypto"
 	"github.com/onflow/flow-go-sdk/templates"
+	"github.com/onflow/flow-go/fvm/systemcontracts"
+	flowGo "github.com/onflow/flow-go/model/flow"
 	"golang.org/x/exp/rand"
 )
+
+var sc = systemcontracts.SystemContractsForChain(flowGo.Emulator)
+var ftAddress = sc.FungibleToken.Address.HexWithPrefix()
+var flowAddress = sc.FlowToken.Address.HexWithPrefix()
 
 // RunCreateMultiKeyAccount command creates a new account with multiple keys, which are saved to keys.json for later
 // use with running the gateway in a key-rotation mode (used with --coa-key-file flag).
@@ -27,8 +33,8 @@ func RunCreateMultiKeyAccount() {
 	flag.IntVar(&keyCount, "key-count", 20, "how many keys you want to create and assign to account")
 	flag.StringVar(&keyFlag, "signer-key", "", "signer key used to create the new account")
 	flag.StringVar(&addressFlag, "signer-address", "", "signer address used to create new account")
-	flag.StringVar(&ftFlag, "ft-address", "0xee82856bf20e2aa6", "address of fungible token contract")
-	flag.StringVar(&flowFlag, "flow-token-address", "0x0ae53cb6e3f42a79", "address of flow token contract")
+	flag.StringVar(&ftFlag, "ft-address", ftAddress, "address of fungible token contract")
+	flag.StringVar(&flowFlag, "flow-token-address", flowAddress, "address of flow token contract")
 	flag.StringVar(&hostFlag, "access-node-grpc-host", "localhost:3569", "host to the flow access node gRPC API")
 
 	flag.Parse()

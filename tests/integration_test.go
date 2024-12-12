@@ -54,8 +54,8 @@ func Test_ConcurrentTransactionSubmissionWithTxSeal(t *testing.T) {
 		client,
 		keyCount,
 		service.Address,
-		"0xee82856bf20e2aa6",
-		"0x0ae53cb6e3f42a79",
+		sc.FungibleToken.Address.HexWithPrefix(),
+		sc.FlowToken.Address.HexWithPrefix(),
 		service.PrivateKey,
 	)
 	require.NoError(t, err)
@@ -164,8 +164,8 @@ func Test_ConcurrentTransactionSubmissionWithLocalIndex(t *testing.T) {
 		client,
 		keyCount,
 		service.Address,
-		"0xee82856bf20e2aa6",
-		"0x0ae53cb6e3f42a79",
+		sc.FungibleToken.Address.HexWithPrefix(),
+		sc.FlowToken.Address.HexWithPrefix(),
 		service.PrivateKey,
 	)
 	require.NoError(t, err)
@@ -268,8 +268,8 @@ func Test_EthClientTest(t *testing.T) {
 		client,
 		keyCount,
 		service.Address,
-		"0xee82856bf20e2aa6",
-		"0x0ae53cb6e3f42a79",
+		sc.FungibleToken.Address.HexWithPrefix(),
+		sc.FlowToken.Address.HexWithPrefix(),
 		service.PrivateKey,
 	)
 	require.NoError(t, err)
@@ -364,8 +364,8 @@ func Test_CloudKMSConcurrentTransactionSubmission(t *testing.T) {
 		client,
 		publicKeys,
 		service.Address,
-		"0xee82856bf20e2aa6",
-		"0x0ae53cb6e3f42a79",
+		sc.FungibleToken.Address.HexWithPrefix(),
+		sc.FlowToken.Address.HexWithPrefix(),
 		service.PrivateKey,
 	)
 	require.NoError(t, err)
