@@ -7,7 +7,8 @@ COMMIT := $(shell git rev-parse HEAD)
 GIT_VERSION := $(shell git describe --tags --abbrev=2 2>/dev/null)
 CMD_ARGS :=
 # ACCESS_NODE_SPORK_HOSTS are comma separated
-ACCESS_NODE_SPORK_HOSTS := access-001.devnet51.nodes.onflow.org:9000
+TESTNET_ACCESS_NODE_SPORK_HOSTS := access-001.devnet51.nodes.onflow.org:9000
+MAINNET_ACCESS_NODE_SPORK_HOSTS :=
 EMULATOR_COINBASE := FACF71692421039876a5BB4F10EF7A439D8ef61E
 EMULATOR_COA_ADDRESS := f8d6e0586b0a20c7
 EMULATOR_COA_KEY := 2619878f0e2ff438d17835c2a4561cb87b4d24d72d12ec34569acd0dd4af7c21
@@ -124,7 +125,7 @@ docker-build-local:
 ifdef GOARCH
 	$(eval ARCH=$(GOARCH))
 endif
-	docker build --build-arg ARCH=$(ARCH) --no-cache -f dev/Dockerfile -t "$(CONTAINER_REGISTRY)/evm-gateway:$(COMMIT)" .
+	docker build --build-arg ARCH=$(ARCH) --no-cache -f dev/Dockerfile -t "$(CONTAINER_REGISTRY)/flow-evm-gateway:$(COMMIT)" .
 
 # Docker run for local development
 .PHONY: docker-run-local
@@ -139,7 +140,7 @@ docker-run-local:
 
 	$(eval CMD_ARGS += --flow-network-id=flow-emulator --log-level=debug --gas-price=0 --log-writer=console --profiler-enabled=true --access-node-grpc-host=host.docker.internal:3569)
 
-	docker run -p 8545:8545 --add-host=host.docker.internal:host-gateway "$(CONTAINER_REGISTRY)/evm-gateway:$(COMMIT)" $(CMD_ARGS)
+	docker run -p 8545:8545 --add-host=host.docker.internal:host-gateway "$(CONTAINER_REGISTRY)/flow-evm-gateway:$(COMMIT)" $(CMD_ARGS)
 
 
 # Build docker image for release
@@ -148,13 +149,13 @@ docker-build:
 ifdef GOARCH
 	$(eval ARCH=$(GOARCH))
 endif
-	docker build --build-arg VERSION="$(VERSION)" --build-arg ARCH=$(ARCH)  -f Dockerfile -t "$(CONTAINER_REGISTRY)/evm-gateway:$(IMAGE_TAG)" \
+	docker build --build-arg VERSION="$(VERSION)" --build-arg ARCH=$(ARCH)  -f Dockerfile -t "$(CONTAINER_REGISTRY)/flow-evm-gateway:$(IMAGE_TAG)" \
 		--label "git_commit=$(COMMIT)" --label "git_tag=$(IMAGE_TAG)" .
 
 # Install image version from container registry
 .PHONY: docker-pull-version
 docker-pull-version:
-	docker pull "$(CONTAINER_REGISTRY)/evm-gateway:$(IMAGE_VERSION)"
+	docker pull "$(CONTAINER_REGISTRY)/flow-evm-gateway:$(IMAGE_VERSION)"
 
 # Run GW image
 # https://github.com/onflow/flow-evm-gateway?tab=readme-ov-file#configuration-flags
@@ -192,6 +193,14 @@ ifdef DOCKER_MOUNT
 	$(call check_and_append,database-dir,DATADIR)
 endif
 
+ifdef FLOW_NETWORK_ID
+    ifeq ($(FLOW_NETWORK_ID),flow-testnet)
+        ACCESS_NODE_SPORK_HOSTS := TESTNET_ACCESS_NODE_SPORK_HOSTS
+    else ifeq ($(FLOW_NETWORK_ID),flow-testnet)
+        ACCESS_NODE_SPORK_HOSTS := MAINNET_ACCESS_NODE_SPORK_HOSTS
+    endif
+endif
+
 	$(call check_and_append,access-node-grpc-host,ACCESS_NODE_GRPC_HOST)
 	$(call check_and_append,flow-network-id,FLOW_NETWORK_ID)
 	$(call check_and_append,init-cadence-height,INIT_CADENCE_HEIGHT)
@@ -203,5 +212,5 @@ endif
 	$(eval CMD_ARGS += --ws-enabled=true --rate-limit=9999999 --rpc-host=0.0.0.0 --log-level=info)
 	$(call check_and_append,access-node-spork-hosts,ACCESS_NODE_SPORK_HOSTS)
 
-	docker run $(MODE) -p $(HOST_PORT):8545 -p 8080:8080 $(MOUNT) "$(CONTAINER_REGISTRY)/evm-gateway:$(IMAGE_TAG)" $(CMD_ARGS)
+	docker run $(MODE) -p $(HOST_PORT):8545 -p 8080:8080 $(MOUNT) "$(CONTAINER_REGISTRY)/flow-evm-gateway:$(IMAGE_TAG)" $(CMD_ARGS)
 
