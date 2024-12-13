@@ -19,7 +19,7 @@ StandardOutput=journal
 EnvironmentFile=/etc/flow/runtime-conf.env
 EnvironmentFile=-/etc/flow/conf.d/*.env
 
-ExecStartPre=us-west1-docker.pkg.dev/dl-flow-devex-production/development/flow-evm-gateway:${VERSION}
+ExecStartPre=docker pull us-west1-docker.pkg.dev/dl-flow-devex-production/development/flow-evm-gateway:${VERSION}
 ExecStart=docker run --rm \
 	--name flow-evm-gateway \
 	us-west1-docker.pkg.dev/dl-flow-devex-production/development/flow-evm-gateway:${VERSION} \
