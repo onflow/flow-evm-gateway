@@ -82,15 +82,7 @@ func Test_ConcurrentTransactionSubmissionWithTxSeal(t *testing.T) {
 		url: fmt.Sprintf("%s:%d", cfg.RPCHost, cfg.RPCPort),
 	}
 
-	ready := make(chan struct{})
-	go func() {
-		err := bootstrap.Run(ctx, cfg, func() {
-			close(ready)
-		})
-		require.NoError(t, err)
-	}()
-
-	<-ready
+	startGateway(t, ctx, cfg)
 
 	eoaKey, err := crypto.HexToECDSA(eoaTestPrivateKey)
 	require.NoError(t, err)
@@ -289,15 +281,7 @@ func Test_EthClientTest(t *testing.T) {
 		LogWriter:      testLogWriter(),
 	}
 
-	ready := make(chan struct{})
-	go func() {
-		err := bootstrap.Run(ctx, cfg, func() {
-			close(ready)
-		})
-		require.NoError(t, err)
-	}()
-
-	<-ready
+	startGateway(t, ctx, cfg)
 
 	ethClient, err := ethclient.Dial("http://127.0.0.1:8545")
 	require.NoError(t, err)
@@ -391,15 +375,7 @@ func Test_CloudKMSConcurrentTransactionSubmission(t *testing.T) {
 		url: fmt.Sprintf("%s:%d", cfg.RPCHost, cfg.RPCPort),
 	}
 
-	ready := make(chan struct{})
-	go func() {
-		err := bootstrap.Run(ctx, cfg, func() {
-			close(ready)
-		})
-		require.NoError(t, err)
-	}()
-
-	<-ready
+	startGateway(t, ctx, cfg)
 
 	eoaKey, err := crypto.HexToECDSA(eoaTestPrivateKey)
 	require.NoError(t, err)
