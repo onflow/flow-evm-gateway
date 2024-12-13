@@ -18,6 +18,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/onflow/go-ethereum/core"
+
 	"github.com/onflow/flow-go/module/component"
 	"github.com/onflow/flow-go/module/irrecoverable"
 

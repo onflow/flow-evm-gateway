@@ -184,15 +184,7 @@ func Test_ConcurrentTransactionSubmissionWithLocalIndex(t *testing.T) {
 		url: fmt.Sprintf("%s:%d", cfg.RPCHost, cfg.RPCPort),
 	}
 
-	ready := make(chan struct{})
-	go func() {
-		err = bootstrap.Run(ctx, cfg, func() {
-			close(ready)
-		})
-		require.NoError(t, err)
-	}()
-
-	<-ready
+	startGateway(t, ctx, cfg)
 
 	time.Sleep(3 * time.Second) // some time to startup
 

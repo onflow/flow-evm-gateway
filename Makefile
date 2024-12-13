@@ -103,7 +103,6 @@ generate:
 	mockery --dir=storage --name=TraceIndexer --output=storage/mocks
 	mockery --all --dir=services/traces --output=services/traces/mocks
 	mockery --all --dir=services/ingestion --output=services/ingestion/mocks
-	mockery --dir=models --name=Engine --output=models/mocks
 
 .PHONY: ci
 ci: check-tidy test e2e-test
