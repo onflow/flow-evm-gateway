@@ -18,7 +18,6 @@ import (
 	"github.com/hashicorp/go-multierror"
 	"github.com/onflow/flow-evm-gateway/api"
 	"github.com/onflow/flow-evm-gateway/config"
-	"github.com/onflow/flow-go-sdk/crypto"
 	"github.com/onflow/flow-go/cmd"
 	"github.com/onflow/flow-go/fvm/environment"
 	"github.com/onflow/flow-go/fvm/evm"
@@ -34,7 +33,6 @@ import (
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/services/ingestion"
 	"github.com/onflow/flow-evm-gateway/services/replayer"
-	"github.com/onflow/flow-evm-gateway/services/signer"
 	pebble2 "github.com/onflow/flow-evm-gateway/storage/pebble"
 )
 
@@ -92,8 +90,8 @@ type EVMGatewayNodeBuilder struct {
 	Client   *requester.CrossSporkClient
 	Storages *Storages
 	// Signer is used for signing flow transactions
-	Signer     crypto.Signer
 	Publishers *Publishers
+	Keystore   *requester.KeyStoreComponent
 }
 
 func (fnb *EVMGatewayNodeBuilder) Build() (cmd.Node, error) {
@@ -209,7 +207,7 @@ func (fnb *EVMGatewayNodeBuilder) Initialize() error {
 func (fnb *EVMGatewayNodeBuilder) LoadComponentsAndModules() {
 	fnb.initPublishers()
 
-	fnb.Component("Transaction Signer", fnb.initSigner)
+	fnb.Component("Key Store", fnb.initKeyStore)
 	fnb.Component("API Server", fnb.apiServerComponent)
 	fnb.Component("Event Ingestion Engine", fnb.eventIngestionEngineComponent)
 	fnb.Component("Metrics Server", fnb.metricsServerComponent)
@@ -238,6 +236,7 @@ func (fnb *EVMGatewayNodeBuilder) apiServerComponent(cfg config.Config) (module.
 		fnb.Client,
 		fnb.Publishers.Transaction,
 		log,
+		cfg,
 	)
 
 	blocksProvider := replayer.NewBlocksProvider(
@@ -251,11 +250,11 @@ func (fnb *EVMGatewayNodeBuilder) apiServerComponent(cfg config.Config) (module.
 		blocksProvider,
 		fnb.Client,
 		cfg,
-		fnb.Signer,
 		log,
 		fnb.Storages.Blocks,
 		txPool,
 		fnb.Metrics,
+		fnb.Keystore.KeyStore,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create EVM requester: %w", err)
@@ -393,6 +392,7 @@ func (fnb *EVMGatewayNodeBuilder) eventIngestionEngineComponent(cfg config.Confi
 		fnb.Logger,
 		fnb.Client,
 		chainID,
+		fnb.Keystore,
 		latestCadenceHeight,
 	)
 
@@ -542,10 +542,12 @@ func (fnb *EVMGatewayNodeBuilder) initStorage() error {
 
 	return nil
 }
-func (fnb *EVMGatewayNodeBuilder) initSigner(config config.Config) (module.ReadyDoneAware, error) {
-	sig := signer.NewSigner(fnb.Logger, config)
-	fnb.Signer = sig
-	return sig, nil
+func (fnb *EVMGatewayNodeBuilder) initKeyStore(cfg config.Config) (module.ReadyDoneAware, error) {
+	keystore := requester.NewKeyStoreComponent(fnb.Logger, cfg, fnb.Client)
+
+	fnb.Keystore = keystore
+
+	return keystore, nil
 }
 
 func (fnb *EVMGatewayNodeBuilder) initPublishers() {

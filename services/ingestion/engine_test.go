@@ -69,6 +69,11 @@ func TestSerialBlockIngestion(t *testing.T) {
 				return eventsChan
 			})
 
+		blocksPublisher := models.NewPublisher[*models.Block](zerolog.Nop())
+		blocksPublisher.Start(ictx)
+		logsPublisher := models.NewPublisher[[]*gethTypes.Log](zerolog.Nop())
+		logsPublisher.Start(ictx)
+
 		engine := NewEventIngestionEngine(
 			subscriber,
 			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
@@ -78,8 +83,8 @@ func TestSerialBlockIngestion(t *testing.T) {
 			receipts,
 			transactions,
 			traces,
-			models.NewPublisher[*models.Block](zerolog.Nop()),
-			models.NewPublisher[[]*gethTypes.Log](zerolog.Nop()),
+			blocksPublisher,
+			logsPublisher,
 			zerolog.Nop(),
 			metrics.NopCollector,
 			defaultReplayerConfig(),
