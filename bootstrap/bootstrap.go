@@ -213,6 +213,11 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 		return err
 	}
 	for _, key := range account.Keys {
+		// Skip account keys that do not use the same Publick Key as the
+		// configured crypto.Signer object.
+		if !key.PublicKey.Equals(signer.PublicKey()) {
+			continue
+		}
 		accountKeys = append(accountKeys, &requester.AccountKey{
 			AccountKey: *key,
 			Address:    b.config.COAAddress,
