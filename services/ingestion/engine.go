@@ -135,7 +135,7 @@ func (e *Engine) run(ctx irrecoverable.SignalerContext, ready component.ReadyFun
 			err := e.processEvents(events.Events)
 			if err != nil {
 				e.log.Error().Err(err).Msg("failed to process EVM events")
-				return
+				ctx.Throw(err)
 			}
 		}
 	}

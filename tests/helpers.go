@@ -176,20 +176,25 @@ func servicesSetup(t *testing.T) (emulator.Emulator, func()) {
 		TxStateValidation: config.LocalIndexValidation,
 	}
 
-	bootstrapDone := make(chan struct{})
-	go func() {
-		err = bootstrap.Run(ctx, cfg, func() {
-			close(bootstrapDone)
-		})
-		require.NoError(t, err)
-	}()
-
-	<-bootstrapDone
+	startGateway(t, ctx, cfg)
 
 	return emu, func() {
 		cancel()
 		srv.Stop()
 	}
+}
+
+func startGateway(t *testing.T, ctx context.Context, cfg config.Config) {
+	builder := bootstrap.NewEVMGatewayNodeBuilder(cfg)
+
+	err := builder.Initialize()
+	require.NoError(t, err)
+
+	builder.LoadComponentsAndModules()
+
+	node, err := builder.Build()
+	require.NoError(t, err)
+	go node.Run(ctx)
 }
 
 // executeTest will run the provided JS test file using mocha

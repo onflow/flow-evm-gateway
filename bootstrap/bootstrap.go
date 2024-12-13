@@ -203,8 +203,6 @@ func NewEVMGatewayNodeBuilder(
 func (fnb *EVMGatewayNodeBuilder) Initialize() error {
 	fnb.PrintBuildDetails()
 
-	fnb.EnqueueMetricsServerInit()
-
 	return nil
 }
 
@@ -442,13 +440,6 @@ func (fnb *EVMGatewayNodeBuilder) PrintBuildDetails() {
 func (fnb *EVMGatewayNodeBuilder) ShutdownFunc(fn func() error) *EVMGatewayNodeBuilder {
 	fnb.postShutdownFns = append(fnb.postShutdownFns, fn)
 	return fnb
-}
-
-func (fnb *EVMGatewayNodeBuilder) EnqueueMetricsServerInit() {
-	fnb.Component("Metrics server", func(config config.Config) (module.ReadyDoneAware, error) {
-		server := metrics.NewServer(fnb.Logger, uint(config.MetricsPort))
-		return server, nil
-	})
 }
 
 func (fnb *EVMGatewayNodeBuilder) initMetrics() error {

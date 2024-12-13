@@ -49,7 +49,7 @@ var Cmd = &cobra.Command{
 		if err != nil {
 			builder.Logger.Fatal().Err(err).Send()
 		}
-		node.Run()
+		node.Run(command.Context())
 		return nil
 	},
 }
