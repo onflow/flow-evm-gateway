@@ -321,6 +321,7 @@ func (fnb *EVMGatewayNodeBuilder) apiServerComponent(cfg config.Config) (module.
 		cfg,
 		log,
 		fnb.Metrics,
+		ratelimiter,
 	)
 
 	var walletAPI *api.WalletAPI
