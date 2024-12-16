@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"slices"
+	"strings"
 
 	"github.com/goccy/go-json"
 	"github.com/onflow/flow-go/fvm/evm/offchain/query"
@@ -480,6 +480,6 @@ func isDefaultCallTracer(config *tracers.TraceConfig) bool {
 		return false
 	}
 
-	tracerConfig := json.RawMessage(replayer.TracerConfig)
-	return slices.Equal(config.TracerConfig, tracerConfig)
+	trimmedConfig := strings.ReplaceAll(string(config.TracerConfig), " ", "")
+	return trimmedConfig == replayer.TracerConfig
 }
