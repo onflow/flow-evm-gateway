@@ -3,6 +3,7 @@ package ingestion
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"math/big"
 	"testing"
 
@@ -124,455 +125,478 @@ func TestSerialBlockIngestion(t *testing.T) {
 		assert.Equal(t, runs-1, uint64(storedCounter))
 	})
 
-	//	t.Run("fail with events out of sequence", func(t *testing.T) {
-	//		receipts := &storageMock.ReceiptIndexer{}
-	//		transactions := &storageMock.TransactionIndexer{}
-	//		latestHeight := uint64(10)
-	//
-	//		store, registerStore := setupStore(t)
-	//
-	//		blocks := &storageMock.BlockIndexer{}
-	//		blocks.
-	//			On("LatestCadenceHeight").
-	//			Return(func() (uint64, error) {
-	//				return latestHeight, nil
-	//			}).
-	//			Once() // make sure this isn't called multiple times
-	//
-	//		traces := &storageMock.TraceIndexer{}
-	//
-	//		eventsChan := make(chan models.BlockEvents)
-	//		subscriber := &mocks.EventSubscriber{}
-	//		subscriber.
-	//			On("Subscribe", mock.Anything).
-	//			Return(func(ctx context.Context) <-chan models.BlockEvents {
-	//				return eventsChan
-	//			})
-	//
-	//		engine := NewEventIngestionEngine(
-	//			subscriber,
-	//			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
-	//			store,
-	//			registerStore,
-	//			blocks,
-	//			receipts,
-	//			transactions,
-	//			traces,
-	//			models.NewPublisher[*models.Block](),
-	//			models.NewPublisher[[]*gethTypes.Log](),
-	//			zerolog.Nop(),
-	//			metrics.NopCollector,
-	//			defaultReplayerConfig(),
-	//		)
-	//
-	//		waitErr := make(chan struct{})
-	//		// catch eventual error due to out of sequence block height
-	//		go func() {
-	//			err := engine.Run(context.Background())
-	//			assert.ErrorIs(t, err, models.ErrInvalidHeight)
-	//			assert.ErrorContains(t, err, "invalid height: received new block: 20, non-sequential of latest block: 11")
-	//			close(waitErr)
-	//		}()
-	//
-	//		// first create one successful block event
-	//		blockCdc, block, blockEvent, err := newBlock(latestHeight+1, nil)
-	//		cadenceHeight := latestHeight + 10
-	//		require.NoError(t, err)
-	//
-	//		blocks.
-	//			On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*models.Block"), mock.Anything).
-	//			Return(func(h uint64, id flow.Identifier, storeBlock *models.Block, _ *pebbleDB.Batch) error {
-	//				assert.Equal(t, block, storeBlock)
-	//				assert.Equal(t, cadenceHeight, h)
-	//				return nil
-	//			}).
-	//			Once() // this should only be called for first valid block
-	//
-	//		cadenceEvents, err := models.NewCadenceEvents(flow.BlockEvents{
-	//			Events: []flow.Event{{
-	//				Type:  string(blockEvent.Etype),
-	//				Value: blockCdc,
-	//			}},
-	//			Height: cadenceHeight,
-	//		})
-	//		require.NoError(t, err)
-	//
-	//		eventsChan <- models.BlockEvents{
-	//			Events: cadenceEvents,
-	//		}
-	//
-	//		// fail with next block height being incorrect
-	//		blockCdc, _, blockEvent, err = newBlock(latestHeight+10, nil) // not sequential next block height
-	//		require.NoError(t, err)
-	//
-	//		cadenceEvents, err = models.NewCadenceEvents(flow.BlockEvents{
-	//			Events: []flow.Event{{
-	//				Type:  string(blockEvent.Etype),
-	//				Value: blockCdc,
-	//			}},
-	//			Height: cadenceHeight + 1,
-	//		})
-	//		require.NoError(t, err)
-	//
-	//		eventsChan <- models.BlockEvents{
-	//			Events: cadenceEvents,
-	//		}
-	//
-	//		close(eventsChan)
-	//		<-waitErr
-	//	})
-	//}
-	//
-	//func TestBlockAndTransactionIngestion(t *testing.T) {
-	//
-	//	t.Run("successfully ingest transaction and block", func(t *testing.T) {
-	//		receipts := &storageMock.ReceiptIndexer{}
-	//		transactions := &storageMock.TransactionIndexer{}
-	//		latestHeight := uint64(10)
-	//		nextHeight := latestHeight + 1
-	//		blockID := flow.Identifier{0x01}
-	//
-	//		store, registerStore := setupStore(t)
-	//
-	//		blocks := &storageMock.BlockIndexer{}
-	//		blocks.
-	//			On("LatestCadenceHeight").
-	//			Return(func() (uint64, error) {
-	//				return latestHeight, nil
-	//			}).
-	//			Once() // make sure this isn't called multiple times
-	//
-	//		blocks.
-	//			On("SetLatestCadenceHeight", mock.AnythingOfType("uint64"), mock.Anything).
-	//			Return(func(h uint64, _ *pebbleDB.Batch) error {
-	//				assert.Equal(t, nextHeight, h)
-	//				return nil
-	//			})
-	//
-	//		eventsChan := make(chan models.BlockEvents)
-	//		subscriber := &mocks.EventSubscriber{}
-	//		subscriber.
-	//			On("Subscribe", mock.Anything).
-	//			Return(func(ctx context.Context) <-chan models.BlockEvents {
-	//				return eventsChan
-	//			})
-	//
-	//		txCdc, txEvent, transaction, result, err := newTransaction(nextHeight)
-	//		require.NoError(t, err)
-	//		blockCdc, block, blockEvent, err := newBlock(nextHeight, []gethCommon.Hash{result.TxHash})
-	//		require.NoError(t, err)
-	//
-	//		traces := &storageMock.TraceIndexer{}
-	//		traces.
-	//			On("StoreTransaction", mock.AnythingOfType("common.Hash"), mock.AnythingOfType("json.RawMessage"), mock.Anything).
-	//			Return(func(txID gethCommon.Hash, trace json.RawMessage, batch *pebbleDB.Batch) error {
-	//				assert.Equal(t, transaction.Hash(), txID)
-	//				return nil
-	//			})
-	//
-	//		engine := NewEventIngestionEngine(
-	//			subscriber,
-	//			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
-	//			store,
-	//			registerStore,
-	//			blocks,
-	//			receipts,
-	//			transactions,
-	//			traces,
-	//			models.NewPublisher[*models.Block](),
-	//			models.NewPublisher[[]*gethTypes.Log](),
-	//			zerolog.Nop(),
-	//			metrics.NopCollector,
-	//			defaultReplayerConfig(),
-	//		)
-	//
-	//		done := make(chan struct{})
-	//		go func() {
-	//			err := engine.Run(context.Background())
-	//			assert.NoError(t, err)
-	//			close(done)
-	//		}()
-	//
-	//		blocks.
-	//			On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*models.Block"), mock.Anything).
-	//			Return(func(h uint64, id flow.Identifier, storeBlock *models.Block, _ *pebbleDB.Batch) error {
-	//				assert.Equal(t, block, storeBlock)
-	//				assert.Equal(t, blockID, id)
-	//				assert.Equal(t, nextHeight, h)
-	//				return nil
-	//			}).
-	//			Once()
-	//
-	//		transactions.
-	//			On("Store", mock.AnythingOfType("models.TransactionCall"), mock.Anything).
-	//			Return(func(tx models.Transaction, _ *pebbleDB.Batch) error {
-	//				assert.Equal(t, transaction.Hash(), tx.Hash()) // if hashes are equal tx is equal
-	//				return nil
-	//			}).
-	//			Once()
-	//
-	//		receipts.
-	//			On("Store", mock.AnythingOfType("[]*models.Receipt"), mock.Anything).
-	//			Return(func(receipts []*models.Receipt, _ *pebbleDB.Batch) error {
-	//				assert.Len(t, receipts, 1)
-	//				rcp := receipts[0]
-	//
-	//				assert.Equal(t, nextHeight, rcp.BlockNumber.Uint64())
-	//				assert.Len(t, rcp.Logs, len(result.Logs))
-	//				assert.Equal(t, result.DeployedContractAddress.ToCommon().String(), rcp.ContractAddress.String())
-	//				return nil
-	//			}).
-	//			Once()
-	//
-	//		eventsChan <- models.NewSingleBlockEvents(flow.BlockEvents{
-	//			Events: []flow.Event{{
-	//				Type:  string(blockEvent.Etype),
-	//				Value: blockCdc,
-	//			}, {
-	//				Type:  string(txEvent.Etype),
-	//				Value: txCdc,
-	//			}},
-	//			Height:  nextHeight,
-	//			BlockID: blockID,
-	//		})
-	//
-	//		close(eventsChan)
-	//		<-done
-	//	})
-	//
-	//	t.Run("ingest block first and then transaction even if received out-of-order", func(t *testing.T) {
-	//		receipts := &storageMock.ReceiptIndexer{}
-	//		transactions := &storageMock.TransactionIndexer{}
-	//		latestHeight := uint64(10)
-	//		nextHeight := latestHeight + 1
-	//
-	//		store, registerStore := setupStore(t)
-	//
-	//		blocks := &storageMock.BlockIndexer{}
-	//		blocks.
-	//			On("LatestCadenceHeight").
-	//			Return(func() (uint64, error) {
-	//				return latestHeight, nil
-	//			}).
-	//			On("SetLatestCadenceHeight", mock.AnythingOfType("uint64")).
-	//			Return(func(h uint64) error { return nil })
-	//
-	//		eventsChan := make(chan models.BlockEvents)
-	//		subscriber := &mocks.EventSubscriber{}
-	//		subscriber.
-	//			On("Subscribe", mock.Anything).
-	//			Return(func(ctx context.Context) <-chan models.BlockEvents {
-	//				return eventsChan
-	//			})
-	//
-	//		txCdc, txEvent, transaction, res, err := newTransaction(nextHeight)
-	//		require.NoError(t, err)
-	//		blockCdc, _, blockEvent, err := newBlock(nextHeight, []gethCommon.Hash{res.TxHash})
-	//		require.NoError(t, err)
-	//
-	//		traces := &storageMock.TraceIndexer{}
-	//		traces.
-	//			On("StoreTransaction", mock.AnythingOfType("common.Hash"), mock.AnythingOfType("json.RawMessage"), mock.Anything).
-	//			Return(func(txID gethCommon.Hash, trace json.RawMessage, batch *pebbleDB.Batch) error {
-	//				assert.Equal(t, transaction.Hash(), txID)
-	//				return nil
-	//			})
-	//
-	//		engine := NewEventIngestionEngine(
-	//			subscriber,
-	//			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
-	//			store,
-	//			registerStore,
-	//			blocks,
-	//			receipts,
-	//			transactions,
-	//			traces,
-	//			models.NewPublisher[*models.Block](),
-	//			models.NewPublisher[[]*gethTypes.Log](),
-	//			zerolog.Nop(),
-	//			metrics.NopCollector,
-	//			defaultReplayerConfig(),
-	//		)
-	//
-	//		done := make(chan struct{})
-	//		go func() {
-	//			err := engine.Run(context.Background())
-	//			assert.NoError(t, err)
-	//			close(done)
-	//		}()
-	//
-	//		blocksFirst := false // flag indicating we stored block first
-	//		blocks.
-	//			On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*models.Block"), mock.Anything).
-	//			Return(func(h uint64, id flow.Identifier, storeBlock *models.Block, _ *pebbleDB.Batch) error {
-	//				blocksFirst = true
-	//				return nil
-	//			}).
-	//			Once()
-	//
-	//		transactions.
-	//			On("Store", mock.AnythingOfType("models.TransactionCall"), mock.Anything).
-	//			Return(func(tx models.Transaction, _ *pebbleDB.Batch) error {
-	//				require.True(t, blocksFirst)
-	//				return nil
-	//			}).
-	//			Once()
-	//
-	//		receipts.
-	//			On("Store", mock.AnythingOfType("[]*models.Receipt"), mock.Anything).
-	//			Return(func(receipts []*models.Receipt, _ *pebbleDB.Batch) error {
-	//				require.True(t, blocksFirst)
-	//				return nil
-	//			}).
-	//			Once()
-	//
-	//		eventsChan <- models.NewSingleBlockEvents(flow.BlockEvents{
-	//			Events: []flow.Event{
-	//				// first transaction
-	//				{
-	//					Type:  string(txEvent.Etype),
-	//					Value: txCdc,
-	//				},
-	//				// and then block (out-of-order)
-	//				{
-	//					Type:  string(blockEvent.Etype),
-	//					Value: blockCdc,
-	//				},
-	//			},
-	//			Height: nextHeight,
-	//		})
-	//
-	//		close(eventsChan)
-	//		<-done
-	//	})
-	//
-	//	t.Run("ingest block and multiple transactions in same block event, even if out-of-order", func(t *testing.T) {
-	//		receipts := &storageMock.ReceiptIndexer{}
-	//		transactions := &storageMock.TransactionIndexer{}
-	//		latestCadenceHeight := uint64(0)
-	//
-	//		store, registerStore := setupStore(t)
-	//
-	//		blocks := &storageMock.BlockIndexer{}
-	//		blocks.
-	//			On("LatestCadenceHeight").
-	//			Return(func() (uint64, error) {
-	//				return latestCadenceHeight, nil
-	//			}).
-	//			Once() // make sure this isn't called multiple times
-	//
-	//		traces := &storageMock.TraceIndexer{}
-	//
-	//		eventsChan := make(chan models.BlockEvents)
-	//		subscriber := &mocks.EventSubscriber{}
-	//		subscriber.
-	//			On("Subscribe", mock.Anything).
-	//			Return(func(ctx context.Context) <-chan models.BlockEvents {
-	//				return eventsChan
-	//			}).
-	//			Once()
-	//
-	//		engine := NewEventIngestionEngine(
-	//			subscriber,
-	//			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
-	//			store,
-	//			registerStore,
-	//			blocks,
-	//			receipts,
-	//			transactions,
-	//			traces,
-	//			models.NewPublisher[*models.Block](),
-	//			models.NewPublisher[[]*gethTypes.Log](),
-	//			zerolog.Nop(),
-	//			metrics.NopCollector,
-	//			defaultReplayerConfig(),
-	//		)
-	//
-	//		done := make(chan struct{})
-	//		go func() {
-	//			err := engine.Run(context.Background())
-	//			assert.NoError(t, err)
-	//			close(done)
-	//		}()
-	//
-	//		evmHeight := uint64(0)
-	//		events := make([]flow.Event, 0)
-	//		blockIndexedFirst := false
-	//		txsStored := 0
-	//		eventCount := 5
-	//		txHashes := make([]gethCommon.Hash, eventCount)
-	//
-	//		for i := 0; i < eventCount; i++ {
-	//			txCdc, txEvent, transaction, res, err := newTransaction(evmHeight)
-	//			txHashes[i] = res.TxHash
-	//			require.NoError(t, err)
-	//
-	//			// add a single transaction for each block
-	//			transactions.
-	//				On("Store", mock.AnythingOfType("models.TransactionCall"), mock.Anything).
-	//				Return(func(tx models.Transaction, _ *pebbleDB.Batch) error {
-	//					assert.Equal(t, transaction.Hash(), tx.Hash()) // if hashes are equal tx is equal
-	//					require.True(t, blockIndexedFirst)
-	//					txsStored++
-	//					return nil
-	//				}).
-	//				Once()
-	//
-	//			receipts.
-	//				On("Store", mock.AnythingOfType("[]*models.Receipt"), mock.Anything).
-	//				Return(func(receipts []*models.Receipt, _ *pebbleDB.Batch) error { return nil }).
-	//				Once()
-	//
-	//			traces.
-	//				On("StoreTransaction", mock.AnythingOfType("common.Hash"), mock.AnythingOfType("json.RawMessage"), mock.Anything).
-	//				Return(func(txID gethCommon.Hash, trace json.RawMessage, batch *pebbleDB.Batch) error {
-	//					assert.Equal(t, transaction.Hash(), txID)
-	//					return nil
-	//				})
-	//
-	//			events = append(events, flow.Event{
-	//				Type:  string(txEvent.Etype),
-	//				Value: txCdc,
-	//			})
-	//		}
-	//
-	//		blocksStored := 0
-	//		blockCdc, block, blockEvent, err := newBlock(evmHeight, txHashes)
-	//		require.NoError(t, err)
-	//
-	//		blocks.
-	//			On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*models.Block"), mock.Anything).
-	//			Return(func(h uint64, id flow.Identifier, storeBlock *models.Block, _ *pebbleDB.Batch) error {
-	//				assert.Equal(t, block, storeBlock)
-	//				assert.Equal(t, evmHeight, block.Height)
-	//				assert.Equal(t, latestCadenceHeight+1, h)
-	//				blockIndexedFirst = true
-	//				blocksStored++
-	//				return nil
-	//			}).
-	//			Once()
-	//
-	//		events = append(events, flow.Event{
-	//			Type:  string(blockEvent.Etype),
-	//			Value: blockCdc,
-	//		})
-	//
-	//		// this messes up order of events to test if we still process events in-order
-	//		// it will make transaction event first and then block event
-	//		events[0], events[1] = events[1], events[0]
-	//		// and it will make the first block be swapped with second block out-of-order
-	//		events[1], events[2] = events[2], events[1]
-	//
-	//		eventsChan <- models.NewSingleBlockEvents(flow.BlockEvents{
-	//			Events: events,
-	//			Height: latestCadenceHeight + 1,
-	//		})
-	//
-	//		close(eventsChan)
-	//		<-done
-	//		assert.Equal(t, eventCount, txsStored)
-	//		assert.Equal(t, 1, blocksStored)
-	//	})
+	t.Run("fail with events out of sequence", func(t *testing.T) {
+		ctx := context.Background()
+		ictx, cancel := irrecoverable.NewMockSignalerContextWithCancel(t, ctx)
+		defer cancel()
+
+		ictx.On("Throw", mock.Anything).Run(func(args mock.Arguments) {
+			err := args.Get(0).(error)
+			require.ErrorContains(t, err, "failed to index events for cadence block 21: invalid height: received new block: 20, non-sequential of latest block: 11")
+		})
+
+		receipts := &storageMock.ReceiptIndexer{}
+		transactions := &storageMock.TransactionIndexer{}
+		latestHeight := uint64(10)
+
+		store, registerStore := setupStore(t)
+
+		blocks := &storageMock.BlockIndexer{}
+		blocks.
+			On("LatestCadenceHeight").
+			Return(func() (uint64, error) {
+				return latestHeight, nil
+			}).
+			Once() // make sure this isn't called multiple times
+
+		traces := &storageMock.TraceIndexer{}
+
+		eventsChan := make(chan models.BlockEvents)
+		subscriber := &mocks.EventSubscriber{}
+		subscriber.
+			On("Subscribe", mock.Anything).
+			Return(func(ctx context.Context) <-chan models.BlockEvents {
+				return eventsChan
+			})
+
+		blocksPublisher := models.NewPublisher[*models.Block](zerolog.Nop())
+		blocksPublisher.Start(ictx)
+		logsPublisher := models.NewPublisher[[]*gethTypes.Log](zerolog.Nop())
+		logsPublisher.Start(ictx)
+
+		engine := NewEventIngestionEngine(
+			subscriber,
+			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
+			store,
+			registerStore,
+			blocks,
+			receipts,
+			transactions,
+			traces,
+			blocksPublisher,
+			logsPublisher,
+			zerolog.Nop(),
+			metrics.NopCollector,
+			defaultReplayerConfig(),
+		)
+
+		engine.Start(ictx)
+		<-engine.Ready()
+
+		// first create one successful block event
+		blockCdc, block, blockEvent, err := newBlock(latestHeight+1, nil)
+		cadenceHeight := latestHeight + 10
+		require.NoError(t, err)
+
+		blocks.
+			On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*models.Block"), mock.Anything).
+			Return(func(h uint64, id flow.Identifier, storeBlock *models.Block, _ *pebbleDB.Batch) error {
+				assert.Equal(t, block, storeBlock)
+				assert.Equal(t, cadenceHeight, h)
+				return nil
+			}).
+			Once() // this should only be called for first valid block
+
+		cadenceEvents, err := models.NewCadenceEvents(flow.BlockEvents{
+			Events: []flow.Event{{
+				Type:  string(blockEvent.Etype),
+				Value: blockCdc,
+			}},
+			Height: cadenceHeight,
+		})
+		require.NoError(t, err)
+
+		eventsChan <- models.BlockEvents{
+			Events: cadenceEvents,
+		}
+
+		// fail with next block height being incorrect
+		blockCdc, _, blockEvent, err = newBlock(latestHeight+10, nil) // not sequential next block height
+		require.NoError(t, err)
+
+		cadenceEvents, err = models.NewCadenceEvents(flow.BlockEvents{
+			Events: []flow.Event{{
+				Type:  string(blockEvent.Etype),
+				Value: blockCdc,
+			}},
+			Height: cadenceHeight + 1,
+		})
+		require.NoError(t, err)
+
+		eventsChan <- models.BlockEvents{
+			Events: cadenceEvents,
+		}
+
+		close(eventsChan)
+		<-engine.Done()
+	})
+}
+
+func TestBlockAndTransactionIngestion(t *testing.T) {
+
+	t.Run("successfully ingest transaction and block", func(t *testing.T) {
+		ctx := context.Background()
+		ictx, cancel := irrecoverable.NewMockSignalerContextWithCancel(t, ctx)
+		defer cancel()
+
+		receipts := &storageMock.ReceiptIndexer{}
+		transactions := &storageMock.TransactionIndexer{}
+		latestHeight := uint64(10)
+		nextHeight := latestHeight + 1
+		blockID := flow.Identifier{0x01}
+
+		store, registerStore := setupStore(t)
+
+		blocks := &storageMock.BlockIndexer{}
+		blocks.
+			On("LatestCadenceHeight").
+			Return(func() (uint64, error) {
+				return latestHeight, nil
+			}).
+			Once() // make sure this isn't called multiple times
+
+		blocks.
+			On("SetLatestCadenceHeight", mock.AnythingOfType("uint64"), mock.Anything).
+			Return(func(h uint64, _ *pebbleDB.Batch) error {
+				assert.Equal(t, nextHeight, h)
+				return nil
+			})
+
+		eventsChan := make(chan models.BlockEvents)
+		subscriber := &mocks.EventSubscriber{}
+		subscriber.
+			On("Subscribe", mock.Anything).
+			Return(func(ctx context.Context) <-chan models.BlockEvents {
+				return eventsChan
+			})
+
+		txCdc, txEvent, transaction, result, err := newTransaction(nextHeight)
+		require.NoError(t, err)
+		blockCdc, block, blockEvent, err := newBlock(nextHeight, []gethCommon.Hash{result.TxHash})
+		require.NoError(t, err)
+
+		traces := &storageMock.TraceIndexer{}
+		traces.
+			On("StoreTransaction", mock.AnythingOfType("common.Hash"), mock.AnythingOfType("json.RawMessage"), mock.Anything).
+			Return(func(txID gethCommon.Hash, trace json.RawMessage, batch *pebbleDB.Batch) error {
+				assert.Equal(t, transaction.Hash(), txID)
+				return nil
+			})
+
+		blocksPublisher := models.NewPublisher[*models.Block](zerolog.Nop())
+		blocksPublisher.Start(ictx)
+		logsPublisher := models.NewPublisher[[]*gethTypes.Log](zerolog.Nop())
+		logsPublisher.Start(ictx)
+
+		engine := NewEventIngestionEngine(
+			subscriber,
+			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
+			store,
+			registerStore,
+			blocks,
+			receipts,
+			transactions,
+			traces,
+			blocksPublisher,
+			logsPublisher,
+			zerolog.Nop(),
+			metrics.NopCollector,
+			defaultReplayerConfig(),
+		)
+
+		engine.Start(ictx)
+		<-engine.Ready()
+
+		blocks.
+			On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*models.Block"), mock.Anything).
+			Return(func(h uint64, id flow.Identifier, storeBlock *models.Block, _ *pebbleDB.Batch) error {
+				assert.Equal(t, block, storeBlock)
+				assert.Equal(t, blockID, id)
+				assert.Equal(t, nextHeight, h)
+				return nil
+			}).
+			Once()
+
+		transactions.
+			On("Store", mock.AnythingOfType("models.TransactionCall"), mock.Anything).
+			Return(func(tx models.Transaction, _ *pebbleDB.Batch) error {
+				assert.Equal(t, transaction.Hash(), tx.Hash()) // if hashes are equal tx is equal
+				return nil
+			}).
+			Once()
+
+		receipts.
+			On("Store", mock.AnythingOfType("[]*models.Receipt"), mock.Anything).
+			Return(func(receipts []*models.Receipt, _ *pebbleDB.Batch) error {
+				assert.Len(t, receipts, 1)
+				rcp := receipts[0]
+
+				assert.Equal(t, nextHeight, rcp.BlockNumber.Uint64())
+				assert.Len(t, rcp.Logs, len(result.Logs))
+				assert.Equal(t, result.DeployedContractAddress.ToCommon().String(), rcp.ContractAddress.String())
+				return nil
+			}).
+			Once()
+
+		eventsChan <- models.NewSingleBlockEvents(flow.BlockEvents{
+			Events: []flow.Event{{
+				Type:  string(blockEvent.Etype),
+				Value: blockCdc,
+			}, {
+				Type:  string(txEvent.Etype),
+				Value: txCdc,
+			}},
+			Height:  nextHeight,
+			BlockID: blockID,
+		})
+
+		close(eventsChan)
+		<-engine.Done()
+	})
+
+	t.Run("ingest block first and then transaction even if received out-of-order", func(t *testing.T) {
+		ctx := context.Background()
+		ictx, cancel := irrecoverable.NewMockSignalerContextWithCancel(t, ctx)
+		defer cancel()
+
+		receipts := &storageMock.ReceiptIndexer{}
+		transactions := &storageMock.TransactionIndexer{}
+		latestHeight := uint64(10)
+		nextHeight := latestHeight + 1
+
+		store, registerStore := setupStore(t)
+
+		blocks := &storageMock.BlockIndexer{}
+		blocks.
+			On("LatestCadenceHeight").
+			Return(func() (uint64, error) {
+				return latestHeight, nil
+			}).
+			On("SetLatestCadenceHeight", mock.AnythingOfType("uint64")).
+			Return(func(h uint64) error { return nil })
+
+		eventsChan := make(chan models.BlockEvents)
+		subscriber := &mocks.EventSubscriber{}
+		subscriber.
+			On("Subscribe", mock.Anything).
+			Return(func(ctx context.Context) <-chan models.BlockEvents {
+				return eventsChan
+			})
+
+		txCdc, txEvent, transaction, res, err := newTransaction(nextHeight)
+		require.NoError(t, err)
+		blockCdc, _, blockEvent, err := newBlock(nextHeight, []gethCommon.Hash{res.TxHash})
+		require.NoError(t, err)
+
+		traces := &storageMock.TraceIndexer{}
+		traces.
+			On("StoreTransaction", mock.AnythingOfType("common.Hash"), mock.AnythingOfType("json.RawMessage"), mock.Anything).
+			Return(func(txID gethCommon.Hash, trace json.RawMessage, batch *pebbleDB.Batch) error {
+				assert.Equal(t, transaction.Hash(), txID)
+				return nil
+			})
+
+		blocksPublisher := models.NewPublisher[*models.Block](zerolog.Nop())
+		blocksPublisher.Start(ictx)
+		logsPublisher := models.NewPublisher[[]*gethTypes.Log](zerolog.Nop())
+		logsPublisher.Start(ictx)
+
+		engine := NewEventIngestionEngine(
+			subscriber,
+			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
+			store,
+			registerStore,
+			blocks,
+			receipts,
+			transactions,
+			traces,
+			blocksPublisher,
+			logsPublisher,
+			zerolog.Nop(),
+			metrics.NopCollector,
+			defaultReplayerConfig(),
+		)
+
+		engine.Start(ictx)
+		<-engine.Ready()
+
+		blocksFirst := false // flag indicating we stored block first
+		blocks.
+			On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*models.Block"), mock.Anything).
+			Return(func(h uint64, id flow.Identifier, storeBlock *models.Block, _ *pebbleDB.Batch) error {
+				blocksFirst = true
+				return nil
+			}).
+			Once()
+
+		transactions.
+			On("Store", mock.AnythingOfType("models.TransactionCall"), mock.Anything).
+			Return(func(tx models.Transaction, _ *pebbleDB.Batch) error {
+				require.True(t, blocksFirst)
+				return nil
+			}).
+			Once()
+
+		receipts.
+			On("Store", mock.AnythingOfType("[]*models.Receipt"), mock.Anything).
+			Return(func(receipts []*models.Receipt, _ *pebbleDB.Batch) error {
+				require.True(t, blocksFirst)
+				return nil
+			}).
+			Once()
+
+		eventsChan <- models.NewSingleBlockEvents(flow.BlockEvents{
+			Events: []flow.Event{
+				// first transaction
+				{
+					Type:  string(txEvent.Etype),
+					Value: txCdc,
+				},
+				// and then block (out-of-order)
+				{
+					Type:  string(blockEvent.Etype),
+					Value: blockCdc,
+				},
+			},
+			Height: nextHeight,
+		})
+
+		close(eventsChan)
+		<-engine.Done()
+	})
+
+	t.Run("ingest block and multiple transactions in same block event, even if out-of-order", func(t *testing.T) {
+		ctx := context.Background()
+		ictx, cancel := irrecoverable.NewMockSignalerContextWithCancel(t, ctx)
+		defer cancel()
+
+		receipts := &storageMock.ReceiptIndexer{}
+		transactions := &storageMock.TransactionIndexer{}
+		latestCadenceHeight := uint64(0)
+
+		store, registerStore := setupStore(t)
+
+		blocks := &storageMock.BlockIndexer{}
+		blocks.
+			On("LatestCadenceHeight").
+			Return(func() (uint64, error) {
+				return latestCadenceHeight, nil
+			}).
+			Once() // make sure this isn't called multiple times
+
+		traces := &storageMock.TraceIndexer{}
+
+		eventsChan := make(chan models.BlockEvents)
+		subscriber := &mocks.EventSubscriber{}
+		subscriber.
+			On("Subscribe", mock.Anything).
+			Return(func(ctx context.Context) <-chan models.BlockEvents {
+				return eventsChan
+			}).
+			Once()
+
+		blocksPublisher := models.NewPublisher[*models.Block](zerolog.Nop())
+		blocksPublisher.Start(ictx)
+		logsPublisher := models.NewPublisher[[]*gethTypes.Log](zerolog.Nop())
+		logsPublisher.Start(ictx)
+
+		engine := NewEventIngestionEngine(
+			subscriber,
+			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
+			store,
+			registerStore,
+			blocks,
+			receipts,
+			transactions,
+			traces,
+			blocksPublisher,
+			logsPublisher,
+			zerolog.Nop(),
+			metrics.NopCollector,
+			defaultReplayerConfig(),
+		)
+
+		engine.Start(ictx)
+		<-engine.Ready()
+
+		evmHeight := uint64(0)
+		events := make([]flow.Event, 0)
+		blockIndexedFirst := false
+		txsStored := 0
+		eventCount := 5
+		txHashes := make([]gethCommon.Hash, eventCount)
+
+		for i := 0; i < eventCount; i++ {
+			txCdc, txEvent, transaction, res, err := newTransaction(evmHeight)
+			txHashes[i] = res.TxHash
+			require.NoError(t, err)
+
+			// add a single transaction for each block
+			transactions.
+				On("Store", mock.AnythingOfType("models.TransactionCall"), mock.Anything).
+				Return(func(tx models.Transaction, _ *pebbleDB.Batch) error {
+					assert.Equal(t, transaction.Hash(), tx.Hash()) // if hashes are equal tx is equal
+					require.True(t, blockIndexedFirst)
+					txsStored++
+					return nil
+				}).
+				Once()
+
+			receipts.
+				On("Store", mock.AnythingOfType("[]*models.Receipt"), mock.Anything).
+				Return(func(receipts []*models.Receipt, _ *pebbleDB.Batch) error { return nil }).
+				Once()
+
+			traces.
+				On("StoreTransaction", mock.AnythingOfType("common.Hash"), mock.AnythingOfType("json.RawMessage"), mock.Anything).
+				Return(func(txID gethCommon.Hash, trace json.RawMessage, batch *pebbleDB.Batch) error {
+					assert.Equal(t, transaction.Hash(), txID)
+					return nil
+				})
+
+			events = append(events, flow.Event{
+				Type:  string(txEvent.Etype),
+				Value: txCdc,
+			})
+		}
+
+		blocksStored := 0
+		blockCdc, block, blockEvent, err := newBlock(evmHeight, txHashes)
+		require.NoError(t, err)
+
+		blocks.
+			On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*models.Block"), mock.Anything).
+			Return(func(h uint64, id flow.Identifier, storeBlock *models.Block, _ *pebbleDB.Batch) error {
+				assert.Equal(t, block, storeBlock)
+				assert.Equal(t, evmHeight, block.Height)
+				assert.Equal(t, latestCadenceHeight+1, h)
+				blockIndexedFirst = true
+				blocksStored++
+				return nil
+			}).
+			Once()
+
+		events = append(events, flow.Event{
+			Type:  string(blockEvent.Etype),
+			Value: blockCdc,
+		})
+
+		// this messes up order of events to test if we still process events in-order
+		// it will make transaction event first and then block event
+		events[0], events[1] = events[1], events[0]
+		// and it will make the first block be swapped with second block out-of-order
+		events[1], events[2] = events[2], events[1]
+
+		eventsChan <- models.NewSingleBlockEvents(flow.BlockEvents{
+			Events: events,
+			Height: latestCadenceHeight + 1,
+		})
+
+		close(eventsChan)
+		<-engine.Done()
+		assert.Equal(t, eventCount, txsStored)
+		assert.Equal(t, 1, blocksStored)
+	})
 }
 
 func newBlock(height uint64, txHashes []gethCommon.Hash) (cadence.Event, *models.Block, *events.Event, error) {
