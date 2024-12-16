@@ -6,6 +6,7 @@ import (
 	"github.com/onflow/atree"
 	"github.com/onflow/flow-go/fvm/evm"
 	"github.com/onflow/flow-go/fvm/evm/emulator"
+	"github.com/onflow/flow-go/fvm/evm/offchain/blocks"
 	"github.com/onflow/flow-go/fvm/evm/precompiles"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	flowGo "github.com/onflow/flow-go/model/flow"
@@ -98,6 +99,13 @@ func (s *BlockExecutor) Run(
 	s.gasUsed += res.GasConsumed
 	s.txIndex++
 
+	if res.GasConsumed != receipt.GasUsed {
+		return fmt.Errorf(
+			"used gas mismatch, expected: %d, got: %d",
+			receipt.GasUsed,
+			res.GasConsumed,
+		)
+	}
 	l.Debug().Msg("transaction executed successfully")
 
 	return nil
@@ -110,25 +118,11 @@ func (s *BlockExecutor) blockContext(
 	receipt *models.Receipt,
 	tracer *tracers.Tracer,
 ) (types.BlockContext, error) {
-	ctx := types.BlockContext{
-		ChainID:                types.EVMChainIDFromFlowChainID(s.chainID),
-		BlockNumber:            s.block.Height,
-		BlockTimestamp:         s.block.Timestamp,
-		DirectCallBaseGasUsage: types.DefaultDirectCallBaseGasUsage,
-		DirectCallGasPrice:     types.DefaultDirectCallGasPrice,
-		GasFeeCollector:        types.CoinbaseAddress,
-		GetHashFunc: func(n uint64) common.Hash {
-			// For block heights greater than or equal to the current,
-			// return an empty block hash.
-			if n >= s.block.Height {
-				return common.Hash{}
-			}
-			// If the given block height, is more than 256 blocks
-			// in the past, return an empty block hash.
-			if s.block.Height-n > 256 {
-				return common.Hash{}
-			}
-
+	ctx, err := blocks.NewBlockContext(
+		s.chainID,
+		s.block.Height,
+		s.block.Timestamp,
+		func(n uint64) common.Hash {
 			block, err := s.blocks.GetByHeight(n)
 			if err != nil {
 				return common.Hash{}
@@ -140,11 +134,16 @@ func (s *BlockExecutor) blockContext(
 
 			return blockHash
 		},
-		Random:            s.block.PrevRandao,
-		TxCountSoFar:      s.txIndex,
-		TotalGasUsedSoFar: s.gasUsed,
-		Tracer:            tracer,
+		s.block.PrevRandao,
+		tracer,
+	)
+
+	if err != nil {
+		return types.BlockContext{}, err
 	}
+
+	ctx.TxCountSoFar = s.txIndex
+	ctx.TotalGasUsedSoFar = s.gasUsed
 
 	// only add precompile cadence arch contract if we have a receipt
 	if receipt != nil {

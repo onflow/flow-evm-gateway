@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"slices"
+	"strings"
 
 	"github.com/goccy/go-json"
 	"github.com/onflow/flow-go/fvm/evm/offchain/query"
@@ -28,6 +28,8 @@ import (
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
 	flowEVM "github.com/onflow/flow-go/fvm/evm"
+
+	offchain "github.com/onflow/flow-go/fvm/evm/offchain/storage"
 
 	// this import is needed for side-effects, because the
 	// tracers.DefaultDirectory is relying on the init function
@@ -302,15 +304,7 @@ func (d *DebugAPI) traceTransaction(
 		return nil, err
 	}
 
-	// We need to re-execute the given transaction and all the
-	// transactions that precede it in the same block, based on
-	// the previous block state, to generate the correct trace.
-	previousBlock, err := d.blocks.GetByHeight(block.Height - 1)
-	if err != nil {
-		return nil, err
-	}
-
-	blockExecutor, err := d.executorAtBlock(previousBlock)
+	blockExecutor, err := d.executorAtBlock(block)
 	if err != nil {
 		return nil, err
 	}
@@ -383,14 +377,7 @@ func (d *DebugAPI) traceBlockByNumber(
 		return results, nil
 	}
 
-	// We need to re-execute all the transactions from the given block,
-	// on top of the previous block state, to generate the correct traces.
-	previousBlock, err := d.blocks.GetByHeight(block.Height - 1)
-	if err != nil {
-		return nil, err
-	}
-
-	blockExecutor, err := d.executorAtBlock(previousBlock)
+	blockExecutor, err := d.executorAtBlock(block)
 	if err != nil {
 		return nil, err
 	}
@@ -424,19 +411,28 @@ func (d *DebugAPI) traceBlockByNumber(
 }
 
 func (d *DebugAPI) executorAtBlock(block *models.Block) (*evm.BlockExecutor, error) {
-	snapshot, err := d.registerStore.GetSnapshotAt(block.Height)
+	previousBlock, err := d.blocks.GetByHeight(block.Height - 1)
+	if err != nil {
+		return nil, err
+	}
+
+	// We need to re-execute all the transactions from the given block,
+	// on top of the previous block state, to generate the correct traces.
+	snapshot, err := d.registerStore.GetSnapshotAt(previousBlock.Height)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"failed to get register snapshot at block height %d: %w",
-			block.Height,
+			previousBlock.Height,
 			err,
 		)
 	}
-	ledger := storage.NewRegisterDelta(snapshot)
+
+	// create storage
+	state := offchain.NewEphemeralStorage(offchain.NewReadOnlyStorage(snapshot))
 
 	return evm.NewBlockExecutor(
 		block,
-		ledger,
+		state,
 		d.config.FlowNetworkID,
 		d.blocks,
 		d.receipts,
@@ -484,6 +480,6 @@ func isDefaultCallTracer(config *tracers.TraceConfig) bool {
 		return false
 	}
 
-	tracerConfig := json.RawMessage(replayer.TracerConfig)
-	return slices.Equal(config.TracerConfig, tracerConfig)
+	trimmedConfig := strings.ReplaceAll(string(config.TracerConfig), " ", "")
+	return trimmedConfig == replayer.TracerConfig
 }
