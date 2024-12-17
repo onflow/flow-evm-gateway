@@ -109,6 +109,7 @@ make docker-run-local
 ```
 
 **Verify**
+
 To verify the service is up and running:
 
 ```bash
