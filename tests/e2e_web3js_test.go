@@ -28,6 +28,18 @@ func TestWeb3_E2E(t *testing.T) {
 		runWeb3Test(t, "build_evm_state_test")
 	})
 
+	t.Run("verify Cadence arch calls", func(t *testing.T) {
+		runWeb3Test(t, "verify_cadence_arch_calls_test")
+	})
+
+	t.Run("test transaction traces", func(t *testing.T) {
+		runWeb3Test(t, "debug_traces_test")
+	})
+
+	t.Run("test debug utils", func(t *testing.T) {
+		runWeb3Test(t, "debug_util_test")
+	})
+
 	t.Run("test setup sanity check", func(t *testing.T) {
 		runWeb3Test(t, "setup_test")
 	})
@@ -56,6 +68,10 @@ func TestWeb3_E2E(t *testing.T) {
 		runWeb3Test(t, "eth_deploy_contract_and_interact_test")
 	})
 
+	t.Run("test retrieval of contract storage slots", func(t *testing.T) {
+		runWeb3Test(t, "eth_get_storage_at_test")
+	})
+
 	t.Run("deploy multicall3 contract and call methods", func(t *testing.T) {
 		runWeb3Test(t, "eth_multicall3_contract_test")
 	})
@@ -73,7 +89,23 @@ func TestWeb3_E2E(t *testing.T) {
 	})
 
 	t.Run("logs emitting and filtering", func(t *testing.T) {
-		runWeb3Test(t, "eth_logs_filtering_test")
+		runWeb3TestWithSetup(t, "eth_logs_filtering_test", func(emu emulator.Emulator) {
+			// Run an arbitrary transaction, to form an empty EVM block
+			// through the system chunk transaction. This is needed
+			// to emulate the `eth_getLogs` by passing the block hash
+			// of a block without EVM transactions/receipts.
+			res, err := flowSendTransaction(
+				emu,
+				`transaction() {
+					prepare(signer: auth(Storage) &Account) {
+						let currentBlock = getCurrentBlock()
+						assert(currentBlock.height > 0, message: "current block is zero")
+					}
+				}`,
+			)
+			require.NoError(t, err)
+			require.NoError(t, res.Error)
+		})
 	})
 
 	t.Run("test filter-related endpoints", func(t *testing.T) {

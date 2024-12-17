@@ -1,14 +1,20 @@
-package storage
+package storage_test
 
 import (
 	"fmt"
+	"testing"
+
+	pebble2 "github.com/cockroachdb/pebble"
+	"github.com/onflow/flow-evm-gateway/config"
+	"github.com/onflow/flow-evm-gateway/storage"
+	"github.com/onflow/flow-evm-gateway/storage/pebble"
+	flowGo "github.com/onflow/flow-go/model/flow"
+	"github.com/stretchr/testify/require"
 
 	"github.com/goccy/go-json"
 	"github.com/onflow/flow-go-sdk"
-	evmEmulator "github.com/onflow/flow-go/fvm/evm/emulator"
 	"github.com/onflow/go-ethereum/common"
 	"github.com/onflow/go-ethereum/core/types"
-	"github.com/onflow/go-ethereum/crypto"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/onflow/flow-evm-gateway/models"
@@ -16,9 +22,70 @@ import (
 	"github.com/onflow/flow-evm-gateway/storage/mocks"
 )
 
+// tests that make sure the implementation conform to the interface expected behaviour
+func TestBlocks(t *testing.T) {
+	runDB("blocks", t, func(t *testing.T, db *pebble.Storage) {
+		bl := pebble.NewBlocks(db, flowGo.Emulator)
+		batch := db.NewBatch()
+
+		err := bl.InitHeights(config.EmulatorInitCadenceHeight, flow.Identifier{0x1}, batch)
+		require.NoError(t, err)
+
+		err = batch.Commit(pebble2.Sync)
+		require.NoError(t, err)
+
+		suite.Run(t, &BlockTestSuite{
+			Blocks: bl,
+			DB:     db,
+		})
+	})
+}
+
+func TestReceipts(t *testing.T) {
+	runDB("receipts", t, func(t *testing.T, db *pebble.Storage) {
+		// prepare the blocks database since they track heights which are used in receipts as well
+		bl := pebble.NewBlocks(db, flowGo.Emulator)
+		batch := db.NewBatch()
+
+		err := bl.InitHeights(config.EmulatorInitCadenceHeight, flow.Identifier{0x1}, batch)
+		require.NoError(t, err)
+		err = bl.Store(30, flow.Identifier{0x1}, mocks.NewBlock(10), batch) // update first and latest height
+		require.NoError(t, err)
+		err = bl.Store(30, flow.Identifier{0x1}, mocks.NewBlock(300), batch) // update latest
+		require.NoError(t, err)
+
+		err = batch.Commit(pebble2.Sync)
+		require.NoError(t, err)
+
+		suite.Run(t, &ReceiptTestSuite{
+			ReceiptIndexer: pebble.NewReceipts(db),
+			DB:             db,
+		})
+	})
+}
+
+func TestTransactions(t *testing.T) {
+	runDB("transactions", t, func(t *testing.T, db *pebble.Storage) {
+		suite.Run(t, &TransactionTestSuite{
+			TransactionIndexer: pebble.NewTransactions(db),
+			DB:                 db,
+		})
+	})
+}
+
+func TestTraces(t *testing.T) {
+	runDB("traces", t, func(t *testing.T, db *pebble.Storage) {
+		suite.Run(t, &TraceTestSuite{
+			TraceIndexer: pebble.NewTraces(db),
+			DB:           db,
+		})
+	})
+}
+
 type BlockTestSuite struct {
 	suite.Suite
-	Blocks BlockIndexer
+	Blocks storage.BlockIndexer
+	DB     *pebble.Storage
 }
 
 func (b *BlockTestSuite) TestGet() {
@@ -26,7 +93,12 @@ func (b *BlockTestSuite) TestGet() {
 		height := uint64(1)
 		flowID := flow.Identifier{0x01}
 		block := mocks.NewBlock(height)
-		err := b.Blocks.Store(height+1, flowID, block, nil)
+		batch := b.DB.NewBatch()
+
+		err := b.Blocks.Store(height+1, flowID, block, batch)
+		b.Require().NoError(err)
+
+		err = batch.Commit(pebble2.Sync)
 		b.Require().NoError(err)
 
 		ID, err := block.Hash()
@@ -59,17 +131,33 @@ func (b *BlockTestSuite) TestStore() {
 
 	b.Run("success", func() {
 		flowID := flow.Identifier{0x01}
-		err := b.Blocks.Store(2, flowID, block, nil)
+		batch := b.DB.NewBatch()
+
+		err := b.Blocks.Store(2, flowID, block, batch)
 		b.Require().NoError(err)
 
+		err = batch.Commit(pebble2.Sync)
+		b.Require().NoError(err)
+
+		batch = b.DB.NewBatch()
+
 		// we allow overwriting blocks to make the actions idempotent
-		err = b.Blocks.Store(2, flowID, block, nil)
+		err = b.Blocks.Store(2, flowID, block, batch)
+		b.Require().NoError(err)
+
+		err = batch.Commit(pebble2.Sync)
 		b.Require().NoError(err)
 	})
 
 	b.Run("store multiple blocks, and get one", func() {
+
 		for i := 0; i < 10; i++ {
-			err := b.Blocks.Store(uint64(i+5), flow.Identifier{byte(i)}, mocks.NewBlock(uint64(10+i)), nil)
+			batch := b.DB.NewBatch()
+
+			err := b.Blocks.Store(uint64(i+5), flow.Identifier{byte(i)}, mocks.NewBlock(uint64(10+i)), batch)
+			b.Require().NoError(err)
+
+			err = batch.Commit(pebble2.Sync)
 			b.Require().NoError(err)
 		}
 
@@ -89,7 +177,12 @@ func (b *BlockTestSuite) TestHeights() {
 	b.Run("last EVM height", func() {
 		for i := 0; i < 5; i++ {
 			lastHeight := uint64(100 + i)
-			err := b.Blocks.Store(lastHeight+10, flow.Identifier{byte(i)}, mocks.NewBlock(lastHeight), nil)
+			batch := b.DB.NewBatch()
+
+			err := b.Blocks.Store(lastHeight+10, flow.Identifier{byte(i)}, mocks.NewBlock(lastHeight), batch)
+			b.Require().NoError(err)
+
+			err = batch.Commit(pebble2.Sync)
 			b.Require().NoError(err)
 
 			last, err := b.Blocks.LatestEVMHeight()
@@ -109,7 +202,12 @@ func (b *BlockTestSuite) TestHeights() {
 
 		for i, evmHeight := range evmHeights {
 			blocks[i] = mocks.NewBlock(evmHeight)
-			err := b.Blocks.Store(uint64(i), cadenceIDs[i], blocks[i], nil)
+			batch := b.DB.NewBatch()
+
+			err := b.Blocks.Store(uint64(i), cadenceIDs[i], blocks[i], batch)
+			b.Require().NoError(err)
+
+			err = batch.Commit(pebble2.Sync)
 			b.Require().NoError(err)
 		}
 
@@ -125,7 +223,11 @@ func (b *BlockTestSuite) TestHeights() {
 	b.Run("last Cadence height", func() {
 		for i := 0; i < 5; i++ {
 			lastHeight := uint64(100 + i)
-			err := b.Blocks.Store(lastHeight, flow.Identifier{byte(i)}, mocks.NewBlock(lastHeight-10), nil)
+			batch := b.DB.NewBatch()
+			err := b.Blocks.Store(lastHeight, flow.Identifier{byte(i)}, mocks.NewBlock(lastHeight-10), batch)
+			b.Require().NoError(err)
+
+			err = batch.Commit(pebble2.Sync)
 			b.Require().NoError(err)
 
 			last, err := b.Blocks.LatestCadenceHeight()
@@ -138,7 +240,11 @@ func (b *BlockTestSuite) TestHeights() {
 		evmHeights := []uint64{10, 11, 12, 13}
 		cadenceHeights := []uint64{20, 24, 26, 27}
 		for i, evmHeight := range evmHeights {
-			err := b.Blocks.Store(cadenceHeights[i], flow.Identifier{byte(i)}, mocks.NewBlock(evmHeight), nil)
+			batch := b.DB.NewBatch()
+			err := b.Blocks.Store(cadenceHeights[i], flow.Identifier{byte(i)}, mocks.NewBlock(evmHeight), batch)
+			b.Require().NoError(err)
+
+			err = batch.Commit(pebble2.Sync)
 			b.Require().NoError(err)
 		}
 
@@ -153,7 +259,11 @@ func (b *BlockTestSuite) TestHeights() {
 		evmHeights := []uint64{10, 11, 12, 13}
 		cadenceIDs := []flow.Identifier{{0x01}, {0x02}, {0x03}, {0x04}}
 		for i, evmHeight := range evmHeights {
-			err := b.Blocks.Store(uint64(i), cadenceIDs[i], mocks.NewBlock(evmHeight), nil)
+			batch := b.DB.NewBatch()
+			err := b.Blocks.Store(uint64(i), cadenceIDs[i], mocks.NewBlock(evmHeight), batch)
+			b.Require().NoError(err)
+
+			err = batch.Commit(pebble2.Sync)
 			b.Require().NoError(err)
 		}
 
@@ -167,14 +277,19 @@ func (b *BlockTestSuite) TestHeights() {
 
 type ReceiptTestSuite struct {
 	suite.Suite
-	ReceiptIndexer ReceiptIndexer
+	ReceiptIndexer storage.ReceiptIndexer
+	DB             *pebble.Storage
 }
 
 func (s *ReceiptTestSuite) TestStoreReceipt() {
 
 	s.Run("store receipt successfully", func() {
 		receipt := mocks.NewReceipt(1, common.HexToHash("0xf1"))
-		err := s.ReceiptIndexer.Store([]*models.Receipt{receipt}, nil)
+		batch := s.DB.NewBatch()
+		err := s.ReceiptIndexer.Store([]*models.Receipt{receipt}, batch)
+		s.Require().NoError(err)
+
+		err = batch.Commit(pebble2.Sync)
 		s.Require().NoError(err)
 	})
 
@@ -194,7 +309,11 @@ func (s *ReceiptTestSuite) TestStoreReceipt() {
 			}
 		}
 
-		err := s.ReceiptIndexer.Store(receipts, nil)
+		batch := s.DB.NewBatch()
+		err := s.ReceiptIndexer.Store(receipts, batch)
+		s.Require().NoError(err)
+
+		err = batch.Commit(pebble2.Sync)
 		s.Require().NoError(err)
 
 		storeReceipts, err := s.ReceiptIndexer.GetByBlockHeight(height)
@@ -211,7 +330,8 @@ func (s *ReceiptTestSuite) TestStoreReceipt() {
 			mocks.NewReceipt(2, common.HexToHash("0x2")),
 		}
 
-		err := s.ReceiptIndexer.Store(receipts, nil)
+		batch := s.DB.NewBatch()
+		err := s.ReceiptIndexer.Store(receipts, batch)
 		s.Require().EqualError(err, "can't store receipts for multiple heights")
 	})
 }
@@ -219,7 +339,11 @@ func (s *ReceiptTestSuite) TestStoreReceipt() {
 func (s *ReceiptTestSuite) TestGetReceiptByTransactionID() {
 	s.Run("existing transaction ID", func() {
 		receipt := mocks.NewReceipt(2, common.HexToHash("0xf2"))
-		err := s.ReceiptIndexer.Store([]*models.Receipt{receipt}, nil)
+		batch := s.DB.NewBatch()
+		err := s.ReceiptIndexer.Store([]*models.Receipt{receipt}, batch)
+		s.Require().NoError(err)
+
+		err = batch.Commit(pebble2.Sync)
 		s.Require().NoError(err)
 
 		retReceipt, err := s.ReceiptIndexer.GetByTransactionID(receipt.TxHash)
@@ -238,11 +362,21 @@ func (s *ReceiptTestSuite) TestGetReceiptByTransactionID() {
 func (s *ReceiptTestSuite) TestGetReceiptByBlockHeight() {
 	s.Run("existing block height", func() {
 		receipt := mocks.NewReceipt(3, common.HexToHash("0x1"))
-		err := s.ReceiptIndexer.Store([]*models.Receipt{receipt}, nil)
+		batch := s.DB.NewBatch()
+		err := s.ReceiptIndexer.Store([]*models.Receipt{receipt}, batch)
 		s.Require().NoError(err)
+
+		err = batch.Commit(pebble2.Sync)
+		s.Require().NoError(err)
+
+		batch = s.DB.NewBatch()
+
 		// add one more receipt that shouldn't be retrieved
 		r := mocks.NewReceipt(4, common.HexToHash("0x2"))
-		s.Require().NoError(s.ReceiptIndexer.Store([]*models.Receipt{r}, nil))
+		s.Require().NoError(s.ReceiptIndexer.Store([]*models.Receipt{r}, batch))
+
+		err = batch.Commit(pebble2.Sync)
+		s.Require().NoError(err)
 
 		retReceipts, err := s.ReceiptIndexer.GetByBlockHeight(receipt.BlockNumber.Uint64())
 		s.Require().NoError(err)
@@ -251,8 +385,8 @@ func (s *ReceiptTestSuite) TestGetReceiptByBlockHeight() {
 
 	s.Run("non-existing block height", func() {
 		retReceipt, err := s.ReceiptIndexer.GetByBlockHeight(1337)
-		s.Require().Nil(retReceipt)
-		s.Require().ErrorIs(err, errors.ErrEntityNotFound)
+		s.Require().NoError(err)
+		s.Require().Len(retReceipt, 0)
 	})
 }
 
@@ -268,7 +402,11 @@ func (s *ReceiptTestSuite) TestBloomsForBlockRange() {
 			r := mocks.NewReceipt(i, common.HexToHash(fmt.Sprintf("0xf1%d", i)))
 			testBlooms = append(testBlooms, &r.Bloom)
 			testHeights = append(testHeights, i)
-			err := s.ReceiptIndexer.Store([]*models.Receipt{r}, nil)
+			batch := s.DB.NewBatch()
+			err := s.ReceiptIndexer.Store([]*models.Receipt{r}, batch)
+			s.Require().NoError(err)
+
+			err = batch.Commit(pebble2.Sync)
 			s.Require().NoError(err)
 		}
 
@@ -307,7 +445,10 @@ func (s *ReceiptTestSuite) TestBloomsForBlockRange() {
 			r2 := mocks.NewReceipt(i, common.HexToHash(fmt.Sprintf("0x%d", i)))
 			receipts := []*models.Receipt{r1, r2}
 
-			s.Require().NoError(s.ReceiptIndexer.Store(receipts, nil))
+			batch := s.DB.NewBatch()
+			s.Require().NoError(s.ReceiptIndexer.Store(receipts, batch))
+			err := batch.Commit(pebble2.Sync)
+			s.Require().NoError(err)
 
 			testBlooms = append(testBlooms, &r1.Bloom, &r2.Bloom)
 			testHeights = append(testHeights, i)
@@ -355,7 +496,12 @@ func (s *ReceiptTestSuite) TestBloomsForBlockRange() {
 		for i := start; i < end; i++ {
 			r1 := mocks.NewReceipt(i, common.HexToHash(fmt.Sprintf("0x%d", i)))
 			receipts := []*models.Receipt{r1}
-			s.Require().NoError(s.ReceiptIndexer.Store(receipts, nil))
+
+			batch := s.DB.NewBatch()
+			s.Require().NoError(s.ReceiptIndexer.Store(receipts, batch))
+
+			err := batch.Commit(pebble2.Sync)
+			s.Require().NoError(err)
 
 			if i == specific {
 				expectedBloom = &r1.Bloom
@@ -430,14 +576,20 @@ func (s *ReceiptTestSuite) compareReceipts(expected *models.Receipt, actual *mod
 
 type TransactionTestSuite struct {
 	suite.Suite
-	TransactionIndexer TransactionIndexer
+	TransactionIndexer storage.TransactionIndexer
+	DB                 *pebble.Storage
 }
 
 func (s *TransactionTestSuite) TestStoreTransaction() {
 	tx := mocks.NewTransaction(0)
 
 	s.Run("store transaction successfully", func() {
-		err := s.TransactionIndexer.Store(tx, nil)
+		batch := s.DB.NewBatch()
+
+		err := s.TransactionIndexer.Store(tx, batch)
+		s.Require().NoError(err)
+
+		err = batch.Commit(pebble2.Sync)
 		s.Require().NoError(err)
 	})
 }
@@ -445,7 +597,11 @@ func (s *TransactionTestSuite) TestStoreTransaction() {
 func (s *TransactionTestSuite) TestGetTransaction() {
 	s.Run("existing transaction", func() {
 		tx := mocks.NewTransaction(1)
-		err := s.TransactionIndexer.Store(tx, nil)
+		batch := s.DB.NewBatch()
+		err := s.TransactionIndexer.Store(tx, batch)
+		s.Require().NoError(err)
+
+		err = batch.Commit(pebble2.Sync)
 		s.Require().NoError(err)
 
 		txHash := tx.Hash()
@@ -456,15 +612,23 @@ func (s *TransactionTestSuite) TestGetTransaction() {
 		retTxHash := retTx.Hash()
 		s.Require().Equal(txHash, retTxHash) // if hashes are equal the data must be equal
 
+		batch = s.DB.NewBatch()
 		// allow same transaction overwrites
-		s.Require().NoError(s.TransactionIndexer.Store(retTx, nil))
+		s.Require().NoError(s.TransactionIndexer.Store(retTx, batch))
+
+		err = batch.Commit(pebble2.Sync)
+		s.Require().NoError(err)
 	})
 
 	s.Run("store multiple transactions and get single", func() {
 		var tx models.Transaction
 		for i := 0; i < 10; i++ {
 			tx = mocks.NewTransaction(uint64(10 + i))
-			err := s.TransactionIndexer.Store(tx, nil)
+			batch := s.DB.NewBatch()
+			err := s.TransactionIndexer.Store(tx, batch)
+			s.Require().NoError(err)
+
+			err = batch.Commit(pebble2.Sync)
 			s.Require().NoError(err)
 		}
 
@@ -485,82 +649,23 @@ func (s *TransactionTestSuite) TestGetTransaction() {
 	})
 }
 
-type AccountTestSuite struct {
-	suite.Suite
-	AccountIndexer AccountIndexer
-}
-
-func (a *AccountTestSuite) TestNonce() {
-
-	a.Run("update account and increase nonce", func() {
-		// todo add multiple accounts test
-		from := common.HexToAddress("FACF71692421039876a5BB4F10EF7A439D8ef61E")
-		rawKey := "f6d5333177711e562cabf1f311916196ee6ffc2a07966d9d4628094073bd5442"
-		key, err := crypto.HexToECDSA(rawKey)
-		a.Require().NoError(err)
-
-		nonce, err := a.AccountIndexer.GetNonce(from)
-		a.Require().NoError(err)
-		a.Require().Equal(uint64(0), nonce)
-
-		for i := 1; i < 5; i++ {
-			tx := mocks.NewTransaction(0)
-
-			txCall, ok := tx.(models.TransactionCall)
-			a.Require().True(ok)
-
-			txHash := tx.Hash()
-
-			rcp := mocks.NewReceipt(uint64(i+5), txHash)
-			gethTx, err := types.SignTx(txCall.Transaction, evmEmulator.GetDefaultSigner(), key)
-			a.Require().NoError(err)
-
-			tx = models.TransactionCall{Transaction: gethTx}
-
-			err = a.AccountIndexer.Update(tx, rcp, nil)
-			a.Require().NoError(err)
-
-			nonce, err = a.AccountIndexer.GetNonce(from)
-			a.Require().NoError(err)
-			a.Require().Equal(uint64(i), nonce)
-		}
-
-		// if run second time we should still see same nonce values, since they won't be incremented
-		// because we track nonce with evm height, and if same height is used twice we don't update
-		for i := 1; i < 5; i++ {
-			tx := mocks.NewTransaction(0)
-
-			txCall, ok := tx.(models.TransactionCall)
-			a.Require().True(ok)
-
-			txHash := tx.Hash()
-
-			rcp := mocks.NewReceipt(uint64(i+5), txHash)
-			gethTx, err := types.SignTx(txCall.Transaction, evmEmulator.GetDefaultSigner(), key)
-			a.Require().NoError(err)
-
-			tx = models.TransactionCall{Transaction: gethTx}
-
-			err = a.AccountIndexer.Update(tx, rcp, nil)
-			a.Require().NoError(err)
-
-			nonce, err = a.AccountIndexer.GetNonce(from)
-			a.Require().NoError(err)
-			a.Require().Equal(uint64(4), nonce) // always equal to latest nonce
-		}
-	})
-}
-
 type TraceTestSuite struct {
 	suite.Suite
-	TraceIndexer TraceIndexer
+	TraceIndexer storage.TraceIndexer
+	DB           *pebble.Storage
 }
 
 func (s *TraceTestSuite) TestStore() {
 	s.Run("store new trace", func() {
 		id := common.Hash{0x01}
 		trace := json.RawMessage(`{ "test": "foo" }`)
-		err := s.TraceIndexer.StoreTransaction(id, trace, nil)
+
+		batch := s.DB.NewBatch()
+
+		err := s.TraceIndexer.StoreTransaction(id, trace, batch)
+		s.Require().NoError(err)
+
+		err = batch.Commit(pebble2.Sync)
 		s.Require().NoError(err)
 	})
 
@@ -568,7 +673,13 @@ func (s *TraceTestSuite) TestStore() {
 		for i := 0; i < 2; i++ {
 			id := common.Hash{0x01}
 			trace := json.RawMessage(`{ "test": "foo" }`)
-			err := s.TraceIndexer.StoreTransaction(id, trace, nil)
+
+			batch := s.DB.NewBatch()
+
+			err := s.TraceIndexer.StoreTransaction(id, trace, batch)
+			s.Require().NoError(err)
+
+			err = batch.Commit(pebble2.Sync)
 			s.Require().NoError(err)
 		}
 	})
@@ -579,7 +690,12 @@ func (s *TraceTestSuite) TestGet() {
 		id := common.Hash{0x01}
 		trace := json.RawMessage(`{ "test": "foo" }`)
 
-		err := s.TraceIndexer.StoreTransaction(id, trace, nil)
+		batch := s.DB.NewBatch()
+
+		err := s.TraceIndexer.StoreTransaction(id, trace, batch)
+		s.Require().NoError(err)
+
+		err = batch.Commit(pebble2.Sync)
 		s.Require().NoError(err)
 
 		val, err := s.TraceIndexer.GetTransaction(id)

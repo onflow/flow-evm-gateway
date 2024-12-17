@@ -15,6 +15,7 @@ import (
 	"github.com/sethvargo/go-limiter"
 
 	"github.com/onflow/flow-evm-gateway/config"
+	ethTypes "github.com/onflow/flow-evm-gateway/eth/types"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/services/logs"
 	"github.com/onflow/flow-evm-gateway/storage"
@@ -128,7 +129,7 @@ func newLogsFilter(
 
 type PullAPI struct {
 	logger       zerolog.Logger
-	config       *config.Config
+	config       config.Config
 	blocks       storage.BlockIndexer
 	transactions storage.TransactionIndexer
 	receipts     storage.ReceiptIndexer
@@ -139,7 +140,7 @@ type PullAPI struct {
 
 func NewPullAPI(
 	logger zerolog.Logger,
-	config *config.Config,
+	config config.Config,
 	blocks storage.BlockIndexer,
 	transactions storage.TransactionIndexer,
 	receipts storage.ReceiptIndexer,
@@ -435,7 +436,7 @@ func (api *PullAPI) getBlocks(latestHeight uint64, filter *blocksFilter) ([]comm
 }
 
 func (api *PullAPI) getTransactions(latestHeight uint64, filter *transactionsFilter) (any, error) {
-	txs := make([]*Transaction, 0)
+	txs := make([]*ethTypes.Transaction, 0)
 	hashes := make([]common.Hash, 0)
 	nextHeight := filter.next()
 
@@ -464,7 +465,7 @@ func (api *PullAPI) getTransactions(latestHeight uint64, filter *transactionsFil
 			if err != nil {
 				return nil, err
 			}
-			txResult, err := NewTransactionResult(tx, *receipt, api.config.EVMNetworkID)
+			txResult, err := ethTypes.NewTransactionResult(tx, *receipt, api.config.EVMNetworkID)
 			if err != nil {
 				return nil, err
 			}

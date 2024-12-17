@@ -12,6 +12,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/onflow/flow-evm-gateway/config"
+	ethTypes "github.com/onflow/flow-evm-gateway/eth/types"
 	"github.com/onflow/flow-evm-gateway/models"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/services/logs"
@@ -20,7 +21,7 @@ import (
 
 type StreamAPI struct {
 	logger                zerolog.Logger
-	config                *config.Config
+	config                config.Config
 	blocks                storage.BlockIndexer
 	transactions          storage.TransactionIndexer
 	receipts              storage.ReceiptIndexer
@@ -31,7 +32,7 @@ type StreamAPI struct {
 
 func NewStreamAPI(
 	logger zerolog.Logger,
-	config *config.Config,
+	config config.Config,
 	blocks storage.BlockIndexer,
 	transactions storage.TransactionIndexer,
 	receipts storage.ReceiptIndexer,
@@ -123,14 +124,14 @@ func (s *StreamAPI) Logs(ctx context.Context, criteria filters.FilterCriteria) (
 
 func (s *StreamAPI) prepareBlockHeader(
 	block *models.Block,
-) (*BlockHeader, error) {
+) (*ethTypes.BlockHeader, error) {
 	h, err := block.Hash()
 	if err != nil {
 		s.logger.Error().Err(err).Msg("failed to calculate hash for block by number")
 		return nil, errs.ErrInternal
 	}
 
-	blockHeader := &BlockHeader{
+	blockHeader := &ethTypes.BlockHeader{
 		Number:           hexutil.Uint64(block.Height),
 		Hash:             h,
 		ParentHash:       block.ParentBlockHash,
@@ -140,7 +141,7 @@ func (s *StreamAPI) prepareBlockHeader(
 		TransactionsRoot: block.TransactionHashRoot,
 		ReceiptsRoot:     block.ReceiptRoot,
 		Miner:            evmTypes.CoinbaseAddress.ToCommon(),
-		GasLimit:         hexutil.Uint64(blockGasLimit),
+		GasLimit:         hexutil.Uint64(BlockGasLimit),
 		Timestamp:        hexutil.Uint64(block.Timestamp),
 	}
 

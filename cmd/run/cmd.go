@@ -3,11 +3,13 @@ package run
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -28,25 +30,42 @@ import (
 var Cmd = &cobra.Command{
 	Use:   "run",
 	Short: "Runs the EVM Gateway Node",
-	Run: func(*cobra.Command, []string) {
+	RunE: func(command *cobra.Command, _ []string) error {
+
+		ctx, cancel := context.WithCancel(command.Context())
+		defer cancel()
+
 		// create multi-key account
+		// TODO(JanezP): move to separate command
 		if _, exists := os.LookupEnv("MULTIKEY_MODE"); exists {
 			bootstrap.RunCreateMultiKeyAccount()
-			return
+			return nil
 		}
 
 		if err := parseConfigFromFlags(); err != nil {
-			log.Err(err).Msg("failed to parse flags")
-			os.Exit(1)
+			return fmt.Errorf("failed to parse flags: %w", err)
 		}
 
-		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan struct{})
 		ready := make(chan struct{})
+		once := sync.Once{}
+		closeReady := func() {
+			once.Do(func() {
+				close(ready)
+			})
+		}
 		go func() {
-			if err := bootstrap.Run(ctx, cfg, ready); err != nil {
-				log.Err(err).Msg("failed to run bootstrap")
-				cancel()
-				os.Exit(1)
+			defer close(done)
+			// In case an error happens before ready is called we need to close the ready channel
+			defer closeReady()
+
+			err := bootstrap.Run(
+				ctx,
+				cfg,
+				closeReady,
+			)
+			if err != nil && !errors.Is(err, context.Canceled) {
+				log.Err(err).Msg("Gateway runtime error")
 			}
 		}()
 
@@ -55,9 +74,19 @@ var Cmd = &cobra.Command{
 		osSig := make(chan os.Signal, 1)
 		signal.Notify(osSig, syscall.SIGINT, syscall.SIGTERM)
 
-		<-osSig
-		log.Info().Msg("OS Signal to shutdown received, shutting down")
-		cancel()
+		// wait for gateway to exit or for a shutdown signal
+		select {
+		case <-osSig:
+			log.Info().Msg("OS Signal to shutdown received, shutting down")
+			cancel()
+		case <-done:
+			log.Info().Msg("done, shutting down")
+		}
+
+		// Wait for the gateway to completely stop
+		<-done
+
+		return nil
 	},
 }
 
@@ -72,7 +101,7 @@ func parseConfigFromFlags() error {
 
 	if g, ok := new(big.Int).SetString(gas, 10); ok {
 		cfg.GasPrice = g
-	} else if !ok {
+	} else {
 		return fmt.Errorf("invalid gas price")
 	}
 
@@ -201,12 +230,6 @@ func parseConfigFromFlags() error {
 		cfg.ForceStartCadenceHeight = forceStartHeight
 	}
 
-	cfg.TracesEnabled = cfg.TracesBucketName != ""
-
-	if cfg.TracesBackfillStartHeight > 0 && cfg.TracesBackfillEndHeight > 0 && cfg.TracesBackfillStartHeight > cfg.TracesBackfillEndHeight {
-		return fmt.Errorf("traces backfill start height must be less than the end height")
-	}
-
 	if walletKey != "" {
 		k, err := gethCrypto.HexToECDSA(walletKey)
 		if err != nil {
@@ -221,7 +244,7 @@ func parseConfigFromFlags() error {
 	return nil
 }
 
-var cfg = &config.Config{}
+var cfg = config.Config{}
 var (
 	coinbase,
 	gas,
@@ -262,20 +285,14 @@ func init() {
 	Cmd.Flags().StringVar(&key, "coa-key", "", "Private key value for the COA address used for submitting transactions")
 	Cmd.Flags().StringVar(&keyAlg, "coa-key-alg", "ECDSA_P256", "Private key algorithm for the COA private key, only effective if coa-key/coa-key-file is present. Available values (ECDSA_P256 / ECDSA_secp256k1 / BLS_BLS12_381), defaults to ECDSA_P256.")
 	Cmd.Flags().StringVar(&keysPath, "coa-key-file", "", "File path that contains JSON array of COA keys used in key-rotation mechanism, this is exclusive with coa-key flag.")
-	Cmd.Flags().BoolVar(&cfg.CreateCOAResource, "coa-resource-create", false, "Auto-create the COA resource in the Flow COA account provided if one doesn't exist")
 	Cmd.Flags().StringVar(&logLevel, "log-level", "debug", "Define verbosity of the log output ('debug', 'info', 'warn', 'error', 'fatal', 'panic')")
 	Cmd.Flags().StringVar(&logWriter, "log-writer", "stderr", "Log writer used for output ('stderr', 'console')")
 	Cmd.Flags().Float64Var(&cfg.StreamLimit, "stream-limit", 10, "Rate-limits the events sent to the client within one second")
 	Cmd.Flags().Uint64Var(&cfg.RateLimit, "rate-limit", 50, "Rate-limit requests per second made by the client over any protocol (ws/http)")
 	Cmd.Flags().StringVar(&cfg.AddressHeader, "address-header", "", "Address header that contains the client IP, this is useful when the server is behind a proxy that sets the source IP of the client. Leave empty if no proxy is used.")
-	Cmd.Flags().Uint64Var(&cfg.HeartbeatInterval, "heartbeat-interval", 100, "Heartbeat interval for AN event subscription")
-	Cmd.Flags().UintVar(&cfg.CacheSize, "script-cache-size", 10000, "Cache size used for script execution in items kept in cache")
 	Cmd.Flags().IntVar(&streamTimeout, "stream-timeout", 3, "Defines the timeout in seconds the server waits for the event to be sent to the client")
 	Cmd.Flags().Uint64Var(&forceStartHeight, "force-start-height", 0, "Force set starting Cadence height. WARNING: This should only be used locally or for testing, never in production.")
 	Cmd.Flags().StringVar(&filterExpiry, "filter-expiry", "5m", "Filter defines the time it takes for an idle filter to expire")
-	Cmd.Flags().StringVar(&cfg.TracesBucketName, "traces-gcp-bucket", "", "GCP bucket name where transaction traces are stored")
-	Cmd.Flags().Uint64Var(&cfg.TracesBackfillStartHeight, "traces-backfill-start-height", 0, "evm block height from which to start backfilling missing traces.")
-	Cmd.Flags().Uint64Var(&cfg.TracesBackfillEndHeight, "traces-backfill-end-height", 0, "evm block height until which to backfill missing traces. If 0, backfill until the latest block")
 	Cmd.Flags().StringVar(&cloudKMSProjectID, "coa-cloud-kms-project-id", "", "The project ID containing the KMS keys, e.g. 'flow-evm-gateway'")
 	Cmd.Flags().StringVar(&cloudKMSLocationID, "coa-cloud-kms-location-id", "", "The location ID where the key ring is grouped into, e.g. 'global'")
 	Cmd.Flags().StringVar(&cloudKMSKeyRingID, "coa-cloud-kms-key-ring-id", "", "The key ring ID where the KMS keys exist, e.g. 'tx-signing'")
