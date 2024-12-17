@@ -239,7 +239,7 @@ The application can be configured using the following flags at runtime:
 | `coa-cloud-kms-project-id`     | `""`             | Project ID for KMS keys (e.g. `flow-evm-gateway`)                                          |
 | `coa-cloud-kms-location-id`    | `""`             | Location ID for KMS key ring (e.g. 'global')                                               |
 | `coa-cloud-kms-key-ring-id`    | `""`             | Key ring ID for KMS keys (e.g. 'tx-signing')                                               |
-| `coa-cloud-kms-keys`           | `""`             | KMS keys and versions, comma-separated (e.g. `"gw-key-6@1,gw-key-7@1"`)                    |
+| `coa-cloud-kms-key`            | `""`             | KMS keys and versions, comma-separated (e.g. `"gw-key-6@1,gw-key-7@1"`)                    |
 | `log-level`                    | `debug`          | Log verbosity level (`debug`, `info`, `warn`, `error`, `fatal`, `panic`)                   |
 | `log-writer`                   | `stderr`         | Output method for logs (`stderr`, `console`)                                               |
 | `stream-limit`                 | `10`             | Rate-limit for client events sent per second                                               |
@@ -257,6 +257,7 @@ The application can be configured using the following flags at runtime:
 | `profiler-enabled`             | `false`          | Enable the pprof profiler server                                                           |
 | `profiler-host`                | `localhost`      | Host for the pprof profiler                                                                |
 | `profiler-port`                | `6060`           | Port for the pprof profiler                                                                |
+| `tx-state-validation`          | `""`             | When set to `local-index` will validate EVM transaction state locally                      |
 
 
 # EVM Gateway Endpoints
