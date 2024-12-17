@@ -32,6 +32,7 @@ ExecStart=docker run --rm \
     --coa-key=${COA_KEY} \
     --access-node-spork-hosts=${ACCESS_NODE_SPORK_HOSTS} \
     --ws-enabled=true \
+    --tx-state-validation=local-index \
     --rate-limit=9999999 \
     --rpc-host=0.0.0.0 \
     --log-level=error

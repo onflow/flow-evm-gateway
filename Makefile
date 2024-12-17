@@ -25,6 +25,7 @@ EMULATOR_ARGS := --flow-network-id=flow-emulator \
 		--wallet-api-key=2619878f0e2ff438d17835c2a4561cb87b4d24d72d12ec34569acd0dd4af7c21 \
 		--gas-price=0 \
 		--log-writer=console \
+		--tx-state-validation=local-index \
 		--profiler-enabled=true \
 		--profiler-port=6060
 
@@ -138,7 +139,7 @@ docker-run-local:
 	$(call check_and_append,coa-address,EMULATOR_COA_ADDRESS)
 	$(call check_and_append,coa-key,EMULATOR_COA_KEY)
 
-	$(eval CMD_ARGS += --flow-network-id=flow-emulator --log-level=debug --gas-price=0 --log-writer=console --profiler-enabled=true --access-node-grpc-host=host.docker.internal:3569)
+	$(eval CMD_ARGS += --flow-network-id=flow-emulator --tx-state-validation=local-index --log-level=debug --gas-price=0 --log-writer=console --profiler-enabled=true --access-node-grpc-host=host.docker.internal:3569)
 
 	docker run -p 8545:8545 --add-host=host.docker.internal:host-gateway "$(CONTAINER_REGISTRY)/flow-evm-gateway:$(COMMIT)" $(CMD_ARGS)
 
@@ -209,7 +210,7 @@ endif
 	$(call check_and_append,coa-key,COA_KEY)
 	$(call check_and_append,gas-price,GAS_PRICE)
 
-	$(eval CMD_ARGS += --ws-enabled=true --rate-limit=9999999 --rpc-host=0.0.0.0 --log-level=info)
+	$(eval CMD_ARGS += --ws-enabled=true --rate-limit=9999999 --rpc-host=0.0.0.0 --log-level=info --tx-state-validation=local-index)
 	$(call check_and_append,access-node-spork-hosts,ACCESS_NODE_SPORK_HOSTS)
 
 	docker run $(MODE) -p $(HOST_PORT):8545 -p 8080:8080 $(MOUNT) "$(CONTAINER_REGISTRY)/flow-evm-gateway:$(IMAGE_TAG)" $(CMD_ARGS)
