@@ -85,11 +85,10 @@ type EVMGatewayNodeBuilder struct {
 	postShutdownFns  []func() error
 	modules          []namedModuleFunc
 
-	Metrics  metrics2.Collector
-	DB       *pebble.DB
-	Client   *requester.CrossSporkClient
-	Storages *Storages
-	// Signer is used for signing flow transactions
+	Metrics    metrics2.Collector
+	DB         *pebble.DB
+	Client     *requester.CrossSporkClient
+	Storages   *Storages
 	Publishers *Publishers
 	Keystore   *requester.KeyStoreComponent
 }
@@ -227,7 +226,7 @@ func (fnb *EVMGatewayNodeBuilder) profilerServerComponent(config config.Config) 
 func (fnb *EVMGatewayNodeBuilder) apiServerComponent(cfg config.Config) (module.ReadyDoneAware, error) {
 	log := fnb.Logger
 
-	log.Info().Msg("bootstrap starting Metrics server")
+	log.Info().Msg("bootstrap starting API server")
 
 	server := api.NewServer(log, fnb.Metrics, cfg)
 
