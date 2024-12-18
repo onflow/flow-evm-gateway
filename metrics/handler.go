@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+
+	"github.com/onflow/flow-evm-gateway/eth"
 )
 
 // HttpHandler is a thin middleware for gathering metrics about http request.
@@ -34,7 +36,7 @@ func (h *HttpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	method, err := extractMethod(r, h.logger)
 	if err != nil {
 		h.logger.Debug().Err(err).Msg("error extracting method")
-	} else {
+	} else if eth.IsValidMethod(method) {
 		start = time.Now()
 		defer h.collector.MeasureRequestDuration(start, method)
 	}

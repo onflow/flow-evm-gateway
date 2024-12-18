@@ -13,8 +13,14 @@ import (
 	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/onflow/flow-go-sdk/crypto"
 	"github.com/onflow/flow-go-sdk/templates"
+	"github.com/onflow/flow-go/fvm/systemcontracts"
+	flowGo "github.com/onflow/flow-go/model/flow"
 	"golang.org/x/exp/rand"
 )
+
+var sc = systemcontracts.SystemContractsForChain(flowGo.Emulator)
+var ftAddress = sc.FungibleToken.Address.HexWithPrefix()
+var flowAddress = sc.FlowToken.Address.HexWithPrefix()
 
 // RunCreateMultiKeyAccount command creates a new account with multiple keys, which are saved to keys.json for later
 // use with running the gateway in a key-rotation mode (used with --coa-key-file flag).
@@ -27,8 +33,8 @@ func RunCreateMultiKeyAccount() {
 	flag.IntVar(&keyCount, "key-count", 20, "how many keys you want to create and assign to account")
 	flag.StringVar(&keyFlag, "signer-key", "", "signer key used to create the new account")
 	flag.StringVar(&addressFlag, "signer-address", "", "signer address used to create new account")
-	flag.StringVar(&ftFlag, "ft-address", "0xee82856bf20e2aa6", "address of fungible token contract")
-	flag.StringVar(&flowFlag, "flow-token-address", "0x0ae53cb6e3f42a79", "address of flow token contract")
+	flag.StringVar(&ftFlag, "ft-address", ftAddress, "address of fungible token contract")
+	flag.StringVar(&flowFlag, "flow-token-address", flowAddress, "address of flow token contract")
 	flag.StringVar(&hostFlag, "access-node-grpc-host", "localhost:3569", "host to the flow access node gRPC API")
 
 	flag.Parse()
@@ -48,16 +54,13 @@ func RunCreateMultiKeyAccount() {
 		panic(err)
 	}
 
-	address, keys, err := CreateMultiKeyAccount(client, keyCount, payer, ftFlag, flowFlag, key)
+	address, privateKey, err := CreateMultiKeyAccount(client, keyCount, payer, ftFlag, flowFlag, key)
 	if err != nil {
 		panic(err)
 	}
 
 	fmt.Println("Address: ", address.Hex())
-	fmt.Println("Keys:")
-	for _, pk := range keys {
-		fmt.Println(pk.String())
-	}
+	fmt.Println("Key: ", privateKey.String())
 }
 
 /*
@@ -71,35 +74,25 @@ func CreateMultiKeyAccount(
 	ftAddress string,
 	flowAddress string,
 	key crypto.PrivateKey,
-) (*flow.Address, []crypto.PrivateKey, error) {
+) (*flow.Address, crypto.PrivateKey, error) {
+	privateKey, err := randomPrivateKey()
+	if err != nil {
+		return nil, nil, err
+	}
 
-	privKeys := make([]*flow.AccountKey, keyCount)
-	pks := make([]crypto.PrivateKey, keyCount)
+	accountKeys := make([]*flow.AccountKey, keyCount)
 	for i := 0; i < keyCount; i++ {
-		seed := make([]byte, crypto.MinSeedLength)
-		_, err := rand.Read(seed)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		pk, err := crypto.GeneratePrivateKey(crypto.ECDSA_P256, seed)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		pks[i] = pk
-		privKeys[i] = &flow.AccountKey{
+		accountKeys[i] = &flow.AccountKey{
 			Index:     uint32(i),
-			PublicKey: pk.PublicKey(),
+			PublicKey: privateKey.PublicKey(),
 			SigAlgo:   crypto.ECDSA_P256,
 			HashAlgo:  crypto.SHA3_256,
 			Weight:    1000,
 		}
 	}
 
-	var err error
 	keyList := make([]cadence.Value, keyCount)
-	for i, key := range privKeys {
+	for i, key := range accountKeys {
 		keyList[i], err = templates.AccountKeyToCadenceCryptoKey(key)
 		if err != nil {
 			return nil, nil, err
@@ -197,7 +190,7 @@ func CreateMultiKeyAccount(
 	events := eventsFromTx(res)
 	createdAddrs := events.GetCreatedAddresses()
 
-	return createdAddrs[0], pks, nil
+	return createdAddrs[0], privateKey, nil
 }
 
 func CreateMultiCloudKMSKeysAccount(
@@ -410,3 +403,20 @@ transaction(publicKeys: [Crypto.KeyListEntry], contracts: {String: String}, fund
 	}
 }
 `)
+
+// randomPrivateKey returns a randomly generated ECDSA P-256 private key.
+func randomPrivateKey() (crypto.PrivateKey, error) {
+	seed := make([]byte, crypto.MinSeedLength)
+
+	_, err := rand.Read(seed)
+	if err != nil {
+		return nil, err
+	}
+
+	privateKey, err := crypto.GeneratePrivateKey(crypto.ECDSA_P256, seed)
+	if err != nil {
+		return nil, err
+	}
+
+	return privateKey, nil
+}
