@@ -7,6 +7,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/onflow/flow-go/module/irrecoverable"
+
 	"github.com/onflow/flow-evm-gateway/storage"
 
 	pebbleDB "github.com/cockroachdb/pebble"
@@ -39,6 +41,10 @@ import (
 func TestSerialBlockIngestion(t *testing.T) {
 
 	t.Run("successfully ingest serial blocks", func(t *testing.T) {
+		ctx := context.Background()
+		ictx, cancel := irrecoverable.NewMockSignalerContextWithCancel(t, ctx)
+		defer cancel()
+
 		receipts := &storageMock.ReceiptIndexer{}
 		transactions := &storageMock.TransactionIndexer{}
 		latestHeight := uint64(10)
@@ -64,6 +70,11 @@ func TestSerialBlockIngestion(t *testing.T) {
 				return eventsChan
 			})
 
+		blocksPublisher := models.NewPublisher[*models.Block](zerolog.Nop())
+		blocksPublisher.Start(ictx)
+		logsPublisher := models.NewPublisher[[]*gethTypes.Log](zerolog.Nop())
+		logsPublisher.Start(ictx)
+
 		engine := NewEventIngestionEngine(
 			subscriber,
 			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
@@ -73,19 +84,15 @@ func TestSerialBlockIngestion(t *testing.T) {
 			receipts,
 			transactions,
 			traces,
-			models.NewPublisher[*models.Block](),
-			models.NewPublisher[[]*gethTypes.Log](),
+			blocksPublisher,
+			logsPublisher,
 			zerolog.Nop(),
 			metrics.NopCollector,
 			defaultReplayerConfig(),
 		)
 
-		done := make(chan struct{})
-		go func() {
-			err := engine.Run(context.Background())
-			assert.NoError(t, err)
-			close(done)
-		}()
+		engine.Start(ictx)
+		<-engine.Ready()
 
 		storedCounter := 0
 		runs := uint64(20)
@@ -114,11 +121,20 @@ func TestSerialBlockIngestion(t *testing.T) {
 		}
 
 		close(eventsChan)
-		<-done
+		<-engine.Done()
 		assert.Equal(t, runs-1, uint64(storedCounter))
 	})
 
 	t.Run("fail with events out of sequence", func(t *testing.T) {
+		ctx := context.Background()
+		ictx, cancel := irrecoverable.NewMockSignalerContextWithCancel(t, ctx)
+		defer cancel()
+
+		ictx.On("Throw", mock.Anything).Run(func(args mock.Arguments) {
+			err := args.Get(0).(error)
+			require.ErrorContains(t, err, "failed to index events for cadence block 21: invalid height: received new block: 20, non-sequential of latest block: 11")
+		})
+
 		receipts := &storageMock.ReceiptIndexer{}
 		transactions := &storageMock.TransactionIndexer{}
 		latestHeight := uint64(10)
@@ -143,6 +159,11 @@ func TestSerialBlockIngestion(t *testing.T) {
 				return eventsChan
 			})
 
+		blocksPublisher := models.NewPublisher[*models.Block](zerolog.Nop())
+		blocksPublisher.Start(ictx)
+		logsPublisher := models.NewPublisher[[]*gethTypes.Log](zerolog.Nop())
+		logsPublisher.Start(ictx)
+
 		engine := NewEventIngestionEngine(
 			subscriber,
 			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
@@ -152,21 +173,15 @@ func TestSerialBlockIngestion(t *testing.T) {
 			receipts,
 			transactions,
 			traces,
-			models.NewPublisher[*models.Block](),
-			models.NewPublisher[[]*gethTypes.Log](),
+			blocksPublisher,
+			logsPublisher,
 			zerolog.Nop(),
 			metrics.NopCollector,
 			defaultReplayerConfig(),
 		)
 
-		waitErr := make(chan struct{})
-		// catch eventual error due to out of sequence block height
-		go func() {
-			err := engine.Run(context.Background())
-			assert.ErrorIs(t, err, models.ErrInvalidHeight)
-			assert.ErrorContains(t, err, "invalid height: received new block: 20, non-sequential of latest block: 11")
-			close(waitErr)
-		}()
+		engine.Start(ictx)
+		<-engine.Ready()
 
 		// first create one successful block event
 		blockCdc, block, blockEvent, err := newBlock(latestHeight+1, nil)
@@ -213,13 +228,17 @@ func TestSerialBlockIngestion(t *testing.T) {
 		}
 
 		close(eventsChan)
-		<-waitErr
+		<-engine.Done()
 	})
 }
 
 func TestBlockAndTransactionIngestion(t *testing.T) {
 
 	t.Run("successfully ingest transaction and block", func(t *testing.T) {
+		ctx := context.Background()
+		ictx, cancel := irrecoverable.NewMockSignalerContextWithCancel(t, ctx)
+		defer cancel()
+
 		receipts := &storageMock.ReceiptIndexer{}
 		transactions := &storageMock.TransactionIndexer{}
 		latestHeight := uint64(10)
@@ -264,6 +283,11 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 				return nil
 			})
 
+		blocksPublisher := models.NewPublisher[*models.Block](zerolog.Nop())
+		blocksPublisher.Start(ictx)
+		logsPublisher := models.NewPublisher[[]*gethTypes.Log](zerolog.Nop())
+		logsPublisher.Start(ictx)
+
 		engine := NewEventIngestionEngine(
 			subscriber,
 			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
@@ -273,19 +297,15 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			receipts,
 			transactions,
 			traces,
-			models.NewPublisher[*models.Block](),
-			models.NewPublisher[[]*gethTypes.Log](),
+			blocksPublisher,
+			logsPublisher,
 			zerolog.Nop(),
 			metrics.NopCollector,
 			defaultReplayerConfig(),
 		)
 
-		done := make(chan struct{})
-		go func() {
-			err := engine.Run(context.Background())
-			assert.NoError(t, err)
-			close(done)
-		}()
+		engine.Start(ictx)
+		<-engine.Ready()
 
 		blocks.
 			On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*models.Block"), mock.Anything).
@@ -331,10 +351,14 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		})
 
 		close(eventsChan)
-		<-done
+		<-engine.Done()
 	})
 
 	t.Run("ingest block first and then transaction even if received out-of-order", func(t *testing.T) {
+		ctx := context.Background()
+		ictx, cancel := irrecoverable.NewMockSignalerContextWithCancel(t, ctx)
+		defer cancel()
+
 		receipts := &storageMock.ReceiptIndexer{}
 		transactions := &storageMock.TransactionIndexer{}
 		latestHeight := uint64(10)
@@ -372,6 +396,11 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 				return nil
 			})
 
+		blocksPublisher := models.NewPublisher[*models.Block](zerolog.Nop())
+		blocksPublisher.Start(ictx)
+		logsPublisher := models.NewPublisher[[]*gethTypes.Log](zerolog.Nop())
+		logsPublisher.Start(ictx)
+
 		engine := NewEventIngestionEngine(
 			subscriber,
 			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
@@ -381,19 +410,15 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			receipts,
 			transactions,
 			traces,
-			models.NewPublisher[*models.Block](),
-			models.NewPublisher[[]*gethTypes.Log](),
+			blocksPublisher,
+			logsPublisher,
 			zerolog.Nop(),
 			metrics.NopCollector,
 			defaultReplayerConfig(),
 		)
 
-		done := make(chan struct{})
-		go func() {
-			err := engine.Run(context.Background())
-			assert.NoError(t, err)
-			close(done)
-		}()
+		engine.Start(ictx)
+		<-engine.Ready()
 
 		blocksFirst := false // flag indicating we stored block first
 		blocks.
@@ -437,10 +462,14 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		})
 
 		close(eventsChan)
-		<-done
+		<-engine.Done()
 	})
 
 	t.Run("ingest block and multiple transactions in same block event, even if out-of-order", func(t *testing.T) {
+		ctx := context.Background()
+		ictx, cancel := irrecoverable.NewMockSignalerContextWithCancel(t, ctx)
+		defer cancel()
+
 		receipts := &storageMock.ReceiptIndexer{}
 		transactions := &storageMock.TransactionIndexer{}
 		latestCadenceHeight := uint64(0)
@@ -466,6 +495,11 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			}).
 			Once()
 
+		blocksPublisher := models.NewPublisher[*models.Block](zerolog.Nop())
+		blocksPublisher.Start(ictx)
+		logsPublisher := models.NewPublisher[[]*gethTypes.Log](zerolog.Nop())
+		logsPublisher.Start(ictx)
+
 		engine := NewEventIngestionEngine(
 			subscriber,
 			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
@@ -475,19 +509,15 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			receipts,
 			transactions,
 			traces,
-			models.NewPublisher[*models.Block](),
-			models.NewPublisher[[]*gethTypes.Log](),
+			blocksPublisher,
+			logsPublisher,
 			zerolog.Nop(),
 			metrics.NopCollector,
 			defaultReplayerConfig(),
 		)
 
-		done := make(chan struct{})
-		go func() {
-			err := engine.Run(context.Background())
-			assert.NoError(t, err)
-			close(done)
-		}()
+		engine.Start(ictx)
+		<-engine.Ready()
 
 		evmHeight := uint64(0)
 		events := make([]flow.Event, 0)
@@ -563,7 +593,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		})
 
 		close(eventsChan)
-		<-done
+		<-engine.Done()
 		assert.Equal(t, eventCount, txsStored)
 		assert.Equal(t, 1, blocksStored)
 	})

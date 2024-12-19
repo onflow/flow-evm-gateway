@@ -7,35 +7,38 @@ import (
 	"math"
 	"time"
 
-	pebbleDB "github.com/cockroachdb/pebble"
-	"github.com/onflow/flow-evm-gateway/metrics"
+	"github.com/onflow/flow-evm-gateway/models"
+	"github.com/onflow/flow-evm-gateway/services/requester"
+	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-go-sdk/access"
 	"github.com/onflow/flow-go-sdk/access/grpc"
+	grpcOpts "google.golang.org/grpc"
+
+	"github.com/cockroachdb/pebble"
+	"github.com/hashicorp/go-multierror"
+	"github.com/onflow/flow-evm-gateway/api"
+	"github.com/onflow/flow-evm-gateway/config"
+	"github.com/onflow/flow-go/cmd"
 	"github.com/onflow/flow-go/fvm/environment"
 	"github.com/onflow/flow-go/fvm/evm"
 	flowGo "github.com/onflow/flow-go/model/flow"
+	"github.com/onflow/flow-go/module"
 	"github.com/onflow/flow-go/module/component"
-	flowMetrics "github.com/onflow/flow-go/module/metrics"
-	"github.com/onflow/flow-go/module/util"
+	"github.com/onflow/flow-go/module/metrics"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-limiter/memorystore"
-	grpcOpts "google.golang.org/grpc"
 
-	"github.com/onflow/flow-evm-gateway/api"
-	"github.com/onflow/flow-evm-gateway/config"
-	"github.com/onflow/flow-evm-gateway/models"
+	metrics2 "github.com/onflow/flow-evm-gateway/metrics"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/services/ingestion"
 	"github.com/onflow/flow-evm-gateway/services/replayer"
-	"github.com/onflow/flow-evm-gateway/services/requester"
-	"github.com/onflow/flow-evm-gateway/storage"
-	"github.com/onflow/flow-evm-gateway/storage/pebble"
+	pebble2 "github.com/onflow/flow-evm-gateway/storage/pebble"
 )
 
 type Storages struct {
-	Storage      *pebble.Storage
-	Registers    *pebble.RegisterStorage
+	Storage      *pebble2.Storage
+	Registers    *pebble2.RegisterStorage
 	Blocks       storage.BlockIndexer
 	Transactions storage.TransactionIndexer
 	Receipts     storage.ReceiptIndexer
@@ -48,70 +51,328 @@ type Publishers struct {
 	Logs        *models.Publisher[[]*gethTypes.Log]
 }
 
-type Bootstrap struct {
-	logger     zerolog.Logger
-	config     config.Config
-	client     *requester.CrossSporkClient
-	storages   *Storages
-	publishers *Publishers
-	collector  metrics.Collector
-	server     *api.Server
-	metrics    *flowMetrics.Server
-	events     *ingestion.Engine
-	profiler   *api.ProfileServer
-	db         *pebbleDB.DB
-	keystore   *requester.KeyStore
+type EVMGatewayNodeImp struct {
+	cmd.NodeImp
+	config.Config
 }
 
-func New(config config.Config) (*Bootstrap, error) {
+// NewNode returns a new node instance
+func NewNode(
+	component component.Component,
+	cfg config.Config,
+	logger zerolog.Logger,
+	cleanup func() error,
+	handleFatal func(error),
+) *EVMGatewayNodeImp {
+	return &EVMGatewayNodeImp{
+		Config: cfg,
+		NodeImp: cmd.NewBaseNode(
+			component,
+			logger.With().
+				Str("node_role", "EVM Gateway").
+				Logger(),
+			cleanup,
+			handleFatal,
+		),
+	}
+}
+
+type EVMGatewayNodeBuilder struct {
+	config.Config
+	Logger           zerolog.Logger
+	componentBuilder component.ComponentManagerBuilder
+	components       []cmd.NamedComponentFactory[config.Config]
+	postShutdownFns  []func() error
+	modules          []namedModuleFunc
+
+	Metrics    metrics2.Collector
+	DB         *pebble.DB
+	Client     *requester.CrossSporkClient
+	Storages   *Storages
+	Publishers *Publishers
+	Keystore   *requester.KeyStoreComponent
+}
+
+func (fnb *EVMGatewayNodeBuilder) Build() (cmd.Node, error) {
+	// Run the prestart initialization. This includes anything that should be done before
+	// starting the components.
+	if err := fnb.onStart(); err != nil {
+		return nil, err
+	}
+
+	return NewNode(
+		fnb.componentBuilder.Build(),
+		fnb.Config,
+		fnb.Logger,
+		fnb.postShutdown,
+		fnb.handleFatal,
+	), nil
+}
+
+func (fnb *EVMGatewayNodeBuilder) onStart() error {
+
+	if err := fnb.initDB(); err != nil {
+		return err
+	}
+
+	if err := fnb.initMetrics(); err != nil {
+		return err
+	}
+
+	if err := fnb.initClient(); err != nil {
+		return err
+	}
+
+	if err := fnb.initStorage(); err != nil {
+		return err
+	}
+
+	// run all modules
+	if err := fnb.handleModules(); err != nil {
+		return fmt.Errorf("could not handle modules: %w", err)
+	}
+
+	// run all components
+	return fnb.handleComponents()
+}
+
+func (fnb *EVMGatewayNodeBuilder) initDB() error {
+	pebbleDB, err := pebble2.OpenDB(fnb.DatabaseDir)
+	if err != nil {
+		return fmt.Errorf("failed to open db for dir: %s, with: %w", fnb.DatabaseDir, err)
+	}
+
+	fnb.DB = pebbleDB
+
+	fnb.ShutdownFunc(func() error {
+		if err := fnb.DB.Close(); err != nil {
+			return fmt.Errorf("error closing pebble database: %w", err)
+		}
+		return nil
+	})
+
+	return err
+}
+
+func (fnb *EVMGatewayNodeBuilder) Component(name string, f cmd.ReadyDoneFactory[config.Config]) *EVMGatewayNodeBuilder {
+	fnb.components = append(fnb.components, cmd.NamedComponentFactory[config.Config]{
+		ComponentFactory: f,
+		Name:             name,
+	})
+	return fnb
+}
+
+// postShutdown is called by the node before exiting
+// put any cleanup code here that should be run after all components have stopped
+func (fnb *EVMGatewayNodeBuilder) postShutdown() error {
+	var errs *multierror.Error
+
+	for _, fn := range fnb.postShutdownFns {
+		err := fn()
+		if err != nil {
+			errs = multierror.Append(errs, err)
+		}
+	}
+	fnb.Logger.Info().Msg("database has been closed")
+	return errs.ErrorOrNil()
+}
+
+// handleFatal handles irrecoverable errors by logging them and exiting the process.
+func (fnb *EVMGatewayNodeBuilder) handleFatal(err error) {
+	fnb.Logger.Fatal().Err(err).Msg("unhandled irrecoverable error")
+}
+
+func NewEVMGatewayNodeBuilder(
+	config config.Config,
+) *EVMGatewayNodeBuilder {
+
 	logger := zerolog.New(config.LogWriter).
 		With().Timestamp().Str("version", api.Version).
 		Logger().Level(config.LogLevel)
 
-	client, err := setupCrossSporkClient(config, logger)
-	if err != nil {
-		return nil, err
+	return &EVMGatewayNodeBuilder{
+		Logger:           logger,
+		Config:           config,
+		componentBuilder: component.NewComponentManagerBuilder(),
 	}
-
-	db, storages, err := setupStorage(config, client, logger)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Bootstrap{
-		publishers: &Publishers{
-			Block:       models.NewPublisher[*models.Block](),
-			Transaction: models.NewPublisher[*gethTypes.Transaction](),
-			Logs:        models.NewPublisher[[]*gethTypes.Log](),
-		},
-		db:        db,
-		storages:  storages,
-		logger:    logger,
-		config:    config,
-		client:    client,
-		collector: metrics.NewCollector(logger),
-	}, nil
 }
 
-func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
-	l := b.logger.With().Str("component", "bootstrap-ingestion").Logger()
+func (fnb *EVMGatewayNodeBuilder) Initialize() error {
+	fnb.PrintBuildDetails()
+
+	return nil
+}
+
+func (fnb *EVMGatewayNodeBuilder) LoadComponentsAndModules() {
+	fnb.initPublishers()
+
+	fnb.Component("Key Store", fnb.initKeyStore)
+	fnb.Component("API Server", fnb.apiServerComponent)
+	fnb.Component("Event Ingestion Engine", fnb.eventIngestionEngineComponent)
+	fnb.Component("Metrics Server", fnb.metricsServerComponent)
+	fnb.Component("Profiler Server", fnb.profilerServerComponent)
+}
+
+func (fnb *EVMGatewayNodeBuilder) metricsServerComponent(config config.Config) (module.ReadyDoneAware, error) {
+	server := metrics.NewServer(fnb.Logger, uint(config.MetricsPort))
+	return server, nil
+}
+
+func (fnb *EVMGatewayNodeBuilder) profilerServerComponent(config config.Config) (module.ReadyDoneAware, error) {
+	server := api.NewProfileServer(fnb.Logger, config.ProfilerHost, config.ProfilerPort)
+	return server, nil
+}
+
+func (fnb *EVMGatewayNodeBuilder) apiServerComponent(cfg config.Config) (module.ReadyDoneAware, error) {
+	log := fnb.Logger
+
+	log.Info().Msg("bootstrap starting API server")
+
+	server := api.NewServer(log, fnb.Metrics, cfg)
+
+	// create transaction pool
+	txPool := requester.NewTxPool(
+		fnb.Client,
+		fnb.Publishers.Transaction,
+		log,
+		cfg,
+	)
+
+	blocksProvider := replayer.NewBlocksProvider(
+		fnb.Storages.Blocks,
+		cfg.FlowNetworkID,
+		nil,
+	)
+
+	evm, err := requester.NewEVM(
+		fnb.Storages.Registers,
+		blocksProvider,
+		fnb.Client,
+		cfg,
+		log,
+		fnb.Storages.Blocks,
+		txPool,
+		fnb.Metrics,
+		fnb.Keystore.KeyStore,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create EVM requester: %w", err)
+	}
+
+	// create rate limiter for requests on the APIs. Tokens are number of requests allowed per 1 second interval
+	// if no limit is defined we specify max value, effectively disabling rate-limiting
+	rateLimit := cfg.RateLimit
+	if rateLimit == 0 {
+		log.Warn().Msg("no rate-limiting is set")
+		rateLimit = math.MaxInt
+	}
+	ratelimiter, err := memorystore.New(&memorystore.Config{Tokens: rateLimit, Interval: time.Second})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create rate limiter: %w", err)
+	}
+
+	// get the height from which the indexing resumed since the last restart,
+	// this is needed for the `eth_syncing` endpoint.
+	indexingResumedHeight, err := fnb.Storages.Blocks.LatestEVMHeight()
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve the indexing resumed height: %w", err)
+	}
+
+	blockchainAPI := api.NewBlockChainAPI(
+		log,
+		cfg,
+		evm,
+		fnb.Storages.Blocks,
+		fnb.Storages.Transactions,
+		fnb.Storages.Receipts,
+		ratelimiter,
+		fnb.Metrics,
+		indexingResumedHeight,
+	)
+
+	streamAPI := api.NewStreamAPI(
+		log,
+		cfg,
+		fnb.Storages.Blocks,
+		fnb.Storages.Transactions,
+		fnb.Storages.Receipts,
+		fnb.Publishers.Block,
+		fnb.Publishers.Transaction,
+		fnb.Publishers.Logs,
+	)
+
+	pullAPI := api.NewPullAPI(
+		log,
+		cfg,
+		fnb.Storages.Blocks,
+		fnb.Storages.Transactions,
+		fnb.Storages.Receipts,
+		ratelimiter,
+	)
+
+	debugAPI := api.NewDebugAPI(
+		fnb.Storages.Registers,
+		fnb.Storages.Traces,
+		fnb.Storages.Blocks,
+		fnb.Storages.Transactions,
+		fnb.Storages.Receipts,
+		fnb.Client,
+		cfg,
+		log,
+		fnb.Metrics,
+		ratelimiter,
+	)
+
+	var walletAPI *api.WalletAPI
+	if cfg.WalletEnabled {
+		walletAPI = api.NewWalletAPI(cfg, blockchainAPI)
+	}
+
+	supportedAPIs := api.SupportedAPIs(
+		blockchainAPI,
+		streamAPI,
+		pullAPI,
+		debugAPI,
+		walletAPI,
+		cfg,
+	)
+
+	if err := server.EnableRPC(supportedAPIs); err != nil {
+		return nil, err
+	}
+
+	if cfg.WSEnabled {
+		if err := server.EnableWS(supportedAPIs); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := server.SetListenAddr(cfg.RPCHost, cfg.RPCPort); err != nil {
+		return nil, err
+	}
+
+	return server, nil
+}
+
+func (fnb *EVMGatewayNodeBuilder) eventIngestionEngineComponent(cfg config.Config) (module.ReadyDoneAware, error) {
+	l := fnb.Logger.With().Str("component", "bootstrap-ingestion").Logger()
 	l.Info().Msg("bootstrap starting event ingestion")
 
 	// get latest cadence block from the network and the database
-	latestCadenceBlock, err := b.client.GetLatestBlock(context.Background(), true)
+	latestCadenceBlock, err := fnb.Client.GetLatestBlock(context.Background(), true)
 	if err != nil {
-		return fmt.Errorf("failed to get latest cadence block: %w", err)
+		return nil, fmt.Errorf("failed to get latest cadence block: %w", err)
 	}
 
-	latestCadenceHeight, err := b.storages.Blocks.LatestCadenceHeight()
+	latestCadenceHeight, err := fnb.Storages.Blocks.LatestCadenceHeight()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// make sure the provided block to start the indexing can be loaded
-	_, err = b.client.GetBlockHeaderByHeight(context.Background(), latestCadenceHeight)
+	_, err = fnb.Client.GetBlockHeaderByHeight(context.Background(), latestCadenceHeight)
 	if err != nil {
-		return fmt.Errorf(
+		return nil, fmt.Errorf(
 			"failed to get provided cadence height %d: %w",
 			latestCadenceHeight,
 			err,
@@ -124,23 +385,23 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 		Uint64("missed-heights", latestCadenceBlock.Height-latestCadenceHeight).
 		Msg("indexing cadence height information")
 
-	chainID := b.config.FlowNetworkID
+	chainID := cfg.FlowNetworkID
 
 	// create event subscriber
 	subscriber := ingestion.NewRPCEventSubscriber(
-		b.logger,
-		b.client,
+		fnb.Logger,
+		fnb.Client,
 		chainID,
-		b.keystore,
+		fnb.Keystore,
 		latestCadenceHeight,
 	)
 
-	callTracerCollector, err := replayer.NewCallTracerCollector(b.logger)
+	callTracerCollector, err := replayer.NewCallTracerCollector(fnb.Logger)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	blocksProvider := replayer.NewBlocksProvider(
-		b.storages.Blocks,
+		fnb.Storages.Blocks,
 		chainID,
 		callTracerCollector.TxTracer(),
 	)
@@ -152,297 +413,217 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 	}
 
 	// initialize event ingestion engine
-	b.events = ingestion.NewEventIngestionEngine(
+	events := ingestion.NewEventIngestionEngine(
 		subscriber,
 		blocksProvider,
-		b.storages.Storage,
-		b.storages.Registers,
-		b.storages.Blocks,
-		b.storages.Receipts,
-		b.storages.Transactions,
-		b.storages.Traces,
-		b.publishers.Block,
-		b.publishers.Logs,
-		b.logger,
-		b.collector,
+		fnb.Storages.Storage,
+		fnb.Storages.Registers,
+		fnb.Storages.Blocks,
+		fnb.Storages.Receipts,
+		fnb.Storages.Transactions,
+		fnb.Storages.Traces,
+		fnb.Publishers.Block,
+		fnb.Publishers.Logs,
+		fnb.Logger,
+		fnb.Metrics,
 		replayerConfig,
 	)
 
-	StartEngine(ctx, b.events, l)
+	return events, nil
+}
+
+func (fnb *EVMGatewayNodeBuilder) PrintBuildDetails() {
+	fnb.Logger.Info().Str("version", api.Version).Msg("build details")
+}
+
+// ShutdownFunc adds a callback function that is called after all components have exited.
+func (fnb *EVMGatewayNodeBuilder) ShutdownFunc(fn func() error) *EVMGatewayNodeBuilder {
+	fnb.postShutdownFns = append(fnb.postShutdownFns, fn)
+	return fnb
+}
+
+func (fnb *EVMGatewayNodeBuilder) initMetrics() error {
+	fnb.Metrics = metrics2.NewCollector(fnb.Logger)
 	return nil
 }
 
-func (b *Bootstrap) StopEventIngestion() {
-	if b.events == nil {
-		return
-	}
-	b.logger.Warn().Msg("stopping event ingestion engine")
-	b.events.Stop()
-}
+func (fnb *EVMGatewayNodeBuilder) initStorage() error {
+	logger := fnb.Logger
+	cfg := fnb.Config
 
-func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
-	b.logger.Info().Msg("bootstrap starting metrics server")
+	store := pebble2.New(fnb.DB, fnb.Logger)
 
-	b.server = api.NewServer(b.logger, b.collector, b.config)
+	blocks := pebble2.NewBlocks(store, cfg.FlowNetworkID)
+	storageAddress := evm.StorageAccountAddress(cfg.FlowNetworkID)
+	registerStore := pebble2.NewRegisterStorage(store, storageAddress)
 
-	// create transaction pool
-	txPool := requester.NewTxPool(
-		b.client,
-		b.publishers.Transaction,
-		b.logger,
-		b.config,
-	)
-
-	blocksProvider := replayer.NewBlocksProvider(
-		b.storages.Blocks,
-		b.config.FlowNetworkID,
-		nil,
-	)
-
-	accountKeys := make([]*requester.AccountKey, 0)
-	account, err := b.client.GetAccount(ctx, b.config.COAAddress)
-	if err != nil {
-		return fmt.Errorf(
-			"failed to get signer info account for address: %s, with: %w",
-			b.config.COAAddress,
-			err,
-		)
-	}
-	signer, err := createSigner(ctx, b.config, b.logger)
-	if err != nil {
-		return err
-	}
-	for _, key := range account.Keys {
-		// Skip account keys that do not use the same Publick Key as the
-		// configured crypto.Signer object.
-		if !key.PublicKey.Equals(signer.PublicKey()) {
-			continue
-		}
-		accountKeys = append(accountKeys, &requester.AccountKey{
-			AccountKey: *key,
-			Address:    b.config.COAAddress,
-			Signer:     signer,
-		})
-	}
-
-	b.keystore = requester.NewKeyStore(accountKeys)
-
-	evm, err := requester.NewEVM(
-		b.storages.Registers,
-		blocksProvider,
-		b.client,
-		b.config,
-		b.logger,
-		b.storages.Blocks,
-		txPool,
-		b.collector,
-		b.keystore,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to create EVM requester: %w", err)
-	}
-
-	// create rate limiter for requests on the APIs. Tokens are number of requests allowed per 1 second interval
-	// if no limit is defined we specify max value, effectively disabling rate-limiting
-	rateLimit := b.config.RateLimit
-	if rateLimit == 0 {
-		b.logger.Warn().Msg("no rate-limiting is set")
-		rateLimit = math.MaxInt
-	}
-	ratelimiter, err := memorystore.New(&memorystore.Config{Tokens: rateLimit, Interval: time.Second})
-	if err != nil {
-		return fmt.Errorf("failed to create rate limiter: %w", err)
-	}
-
-	// get the height from which the indexing resumed since the last restart,
-	// this is needed for the `eth_syncing` endpoint.
-	indexingResumedHeight, err := b.storages.Blocks.LatestEVMHeight()
-	if err != nil {
-		return fmt.Errorf("failed to retrieve the indexing resumed height: %w", err)
-	}
-
-	blockchainAPI := api.NewBlockChainAPI(
-		b.logger,
-		b.config,
-		evm,
-		b.storages.Blocks,
-		b.storages.Transactions,
-		b.storages.Receipts,
-		ratelimiter,
-		b.collector,
-		indexingResumedHeight,
-	)
-
-	streamAPI := api.NewStreamAPI(
-		b.logger,
-		b.config,
-		b.storages.Blocks,
-		b.storages.Transactions,
-		b.storages.Receipts,
-		b.publishers.Block,
-		b.publishers.Transaction,
-		b.publishers.Logs,
-	)
-
-	pullAPI := api.NewPullAPI(
-		b.logger,
-		b.config,
-		b.storages.Blocks,
-		b.storages.Transactions,
-		b.storages.Receipts,
-		ratelimiter,
-	)
-
-	debugAPI := api.NewDebugAPI(
-		b.storages.Registers,
-		b.storages.Traces,
-		b.storages.Blocks,
-		b.storages.Transactions,
-		b.storages.Receipts,
-		b.client,
-		b.config,
-		b.logger,
-		b.collector,
-		ratelimiter,
-	)
-
-	var walletAPI *api.WalletAPI
-	if b.config.WalletEnabled {
-		walletAPI = api.NewWalletAPI(b.config, blockchainAPI)
-	}
-
-	supportedAPIs := api.SupportedAPIs(
-		blockchainAPI,
-		streamAPI,
-		pullAPI,
-		debugAPI,
-		walletAPI,
-		b.config,
-	)
-
-	if err := b.server.EnableRPC(supportedAPIs); err != nil {
-		return err
-	}
-
-	if b.config.WSEnabled {
-		if err := b.server.EnableWS(supportedAPIs); err != nil {
+	// hard set the start cadence height, this is used when force reindexing
+	if cfg.ForceStartCadenceHeight != 0 {
+		logger.Warn().Uint64("height", cfg.ForceStartCadenceHeight).Msg("force setting starting Cadence height!!!")
+		if err := blocks.SetLatestCadenceHeight(cfg.ForceStartCadenceHeight, nil); err != nil {
 			return err
 		}
 	}
 
-	if err := b.server.SetListenAddr(b.config.RPCHost, b.config.RPCPort); err != nil {
-		return err
-	}
+	// if database is not initialized require init height
+	if _, err := blocks.LatestCadenceHeight(); errors.Is(err, errs.ErrStorageNotInitialized) {
+		// TODO(JanezP): move this to a separate function
+		err = func() (innerErr error) {
+			batch := store.NewBatch()
+			defer func(batch *pebble.Batch) {
+				innerErr = batch.Close()
+			}(batch)
 
-	if err := b.server.Start(); err != nil {
-		return err
-	}
+			cadenceHeight := cfg.InitCadenceHeight
+			evmBlokcHeight := uint64(0)
+			cadenceBlock, err := fnb.Client.GetBlockHeaderByHeight(context.Background(), cadenceHeight)
+			if err != nil {
+				return fmt.Errorf("could not fetch provided cadence height, make sure it's correct: %w", err)
+			}
 
-	b.logger.Info().Msgf("API server started: %s", b.server.ListenAddr())
-	return nil
-}
+			snapshot, err := registerStore.GetSnapshotAt(evmBlokcHeight)
+			if err != nil {
+				return fmt.Errorf("could not get register snapshot at block height %d: %w", 0, err)
+			}
 
-func (b *Bootstrap) StopAPIServer() {
-	if b.server == nil {
-		return
-	}
-	b.logger.Warn().Msg("shutting down API server")
-	b.server.Stop()
-}
+			delta := storage.NewRegisterDelta(snapshot)
+			accountStatus := environment.NewAccountStatus()
+			err = delta.SetValue(
+				storageAddress[:],
+				[]byte(flowGo.AccountStatusKey),
+				accountStatus.ToBytes(),
+			)
+			if err != nil {
+				return fmt.Errorf("could not set account status: %w", err)
+			}
 
-func (b *Bootstrap) StartMetricsServer(ctx context.Context) error {
-	b.logger.Info().Msg("bootstrap starting metrics server")
+			err = registerStore.Store(delta.GetUpdates(), evmBlokcHeight, batch)
+			if err != nil {
+				return fmt.Errorf("could not store register updates: %w", err)
+			}
 
-	b.metrics = flowMetrics.NewServer(b.logger, uint(b.config.MetricsPort))
-	err := util.WaitClosed(ctx, b.metrics.Ready())
-	if err != nil {
-		return fmt.Errorf("failed to start metrics server: %w", err)
-	}
+			if err := blocks.InitHeights(cadenceHeight, cadenceBlock.ID, batch); err != nil {
+				return fmt.Errorf(
+					"failed to init the database for block height: %d and ID: %s, with : %w",
+					cadenceHeight,
+					cadenceBlock.ID,
+					err,
+				)
+			}
 
-	return nil
-}
+			err = batch.Commit(pebble.Sync)
+			if err != nil {
+				return fmt.Errorf("could not commit register updates: %w", err)
+			}
 
-func (b *Bootstrap) StopMetricsServer() {
-	if b.metrics == nil {
-		return
-	}
-	b.logger.Warn().Msg("shutting down metrics server")
-	<-b.metrics.Done()
-}
+			logger.Info().
+				Stringer("fvm_address_for_evm_storage_account", storageAddress).
+				Msgf("database initialized with cadence height: %d", cadenceHeight)
 
-func (b *Bootstrap) StartProfilerServer(_ context.Context) error {
-	if !b.config.ProfilerEnabled {
-		return nil
-	}
-	b.logger.Info().Msg("bootstrap starting profiler server")
+			return nil
+		}()
 
-	b.profiler = api.NewProfileServer(b.logger, b.config.ProfilerHost, b.config.ProfilerPort)
-
-	b.profiler.Start()
-	b.logger.Info().Msgf("Profiler server started: %s", b.profiler.ListenAddr())
-
-	return nil
-}
-
-func (b *Bootstrap) StopProfilerServer() {
-	if b.profiler == nil {
-		return
-	}
-
-	b.logger.Warn().Msg("shutting down profiler server")
-
-	err := b.profiler.Stop()
-	if err != nil {
-		if errors.Is(err, context.DeadlineExceeded) {
-			b.logger.Warn().Msg("Profiler server graceful shutdown timed out")
-			b.profiler.Close()
-		} else {
-			b.logger.Err(err).Msg("Profiler server graceful shutdown failed")
-		}
-	}
-}
-
-func (b *Bootstrap) StopDB() {
-	if b.db == nil {
-		return
-	}
-	err := b.db.Close()
-	if err != nil {
-		b.logger.Err(err).Msg("PebbleDB graceful shutdown failed")
-	}
-}
-
-func (b *Bootstrap) StopClient() {
-	if b.client == nil {
-		return
-	}
-	err := b.client.Close()
-	if err != nil {
-		b.logger.Err(err).Msg("CrossSporkClient graceful shutdown failed")
-	}
-}
-
-// StartEngine starts provided engine and panics if there are startup errors.
-func StartEngine(
-	ctx context.Context,
-	engine models.Engine,
-	logger zerolog.Logger,
-) {
-	l := logger.With().Type("engine", engine).Logger()
-
-	l.Info().Msg("starting engine")
-	start := time.Now()
-	go func() {
-		err := engine.Run(ctx)
 		if err != nil {
-			l.Fatal().Err(err).Msg("engine failed to run")
+			return fmt.Errorf("failed to init the database: %w", err)
 		}
-	}()
+	}
+	//else {
+	//	// TODO(JanezP): verify storage account owner is correct
+	//}
 
-	<-engine.Ready()
-	l.Info().
-		Dur("duration", time.Since(start)).
-		Msg("engine started successfully")
+	fnb.Storages = &Storages{
+		Storage:      store,
+		Blocks:       blocks,
+		Registers:    registerStore,
+		Transactions: pebble2.NewTransactions(store),
+		Receipts:     pebble2.NewReceipts(store),
+		Traces:       pebble2.NewTraces(store),
+	}
+
+	return nil
+}
+func (fnb *EVMGatewayNodeBuilder) initKeyStore(cfg config.Config) (module.ReadyDoneAware, error) {
+	keystore := requester.NewKeyStoreComponent(fnb.Logger, cfg, fnb.Client)
+
+	fnb.Keystore = keystore
+
+	return keystore, nil
+}
+
+func (fnb *EVMGatewayNodeBuilder) initPublishers() {
+	fnb.Publishers = &Publishers{}
+
+	fnb.Component("Block Publisher", func(config config.Config) (module.ReadyDoneAware, error) {
+		p := models.NewPublisher[*models.Block](fnb.Logger)
+		fnb.Publishers.Block = p
+		return p, nil
+	})
+	fnb.Component("Transaction Publisher", func(config config.Config) (module.ReadyDoneAware, error) {
+		p := models.NewPublisher[*gethTypes.Transaction](fnb.Logger)
+		fnb.Publishers.Transaction = p
+		return p, nil
+	})
+	fnb.Component("Logs Publisher", func(config config.Config) (module.ReadyDoneAware, error) {
+		p := models.NewPublisher[[]*gethTypes.Log](fnb.Logger)
+		fnb.Publishers.Logs = p
+		return p, nil
+	})
+}
+
+func (fnb *EVMGatewayNodeBuilder) initClient() error {
+	logger := fnb.Logger
+	cfg := fnb.Config
+
+	client, err := setupCrossSporkClient(cfg, logger)
+	if err != nil {
+		return fmt.Errorf("failed to create cross-spork client: %w", err)
+	}
+
+	fnb.Client = client
+
+	fnb.ShutdownFunc(func() error {
+		if err := fnb.Client.Close(); err != nil {
+			return fmt.Errorf("error closing cross-spork client: %w", err)
+		}
+		return nil
+	})
+
+	return nil
+}
+
+type BuilderFunc func(nodeConfig config.Config) error
+
+type namedModuleFunc struct {
+	fn   BuilderFunc
+	name string
+}
+
+// handleModules initializes the given module.
+func (fnb *EVMGatewayNodeBuilder) handleModule(v namedModuleFunc) error {
+	fnb.Logger.Info().Str("module", v.name).Msg("module initialization started")
+	err := v.fn(fnb.Config)
+	if err != nil {
+		return fmt.Errorf("module %s initialization failed: %w", v.name, err)
+	}
+
+	fnb.Logger.Info().Str("module", v.name).Msg("module initialization complete")
+	return nil
+}
+
+// handleModules initializes all modules that have been enqueued on this node builder.
+func (fnb *EVMGatewayNodeBuilder) handleModules() error {
+	for _, f := range fnb.modules {
+		if err := fnb.handleModule(f); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (fnb *EVMGatewayNodeBuilder) handleComponents() error {
+	cmd.AddWorkersFromComponents(fnb.Logger, fnb.Config, fnb.componentBuilder, fnb.components)
+	return nil
 }
 
 // setupCrossSporkClient sets up a cross-spork AN client.
@@ -483,144 +664,4 @@ func setupCrossSporkClient(config config.Config, logger zerolog.Logger) (*reques
 	}
 
 	return client, nil
-}
-
-// setupStorage creates storage and initializes it with configured starting cadence height
-// in case such a height doesn't already exist in the database.
-func setupStorage(
-	config config.Config,
-	client *requester.CrossSporkClient,
-	logger zerolog.Logger,
-) (*pebbleDB.DB, *Storages, error) {
-	// create pebble storage from the provided database root directory
-	db, err := pebble.OpenDB(config.DatabaseDir)
-	if err != nil {
-		return nil, nil, err
-	}
-	store := pebble.New(db, logger)
-
-	blocks := pebble.NewBlocks(store, config.FlowNetworkID)
-	storageAddress := evm.StorageAccountAddress(config.FlowNetworkID)
-	registerStore := pebble.NewRegisterStorage(store, storageAddress)
-
-	// hard set the start cadence height, this is used when force reindexing
-	if config.ForceStartCadenceHeight != 0 {
-		logger.Warn().Uint64("height", config.ForceStartCadenceHeight).Msg("force setting starting Cadence height!!!")
-		if err := blocks.SetLatestCadenceHeight(config.ForceStartCadenceHeight, nil); err != nil {
-			return nil, nil, err
-		}
-	}
-
-	// if database is not initialized require init height
-	if _, err := blocks.LatestCadenceHeight(); errors.Is(err, errs.ErrStorageNotInitialized) {
-		batch := store.NewBatch()
-		defer func(batch *pebbleDB.Batch) {
-			err := batch.Close()
-			if err != nil {
-				// we don't know what went wrong, so this is fatal
-				logger.Fatal().Err(err).Msg("failed to close batch")
-			}
-		}(batch)
-
-		cadenceHeight := config.InitCadenceHeight
-		evmBlokcHeight := uint64(0)
-		cadenceBlock, err := client.GetBlockHeaderByHeight(context.Background(), cadenceHeight)
-		if err != nil {
-			return nil, nil, fmt.Errorf("could not fetch provided cadence height, make sure it's correct: %w", err)
-		}
-
-		snapshot, err := registerStore.GetSnapshotAt(evmBlokcHeight)
-		if err != nil {
-			return nil, nil, fmt.Errorf("could not get register snapshot at block height %d: %w", 0, err)
-		}
-
-		delta := storage.NewRegisterDelta(snapshot)
-		accountStatus := environment.NewAccountStatus()
-		err = delta.SetValue(
-			storageAddress[:],
-			[]byte(flowGo.AccountStatusKey),
-			accountStatus.ToBytes(),
-		)
-		if err != nil {
-			return nil, nil, fmt.Errorf("could not set account status: %w", err)
-		}
-
-		err = registerStore.Store(delta.GetUpdates(), evmBlokcHeight, batch)
-		if err != nil {
-			return nil, nil, fmt.Errorf("could not store register updates: %w", err)
-		}
-
-		if err := blocks.InitHeights(cadenceHeight, cadenceBlock.ID, batch); err != nil {
-			return nil, nil, fmt.Errorf(
-				"failed to init the database for block height: %d and ID: %s, with : %w",
-				cadenceHeight,
-				cadenceBlock.ID,
-				err,
-			)
-		}
-
-		err = batch.Commit(pebbleDB.Sync)
-		if err != nil {
-			return nil, nil, fmt.Errorf("could not commit register updates: %w", err)
-		}
-
-		logger.Info().
-			Stringer("fvm_address_for_evm_storage_account", storageAddress).
-			Msgf("database initialized with cadence height: %d", cadenceHeight)
-	}
-	//else {
-	//	// TODO(JanezP): verify storage account owner is correct
-	//}
-
-	return db, &Storages{
-		Storage:      store,
-		Blocks:       blocks,
-		Registers:    registerStore,
-		Transactions: pebble.NewTransactions(store),
-		Receipts:     pebble.NewReceipts(store),
-		Traces:       pebble.NewTraces(store),
-	}, nil
-}
-
-// Run will run complete bootstrap of the EVM gateway with all the engines.
-// Run is a blocking call, but it does signal readiness of the service
-// through a channel provided as an argument.
-func Run(ctx context.Context, cfg config.Config, ready component.ReadyFunc) error {
-	boot, err := New(cfg)
-	if err != nil {
-		return err
-	}
-
-	// Start the API Server first, to avoid any races with incoming
-	// EVM events, that might affect the starting state.
-	if err := boot.StartAPIServer(ctx); err != nil {
-		return fmt.Errorf("failed to start API server: %w", err)
-	}
-
-	if err := boot.StartEventIngestion(ctx); err != nil {
-		return fmt.Errorf("failed to start event ingestion engine: %w", err)
-	}
-
-	if err := boot.StartMetricsServer(ctx); err != nil {
-		return fmt.Errorf("failed to start metrics server: %w", err)
-	}
-
-	if err := boot.StartProfilerServer(ctx); err != nil {
-		return fmt.Errorf("failed to start profiler server: %w", err)
-	}
-
-	// mark ready
-	ready()
-
-	// if context is canceled start shutdown
-	<-ctx.Done()
-	boot.logger.Warn().Msg("bootstrap received context cancellation, stopping services")
-
-	boot.StopEventIngestion()
-	boot.StopMetricsServer()
-	boot.StopAPIServer()
-	boot.StopClient()
-	boot.StopDB()
-
-	return nil
 }

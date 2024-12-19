@@ -1,6 +1,7 @@
 package models_test
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -8,7 +9,9 @@ import (
 	"time"
 
 	"github.com/onflow/flow-evm-gateway/models"
+	"github.com/onflow/flow-go/module/irrecoverable"
 	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -16,7 +19,7 @@ func Test_Stream(t *testing.T) {
 
 	t.Run("unsubscribe before subscribing", func(t *testing.T) {
 		p := newMockPublisher()
-		s := newMockSubscription()
+		s := newMockSubscription(func(mockData) error { return nil })
 
 		require.NotPanics(t, func() {
 			p.Unsubscribe(s)
@@ -25,28 +28,45 @@ func Test_Stream(t *testing.T) {
 
 	t.Run("subscribe, publish, unsubscribe, publish", func(t *testing.T) {
 		p := newMockPublisher()
-		s1 := newMockSubscription()
-		s2 := newMockSubscription()
+
+		ctx := context.Background()
+		ictx, cancel := irrecoverable.NewMockSignalerContextWithCancel(t, ctx)
+		defer cancel()
+
+		p.Start(ictx)
+
+		callbackChan := make(chan struct{})
+
+		f := func(mockData) error {
+			callbackChan <- struct{}{}
+			return nil
+		}
+
+		s1 := newMockSubscription(f)
+		s2 := newMockSubscription(f)
 
 		p.Subscribe(s1)
 		p.Subscribe(s2)
 
 		p.Publish(mockData{})
 
-		require.Equal(t, uint64(1), s1.CallCount())
-		require.Equal(t, uint64(1), s2.CallCount())
+		<-callbackChan
+		<-callbackChan
 
 		p.Unsubscribe(s1)
 
 		p.Publish(mockData{})
 
-		require.Equal(t, uint64(1), s1.CallCount())
-		require.Equal(t, uint64(2), s2.CallCount())
+		<-callbackChan
 	})
 
 	t.Run("concurrent subscribe, publish, unsubscribe, publish", func(t *testing.T) {
+		ctx := context.Background()
+		ictx, cancel := irrecoverable.NewMockSignalerContextWithCancel(t, ctx)
+		defer cancel()
 
 		p := newMockPublisher()
+		p.Start(ictx)
 
 		stopPublishing := make(chan struct{})
 
@@ -79,9 +99,17 @@ func Test_Stream(t *testing.T) {
 		for i := 0; i < 10; i++ {
 			go func() {
 				subscriptions := make([]*mockSubscription, 10)
+				callCount := make([]atomic.Uint64, 10)
 
 				for j := 0; j < 10; j++ {
-					s := newMockSubscription()
+					callCount[j].Store(0)
+
+					s := newMockSubscription(
+						func(data mockData) error {
+							callCount[j].Add(1)
+							return nil
+						},
+					)
 					subscriptions[j] = s
 					p.Subscribe(s)
 
@@ -100,7 +128,7 @@ func Test_Stream(t *testing.T) {
 
 				// there should be at least 1 call
 				for j := 0; j < 10; j++ {
-					require.GreaterOrEqual(t, subscriptions[j].CallCount(), uint64(10))
+					require.GreaterOrEqual(t, callCount[j].Load(), uint64(10))
 				}
 
 				waitAllUnsubscribed.Done()
@@ -112,32 +140,27 @@ func Test_Stream(t *testing.T) {
 	})
 
 	t.Run("error handling", func(t *testing.T) {
-		p := newMockPublisher()
-		s := &mockSubscription{}
 		errContent := fmt.Errorf("failed to process data")
+		gotError := make(chan struct{})
 
-		s.Subscription = models.NewSubscription[mockData](zerolog.Nop(), func(data mockData) error {
-			s.callCount.Add(1)
+		ctx := context.Background()
+		ictx := irrecoverable.NewMockSignalerContext(t, ctx)
+		ictx.On("Throw", errContent).Run(func(args mock.Arguments) {
+			close(gotError)
+		})
+
+		p := newMockPublisher()
+		p.Start(ictx)
+
+		s := newMockSubscription(func(data mockData) error {
 			return errContent
 		})
 
 		p.Subscribe(s)
 
-		shouldReceiveError := make(chan struct{})
-		ready := make(chan struct{})
-		go func() {
-			close(ready)
-			select {
-			case err := <-s.Error():
-				require.ErrorIs(t, err, errContent)
-			case <-shouldReceiveError:
-				require.Fail(t, "should have received error")
-			}
-		}()
-		<-ready
-
 		p.Publish(mockData{})
-		close(shouldReceiveError)
+
+		<-gotError
 	})
 }
 
@@ -145,22 +168,14 @@ type mockData struct{}
 
 type mockSubscription struct {
 	*models.Subscription[mockData]
-	callCount atomic.Uint64
 }
 
-func newMockSubscription() *mockSubscription {
+func newMockSubscription(callback func(mockData) error) *mockSubscription {
 	s := &mockSubscription{}
-	s.Subscription = models.NewSubscription[mockData](zerolog.Nop(), func(data mockData) error {
-		s.callCount.Add(1)
-		return nil
-	})
+	s.Subscription = models.NewSubscription[mockData](callback)
 	return s
 }
 
-func (s *mockSubscription) CallCount() uint64 {
-	return s.callCount.Load()
-}
-
 func newMockPublisher() *models.Publisher[mockData] {
-	return models.NewPublisher[mockData]()
+	return models.NewPublisher[mockData](zerolog.Nop())
 }
