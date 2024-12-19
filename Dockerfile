@@ -16,7 +16,7 @@ ARG VERSION
 ARG ARCH
 
 # Build binary
-RUN CGO_ENABLED=1 GOOS=linux GOARCH=$ARCH build -o bin -ldflags="-X github.com/onflow/flow-evm-gateway/api.Version=$VERSION" -trimpath cmd/main.go
+RUN CGO_ENABLED=1 GOOS=linux GOARCH=$ARCH go build -o bin -ldflags="-X github.com/onflow/flow-evm-gateway/api.Version=$VERSION" -trimpath cmd/main.go
 RUN chmod a+x bin
 
 # RUN APP
