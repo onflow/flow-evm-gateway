@@ -229,7 +229,7 @@ func (d *DebugAPI) TraceCall(
 			}
 		}
 	}
-	_, err = view.DryCall(
+	res, err := view.DryCall(
 		from,
 		to,
 		tx.Data,
@@ -237,9 +237,14 @@ func (d *DebugAPI) TraceCall(
 		tx.Gas,
 		opts...,
 	)
-
 	if err != nil {
 		return nil, err
+	}
+
+	for _, log := range res.Logs {
+		if tracer != nil && tracer.OnLog != nil {
+			tracer.OnLog(log)
+		}
 	}
 
 	return tracer.GetResult()
@@ -480,6 +485,9 @@ func isDefaultCallTracer(config *tracers.TraceConfig) bool {
 		return false
 	}
 
+	// The default tracer config is `{"onlyTopCall":true}`, if the user adds
+	// any whitespace, e.g `{ "onlyTopCall": true }`, the comparison will fail.
+	// That's why we need to trim out all whitespace characters.
 	trimmedConfig := strings.ReplaceAll(string(config.TracerConfig), " ", "")
 	return trimmedConfig == replayer.TracerConfig
 }
