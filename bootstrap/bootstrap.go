@@ -200,29 +200,31 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 	)
 
 	accountKeys := make([]*requester.AccountKey, 0)
-	account, err := b.client.GetAccount(ctx, b.config.COAAddress)
-	if err != nil {
-		return fmt.Errorf(
-			"failed to get signer info account for address: %s, with: %w",
-			b.config.COAAddress,
-			err,
-		)
-	}
-	signer, err := createSigner(ctx, b.config, b.logger)
-	if err != nil {
-		return err
-	}
-	for _, key := range account.Keys {
-		// Skip account keys that do not use the same Publick Key as the
-		// configured crypto.Signer object.
-		if !key.PublicKey.Equals(signer.PublicKey()) {
-			continue
+	if !b.config.IndexOnly {
+		account, err := b.client.GetAccount(ctx, b.config.COAAddress)
+		if err != nil {
+			return fmt.Errorf(
+				"failed to get signer info account for address: %s, with: %w",
+				b.config.COAAddress,
+				err,
+			)
 		}
-		accountKeys = append(accountKeys, &requester.AccountKey{
-			AccountKey: *key,
-			Address:    b.config.COAAddress,
-			Signer:     signer,
-		})
+		signer, err := createSigner(ctx, b.config, b.logger)
+		if err != nil {
+			return err
+		}
+		for _, key := range account.Keys {
+			// Skip account keys that do not use the same Publick Key as the
+			// configured crypto.Signer object.
+			if !key.PublicKey.Equals(signer.PublicKey()) {
+				continue
+			}
+			accountKeys = append(accountKeys, &requester.AccountKey{
+				AccountKey: *key,
+				Address:    b.config.COAAddress,
+				Signer:     signer,
+			})
+		}
 	}
 
 	b.keystore = requester.NewKeyStore(accountKeys)

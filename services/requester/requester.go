@@ -122,22 +122,25 @@ func NewEVM(
 	keystore *KeyStore,
 ) (*EVM, error) {
 	logger = logger.With().Str("component", "requester").Logger()
-	address := config.COAAddress
-	acc, err := client.GetAccount(context.Background(), address)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"could not fetch the configured COA account: %s make sure it exists: %w",
-			address.String(),
-			err,
-		)
-	}
 
-	if acc.Balance < minFlowBalance {
-		return nil, fmt.Errorf(
-			"COA account must be funded with at least %d Flow, but has balance of: %d",
-			minFlowBalance,
-			acc.Balance,
-		)
+	if !config.IndexOnly {
+		address := config.COAAddress
+		acc, err := client.GetAccount(context.Background(), address)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"could not fetch the configured COA account: %s make sure it exists: %w",
+				address.String(),
+				err,
+			)
+		}
+
+		if acc.Balance < minFlowBalance {
+			return nil, fmt.Errorf(
+				"COA account must be funded with at least %d Flow, but has balance of: %d",
+				minFlowBalance,
+				acc.Balance,
+			)
+		}
 	}
 
 	head := &types.Header{
