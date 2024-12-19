@@ -90,58 +90,71 @@ var Cmd = &cobra.Command{
 }
 
 func parseConfigFromFlags() error {
-	if coinbase == "" {
-		return fmt.Errorf("coinbase EVM address required")
-	}
-	cfg.Coinbase = gethCommon.HexToAddress(coinbase)
-	if cfg.Coinbase == (gethCommon.Address{}) {
-		return fmt.Errorf("invalid coinbase address: %s", coinbase)
+	if !cfg.IndexOnly {
+		if coinbase == "" {
+			return fmt.Errorf("coinbase EVM address required")
+		}
+		cfg.Coinbase = gethCommon.HexToAddress(coinbase)
+		if cfg.Coinbase == (gethCommon.Address{}) {
+			return fmt.Errorf("invalid coinbase address: %s", coinbase)
+		}
+
+		cfg.COAAddress = flow.HexToAddress(coa)
+		if cfg.COAAddress == flow.EmptyAddress {
+			return fmt.Errorf("COA address value is the empty address")
+		}
+
+		if key != "" {
+			sigAlgo := crypto.StringToSignatureAlgorithm(keyAlg)
+			if sigAlgo == crypto.UnknownSignatureAlgorithm {
+				return fmt.Errorf("invalid signature algorithm: %s", keyAlg)
+			}
+			pkey, err := crypto.DecodePrivateKeyHex(sigAlgo, key)
+			if err != nil {
+				return fmt.Errorf("invalid COA private key: %w", err)
+			}
+			cfg.COAKey = pkey
+		} else if cloudKMSKey != "" {
+			if cloudKMSProjectID == "" || cloudKMSLocationID == "" || cloudKMSKeyRingID == "" {
+				return fmt.Errorf(
+					"using coa-cloud-kms-key requires also coa-cloud-kms-project-id & coa-cloud-kms-location-id & coa-cloud-kms-key-ring-id",
+				)
+			}
+
+			// key has the form "{keyID}@{keyVersion}"
+			keyParts := strings.Split(cloudKMSKey, "@")
+			if len(keyParts) != 2 {
+				return fmt.Errorf("wrong format for Cloud KMS key: %s", key)
+			}
+			cfg.COACloudKMSKey = &flowGoKMS.Key{
+				ProjectID:  cloudKMSProjectID,
+				LocationID: cloudKMSLocationID,
+				KeyRingID:  cloudKMSKeyRingID,
+				KeyID:      keyParts[0],
+				KeyVersion: keyParts[1],
+			}
+		} else {
+			return fmt.Errorf(
+				"must either provide coa-key / coa-cloud-kms-key",
+			)
+		}
+
+		if walletKey != "" {
+			k, err := gethCrypto.HexToECDSA(walletKey)
+			if err != nil {
+				return fmt.Errorf("invalid private key for wallet API: %w", err)
+			}
+
+			cfg.WalletKey = k
+			cfg.WalletEnabled = true
+			log.Warn().Msg("wallet API is enabled. Ensure this is not used in production environments.")
+		}
 	}
 
 	if g, ok := new(big.Int).SetString(gas, 10); ok {
 		cfg.GasPrice = g
 	} else {
 		return fmt.Errorf("invalid gas price")
-	}
-
-	cfg.COAAddress = flow.HexToAddress(coa)
-	if cfg.COAAddress == flow.EmptyAddress {
-		return fmt.Errorf("COA address value is the empty address")
-	}
-
-	if key != "" {
-		sigAlgo := crypto.StringToSignatureAlgorithm(keyAlg)
-		if sigAlgo == crypto.UnknownSignatureAlgorithm {
-			return fmt.Errorf("invalid signature algorithm: %s", keyAlg)
-		}
-		pkey, err := crypto.DecodePrivateKeyHex(sigAlgo, key)
-		if err != nil {
-			return fmt.Errorf("invalid COA private key: %w", err)
-		}
-		cfg.COAKey = pkey
-	} else if cloudKMSKey != "" {
-		if cloudKMSProjectID == "" || cloudKMSLocationID == "" || cloudKMSKeyRingID == "" {
-			return fmt.Errorf(
-				"using coa-cloud-kms-keys requires also coa-cloud-kms-project-id & coa-cloud-kms-location-id & coa-cloud-kms-key-ring-id",
-			)
-		}
-
-		// key has the form "{keyID}@{keyVersion}"
-		keyParts := strings.Split(cloudKMSKey, "@")
-		if len(keyParts) != 2 {
-			return fmt.Errorf("wrong format for Cloud KMS key: %s", key)
-		}
-		cfg.COACloudKMSKey = &flowGoKMS.Key{
-			ProjectID:  cloudKMSProjectID,
-			LocationID: cloudKMSLocationID,
-			KeyRingID:  cloudKMSKeyRingID,
-			KeyID:      keyParts[0],
-			KeyVersion: keyParts[1],
-		}
-	} else {
-		return fmt.Errorf(
-			"must either provide coa-key / coa-key-path / coa-cloud-kms-keys",
-		)
 	}
 
 	switch flowNetwork {
@@ -201,17 +214,6 @@ func parseConfigFromFlags() error {
 
 	if forceStartHeight != 0 {
 		cfg.ForceStartCadenceHeight = forceStartHeight
-	}
-
-	if walletKey != "" {
-		k, err := gethCrypto.HexToECDSA(walletKey)
-		if err != nil {
-			return fmt.Errorf("invalid private key for wallet API: %w", err)
-		}
-
-		cfg.WalletKey = k
-		cfg.WalletEnabled = true
-		log.Warn().Msg("wallet API is enabled. Ensure this is not used in production environments.")
 	}
 
 	if txStateValidation == config.LocalIndexValidation {
