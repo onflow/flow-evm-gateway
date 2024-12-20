@@ -22,7 +22,8 @@ it('should retrieve transaction traces', async () => {
     let callTracer = {
         tracer: 'callTracer',
         tracerConfig: {
-            onlyTopCall: true
+            withLog: true,
+            onlyTopCall: false
         }
     }
     response = await helpers.callRPCMethod(
@@ -40,6 +41,7 @@ it('should retrieve transaction traces', async () => {
     assert.equal(txTrace.to, '0x99a64c993965f8d69f985b5171bc20065cc32fab')
     assert.lengthOf(txTrace.input, 9856n)
     assert.lengthOf(txTrace.output, 9806n)
+    assert.isUndefined(txTrace.logs)
     assert.equal(txTrace.value, '0x0')
     assert.equal(txTrace.type, 'CREATE')
 
@@ -70,7 +72,7 @@ it('should retrieve transaction traces', async () => {
         }
     )
 
-    let updateData = deployed.contract.methods.store(100n).encodeABI()
+    let updateData = deployed.contract.methods.storeWithLog(100n).encodeABI()
     let res = await helpers.signAndSend({
         from: conf.eoa.address,
         to: contractAddress,
@@ -92,8 +94,8 @@ it('should retrieve transaction traces', async () => {
     // Assert proper response for `callTracer`
     txTrace = response.body.result
     assert.equal(txTrace.from, '0xfacf71692421039876a5bb4f10ef7a439d8ef61e')
-    assert.equal(txTrace.gas, '0x697f')
-    assert.equal(txTrace.gasUsed, '0x6827')
+    assert.equal(txTrace.gas, '0x6f9a')
+    assert.equal(txTrace.gasUsed, '0x6e3f')
     assert.equal(txTrace.to, '0x99a64c993965f8d69f985b5171bc20065cc32fab')
     assert.equal(
         txTrace.input,
@@ -127,11 +129,11 @@ it('should retrieve transaction traces', async () => {
     )
     assert.deepEqual(
         txTrace.post['0x0000000000000000000000030000000000000000'],
-        { balance: '0x3d06da' }
+        { balance: '0x4098ea' }
     )
     assert.deepEqual(
         txTrace.post['0xfacf71692421039876a5bb4f10ef7a439d8ef61e'],
-        { balance: '0x456391823a9b6fc6', nonce: 2 }
+        { balance: '0x456391823a97ddb6', nonce: 2 }
     )
 
     response = await helpers.callRPCMethod(
@@ -145,7 +147,7 @@ it('should retrieve transaction traces', async () => {
     txTrace = response.body.result
     assert.deepEqual(
         txTrace,
-        { '0x6057361d-32': 1 }
+        { '0x6babb224-32': 1 }
     )
 
     response = await helpers.callRPCMethod(
@@ -161,26 +163,38 @@ it('should retrieve transaction traces', async () => {
         txTraces,
         [
             {
-                txHash: '0xc34f49f9c6b56ebd88095054e2ad42d6854ba818a9657caf3f8500161a5e4ef7',
+                txHash: '0x59a48269f0f57fdbfe53fed4a27d95deee3d12aad62b40d22562ad2270732c8d',
                 result: {
                     from: '0xfacf71692421039876a5bb4f10ef7a439d8ef61e',
-                    gas: '0x697f',
-                    gasUsed: '0x6827',
+                    gas: '0x6f9a',
+                    gasUsed: '0x6e3f',
                     to: '0x99a64c993965f8d69f985b5171bc20065cc32fab',
-                    input: '0x6057361d0000000000000000000000000000000000000000000000000000000000000064',
+                    input: '0x6babb2240000000000000000000000000000000000000000000000000000000000000064',
+                    logs: [
+                        {
+                            address: '0x99a64c993965f8d69f985b5171bc20065cc32fab',
+                            data: '0x',
+                            position: '0x0',
+                            topics: [
+                                '0x043cc306157a91d747b36aba0e235bbbc5771d75aba162f6e5540767d22673c6',
+                                '0x000000000000000000000000facf71692421039876a5bb4f10ef7a439d8ef61e',
+                                '0x0000000000000000000000000000000000000000000000000000000000000064'
+                            ]
+                        }
+                    ],
                     value: '0x0',
                     type: 'CALL'
                 }
             },
             {
-                txHash: '0x6039ef1f7dc8d40b74f58e502f5b0b535a46c1b4ddd780c23cb97cf4d681bb47',
+                txHash: '0x828d174e7fbdd7de2224f0204953356d9ccd5b1783780e27340a745a96d6e9e4',
                 result: {
                     from: '0x0000000000000000000000030000000000000000',
                     gas: '0x5b04',
                     gasUsed: '0x5208',
                     to: '0x658bdf435d810c91414ec09147daa6db62406379',
                     input: '0x',
-                    value: '0x3d06da',
+                    value: '0x4098ea',
                     type: 'CALL'
                 }
             }
@@ -200,26 +214,38 @@ it('should retrieve transaction traces', async () => {
         txTraces,
         [
             {
-                txHash: '0xc34f49f9c6b56ebd88095054e2ad42d6854ba818a9657caf3f8500161a5e4ef7',
+                txHash: '0x59a48269f0f57fdbfe53fed4a27d95deee3d12aad62b40d22562ad2270732c8d',
                 result: {
                     from: '0xfacf71692421039876a5bb4f10ef7a439d8ef61e',
-                    gas: '0x697f',
-                    gasUsed: '0x6827',
+                    gas: '0x6f9a',
+                    gasUsed: '0x6e3f',
                     to: '0x99a64c993965f8d69f985b5171bc20065cc32fab',
-                    input: '0x6057361d0000000000000000000000000000000000000000000000000000000000000064',
+                    input: '0x6babb2240000000000000000000000000000000000000000000000000000000000000064',
+                    logs: [
+                        {
+                            address: '0x99a64c993965f8d69f985b5171bc20065cc32fab',
+                            data: '0x',
+                            position: '0x0',
+                            topics: [
+                                '0x043cc306157a91d747b36aba0e235bbbc5771d75aba162f6e5540767d22673c6',
+                                '0x000000000000000000000000facf71692421039876a5bb4f10ef7a439d8ef61e',
+                                '0x0000000000000000000000000000000000000000000000000000000000000064'
+                            ]
+                        }
+                    ],
                     value: '0x0',
                     type: 'CALL'
                 }
             },
             {
-                txHash: '0x6039ef1f7dc8d40b74f58e502f5b0b535a46c1b4ddd780c23cb97cf4d681bb47',
+                txHash: '0x828d174e7fbdd7de2224f0204953356d9ccd5b1783780e27340a745a96d6e9e4',
                 result: {
                     from: '0x0000000000000000000000030000000000000000',
                     gas: '0x5b04',
                     gasUsed: '0x5208',
                     to: '0x658bdf435d810c91414ec09147daa6db62406379',
                     input: '0x',
-                    value: '0x3d06da',
+                    value: '0x4098ea',
                     type: 'CALL'
                 }
             }
@@ -286,11 +312,12 @@ it('should retrieve call traces', async () => {
     let callTracer = {
         tracer: 'callTracer',
         tracerConfig: {
+            withLog: true,
             onlyTopCall: true
         }
     }
 
-    let callData = deployed.contract.methods.store(500).encodeABI()
+    let callData = deployed.contract.methods.storeWithLog(500).encodeABI()
     let traceCall = {
         from: conf.eoa.address,
         to: contractAddress,
@@ -309,11 +336,26 @@ it('should retrieve call traces', async () => {
     let updateTrace = response.body.result
     assert.equal(updateTrace.from, '0xfacf71692421039876a5bb4f10ef7a439d8ef61e')
     assert.equal(updateTrace.gas, '0x95ab')
-    assert.equal(updateTrace.gasUsed, '0x6833')
+    assert.equal(updateTrace.gasUsed, '0x6e4b')
     assert.equal(updateTrace.to, '0x99a64c993965f8d69f985b5171bc20065cc32fab')
     assert.equal(
         updateTrace.input,
-        '0x6057361d00000000000000000000000000000000000000000000000000000000000001f4'
+        '0x6babb22400000000000000000000000000000000000000000000000000000000000001f4'
+    )
+    assert.deepEqual(
+        updateTrace.logs,
+        [
+            {
+                address: '0x99a64c993965f8d69f985b5171bc20065cc32fab',
+                data: '0x',
+                position: '0x0',
+                topics: [
+                    '0x043cc306157a91d747b36aba0e235bbbc5771d75aba162f6e5540767d22673c6',
+                    '0x000000000000000000000000facf71692421039876a5bb4f10ef7a439d8ef61e',
+                    '0x00000000000000000000000000000000000000000000000000000000000001f4'
+                ]
+            }
+        ]
     )
     assert.equal(updateTrace.value, '0x0')
     assert.equal(updateTrace.type, 'CALL')
@@ -372,7 +414,7 @@ it('should retrieve call traces', async () => {
             },
             pre: {
                 '0xfacf71692421039876a5bb4f10ef7a439d8ef61e': {
-                    balance: '0x456391823a62702c',
+                    balance: '0x456391823a5ede1c',
                     nonce: 3
                 }
             }
@@ -525,6 +567,7 @@ it('should retrieve call traces', async () => {
     callTracer = {
         tracer: 'callTracer',
         tracerConfig: {
+            withLog: false,
             onlyTopCall: false
         }
     }
@@ -561,4 +604,56 @@ it('should retrieve call traces', async () => {
             type: 'CALL'
         }
     )
+
+    callTracer = {
+        tracer: 'callTracer',
+        tracerConfig: {
+            withLog: true,
+            onlyTopCall: false
+        }
+    }
+
+    callData = deployed.contract.methods.sum(500, 100).encodeABI()
+    traceCall = {
+        from: conf.eoa.address,
+        to: contractAddress,
+        data: callData,
+        value: '0x0',
+        gasPrice: web3.utils.toHex(conf.minGasPrice),
+        gas: '0x95ab'
+    }
+    response = await helpers.callRPCMethod(
+        'debug_traceCall',
+        [traceCall, 'latest', callTracer]
+    )
+    assert.equal(response.status, 200)
+    assert.isDefined(response.body)
+
+    updateTrace = response.body.result
+    assert.equal(updateTrace.from, '0xfacf71692421039876a5bb4f10ef7a439d8ef61e')
+    assert.equal(updateTrace.gas, '0x95ab')
+    assert.equal(updateTrace.gasUsed, '0x6094')
+    assert.equal(updateTrace.to, '0x99a64c993965f8d69f985b5171bc20065cc32fab')
+    assert.equal(
+        updateTrace.input,
+        '0x9967062d00000000000000000000000000000000000000000000000000000000000001f40000000000000000000000000000000000000000000000000000000000000064'
+    )
+    assert.deepEqual(
+        updateTrace.logs,
+        [
+            {
+                address: '0x99a64c993965f8d69f985b5171bc20065cc32fab',
+                data: '0x0000000000000000000000000000000000000000000000000000000000000258',
+                position: '0x0',
+                topics: [
+                    '0x76efea95e5da1fa661f235b2921ae1d89b99e457ec73fb88e34a1d150f95c64b',
+                    '0x000000000000000000000000facf71692421039876a5bb4f10ef7a439d8ef61e',
+                    '0x00000000000000000000000000000000000000000000000000000000000001f4',
+                    '0x0000000000000000000000000000000000000000000000000000000000000064'
+                ]
+            }
+        ]
+    )
+    assert.equal(updateTrace.value, '0x0')
+    assert.equal(updateTrace.type, 'CALL')
 })
