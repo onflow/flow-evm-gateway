@@ -45,7 +45,7 @@ DATADIR := /data
 ifeq ($(UNAME_S),Darwin)
 	OS := macos
 	ARCH := arm64
-	$(eval COMPILER_FLAGS += CGO_CFLAGS="-O2 -D__BLST_PORTABLE__")
+	COMPILER_FLAGS += CGO_CFLAGS="-O2 -D__BLST_PORTABLE__"
 else ifeq ($(UNAME_S),Linux)
 	OS := linux
 	ARCH := amd64
@@ -56,8 +56,8 @@ endif
 # Function to check and append required arguments
 define check_and_append
 $(if $($(2)),\
-    $(eval CMD_ARGS += --$(1)=$($(2))),\
-    $(error ERROR: $(2) ENV variable is required))
+	$(eval CMD_ARGS += --$(1)=$($(2))),\
+	$(error ERROR: $(2) ENV variable is required))
 endef
 
 # Default target
