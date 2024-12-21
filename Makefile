@@ -188,6 +188,8 @@ ifdef DOCKER_RUN_DETACHED
 endif
 ifdef DOCKER_METRICS_PORT
 	$(call check_and_append,metrics-port,DOCKER_METRICS_PORT)
+else
+	$(call check_and_append,metrics-port,8080)
 endif
 ifdef DOCKER_HOST_PORT
 	$(eval HOST_PORT=$(DOCKER_HOST_PORT))
