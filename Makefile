@@ -186,10 +186,10 @@ docker-run:
 ifdef DOCKER_RUN_DETACHED
 	$(eval MODE=-d)
 endif
-ifdef DOCKER_METRICS_PORT
-	$(call check_and_append,metrics-port,DOCKER_METRICS_PORT)
+ifdef DOCKER_HOST_METRICS_PORT
+	$(eval HOST_METRICS_PORT=$(DOCKER_HOST_METRICS_PORT))
 else
-	$(call check_and_append,metrics-port,8080)
+	$(eval HOST_METRICS_PORT=8080)
 endif
 ifdef DOCKER_HOST_PORT
 	$(eval HOST_PORT=$(DOCKER_HOST_PORT))
@@ -219,9 +219,10 @@ endif
 	$(call check_and_append,coa-address,COA_ADDRESS)
 	$(call check_and_append,coa-key,COA_KEY)
 	$(call check_and_append,gas-price,GAS_PRICE)
+	$(call check_and_append,metrics-port,HOST_METRICS_PORT)
 
 	$(eval CMD_ARGS += --ws-enabled=true --rate-limit=9999999 --rpc-host=0.0.0.0 --log-level=info --tx-state-validation=local-index)
 	$(call check_and_append,access-node-spork-hosts,ACCESS_NODE_SPORK_HOSTS)
 
-	docker run $(MODE) -p $(HOST_PORT):8545 -p $(METRICS_PORT):8080 $(MOUNT) "$(CONTAINER_REGISTRY)/flow-evm-gateway:$(IMAGE_TAG)" $(CMD_ARGS)
+	docker run $(MODE) -p $(HOST_PORT):8545 -p $(HOST_METRICS_PORT):8080 $(MOUNT) "$(CONTAINER_REGISTRY)/flow-evm-gateway:$(IMAGE_TAG)" $(CMD_ARGS)
 
