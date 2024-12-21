@@ -31,10 +31,27 @@ EMULATOR_ARGS := --flow-network-id=flow-emulator \
 		--tx-state-validation=local-index
 
 # Set VERSION from command line, environment, or default to SHORT_COMMIT
-VERSION ?= ${SHORT_COMMIT}
+VERSION ?= $(SHORT_COMMIT)
 
 # Set IMAGE_TAG from VERSION if not explicitly set
-IMAGE_TAG ?= ${VERSION}
+IMAGE_TAG ?= $(VERSION)
+
+# docker container registry
+CONTAINER_REGISTRY := us-west1-docker.pkg.dev/dl-flow-devex-production/development
+DOCKER_BUILDKIT := 1
+DATADIR := /data
+
+# Determine OS and set ARCH
+ifeq ($(UNAME_S),Darwin)
+	OS := macos
+	ARCH := arm64
+	$(eval COMPILER_FLAGS += CGO_CFLAGS="-O2 -D__BLST_PORTABLE__")
+else ifeq ($(UNAME_S),Linux)
+	OS := linux
+	ARCH := amd64
+else
+	$(error Unsupported operating system: $(UNAME_S))
+endif
 
 # Function to check and append required arguments
 define check_and_append
@@ -43,22 +60,9 @@ $(if $($(2)),\
     $(error ERROR: $(2) ENV variable is required))
 endef
 
-# Determine OS and set ARCH
-ifeq ($(UNAME_S),Darwin)
-    OS := macos
-    ARCH := arm64
-    $(eval COMPILER_FLAGS += CGO_CFLAGS="-O2 -D__BLST_PORTABLE__")
-else ifeq ($(UNAME_S),Linux)
-    OS := linux
-    ARCH := amd64
-else
-    $(error Unsupported operating system: $(UNAME_S))
-endif
-
-# docker container registry
-export CONTAINER_REGISTRY := us-west1-docker.pkg.dev/dl-flow-devex-production/development
-export DOCKER_BUILDKIT := 1
-export DATADIR := /data
+# Default target
+.PHONY: all
+all: test build
 
 .PHONY: test
 test:
@@ -182,6 +186,9 @@ docker-run:
 ifdef DOCKER_RUN_DETACHED
 	$(eval MODE=-d)
 endif
+ifdef DOCKER_METRICS_PORT
+	$(call check_and_append,metrics-port,DOCKER_METRICS_PORT)
+endif
 ifdef DOCKER_HOST_PORT
 	$(eval HOST_PORT=$(DOCKER_HOST_PORT))
 else
@@ -190,17 +197,17 @@ endif
 ifndef GAS_PRICE
 	$(eval GAS_PRICE=100)
 endif
-ifdef DOCKER_MOUNT
-	$(eval MOUNT=--mount type=bind,src="$(DOCKER_MOUNT)",target=$(DATADIR))
+ifdef DOCKER_HOST_MOUNT
+	$(eval MOUNT=--mount type=bind,src="$(DOCKER_HOST_MOUNT)",target=$(DATADIR))
 	$(call check_and_append,database-dir,DATADIR)
 endif
 
 ifdef FLOW_NETWORK_ID
-    ifeq ($(FLOW_NETWORK_ID),flow-testnet)
-        ACCESS_NODE_SPORK_HOSTS := TESTNET_ACCESS_NODE_SPORK_HOSTS
-    else ifeq ($(FLOW_NETWORK_ID),flow-mainnet)
-        ACCESS_NODE_SPORK_HOSTS := MAINNET_ACCESS_NODE_SPORK_HOSTS
-    endif
+ifeq ($(FLOW_NETWORK_ID),flow-testnet)
+	$(eval ACCESS_NODE_SPORK_HOSTS=$(TESTNET_ACCESS_NODE_SPORK_HOSTS))
+else ifeq ($(FLOW_NETWORK_ID),flow-mainnet)
+	$(eval ACCESS_NODE_SPORK_HOSTS=$(MAINNET_ACCESS_NODE_SPORK_HOSTS))
+endif
 endif
 
 	$(call check_and_append,access-node-grpc-host,ACCESS_NODE_GRPC_HOST)
@@ -214,5 +221,5 @@ endif
 	$(eval CMD_ARGS += --ws-enabled=true --rate-limit=9999999 --rpc-host=0.0.0.0 --log-level=info --tx-state-validation=local-index)
 	$(call check_and_append,access-node-spork-hosts,ACCESS_NODE_SPORK_HOSTS)
 
-	docker run $(MODE) -p $(HOST_PORT):8545 -p 8080:8080 $(MOUNT) "$(CONTAINER_REGISTRY)/flow-evm-gateway:$(IMAGE_TAG)" $(CMD_ARGS)
+	docker run $(MODE) -p $(HOST_PORT):8545 -p $(METRICS_PORT):8080 $(MOUNT) "$(CONTAINER_REGISTRY)/flow-evm-gateway:$(IMAGE_TAG)" $(CMD_ARGS)
 
