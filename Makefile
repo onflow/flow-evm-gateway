@@ -178,7 +178,8 @@ docker-pull-version:
 #
 # Optional make arguments:
 #   - DOCKER_RUN_DETACHED: Runs container in detached mode when true
-#   - DOCKER_HOST_PORT: Sets the exposed container port for the gateway JSON-RPC
+#   - DOCKER_HOST_PORT: Sets the exposed host port for the gateway JSON-RPC port
+#   - DOCKER_HOST_METRICS_PORT: Sets the exposed host port for the gateway metrics RPC port
 #   - DOCKER_MOUNT: Sets the host mount point for the EVM data dir
 .PHONY: docker-run
 docker-run:
