@@ -1,0 +1,26 @@
+version: '3'
+
+services:
+  flow-evm-gateway:
+    image: us-west1-docker.pkg.dev/dl-flow-devex-production/development/flow-evm-gateway:${VERSION}
+    ports:
+      - "${DOCKER_HOST_PORT}:8545"
+      - "${DOCKER_HOST_METRICS_PORT}:8080"
+    command: >
+      --access-node-grpc-host=${ACCESS_NODE_GRPC_HOST}
+      --access-node-spork-hosts=${ACCESS_NODE_SPORK_HOSTS}
+      --flow-network-id=${FLOW_NETWORK_ID}
+      --init-cadence-height=${INIT_CADENCE_HEIGHT}
+      --coinbase=${COINBASE}
+      --coa-address=${COA_ADDRESS}
+      --coa-key=${COA_KEY}
+      --ws-enabled=true
+      --gas-price=100
+      --rate-limit=9999999
+      --rpc-host=0.0.0.0
+      --log-level=warn
+      --tx-state-validation=local-index
+      --database-dir=/data
+    volumes:
+      - ${DOCKER_HOST_MOUNT}:/data
+    restart: unless-stopped
