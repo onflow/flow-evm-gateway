@@ -33,74 +33,6 @@ const maxFeeHistoryBlockCount = 1024
 
 var baseFeesPerGas = big.NewInt(1)
 
-// A map containing all the valid method names that are found
-// in the Ethereum JSON-RPC API specification.
-// Update accordingly if any new methods are added/removed.
-var validMethods = map[string]struct{}{
-	// eth namespace
-	"eth_blockNumber":                         {},
-	"eth_syncing":                             {},
-	"eth_sendRawTransaction":                  {},
-	"eth_getBalance":                          {},
-	"eth_getTransactionByHash":                {},
-	"eth_getTransactionByBlockHashAndIndex":   {},
-	"eth_getTransactionByBlockNumberAndIndex": {},
-	"eth_getTransactionReceipt":               {},
-	"eth_getBlockByHash":                      {},
-	"eth_getBlockByNumber":                    {},
-	"eth_getBlockReceipts":                    {},
-	"eth_getBlockTransactionCountByHash":      {},
-	"eth_getBlockTransactionCountByNumber":    {},
-	"eth_call":                                {},
-	"eth_getLogs":                             {},
-	"eth_getTransactionCount":                 {},
-	"eth_estimateGas":                         {},
-	"eth_getCode":                             {},
-	"eth_feeHistory":                          {},
-	"eth_getStorageAt":                        {},
-	"eth_chainId":                             {},
-	"eth_coinbase":                            {},
-	"eth_gasPrice":                            {},
-	"eth_getUncleCountByBlockHash":            {},
-	"eth_getUncleCountByBlockNumber":          {},
-	"eth_getUncleByBlockHashAndIndex":         {},
-	"eth_getUncleByBlockNumberAndIndex":       {},
-	"eth_maxPriorityFeePerGas":                {},
-	"eth_mining":                              {},
-	"eth_hashrate":                            {},
-	"eth_getProof":                            {},
-	"eth_createAccessList":                    {},
-
-	// debug namespace
-	"debug_traceTransaction":   {},
-	"debug_traceBlockByNumber": {},
-	"debug_traceBlockByHash":   {},
-	"debug_traceCall":          {},
-	"debug_flowHeightByBlock":  {},
-
-	// web3 namespace
-	"web3_clientVersion": {},
-	"web3_sha3":          {},
-
-	// net namespace
-	"net_listening": {},
-	"net_peerCount": {},
-	"net_version":   {},
-
-	// txpool namespace
-	"txpool_content":     {},
-	"txpool_contentFrom": {},
-	"txpool_status":      {},
-	"txpool_inspect":     {},
-}
-
-// Returns whether the given method name is a valid method from
-// the Ethereum JSON-RPC API specification.
-func IsValidMethod(methodName string) bool {
-	_, ok := validMethods[methodName]
-	return ok
-}
-
 var latestBlockNumberOrHash = rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
 
 func SupportedAPIs(
@@ -109,7 +41,7 @@ func SupportedAPIs(
 	pullAPI *PullAPI,
 	debugAPI *DebugAPI,
 	walletAPI *WalletAPI,
-	config *config.Config,
+	config config.Config,
 ) []rpc.API {
 	apis := []rpc.API{{
 		Namespace: "eth",
@@ -151,7 +83,7 @@ func SupportedAPIs(
 
 type BlockChainAPI struct {
 	logger                zerolog.Logger
-	config                *config.Config
+	config                config.Config
 	evm                   requester.Requester
 	blocks                storage.BlockIndexer
 	transactions          storage.TransactionIndexer
@@ -163,7 +95,7 @@ type BlockChainAPI struct {
 
 func NewBlockChainAPI(
 	logger zerolog.Logger,
-	config *config.Config,
+	config config.Config,
 	evm requester.Requester,
 	blocks storage.BlockIndexer,
 	transactions storage.TransactionIndexer,
@@ -673,6 +605,16 @@ func (b *BlockChainAPI) GetLogs(
 
 	// if filter provided specific block ID
 	if criteria.BlockHash != nil {
+		// Check if the block exists, and return an error if not.
+		block, err := b.blocks.GetByID(*criteria.BlockHash)
+		if err != nil {
+			return nil, err
+		}
+		// If the block has no transactions, we can simply return an empty Logs array.
+		if len(block.TransactionHashes) == 0 {
+			return []*types.Log{}, nil
+		}
+
 		f, err := logs.NewIDFilter(*criteria.BlockHash, filter, b.blocks, b.receipts)
 		if err != nil {
 			return handleError[[]*types.Log](err, l, b.collector)
@@ -687,7 +629,6 @@ func (b *BlockChainAPI) GetLogs(
 	}
 
 	// otherwise we use the block range as the filter
-
 	// assign default values to latest block number, unless provided
 	from := models.LatestBlockNumber
 	if criteria.FromBlock != nil {

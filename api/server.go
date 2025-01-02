@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/onflow/go-ethereum/core"
 	gethVM "github.com/onflow/go-ethereum/core/vm"
 	gethLog "github.com/onflow/go-ethereum/log"
 	"github.com/onflow/go-ethereum/rpc"
@@ -26,6 +27,7 @@ import (
 	slogzerolog "github.com/samber/slog-zerolog"
 
 	"github.com/onflow/flow-evm-gateway/config"
+	"github.com/onflow/flow-evm-gateway/eth"
 	"github.com/onflow/flow-evm-gateway/metrics"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
 )
@@ -53,7 +55,7 @@ type Server struct {
 	host     string
 	port     int
 
-	config    *config.Config
+	config    config.Config
 	collector metrics.Collector
 }
 
@@ -66,7 +68,7 @@ const (
 func NewServer(
 	logger zerolog.Logger,
 	collector metrics.Collector,
-	cfg *config.Config,
+	cfg config.Config,
 ) *Server {
 	logger = logger.With().Str("component", "API").Logger()
 
@@ -252,7 +254,7 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// Do not log any debug info for methods that are not valid
 		// JSON-RPC methods.
 		if methodValue, ok := requestBody["method"]; ok {
-			if methodStr, ok := methodValue.(string); ok && IsValidMethod(methodStr) {
+			if methodStr, ok := methodValue.(string); ok && eth.IsValidMethod(methodStr) {
 				h.logger.Debug().
 					Str("IP", r.RemoteAddr).
 					Str("url", r.URL.String()).
@@ -427,6 +429,17 @@ type responseHandler struct {
 	metrics     metrics.Collector
 }
 
+var knownErrors = []error{
+	errs.ErrRateLimit,
+	errs.ErrInvalid,
+	errs.ErrFailedTransaction,
+	errs.ErrEndpointNotSupported,
+	gethVM.ErrExecutionReverted,
+	core.ErrNonceTooLow,
+	core.ErrNonceTooHigh,
+	core.ErrInsufficientFunds,
+}
+
 const errMethodNotFound = -32601
 const errCodePanic = -32603
 
@@ -471,11 +484,7 @@ func (w *responseHandler) Write(data []byte) (int, error) {
 			}
 
 			// don't error log known handled errors
-			if !errorIs(errMsg, errs.ErrRateLimit) &&
-				!errorIs(errMsg, errs.ErrInvalid) &&
-				!errorIs(errMsg, errs.ErrFailedTransaction) &&
-				!errorIs(errMsg, errs.ErrEndpointNotSupported) &&
-				!errorIs(errMsg, gethVM.ErrExecutionReverted) {
+			if !isKnownError(errMsg) {
 				// log the response error as a warning
 				l.Warn().Err(errors.New(errMsg)).Msg("API response")
 			}
@@ -505,6 +514,11 @@ func (w *responseHandler) WriteHeader(statusCode int) {
 	w.ResponseWriter.WriteHeader(statusCode)
 }
 
-func errorIs(msg string, err error) bool {
-	return strings.Contains(msg, err.Error())
+func isKnownError(errMsg string) bool {
+	for _, err := range knownErrors {
+		if strings.Contains(errMsg, err.Error()) {
+			return true
+		}
+	}
+	return false
 }

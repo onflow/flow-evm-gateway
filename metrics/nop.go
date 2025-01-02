@@ -21,3 +21,4 @@ func (c *nopCollector) EVMTransactionIndexed(int)                {}
 func (c *nopCollector) EVMAccountInteraction(string)             {}
 func (c *nopCollector) MeasureRequestDuration(time.Time, string) {}
 func (c *nopCollector) OperatorBalance(*flow.Account)            {}
+func (c *nopCollector) AvailableSigningKeys(count int)           {}

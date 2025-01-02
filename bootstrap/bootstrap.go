@@ -11,7 +11,6 @@ import (
 	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-go-sdk/access"
 	"github.com/onflow/flow-go-sdk/access/grpc"
-	"github.com/onflow/flow-go-sdk/crypto"
 	"github.com/onflow/flow-go/fvm/environment"
 	"github.com/onflow/flow-go/fvm/evm"
 	flowGo "github.com/onflow/flow-go/model/flow"
@@ -51,7 +50,7 @@ type Publishers struct {
 
 type Bootstrap struct {
 	logger     zerolog.Logger
-	config     *config.Config
+	config     config.Config
 	client     *requester.CrossSporkClient
 	storages   *Storages
 	publishers *Publishers
@@ -61,9 +60,10 @@ type Bootstrap struct {
 	events     *ingestion.Engine
 	profiler   *api.ProfileServer
 	db         *pebbleDB.DB
+	keystore   *requester.KeyStore
 }
 
-func New(config *config.Config) (*Bootstrap, error) {
+func New(config config.Config) (*Bootstrap, error) {
 	logger := zerolog.New(config.LogWriter).
 		With().Timestamp().Str("version", api.Version).
 		Logger().Level(config.LogLevel)
@@ -131,6 +131,7 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 		b.logger,
 		b.client,
 		chainID,
+		b.keystore,
 		latestCadenceHeight,
 	)
 
@@ -184,33 +185,12 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 
 	b.server = api.NewServer(b.logger, b.collector, b.config)
 
-	// create the signer based on either a single coa key being provided and using a simple in-memory
-	// signer, or multiple keys being provided and using signer with key-rotation mechanism.
-	var signer crypto.Signer
-	var err error
-	switch {
-	case b.config.COAKey != nil:
-		signer, err = crypto.NewInMemorySigner(b.config.COAKey, crypto.SHA3_256)
-	case b.config.COAKeys != nil:
-		signer, err = requester.NewKeyRotationSigner(b.config.COAKeys, crypto.SHA3_256)
-	case len(b.config.COACloudKMSKeys) > 0:
-		signer, err = requester.NewKMSKeyRotationSigner(
-			ctx,
-			b.config.COACloudKMSKeys,
-			b.logger,
-		)
-	default:
-		return fmt.Errorf("must provide either single COA / keylist of COA keys / COA cloud KMS keys")
-	}
-	if err != nil {
-		return fmt.Errorf("failed to create a COA signer: %w", err)
-	}
-
 	// create transaction pool
 	txPool := requester.NewTxPool(
 		b.client,
 		b.publishers.Transaction,
 		b.logger,
+		b.config,
 	)
 
 	blocksProvider := replayer.NewBlocksProvider(
@@ -219,16 +199,46 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 		nil,
 	)
 
+	accountKeys := make([]*requester.AccountKey, 0)
+	if !b.config.IndexOnly {
+		account, err := b.client.GetAccount(ctx, b.config.COAAddress)
+		if err != nil {
+			return fmt.Errorf(
+				"failed to get signer info account for address: %s, with: %w",
+				b.config.COAAddress,
+				err,
+			)
+		}
+		signer, err := createSigner(ctx, b.config, b.logger)
+		if err != nil {
+			return err
+		}
+		for _, key := range account.Keys {
+			// Skip account keys that do not use the same Publick Key as the
+			// configured crypto.Signer object.
+			if !key.PublicKey.Equals(signer.PublicKey()) {
+				continue
+			}
+			accountKeys = append(accountKeys, &requester.AccountKey{
+				AccountKey: *key,
+				Address:    b.config.COAAddress,
+				Signer:     signer,
+			})
+		}
+	}
+
+	b.keystore = requester.NewKeyStore(accountKeys)
+
 	evm, err := requester.NewEVM(
 		b.storages.Registers,
 		blocksProvider,
 		b.client,
 		b.config,
-		signer,
 		b.logger,
 		b.storages.Blocks,
 		txPool,
 		b.collector,
+		b.keystore,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create EVM requester: %w", err)
@@ -295,6 +305,7 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 		b.config,
 		b.logger,
 		b.collector,
+		ratelimiter,
 	)
 
 	var walletAPI *api.WalletAPI
@@ -437,7 +448,7 @@ func StartEngine(
 }
 
 // setupCrossSporkClient sets up a cross-spork AN client.
-func setupCrossSporkClient(config *config.Config, logger zerolog.Logger) (*requester.CrossSporkClient, error) {
+func setupCrossSporkClient(config config.Config, logger zerolog.Logger) (*requester.CrossSporkClient, error) {
 	// create access client with cross-spork capabilities
 	currentSporkClient, err := grpc.NewClient(
 		config.AccessNodeHost,
@@ -479,7 +490,7 @@ func setupCrossSporkClient(config *config.Config, logger zerolog.Logger) (*reque
 // setupStorage creates storage and initializes it with configured starting cadence height
 // in case such a height doesn't already exist in the database.
 func setupStorage(
-	config *config.Config,
+	config config.Config,
 	client *requester.CrossSporkClient,
 	logger zerolog.Logger,
 ) (*pebbleDB.DB, *Storages, error) {
@@ -576,7 +587,7 @@ func setupStorage(
 // Run will run complete bootstrap of the EVM gateway with all the engines.
 // Run is a blocking call, but it does signal readiness of the service
 // through a channel provided as an argument.
-func Run(ctx context.Context, cfg *config.Config, ready component.ReadyFunc) error {
+func Run(ctx context.Context, cfg config.Config, ready component.ReadyFunc) error {
 	boot, err := New(cfg)
 	if err != nil {
 		return err

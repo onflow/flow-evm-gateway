@@ -27,6 +27,7 @@ import (
 	"github.com/onflow/flow-emulator/emulator"
 	"github.com/onflow/flow-emulator/server"
 	sdk "github.com/onflow/flow-go-sdk"
+	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/onflow/flow-go-sdk/crypto"
 	evmEmulator "github.com/onflow/flow-go/fvm/evm/emulator"
 	"github.com/onflow/flow-go/fvm/systemcontracts"
@@ -136,26 +137,43 @@ func servicesSetup(t *testing.T) (emulator.Emulator, func()) {
 	emu := srv.Emulator()
 	service := emu.ServiceKey()
 
+	grpcHost := "localhost:3569"
+	client, err := grpc.NewClient(grpcHost)
+	require.NoError(t, err)
+
+	// create new account with keys used for key-rotation
+	keyCount := 5
+	coaAddress, privateKey, err := bootstrap.CreateMultiKeyAccount(
+		client,
+		keyCount,
+		service.Address,
+		sc.FungibleToken.Address.HexWithPrefix(),
+		sc.FlowToken.Address.HexWithPrefix(),
+		service.PrivateKey,
+	)
+	require.NoError(t, err)
+
 	// default config
-	cfg := &config.Config{
-		DatabaseDir:    t.TempDir(),
-		AccessNodeHost: "localhost:3569", // emulator
-		RPCPort:        8545,
-		RPCHost:        "127.0.0.1",
-		FlowNetworkID:  "flow-emulator",
-		EVMNetworkID:   evmTypes.FlowEVMPreviewNetChainID,
-		Coinbase:       common.HexToAddress(coinbaseAddress),
-		COAAddress:     service.Address,
-		COAKey:         service.PrivateKey,
-		GasPrice:       new(big.Int).SetUint64(150),
-		LogLevel:       zerolog.DebugLevel,
-		LogWriter:      testLogWriter(),
-		StreamTimeout:  time.Second * 30,
-		StreamLimit:    10,
-		RateLimit:      500,
-		WSEnabled:      true,
-		MetricsPort:    8443,
-		FilterExpiry:   time.Second * 5,
+	cfg := config.Config{
+		DatabaseDir:       t.TempDir(),
+		AccessNodeHost:    "localhost:3569", // emulator
+		RPCPort:           8545,
+		RPCHost:           "127.0.0.1",
+		FlowNetworkID:     "flow-emulator",
+		EVMNetworkID:      evmTypes.FlowEVMPreviewNetChainID,
+		Coinbase:          common.HexToAddress(coinbaseAddress),
+		COAAddress:        *coaAddress,
+		COAKey:            privateKey,
+		GasPrice:          new(big.Int).SetUint64(150),
+		LogLevel:          zerolog.DebugLevel,
+		LogWriter:         testLogWriter(),
+		StreamTimeout:     time.Second * 30,
+		StreamLimit:       10,
+		RateLimit:         500,
+		WSEnabled:         true,
+		MetricsPort:       8443,
+		FilterExpiry:      time.Second * 5,
+		TxStateValidation: config.LocalIndexValidation,
 	}
 
 	bootstrapDone := make(chan struct{})

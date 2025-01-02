@@ -385,8 +385,8 @@ func (s *ReceiptTestSuite) TestGetReceiptByBlockHeight() {
 
 	s.Run("non-existing block height", func() {
 		retReceipt, err := s.ReceiptIndexer.GetByBlockHeight(1337)
-		s.Require().Nil(retReceipt)
-		s.Require().ErrorIs(err, errors.ErrEntityNotFound)
+		s.Require().NoError(err)
+		s.Require().Len(retReceipt, 0)
 	})
 }
 
