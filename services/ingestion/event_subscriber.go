@@ -5,12 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"time"
 
 	"github.com/onflow/cadence/common"
 	"github.com/onflow/flow-go/fvm/evm/events"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	"github.com/onflow/flow-evm-gateway/models"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
@@ -281,21 +278,11 @@ func (r *RPCEventSubscriber) backfillSporkFromHeight(ctx context.Context, fromCa
 
 		blocks, err := r.client.GetEventsForHeightRange(ctx, blockExecutedEvent, startHeight, endHeight)
 		if err != nil {
-			// if we are rate limited by the AN, wait a bit and try again
-			if status.Code(err) == codes.ResourceExhausted {
-				time.Sleep(100 * time.Millisecond)
-				continue
-			}
 			return 0, fmt.Errorf("failed to get block events: %w", err)
 		}
 
 		transactions, err := r.client.GetEventsForHeightRange(ctx, transactionExecutedEvent, startHeight, endHeight)
 		if err != nil {
-			// if we are rate limited by the AN, wait a bit and try again
-			if status.Code(err) == codes.ResourceExhausted {
-				time.Sleep(100 * time.Millisecond)
-				continue
-			}
 			return 0, fmt.Errorf("failed to get block events: %w", err)
 		}
 
@@ -366,11 +353,6 @@ func (r *RPCEventSubscriber) accumulateBlockEvents(
 			currentHeight+maxRangeForGetEvents,
 		)
 		if err != nil {
-			// if we are rate limited by the AN, wait a bit and try again
-			if status.Code(err) == codes.ResourceExhausted {
-				time.Sleep(100 * time.Millisecond)
-				continue
-			}
 			return models.BlockEvents{}, fmt.Errorf("failed to get block events: %w", err)
 		}
 
@@ -381,11 +363,6 @@ func (r *RPCEventSubscriber) accumulateBlockEvents(
 			currentHeight+maxRangeForGetEvents,
 		)
 		if err != nil {
-			// if we are rate limited by the AN, wait a bit and try again
-			if status.Code(err) == codes.ResourceExhausted {
-				time.Sleep(100 * time.Millisecond)
-				continue
-			}
 			return models.BlockEvents{}, fmt.Errorf("failed to get block events: %w", err)
 		}
 
