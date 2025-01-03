@@ -148,10 +148,12 @@ func (fnb *EVMGatewayNodeBuilder) initDB() error {
 		if err := fnb.DB.Close(); err != nil {
 			return fmt.Errorf("error closing pebble database: %w", err)
 		}
+
+		fnb.Logger.Info().Msg("database has been closed")
 		return nil
 	})
 
-	return err
+	return nil
 }
 
 func (fnb *EVMGatewayNodeBuilder) Component(name string, f cmd.ReadyDoneFactory[config.Config]) *EVMGatewayNodeBuilder {
@@ -173,7 +175,6 @@ func (fnb *EVMGatewayNodeBuilder) postShutdown() error {
 			errs = multierror.Append(errs, err)
 		}
 	}
-	fnb.Logger.Info().Msg("database has been closed")
 	return errs.ErrorOrNil()
 }
 
@@ -206,11 +207,11 @@ func (fnb *EVMGatewayNodeBuilder) Initialize() error {
 func (fnb *EVMGatewayNodeBuilder) LoadComponentsAndModules() {
 	fnb.initPublishers()
 
+	fnb.Component("Profiler Server", fnb.profilerServerComponent)
+	fnb.Component("Metrics Server", fnb.metricsServerComponent)
 	fnb.Component("Key Store", fnb.initKeyStore)
 	fnb.Component("API Server", fnb.apiServerComponent)
 	fnb.Component("Event Ingestion Engine", fnb.eventIngestionEngineComponent)
-	fnb.Component("Metrics Server", fnb.metricsServerComponent)
-	fnb.Component("Profiler Server", fnb.profilerServerComponent)
 }
 
 func (fnb *EVMGatewayNodeBuilder) metricsServerComponent(config config.Config) (module.ReadyDoneAware, error) {
@@ -359,30 +360,30 @@ func (fnb *EVMGatewayNodeBuilder) eventIngestionEngineComponent(cfg config.Confi
 	l.Info().Msg("bootstrap starting event ingestion")
 
 	// get latest cadence block from the network and the database
-	latestCadenceBlock, err := fnb.Client.GetLatestBlock(context.Background(), true)
+	gatewayLatestBlock, err := fnb.Client.GetLatestBlock(context.Background(), true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get latest cadence block: %w", err)
 	}
 
-	latestCadenceHeight, err := fnb.Storages.Blocks.LatestCadenceHeight()
+	chainLatestHeight, err := fnb.Storages.Blocks.LatestCadenceHeight()
 	if err != nil {
 		return nil, err
 	}
 
 	// make sure the provided block to start the indexing can be loaded
-	_, err = fnb.Client.GetBlockHeaderByHeight(context.Background(), latestCadenceHeight)
+	_, err = fnb.Client.GetBlockHeaderByHeight(context.Background(), chainLatestHeight)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"failed to get provided cadence height %d: %w",
-			latestCadenceHeight,
+			chainLatestHeight,
 			err,
 		)
 	}
 
 	l.Info().
-		Uint64("start-cadence-height", latestCadenceHeight).
-		Uint64("latest-cadence-height", latestCadenceBlock.Height).
-		Uint64("missed-heights", latestCadenceBlock.Height-latestCadenceHeight).
+		Uint64("chain-cadence-height", chainLatestHeight).
+		Uint64("gateway-cadence-height", gatewayLatestBlock.Height).
+		Uint64("missed-heights", gatewayLatestBlock.Height-chainLatestHeight).
 		Msg("indexing cadence height information")
 
 	chainID := cfg.FlowNetworkID
@@ -393,7 +394,7 @@ func (fnb *EVMGatewayNodeBuilder) eventIngestionEngineComponent(cfg config.Confi
 		fnb.Client,
 		chainID,
 		fnb.Keystore,
-		latestCadenceHeight,
+		chainLatestHeight,
 	)
 
 	callTracerCollector, err := replayer.NewCallTracerCollector(fnb.Logger)

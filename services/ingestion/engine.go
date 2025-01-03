@@ -129,6 +129,7 @@ func (e *Engine) run(ctx irrecoverable.SignalerContext, ready component.ReadyFun
 				return
 			}
 			if events.Err != nil {
+				ctx.Throw(fmt.Errorf("failure in event subscription with: %w", events.Err))
 				return
 			}
 
@@ -136,6 +137,7 @@ func (e *Engine) run(ctx irrecoverable.SignalerContext, ready component.ReadyFun
 			if err != nil {
 				e.log.Error().Err(err).Msg("failed to process EVM events")
 				ctx.Throw(err)
+				return
 			}
 		}
 	}

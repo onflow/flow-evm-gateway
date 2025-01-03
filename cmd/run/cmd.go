@@ -39,14 +39,14 @@ var Cmd = &cobra.Command{
 		builder := bootstrap.NewEVMGatewayNodeBuilder(cfg)
 
 		if err := builder.Initialize(); err != nil {
-			builder.Logger.Fatal().Err(err).Send()
+			builder.Logger.Fatal().Err(err).Msg("failed to initialize")
 		}
 
 		builder.LoadComponentsAndModules()
 
 		node, err := builder.Build()
 		if err != nil {
-			builder.Logger.Fatal().Err(err).Send()
+			builder.Logger.Fatal().Err(err).Msg("failed to build node")
 		}
 		node.Run(command.Context())
 		return nil

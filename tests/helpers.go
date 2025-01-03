@@ -195,6 +195,7 @@ func startGateway(t *testing.T, ctx context.Context, cfg config.Config) {
 	node, err := builder.Build()
 	require.NoError(t, err)
 	go node.Run(ctx)
+	<-node.Ready()
 }
 
 // executeTest will run the provided JS test file using mocha
