@@ -40,6 +40,10 @@ func TestWeb3_E2E(t *testing.T) {
 		runWeb3Test(t, "debug_util_test")
 	})
 
+	t.Run("test contract call overrides", func(t *testing.T) {
+		runWeb3Test(t, "contract_call_overrides_test")
+	})
+
 	t.Run("test setup sanity check", func(t *testing.T) {
 		runWeb3Test(t, "setup_test")
 	})
