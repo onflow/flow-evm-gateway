@@ -242,11 +242,9 @@ The application can be configured using the following flags at runtime:
 | `coa-cloud-kms-key`            | `""`             | KMS keys and versions, comma-separated (e.g. `"gw-key-6@1,gw-key-7@1"`)                    |
 | `log-level`                    | `debug`          | Log verbosity level (`debug`, `info`, `warn`, `error`, `fatal`, `panic`)                   |
 | `log-writer`                   | `stderr`         | Output method for logs (`stderr`, `console`)                                               |
-| `stream-limit`                 | `10`             | Rate-limit for client events sent per second                                               |
 | `rate-limit`                   | `50`             | Requests per second limit for clients over any protocol (ws/http)                          |
 | `address-header`               | `""`             | Header for client IP when server is behind a proxy                                         |
 | `heartbeat-interval`           | `100`            | Interval for AN event subscription heartbeats                                              |
-| `stream-timeout`               | `3`              | Timeout in seconds for sending events to clients                                           |
 | `force-start-height`           | `0`              | Force-set starting Cadence height (local/testing use only)                                 |
 | `wallet-api-key`               | `""`             | ECDSA private key for wallet APIs (local/testing use only)                                 |
 | `filter-expiry`                | `5m`             | Expiry time for idle filters                                                               |
