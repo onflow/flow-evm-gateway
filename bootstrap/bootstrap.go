@@ -8,7 +8,6 @@ import (
 	"time"
 
 	pebbleDB "github.com/cockroachdb/pebble"
-	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-go-sdk/access"
 	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/onflow/flow-go/fvm/environment"
@@ -21,9 +20,12 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-limiter/memorystore"
 	grpcOpts "google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/onflow/flow-evm-gateway/api"
 	"github.com/onflow/flow-evm-gateway/config"
+	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/models"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/services/ingestion"
@@ -31,6 +33,19 @@ import (
 	"github.com/onflow/flow-evm-gateway/services/requester"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
+)
+
+const (
+	// DefaultMaxMessageSize is the default maximum message size for gRPC responses
+	DefaultMaxMessageSize = 1024 * 1024 * 1024
+
+	// DefaultResourceExhaustedRetryDelay is the default delay between retries when the server returns
+	// a ResourceExhausted error.
+	DefaultResourceExhaustedRetryDelay = 100 * time.Millisecond
+
+	// DefaultResourceExhaustedMaxRetryDelay is the default max request duration when retrying server
+	// ResourceExhausted errors.
+	DefaultResourceExhaustedMaxRetryDelay = 30 * time.Second
 )
 
 type Storages struct {
@@ -452,7 +467,13 @@ func setupCrossSporkClient(config config.Config, logger zerolog.Logger) (*reques
 	// create access client with cross-spork capabilities
 	currentSporkClient, err := grpc.NewClient(
 		config.AccessNodeHost,
-		grpc.WithGRPCDialOptions(grpcOpts.WithDefaultCallOptions(grpcOpts.MaxCallRecvMsgSize(1024*1024*1024))),
+		grpc.WithGRPCDialOptions(
+			grpcOpts.WithDefaultCallOptions(grpcOpts.MaxCallRecvMsgSize(DefaultMaxMessageSize)),
+			grpcOpts.WithUnaryInterceptor(retryInterceptor(
+				DefaultResourceExhaustedMaxRetryDelay,
+				DefaultResourceExhaustedRetryDelay,
+			)),
+		),
 	)
 	if err != nil {
 		return nil, fmt.Errorf(
@@ -485,6 +506,44 @@ func setupCrossSporkClient(config config.Config, logger zerolog.Logger) (*reques
 	}
 
 	return client, nil
+}
+
+// retryInterceptor is a gRPC client interceptor that retries the request when the server returns
+// a ResourceExhausted error
+func retryInterceptor(maxDuration, pauseDuration time.Duration) grpcOpts.UnaryClientInterceptor {
+	return func(
+		ctx context.Context,
+		method string,
+		req, reply interface{},
+		cc *grpcOpts.ClientConn,
+		invoker grpcOpts.UnaryInvoker,
+		opts ...grpcOpts.CallOption,
+	) error {
+		start := time.Now()
+		attempts := 0
+		for {
+			err := invoker(ctx, method, req, reply, cc, opts...)
+			if err == nil {
+				return nil
+			}
+
+			if status.Code(err) != codes.ResourceExhausted {
+				return err
+			}
+
+			attempts++
+			duration := time.Since(start)
+			if duration >= maxDuration {
+				return fmt.Errorf("request failed (attempts: %d, duration: %v): %w", attempts, duration, err)
+			}
+
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(pauseDuration):
+			}
+		}
+	}
 }
 
 // setupStorage creates storage and initializes it with configured starting cadence height
@@ -570,9 +629,9 @@ func setupStorage(
 			Stringer("fvm_address_for_evm_storage_account", storageAddress).
 			Msgf("database initialized with cadence height: %d", cadenceHeight)
 	}
-	//else {
+	// else {
 	//	// TODO(JanezP): verify storage account owner is correct
-	//}
+	// }
 
 	return db, &Storages{
 		Storage:      store,
