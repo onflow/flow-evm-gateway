@@ -178,10 +178,9 @@ func (d *DebugAPI) TraceCall(
 	blocksProvider := requester.NewBlocksProvider(
 		d.blocks,
 		d.config.FlowNetworkID,
-	)
-	blocksProvider.SetTracer(tracer)
+	).WithTracer(tracer)
 	if config.BlockOverrides != nil {
-		blocksProvider.SetBlockOverrides(&ethTypes.BlockOverrides{
+		blocksProvider = blocksProvider.WithBlockOverrides(&ethTypes.BlockOverrides{
 			Number:   config.BlockOverrides.Number,
 			Time:     config.BlockOverrides.Time,
 			Coinbase: config.BlockOverrides.Coinbase,
