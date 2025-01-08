@@ -359,42 +359,30 @@ func (fnb *EVMGatewayNodeBuilder) eventIngestionEngineComponent(cfg config.Confi
 	l := fnb.Logger.With().Str("component", "bootstrap-ingestion").Logger()
 	l.Info().Msg("bootstrap starting event ingestion")
 
-	// get latest cadence block from the network and the database
-	chainLatestBlock, err := fnb.Client.GetLatestBlock(context.Background(), true)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get latest cadence block: %w", err)
-	}
-
-	gatewayLatestHeight, err := fnb.Storages.Blocks.LatestCadenceHeight()
+	latestIndexedHeight, err := fnb.Storages.Blocks.LatestCadenceHeight()
 	if err != nil {
 		return nil, err
 	}
-
-	// make sure the provided block to start the indexing can be loaded
-	_, err = fnb.Client.GetBlockHeaderByHeight(context.Background(), chainLatestBlock.Height)
+	// make sure the latest indexed block can be retrieved from the network
+	_, err = fnb.Client.GetBlockHeaderByHeight(context.Background(), latestIndexedHeight)
 	if err != nil {
 		return nil, fmt.Errorf(
-			"failed to get provided cadence height %d: %w",
-			chainLatestBlock.Height,
+			"failed to get header for last indexed cadence height %d: %w",
+			latestIndexedHeight,
 			err,
 		)
 	}
 
-	l.Info().
-		Uint64("chain-cadence-height", chainLatestBlock.Height).
-		Uint64("gateway-cadence-height", gatewayLatestHeight).
-		Uint64("missed-heights", chainLatestBlock.Height-gatewayLatestHeight).
-		Msg("indexing cadence height information")
-
 	chainID := cfg.FlowNetworkID
 
 	// create event subscriber
+	// continuing from the latest indexed height
 	subscriber := ingestion.NewRPCEventSubscriber(
 		fnb.Logger,
 		fnb.Client,
 		chainID,
 		fnb.Keystore,
-		gatewayLatestHeight,
+		latestIndexedHeight,
 	)
 
 	callTracerCollector, err := replayer.NewCallTracerCollector(fnb.Logger)

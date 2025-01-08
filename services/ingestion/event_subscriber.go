@@ -74,6 +74,22 @@ func (r *RPCEventSubscriber) Subscribe(ctx context.Context) <-chan models.BlockE
 			close(eventsChan)
 		}()
 
+		// get latest cadence block from the network and the database
+		chainLatestBlockHeader, err := r.client.GetLatestBlockHeader(ctx, true)
+		if err != nil {
+			eventsChan <- models.NewBlockEventsError(fmt.Errorf("failed to get latest cadence block: %w", err))
+			return
+		}
+		latestOnChainHeight := chainLatestBlockHeader.Height
+
+		blocksToCatchUp := latestOnChainHeight - r.height
+
+		r.logger.Info().
+			Uint64("chain-cadence-height", latestOnChainHeight).
+			Uint64("latest-indexed-height", r.height).
+			Uint64("missed-heights", blocksToCatchUp).
+			Msg("indexing cadence height information")
+
 		// if the height is from the previous spork, backfill all the eventsChan from previous sporks first
 		if r.client.IsPastSpork(r.height) {
 			r.logger.Info().
