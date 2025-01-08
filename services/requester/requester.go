@@ -95,15 +95,14 @@ type Requester interface {
 var _ Requester = &EVM{}
 
 type EVM struct {
-	registerStore  *pebble.RegisterStorage
-	blocksProvider *BlocksProvider
-	client         *CrossSporkClient
-	config         config.Config
-	txPool         *TxPool
-	logger         zerolog.Logger
-	blocks         storage.BlockIndexer
-	mux            sync.Mutex
-	keystore       *KeyStore
+	registerStore *pebble.RegisterStorage
+	client        *CrossSporkClient
+	config        config.Config
+	txPool        *TxPool
+	logger        zerolog.Logger
+	blocks        storage.BlockIndexer
+	mux           sync.Mutex
+	keystore      *KeyStore
 
 	head              *types.Header
 	evmSigner         types.Signer
@@ -113,7 +112,6 @@ type EVM struct {
 
 func NewEVM(
 	registerStore *pebble.RegisterStorage,
-	blocksProvider *BlocksProvider,
 	client *CrossSporkClient,
 	config config.Config,
 	logger zerolog.Logger,
@@ -168,7 +166,6 @@ func NewEVM(
 
 	evm := &EVM{
 		registerStore:     registerStore,
-		blocksProvider:    blocksProvider,
 		client:            client,
 		config:            config,
 		logger:            logger,
@@ -443,15 +440,17 @@ func (e *EVM) getBlockView(
 	height uint64,
 	blockOverrides *ethTypes.BlockOverrides,
 ) (*query.View, error) {
+	blocksProvider := NewBlocksProvider(e.blocks, e.config.FlowNetworkID)
+
 	if blockOverrides != nil {
-		e.blocksProvider.SetBlockOverrides(blockOverrides)
+		blocksProvider = blocksProvider.WithBlockOverrides(blockOverrides)
 	}
 
 	viewProvider := query.NewViewProvider(
 		e.config.FlowNetworkID,
 		evm.StorageAccountAddress(e.config.FlowNetworkID),
 		e.registerStore,
-		e.blocksProvider,
+		blocksProvider,
 		blockGasLimit,
 	)
 

@@ -65,6 +65,10 @@ func (bs *blockSnapshot) BlockContext() (evmTypes.BlockContext, error) {
 	return blockContext, nil
 }
 
+// This BlocksProvider implementation is only used for the `eth_call` &
+// `debug_traceCall` JSON-RPC endpoints. It accepts optional `Tracer` &
+// `BlockOverrides` objects, which are used when constructing the
+// `BlockContext` object.
 type BlocksProvider struct {
 	blocks         storage.BlockIndexer
 	chainID        flowGo.ChainID
@@ -84,12 +88,24 @@ func NewBlocksProvider(
 	}
 }
 
-func (bp *BlocksProvider) SetTracer(tracer *tracers.Tracer) {
-	bp.tracer = tracer
+func (bp *BlocksProvider) WithTracer(tracer *tracers.Tracer) *BlocksProvider {
+	return &BlocksProvider{
+		blocks:         bp.blocks,
+		chainID:        bp.chainID,
+		tracer:         tracer,
+		blockOverrides: bp.blockOverrides,
+	}
 }
 
-func (bp *BlocksProvider) SetBlockOverrides(blockOverrides *ethTypes.BlockOverrides) {
-	bp.blockOverrides = blockOverrides
+func (bp *BlocksProvider) WithBlockOverrides(
+	blockOverrides *ethTypes.BlockOverrides,
+) *BlocksProvider {
+	return &BlocksProvider{
+		blocks:         bp.blocks,
+		chainID:        bp.chainID,
+		tracer:         bp.tracer,
+		blockOverrides: blockOverrides,
+	}
 }
 
 func (bp *BlocksProvider) GetSnapshotAt(height uint64) (
