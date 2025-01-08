@@ -58,6 +58,12 @@ func (k *KeyStoreComponent) Start(ctx irrecoverable.SignalerContext) {
 		return
 	}
 	for _, key := range account.Keys {
+		// Skip account keys that do not use the same Public Key as the
+		// configured crypto.Signer object.
+		if !key.PublicKey.Equals(signer.PublicKey()) {
+			continue
+		}
+
 		accountKeys = append(accountKeys, &AccountKey{
 			AccountKey: *key,
 			Address:    k.config.COAAddress,
