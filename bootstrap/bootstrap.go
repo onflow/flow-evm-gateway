@@ -464,13 +464,13 @@ func (fnb *EVMGatewayNodeBuilder) initStorage() error {
 			}(batch)
 
 			cadenceHeight := cfg.InitCadenceHeight
-			evmBlokcHeight := uint64(0)
+			evmBlockHeight := uint64(0)
 			cadenceBlock, err := fnb.Client.GetBlockHeaderByHeight(context.Background(), cadenceHeight)
 			if err != nil {
 				return fmt.Errorf("could not fetch provided cadence height, make sure it's correct: %w", err)
 			}
 
-			snapshot, err := registerStore.GetSnapshotAt(evmBlokcHeight)
+			snapshot, err := registerStore.GetSnapshotAt(evmBlockHeight)
 			if err != nil {
 				return fmt.Errorf("could not get register snapshot at block height %d: %w", 0, err)
 			}
@@ -486,7 +486,7 @@ func (fnb *EVMGatewayNodeBuilder) initStorage() error {
 				return fmt.Errorf("could not set account status: %w", err)
 			}
 
-			err = registerStore.Store(delta.GetUpdates(), evmBlokcHeight, batch)
+			err = registerStore.Store(delta.GetUpdates(), evmBlockHeight, batch)
 			if err != nil {
 				return fmt.Errorf("could not store register updates: %w", err)
 			}
