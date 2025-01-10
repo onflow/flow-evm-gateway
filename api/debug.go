@@ -175,7 +175,7 @@ func (d *DebugAPI) TraceCall(
 		return nil, err
 	}
 
-	blocksProvider := requester.NewBlocksProvider(
+	blocksProvider := requester.NewOverridableBlocksProvider(
 		d.blocks,
 		d.config.FlowNetworkID,
 	).WithTracer(tracer)
