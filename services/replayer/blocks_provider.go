@@ -41,6 +41,13 @@ func (bs *blockSnapshot) BlockContext() (evmTypes.BlockContext, error) {
 	)
 }
 
+// This BlocksProvider implementation is used in the EVM events ingestion pipeline.
+// The ingestion module notifies the BlocksProvider of incoming EVM blocks, by
+// calling the `OnBlockReceived` method. This method guarantees that blocks are
+// processed sequentially, and keeps track of the latest block, which is used
+// for generating the proper `BlockContext`. This is necessary for replaying
+// EVM blocks/transactions locally, and verifying that there are no state
+// mismatches.
 type BlocksProvider struct {
 	blocks      storage.BlockIndexer
 	chainID     flowGo.ChainID
