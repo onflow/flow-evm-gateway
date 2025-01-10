@@ -12,7 +12,7 @@ import (
 )
 
 type blockSnapshot struct {
-	*BlocksProvider
+	*OverridableBlocksProvider
 	block models.Block
 }
 
@@ -65,31 +65,31 @@ func (bs *blockSnapshot) BlockContext() (evmTypes.BlockContext, error) {
 	return blockContext, nil
 }
 
-// This BlocksProvider implementation is only used for the `eth_call` &
+// This OverridableBlocksProvider implementation is only used for the `eth_call` &
 // `debug_traceCall` JSON-RPC endpoints. It accepts optional `Tracer` &
 // `BlockOverrides` objects, which are used when constructing the
 // `BlockContext` object.
-type BlocksProvider struct {
+type OverridableBlocksProvider struct {
 	blocks         storage.BlockIndexer
 	chainID        flowGo.ChainID
 	tracer         *tracers.Tracer
 	blockOverrides *ethTypes.BlockOverrides
 }
 
-var _ evmTypes.BlockSnapshotProvider = (*BlocksProvider)(nil)
+var _ evmTypes.BlockSnapshotProvider = (*OverridableBlocksProvider)(nil)
 
-func NewBlocksProvider(
+func NewOverridableBlocksProvider(
 	blocks storage.BlockIndexer,
 	chainID flowGo.ChainID,
-) *BlocksProvider {
-	return &BlocksProvider{
+) *OverridableBlocksProvider {
+	return &OverridableBlocksProvider{
 		blocks:  blocks,
 		chainID: chainID,
 	}
 }
 
-func (bp *BlocksProvider) WithTracer(tracer *tracers.Tracer) *BlocksProvider {
-	return &BlocksProvider{
+func (bp *OverridableBlocksProvider) WithTracer(tracer *tracers.Tracer) *OverridableBlocksProvider {
+	return &OverridableBlocksProvider{
 		blocks:         bp.blocks,
 		chainID:        bp.chainID,
 		tracer:         tracer,
@@ -97,10 +97,10 @@ func (bp *BlocksProvider) WithTracer(tracer *tracers.Tracer) *BlocksProvider {
 	}
 }
 
-func (bp *BlocksProvider) WithBlockOverrides(
+func (bp *OverridableBlocksProvider) WithBlockOverrides(
 	blockOverrides *ethTypes.BlockOverrides,
-) *BlocksProvider {
-	return &BlocksProvider{
+) *OverridableBlocksProvider {
+	return &OverridableBlocksProvider{
 		blocks:         bp.blocks,
 		chainID:        bp.chainID,
 		tracer:         bp.tracer,
@@ -108,7 +108,7 @@ func (bp *BlocksProvider) WithBlockOverrides(
 	}
 }
 
-func (bp *BlocksProvider) GetSnapshotAt(height uint64) (
+func (bp *OverridableBlocksProvider) GetSnapshotAt(height uint64) (
 	evmTypes.BlockSnapshot,
 	error,
 ) {
@@ -118,7 +118,7 @@ func (bp *BlocksProvider) GetSnapshotAt(height uint64) (
 	}
 
 	return &blockSnapshot{
-		BlocksProvider: bp,
-		block:          *block,
+		OverridableBlocksProvider: bp,
+		block:                     *block,
 	}, nil
 }
