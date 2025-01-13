@@ -167,8 +167,6 @@ func servicesSetup(t *testing.T) (emulator.Emulator, func()) {
 		GasPrice:          new(big.Int).SetUint64(150),
 		LogLevel:          zerolog.DebugLevel,
 		LogWriter:         testLogWriter(),
-		StreamTimeout:     time.Second * 30,
-		StreamLimit:       10,
 		RateLimit:         500,
 		WSEnabled:         true,
 		MetricsPort:       8443,

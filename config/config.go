@@ -68,10 +68,6 @@ type Config struct {
 	RateLimit uint64
 	// Address header used to identified clients, usually set by the proxy
 	AddressHeader string
-	// StreamLimit rate-limits the events sent to the client within 1 second time interval.
-	StreamLimit float64
-	// StreamTimeout defines the timeout the server waits for the event to be sent to the client.
-	StreamTimeout time.Duration
 	// FilterExpiry defines the time it takes for an idle filter to expire
 	FilterExpiry time.Duration
 	// ForceStartCadenceHeight will force set the starting Cadence height, this should be only used for testing or locally.
