@@ -81,19 +81,12 @@ var _ evmTypes.BlockSnapshotProvider = (*OverridableBlocksProvider)(nil)
 func NewOverridableBlocksProvider(
 	blocks storage.BlockIndexer,
 	chainID flowGo.ChainID,
+	tracer *tracers.Tracer,
 ) *OverridableBlocksProvider {
 	return &OverridableBlocksProvider{
 		blocks:  blocks,
 		chainID: chainID,
-	}
-}
-
-func (bp *OverridableBlocksProvider) WithTracer(tracer *tracers.Tracer) *OverridableBlocksProvider {
-	return &OverridableBlocksProvider{
-		blocks:         bp.blocks,
-		chainID:        bp.chainID,
-		tracer:         tracer,
-		blockOverrides: bp.blockOverrides,
+		tracer:  tracer,
 	}
 }
 

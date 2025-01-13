@@ -440,7 +440,11 @@ func (e *EVM) getBlockView(
 	height uint64,
 	blockOverrides *ethTypes.BlockOverrides,
 ) (*query.View, error) {
-	blocksProvider := NewOverridableBlocksProvider(e.blocks, e.config.FlowNetworkID)
+	blocksProvider := NewOverridableBlocksProvider(
+		e.blocks,
+		e.config.FlowNetworkID,
+		nil,
+	)
 
 	if blockOverrides != nil {
 		blocksProvider = blocksProvider.WithBlockOverrides(blockOverrides)

@@ -178,7 +178,9 @@ func (d *DebugAPI) TraceCall(
 	blocksProvider := requester.NewOverridableBlocksProvider(
 		d.blocks,
 		d.config.FlowNetworkID,
-	).WithTracer(tracer)
+		tracer,
+	)
+
 	if config.BlockOverrides != nil {
 		blocksProvider = blocksProvider.WithBlockOverrides(&ethTypes.BlockOverrides{
 			Number:   config.BlockOverrides.Number,
