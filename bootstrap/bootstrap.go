@@ -208,12 +208,6 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 		b.config,
 	)
 
-	blocksProvider := replayer.NewBlocksProvider(
-		b.storages.Blocks,
-		b.config.FlowNetworkID,
-		nil,
-	)
-
 	accountKeys := make([]*requester.AccountKey, 0)
 	if !b.config.IndexOnly {
 		account, err := b.client.GetAccount(ctx, b.config.COAAddress)
@@ -246,7 +240,6 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 
 	evm, err := requester.NewEVM(
 		b.storages.Registers,
-		blocksProvider,
 		b.client,
 		b.config,
 		b.logger,

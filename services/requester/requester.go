@@ -27,7 +27,6 @@ import (
 	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/models"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
-	"github.com/onflow/flow-evm-gateway/services/replayer"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
 
@@ -66,6 +65,7 @@ type Requester interface {
 		from common.Address,
 		height uint64,
 		stateOverrides *ethTypes.StateOverride,
+		blockOverrides *ethTypes.BlockOverrides,
 	) ([]byte, error)
 
 	// EstimateGas executes the given signed transaction data on the state for the given EVM block height.
@@ -95,15 +95,15 @@ type Requester interface {
 var _ Requester = &EVM{}
 
 type EVM struct {
-	registerStore     *pebble.RegisterStorage
-	blocksProvider    *replayer.BlocksProvider
-	client            *CrossSporkClient
-	config            config.Config
-	txPool            *TxPool
-	logger            zerolog.Logger
-	blocks            storage.BlockIndexer
-	mux               sync.Mutex
-	keystore          *KeyStore
+	registerStore *pebble.RegisterStorage
+	client        *CrossSporkClient
+	config        config.Config
+	txPool        *TxPool
+	logger        zerolog.Logger
+	blocks        storage.BlockIndexer
+	mux           sync.Mutex
+	keystore      *KeyStore
+
 	head              *types.Header
 	evmSigner         types.Signer
 	validationOptions *txpool.ValidationOptions
@@ -112,7 +112,6 @@ type EVM struct {
 
 func NewEVM(
 	registerStore *pebble.RegisterStorage,
-	blocksProvider *replayer.BlocksProvider,
 	client *CrossSporkClient,
 	config config.Config,
 	logger zerolog.Logger,
@@ -167,7 +166,6 @@ func NewEVM(
 
 	evm := &EVM{
 		registerStore:     registerStore,
-		blocksProvider:    blocksProvider,
 		client:            client,
 		config:            config,
 		logger:            logger,
@@ -250,7 +248,7 @@ func (e *EVM) GetBalance(
 	address common.Address,
 	height uint64,
 ) (*big.Int, error) {
-	view, err := e.getBlockView(height)
+	view, err := e.getBlockView(height, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -262,7 +260,7 @@ func (e *EVM) GetNonce(
 	address common.Address,
 	height uint64,
 ) (uint64, error) {
-	view, err := e.getBlockView(height)
+	view, err := e.getBlockView(height, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -275,7 +273,7 @@ func (e *EVM) GetStorageAt(
 	hash common.Hash,
 	height uint64,
 ) (common.Hash, error) {
-	view, err := e.getBlockView(height)
+	view, err := e.getBlockView(height, nil)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -288,8 +286,9 @@ func (e *EVM) Call(
 	from common.Address,
 	height uint64,
 	stateOverrides *ethTypes.StateOverride,
+	blockOverrides *ethTypes.BlockOverrides,
 ) ([]byte, error) {
-	result, err := e.dryRunTx(tx, from, height, stateOverrides)
+	result, err := e.dryRunTx(tx, from, height, stateOverrides, blockOverrides)
 	if err != nil {
 		return nil, err
 	}
@@ -327,7 +326,7 @@ func (e *EVM) EstimateGas(
 	tx.Gas = passingGasLimit
 	// We first execute the transaction at the highest allowable gas limit,
 	// since if this fails we can return the error immediately.
-	result, err := e.dryRunTx(tx, from, height, stateOverrides)
+	result, err := e.dryRunTx(tx, from, height, stateOverrides, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -352,7 +351,7 @@ func (e *EVM) EstimateGas(
 	optimisticGasLimit := (result.GasConsumed + result.GasRefund + gethParams.CallStipend) * 64 / 63
 	if optimisticGasLimit < passingGasLimit {
 		tx.Gas = optimisticGasLimit
-		result, err = e.dryRunTx(tx, from, height, stateOverrides)
+		result, err = e.dryRunTx(tx, from, height, stateOverrides, nil)
 		if err != nil {
 			// This should not happen under normal conditions since if we make it this far the
 			// transaction had run without error at least once before.
@@ -382,7 +381,7 @@ func (e *EVM) EstimateGas(
 			mid = failingGasLimit * 2
 		}
 		tx.Gas = mid
-		result, err = e.dryRunTx(tx, from, height, stateOverrides)
+		result, err = e.dryRunTx(tx, from, height, stateOverrides, nil)
 		if err != nil {
 			return 0, err
 		}
@@ -405,7 +404,7 @@ func (e *EVM) GetCode(
 	address common.Address,
 	height uint64,
 ) ([]byte, error) {
-	view, err := e.getBlockView(height)
+	view, err := e.getBlockView(height, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -437,12 +436,25 @@ func (e *EVM) GetLatestEVMHeight(ctx context.Context) (uint64, error) {
 	return height, nil
 }
 
-func (e *EVM) getBlockView(height uint64) (*query.View, error) {
+func (e *EVM) getBlockView(
+	height uint64,
+	blockOverrides *ethTypes.BlockOverrides,
+) (*query.View, error) {
+	blocksProvider := NewOverridableBlocksProvider(
+		e.blocks,
+		e.config.FlowNetworkID,
+		nil,
+	)
+
+	if blockOverrides != nil {
+		blocksProvider = blocksProvider.WithBlockOverrides(blockOverrides)
+	}
+
 	viewProvider := query.NewViewProvider(
 		e.config.FlowNetworkID,
 		evm.StorageAccountAddress(e.config.FlowNetworkID),
 		e.registerStore,
-		e.blocksProvider,
+		blocksProvider,
 		blockGasLimit,
 	)
 
@@ -467,8 +479,9 @@ func (e *EVM) dryRunTx(
 	from common.Address,
 	height uint64,
 	stateOverrides *ethTypes.StateOverride,
+	blockOverrides *ethTypes.BlockOverrides,
 ) (*evmTypes.Result, error) {
-	view, err := e.getBlockView(height)
+	view, err := e.getBlockView(height, blockOverrides)
 	if err != nil {
 		return nil, err
 	}
@@ -592,7 +605,7 @@ func (e *EVM) validateTransactionWithState(
 	if err != nil {
 		return err
 	}
-	view, err := e.getBlockView(height)
+	view, err := e.getBlockView(height, nil)
 	if err != nil {
 		return err
 	}
