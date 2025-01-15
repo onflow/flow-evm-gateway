@@ -310,6 +310,11 @@ func (e *EVM) EstimateGas(
 	height uint64,
 	stateOverrides *ethTypes.StateOverride,
 ) (uint64, error) {
+	iterations := 0
+	defer func() {
+		e.collector.GasEstimationIterations(iterations)
+	}()
+
 	// Note: The following algorithm, is largely inspired from
 	// https://github.com/onflow/go-ethereum/blob/master/eth/gasestimator/gasestimator.go#L49-L192,
 	// and adapted to fit our use-case.
@@ -327,6 +332,7 @@ func (e *EVM) EstimateGas(
 	// We first execute the transaction at the highest allowable gas limit,
 	// since if this fails we can return the error immediately.
 	result, err := e.dryRunTx(tx, from, height, stateOverrides, nil)
+	iterations += 1
 	if err != nil {
 		return 0, err
 	}
@@ -352,6 +358,7 @@ func (e *EVM) EstimateGas(
 	if optimisticGasLimit < passingGasLimit {
 		tx.Gas = optimisticGasLimit
 		result, err = e.dryRunTx(tx, from, height, stateOverrides, nil)
+		iterations += 1
 		if err != nil {
 			// This should not happen under normal conditions since if we make it this far the
 			// transaction had run without error at least once before.
@@ -382,6 +389,7 @@ func (e *EVM) EstimateGas(
 		}
 		tx.Gas = mid
 		result, err = e.dryRunTx(tx, from, height, stateOverrides, nil)
+		iterations += 1
 		if err != nil {
 			return 0, err
 		}
