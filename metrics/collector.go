@@ -11,7 +11,6 @@ import (
 
 type Collector interface {
 	ApiErrorOccurred()
-	TraceDownloadFailed()
 	ServerPanicked(reason string)
 	CadenceHeightIndexed(height uint64)
 	EVMHeightIndexed(height uint64)
@@ -26,28 +25,22 @@ var _ Collector = &DefaultCollector{}
 
 type DefaultCollector struct {
 	// TODO: for now we cannot differentiate which api request failed number of times
-	apiErrorsCounter          prometheus.Counter
-	traceDownloadErrorCounter prometheus.Counter
-	serverPanicsCounters      *prometheus.CounterVec
-	cadenceBlockHeight        prometheus.Gauge
-	evmBlockHeight            prometheus.Gauge
-	evmBlockIndexedCounter    prometheus.Counter
-	evmTxIndexedCounter       prometheus.Counter
-	operatorBalance           prometheus.Gauge
-	evmAccountCallCounters    *prometheus.CounterVec
-	requestDurations          *prometheus.HistogramVec
-	availableSigningkeys      prometheus.Gauge
+	apiErrorsCounter       prometheus.Counter
+	serverPanicsCounters   *prometheus.CounterVec
+	cadenceBlockHeight     prometheus.Gauge
+	evmBlockHeight         prometheus.Gauge
+	evmBlockIndexedCounter prometheus.Counter
+	evmTxIndexedCounter    prometheus.Counter
+	operatorBalance        prometheus.Gauge
+	evmAccountCallCounters *prometheus.CounterVec
+	requestDurations       *prometheus.HistogramVec
+	availableSigningkeys   prometheus.Gauge
 }
 
 func NewCollector(logger zerolog.Logger) Collector {
 	apiErrors := prometheus.NewCounter(prometheus.CounterOpts{
 		Name: prefixedName("api_errors_total"),
 		Help: "Total number of API errors",
-	})
-
-	traceDownloadErrorCounter := prometheus.NewCounter(prometheus.CounterOpts{
-		Name: prefixedName("trace_download_errors_total"),
-		Help: "Total number of trace download errors",
 	})
 
 	serverPanicsCounters := prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -99,7 +92,6 @@ func NewCollector(logger zerolog.Logger) Collector {
 
 	metrics := []prometheus.Collector{
 		apiErrors,
-		traceDownloadErrorCounter,
 		serverPanicsCounters,
 		cadenceBlockHeight,
 		evmBlockHeight,
@@ -116,17 +108,16 @@ func NewCollector(logger zerolog.Logger) Collector {
 	}
 
 	return &DefaultCollector{
-		apiErrorsCounter:          apiErrors,
-		traceDownloadErrorCounter: traceDownloadErrorCounter,
-		serverPanicsCounters:      serverPanicsCounters,
-		cadenceBlockHeight:        cadenceBlockHeight,
-		evmBlockHeight:            evmBlockHeight,
-		evmBlockIndexedCounter:    evmBlockIndexedCounter,
-		evmTxIndexedCounter:       evmTxIndexedCounter,
-		evmAccountCallCounters:    evmAccountCallCounters,
-		requestDurations:          requestDurations,
-		operatorBalance:           operatorBalance,
-		availableSigningkeys:      availableSigningKeys,
+		apiErrorsCounter:       apiErrors,
+		serverPanicsCounters:   serverPanicsCounters,
+		cadenceBlockHeight:     cadenceBlockHeight,
+		evmBlockHeight:         evmBlockHeight,
+		evmBlockIndexedCounter: evmBlockIndexedCounter,
+		evmTxIndexedCounter:    evmTxIndexedCounter,
+		evmAccountCallCounters: evmAccountCallCounters,
+		requestDurations:       requestDurations,
+		operatorBalance:        operatorBalance,
+		availableSigningkeys:   availableSigningKeys,
 	}
 }
 
@@ -143,10 +134,6 @@ func registerMetrics(logger zerolog.Logger, metrics ...prometheus.Collector) err
 
 func (c *DefaultCollector) ApiErrorOccurred() {
 	c.apiErrorsCounter.Inc()
-}
-
-func (c *DefaultCollector) TraceDownloadFailed() {
-	c.traceDownloadErrorCounter.Inc()
 }
 
 func (c *DefaultCollector) ServerPanicked(reason string) {
