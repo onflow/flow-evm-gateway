@@ -9,6 +9,7 @@ import (
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access"
+	"github.com/onflow/flow-go-sdk/access/grpc"
 	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/rs/zerolog"
 	"go.uber.org/ratelimit"
@@ -247,6 +248,23 @@ func (c *CrossSporkClient) GetEventsForHeightRange(
 		return nil, fmt.Errorf("invalid height range, end height %d is not in the same spork as start height %d", endHeight, startHeight)
 	}
 	return client.GetEventsForHeightRange(ctx, eventType, startHeight, endHeight)
+}
+
+func (c *CrossSporkClient) SubscribeBlockHeadersFromStartHeight(
+	ctx context.Context,
+	startHeight uint64,
+	blockStatus flow.BlockStatus,
+) (<-chan flow.BlockHeader, <-chan error, error) {
+	client, err := c.getClientForHeight(startHeight)
+	if err != nil {
+		return nil, nil, err
+	}
+	grpcClient, ok := (client).(*grpc.Client)
+	if !ok {
+		return nil, nil, fmt.Errorf("unable to convert to Flow grpc.Client")
+	}
+
+	return grpcClient.SubscribeBlockHeadersFromStartHeight(ctx, startHeight, blockStatus)
 }
 
 func (c *CrossSporkClient) Close() error {

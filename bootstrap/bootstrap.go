@@ -142,7 +142,7 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 	chainID := b.config.FlowNetworkID
 
 	// create event subscriber
-	subscriber := ingestion.NewRPCEventSubscriber(
+	subscriber := ingestion.NewRPCBlockHeaderSubscriber(
 		b.logger,
 		b.client,
 		chainID,

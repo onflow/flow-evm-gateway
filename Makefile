@@ -227,3 +227,36 @@ endif
 
 	docker run $(MODE) -p $(HOST_PORT):8545 -p $(HOST_METRICS_PORT):8080 $(MOUNT) "$(CONTAINER_REGISTRY)/flow-evm-gateway:$(IMAGE_TAG)" $(CMD_ARGS)
 
+.PHONY: start-testnet
+start-testnet:
+	rm -rf testnet-db-block-headers/
+	rm -rf metrics/data/
+	go run cmd/main.go run \
+		--database-dir=testnet-db-block-headers \
+		--access-node-grpc-host=access.devnet.nodes.onflow.org:9000 \
+		--access-node-spork-hosts=access-001.devnet51.nodes.onflow.org:9000 \
+		--flow-network-id=flow-testnet \
+		--init-cadence-height=211176670 \
+		--ws-enabled=true \
+		--coinbase=FACF71692421039876a5BB4F10EF7A439D8ef61E \
+		--coa-address=0x62631c28c9fc5a91 \
+		--coa-key=2892fba444f1d5787739708874e3b01160671924610411ac787ac1379d420f49 \
+		--gas-price=100 \
+		--log-level=info
+
+.PHONY: start-mainnet
+start-mainnet:
+	rm -rf mainnet-db-block-headers/
+	rm -rf metrics/data/
+	go run cmd/main.go run \
+		--database-dir=mainnet-db-block-headers \
+		--access-node-grpc-host=access.mainnet.nodes.onflow.org:9000 \
+		--access-node-spork-hosts=access-001.mainnet25.nodes.onflow.org:9000 \
+		--flow-network-id=flow-mainnet \
+		--init-cadence-height=85981135 \
+		--ws-enabled=true \
+		--coinbase=FACF71692421039876a5BB4F10EF7A439D8ef61E \
+		--coa-address=0xf1ab99c82dee3526 \
+		--coa-key=2892fba444f1d5787739708874e3b01160671924610411ac787ac1379d420f49 \
+		--gas-price=100 \
+		--log-level=info
