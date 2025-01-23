@@ -110,13 +110,6 @@ func (r *RPCBlockTrackingSubscriber) Subscribe(ctx context.Context) <-chan model
 func (r *RPCBlockTrackingSubscriber) subscribe(ctx context.Context, height uint64) <-chan models.BlockEvents {
 	eventsChan := make(chan models.BlockEvents)
 
-	_, err := r.client.GetBlockHeaderByHeight(ctx, height)
-	if err != nil {
-		err = fmt.Errorf("failed to subscribe for events, the block height %d doesn't exist: %w", height, err)
-		eventsChan <- models.NewBlockEventsError(err)
-		return eventsChan
-	}
-
 	blockHeadersChan, errChan, err := r.client.SubscribeBlockHeadersFromStartHeight(
 		ctx,
 		height,
