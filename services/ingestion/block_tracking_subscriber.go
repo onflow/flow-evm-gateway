@@ -117,7 +117,11 @@ func (r *RPCBlockTrackingSubscriber) subscribe(ctx context.Context, height uint6
 	)
 	if err != nil {
 		eventsChan <- models.NewBlockEventsError(
-			fmt.Errorf("failed to subscribe to events by block height: %d, with: %w", height, err),
+			fmt.Errorf(
+				"failed to subscribe for finalized block headers on height: %d, with: %w",
+				height,
+				err,
+			),
 		)
 		return eventsChan
 	}
@@ -146,7 +150,6 @@ func (r *RPCBlockTrackingSubscriber) subscribe(ctx context.Context, height uint6
 				}
 
 				var blockEvents flow.BlockEvents
-
 				for _, eventType := range blocksFilter(r.chain).EventTypes {
 					evts, err := r.client.GetEventsForHeightRange(
 						ctx,
@@ -155,10 +158,24 @@ func (r *RPCBlockTrackingSubscriber) subscribe(ctx context.Context, height uint6
 						blockHeader.Height,
 					)
 					if err != nil {
+						eventsChan <- models.NewBlockEventsError(
+							fmt.Errorf(
+								"failed to fetch EVM events for height: %d, with: %w",
+								blockHeader.Height,
+								err,
+							),
+						)
 						return
 					}
 
 					if len(evts) != 1 {
+						eventsChan <- models.NewBlockEventsError(
+							fmt.Errorf(
+								"received unexpected number of EVM events for height: %d, got: %d, expected: 1",
+								blockHeader.Height,
+								len(evts),
+							),
+						)
 						return
 					}
 					blockEvent := evts[0]
@@ -203,7 +220,11 @@ func (r *RPCBlockTrackingSubscriber) subscribe(ctx context.Context, height uint6
 					)
 					if err != nil {
 						eventsChan <- models.NewBlockEventsError(
-							fmt.Errorf("failed to subscribe to events by block height: %d, with: %w", height, err),
+							fmt.Errorf(
+								"failed to subscribe for finalized block headers on height: %d, with: %w",
+								height,
+								err,
+							),
 						)
 						return
 					}
