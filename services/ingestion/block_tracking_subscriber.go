@@ -18,9 +18,9 @@ import (
 	"github.com/rs/zerolog"
 )
 
-var _ EventSubscriber = &RPCEventSubscriber{}
+var _ EventSubscriber = &RPCBlockTrackingSubscriber{}
 
-type RPCBlockHeaderSubscriber struct {
+type RPCBlockTrackingSubscriber struct {
 	logger zerolog.Logger
 
 	client  *requester.CrossSporkClient
@@ -32,15 +32,15 @@ type RPCBlockHeaderSubscriber struct {
 	recoveredEvents []flow.Event
 }
 
-func NewRPCBlockHeaderSubscriber(
+func NewRPCBlockTrackingSubscriber(
 	logger zerolog.Logger,
 	client *requester.CrossSporkClient,
 	chainID flowGo.ChainID,
 	keyLock requester.KeyLock,
 	startHeight uint64,
-) *RPCBlockHeaderSubscriber {
+) *RPCBlockTrackingSubscriber {
 	logger = logger.With().Str("component", "subscriber").Logger()
-	return &RPCBlockHeaderSubscriber{
+	return &RPCBlockTrackingSubscriber{
 		logger: logger,
 
 		client:  client,
@@ -55,7 +55,7 @@ func NewRPCBlockHeaderSubscriber(
 // to listen all new events in the current spork.
 //
 // If error is encountered during backfill the subscription will end and the response chanel will be closed.
-func (r *RPCBlockHeaderSubscriber) Subscribe(ctx context.Context) <-chan models.BlockEvents {
+func (r *RPCBlockTrackingSubscriber) Subscribe(ctx context.Context) <-chan models.BlockEvents {
 	// buffered channel so that the decoding of the events can happen in parallel to other operations
 	eventsChan := make(chan models.BlockEvents, 1000)
 
@@ -107,7 +107,7 @@ func (r *RPCBlockHeaderSubscriber) Subscribe(ctx context.Context) <-chan models.
 //
 // Subscribing to EVM specific events and handle any disconnection errors
 // as well as context cancellations.
-func (r *RPCBlockHeaderSubscriber) subscribe(ctx context.Context, height uint64) <-chan models.BlockEvents {
+func (r *RPCBlockTrackingSubscriber) subscribe(ctx context.Context, height uint64) <-chan models.BlockEvents {
 	eventsChan := make(chan models.BlockEvents)
 
 	_, err := r.client.GetBlockHeaderByHeight(ctx, height)
@@ -227,7 +227,7 @@ func (r *RPCBlockHeaderSubscriber) subscribe(ctx context.Context, height uint64)
 
 // backfill returns a channel that is filled with block events from the provided fromCadenceHeight up to the first
 // height in the current spork.
-func (r *RPCBlockHeaderSubscriber) backfill(ctx context.Context, fromCadenceHeight uint64) <-chan models.BlockEvents {
+func (r *RPCBlockTrackingSubscriber) backfill(ctx context.Context, fromCadenceHeight uint64) <-chan models.BlockEvents {
 	eventsChan := make(chan models.BlockEvents)
 
 	go func() {
@@ -264,7 +264,7 @@ func (r *RPCBlockHeaderSubscriber) backfill(ctx context.Context, fromCadenceHeig
 
 // / backfillSporkFromHeight will fill the eventsChan with block events from the provided fromHeight up to the first height in the spork that comes
 // after the spork of the provided fromHeight.
-func (r *RPCBlockHeaderSubscriber) backfillSporkFromHeight(ctx context.Context, fromCadenceHeight uint64, eventsChan chan<- models.BlockEvents) (uint64, error) {
+func (r *RPCBlockTrackingSubscriber) backfillSporkFromHeight(ctx context.Context, fromCadenceHeight uint64, eventsChan chan<- models.BlockEvents) (uint64, error) {
 	evmAddress := common.Address(systemcontracts.SystemContractsForChain(r.chain).EVMContract.Address)
 
 	blockExecutedEvent := common.NewAddressLocation(
@@ -358,7 +358,7 @@ func (r *RPCBlockHeaderSubscriber) backfillSporkFromHeight(ctx context.Context, 
 // accumulateBlockEvents will keep fetching `EVM.TransactionExecuted` events
 // until it finds their `EVM.BlockExecuted` event.
 // At that point it will return the valid models.BlockEvents.
-func (r *RPCBlockHeaderSubscriber) accumulateBlockEvents(
+func (r *RPCBlockTrackingSubscriber) accumulateBlockEvents(
 	ctx context.Context,
 	block flow.BlockEvents,
 	blockExecutedEventType string,
@@ -440,7 +440,7 @@ func (r *RPCBlockHeaderSubscriber) accumulateBlockEvents(
 // An inconsistent response could be an EVM block that references EVM
 // transactions which are not present in the response. It falls back
 // to using grpc requests instead of streaming.
-func (r *RPCBlockHeaderSubscriber) fetchMissingData(
+func (r *RPCBlockTrackingSubscriber) fetchMissingData(
 	ctx context.Context,
 	blockEvents flow.BlockEvents,
 ) models.BlockEvents {
@@ -477,7 +477,7 @@ func (r *RPCBlockHeaderSubscriber) fetchMissingData(
 // accumulateEventsMissingBlock will keep receiving transaction events until it can produce a valid
 // EVM block event containing a block and transactions. At that point it will reset the recovery mode
 // and return the valid block events.
-func (r *RPCBlockHeaderSubscriber) accumulateEventsMissingBlock(events flow.BlockEvents) models.BlockEvents {
+func (r *RPCBlockTrackingSubscriber) accumulateEventsMissingBlock(events flow.BlockEvents) models.BlockEvents {
 	txEvents := events.Events
 	// Sort `EVM.TransactionExecuted` events
 	sort.Slice(txEvents, func(i, j int) bool {
@@ -507,7 +507,7 @@ func (r *RPCBlockHeaderSubscriber) accumulateEventsMissingBlock(events flow.Bloc
 // in which case we might miss one of the events (missing transaction), or it can be
 // due to a failure from the system transaction which commits an EVM block, which results
 // in missing EVM block event but present transactions.
-func (r *RPCBlockHeaderSubscriber) recover(
+func (r *RPCBlockTrackingSubscriber) recover(
 	ctx context.Context,
 	events flow.BlockEvents,
 	err error,
