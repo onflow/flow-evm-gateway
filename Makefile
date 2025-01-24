@@ -4,7 +4,7 @@ BRANCH_NAME:=$(shell git rev-parse --abbrev-ref HEAD | tr '/' '-')
 # The Git commit hash
 COMMIT := $(shell git rev-parse HEAD)
 # The tag of the current commit, otherwise empty
-GIT_VERSION := $(shell git describe --tags --abbrev=2 2>/dev/null)
+GIT_VERSION := $(shell git describe --tags --abbrev=0 2>/dev/null)
 CMD_ARGS :=
 # ACCESS_NODE_SPORK_HOSTS are comma separated
 TESTNET_ACCESS_NODE_SPORK_HOSTS := access-001.devnet51.nodes.onflow.org:9000
@@ -86,7 +86,7 @@ check-tidy:
 
 .PHONY: build
 build:
-	$(COMPILER_FLAGS) go build -o flow-evm-gateway -ldflags="-X github.com/onflow/flow-evm-gateway/api.Version=$(IMAGE_TAG)" cmd/main.go
+	$(COMPILER_FLAGS) go build -o flow-evm-gateway -ldflags="-X github.com/onflow/flow-evm-gateway/api.Version=$(GIT_VERSION)" cmd/main.go
 	chmod a+x flow-evm-gateway
 
 .PHONY: fix-lint
