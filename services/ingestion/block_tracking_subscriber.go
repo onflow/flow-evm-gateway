@@ -10,7 +10,9 @@ import (
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/services/requester"
 	"github.com/onflow/flow-go-sdk"
+	"github.com/onflow/flow-go/fvm/evm/events"
 	flowGo "github.com/onflow/flow-go/model/flow"
+	"github.com/onflow/go-ethereum/core/types"
 	"github.com/rs/zerolog"
 )
 
@@ -151,40 +153,10 @@ func (r *RPCBlockTrackingSubscriber) subscribe(ctx context.Context, height uint6
 					return
 				}
 
-				var blockEvents flow.BlockEvents
-				for _, eventType := range blocksFilter(r.chain).EventTypes {
-					evts, err := r.client.GetEventsForHeightRange(
-						ctx,
-						eventType,
-						blockHeader.Height,
-						blockHeader.Height,
-					)
-					if err != nil {
-						eventsChan <- models.NewBlockEventsError(
-							fmt.Errorf(
-								"failed to fetch EVM events for height: %d, with: %w",
-								blockHeader.Height,
-								err,
-							),
-						)
-						return
-					}
-
-					if len(evts) != 1 {
-						eventsChan <- models.NewBlockEventsError(
-							fmt.Errorf(
-								"received unexpected number of EVM events for height: %d, got: %d, expected: 1",
-								blockHeader.Height,
-								len(evts),
-							),
-						)
-						return
-					}
-					blockEvent := evts[0]
-					blockEvents.BlockID = blockEvent.BlockID
-					blockEvents.BlockTimestamp = blockEvent.BlockTimestamp
-					blockEvents.Height = blockEvent.Height
-					blockEvents.Events = append(blockEvents.Events, blockEvent.Events...)
+				blockEvents, err := r.evmEventsForHeight(ctx, blockHeader.Height)
+				if err != nil {
+					eventsChan <- models.NewBlockEventsError(err)
+					return
 				}
 
 				evmEvents := models.NewSingleBlockEvents(blockEvents)
@@ -242,4 +214,64 @@ func (r *RPCBlockTrackingSubscriber) subscribe(ctx context.Context, height uint6
 	}()
 
 	return eventsChan
+}
+
+func (r *RPCBlockTrackingSubscriber) evmEventsForHeight(
+	ctx context.Context,
+	height uint64,
+) (flow.BlockEvents, error) {
+	eventTypes := blocksFilter(r.chain).EventTypes
+	evmBlockEvent := eventTypes[0]
+
+	evts, err := r.client.GetEventsForHeightRange(
+		ctx,
+		evmBlockEvent,
+		height,
+		height,
+	)
+	if err != nil {
+		return flow.BlockEvents{}, err
+	}
+
+	if len(evts) != 1 && len(evts[0].Events) != 1 {
+		return flow.BlockEvents{}, fmt.Errorf(
+			"received unexpected number of EVM events for height: %d, got: %d, expected: 1",
+			height,
+			len(evts),
+		)
+	}
+
+	blockEvents := evts[0]
+	payload, err := events.DecodeBlockEventPayload(blockEvents.Events[0].Value)
+	if err != nil {
+		return flow.BlockEvents{}, err
+	}
+
+	if payload.TransactionHashRoot == types.EmptyTxsHash {
+		return blockEvents, nil
+	}
+
+	evmTxEvent := eventTypes[1]
+	evts, err = r.client.GetEventsForHeightRange(
+		ctx,
+		evmTxEvent,
+		height,
+		height,
+	)
+	if err != nil {
+		return flow.BlockEvents{}, err
+	}
+
+	if len(evts) != 1 && len(evts[0].Events) != 1 {
+		return flow.BlockEvents{}, fmt.Errorf(
+			"received unexpected number of EVM events for height: %d, got: %d, expected: 1",
+			height,
+			len(evts),
+		)
+	}
+	txEvents := evts[0]
+
+	blockEvents.Events = append(blockEvents.Events, txEvents.Events...)
+
+	return blockEvents, nil
 }
