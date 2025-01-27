@@ -6,11 +6,12 @@ import (
 
 	flowsdk "github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/crypto"
+	"github.com/onflow/flow-go/model/flow"
 )
 
 var ErrNoKeysAvailable = fmt.Errorf("no keys available")
 
-const accountKeyBlockExpiration = 1_000
+const accountKeyBlockExpiration = flow.DefaultTransactionExpiry
 
 type AccountKey struct {
 	flowsdk.AccountKey
