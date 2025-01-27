@@ -233,7 +233,10 @@ func (r *RPCBlockTrackingSubscriber) evmEventsForHeight(
 		return flow.BlockEvents{}, err
 	}
 
-	if len(evts) != 1 && len(evts[0].Events) != 1 {
+	// We are requesting the `EVM.BlockExecuted` events for a single Flow block,
+	// so we expect the length of `evts` to equal 1.
+	// The `EVM.BlockExecuted` event should be present for every Flow block.
+	if len(evts) != 1 || len(evts[0].Events) != 1 {
 		return flow.BlockEvents{}, fmt.Errorf(
 			"received unexpected number of EVM events for height: %d, got: %d, expected: 1",
 			height,
@@ -262,7 +265,9 @@ func (r *RPCBlockTrackingSubscriber) evmEventsForHeight(
 		return flow.BlockEvents{}, err
 	}
 
-	if len(evts) != 1 && len(evts[0].Events) != 1 {
+	// We are requesting the `EVM.TransactionExecuted` events for a single
+	// Flow block, so we expect the length of `evts` to equal 1.
+	if len(evts) != 1 {
 		return flow.BlockEvents{}, fmt.Errorf(
 			"received unexpected number of EVM events for height: %d, got: %d, expected: 1",
 			height,
