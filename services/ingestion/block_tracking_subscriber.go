@@ -35,22 +35,14 @@ func NewRPCBlockTrackingSubscriber(
 	keyLock requester.KeyLock,
 	startHeight uint64,
 ) *RPCBlockTrackingSubscriber {
-	eventSubscriber := NewRPCEventSubscriber(
-		logger,
-		client,
-		chainID,
-		keyLock,
-		startHeight,
-	)
-	logger = logger.With().Str("component", "subscriber").Logger()
-
 	return &RPCBlockTrackingSubscriber{
-		RPCEventSubscriber: eventSubscriber,
-		logger:             logger,
-		client:             client,
-		chain:              chainID,
-		keyLock:            keyLock,
-		height:             startHeight,
+		RPCEventSubscriber: NewRPCEventSubscriber(
+			logger.With().Str("component", "subscriber").Logger(),
+			client,
+			chainID,
+			keyLock,
+			startHeight,
+		)
 	}
 }
 
