@@ -3,6 +3,7 @@ package ingestion
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/onflow/flow-evm-gateway/models"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
@@ -153,7 +154,7 @@ func (r *RPCBlockTrackingSubscriber) subscribe(ctx context.Context, height uint6
 					return
 				}
 
-				blockEvents, err := r.evmEventsForBlockHeader(ctx, blockHeader)
+				blockEvents, err := r.evmEventsForBlock(ctx, blockHeader)
 				if err != nil {
 					eventsChan <- models.NewBlockEventsError(err)
 					return
@@ -215,34 +216,18 @@ func (r *RPCBlockTrackingSubscriber) subscribe(ctx context.Context, height uint6
 	return eventsChan
 }
 
-func (r *RPCBlockTrackingSubscriber) evmEventsForBlockHeader(
+func (r *RPCBlockTrackingSubscriber) evmEventsForBlock(
 	ctx context.Context,
 	blockHeader flow.BlockHeader,
 ) (flow.BlockEvents, error) {
 	eventTypes := blocksFilter(r.chain).EventTypes
-	evmBlockEvent := eventTypes[0]
 
-	evts, err := r.client.GetEventsForBlockHeader(
-		ctx,
-		evmBlockEvent,
-		blockHeader,
-	)
+	// evm Block events
+	blockEvents, err := r.getEventsByType(ctx, blockHeader, eventTypes[0])
 	if err != nil {
 		return flow.BlockEvents{}, err
 	}
 
-	// We are requesting the `EVM.BlockExecuted` events for a single Flow block,
-	// so we expect the length of `evts` to equal 1.
-	// The `EVM.BlockExecuted` event should be present for every Flow block.
-	if len(evts) != 1 || len(evts[0].Events) != 1 {
-		return flow.BlockEvents{}, fmt.Errorf(
-			"received unexpected number of EVM events for height: %d, got: %d, expected: 1",
-			blockHeader.Height,
-			len(evts),
-		)
-	}
-
-	blockEvents := evts[0]
 	payload, err := events.DecodeBlockEventPayload(blockEvents.Events[0].Value)
 	if err != nil {
 		return flow.BlockEvents{}, err
@@ -252,28 +237,49 @@ func (r *RPCBlockTrackingSubscriber) evmEventsForBlockHeader(
 		return blockEvents, nil
 	}
 
-	evmTxEvent := eventTypes[1]
-	evts, err = r.client.GetEventsForBlockHeader(
+	// evm TX events
+	txEvents, err := r.getEventsByType(ctx, blockHeader, eventTypes[1])
+	if err != nil {
+		return flow.BlockEvents{}, err
+	}
+
+	// combine block and tx events to be processed together
+	blockEvents.Events = append(blockEvents.Events, txEvents.Events...)
+
+	return blockEvents, nil
+}
+
+func (r *RPCBlockTrackingSubscriber) getEventsByType(
+	ctx context.Context,
+	blockHeader flow.BlockHeader,
+	eventType string,
+) (flow.BlockEvents, error) {
+	evts, err := r.client.GetEventsForBlockHeader(
 		ctx,
-		evmTxEvent,
+		eventType,
 		blockHeader,
 	)
 	if err != nil {
 		return flow.BlockEvents{}, err
 	}
 
-	// We are requesting the `EVM.TransactionExecuted` events for a single
-	// Flow block, so we expect the length of `evts` to equal 1.
 	if len(evts) != 1 {
+		// this shouldn't happen and probably indicates a bug on the Access node.
 		return flow.BlockEvents{}, fmt.Errorf(
-			"received unexpected number of EVM events for height: %d, got: %d, expected: 1",
-			blockHeader.Height,
+			"received unexpected number of block events: got: %d, expected: 1",
 			len(evts),
 		)
 	}
-	txEvents := evts[0]
 
-	blockEvents.Events = append(blockEvents.Events, txEvents.Events...)
+	// The `EVM.BlockExecuted` event should be present for every Flow block.
+	if strings.Contains(eventType, string(events.EventTypeBlockExecuted)) {
+		if len(evts[0].Events) != 1 {
+			return flow.BlockEvents{}, fmt.Errorf(
+				"received unexpected number of EVM events in block: got: %d, expected: 1",
+				len(evts[0].Events),
+			)
+		}
+	}
 
-	return blockEvents, nil
+	return evts[0], nil
 }
