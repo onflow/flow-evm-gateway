@@ -140,7 +140,7 @@ func (r *RPCBlockTrackingSubscriber) subscribe(ctx context.Context, height uint6
 					return
 				}
 
-				blockEvents, err := r.evmEventsForHeight(ctx, blockHeader.Height)
+				blockEvents, err := r.evmEventsForBlockHeader(ctx, blockHeader)
 				if err != nil {
 					eventsChan <- models.NewBlockEventsError(err)
 					return
@@ -202,18 +202,17 @@ func (r *RPCBlockTrackingSubscriber) subscribe(ctx context.Context, height uint6
 	return eventsChan
 }
 
-func (r *RPCBlockTrackingSubscriber) evmEventsForHeight(
+func (r *RPCBlockTrackingSubscriber) evmEventsForBlockHeader(
 	ctx context.Context,
-	height uint64,
+	blockHeader flow.BlockHeader,
 ) (flow.BlockEvents, error) {
 	eventTypes := blocksFilter(r.chain).EventTypes
 	evmBlockEvent := eventTypes[0]
 
-	evts, err := r.client.GetEventsForHeightRange(
+	evts, err := r.client.GetEventsForBlockHeader(
 		ctx,
 		evmBlockEvent,
-		height,
-		height,
+		blockHeader,
 	)
 	if err != nil {
 		return flow.BlockEvents{}, err
@@ -225,7 +224,7 @@ func (r *RPCBlockTrackingSubscriber) evmEventsForHeight(
 	if len(evts) != 1 || len(evts[0].Events) != 1 {
 		return flow.BlockEvents{}, fmt.Errorf(
 			"received unexpected number of EVM events for height: %d, got: %d, expected: 1",
-			height,
+			blockHeader.Height,
 			len(evts),
 		)
 	}
@@ -241,11 +240,10 @@ func (r *RPCBlockTrackingSubscriber) evmEventsForHeight(
 	}
 
 	evmTxEvent := eventTypes[1]
-	evts, err = r.client.GetEventsForHeightRange(
+	evts, err = r.client.GetEventsForBlockHeader(
 		ctx,
 		evmTxEvent,
-		height,
-		height,
+		blockHeader,
 	)
 	if err != nil {
 		return flow.BlockEvents{}, err
@@ -256,7 +254,7 @@ func (r *RPCBlockTrackingSubscriber) evmEventsForHeight(
 	if len(evts) != 1 {
 		return flow.BlockEvents{}, fmt.Errorf(
 			"received unexpected number of EVM events for height: %d, got: %d, expected: 1",
-			height,
+			blockHeader.Height,
 			len(evts),
 		)
 	}

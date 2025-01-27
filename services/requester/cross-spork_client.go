@@ -250,6 +250,18 @@ func (c *CrossSporkClient) GetEventsForHeightRange(
 	return client.GetEventsForHeightRange(ctx, eventType, startHeight, endHeight)
 }
 
+func (c *CrossSporkClient) GetEventsForBlockHeader(
+	ctx context.Context,
+	eventType string,
+	blockHeader flow.BlockHeader,
+) ([]flow.BlockEvents, error) {
+	client, err := c.getClientForHeight(blockHeader.Height)
+	if err != nil {
+		return nil, err
+	}
+	return client.GetEventsForBlockIDs(ctx, eventType, []flow.Identifier{blockHeader.ID})
+}
+
 func (c *CrossSporkClient) SubscribeBlockHeadersFromStartHeight(
 	ctx context.Context,
 	startHeight uint64,
