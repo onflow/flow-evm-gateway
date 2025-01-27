@@ -18,6 +18,19 @@ import (
 
 var _ EventSubscriber = &RPCBlockTrackingSubscriber{}
 
+// RPCBlockTrackingSubscriber subscribes to new EVM block events for unsealed finalized blocks.
+// This is accomplished by following finalized blocks from the upstream Access node, and using the
+// polling endpoint to fetch the events for each finalized block.
+//
+// IMPORTANT: Since data is downloaded and processed from unsealed blocks, it's possible for the
+// data that was downloaded to be incorrect. This subscriber provides no handling or detection for
+// cases where the received data differs from the data that was ultimately sealed. The operator must
+// handle this manually.
+// Since it's not reasonable to expect operators to do this manual tracking, this features should NOT
+// be used outside of a limited Proof of Concept. Use at own risk.
+//
+// A future version of the RPCEventSubscriber will provide this detection and handling functionality
+// at which point this subscriber will be removed.
 type RPCBlockTrackingSubscriber struct {
 	*RPCEventSubscriber
 }
