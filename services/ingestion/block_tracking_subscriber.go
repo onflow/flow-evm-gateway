@@ -20,12 +20,6 @@ var _ EventSubscriber = &RPCBlockTrackingSubscriber{}
 
 type RPCBlockTrackingSubscriber struct {
 	*RPCEventSubscriber
-
-	logger  zerolog.Logger
-	client  *requester.CrossSporkClient
-	chain   flowGo.ChainID
-	keyLock requester.KeyLock
-	height  uint64
 }
 
 func NewRPCBlockTrackingSubscriber(
@@ -42,7 +36,7 @@ func NewRPCBlockTrackingSubscriber(
 			chainID,
 			keyLock,
 			startHeight,
-		)
+		),
 	}
 }
 
