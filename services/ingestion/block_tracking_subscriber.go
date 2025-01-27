@@ -2,9 +2,7 @@ package ingestion
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/onflow/flow-evm-gateway/models"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
@@ -14,6 +12,8 @@ import (
 	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/onflow/go-ethereum/core/types"
 	"github.com/rs/zerolog"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 var _ EventSubscriber = &RPCBlockTrackingSubscriber{}
@@ -189,8 +189,7 @@ func (r *RPCBlockTrackingSubscriber) subscribe(ctx context.Context, height uint6
 					return
 				}
 
-				if strings.Contains(errors.Unwrap(err).Error(), "DeadlineExceeded") ||
-					strings.Contains(errors.Unwrap(err).Error(), "unexpected EOF") {
+				if status.Code(err) == codes.DeadlineExceeded || status.Code(err) == codes.Internal {
 					blockHeadersChan, errChan, err = r.client.SubscribeBlockHeadersFromStartHeight(
 						ctx,
 						lastReceivedHeight+1,
