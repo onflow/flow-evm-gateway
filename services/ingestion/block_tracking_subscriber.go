@@ -127,6 +127,7 @@ func (r *RPCBlockTrackingSubscriber) subscribe(ctx context.Context, height uint6
 				err,
 			),
 		)
+		close(eventsChan)
 		return eventsChan
 	}
 	lastReceivedHeight := height
