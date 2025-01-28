@@ -89,4 +89,8 @@ type Config struct {
 	// TxStateValidation sets the transaction validation mechanism. It can validate
 	// using the local state index, or wait for the outer Flow transaction to seal.
 	TxStateValidation string
+	// ExperimentalSoftFinalityEnabled enables the experimental soft finality feature which syncs
+	// EVM block and transaction data from the upstream Access node before the block is sealed.
+	// CAUTION: This feature is experimental and may return incorrect data in certain circumstances.
+	ExperimentalSoftFinalityEnabled bool
 }
