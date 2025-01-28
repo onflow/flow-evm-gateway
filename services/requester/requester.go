@@ -15,6 +15,7 @@ import (
 	"github.com/onflow/flow-go/fvm/evm/emulator"
 	"github.com/onflow/flow-go/fvm/evm/offchain/query"
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
+	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/onflow/go-ethereum/common"
 	gethCore "github.com/onflow/go-ethereum/core"
 	"github.com/onflow/go-ethereum/core/txpool"
@@ -43,6 +44,7 @@ var (
 
 const minFlowBalance = 2
 const blockGasLimit = 120_000_000
+const txMaxGasLimit = 50_000_000
 
 // estimateGasErrorRatio is the amount of overestimation eth_estimateGas
 // is allowed to produce in order to speed up calculations.
@@ -185,6 +187,10 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 	tx := &types.Transaction{}
 	if err := tx.UnmarshalBinary(data); err != nil {
 		return common.Hash{}, err
+	}
+
+	if tx.Gas() > txMaxGasLimit {
+		return common.Hash{}, errs.NewTxGasLimitTooHighError(txMaxGasLimit)
 	}
 
 	if err := models.ValidateTransaction(tx, e.head, e.evmSigner, e.validationOptions); err != nil {
@@ -589,7 +595,8 @@ func (e *EVM) buildTransaction(
 
 	flowTx := flow.NewTransaction().
 		SetScript(script).
-		SetReferenceBlockID(latestBlock.ID)
+		SetReferenceBlockID(latestBlock.ID).
+		SetComputeLimit(flowGo.DefaultMaxTransactionGasLimit)
 
 	for _, arg := range args {
 		if err := flowTx.AddArgument(arg); err != nil {
