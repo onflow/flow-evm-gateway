@@ -222,6 +222,8 @@ func parseConfigFromFlags() error {
 		return fmt.Errorf("unknown tx state validation: %s", txStateValidation)
 	}
 
+	cfg.ExperimentalSoftFinalityEnabled = experimentalSoftFinalityEnabled
+
 	return nil
 }
 
@@ -246,6 +248,8 @@ var (
 
 	initHeight,
 	forceStartHeight uint64
+
+	experimentalSoftFinalityEnabled bool
 )
 
 func init() {
@@ -280,4 +284,5 @@ func init() {
 	Cmd.Flags().StringVar(&cfg.ProfilerHost, "profiler-host", "localhost", "Host for the Profiler server")
 	Cmd.Flags().IntVar(&cfg.ProfilerPort, "profiler-port", 6060, "Port for the Profiler server")
 	Cmd.Flags().StringVar(&txStateValidation, "tx-state-validation", "tx-seal", "Sets the transaction validation mechanism. It can validate using the local state index, or wait for the outer Flow transaction to seal. Available values ('local-index' / 'tx-seal'), defaults to 'tx-seal'.")
+	Cmd.Flags().BoolVar(&experimentalSoftFinalityEnabled, "experimental-soft-finality-enabled", false, "Sets whether the gateway should use the experimental soft finality feature. WARNING: This may result in incorrect results being returned in certain circumstances. Use only if you know what you are doing.")
 }
