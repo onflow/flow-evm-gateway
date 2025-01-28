@@ -19,22 +19,24 @@ type Collector interface {
 	MeasureRequestDuration(start time.Time, method string)
 	OperatorBalance(account *flow.Account)
 	AvailableSigningKeys(count int)
+	GasEstimationIterations(count int)
 }
 
 var _ Collector = &DefaultCollector{}
 
 type DefaultCollector struct {
 	// TODO: for now we cannot differentiate which api request failed number of times
-	apiErrorsCounter       prometheus.Counter
-	serverPanicsCounters   *prometheus.CounterVec
-	cadenceBlockHeight     prometheus.Gauge
-	evmBlockHeight         prometheus.Gauge
-	evmBlockIndexedCounter prometheus.Counter
-	evmTxIndexedCounter    prometheus.Counter
-	operatorBalance        prometheus.Gauge
-	evmAccountCallCounters *prometheus.CounterVec
-	requestDurations       *prometheus.HistogramVec
-	availableSigningkeys   prometheus.Gauge
+	apiErrorsCounter        prometheus.Counter
+	serverPanicsCounters    *prometheus.CounterVec
+	cadenceBlockHeight      prometheus.Gauge
+	evmBlockHeight          prometheus.Gauge
+	evmBlockIndexedCounter  prometheus.Counter
+	evmTxIndexedCounter     prometheus.Counter
+	operatorBalance         prometheus.Gauge
+	evmAccountCallCounters  *prometheus.CounterVec
+	requestDurations        *prometheus.HistogramVec
+	availableSigningkeys    prometheus.Gauge
+	gasEstimationIterations prometheus.Gauge
 }
 
 func NewCollector(logger zerolog.Logger) Collector {
@@ -90,6 +92,11 @@ func NewCollector(logger zerolog.Logger) Collector {
 		Help: "Number of keys available for transaction signing",
 	})
 
+	gasEstimationIterations := prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: prefixedName("gas_estimation_iterations"),
+		Help: "Number of iterations taken to estimate the gas of a EVM call/tx",
+	})
+
 	metrics := []prometheus.Collector{
 		apiErrors,
 		serverPanicsCounters,
@@ -101,6 +108,7 @@ func NewCollector(logger zerolog.Logger) Collector {
 		evmAccountCallCounters,
 		requestDurations,
 		availableSigningKeys,
+		gasEstimationIterations,
 	}
 	if err := registerMetrics(logger, metrics...); err != nil {
 		logger.Info().Msg("using noop collector as metric register failed")
@@ -108,16 +116,17 @@ func NewCollector(logger zerolog.Logger) Collector {
 	}
 
 	return &DefaultCollector{
-		apiErrorsCounter:       apiErrors,
-		serverPanicsCounters:   serverPanicsCounters,
-		cadenceBlockHeight:     cadenceBlockHeight,
-		evmBlockHeight:         evmBlockHeight,
-		evmBlockIndexedCounter: evmBlockIndexedCounter,
-		evmTxIndexedCounter:    evmTxIndexedCounter,
-		evmAccountCallCounters: evmAccountCallCounters,
-		requestDurations:       requestDurations,
-		operatorBalance:        operatorBalance,
-		availableSigningkeys:   availableSigningKeys,
+		apiErrorsCounter:        apiErrors,
+		serverPanicsCounters:    serverPanicsCounters,
+		cadenceBlockHeight:      cadenceBlockHeight,
+		evmBlockHeight:          evmBlockHeight,
+		evmBlockIndexedCounter:  evmBlockIndexedCounter,
+		evmTxIndexedCounter:     evmTxIndexedCounter,
+		evmAccountCallCounters:  evmAccountCallCounters,
+		requestDurations:        requestDurations,
+		operatorBalance:         operatorBalance,
+		availableSigningkeys:    availableSigningKeys,
+		gasEstimationIterations: gasEstimationIterations,
 	}
 }
 
@@ -170,6 +179,10 @@ func (c *DefaultCollector) MeasureRequestDuration(start time.Time, method string
 
 func (c *DefaultCollector) AvailableSigningKeys(count int) {
 	c.availableSigningkeys.Set(float64(count))
+}
+
+func (c *DefaultCollector) GasEstimationIterations(count int) {
+	c.gasEstimationIterations.Set(float64(count))
 }
 
 func prefixedName(name string) string {
