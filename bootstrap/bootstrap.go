@@ -144,7 +144,7 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 	// create event subscriber
 	var subscriber ingestion.EventSubscriber
 	if b.config.ExperimentalSoftFinalityEnabled {
-		subscriber = ingestion.NewRPCEventSubscriber(
+		subscriber = ingestion.NewRPCBlockTrackingSubscriber(
 			b.logger,
 			b.client,
 			chainID,
@@ -152,7 +152,7 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 			latestCadenceHeight,
 		)
 	} else {
-		subscriber = ingestion.NewRPCBlockTrackingSubscriber(
+		subscriber = ingestion.NewRPCEventSubscriber(
 			b.logger,
 			b.client,
 			chainID,
