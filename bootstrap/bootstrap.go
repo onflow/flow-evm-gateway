@@ -15,7 +15,6 @@ import (
 	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/onflow/flow-go/module/component"
 	flowMetrics "github.com/onflow/flow-go/module/metrics"
-	"github.com/onflow/flow-go/module/util"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-limiter/memorystore"
@@ -368,10 +367,6 @@ func (b *Bootstrap) StartMetricsServer(ctx context.Context) error {
 	b.logger.Info().Msg("bootstrap starting metrics server")
 
 	b.metrics = flowMetrics.NewServer(b.logger, uint(b.config.MetricsPort))
-	err := util.WaitClosed(ctx, b.metrics.Ready())
-	if err != nil {
-		return fmt.Errorf("failed to start metrics server: %w", err)
-	}
 
 	return nil
 }
@@ -381,7 +376,6 @@ func (b *Bootstrap) StopMetricsServer() {
 		return
 	}
 	b.logger.Warn().Msg("shutting down metrics server")
-	<-b.metrics.Done()
 }
 
 func (b *Bootstrap) StartProfilerServer(_ context.Context) error {
