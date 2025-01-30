@@ -141,6 +141,10 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 
 	chainID := b.config.FlowNetworkID
 
+	// the event subscriber takes the first block to sync from the Access node, which is the block
+	// after the latest cadence block
+	nextCadenceHeight := latestCadenceHeight + 1
+
 	// create event subscriber
 	var subscriber ingestion.EventSubscriber
 	if b.config.ExperimentalSoftFinalityEnabled {
@@ -149,7 +153,7 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 			b.client,
 			chainID,
 			b.keystore,
-			latestCadenceHeight,
+			nextCadenceHeight,
 		)
 	} else {
 		subscriber = ingestion.NewRPCEventSubscriber(
@@ -157,7 +161,7 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 			b.client,
 			chainID,
 			b.keystore,
-			latestCadenceHeight,
+			nextCadenceHeight,
 		)
 	}
 
