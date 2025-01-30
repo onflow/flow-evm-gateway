@@ -568,39 +568,25 @@ func setupStorage(
 	storageAddress := evm.StorageAccountAddress(config.FlowNetworkID)
 	registerStore := pebble.NewRegisterStorage(store, storageAddress)
 
+	batch := store.NewBatch()
+	defer func() {
+		err := batch.Close()
+		if err != nil {
+			// we don't know what went wrong, so this is fatal
+			logger.Fatal().Err(err).Msg("failed to close batch")
+		}
+	}()
+
 	// hard set the start cadence height, this is used when force reindexing
 	if config.ForceStartCadenceHeight != 0 {
 		logger.Warn().Uint64("height", config.ForceStartCadenceHeight).Msg("force setting starting Cadence height!!!")
-		batch := store.NewBatch()
-		defer func(batch *pebbleDB.Batch) {
-			err := batch.Close()
-			if err != nil {
-				// we don't know what went wrong, so this is fatal
-				logger.Fatal().Err(err).Msg("failed to close batch")
-			}
-		}(batch)
-
 		if err := blocks.SetLatestCadenceHeight(config.ForceStartCadenceHeight, batch); err != nil {
 			return nil, nil, err
-		}
-
-		err = batch.Commit(pebbleDB.Sync)
-		if err != nil {
-			return nil, nil, fmt.Errorf("could not commit forced start cadence height updates: %w", err)
 		}
 	}
 
 	// if database is not initialized require init height
 	if _, err := blocks.LatestCadenceHeight(); errors.Is(err, errs.ErrStorageNotInitialized) {
-		batch := store.NewBatch()
-		defer func(batch *pebbleDB.Batch) {
-			err := batch.Close()
-			if err != nil {
-				// we don't know what went wrong, so this is fatal
-				logger.Fatal().Err(err).Msg("failed to close batch")
-			}
-		}(batch)
-
 		cadenceHeight := config.InitCadenceHeight
 		evmBlokcHeight := uint64(0)
 		cadenceBlock, err := client.GetBlockHeaderByHeight(context.Background(), cadenceHeight)
@@ -638,11 +624,6 @@ func setupStorage(
 			)
 		}
 
-		err = batch.Commit(pebbleDB.Sync)
-		if err != nil {
-			return nil, nil, fmt.Errorf("could not commit register updates: %w", err)
-		}
-
 		logger.Info().
 			Stringer("fvm_address_for_evm_storage_account", storageAddress).
 			Msgf("database initialized with cadence height: %d", cadenceHeight)
@@ -650,6 +631,13 @@ func setupStorage(
 	// else {
 	//	// TODO(JanezP): verify storage account owner is correct
 	// }
+
+	if batch.Count() > 0 {
+		err = batch.Commit(pebbleDB.Sync)
+		if err != nil {
+			return nil, nil, fmt.Errorf("could not commit register updates: %w", err)
+		}
+	}
 
 	return db, &Storages{
 		Storage:      store,
