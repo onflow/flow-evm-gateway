@@ -310,6 +310,15 @@ func (e *EVM) EstimateGas(
 	height uint64,
 	stateOverrides *ethTypes.StateOverride,
 ) (uint64, error) {
+	iterations := 0
+
+	dryRun := func(gasLimit uint64) (*evmTypes.Result, error) {
+		tx.Gas = gasLimit
+		result, err := e.dryRunTx(tx, from, height, stateOverrides, nil)
+		iterations += 1
+		return result, err
+	}
+
 	// Note: The following algorithm, is largely inspired from
 	// https://github.com/onflow/go-ethereum/blob/master/eth/gasestimator/gasestimator.go#L49-L192,
 	// and adapted to fit our use-case.
@@ -323,10 +332,10 @@ func (e *EVM) EstimateGas(
 	if tx.Gas >= gethParams.TxGas {
 		passingGasLimit = tx.Gas
 	}
-	tx.Gas = passingGasLimit
+
 	// We first execute the transaction at the highest allowable gas limit,
 	// since if this fails we can return the error immediately.
-	result, err := e.dryRunTx(tx, from, height, stateOverrides, nil)
+	result, err := dryRun(passingGasLimit)
 	if err != nil {
 		return 0, err
 	}
@@ -337,6 +346,12 @@ func (e *EVM) EstimateGas(
 		}
 		return 0, errs.NewFailedTransactionError(resultSummary.ErrorMessage)
 	}
+
+	// We do not want to report iterations for calls/transactions
+	// that errored out or had their execution reverted.
+	defer func() {
+		e.collector.GasEstimationIterations(iterations)
+	}()
 
 	// For almost any transaction, the gas consumed by the unconstrained execution
 	// above lower-bounds the gas limit required for it to succeed. One exception
@@ -350,8 +365,7 @@ func (e *EVM) EstimateGas(
 	// Explicitly check that gas amount and use as a limit for the binary search.
 	optimisticGasLimit := (result.GasConsumed + result.GasRefund + gethParams.CallStipend) * 64 / 63
 	if optimisticGasLimit < passingGasLimit {
-		tx.Gas = optimisticGasLimit
-		result, err = e.dryRunTx(tx, from, height, stateOverrides, nil)
+		result, err := dryRun(optimisticGasLimit)
 		if err != nil {
 			// This should not happen under normal conditions since if we make it this far the
 			// transaction had run without error at least once before.
@@ -380,8 +394,7 @@ func (e *EVM) EstimateGas(
 			// range here is skewed to favor the low side.
 			mid = failingGasLimit * 2
 		}
-		tx.Gas = mid
-		result, err = e.dryRunTx(tx, from, height, stateOverrides, nil)
+		result, err := dryRun(mid)
 		if err != nil {
 			return 0, err
 		}
