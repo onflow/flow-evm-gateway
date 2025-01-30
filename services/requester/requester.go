@@ -225,7 +225,6 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 	script := replaceAddresses(runTxScript, e.config.FlowNetworkID)
 	flowTx, err := e.buildTransaction(ctx, script, hexEncodedTx, coinbaseAddress)
 	if err != nil {
-		e.logger.Error().Err(err).Str("data", txData).Msg("failed to build transaction")
 		return common.Hash{}, err
 	}
 
