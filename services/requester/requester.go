@@ -569,6 +569,10 @@ func (e *EVM) buildTransaction(
 	e.mux.Lock()
 	defer e.mux.Unlock()
 
+	defer func() {
+		e.collector.AvailableSigningKeys(e.keystore.AvailableKeys())
+	}()
+
 	var (
 		g           = errgroup.Group{}
 		err1, err2  error
@@ -609,7 +613,6 @@ func (e *EVM) buildTransaction(
 	}
 	e.keystore.LockKey(flowTx.ID(), latestBlock.Height, accKey)
 
-	e.collector.AvailableSigningKeys(e.keystore.AvailableKeys())
 	e.collector.OperatorBalance(account)
 
 	return flowTx, nil
