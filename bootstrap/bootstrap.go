@@ -571,8 +571,22 @@ func setupStorage(
 	// hard set the start cadence height, this is used when force reindexing
 	if config.ForceStartCadenceHeight != 0 {
 		logger.Warn().Uint64("height", config.ForceStartCadenceHeight).Msg("force setting starting Cadence height!!!")
-		if err := blocks.SetLatestCadenceHeight(config.ForceStartCadenceHeight, nil); err != nil {
+		batch := store.NewBatch()
+		defer func(batch *pebbleDB.Batch) {
+			err := batch.Close()
+			if err != nil {
+				// we don't know what went wrong, so this is fatal
+				logger.Fatal().Err(err).Msg("failed to close batch")
+			}
+		}(batch)
+
+		if err := blocks.SetLatestCadenceHeight(config.ForceStartCadenceHeight, batch); err != nil {
 			return nil, nil, err
+		}
+
+		err = batch.Commit(pebbleDB.Sync)
+		if err != nil {
+			return nil, nil, fmt.Errorf("could not commit forced start cadence height updates: %w", err)
 		}
 	}
 
