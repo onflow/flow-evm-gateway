@@ -141,13 +141,17 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 
 	chainID := b.config.FlowNetworkID
 
+	// the event subscriber takes the first block to sync from the Access node, which is the block
+	// after the latest cadence block
+	nextCadenceHeight := latestCadenceHeight + 1
+
 	// create event subscriber
 	subscriber := ingestion.NewRPCEventSubscriber(
 		b.logger,
 		b.client,
 		chainID,
 		b.keystore,
-		latestCadenceHeight,
+		nextCadenceHeight,
 	)
 
 	callTracerCollector, err := replayer.NewCallTracerCollector(b.logger)
