@@ -14,6 +14,7 @@ import (
 	"github.com/onflow/flow-go/fvm/evm"
 	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/onflow/flow-go/module/component"
+	"github.com/onflow/flow-go/module/irrecoverable"
 	flowMetrics "github.com/onflow/flow-go/module/metrics"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/rs/zerolog"
@@ -368,6 +369,27 @@ func (b *Bootstrap) StartMetricsServer(ctx context.Context) error {
 
 	b.metrics = flowMetrics.NewServer(b.logger, uint(b.config.MetricsPort))
 
+	// this logic is needed since the metric server is a component.
+	// we need to start and stop it manually here.
+
+	ictx, errCh := irrecoverable.WithSignaler(ctx)
+	b.metrics.Start(ictx)
+	<-b.metrics.Ready()
+	select {
+	case err := <-errCh:
+		// there might be an error already if the startup failed
+		return err
+	default:
+	}
+
+	go func() {
+		err := <-errCh
+		if err != nil {
+			b.logger.Err(err).Msg("error in metrics server")
+			panic(err)
+		}
+	}()
+
 	return nil
 }
 
@@ -375,6 +397,7 @@ func (b *Bootstrap) StopMetricsServer() {
 	if b.metrics == nil {
 		return
 	}
+	<-b.metrics.Done()
 	b.logger.Warn().Msg("shutting down metrics server")
 }
 
