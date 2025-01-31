@@ -283,7 +283,7 @@ it('should retrieve transaction traces', async () => {
         txTrace,
         {
             from: conf.eoa.address.toLowerCase(),
-            gas: '0xbf57',
+            gas: '0xb50d',
             gasUsed: '0x6147',
             to: contractAddress.toLowerCase(),
             input: '0xc550f90f',
@@ -291,7 +291,7 @@ it('should retrieve transaction traces', async () => {
             calls: [
                 {
                     from: contractAddress.toLowerCase(),
-                    gas: '0x5f01',
+                    gas: '0x54e1',
                     gasUsed: '0x2',
                     to: '0x0000000000000000000000010000000000000001',
                     input: '0x53e87d66',
@@ -585,7 +585,7 @@ it('should retrieve call traces', async () => {
         {
             from: conf.eoa.address.toLowerCase(),
             gas: '0xcdd4',
-            gasUsed: '0xbdd4',
+            gasUsed: '0xb38f',
             to: contractAddress.toLowerCase(),
             input: '0xc550f90f',
             output: '0x0000000000000000000000000000000000000000000000000000000000000008',
@@ -593,7 +593,7 @@ it('should retrieve call traces', async () => {
                 {
                     from: contractAddress.toLowerCase(),
                     gas: '0x6d44',
-                    gasUsed: '0x5c8f',
+                    gasUsed: '0x524a',
                     to: '0x0000000000000000000000010000000000000001',
                     input: '0x53e87d66',
                     output: '0x0000000000000000000000000000000000000000000000000000000000000008',
