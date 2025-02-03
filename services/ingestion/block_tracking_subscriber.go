@@ -204,11 +204,7 @@ func (r *RPCBlockTrackingSubscriber) subscribe(ctx context.Context, height uint6
 				case codes.NotFound:
 					// we can get not found when reconnecting after a disconnect/restart before the
 					// next block is finalized. just wait briefly and try again
-					select {
-					case <-ctx.Done():
-						return
-					case <-time.After(200 * time.Millisecond):
-					}
+					time.Sleep(200 * time.Millisecond)
 				case codes.DeadlineExceeded, codes.Internal:
 					// these are sometimes returned when the stream is disconnected by a middleware or the server
 				default:
@@ -272,13 +268,26 @@ func (r *RPCBlockTrackingSubscriber) getEventsByType(
 	blockHeader flow.BlockHeader,
 	eventType string,
 ) (flow.BlockEvents, error) {
-	evts, err := r.client.GetEventsForBlockHeader(
-		ctx,
-		eventType,
-		blockHeader,
-	)
-	if err != nil {
-		return flow.BlockEvents{}, err
+	var evts []flow.BlockEvents
+	var err error
+
+	// retry until we get the block from an execution node that has the events
+	for {
+		evts, err = r.client.GetEventsForBlockHeader(
+			ctx,
+			eventType,
+			blockHeader,
+		)
+		if err != nil {
+			// retry after a short pause
+			if status.Code(err) == codes.NotFound || status.Code(err) == codes.ResourceExhausted {
+				time.Sleep(200 * time.Millisecond)
+				continue
+			}
+
+			return flow.BlockEvents{}, err
+		}
+		break
 	}
 
 	if len(evts) != 1 {
