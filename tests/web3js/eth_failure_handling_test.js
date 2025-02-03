@@ -1,7 +1,26 @@
 const { assert } = require('chai')
 const helpers = require('./helpers')
-const conf = require("./config")
+const conf = require('./config')
 const web3 = conf.web3
+
+it('should fail when tx gas limit higher than the max value', async () => {
+    let receiver = web3.eth.accounts.create()
+
+    try {
+        await helpers.signAndSend({
+            from: conf.eoa.address,
+            to: receiver.address,
+            value: 10,
+            gasPrice: conf.minGasPrice,
+            gasLimit: 51_000_000, // max tx gas limit is 50_000_000
+        })
+    } catch (e) {
+        assert.include(e.message, 'tx gas limit exceeds the max value of 50000000')
+        return
+    }
+
+    assert.fail('should not reach')
+})
 
 it('should fail when nonce too low', async () => {
     let receiver = web3.eth.accounts.create()
