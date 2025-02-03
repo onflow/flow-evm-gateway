@@ -238,7 +238,7 @@ func (d *DebugAPI) TraceCall(
 			}
 		}
 	}
-	res, err := view.DryCall(
+	_, err = view.DryCall(
 		from,
 		to,
 		tx.Data,
@@ -248,12 +248,6 @@ func (d *DebugAPI) TraceCall(
 	)
 	if err != nil {
 		return nil, err
-	}
-
-	for _, log := range res.Logs {
-		if tracer != nil && tracer.OnLog != nil {
-			tracer.OnLog(log)
-		}
 	}
 
 	return tracer.GetResult()
