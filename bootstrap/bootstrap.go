@@ -374,7 +374,9 @@ func (b *Bootstrap) StartMetricsServer(ctx context.Context) error {
 
 	ictx, errCh := irrecoverable.WithSignaler(ctx)
 	b.metrics.Start(ictx)
-	<-b.metrics.Ready()
+	if err := util.WaitClosed(ctx, b.metrics.Ready()); err != nil {
+		return fmt.Errorf("failed to start metrics server: %w", err)
+	}
 	select {
 	case err := <-errCh:
 		// there might be an error already if the startup failed
