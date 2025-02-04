@@ -64,7 +64,7 @@ it('should be able to use Cadence Arch calls', async () => {
     res = await web3.eth.call({ to: contractAddress, data: flowBlockHeightData }, 'latest')
     assert.equal(
         web3.eth.abi.decodeParameter('uint64', res),
-        8n,
+        conf.startBlockHeight + 4n,
     )
 
     // submit a transaction that calls verifyArchCallToVerifyCOAOwnershipProof(address,bytes32,bytes)
