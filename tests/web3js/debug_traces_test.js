@@ -287,7 +287,7 @@ it('should retrieve transaction traces', async () => {
             gasUsed: '0x6147',
             to: contractAddress.toLowerCase(),
             input: '0xc550f90f',
-            output: '0x0000000000000000000000000000000000000000000000000000000000000007',
+            output: '0x0000000000000000000000000000000000000000000000000000000000000006',
             calls: [
                 {
                     from: contractAddress.toLowerCase(),
@@ -295,7 +295,7 @@ it('should retrieve transaction traces', async () => {
                     gasUsed: '0x2',
                     to: '0x0000000000000000000000010000000000000001',
                     input: '0x53e87d66',
-                    output: '0x0000000000000000000000000000000000000000000000000000000000000007',
+                    output: '0x0000000000000000000000000000000000000000000000000000000000000006',
                     type: 'STATICCALL'
                 }
             ],
@@ -588,7 +588,7 @@ it('should retrieve call traces', async () => {
             gasUsed: '0xb38f',
             to: contractAddress.toLowerCase(),
             input: '0xc550f90f',
-            output: '0x0000000000000000000000000000000000000000000000000000000000000008',
+            output: '0x0000000000000000000000000000000000000000000000000000000000000007',
             calls: [
                 {
                     from: contractAddress.toLowerCase(),
@@ -596,7 +596,7 @@ it('should retrieve call traces', async () => {
                     gasUsed: '0x524a',
                     to: '0x0000000000000000000000010000000000000001',
                     input: '0x53e87d66',
-                    output: '0x0000000000000000000000000000000000000000000000000000000000000008',
+                    output: '0x0000000000000000000000000000000000000000000000000000000000000007',
                     type: 'STATICCALL'
                 }
             ],

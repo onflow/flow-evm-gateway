@@ -307,7 +307,7 @@ it('can make batch requests', async () => {
         jsonrpc: '2.0',
         id: 5,
         method: 'eth_getBlockTransactionCountByNumber',
-        params: ['0x3'],
+        params: ['0x2'],
     }
 
     batch.add(getBlockNumber)
@@ -320,7 +320,7 @@ it('can make batch requests', async () => {
 
     assert.deepEqual(
         results[0],
-        { jsonrpc: '2.0', id: 1, result: '0x4' }
+        { jsonrpc: '2.0', id: 1, result: '0x3' }
     )
     assert.deepEqual(
         results[1],
@@ -371,9 +371,9 @@ it('should get fee history', async () => {
         response,
         {
             oldestBlock: 1n,
-            reward: [['0x96'], ['0x96'], ['0x96'], ['0x96']], // gas price is 150 during testing
-            baseFeePerGas: [1n, 1n, 1n, 1n],
-            gasUsedRatio: [0, 0, 0.006205458333333334, 0]
+            reward: [['0x96'], ['0x96'], ['0x96']], // gas price is 150 during testing
+            baseFeePerGas: [1n, 1n, 1n],
+            gasUsedRatio: [0, 0.006205458333333334, 0]
         }
     )
 })

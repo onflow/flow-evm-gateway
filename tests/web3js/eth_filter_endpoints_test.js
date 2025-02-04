@@ -390,7 +390,7 @@ describe('eth_getFilterChanges', async () => {
         assert.lengthOf(transactions, 2) // the last transaction is the COA transfer for gas fees
         let expectedTx = {
             blockHash: res.receipt.blockHash,
-            blockNumber: '0xe',
+            blockNumber: '0xd',
             from: '0xFACF71692421039876a5BB4F10EF7A439D8ef61E',
             gas: '0xf4240',
             gasPrice: '0x96',
@@ -410,7 +410,7 @@ describe('eth_getFilterChanges', async () => {
 
         let expectedCoaTx = {
             blockHash: res.receipt.blockHash,
-            blockNumber: '0xe',
+            blockNumber: '0xd',
             from: '0x0000000000000000000000030000000000000000',
             gas: '0x5b04',
             gasPrice: '0x0',
