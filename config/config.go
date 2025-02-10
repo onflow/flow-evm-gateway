@@ -89,4 +89,9 @@ type Config struct {
 	// TxStateValidation sets the transaction validation mechanism. It can validate
 	// using the local state index, or wait for the outer Flow transaction to seal.
 	TxStateValidation string
+	// TxRequestLimit is the number of transaction submissions to allow per interval.
+	TxRequestLimit uint64
+	// TxDurationLimit is the time interval upon which to enforce transaction submission
+	// rate limiting.
+	TxDurationLimit time.Duration
 }

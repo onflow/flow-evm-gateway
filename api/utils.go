@@ -132,6 +132,8 @@ func handleError[T any](err error, log zerolog.Logger, collector metrics.Collect
 		return zero, err
 	case errors.Is(err, core.ErrInsufficientFunds):
 		return zero, err
+	case errors.Is(err, errs.ErrRateLimit):
+		return zero, err
 	default:
 		collector.ApiErrorOccurred()
 		log.Error().Err(err).Msg("api error")
