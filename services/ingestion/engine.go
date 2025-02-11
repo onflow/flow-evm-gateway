@@ -3,6 +3,7 @@ package ingestion
 import (
 	"context"
 	"fmt"
+	"time"
 
 	flowGo "github.com/onflow/flow-go/model/flow"
 
@@ -305,6 +306,9 @@ func (e *Engine) indexEvents(events *models.CadenceEvents, batch *pebbleDB.Batch
 			return err
 		}
 	}
+
+	blockCreation := time.Unix(int64(events.Block().Timestamp), 0)
+	e.collector.BlockIngestionTime(blockCreation)
 
 	return nil
 }
