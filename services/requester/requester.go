@@ -211,8 +211,12 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 		return common.Hash{}, fmt.Errorf("failed to derive the sender: %w", err)
 	}
 
-	if e.config.FlowNetworkID == flowGo.Testnet {
-		_, _, _, ok, _ := e.limiter.Take(ctx, from.Hex())
+	rateLimitEnabled := e.config.TxRequestLimit > 0
+	if rateLimitEnabled {
+		_, _, _, ok, err := e.limiter.Take(ctx, from.Hex())
+		if err != nil {
+			return common.Hash{}, fmt.Errorf("failed to check rate limit: %w", err)
+		}
 		if !ok {
 			return common.Hash{}, errs.ErrRateLimit
 		}
