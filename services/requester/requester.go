@@ -225,7 +225,6 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 	script := replaceAddresses(runTxScript, e.config.FlowNetworkID)
 	flowTx, err := e.buildTransaction(ctx, script, hexEncodedTx, coinbaseAddress)
 	if err != nil {
-		e.logger.Error().Err(err).Str("data", txData).Msg("failed to build transaction")
 		return common.Hash{}, err
 	}
 
@@ -569,6 +568,10 @@ func (e *EVM) buildTransaction(
 	e.mux.Lock()
 	defer e.mux.Unlock()
 
+	defer func() {
+		e.collector.AvailableSigningKeys(e.keystore.AvailableKeys())
+	}()
+
 	var (
 		g           = errgroup.Group{}
 		err1, err2  error
@@ -609,7 +612,6 @@ func (e *EVM) buildTransaction(
 	}
 	e.keystore.LockKey(flowTx.ID(), latestBlock.Height, accKey)
 
-	e.collector.AvailableSigningKeys(e.keystore.AvailableKeys())
 	e.collector.OperatorBalance(account)
 
 	return flowTx, nil

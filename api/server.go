@@ -430,6 +430,7 @@ type responseHandler struct {
 }
 
 var knownErrors = []error{
+	errs.ErrInternal,
 	errs.ErrRateLimit,
 	errs.ErrInvalid,
 	errs.ErrFailedTransaction,
