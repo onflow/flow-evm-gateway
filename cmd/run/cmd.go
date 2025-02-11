@@ -222,12 +222,6 @@ func parseConfigFromFlags() error {
 		return fmt.Errorf("unknown tx state validation: %s", txStateValidation)
 	}
 
-	txDuration, err := time.ParseDuration(txDurationLimit)
-	if err != nil {
-		return fmt.Errorf("invalid unit %s for TX duration limit: %w", txDuration, err)
-	}
-	cfg.TxDurationLimit = txDuration
-
 	return nil
 }
 
@@ -248,8 +242,7 @@ var (
 	cloudKMSLocationID,
 	cloudKMSKeyRingID,
 	walletKey,
-	txStateValidation,
-	txDurationLimit string
+	txStateValidation string
 
 	initHeight,
 	forceStartHeight uint64
@@ -287,6 +280,6 @@ func init() {
 	Cmd.Flags().StringVar(&cfg.ProfilerHost, "profiler-host", "localhost", "Host for the Profiler server")
 	Cmd.Flags().IntVar(&cfg.ProfilerPort, "profiler-port", 6060, "Port for the Profiler server")
 	Cmd.Flags().StringVar(&txStateValidation, "tx-state-validation", "tx-seal", "Sets the transaction validation mechanism. It can validate using the local state index, or wait for the outer Flow transaction to seal. Available values ('local-index' / 'tx-seal'), defaults to 'tx-seal'.")
-	Cmd.Flags().Uint64Var(&cfg.TxRequestLimit, "tx-request-limit", 1, "Number of transaction submissions to allow per the specified interval. Applies only on Testnet.")
-	Cmd.Flags().StringVar(&txDurationLimit, "tx-duration-limit", "3s", "Time interval upon which to enforce transaction submission rate limiting. Applies only on Testnet.")
+	Cmd.Flags().Uint64Var(&cfg.TxRequestLimit, "tx-request-limit", 0, "Number of transaction submissions to allow per the specified interval.")
+	Cmd.Flags().DurationVar(&cfg.TxRequestDurationLimit, "tx-request-duration-limit", time.Second*3, "Time interval upon which to enforce transaction submission rate limiting.")
 }
