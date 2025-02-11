@@ -145,6 +145,12 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 	// the event subscriber takes the first block to sync from the Access node, which is the block
 	// after the latest cadence block
 	nextCadenceHeight := latestCadenceHeight + 1
+	// Special case when using a local Emulator as Access Node. The Emulator
+	// always starts at block height 0, so if we try to subscribe at block
+	// height 1, we'll get an error, as it doesn't exist.
+	if latestCadenceHeight == config.EmulatorInitCadenceHeight {
+		nextCadenceHeight -= 1
+	}
 
 	// create event subscriber
 	subscriber := ingestion.NewRPCEventSubscriber(
