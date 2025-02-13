@@ -153,13 +153,24 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 	}
 
 	// create event subscriber
-	subscriber := ingestion.NewRPCEventSubscriber(
-		b.logger,
-		b.client,
-		chainID,
-		b.keystore,
-		nextCadenceHeight,
-	)
+	var subscriber ingestion.EventSubscriber
+	if b.config.ExperimentalSoftFinalityEnabled {
+		subscriber = ingestion.NewRPCBlockTrackingSubscriber(
+			b.logger,
+			b.client,
+			chainID,
+			b.keystore,
+			nextCadenceHeight,
+		)
+	} else {
+		subscriber = ingestion.NewRPCEventSubscriber(
+			b.logger,
+			b.client,
+			chainID,
+			b.keystore,
+			nextCadenceHeight,
+		)
+	}
 
 	callTracerCollector, err := replayer.NewCallTracerCollector(b.logger)
 	if err != nil {
