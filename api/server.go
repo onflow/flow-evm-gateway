@@ -248,6 +248,7 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	requestBody := make(map[string]any)
+	requestMethod := ""
 	if b, err := io.ReadAll(r.Body); err == nil {
 		_ = json.Unmarshal(b, &requestBody)
 
@@ -255,6 +256,7 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// JSON-RPC methods.
 		if methodValue, ok := requestBody["method"]; ok {
 			if methodStr, ok := methodValue.(string); ok && eth.IsValidMethod(methodStr) {
+				requestMethod = methodStr
 				h.logger.Debug().
 					Str("IP", r.RemoteAddr).
 					Str("url", r.URL.String()).
@@ -284,13 +286,16 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.httpHandler != nil {
-		if checkPath(r, "") {
-			metrics.
-				NewMetricsHandler(h.httpHandler, h.collector, h.logger).
-				ServeHTTP(logW, r)
-			return
+	if h.httpHandler != nil && checkPath(r, "") {
+		start := time.Now()
+
+		h.httpHandler.ServeHTTP(logW, r)
+
+		if eth.IsValidMethod(requestMethod) {
+			h.collector.MeasureRequestDuration(start, requestMethod)
 		}
+
+		return
 	}
 
 	w.WriteHeader(http.StatusNotFound)
@@ -430,6 +435,7 @@ type responseHandler struct {
 }
 
 var knownErrors = []error{
+	errs.ErrInternal,
 	errs.ErrRateLimit,
 	errs.ErrInvalid,
 	errs.ErrFailedTransaction,

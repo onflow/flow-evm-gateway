@@ -14,6 +14,7 @@ import (
 	"github.com/onflow/flow-go/fvm/evm"
 	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/onflow/flow-go/module/component"
+	"github.com/onflow/flow-go/module/irrecoverable"
 	flowMetrics "github.com/onflow/flow-go/module/metrics"
 	"github.com/onflow/flow-go/module/util"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
@@ -144,6 +145,12 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 	// the event subscriber takes the first block to sync from the Access node, which is the block
 	// after the latest cadence block
 	nextCadenceHeight := latestCadenceHeight + 1
+	// Special case when using a local Emulator as Access Node. The Emulator
+	// always starts at block height 0, so if we try to subscribe at block
+	// height 1, we'll get an error, as it doesn't exist.
+	if latestCadenceHeight == config.EmulatorInitCadenceHeight {
+		nextCadenceHeight -= 1
+	}
 
 	// create event subscriber
 	var subscriber ingestion.EventSubscriber
@@ -379,10 +386,29 @@ func (b *Bootstrap) StartMetricsServer(ctx context.Context) error {
 	b.logger.Info().Msg("bootstrap starting metrics server")
 
 	b.metrics = flowMetrics.NewServer(b.logger, uint(b.config.MetricsPort))
-	err := util.WaitClosed(ctx, b.metrics.Ready())
-	if err != nil {
+
+	// this logic is needed since the metric server is a component.
+	// we need to start and stop it manually here.
+
+	ictx, errCh := irrecoverable.WithSignaler(ctx)
+	b.metrics.Start(ictx)
+	if err := util.WaitClosed(ctx, b.metrics.Ready()); err != nil {
 		return fmt.Errorf("failed to start metrics server: %w", err)
 	}
+	select {
+	case err := <-errCh:
+		// there might be an error already if the startup failed
+		return err
+	default:
+	}
+
+	go func() {
+		err := <-errCh
+		if err != nil {
+			b.logger.Err(err).Msg("error in metrics server")
+			panic(err)
+		}
+	}()
 
 	return nil
 }
@@ -391,8 +417,8 @@ func (b *Bootstrap) StopMetricsServer() {
 	if b.metrics == nil {
 		return
 	}
-	b.logger.Warn().Msg("shutting down metrics server")
 	<-b.metrics.Done()
+	b.logger.Warn().Msg("shutting down metrics server")
 }
 
 func (b *Bootstrap) StartProfilerServer(_ context.Context) error {

@@ -20,6 +20,7 @@ type Collector interface {
 	OperatorBalance(account *flow.Account)
 	AvailableSigningKeys(count int)
 	GasEstimationIterations(count int)
+	BlockIngestionTime(blockCreation time.Time)
 }
 
 var _ Collector = &DefaultCollector{}
@@ -37,6 +38,7 @@ type DefaultCollector struct {
 	requestDurations        *prometheus.HistogramVec
 	availableSigningkeys    prometheus.Gauge
 	gasEstimationIterations prometheus.Gauge
+	blockIngestionTime      prometheus.Histogram
 }
 
 func NewCollector(logger zerolog.Logger) Collector {
@@ -97,6 +99,12 @@ func NewCollector(logger zerolog.Logger) Collector {
 		Help: "Number of iterations taken to estimate the gas of a EVM call/tx",
 	})
 
+	blockIngestionTime := prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name:    prefixedName("block_ingestion_time_seconds"),
+		Help:    "Time taken to fully ingest an EVM block in the local state index",
+		Buckets: prometheus.DefBuckets,
+	})
+
 	metrics := []prometheus.Collector{
 		apiErrors,
 		serverPanicsCounters,
@@ -109,6 +117,7 @@ func NewCollector(logger zerolog.Logger) Collector {
 		requestDurations,
 		availableSigningKeys,
 		gasEstimationIterations,
+		blockIngestionTime,
 	}
 	if err := registerMetrics(logger, metrics...); err != nil {
 		logger.Info().Msg("using noop collector as metric register failed")
@@ -127,6 +136,7 @@ func NewCollector(logger zerolog.Logger) Collector {
 		operatorBalance:         operatorBalance,
 		availableSigningkeys:    availableSigningKeys,
 		gasEstimationIterations: gasEstimationIterations,
+		blockIngestionTime:      blockIngestionTime,
 	}
 }
 
@@ -183,6 +193,11 @@ func (c *DefaultCollector) AvailableSigningKeys(count int) {
 
 func (c *DefaultCollector) GasEstimationIterations(count int) {
 	c.gasEstimationIterations.Set(float64(count))
+}
+
+func (c *DefaultCollector) BlockIngestionTime(blockCreation time.Time) {
+	c.blockIngestionTime.
+		Observe(time.Since(blockCreation).Seconds())
 }
 
 func prefixedName(name string) string {

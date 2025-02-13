@@ -106,11 +106,6 @@ func (s *BlockExecutor) Run(
 			res.GasConsumed,
 		)
 	}
-	for _, log := range res.Logs {
-		if tracer != nil && tracer.OnLog != nil {
-			tracer.OnLog(log)
-		}
-	}
 	l.Debug().Msg("transaction executed successfully")
 
 	return nil
