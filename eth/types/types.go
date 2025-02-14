@@ -345,6 +345,10 @@ func MarshalReceipt(
 		"effectiveGasPrice": (*hexutil.Big)(receipt.EffectiveGasPrice),
 	}
 
+	if _, ok := tx.(models.DirectCall); ok {
+		fields["effectiveGasPrice"] = (*hexutil.Big)(models.BaseFeesPerGas)
+	}
+
 	if tx.To() != nil {
 		fields["to"] = tx.To().Hex()
 	}
