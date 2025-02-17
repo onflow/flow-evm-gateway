@@ -303,6 +303,20 @@ func TestValidateTransaction(t *testing.T) {
 			valid:  true,
 			errMsg: "",
 		},
+		"gas limit exceeds max allowed value": {
+			tx: gethTypes.NewTx(
+				&gethTypes.LegacyTx{
+					Nonce:    1,
+					To:       &validToAddress,
+					Value:    big.NewInt(0),
+					Gas:      TxMaxGasLimit + 25_000,
+					GasPrice: big.NewInt(0),
+					Data:     []byte{},
+				},
+			),
+			valid:  false,
+			errMsg: "invalid: failed transaction: tx gas limit exceeds the max value of 50000000",
+		},
 		"send to 0 address": {
 			tx: gethTypes.NewTx(
 				&gethTypes.LegacyTx{
