@@ -217,8 +217,8 @@ func (s StorageSnapshot) GetValue(owner []byte, key []byte) ([]byte, error) {
 		return value, nil
 	}
 
-	// get from index
-	val, err := s.storageGet(id, s.evmBlockHeight)
+	// get from index, at the end of the previous block
+	val, err := s.storageGet(id, s.evmBlockHeight-1)
 	if err != nil {
 		return nil, err
 	}
