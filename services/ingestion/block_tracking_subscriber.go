@@ -102,6 +102,15 @@ func (r *RPCBlockTrackingSubscriber) Subscribe(ctx context.Context) <-chan model
 			Uint64("next-height", r.height).
 			Msg("backfilling done, subscribe for live data")
 
+		// start the verifier after backfilling since backfilled data is already sealed
+		go func() {
+			r.verifier.SetStartHeight(r.height)
+			if err := r.verifier.Run(ctx); err != nil {
+				r.logger.Fatal().Err(err).Msg("failure running sealing verifier")
+				return
+			}
+		}()
+
 		// subscribe in the current spork, handling of context cancellation is done by the producer
 		for ev := range r.subscribe(ctx, r.height) {
 			eventsChan <- ev
