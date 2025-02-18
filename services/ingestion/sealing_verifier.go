@@ -2,6 +2,7 @@ package ingestion
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -31,8 +32,9 @@ type SealingVerifier struct {
 	client *requester.CrossSporkClient
 	chain  flowGo.ChainID
 
-	eventsHash     *pebble.EventsHash
-	blocksToVerify map[uint64]flow.Identifier
+	eventsHash             *pebble.EventsHash
+	unsealedBlocksToVerify map[uint64]flow.Identifier
+	sealedBlocksToVerify   map[uint64]flow.Identifier
 
 	mu sync.Mutex
 }
@@ -45,11 +47,13 @@ func NewSealingVerifier(
 	eventsHash *pebble.EventsHash,
 ) *SealingVerifier {
 	return &SealingVerifier{
-		EngineStatus: models.NewEngineStatus(),
-		logger:       logger,
-		client:       client,
-		chain:        chain,
-		eventsHash:   eventsHash,
+		EngineStatus:           models.NewEngineStatus(),
+		logger:                 logger,
+		client:                 client,
+		chain:                  chain,
+		eventsHash:             eventsHash,
+		unsealedBlocksToVerify: make(map[uint64]flow.Identifier),
+		sealedBlocksToVerify:   make(map[uint64]flow.Identifier),
 	}
 }
 
@@ -61,20 +65,7 @@ func (v *SealingVerifier) Stop() {
 
 // AddBlock adds a block to the sealing verifier for verification when the sealed data is received.
 func (v *SealingVerifier) AddBlock(events flow.BlockEvents) error {
-	hash, err := CalculateHash(events)
-	if err != nil {
-		return fmt.Errorf("failed to calculate hash for block %d: %w", events.Height, err)
-	}
-
-	if err := v.eventsHash.Store(events.Height, hash); err != nil {
-		return fmt.Errorf("failed to store events hash for block %d: %w", events.Height, err)
-	}
-
-	v.mu.Lock()
-	defer v.mu.Unlock()
-	v.blocksToVerify[events.Height] = hash
-
-	return nil
+	return v.onUnsealedEvents(events)
 }
 
 // Run executes the sealing verifier.
@@ -121,7 +112,7 @@ func (v *SealingVerifier) Run(ctx context.Context) error {
 			cancel()
 			return nil
 
-		case blockEvents, ok := <-eventsChan:
+		case sealedEvents, ok := <-eventsChan:
 			if !ok {
 				if ctx.Err() != nil {
 					return nil
@@ -129,16 +120,8 @@ func (v *SealingVerifier) Run(ctx context.Context) error {
 				return fmt.Errorf("failed to receive block events: %w", err)
 			}
 
-			if err := v.verifyBlock(blockEvents); err != nil {
-				v.logger.Fatal().Err(err).
-					Uint64("height", blockEvents.Height).
-					Str("block_id", blockEvents.BlockID.String()).
-					Msg("failed to verify block events")
-				return fmt.Errorf("failed to verify block events for %d: %w", blockEvents.Height, err)
-			}
-
-			if err := v.eventsHash.SetProcessedSealedHeight(blockEvents.Height); err != nil {
-				return fmt.Errorf("failed to store processed sealed height: %w", err)
+			if err := v.onSealedEvents(sealedEvents); err != nil {
+				return fmt.Errorf("failed to process sealed events: %w", err)
 			}
 
 		case err, ok := <-errChan:
@@ -168,33 +151,10 @@ func (v *SealingVerifier) Run(ctx context.Context) error {
 	}
 }
 
-// getEventsHash returns the events hash for the given height
-func (v *SealingVerifier) getEventsHash(height uint64) (flow.Identifier, error) {
-	v.mu.Lock()
-	defer v.mu.Unlock()
-
-	if hash, ok := v.blocksToVerify[height]; ok {
-		return hash, nil
-	}
-
-	hash, err := v.eventsHash.GetByHeight(height)
-	if err != nil {
-		return flow.Identifier{}, fmt.Errorf("failed to get events hash for block %d: %w", height, err)
-	}
-
-	// note: don't cache it here since we will not revisit this height
-
-	return hash, nil
-}
-
-// verifyBlock verifies that the hash of the sealed events matches the hash of unsealed events stored
-// for the same height.
-func (v *SealingVerifier) verifyBlock(sealedEvents flow.BlockEvents) error {
-	unsealedHash, err := v.getEventsHash(sealedEvents.Height)
-	if err != nil {
-		return fmt.Errorf("no unsealed events found for height %d: %w", sealedEvents.Height, err)
-	}
-
+// onSealedEvents processes sealed events
+// if unsealed events are found for the same height, the events are verified.
+// otherwise, the sealed events are cached for future verification.
+func (v *SealingVerifier) onSealedEvents(sealedEvents flow.BlockEvents) error {
 	sealedHash, err := CalculateHash(sealedEvents)
 	if err != nil {
 		return fmt.Errorf("failed to calculate hash for sealed events: %w", err)
@@ -203,11 +163,93 @@ func (v *SealingVerifier) verifyBlock(sealedEvents flow.BlockEvents) error {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
+	unsealedHash, err := v.unsafeUnsealedEventsHash(sealedEvents.Height)
+	if err != nil {
+		if errors.Is(err, errs.ErrEntityNotFound) {
+			// we haven't processed the unsealed data for this block yet, cache the sealed hash
+			v.sealedBlocksToVerify[sealedEvents.Height] = sealedHash
+			return nil
+		}
+		return fmt.Errorf("no unsealed events found for height %d: %w", sealedEvents.Height, err)
+	}
+
+	if err := v.verifyBlock(sealedEvents.Height, sealedHash, unsealedHash); err != nil {
+		v.logger.Fatal().Err(err).
+			Uint64("height", sealedEvents.Height).
+			Str("block_id", sealedEvents.BlockID.String()).
+			Msg("failed to verify block events")
+		return fmt.Errorf("failed to verify block events for %d: %w", sealedEvents.Height, err)
+	}
+
+	return nil
+}
+
+// onUnsealedEvents processes unsealed events.
+// if sealed events are found for the same height, the events are verified.
+// otherwise, the unsealed events are cached for future verification.
+func (v *SealingVerifier) onUnsealedEvents(unsealedEvents flow.BlockEvents) error {
+	unsealedHash, err := CalculateHash(unsealedEvents)
+	if err != nil {
+		return fmt.Errorf("failed to calculate hash for block %d: %w", unsealedEvents.Height, err)
+	}
+
+	v.mu.Lock()
+	defer v.mu.Unlock()
+
+	// note: do this inside the lock to avoid a race with onSealedEvents
+	if err := v.eventsHash.Store(unsealedEvents.Height, unsealedHash); err != nil {
+		return fmt.Errorf("failed to store events hash for block %d: %w", unsealedEvents.Height, err)
+	}
+
+	sealedHash, ok := v.sealedBlocksToVerify[unsealedEvents.Height]
+	if !ok {
+		v.unsealedBlocksToVerify[unsealedEvents.Height] = sealedHash
+		return nil
+	}
+
+	if err := v.verifyBlock(unsealedEvents.Height, sealedHash, unsealedHash); err != nil {
+		v.logger.Fatal().Err(err).
+			Uint64("height", unsealedEvents.Height).
+			Str("block_id", unsealedEvents.BlockID.String()).
+			Msg("failed to verify block events")
+		return fmt.Errorf("failed to verify block events for %d: %w", unsealedEvents.Height, err)
+	}
+
+	return nil
+}
+
+// unsafeUnsealedEventsHash returns the events hash for the given height without taking a lock
+func (v *SealingVerifier) unsafeUnsealedEventsHash(height uint64) (flow.Identifier, error) {
+	if hash, ok := v.unsealedBlocksToVerify[height]; ok {
+		return hash, nil
+	}
+
+	hash, err := v.eventsHash.GetByHeight(height)
+	if err != nil {
+		return flow.Identifier{}, fmt.Errorf("failed to get events hash for block %d: %w", height, err)
+	}
+
+	// note: don't cache it here since we will usually not revisit this height
+
+	return hash, nil
+}
+
+// verifyBlock verifies that the hash of the sealed events matches the hash of unsealed events stored
+// for the same height.
+func (v *SealingVerifier) verifyBlock(height uint64, sealedHash, unsealedHash flow.Identifier) error {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+
 	// always delete since we will crash on error anyway
-	defer delete(v.blocksToVerify, sealedEvents.Height)
+	defer delete(v.unsealedBlocksToVerify, height)
+	defer delete(v.sealedBlocksToVerify, height)
 
 	if sealedHash != unsealedHash {
 		return fmt.Errorf("event hash mismatch: expected %s, got %s", sealedHash, unsealedHash)
+	}
+
+	if err := v.eventsHash.SetProcessedSealedHeight(height); err != nil {
+		return fmt.Errorf("failed to store processed sealed height: %w", err)
 	}
 
 	return nil
