@@ -178,10 +178,11 @@ func newLookupKey(height uint64, key []byte) *lookupKey {
 	return &lookupKey
 }
 
-// GetSnapshotAt returns a snapshot of the register index at the start of the given block height (which is the end of the previous one).
-// the snapshot has a cache. Nil values are cached.
+// GetSnapshotAt returns a snapshot of the register index at the start of the
+// given block height (which is the end of the previous block).
+// The snapshot has a cache. Nil values are cached.
 func (r *RegisterStorage) GetSnapshotAt(evmBlockHeight uint64) (types.BackendStorageSnapshot, error) {
-        // `evmBlockHeight-1` to get the end of the previous one.
+	// `evmBlockHeight-1` to get the end state of the previous block.
 	return NewStorageSnapshot(r.Get, evmBlockHeight-1), nil
 }
 
