@@ -8,7 +8,7 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/onflow/atree v0.9.0
 	github.com/onflow/cadence v1.3.1
-	github.com/onflow/flow-go v0.38.1-0.20250213171922-77f4db56bb54
+	github.com/onflow/flow-go v0.38.1-0.20250218133611-bca6e7286932
 	github.com/onflow/flow-go-sdk v1.3.1
 	github.com/onflow/go-ethereum v1.14.7
 	github.com/prometheus/client_golang v1.20.5
