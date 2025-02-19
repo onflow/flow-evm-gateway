@@ -437,3 +437,140 @@ func Test_CloudKMSConcurrentTransactionSubmission(t *testing.T) {
 		assert.Equal(t, uint64(1), rcp.Status)
 	}
 }
+
+func Test_ForceStartHeightIdempotency(t *testing.T) {
+	srv, err := startEmulator(true)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer func() {
+		cancel()
+		srv.Stop()
+	}()
+
+	grpcHost := "localhost:3569"
+	emu := srv.Emulator()
+	service := emu.ServiceKey()
+
+	client, err := grpc.NewClient(grpcHost)
+	require.NoError(t, err)
+
+	time.Sleep(500 * time.Millisecond) // some time to startup
+
+	// create new account with keys used for key-rotation
+	keyCount := 5
+	createdAddr, privateKey, err := bootstrap.CreateMultiKeyAccount(
+		client,
+		keyCount,
+		service.Address,
+		sc.FungibleToken.Address.HexWithPrefix(),
+		sc.FlowToken.Address.HexWithPrefix(),
+		service.PrivateKey,
+	)
+	require.NoError(t, err)
+
+	cfg := config.Config{
+		DatabaseDir:       t.TempDir(),
+		AccessNodeHost:    grpcHost,
+		RPCPort:           8545,
+		RPCHost:           "127.0.0.1",
+		FlowNetworkID:     "flow-emulator",
+		EVMNetworkID:      types.FlowEVMPreviewNetChainID,
+		Coinbase:          eoaTestAccount,
+		COAAddress:        *createdAddr,
+		COAKey:            privateKey,
+		GasPrice:          new(big.Int).SetUint64(0),
+		LogLevel:          zerolog.DebugLevel,
+		LogWriter:         testLogWriter(),
+		TxStateValidation: config.LocalIndexValidation,
+	}
+
+	rpcTester := &rpcTest{
+		url: fmt.Sprintf("%s:%d", cfg.RPCHost, cfg.RPCPort),
+	}
+
+	boot, err := bootstrap.New(cfg)
+	require.NoError(t, err)
+
+	ready := make(chan struct{})
+	go func() {
+		err = boot.Run(ctx, cfg, func() {
+			close(ready)
+		})
+		require.NoError(t, err)
+	}()
+
+	<-ready
+
+	time.Sleep(3 * time.Second) // some time to startup
+
+	eoaKey, err := crypto.HexToECDSA(eoaTestPrivateKey)
+	require.NoError(t, err)
+
+	testAddr := common.HexToAddress("55253ed90B70b96C73092D8680915aaF50081194")
+
+	// disable auto-mine so we can control delays
+	emu.DisableAutoMine()
+
+	totalTxs := keyCount*5 + 3
+	hashes := make([]common.Hash, totalTxs)
+	nonce := uint64(0)
+	for i := 0; i < totalTxs; i++ {
+		signed, _, err := evmSign(big.NewInt(10), 21000, eoaKey, nonce, &testAddr, nil)
+		require.NoError(t, err)
+
+		txHash, err := rpcTester.sendRawTx(signed)
+		require.NoError(t, err)
+		hashes[i] = txHash
+
+		// execute commit block every 3 blocks so we make sure we should have
+		// conflicts with seq numbers if keys not rotated.
+		if i%3 == 0 {
+			_, _, _ = emu.ExecuteAndCommitBlock()
+		}
+		nonce += 1
+	}
+
+	assert.Eventually(t, func() bool {
+		for _, h := range hashes {
+			rcp, err := rpcTester.getReceipt(h.String())
+			if err != nil || rcp == nil || uint64(1) != rcp.Status {
+				return false
+			}
+		}
+
+		return true
+	}, time.Second*15, time.Second*1, "all transactions were not executed")
+
+	// Stop the EVM GW service
+	boot.Stop()
+	// Set `ForceStartHeight` to an earlier block, to verify that
+	// the ingestion process is idempotent
+	cfg.ForceStartCadenceHeight = 1
+
+	boot, err = bootstrap.New(cfg)
+	require.NoError(t, err)
+
+	ready2 := make(chan struct{})
+	go func() {
+		err = boot.Run(ctx, cfg, func() {
+			close(ready2)
+		})
+		require.NoError(t, err)
+	}()
+
+	<-ready2
+
+	time.Sleep(3 * time.Second) // some time to startup
+
+	assert.Eventually(t, func() bool {
+		for _, h := range hashes {
+			rcp, err := rpcTester.getReceipt(h.String())
+			if err != nil || rcp == nil || uint64(1) != rcp.Status {
+				return false
+			}
+		}
+
+		return true
+	}, time.Second*15, time.Second*1, "all transactions were not executed")
+}

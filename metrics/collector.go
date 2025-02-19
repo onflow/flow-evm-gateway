@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -143,6 +144,9 @@ func NewCollector(logger zerolog.Logger) Collector {
 func registerMetrics(logger zerolog.Logger, metrics ...prometheus.Collector) error {
 	for _, m := range metrics {
 		if err := prometheus.Register(m); err != nil {
+			if errors.As(err, &prometheus.AlreadyRegisteredError{}) {
+				return nil
+			}
 			logger.Err(err).Msg("failed to register metric")
 			return err
 		}
