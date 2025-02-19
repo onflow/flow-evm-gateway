@@ -170,7 +170,7 @@ func (v *SealingVerifier) Run(ctx context.Context) error {
 	}
 }
 
-func generateLoggable(events flow.BlockEvents) (string, error) {
+func generateLoggable(events flowGo.BlockEvents) (string, error) {
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
 	if err := enc.Encode(events); err != nil {
@@ -187,21 +187,10 @@ func (v *SealingVerifier) onSealedEvents(sealedEvents flow.BlockEvents) error {
 		return nil // skip empty blocks
 	}
 
-	sealedHash, err := CalculateHash(sealedEvents)
+	sealedHash, err := CalculateHash(v.logger, sealedEvents)
 	if err != nil {
 		return fmt.Errorf("failed to calculate hash for sealed events: %w", err)
 	}
-
-	loggable, err := generateLoggable(sealedEvents)
-	if err != nil {
-		return fmt.Errorf("failed to generate loggable for sealed events: %w", err)
-	}
-
-	v.logger.Info().
-		Uint64("height", sealedEvents.Height).
-		Str("hash", sealedHash.String()).
-		Str("data", loggable).
-		Msg("received sealed events")
 
 	v.mu.Lock()
 	defer v.mu.Unlock()
@@ -231,21 +220,10 @@ func (v *SealingVerifier) onSealedEvents(sealedEvents flow.BlockEvents) error {
 // if sealed events are found for the same height, the events are verified.
 // otherwise, the unsealed events are cached for future verification.
 func (v *SealingVerifier) onUnsealedEvents(unsealedEvents flow.BlockEvents) error {
-	unsealedHash, err := CalculateHash(unsealedEvents)
+	unsealedHash, err := CalculateHash(v.logger, unsealedEvents)
 	if err != nil {
 		return fmt.Errorf("failed to calculate hash for block %d: %w", unsealedEvents.Height, err)
 	}
-
-	loggable, err := generateLoggable(unsealedEvents)
-	if err != nil {
-		return fmt.Errorf("failed to generate loggable for unsealed events: %w", err)
-	}
-
-	v.logger.Info().
-		Uint64("height", unsealedEvents.Height).
-		Str("hash", unsealedHash.String()).
-		Str("data", loggable).
-		Msg("received unsealed events")
 
 	v.mu.Lock()
 	defer v.mu.Unlock()
@@ -307,7 +285,7 @@ func (v *SealingVerifier) verifyBlock(height uint64, sealedHash, unsealedHash fl
 }
 
 // CalculateHash calculates the hash of the given block events object.
-func CalculateHash(events flow.BlockEvents) (flow.Identifier, error) {
+func CalculateHash(log zerolog.Logger, events flow.BlockEvents) (flow.Identifier, error) {
 	// convert to strip cadence payload objects
 	converted, err := convertFlowBlockEvents(events)
 	if err != nil {
@@ -315,6 +293,18 @@ func CalculateHash(events flow.BlockEvents) (flow.Identifier, error) {
 	}
 
 	hash := flowGo.MakeID(converted)
+
+	loggable, err := generateLoggable(converted)
+	if err != nil {
+		return flow.Identifier{}, fmt.Errorf("failed to generate loggable: %w", err)
+	}
+
+	log.Info().
+		Uint64("height", events.Height).
+		Str("hash", hash.String()).
+		Str("data", loggable).
+		Msg("calculated events hash")
+
 	return flow.BytesToID(hash[:]), nil
 }
 
