@@ -176,7 +176,7 @@ func (v *SealingVerifier) onSealedEvents(sealedEvents flow.BlockEvents) error {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
-	unsealedHash, err := v.unsafeUnsealedEventsHash(sealedEvents.Height)
+	unsealedHash, err := v.getUnsealedEventsHash(sealedEvents.Height)
 	if err != nil {
 		if errors.Is(err, errs.ErrEntityNotFound) {
 			// we haven't processed the unsealed data for this block yet, cache the sealed hash
@@ -231,8 +231,8 @@ func (v *SealingVerifier) onUnsealedEvents(unsealedEvents flow.BlockEvents) erro
 	return nil
 }
 
-// unsafeUnsealedEventsHash returns the events hash for the given height without taking a lock
-func (v *SealingVerifier) unsafeUnsealedEventsHash(height uint64) (flow.Identifier, error) {
+// getUnsealedEventsHash returns the events hash for the given height without taking a lock
+func (v *SealingVerifier) getUnsealedEventsHash(height uint64) (flow.Identifier, error) {
 	if hash, ok := v.unsealedBlocksToVerify[height]; ok {
 		return hash, nil
 	}
@@ -250,9 +250,6 @@ func (v *SealingVerifier) unsafeUnsealedEventsHash(height uint64) (flow.Identifi
 // verifyBlock verifies that the hash of the sealed events matches the hash of unsealed events stored
 // for the same height.
 func (v *SealingVerifier) verifyBlock(height uint64, sealedHash, unsealedHash flow.Identifier) error {
-	v.mu.Lock()
-	defer v.mu.Unlock()
-
 	// always delete since we will crash on error anyway
 	defer delete(v.unsealedBlocksToVerify, height)
 	defer delete(v.sealedBlocksToVerify, height)
