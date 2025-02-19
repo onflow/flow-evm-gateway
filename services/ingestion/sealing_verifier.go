@@ -1,12 +1,10 @@
 package ingestion
 
 import (
-	"bytes"
 	"context"
-	"encoding/base64"
-	"encoding/gob"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -68,6 +66,12 @@ func (v *SealingVerifier) Stop() {
 	<-v.Stopped()
 }
 
+// SetStartHeight sets the start height for the sealing verifier.
+// This is used to update the height when backfilling already sea
+func (v *SealingVerifier) SetStartHeight(height uint64) {
+	v.startHeight = height
+}
+
 // AddBlock adds a block to the sealing verifier for verification when the sealed data is received.
 func (v *SealingVerifier) AddBlock(events flow.BlockEvents) error {
 	return v.onUnsealedEvents(events)
@@ -112,7 +116,7 @@ func (v *SealingVerifier) Run(ctx context.Context) error {
 		return err
 	}
 
-	v.logger.Info().Uint64("start_height", lastVerifiedHeight).Msg("received done signal")
+	v.logger.Info().Uint64("start_height", lastVerifiedHeight).Msg("starting verifier")
 
 	if err := connect(nextHeight); err != nil {
 		return fmt.Errorf("failed to subscribe for finalized block events on height: %d, with: %w", nextHeight, err)
@@ -170,15 +174,6 @@ func (v *SealingVerifier) Run(ctx context.Context) error {
 	}
 }
 
-func generateLoggable(events flowGo.BlockEvents) (string, error) {
-	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
-	if err := enc.Encode(events); err != nil {
-		return "", fmt.Errorf("failed to encode events: %w", err)
-	}
-	return base64.StdEncoding.EncodeToString(buf.Bytes()), nil
-}
-
 // onSealedEvents processes sealed events
 // if unsealed events are found for the same height, the events are verified.
 // otherwise, the sealed events are cached for future verification.
@@ -187,7 +182,7 @@ func (v *SealingVerifier) onSealedEvents(sealedEvents flow.BlockEvents) error {
 		return nil // skip empty blocks
 	}
 
-	sealedHash, err := CalculateHash(v.logger, sealedEvents)
+	sealedHash, err := CalculateHash(sealedEvents)
 	if err != nil {
 		return fmt.Errorf("failed to calculate hash for sealed events: %w", err)
 	}
@@ -213,6 +208,8 @@ func (v *SealingVerifier) onSealedEvents(sealedEvents flow.BlockEvents) error {
 		return fmt.Errorf("failed to verify block events for %d: %w", sealedEvents.Height, err)
 	}
 
+	v.logger.Debug().Uint64("height", sealedEvents.Height).Msg("verified sealed height")
+
 	return nil
 }
 
@@ -220,7 +217,7 @@ func (v *SealingVerifier) onSealedEvents(sealedEvents flow.BlockEvents) error {
 // if sealed events are found for the same height, the events are verified.
 // otherwise, the unsealed events are cached for future verification.
 func (v *SealingVerifier) onUnsealedEvents(unsealedEvents flow.BlockEvents) error {
-	unsealedHash, err := CalculateHash(v.logger, unsealedEvents)
+	unsealedHash, err := CalculateHash(unsealedEvents)
 	if err != nil {
 		return fmt.Errorf("failed to calculate hash for block %d: %w", unsealedEvents.Height, err)
 	}
@@ -246,6 +243,8 @@ func (v *SealingVerifier) onUnsealedEvents(unsealedEvents flow.BlockEvents) erro
 			Msg("failed to verify block events")
 		return fmt.Errorf("failed to verify block events for %d: %w", unsealedEvents.Height, err)
 	}
+
+	v.logger.Debug().Uint64("height", unsealedEvents.Height).Msg("verified unsealed height")
 
 	return nil
 }
@@ -285,7 +284,7 @@ func (v *SealingVerifier) verifyBlock(height uint64, sealedHash, unsealedHash fl
 }
 
 // CalculateHash calculates the hash of the given block events object.
-func CalculateHash(log zerolog.Logger, events flow.BlockEvents) (flow.Identifier, error) {
+func CalculateHash(events flow.BlockEvents) (flow.Identifier, error) {
 	// convert to strip cadence payload objects
 	converted, err := convertFlowBlockEvents(events)
 	if err != nil {
@@ -293,18 +292,6 @@ func CalculateHash(log zerolog.Logger, events flow.BlockEvents) (flow.Identifier
 	}
 
 	hash := flowGo.MakeID(converted)
-
-	loggable, err := generateLoggable(converted)
-	if err != nil {
-		return flow.Identifier{}, fmt.Errorf("failed to generate loggable: %w", err)
-	}
-
-	log.Info().
-		Uint64("height", events.Height).
-		Str("hash", hash.String()).
-		Str("data", loggable).
-		Msg("calculated events hash")
-
 	return flow.BytesToID(hash[:]), nil
 }
 
@@ -329,6 +316,14 @@ func convertFlowBlockEvents(events flow.BlockEvents) (flowGo.BlockEvents, error)
 			Payload:          e.Payload,
 		}
 	}
+
+	// need canonical order before hashing
+	sort.Slice(flowEvents, func(i, j int) bool {
+		if flowEvents[i].TransactionIndex != flowEvents[j].TransactionIndex {
+			return flowEvents[i].TransactionIndex < flowEvents[j].TransactionIndex
+		}
+		return flowEvents[i].EventIndex < flowEvents[j].EventIndex
+	})
 
 	return flowGo.BlockEvents{
 		BlockID:        blockID,

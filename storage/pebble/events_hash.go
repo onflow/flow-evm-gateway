@@ -43,6 +43,11 @@ func (e *EventsHash) GetByHeight(height uint64) (flow.Identifier, error) {
 	return flow.BytesToID(hash), nil
 }
 
+func (e *EventsHash) Remove(height uint64) error {
+	prefixedKey := makePrefix(eventsHashKey, uint64Bytes(height))
+	return e.store.db.Delete(prefixedKey, pebbleDB.Sync)
+}
+
 func (e *EventsHash) ProcessedSealedHeight() (uint64, error) {
 	val, err := e.store.get(sealedEventsHeightKey)
 	if err != nil {

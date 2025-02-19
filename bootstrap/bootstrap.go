@@ -156,6 +156,38 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 	// create event subscriber
 	var subscriber ingestion.EventSubscriber
 	if b.config.ExperimentalSoftFinalityEnabled {
+		// temporary code to fix data caused by hashing bug
+		if nextCadenceHeight == 243637164 {
+			// delete all data before the broken height
+			i := nextCadenceHeight
+			for {
+				if _, err := b.storages.EventsHash.GetByHeight(i); err == nil {
+					err = b.storages.EventsHash.Remove(i)
+					if err != nil {
+						return fmt.Errorf("failed to remove events hash for block %d: %w", i, err)
+					}
+					i--
+				} else {
+					b.logger.Err(err).Msgf("failed to get events hash for block %d", i)
+					break
+				}
+			}
+			// delete all data after the broken height
+			i = nextCadenceHeight
+			for {
+				if _, err := b.storages.EventsHash.GetByHeight(i); err == nil {
+					err = b.storages.EventsHash.Remove(i)
+					if err != nil {
+						return fmt.Errorf("failed to remove events hash for block %d: %w", i, err)
+					}
+					i++
+				} else {
+					b.logger.Err(err).Msgf("failed to get events hash for block %d", i)
+					break
+				}
+			}
+		}
+
 		verifier := ingestion.NewSealingVerifier(
 			b.logger,
 			b.client,
@@ -163,7 +195,6 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 			b.storages.EventsHash,
 			nextCadenceHeight,
 		)
-		go StartEngine(ctx, verifier, b.logger)
 
 		subscriber = ingestion.NewRPCBlockTrackingSubscriber(
 			b.logger,
