@@ -1,7 +1,10 @@
 package ingestion
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/gob"
 	"errors"
 	"fmt"
 	"sync"
@@ -49,7 +52,7 @@ func NewSealingVerifier(
 ) *SealingVerifier {
 	return &SealingVerifier{
 		EngineStatus:           models.NewEngineStatus(),
-		logger:                 logger,
+		logger:                 logger.With().Str("component", "sealing_verifier").Logger(),
 		client:                 client,
 		chain:                  chain,
 		startHeight:            startHeight,
@@ -97,7 +100,7 @@ func (v *SealingVerifier) Run(ctx context.Context) error {
 	subscriptionCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	lastReceivedHeight := lastVerifiedHeight + 1
+	nextHeight := lastVerifiedHeight + 1
 	connect := func(height uint64) error {
 		var err error
 		eventsChan, errChan, err = v.client.SubscribeEventsByBlockHeight(
@@ -109,19 +112,21 @@ func (v *SealingVerifier) Run(ctx context.Context) error {
 		return err
 	}
 
-	if err := connect(lastReceivedHeight); err != nil {
-		return fmt.Errorf("failed to subscribe for finalized block events on height: %d, with: %w", lastReceivedHeight, err)
+	v.logger.Info().Uint64("start_height", lastVerifiedHeight).Msg("received done signal")
+
+	if err := connect(nextHeight); err != nil {
+		return fmt.Errorf("failed to subscribe for finalized block events on height: %d, with: %w", nextHeight, err)
 	}
 
 	v.MarkReady()
 	for {
 		select {
 		case <-ctx.Done():
-			v.logger.Info().Msg("sealing verifier received done signal")
+			v.logger.Info().Msg("received done signal")
 			return nil
 
 		case <-v.Done():
-			v.logger.Info().Msg("sealing verifier received stop signal")
+			v.logger.Info().Msg("received stop signal")
 			cancel()
 			return nil
 
@@ -132,6 +137,7 @@ func (v *SealingVerifier) Run(ctx context.Context) error {
 				}
 				return fmt.Errorf("failed to receive block events: %w", err)
 			}
+			nextHeight = sealedEvents.Height + 1
 
 			if err := v.onSealedEvents(sealedEvents); err != nil {
 				return fmt.Errorf("failed to process sealed events: %w", err)
@@ -157,21 +163,45 @@ func (v *SealingVerifier) Run(ctx context.Context) error {
 				return fmt.Errorf("%w: %w", errs.ErrDisconnected, err)
 			}
 
-			if err := connect(lastReceivedHeight + 1); err != nil {
-				return fmt.Errorf("failed to resubscribe for finalized block headers on height: %d, with: %w", lastReceivedHeight+1, err)
+			if err := connect(nextHeight); err != nil {
+				return fmt.Errorf("failed to resubscribe for finalized block headers on height: %d, with: %w", nextHeight, err)
 			}
 		}
 	}
+}
+
+func generateLoggable(events flow.BlockEvents) (string, error) {
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+	if err := enc.Encode(events); err != nil {
+		return "", fmt.Errorf("failed to encode events: %w", err)
+	}
+	return base64.StdEncoding.EncodeToString(buf.Bytes()), nil
 }
 
 // onSealedEvents processes sealed events
 // if unsealed events are found for the same height, the events are verified.
 // otherwise, the sealed events are cached for future verification.
 func (v *SealingVerifier) onSealedEvents(sealedEvents flow.BlockEvents) error {
+	if len(sealedEvents.Events) == 0 {
+		return nil // skip empty blocks
+	}
+
 	sealedHash, err := CalculateHash(sealedEvents)
 	if err != nil {
 		return fmt.Errorf("failed to calculate hash for sealed events: %w", err)
 	}
+
+	loggable, err := generateLoggable(sealedEvents)
+	if err != nil {
+		return fmt.Errorf("failed to generate loggable for sealed events: %w", err)
+	}
+
+	v.logger.Info().
+		Uint64("height", sealedEvents.Height).
+		Str("hash", sealedHash.String()).
+		Str("data", loggable).
+		Msg("received sealed events")
 
 	v.mu.Lock()
 	defer v.mu.Unlock()
@@ -206,6 +236,17 @@ func (v *SealingVerifier) onUnsealedEvents(unsealedEvents flow.BlockEvents) erro
 		return fmt.Errorf("failed to calculate hash for block %d: %w", unsealedEvents.Height, err)
 	}
 
+	loggable, err := generateLoggable(unsealedEvents)
+	if err != nil {
+		return fmt.Errorf("failed to generate loggable for unsealed events: %w", err)
+	}
+
+	v.logger.Info().
+		Uint64("height", unsealedEvents.Height).
+		Str("hash", unsealedHash.String()).
+		Str("data", loggable).
+		Msg("received unsealed events")
+
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
@@ -216,7 +257,7 @@ func (v *SealingVerifier) onUnsealedEvents(unsealedEvents flow.BlockEvents) erro
 
 	sealedHash, ok := v.sealedBlocksToVerify[unsealedEvents.Height]
 	if !ok {
-		v.unsealedBlocksToVerify[unsealedEvents.Height] = sealedHash
+		v.unsealedBlocksToVerify[unsealedEvents.Height] = unsealedHash
 		return nil
 	}
 
