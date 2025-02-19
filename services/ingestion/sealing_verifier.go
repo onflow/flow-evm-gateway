@@ -28,10 +28,10 @@ type SealingVerifier struct {
 	*models.EngineStatus
 
 	logger zerolog.Logger
-
 	client *requester.CrossSporkClient
 	chain  flowGo.ChainID
 
+	startHeight            uint64
 	eventsHash             *pebble.EventsHash
 	unsealedBlocksToVerify map[uint64]flow.Identifier
 	sealedBlocksToVerify   map[uint64]flow.Identifier
@@ -45,12 +45,14 @@ func NewSealingVerifier(
 	client *requester.CrossSporkClient,
 	chain flowGo.ChainID,
 	eventsHash *pebble.EventsHash,
+	startHeight uint64,
 ) *SealingVerifier {
 	return &SealingVerifier{
 		EngineStatus:           models.NewEngineStatus(),
 		logger:                 logger,
 		client:                 client,
 		chain:                  chain,
+		startHeight:            startHeight,
 		eventsHash:             eventsHash,
 		unsealedBlocksToVerify: make(map[uint64]flow.Identifier),
 		sealedBlocksToVerify:   make(map[uint64]flow.Identifier),
@@ -75,7 +77,18 @@ func (v *SealingVerifier) Run(ctx context.Context) error {
 
 	lastVerifiedHeight, err := v.eventsHash.ProcessedSealedHeight()
 	if err != nil {
-		return fmt.Errorf("failed to get processed sealed height: %w", err)
+		if !errors.Is(err, errs.ErrStorageNotInitialized) {
+			return fmt.Errorf("failed to get processed sealed height: %w", err)
+		}
+
+		// lastVerifiedHeight should be the block before the startHeight
+		// handle the case where startHeight is 0 like when running with the emulator
+		if lastVerifiedHeight = v.startHeight; lastVerifiedHeight > 0 {
+			lastVerifiedHeight = v.startHeight - 1
+		}
+		if err := v.eventsHash.SetProcessedSealedHeight(lastVerifiedHeight); err != nil {
+			return fmt.Errorf("failed to initialize processed sealed height: %w", err)
+		}
 	}
 
 	var eventsChan <-chan flow.BlockEvents

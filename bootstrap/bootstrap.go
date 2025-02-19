@@ -161,6 +161,7 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 			b.client,
 			chainID,
 			b.storages.EventsHash,
+			nextCadenceHeight,
 		)
 		go StartEngine(ctx, verifier, b.logger)
 
