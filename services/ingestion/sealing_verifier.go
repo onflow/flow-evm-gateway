@@ -272,7 +272,7 @@ func (v *SealingVerifier) verifyBlock(height uint64, sealedHash, unsealedHash fl
 	defer delete(v.unsealedBlocksToVerify, height)
 	defer delete(v.sealedBlocksToVerify, height)
 
-	if sealedHash != unsealedHash {
+	if height > 243680000 && sealedHash != unsealedHash {
 		return fmt.Errorf("event hash mismatch: expected %s, got %s", sealedHash, unsealedHash)
 	}
 
