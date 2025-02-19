@@ -157,7 +157,7 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 	var subscriber ingestion.EventSubscriber
 	if b.config.ExperimentalSoftFinalityEnabled {
 		// temporary code to fix data caused by hashing bug
-		if nextCadenceHeight == 243637164 {
+		if nextCadenceHeight == 243637163 {
 			// delete all data before the broken height
 			i := nextCadenceHeight
 			for {
