@@ -702,26 +702,31 @@ func (m *metricsWrapper) Start(ctx context.Context) error {
 	m.log.Info().Msg("bootstrap starting metrics server")
 
 	ctx, cancel := context.WithCancel(ctx)
-	m.stopFN = cancel
 	ictx, errCh := irrecoverable.WithSignaler(ctx)
+
 	m.Server.Start(ictx)
 	if err := util.WaitClosed(ctx, m.Ready()); err != nil {
+		cancel()
 		return fmt.Errorf("failed to start metrics server: %w", err)
 	}
 	select {
 	case err := <-errCh:
 		// there might be an error already if the startup failed
+		cancel()
 		return err
 	default:
 	}
 
 	go func() {
 		err := <-errCh
+		cancel()
 		if err != nil {
 			m.log.Err(err).Msg("error in metrics server")
 			panic(err)
 		}
 	}()
+
+	m.stopFN = cancel
 
 	return nil
 }
