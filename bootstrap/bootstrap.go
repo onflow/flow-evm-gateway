@@ -668,7 +668,7 @@ func (b *Bootstrap) Run(
 }
 
 func (b *Bootstrap) Stop() {
-	b.logger.Warn().Msg("bootstrap received context cancellation, stopping services")
+	b.logger.Info().Msg("bootstrap received context cancellation, stopping services")
 
 	b.StopEventIngestion()
 	b.StopMetricsServer()
