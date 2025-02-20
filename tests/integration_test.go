@@ -438,6 +438,12 @@ func Test_CloudKMSConcurrentTransactionSubmission(t *testing.T) {
 	}
 }
 
+// Test_ForceStartHeightIdempotency verifies that the ingestion process
+// remains idempotent when restarting with ForceStartHeight set to an
+// earlier block. This ensures that:
+// 1. No events are processed twice
+// 2. No transactions are lost
+// 3. The state remains consistent
 func Test_ForceStartHeightIdempotency(t *testing.T) {
 	srv, err := startEmulator(true)
 	require.NoError(t, err)
@@ -563,6 +569,7 @@ func Test_ForceStartHeightIdempotency(t *testing.T) {
 
 	time.Sleep(3 * time.Second) // some time to startup
 
+	// Verify that the state is consistent after restart
 	assert.Eventually(t, func() bool {
 		for _, h := range hashes {
 			rcp, err := rpcTester.getReceipt(h.String())
