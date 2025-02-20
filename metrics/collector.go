@@ -1,7 +1,6 @@
 package metrics
 
 import (
-	"errors"
 	"fmt"
 	"time"
 
@@ -9,6 +8,84 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
 )
+
+var apiErrors = prometheus.NewCounter(prometheus.CounterOpts{
+	Name: prefixedName("api_errors_total"),
+	Help: "Total number of API errors",
+})
+
+var serverPanicsCounters = prometheus.NewCounterVec(prometheus.CounterOpts{
+	Name: prefixedName("api_server_panics_total"),
+	Help: "Total number of panics in the API server",
+}, []string{"reason"})
+
+var operatorBalance = prometheus.NewGauge(prometheus.GaugeOpts{
+	Name: prefixedName("operator_balance"),
+	Help: "Flow balance of the EVM gateway operator wallet",
+})
+
+var cadenceBlockHeight = prometheus.NewGauge(prometheus.GaugeOpts{
+	Name: prefixedName("cadence_block_height"),
+	Help: "Current Cadence block height",
+})
+
+var evmBlockHeight = prometheus.NewGauge(prometheus.GaugeOpts{
+	Name: prefixedName("evm_block_height"),
+	Help: "Current EVM block height",
+})
+
+var evmBlockIndexedCounter = prometheus.NewCounter(prometheus.CounterOpts{
+	Name: prefixedName("blocks_indexed_total"),
+	Help: "Total number of blocks indexed",
+})
+
+var evmTxIndexedCounter = prometheus.NewCounter(prometheus.CounterOpts{
+	Name: prefixedName("txs_indexed_total"),
+	Help: "Total number transactions indexed",
+})
+
+var evmAccountCallCounters = prometheus.NewCounterVec(prometheus.CounterOpts{
+	Name: prefixedName("evm_account_interactions_total"),
+	Help: "Total number of account interactions",
+}, []string{"address"})
+
+// TODO: Think of adding 'status_code'
+var requestDurations = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+	Name:    prefixedName("api_request_duration_seconds"),
+	Help:    "Duration of the request made a specific API endpoint",
+	Buckets: prometheus.DefBuckets,
+}, []string{"method"})
+
+var availableSigningKeys = prometheus.NewGauge(prometheus.GaugeOpts{
+	Name: prefixedName("available_signing_keys"),
+	Help: "Number of keys available for transaction signing",
+})
+
+var gasEstimationIterations = prometheus.NewGauge(prometheus.GaugeOpts{
+	Name: prefixedName("gas_estimation_iterations"),
+	Help: "Number of iterations taken to estimate the gas of a EVM call/tx",
+})
+
+var blockIngestionTime = prometheus.NewHistogram(prometheus.HistogramOpts{
+	Name:    prefixedName("block_ingestion_time_seconds"),
+	Help:    "Time taken to fully ingest an EVM block in the local state index",
+	Buckets: prometheus.DefBuckets,
+})
+
+var metrics = []prometheus.Collector{
+	apiErrors,
+	serverPanicsCounters,
+	cadenceBlockHeight,
+	evmBlockHeight,
+	evmBlockIndexedCounter,
+	evmTxIndexedCounter,
+	operatorBalance,
+	evmAccountCallCounters,
+	requestDurations,
+	availableSigningKeys,
+	gasEstimationIterations,
+	blockIngestionTime,
+}
 
 type Collector interface {
 	ApiErrorOccurred()
@@ -43,83 +120,6 @@ type DefaultCollector struct {
 }
 
 func NewCollector(logger zerolog.Logger) Collector {
-	apiErrors := prometheus.NewCounter(prometheus.CounterOpts{
-		Name: prefixedName("api_errors_total"),
-		Help: "Total number of API errors",
-	})
-
-	serverPanicsCounters := prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: prefixedName("api_server_panics_total"),
-		Help: "Total number of panics in the API server",
-	}, []string{"reason"})
-
-	operatorBalance := prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: prefixedName("operator_balance"),
-		Help: "Flow balance of the EVM gateway operator wallet",
-	})
-
-	cadenceBlockHeight := prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: prefixedName("cadence_block_height"),
-		Help: "Current Cadence block height",
-	})
-
-	evmBlockHeight := prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: prefixedName("evm_block_height"),
-		Help: "Current EVM block height",
-	})
-
-	evmBlockIndexedCounter := prometheus.NewCounter(prometheus.CounterOpts{
-		Name: prefixedName("blocks_indexed_total"),
-		Help: "Total number of blocks indexed",
-	})
-
-	evmTxIndexedCounter := prometheus.NewCounter(prometheus.CounterOpts{
-		Name: prefixedName("txs_indexed_total"),
-		Help: "Total number transactions indexed",
-	})
-
-	evmAccountCallCounters := prometheus.NewCounterVec(prometheus.CounterOpts{
-		Name: prefixedName("evm_account_interactions_total"),
-		Help: "Total number of account interactions",
-	}, []string{"address"})
-
-	// TODO: Think of adding 'status_code'
-	requestDurations := prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Name:    prefixedName("api_request_duration_seconds"),
-		Help:    "Duration of the request made a specific API endpoint",
-		Buckets: prometheus.DefBuckets,
-	}, []string{"method"})
-
-	availableSigningKeys := prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: prefixedName("available_signing_keys"),
-		Help: "Number of keys available for transaction signing",
-	})
-
-	gasEstimationIterations := prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: prefixedName("gas_estimation_iterations"),
-		Help: "Number of iterations taken to estimate the gas of a EVM call/tx",
-	})
-
-	blockIngestionTime := prometheus.NewHistogram(prometheus.HistogramOpts{
-		Name:    prefixedName("block_ingestion_time_seconds"),
-		Help:    "Time taken to fully ingest an EVM block in the local state index",
-		Buckets: prometheus.DefBuckets,
-	})
-
-	metrics := []prometheus.Collector{
-		apiErrors,
-		serverPanicsCounters,
-		cadenceBlockHeight,
-		evmBlockHeight,
-		evmBlockIndexedCounter,
-		evmTxIndexedCounter,
-		operatorBalance,
-		evmAccountCallCounters,
-		requestDurations,
-		availableSigningKeys,
-		gasEstimationIterations,
-		blockIngestionTime,
-	}
 	if err := registerMetrics(logger, metrics...); err != nil {
 		logger.Info().Msg("using noop collector as metric register failed")
 		return NopCollector
@@ -143,10 +143,11 @@ func NewCollector(logger zerolog.Logger) Collector {
 
 func registerMetrics(logger zerolog.Logger, metrics ...prometheus.Collector) error {
 	for _, m := range metrics {
+		// During E2E tests, the EVM GW might be bootstrapped again
+		// and again, so we make sure to register the metrics on a
+		// clean state.
+		prometheus.Unregister(m)
 		if err := prometheus.Register(m); err != nil {
-			if errors.As(err, &prometheus.AlreadyRegisteredError{}) {
-				return nil
-			}
 			logger.Err(err).Msg("failed to register metric")
 			return err
 		}
