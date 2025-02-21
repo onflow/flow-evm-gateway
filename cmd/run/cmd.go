@@ -12,8 +12,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/onflow/flow-evm-gateway/bootstrap"
-	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/crypto"
 	flowGoKMS "github.com/onflow/flow-go-sdk/crypto/cloudkms"
@@ -24,6 +22,9 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
+
+	"github.com/onflow/flow-evm-gateway/bootstrap"
+	"github.com/onflow/flow-evm-gateway/config"
 )
 
 var Cmd = &cobra.Command{
@@ -223,6 +224,7 @@ func parseConfigFromFlags() error {
 	}
 
 	cfg.ExperimentalSoftFinalityEnabled = experimentalSoftFinalityEnabled
+	cfg.ExperimentalSealingVerificationEnabled = experimentalSealingVerificationEnabled
 
 	return nil
 }
@@ -249,7 +251,8 @@ var (
 	initHeight,
 	forceStartHeight uint64
 
-	experimentalSoftFinalityEnabled bool
+	experimentalSoftFinalityEnabled,
+	experimentalSealingVerificationEnabled bool
 )
 
 func init() {
@@ -285,4 +288,5 @@ func init() {
 	Cmd.Flags().IntVar(&cfg.ProfilerPort, "profiler-port", 6060, "Port for the Profiler server")
 	Cmd.Flags().StringVar(&txStateValidation, "tx-state-validation", "tx-seal", "Sets the transaction validation mechanism. It can validate using the local state index, or wait for the outer Flow transaction to seal. Available values ('local-index' / 'tx-seal'), defaults to 'tx-seal'.")
 	Cmd.Flags().BoolVar(&experimentalSoftFinalityEnabled, "experimental-soft-finality-enabled", false, "Sets whether the gateway should use the experimental soft finality feature. WARNING: This may result in incorrect results being returned in certain circumstances. Use only if you know what you are doing.")
+	Cmd.Flags().BoolVar(&experimentalSealingVerificationEnabled, "experimental-sealing-verification-enabled", true, "Sets whether the gateway should use the experimental soft finality sealing verification feature. WARNING: This may result in indexing halts if events do not match. Use only if you know what you are doing.")
 }

@@ -156,13 +156,16 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 	// create event subscriber
 	var subscriber ingestion.EventSubscriber
 	if b.config.ExperimentalSoftFinalityEnabled {
-		verifier := ingestion.NewSealingVerifier(
-			b.logger,
-			b.client,
-			chainID,
-			b.storages.EventsHash,
-			nextCadenceHeight,
-		)
+		var verifier *ingestion.SealingVerifier
+		if b.config.ExperimentalSealingVerificationEnabled {
+			verifier = ingestion.NewSealingVerifier(
+				b.logger,
+				b.client,
+				chainID,
+				b.storages.EventsHash,
+				nextCadenceHeight,
+			)
+		}
 
 		subscriber = ingestion.NewRPCBlockTrackingSubscriber(
 			b.logger,
