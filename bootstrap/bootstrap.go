@@ -207,7 +207,7 @@ func (b *Bootstrap) StopEventIngestion() {
 }
 
 func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
-	b.logger.Info().Msg("bootstrap starting metrics server")
+	b.logger.Info().Msg("bootstrap starting API server")
 
 	b.server = api.NewServer(b.logger, b.collector, b.config)
 
@@ -372,7 +372,6 @@ func (b *Bootstrap) StopAPIServer() {
 }
 
 func (b *Bootstrap) StartMetricsServer(ctx context.Context) error {
-
 	b.metrics = newMetricsWrapper(b.logger, b.config.MetricsPort)
 	return b.metrics.Start(ctx)
 }
@@ -639,6 +638,45 @@ func setupStorage(
 	}, nil
 }
 
+func (b *Bootstrap) Run(
+	ctx context.Context,
+	cfg config.Config,
+	ready component.ReadyFunc,
+) error {
+	// Start the API Server first, to avoid any races with incoming
+	// EVM events, that might affect the starting state.
+	if err := b.StartAPIServer(ctx); err != nil {
+		return fmt.Errorf("failed to start API server: %w", err)
+	}
+
+	if err := b.StartEventIngestion(ctx); err != nil {
+		return fmt.Errorf("failed to start event ingestion engine: %w", err)
+	}
+
+	if err := b.StartMetricsServer(ctx); err != nil {
+		return fmt.Errorf("failed to start metrics server: %w", err)
+	}
+
+	if err := b.StartProfilerServer(ctx); err != nil {
+		return fmt.Errorf("failed to start profiler server: %w", err)
+	}
+
+	// mark ready
+	ready()
+
+	return nil
+}
+
+func (b *Bootstrap) Stop() {
+	b.logger.Info().Msg("bootstrap received context cancellation, stopping services")
+
+	b.StopEventIngestion()
+	b.StopMetricsServer()
+	b.StopAPIServer()
+	b.StopClient()
+	b.StopDB()
+}
+
 // Run will run complete bootstrap of the EVM gateway with all the engines.
 // Run is a blocking call, but it does signal readiness of the service
 // through a channel provided as an argument.
@@ -648,36 +686,14 @@ func Run(ctx context.Context, cfg config.Config, ready component.ReadyFunc) erro
 		return err
 	}
 
-	// Start the API Server first, to avoid any races with incoming
-	// EVM events, that might affect the starting state.
-	if err := boot.StartAPIServer(ctx); err != nil {
-		return fmt.Errorf("failed to start API server: %w", err)
+	if err := boot.Run(ctx, cfg, ready); err != nil {
+		return err
 	}
-
-	if err := boot.StartEventIngestion(ctx); err != nil {
-		return fmt.Errorf("failed to start event ingestion engine: %w", err)
-	}
-
-	if err := boot.StartMetricsServer(ctx); err != nil {
-		return fmt.Errorf("failed to start metrics server: %w", err)
-	}
-
-	if err := boot.StartProfilerServer(ctx); err != nil {
-		return fmt.Errorf("failed to start profiler server: %w", err)
-	}
-
-	// mark ready
-	ready()
 
 	// if context is canceled start shutdown
 	<-ctx.Done()
-	boot.logger.Warn().Msg("bootstrap received context cancellation, stopping services")
 
-	boot.StopEventIngestion()
-	boot.StopMetricsServer()
-	boot.StopAPIServer()
-	boot.StopClient()
-	boot.StopDB()
+	boot.Stop()
 
 	return nil
 }
