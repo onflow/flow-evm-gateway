@@ -93,4 +93,9 @@ type Config struct {
 	// EVM block and transaction data from the upstream Access node before the block is sealed.
 	// CAUTION: This feature is experimental and may return incorrect data in certain circumstances.
 	ExperimentalSoftFinalityEnabled bool
+	// ExperimentalSealingVerificationEnabled enables the experimental sealing verification feature
+	// which verifies the hash of the EVM events ingested by the requester engine match the hash
+	// of the events from the sealed block in the Flow network.
+	// CAUTION: This feature is experimental and will cause the node to halt if the events don't match.
+	ExperimentalSealingVerificationEnabled bool
 }

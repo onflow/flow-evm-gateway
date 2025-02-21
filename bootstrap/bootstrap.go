@@ -56,6 +56,7 @@ type Storages struct {
 	Transactions storage.TransactionIndexer
 	Receipts     storage.ReceiptIndexer
 	Traces       storage.TraceIndexer
+	EventsHash   *pebble.EventsHash
 }
 
 type Publishers struct {
@@ -155,12 +156,24 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 	// create event subscriber
 	var subscriber ingestion.EventSubscriber
 	if b.config.ExperimentalSoftFinalityEnabled {
+		var verifier *ingestion.SealingVerifier
+		if b.config.ExperimentalSealingVerificationEnabled {
+			verifier = ingestion.NewSealingVerifier(
+				b.logger,
+				b.client,
+				chainID,
+				b.storages.EventsHash,
+				nextCadenceHeight,
+			)
+		}
+
 		subscriber = ingestion.NewRPCBlockTrackingSubscriber(
 			b.logger,
 			b.client,
 			chainID,
 			b.keystore,
 			nextCadenceHeight,
+			verifier,
 		)
 	} else {
 		subscriber = ingestion.NewRPCEventSubscriber(
@@ -597,6 +610,7 @@ func setupStorage(
 	blocks := pebble.NewBlocks(store, config.FlowNetworkID)
 	storageAddress := evm.StorageAccountAddress(config.FlowNetworkID)
 	registerStore := pebble.NewRegisterStorage(store, storageAddress)
+	eventsHash := pebble.NewEventsHash(store)
 
 	batch := store.NewBatch()
 	defer func() {
@@ -676,6 +690,7 @@ func setupStorage(
 		Transactions: pebble.NewTransactions(store),
 		Receipts:     pebble.NewReceipts(store),
 		Traces:       pebble.NewTraces(store),
+		EventsHash:   eventsHash,
 	}, nil
 }
 

@@ -6,9 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/onflow/flow-evm-gateway/models"
-	errs "github.com/onflow/flow-evm-gateway/models/errors"
-	"github.com/onflow/flow-evm-gateway/services/requester"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go/fvm/evm/events"
 	flowGo "github.com/onflow/flow-go/model/flow"
@@ -16,6 +13,10 @@ import (
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"github.com/onflow/flow-evm-gateway/models"
+	errs "github.com/onflow/flow-evm-gateway/models/errors"
+	"github.com/onflow/flow-evm-gateway/services/requester"
 )
 
 var _ EventSubscriber = &RPCBlockTrackingSubscriber{}
@@ -35,6 +36,8 @@ var _ EventSubscriber = &RPCBlockTrackingSubscriber{}
 // at which point this subscriber will be removed.
 type RPCBlockTrackingSubscriber struct {
 	*RPCEventSubscriber
+
+	verifier *SealingVerifier
 }
 
 func NewRPCBlockTrackingSubscriber(
@@ -43,6 +46,7 @@ func NewRPCBlockTrackingSubscriber(
 	chainID flowGo.ChainID,
 	keyLock requester.KeyLock,
 	startHeight uint64,
+	verifier *SealingVerifier,
 ) *RPCBlockTrackingSubscriber {
 	return &RPCBlockTrackingSubscriber{
 		RPCEventSubscriber: NewRPCEventSubscriber(
@@ -52,6 +56,7 @@ func NewRPCBlockTrackingSubscriber(
 			keyLock,
 			startHeight,
 		),
+		verifier: verifier,
 	}
 }
 
@@ -96,6 +101,17 @@ func (r *RPCBlockTrackingSubscriber) Subscribe(ctx context.Context) <-chan model
 		r.logger.Info().
 			Uint64("next-height", r.height).
 			Msg("backfilling done, subscribe for live data")
+
+		// start the verifier after backfilling since backfilled data is already sealed
+		if r.verifier != nil {
+			go func() {
+				r.verifier.SetStartHeight(r.height)
+				if err := r.verifier.Run(ctx); err != nil {
+					r.logger.Fatal().Err(err).Msg("failure running sealing verifier")
+					return
+				}
+			}()
+		}
 
 		// subscribe in the current spork, handling of context cancellation is done by the producer
 		for ev := range r.subscribe(ctx, r.height) {
@@ -168,6 +184,14 @@ func (r *RPCBlockTrackingSubscriber) subscribe(ctx context.Context, height uint6
 				if err != nil {
 					eventsChan <- models.NewBlockEventsError(err)
 					return
+				}
+
+				if r.verifier != nil {
+					// submit the block events to the verifier for future sealing verification
+					if err := r.verifier.AddFinalizedBlock(blockEvents); err != nil {
+						eventsChan <- models.NewBlockEventsError(err)
+						return
+					}
 				}
 
 				evmEvents := models.NewSingleBlockEvents(blockEvents)
