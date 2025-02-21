@@ -656,4 +656,25 @@ it('should retrieve call traces', async () => {
     )
     assert.equal(updateTrace.value, '0x0')
     assert.equal(updateTrace.type, 'CALL')
+
+    // test that `gas` limit does not exceed the `50M` value
+    traceCall = {
+        from: conf.eoa.address,
+        to: contractAddress,
+        data: callData,
+        value: '0x0',
+        gasPrice: web3.utils.toHex(conf.minGasPrice),
+        gas: '0x6CB8080'
+    }
+    response = await helpers.callRPCMethod(
+        'debug_traceCall',
+        [traceCall, 'latest', callTracer]
+    )
+    assert.equal(response.status, 200)
+    assert.isDefined(response.body)
+
+    assert.equal(
+        response.body.error.message,
+        'gas limit is bigger than max gas limit allowed 114000000 > 50000000'
+    )
 })
