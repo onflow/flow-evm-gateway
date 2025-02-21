@@ -188,7 +188,7 @@ func (r *RPCBlockTrackingSubscriber) subscribe(ctx context.Context, height uint6
 
 				if r.verifier != nil {
 					// submit the block events to the verifier for future sealing verification
-					if err := r.verifier.AddBlock(blockEvents); err != nil {
+					if err := r.verifier.AddFinalizedBlock(blockEvents); err != nil {
 						eventsChan <- models.NewBlockEventsError(err)
 						return
 					}

@@ -21,7 +21,7 @@ import (
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
 )
 
-var _ models.Engine = &SealingVerifier{}
+var _ models.Engine = (*SealingVerifier)(nil)
 
 // SealingVerifier verifies that soft finality events received over the Access polling API match the
 // actually sealed results from the event stream.
@@ -32,10 +32,18 @@ type SealingVerifier struct {
 	client *requester.CrossSporkClient
 	chain  flowGo.ChainID
 
-	startHeight            uint64
-	eventsHash             *pebble.EventsHash
+	startHeight uint64
+	eventsHash  *pebble.EventsHash
+
+	// unsealedBlocksToVerify contains the events has for unsealed blocks by the ingestion engine
+	// Cache the unsealed data until the sealed data is available to verify.
 	unsealedBlocksToVerify map[uint64]flow.Identifier
-	sealedBlocksToVerify   map[uint64]flow.Identifier
+
+	// sealedBlocksToVerify contains the events hash for sealed blocks return by the Access node
+	// Note: we also track sealed blocks since it's possible for the sealed data stream to get ahead
+	// of the unsealed data ingestion. In this case, we need to cache the sealed data until the unsealed
+	// data is available.
+	sealedBlocksToVerify map[uint64]flow.Identifier
 
 	mu sync.Mutex
 }
@@ -67,13 +75,14 @@ func (v *SealingVerifier) Stop() {
 }
 
 // SetStartHeight sets the start height for the sealing verifier.
-// This is used to update the height when backfilling already sea
+// This is used to update the height when backfilling to skip verification of already sealed blocks.
 func (v *SealingVerifier) SetStartHeight(height uint64) {
 	v.startHeight = height
 }
 
-// AddBlock adds a block to the sealing verifier for verification when the sealed data is received.
-func (v *SealingVerifier) AddBlock(events flow.BlockEvents) error {
+// AddFinalizedBlock adds events for an unsealed block to the sealing verifier for verification when
+// the sealed data is received.
+func (v *SealingVerifier) AddFinalizedBlock(events flow.BlockEvents) error {
 	return v.onUnsealedEvents(events)
 }
 
@@ -179,12 +188,17 @@ func (v *SealingVerifier) Run(ctx context.Context) error {
 // otherwise, the sealed events are cached for future verification.
 func (v *SealingVerifier) onSealedEvents(sealedEvents flow.BlockEvents) error {
 	if len(sealedEvents.Events) == 0 {
+		v.mu.Lock()
+		defer v.mu.Unlock()
+		if _, ok := v.unsealedBlocksToVerify[sealedEvents.Height]; ok {
+			return fmt.Errorf("found unsealed events but no sealed events for height %d", sealedEvents.Height)
+		}
 		return nil // skip empty blocks
 	}
 
 	sealedHash, err := CalculateHash(sealedEvents)
 	if err != nil {
-		return fmt.Errorf("failed to calculate hash for sealed events: %w", err)
+		return fmt.Errorf("failed to calculate hash for sealed events for height %d: %w", sealedEvents.Height, err)
 	}
 
 	v.mu.Lock()
