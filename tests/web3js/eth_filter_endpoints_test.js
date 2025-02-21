@@ -413,7 +413,7 @@ describe('eth_getFilterChanges', async () => {
             blockNumber: '0xd',
             from: '0x0000000000000000000000030000000000000000',
             gas: '0x5b04',
-            gasPrice: '0x0',
+            gasPrice: '0x1',
             hash: '0x71201dbf66271cedb6e87a5364b2cb84f6170e282f2b3f676196687bdf4babe0',
             input: '0x',
             nonce: '0x9',

@@ -31,8 +31,6 @@ const BlockGasLimit uint64 = 120_000_000
 
 const maxFeeHistoryBlockCount = 1024
 
-var baseFeesPerGas = big.NewInt(1)
-
 var latestBlockNumberOrHash = rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
 
 func SupportedAPIs(
@@ -578,7 +576,7 @@ func (b *BlockChainAPI) Call(
 
 	res, err := b.evm.Call(tx, from, height, stateOverrides, blockOverrides)
 	if err != nil {
-		return handleError[hexutil.Bytes](err, l, b.collector)
+		return nil, err
 	}
 
 	return res, nil
@@ -727,7 +725,8 @@ func (b *BlockChainAPI) EstimateGas(
 
 	tx, err := encodeTxFromArgs(args)
 	if err != nil {
-		return hexutil.Uint64(BlockGasLimit), nil // return block gas limit
+		// return max tx gas limit
+		return hexutil.Uint64(models.TxMaxGasLimit), nil
 	}
 
 	// Default address in case user does not provide one
@@ -747,7 +746,7 @@ func (b *BlockChainAPI) EstimateGas(
 
 	estimatedGas, err := b.evm.EstimateGas(tx, from, height, stateOverrides)
 	if err != nil {
-		return handleError[hexutil.Uint64](err, l, b.collector)
+		return 0, err
 	}
 
 	return hexutil.Uint64(estimatedGas), nil
@@ -851,7 +850,7 @@ func (b *BlockChainAPI) FeeHistory(
 			oldestBlock = (*hexutil.Big)(big.NewInt(int64(block.Height)))
 		}
 
-		baseFees = append(baseFees, (*hexutil.Big)(baseFeesPerGas))
+		baseFees = append(baseFees, (*hexutil.Big)(models.BaseFeePerGas))
 
 		rewards = append(rewards, blockRewards)
 
@@ -967,7 +966,7 @@ func (b *BlockChainAPI) prepareBlockResponse(
 		GasLimit:         hexutil.Uint64(BlockGasLimit),
 		Nonce:            types.BlockNonce{0x1},
 		Timestamp:        hexutil.Uint64(block.Timestamp),
-		BaseFeePerGas:    hexutil.Big(*baseFeesPerGas),
+		BaseFeePerGas:    hexutil.Big(*models.BaseFeePerGas),
 		LogsBloom:        types.LogsBloom([]*types.Log{}),
 		Miner:            evmTypes.CoinbaseAddress.ToCommon(),
 		Sha3Uncles:       types.EmptyUncleHash,

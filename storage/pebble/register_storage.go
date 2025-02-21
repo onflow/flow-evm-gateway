@@ -178,10 +178,23 @@ func newLookupKey(height uint64, key []byte) *lookupKey {
 	return &lookupKey
 }
 
-// GetSnapshotAt returns a snapshot of the register index at the given block height.
-// the snapshot has a cache. Nil values are cached.
-func (r *RegisterStorage) GetSnapshotAt(evmBlockHeight uint64) (types.BackendStorageSnapshot, error) {
-	return NewStorageSnapshot(r.Get, evmBlockHeight), nil
+// GetSnapshotAt returns a snapshot of the register index at the start of the
+// given block height (which is the end of the previous block).
+// The snapshot has a cache. Nil values are cached.
+func (r *RegisterStorage) GetSnapshotAt(
+	evmBlockHeightOfStartStateToQuery uint64,
+) (types.BackendStorageSnapshot, error) {
+	var snapshotHeightOfEndState uint64
+	if evmBlockHeightOfStartStateToQuery > 0 {
+		// `evmBlockHeightOfStartStateToQuery-1` to get the end state of the previous block.
+		snapshotHeightOfEndState = evmBlockHeightOfStartStateToQuery - 1
+	} else {
+		// Avoid a possible underflow
+		snapshotHeightOfEndState = uint64(0)
+	}
+
+	// NewStorageSnapshot return the end state of a given height.
+	return NewStorageSnapshot(r.Get, snapshotHeightOfEndState), nil
 }
 
 func registerOwnerMismatch(expected flow.Address, owner flow.Address) error {

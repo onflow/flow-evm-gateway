@@ -194,7 +194,7 @@ func (d *DebugAPI) TraceCall(
 		flowEVM.StorageAccountAddress(d.config.FlowNetworkID),
 		d.registerStore,
 		blocksProvider,
-		BlockGasLimit,
+		models.TxMaxGasLimit,
 	)
 
 	view, err := viewProvider.GetBlockView(block.Height)
@@ -419,18 +419,11 @@ func (d *DebugAPI) traceBlockByNumber(
 }
 
 func (d *DebugAPI) executorAtBlock(block *models.Block) (*evm.BlockExecutor, error) {
-	previousBlock, err := d.blocks.GetByHeight(block.Height - 1)
-	if err != nil {
-		return nil, err
-	}
-
-	// We need to re-execute all the transactions from the given block,
-	// on top of the previous block state, to generate the correct traces.
-	snapshot, err := d.registerStore.GetSnapshotAt(previousBlock.Height)
+	snapshot, err := d.registerStore.GetSnapshotAt(block.Height)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"failed to get register snapshot at block height %d: %w",
-			previousBlock.Height,
+			block.Height,
 			err,
 		)
 	}
