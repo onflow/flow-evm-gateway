@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -116,13 +117,27 @@ func (v *SealingVerifier) Run(ctx context.Context) error {
 	nextHeight := lastVerifiedHeight + 1
 	connect := func(height uint64) error {
 		var err error
-		eventsChan, errChan, err = v.client.SubscribeEventsByBlockHeight(
-			subscriptionCtx,
-			height,
-			blocksFilter(v.chain),
-			access.WithHeartbeatInterval(1),
-		)
-		return err
+		for {
+			eventsChan, errChan, err = v.client.SubscribeEventsByBlockHeight(
+				subscriptionCtx,
+				height,
+				blocksFilter(v.chain),
+				access.WithHeartbeatInterval(1),
+			)
+
+			if err != nil {
+				// access node has not sealed the next height yet, wait and try again
+				// this typically happens when the AN reboots and the stream is reconnected before
+				// it has sealed the next block
+				if status.Code(err) == codes.InvalidArgument && strings.Contains(err.Error(), "higher than highest indexed height") {
+					time.Sleep(time.Second)
+					continue
+				}
+				return err
+			}
+
+			return nil
+		}
 	}
 
 	v.logger.Info().Uint64("start_height", lastVerifiedHeight).Msg("starting verifier")
