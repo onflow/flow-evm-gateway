@@ -184,12 +184,17 @@ func newLookupKey(height uint64, key []byte) *lookupKey {
 func (r *RegisterStorage) GetSnapshotAt(
 	evmBlockHeightOfStartStateToQuery uint64,
 ) (types.BackendStorageSnapshot, error) {
-	// Avoid a possible underflow
+	var snapshotHeightOfEndState uint64
 	if evmBlockHeightOfStartStateToQuery > 0 {
 		// `evmBlockHeightOfStartStateToQuery-1` to get the end state of the previous block.
-		evmBlockHeightOfStartStateToQuery -= 1
+		snapshotHeightOfEndState = evmBlockHeightOfStartStateToQuery - 1
+	} else {
+		// Avoid a possible underflow
+		snapshotHeightOfEndState = uint64(0)
 	}
-	return NewStorageSnapshot(r.Get, evmBlockHeightOfStartStateToQuery), nil
+	
+	// NewStorageSnapshot return the end state of a given height.
+	return NewStorageSnapshot(r.Get, snapshotHeightOfEndState), nil
 }
 
 func registerOwnerMismatch(expected flow.Address, owner flow.Address) error {
