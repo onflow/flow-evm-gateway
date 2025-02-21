@@ -61,6 +61,13 @@ it('should get block', async () => {
         assert.isString(tx.hash)
         assert.equal(tx.transactionIndex, txIndex)
 
+        // COA interactions
+        if (tx.v === 255n) {
+            assert.equal(tx.gasPrice, 1n)
+        } else {
+            assert.equal(tx.gasPrice, conf.minGasPrice)
+        }
+
         let txReceipt = await web3.eth.getTransactionReceipt(tx.hash)
         assert.isNotNull(txReceipt)
         assert.equal(txReceipt.blockNumber, block.number)
@@ -68,6 +75,13 @@ it('should get block', async () => {
         assert.isString(txReceipt.transactionHash)
         assert.equal(txReceipt.transactionIndex, txIndex)
         assert.isNotNull(txReceipt.from)
+
+        // COA interactions
+        if (tx.v === 255n) {
+            assert.equal(txReceipt.effectiveGasPrice, 1n)
+        } else {
+            assert.equal(txReceipt.effectiveGasPrice, conf.minGasPrice)
+        }
 
         // first transaction is the COA resource creation,
         // which also does the contract deployment
