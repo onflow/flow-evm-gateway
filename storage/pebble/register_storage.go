@@ -192,7 +192,7 @@ func (r *RegisterStorage) GetSnapshotAt(
 		// Avoid a possible underflow
 		snapshotHeightOfEndState = uint64(0)
 	}
-	
+
 	// NewStorageSnapshot return the end state of a given height.
 	return NewStorageSnapshot(r.Get, snapshotHeightOfEndState), nil
 }
