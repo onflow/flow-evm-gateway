@@ -9,6 +9,7 @@ import (
 
 	ethTypes "github.com/onflow/flow-evm-gateway/eth/types"
 	"github.com/onflow/flow-evm-gateway/metrics"
+	"github.com/onflow/flow-evm-gateway/models"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/go-ethereum/common"
@@ -153,7 +154,7 @@ func encodeTxFromArgs(args ethTypes.TransactionArgs) (*types.DynamicFeeTx, error
 
 	// provide a high enough gas for the tx to be able to execute,
 	// capped by the gas set in transaction args.
-	gasLimit := BlockGasLimit
+	gasLimit := models.TxMaxGasLimit
 	if args.Gas != nil {
 		gasLimit = uint64(*args.Gas)
 	}
