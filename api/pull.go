@@ -12,7 +12,6 @@ import (
 	"github.com/onflow/go-ethereum/eth/filters"
 	"github.com/onflow/go-ethereum/rpc"
 	"github.com/rs/zerolog"
-	"github.com/sethvargo/go-limiter"
 
 	"github.com/onflow/flow-evm-gateway/config"
 	ethTypes "github.com/onflow/flow-evm-gateway/eth/types"
@@ -135,7 +134,7 @@ type PullAPI struct {
 	receipts     storage.ReceiptIndexer
 	filters      map[rpc.ID]filter
 	mux          sync.Mutex
-	ratelimiter  limiter.Store
+	rateLimiter  RateLimiter
 }
 
 func NewPullAPI(
@@ -144,7 +143,7 @@ func NewPullAPI(
 	blocks storage.BlockIndexer,
 	transactions storage.TransactionIndexer,
 	receipts storage.ReceiptIndexer,
-	ratelimiter limiter.Store,
+	rateLimiter RateLimiter,
 ) *PullAPI {
 	api := &PullAPI{
 		logger:       logger,
@@ -153,7 +152,7 @@ func NewPullAPI(
 		transactions: transactions,
 		receipts:     receipts,
 		filters:      make(map[rpc.ID]filter),
-		ratelimiter:  ratelimiter,
+		rateLimiter:  rateLimiter,
 	}
 
 	go api.filterExpiryChecker()
@@ -170,7 +169,7 @@ func (api *PullAPI) NewPendingTransactionFilter(
 	ctx context.Context,
 	fullTx *bool,
 ) (rpc.ID, error) {
-	if err := rateLimit(ctx, api.ratelimiter, api.logger); err != nil {
+	if err := api.rateLimiter.Apply(ctx, "NewPendingTransactionFilter"); err != nil {
 		return "", err
 	}
 
@@ -198,7 +197,7 @@ func (api *PullAPI) NewPendingTransactionFilter(
 // NewBlockFilter creates a filter that fetches blocks that are imported into the chain.
 // It is part of the filter package since polling goes with eth_getFilterChanges.
 func (api *PullAPI) NewBlockFilter(ctx context.Context) (rpc.ID, error) {
-	if err := rateLimit(ctx, api.ratelimiter, api.logger); err != nil {
+	if err := api.rateLimiter.Apply(ctx, "NewBlockFilter"); err != nil {
 		return "", err
 	}
 
@@ -247,7 +246,7 @@ func (api *PullAPI) uninstallFilter(id rpc.ID) bool {
 //
 // In case "fromBlock" > "toBlock" an error is returned.
 func (api *PullAPI) NewFilter(ctx context.Context, criteria filters.FilterCriteria) (rpc.ID, error) {
-	if err := rateLimit(ctx, api.ratelimiter, api.logger); err != nil {
+	if err := api.rateLimiter.Apply(ctx, "NewFilter"); err != nil {
 		return "", err
 	}
 
@@ -291,7 +290,7 @@ func (api *PullAPI) GetFilterLogs(
 	ctx context.Context,
 	id rpc.ID,
 ) ([]*gethTypes.Log, error) {
-	if err := rateLimit(ctx, api.ratelimiter, api.logger); err != nil {
+	if err := api.rateLimiter.Apply(ctx, "GetFilterLogs"); err != nil {
 		return nil, err
 	}
 
@@ -341,7 +340,7 @@ func (api *PullAPI) GetFilterLogs(
 // For pending transaction and block filters the result is []common.Hash.
 // (pending)Log filters return []Log.
 func (api *PullAPI) GetFilterChanges(ctx context.Context, id rpc.ID) (any, error) {
-	if err := rateLimit(ctx, api.ratelimiter, api.logger); err != nil {
+	if err := api.rateLimiter.Apply(ctx, "GetFilterChanges"); err != nil {
 		return nil, err
 	}
 
