@@ -166,7 +166,7 @@ func Test_DecodeDirectCall(t *testing.T) {
 	assert.Equal(t, big.NewInt(10000000000), decTx.Value())
 	assert.Equal(t, uint8(gethTypes.LegacyTxType), decTx.Type())
 	assert.Equal(t, uint64(23_300), decTx.Gas())
-	assert.Equal(t, big.NewInt(0), decTx.GasPrice())
+	assert.Equal(t, BaseFeePerGas, decTx.GasPrice())
 	assert.Equal(t, uint64(0), decTx.BlobGas())
 	assert.Equal(t, uint64(61), decTx.Size())
 }
@@ -273,7 +273,7 @@ func Test_UnmarshalTransaction(t *testing.T) {
 		assert.Equal(t, big.NewInt(10000000000), decTx.Value())
 		assert.Equal(t, uint8(gethTypes.LegacyTxType), decTx.Type())
 		assert.Equal(t, uint64(23_300), decTx.Gas())
-		assert.Equal(t, big.NewInt(0), decTx.GasPrice())
+		assert.Equal(t, BaseFeePerGas, decTx.GasPrice())
 		assert.Equal(t, uint64(0), decTx.BlobGas())
 		assert.Equal(t, uint64(61), decTx.Size())
 	})

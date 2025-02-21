@@ -35,6 +35,8 @@ const (
 	TxMaxGasLimit = uint64(50_000_000)
 )
 
+var BaseFeePerGas = big.NewInt(1)
+
 type Transaction interface {
 	Hash() common.Hash
 	RawSignatureValues() (v *big.Int, r *big.Int, s *big.Int)
@@ -117,7 +119,7 @@ func (dc DirectCall) GasTipCap() *big.Int {
 }
 
 func (dc DirectCall) GasPrice() *big.Int {
-	return big.NewInt(0)
+	return BaseFeePerGas
 }
 
 func (dc DirectCall) BlobGas() uint64 {
@@ -232,6 +234,7 @@ func decodeTransactionEvent(event cadence.Event) (
 				err,
 			)
 		}
+		receipt.EffectiveGasPrice = BaseFeePerGas
 		tx = DirectCall{DirectCall: directCall}
 	} else {
 		gethTx := &gethTypes.Transaction{}
