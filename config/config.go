@@ -91,7 +91,7 @@ type Config struct {
 	TxStateValidation string
 	// TxRequestLimit is the number of transaction submissions to allow per interval.
 	TxRequestLimit uint64
-	// TxRequestDurationLimit is the time interval upon which to enforce transaction submission
+	// TxRequestLimitDuration is the time interval upon which to enforce transaction submission
 	// rate limiting.
-	TxRequestDurationLimit time.Duration
+	TxRequestLimitDuration time.Duration
 }

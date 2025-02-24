@@ -171,7 +171,7 @@ func NewEVM(
 	ratelimiter, err := memorystore.New(
 		&memorystore.Config{
 			Tokens:   config.TxRequestLimit,
-			Interval: config.TxRequestDurationLimit,
+			Interval: config.TxRequestLimitDuration,
 		},
 	)
 	if err != nil {
