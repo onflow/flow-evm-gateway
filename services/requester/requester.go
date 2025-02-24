@@ -21,6 +21,8 @@ import (
 	"github.com/onflow/go-ethereum/core/txpool"
 	"github.com/onflow/go-ethereum/core/types"
 	"github.com/rs/zerolog"
+	"github.com/sethvargo/go-limiter"
+	"github.com/sethvargo/go-limiter/memorystore"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/onflow/flow-evm-gateway/config"
@@ -109,6 +111,7 @@ type EVM struct {
 	evmSigner         types.Signer
 	validationOptions *txpool.ValidationOptions
 	collector         metrics.Collector
+	rateLimiter       limiter.Store
 }
 
 func NewEVM(
@@ -165,6 +168,16 @@ func NewEVM(
 		MinTip:  new(big.Int),
 	}
 
+	rateLimiter, err := memorystore.New(
+		&memorystore.Config{
+			Tokens:   config.TxRequestLimit,
+			Interval: config.TxRequestLimitDuration,
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create TX rate limiter: %w", err)
+	}
+
 	evm := &EVM{
 		registerStore:     registerStore,
 		client:            client,
@@ -177,6 +190,7 @@ func NewEVM(
 		validationOptions: validationOptions,
 		collector:         collector,
 		keystore:          keystore,
+		rateLimiter:       rateLimiter,
 	}
 
 	return evm, nil
@@ -195,6 +209,17 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 	from, err := types.Sender(types.LatestSignerForChainID(tx.ChainId()), tx)
 	if err != nil {
 		return common.Hash{}, fmt.Errorf("failed to derive the sender: %w", err)
+	}
+
+	if e.config.TxRequestLimit > 0 {
+		_, _, _, ok, err := e.rateLimiter.Take(ctx, from.Hex())
+		if err != nil {
+			return common.Hash{}, fmt.Errorf("failed to check rate limit: %w", err)
+		}
+		if !ok {
+			e.collector.RequestRateLimited("SendRawTransaction")
+			return common.Hash{}, errs.ErrRateLimit
+		}
 	}
 
 	if tx.GasPrice().Cmp(e.config.GasPrice) < 0 {
