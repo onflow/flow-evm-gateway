@@ -72,6 +72,11 @@ var blockIngestionTime = prometheus.NewHistogram(prometheus.HistogramOpts{
 	Buckets: prometheus.DefBuckets,
 })
 
+var requestRateLimitedCounters = prometheus.NewCounterVec(prometheus.CounterOpts{
+	Name: prefixedName("request_rate_limited"),
+	Help: "Total number of rate limits by JSON-RPC method",
+}, []string{"method"})
+
 var metrics = []prometheus.Collector{
 	apiErrors,
 	serverPanicsCounters,
@@ -85,6 +90,7 @@ var metrics = []prometheus.Collector{
 	availableSigningKeys,
 	gasEstimationIterations,
 	blockIngestionTime,
+	requestRateLimitedCounters,
 }
 
 type Collector interface {
@@ -99,24 +105,26 @@ type Collector interface {
 	AvailableSigningKeys(count int)
 	GasEstimationIterations(count int)
 	BlockIngestionTime(blockCreation time.Time)
+	RequestRateLimited(method string)
 }
 
 var _ Collector = &DefaultCollector{}
 
 type DefaultCollector struct {
 	// TODO: for now we cannot differentiate which api request failed number of times
-	apiErrorsCounter        prometheus.Counter
-	serverPanicsCounters    *prometheus.CounterVec
-	cadenceBlockHeight      prometheus.Gauge
-	evmBlockHeight          prometheus.Gauge
-	evmBlockIndexedCounter  prometheus.Counter
-	evmTxIndexedCounter     prometheus.Counter
-	operatorBalance         prometheus.Gauge
-	evmAccountCallCounters  *prometheus.CounterVec
-	requestDurations        *prometheus.HistogramVec
-	availableSigningkeys    prometheus.Gauge
-	gasEstimationIterations prometheus.Gauge
-	blockIngestionTime      prometheus.Histogram
+	apiErrorsCounter           prometheus.Counter
+	serverPanicsCounters       *prometheus.CounterVec
+	cadenceBlockHeight         prometheus.Gauge
+	evmBlockHeight             prometheus.Gauge
+	evmBlockIndexedCounter     prometheus.Counter
+	evmTxIndexedCounter        prometheus.Counter
+	operatorBalance            prometheus.Gauge
+	evmAccountCallCounters     *prometheus.CounterVec
+	requestDurations           *prometheus.HistogramVec
+	availableSigningkeys       prometheus.Gauge
+	gasEstimationIterations    prometheus.Gauge
+	blockIngestionTime         prometheus.Histogram
+	requestRateLimitedCounters *prometheus.CounterVec
 }
 
 func NewCollector(logger zerolog.Logger) Collector {
@@ -126,18 +134,19 @@ func NewCollector(logger zerolog.Logger) Collector {
 	}
 
 	return &DefaultCollector{
-		apiErrorsCounter:        apiErrors,
-		serverPanicsCounters:    serverPanicsCounters,
-		cadenceBlockHeight:      cadenceBlockHeight,
-		evmBlockHeight:          evmBlockHeight,
-		evmBlockIndexedCounter:  evmBlockIndexedCounter,
-		evmTxIndexedCounter:     evmTxIndexedCounter,
-		evmAccountCallCounters:  evmAccountCallCounters,
-		requestDurations:        requestDurations,
-		operatorBalance:         operatorBalance,
-		availableSigningkeys:    availableSigningKeys,
-		gasEstimationIterations: gasEstimationIterations,
-		blockIngestionTime:      blockIngestionTime,
+		apiErrorsCounter:           apiErrors,
+		serverPanicsCounters:       serverPanicsCounters,
+		cadenceBlockHeight:         cadenceBlockHeight,
+		evmBlockHeight:             evmBlockHeight,
+		evmBlockIndexedCounter:     evmBlockIndexedCounter,
+		evmTxIndexedCounter:        evmTxIndexedCounter,
+		evmAccountCallCounters:     evmAccountCallCounters,
+		requestDurations:           requestDurations,
+		operatorBalance:            operatorBalance,
+		availableSigningkeys:       availableSigningKeys,
+		gasEstimationIterations:    gasEstimationIterations,
+		blockIngestionTime:         blockIngestionTime,
+		requestRateLimitedCounters: requestRateLimitedCounters,
 	}
 }
 
@@ -179,7 +188,6 @@ func (c *DefaultCollector) EVMTransactionIndexed(count int) {
 
 func (c *DefaultCollector) EVMAccountInteraction(address string) {
 	c.evmAccountCallCounters.With(prometheus.Labels{"address": address}).Inc()
-
 }
 
 func (c *DefaultCollector) OperatorBalance(account *flow.Account) {
@@ -203,6 +211,14 @@ func (c *DefaultCollector) GasEstimationIterations(count int) {
 func (c *DefaultCollector) BlockIngestionTime(blockCreation time.Time) {
 	c.blockIngestionTime.
 		Observe(time.Since(blockCreation).Seconds())
+}
+
+func (c *DefaultCollector) RequestRateLimited(method string) {
+	c.requestRateLimitedCounters.With(
+		prometheus.Labels{
+			"method": method,
+		},
+	).Inc()
 }
 
 func prefixedName(name string) string {
