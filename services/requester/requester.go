@@ -211,8 +211,7 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 		return common.Hash{}, fmt.Errorf("failed to derive the sender: %w", err)
 	}
 
-	rateLimitEnabled := e.config.TxRequestLimit > 0
-	if rateLimitEnabled {
+	if e.config.TxRequestLimit > 0 {
 		_, _, _, ok, err := e.limiter.Take(ctx, from.Hex())
 		if err != nil {
 			return common.Hash{}, fmt.Errorf("failed to check rate limit: %w", err)
