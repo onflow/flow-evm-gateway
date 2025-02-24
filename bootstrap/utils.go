@@ -22,7 +22,7 @@ func createSigner(
 	var err error
 	switch {
 	case config.COAKey != nil:
-		signer, err = crypto.NewInMemorySigner(config.COAKey, crypto.SHA3_256)
+		signer, err = crypto.NewInMemorySigner(config.COAKey, crypto.SHA2_256)
 	case config.COACloudKMSKey != nil:
 		signer, err = requester.NewKMSKeySigner(
 			ctx,
