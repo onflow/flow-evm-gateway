@@ -111,7 +111,7 @@ type EVM struct {
 	evmSigner         types.Signer
 	validationOptions *txpool.ValidationOptions
 	collector         metrics.Collector
-	limiter           limiter.Store
+	rateLimiter       limiter.Store
 }
 
 func NewEVM(
@@ -168,7 +168,7 @@ func NewEVM(
 		MinTip:  new(big.Int),
 	}
 
-	ratelimiter, err := memorystore.New(
+	rateLimiter, err := memorystore.New(
 		&memorystore.Config{
 			Tokens:   config.TxRequestLimit,
 			Interval: config.TxRequestLimitDuration,
@@ -190,7 +190,7 @@ func NewEVM(
 		validationOptions: validationOptions,
 		collector:         collector,
 		keystore:          keystore,
-		limiter:           ratelimiter,
+		rateLimiter:       rateLimiter,
 	}
 
 	return evm, nil
@@ -212,11 +212,12 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 	}
 
 	if e.config.TxRequestLimit > 0 {
-		_, _, _, ok, err := e.limiter.Take(ctx, from.Hex())
+		_, _, _, ok, err := e.rateLimiter.Take(ctx, from.Hex())
 		if err != nil {
 			return common.Hash{}, fmt.Errorf("failed to check rate limit: %w", err)
 		}
 		if !ok {
+			e.collector.RequestRateLimited("SendRawTransaction")
 			return common.Hash{}, errs.ErrRateLimit
 		}
 	}
