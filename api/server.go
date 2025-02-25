@@ -18,8 +18,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/onflow/go-ethereum/core"
-	gethVM "github.com/onflow/go-ethereum/core/vm"
 	gethLog "github.com/onflow/go-ethereum/log"
 	"github.com/onflow/go-ethereum/rpc"
 	"github.com/rs/cors"
@@ -29,7 +27,6 @@ import (
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/eth"
 	"github.com/onflow/flow-evm-gateway/metrics"
-	errs "github.com/onflow/flow-evm-gateway/models/errors"
 )
 
 type rpcHandler struct {
@@ -434,18 +431,6 @@ type responseHandler struct {
 	metrics     metrics.Collector
 }
 
-var knownErrors = []error{
-	errs.ErrRateLimit,
-	errs.ErrInvalid,
-	errs.ErrFailedTransaction,
-	errs.ErrEndpointNotSupported,
-	gethVM.ErrExecutionReverted,
-	core.ErrNonceTooLow,
-	core.ErrNonceTooHigh,
-	core.ErrInsufficientFunds,
-}
-
-const errMethodNotFound = -32601
 const errCodePanic = -32603
 
 type jsonError struct {
@@ -475,25 +460,9 @@ func (w *responseHandler) Write(data []byte) (int, error) {
 	l := w.log.With().Fields(w.requestBody).Logger()
 	log := l.Debug()
 
-	// handle possible error
-	if message.Error != nil {
-		errMsg := message.Error.Message
-		switch message.Error.Code {
-		case errCodePanic:
-			w.metrics.ServerPanicked(errMsg)
-		case errMethodNotFound:
-			break
-		default:
-			if errMsg == "" {
-				break
-			}
-
-			// don't error log known handled errors
-			if !isKnownError(errMsg) {
-				// log the response error as a warning
-				l.Warn().Err(errors.New(errMsg)).Msg("API response")
-			}
-		}
+	// handle possible panics inside endpoints
+	if message.Error != nil && message.Error.Code == errCodePanic {
+		w.metrics.ServerPanicked(message.Error.Message)
 	}
 
 	// log all response results of successful requests,
@@ -503,27 +472,9 @@ func (w *responseHandler) Write(data []byte) (int, error) {
 		log.RawJSON("result", r).Msg("API response")
 	}
 
-	// still debug output all errors even known ones
-	if message.Error != nil && message.Error.Code != errMethodNotFound {
-		l.Debug().
-			Str("error", message.Error.Message).
-			Int("code", message.Error.Code).
-			Any("data", message.Error.Data).
-			Msg("API error response")
-	}
-
 	return w.ResponseWriter.Write(data)
 }
 
 func (w *responseHandler) WriteHeader(statusCode int) {
 	w.ResponseWriter.WriteHeader(statusCode)
-}
-
-func isKnownError(errMsg string) bool {
-	for _, err := range knownErrors {
-		if strings.Contains(errMsg, err.Error()) {
-			return true
-		}
-	}
-	return false
 }
