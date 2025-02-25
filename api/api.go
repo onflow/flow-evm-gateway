@@ -575,7 +575,7 @@ func (b *BlockChainAPI) Call(
 
 	res, err := b.evm.Call(tx, from, height, stateOverrides, blockOverrides)
 	if err != nil {
-		return nil, err
+		return handleError[hexutil.Bytes](err, l, b.collector)
 	}
 
 	return res, nil
@@ -724,8 +724,7 @@ func (b *BlockChainAPI) EstimateGas(
 
 	tx, err := encodeTxFromArgs(args)
 	if err != nil {
-		// return max tx gas limit
-		return hexutil.Uint64(models.TxMaxGasLimit), nil
+		return hexutil.Uint64(BlockGasLimit), nil // return block gas limit
 	}
 
 	// Default address in case user does not provide one
@@ -745,7 +744,7 @@ func (b *BlockChainAPI) EstimateGas(
 
 	estimatedGas, err := b.evm.EstimateGas(tx, from, height, stateOverrides)
 	if err != nil {
-		return 0, err
+		return handleError[hexutil.Uint64](err, l, b.collector)
 	}
 
 	return hexutil.Uint64(estimatedGas), nil
