@@ -126,6 +126,8 @@ func NewEVM(
 ) (*EVM, error) {
 	logger = logger.With().Str("component", "requester").Logger()
 
+	collector.AvailableSigningKeys(keystore.AvailableKeys())
+
 	if !config.IndexOnly {
 		address := config.COAAddress
 		acc, err := client.GetAccount(context.Background(), address)
@@ -136,6 +138,7 @@ func NewEVM(
 				err,
 			)
 		}
+		collector.OperatorBalance(acc)
 
 		if acc.Balance < minFlowBalance {
 			return nil, fmt.Errorf(
@@ -178,7 +181,7 @@ func NewEVM(
 		return nil, fmt.Errorf("failed to create TX rate limiter: %w", err)
 	}
 
-	evm := &EVM{
+	return &EVM{
 		registerStore:     registerStore,
 		client:            client,
 		config:            config,
@@ -191,9 +194,7 @@ func NewEVM(
 		collector:         collector,
 		keystore:          keystore,
 		rateLimiter:       rateLimiter,
-	}
-
-	return evm, nil
+	}, nil
 }
 
 func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash, error) {
