@@ -44,6 +44,7 @@ var (
 
 const minFlowBalance = 2
 const blockGasLimit = 120_000_000
+const txMaxGasLimit = 50_000_000
 
 // estimateGasErrorRatio is the amount of overestimation eth_estimateGas
 // is allowed to produce in order to speed up calculations.
@@ -188,6 +189,10 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 		return common.Hash{}, err
 	}
 
+	if tx.Gas() > txMaxGasLimit {
+		return common.Hash{}, errs.NewTxGasLimitTooHighError(txMaxGasLimit)
+	}
+
 	if err := models.ValidateTransaction(tx, e.head, e.evmSigner, e.validationOptions); err != nil {
 		return common.Hash{}, err
 	}
@@ -328,7 +333,7 @@ func (e *EVM) EstimateGas(
 		passingGasLimit uint64 // lowest-known gas limit where tx execution succeeds
 	)
 	// Determine the highest gas limit that can be used during the estimation.
-	passingGasLimit = models.TxMaxGasLimit
+	passingGasLimit = blockGasLimit
 	if tx.Gas >= gethParams.TxGas {
 		passingGasLimit = tx.Gas
 	}
@@ -468,7 +473,7 @@ func (e *EVM) getBlockView(
 		evm.StorageAccountAddress(e.config.FlowNetworkID),
 		e.registerStore,
 		blocksProvider,
-		models.TxMaxGasLimit,
+		blockGasLimit,
 	)
 
 	return viewProvider.GetBlockView(height)
