@@ -7,7 +7,6 @@ import (
 	"math/big"
 
 	"github.com/onflow/cadence"
-	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-go/fvm/evm/events"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/go-ethereum/common"
@@ -28,11 +27,6 @@ const (
 	// more expensive to propagate; larger transactions also take more resources
 	// to validate whether they fit into the pool or not.
 	TxMaxSize = 4 * TxSlotSize // 128KB
-
-	// TxMaxSize is the maximum valid gas limit for EVM transactions that are
-	// wrapped within a Cadence transaction, configured with 9999 as the
-	// computation limit.
-	TxMaxGasLimit = uint64(50_000_000)
 )
 
 var BaseFeePerGas = big.NewInt(1)
@@ -276,10 +270,6 @@ func ValidateTransaction(
 	signer gethTypes.Signer,
 	opts *txpool.ValidationOptions,
 ) error {
-	if tx.Gas() > TxMaxGasLimit {
-		return errs.NewTxGasLimitTooHighError(TxMaxGasLimit)
-	}
-
 	txDataLen := len(tx.Data())
 
 	// Contract creation doesn't validate call data, handle first
