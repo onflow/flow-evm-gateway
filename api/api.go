@@ -31,6 +31,8 @@ const BlockGasLimit uint64 = 120_000_000
 
 const maxFeeHistoryBlockCount = 1024
 
+var baseFeesPerGas = big.NewInt(1)
+
 var latestBlockNumberOrHash = rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
 
 func SupportedAPIs(
@@ -850,7 +852,7 @@ func (b *BlockChainAPI) FeeHistory(
 			oldestBlock = (*hexutil.Big)(big.NewInt(int64(block.Height)))
 		}
 
-		baseFees = append(baseFees, (*hexutil.Big)(models.BaseFeePerGas))
+		baseFees = append(baseFees, (*hexutil.Big)(baseFeesPerGas))
 
 		rewards = append(rewards, blockRewards)
 
@@ -966,7 +968,7 @@ func (b *BlockChainAPI) prepareBlockResponse(
 		GasLimit:         hexutil.Uint64(BlockGasLimit),
 		Nonce:            types.BlockNonce{0x1},
 		Timestamp:        hexutil.Uint64(block.Timestamp),
-		BaseFeePerGas:    hexutil.Big(*models.BaseFeePerGas),
+		BaseFeePerGas:    hexutil.Big(*baseFeesPerGas),
 		LogsBloom:        types.LogsBloom([]*types.Log{}),
 		Miner:            evmTypes.CoinbaseAddress.ToCommon(),
 		Sha3Uncles:       types.EmptyUncleHash,
