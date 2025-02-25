@@ -14,7 +14,6 @@ import (
 	"github.com/onflow/flow-evm-gateway/config"
 	ethTypes "github.com/onflow/flow-evm-gateway/eth/types"
 	"github.com/onflow/flow-evm-gateway/models"
-	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/services/logs"
 	"github.com/onflow/flow-evm-gateway/storage"
 )
@@ -128,7 +127,7 @@ func (s *StreamAPI) prepareBlockHeader(
 	h, err := block.Hash()
 	if err != nil {
 		s.logger.Error().Err(err).Msg("failed to calculate hash for block by number")
-		return nil, errs.ErrInternal
+		return nil, err
 	}
 
 	blockHeader := &ethTypes.BlockHeader{
