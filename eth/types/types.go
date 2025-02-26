@@ -176,8 +176,7 @@ func NewTransaction(
 	f, err := tx.From()
 	if err != nil {
 		return nil, fmt.Errorf(
-			"%w: failed to get from address for tx: %s, with: %w",
-			errs.ErrInternal,
+			"failed to get from address for tx: %s, with: %w",
 			tx.Hash(),
 			err,
 		)

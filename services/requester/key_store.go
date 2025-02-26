@@ -9,7 +9,7 @@ import (
 	"github.com/onflow/flow-go/model/flow"
 )
 
-var ErrNoKeysAvailable = fmt.Errorf("no keys available")
+var ErrNoKeysAvailable = fmt.Errorf("no signing keys available")
 
 const accountKeyBlockExpiration = flow.DefaultTransactionExpiry
 
