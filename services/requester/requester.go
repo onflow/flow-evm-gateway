@@ -127,6 +127,7 @@ func NewEVM(
 ) (*EVM, error) {
 	logger = logger.With().Str("component", "requester").Logger()
 
+	// initialize the available keys metric since it is only updated when sending a tx
 	collector.AvailableSigningKeys(keystore.AvailableKeys())
 
 	if !config.IndexOnly {
@@ -139,6 +140,7 @@ func NewEVM(
 				err,
 			)
 		}
+		// initialize the operator balance metric since it is only updated when sending a tx
 		collector.OperatorBalance(acc)
 
 		if acc.Balance < minFlowBalance {
