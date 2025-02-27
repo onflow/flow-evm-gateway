@@ -950,7 +950,7 @@ func (b *BlockChainAPI) prepareBlockResponse(
 	h, err := block.Hash()
 	if err != nil {
 		b.logger.Error().Err(err).Msg("failed to calculate hash for block by number")
-		return nil, errs.ErrInternal
+		return nil, err
 	}
 
 	blockResponse := &ethTypes.Block{

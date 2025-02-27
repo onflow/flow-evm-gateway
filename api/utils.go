@@ -136,7 +136,7 @@ func handleError[T any](err error, log zerolog.Logger, collector metrics.Collect
 	default:
 		collector.ApiErrorOccurred()
 		log.Error().Err(err).Msg("api error")
-		return zero, errs.ErrInternal
+		return zero, err
 	}
 }
 
