@@ -322,12 +322,13 @@ func (r *RPCBlockTrackingSubscriber) getEventsByType(
 			len(evts),
 		)
 	}
+	event := evts[0]
 
 	// The `EVM.BlockExecuted` event should be present for every Flow block.
-	if strings.Contains(eventType, string(events.EventTypeBlockExecuted)) && len(evts[0].Events) != 1 {
+	if strings.Contains(eventType, string(events.EventTypeBlockExecuted)) && len(event.Events) != 1 {
 		missingEventsErr := fmt.Errorf(
 			"received unexpected number of EVM events in block: got: %d, expected: 1",
-			len(evts[0].Events),
+			len(event.Events),
 		)
 
 		// EVM Blocks events are emitted from the system transaction. if the system transaction fails,
@@ -347,8 +348,8 @@ func (r *RPCBlockTrackingSubscriber) getEventsByType(
 		}
 
 		// system transaction failed, there will not be any EVM block events
-		return evts[0], nil
+		return event, nil
 	}
 
-	return evts[0], nil
+	return event, nil
 }
