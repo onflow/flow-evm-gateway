@@ -15,11 +15,9 @@ import (
 	"github.com/onflow/go-ethereum/eth/tracers/logger"
 	"github.com/onflow/go-ethereum/rpc"
 	"github.com/rs/zerolog"
-	"github.com/sethvargo/go-limiter"
 
 	"github.com/onflow/flow-evm-gateway/config"
 	ethTypes "github.com/onflow/flow-evm-gateway/eth/types"
-	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/models"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/services/evm"
@@ -53,8 +51,7 @@ type DebugAPI struct {
 	receipts      storage.ReceiptIndexer
 	client        *requester.CrossSporkClient
 	config        config.Config
-	collector     metrics.Collector
-	limiter       limiter.Store
+	rateLimiter   RateLimiter
 }
 
 func NewDebugAPI(
@@ -66,8 +63,7 @@ func NewDebugAPI(
 	client *requester.CrossSporkClient,
 	config config.Config,
 	logger zerolog.Logger,
-	collector metrics.Collector,
-	limiter limiter.Store,
+	rateLimiter RateLimiter,
 ) *DebugAPI {
 	return &DebugAPI{
 		registerStore: registerStore,
@@ -78,8 +74,7 @@ func NewDebugAPI(
 		receipts:      receipts,
 		client:        client,
 		config:        config,
-		collector:     collector,
-		limiter:       limiter,
+		rateLimiter:   rateLimiter,
 	}
 }
 
@@ -89,7 +84,7 @@ func (d *DebugAPI) TraceTransaction(
 	hash gethCommon.Hash,
 	config *tracers.TraceConfig,
 ) (json.RawMessage, error) {
-	if err := rateLimit(ctx, d.limiter, d.logger); err != nil {
+	if err := d.rateLimiter.Apply(ctx, "TraceTransaction"); err != nil {
 		return nil, err
 	}
 
@@ -101,7 +96,7 @@ func (d *DebugAPI) TraceBlockByNumber(
 	number rpc.BlockNumber,
 	config *tracers.TraceConfig,
 ) ([]*txTraceResult, error) {
-	if err := rateLimit(ctx, d.limiter, d.logger); err != nil {
+	if err := d.rateLimiter.Apply(ctx, "TraceBlockByNumber"); err != nil {
 		return nil, err
 	}
 
@@ -118,7 +113,7 @@ func (d *DebugAPI) TraceBlockByHash(
 	hash gethCommon.Hash,
 	config *tracers.TraceConfig,
 ) ([]*txTraceResult, error) {
-	if err := rateLimit(ctx, d.limiter, d.logger); err != nil {
+	if err := d.rateLimiter.Apply(ctx, "TraceBlockByHash"); err != nil {
 		return nil, err
 	}
 
@@ -136,7 +131,7 @@ func (d *DebugAPI) TraceCall(
 	blockNrOrHash rpc.BlockNumberOrHash,
 	config *tracers.TraceCallConfig,
 ) (interface{}, error) {
-	if err := rateLimit(ctx, d.limiter, d.logger); err != nil {
+	if err := d.rateLimiter.Apply(ctx, "TraceCall"); err != nil {
 		return nil, err
 	}
 
@@ -194,7 +189,7 @@ func (d *DebugAPI) TraceCall(
 		flowEVM.StorageAccountAddress(d.config.FlowNetworkID),
 		d.registerStore,
 		blocksProvider,
-		models.TxMaxGasLimit,
+		BlockGasLimit,
 	)
 
 	view, err := viewProvider.GetBlockView(block.Height)
@@ -259,7 +254,7 @@ func (d *DebugAPI) FlowHeightByBlock(
 	ctx context.Context,
 	blockNrOrHash rpc.BlockNumberOrHash,
 ) (uint64, error) {
-	if err := rateLimit(ctx, d.limiter, d.logger); err != nil {
+	if err := d.rateLimiter.Apply(ctx, "FlowHeightByBlock"); err != nil {
 		return 0, err
 	}
 

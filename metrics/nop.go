@@ -23,3 +23,4 @@ func (c *nopCollector) OperatorBalance(*flow.Account)              {}
 func (c *nopCollector) AvailableSigningKeys(count int)             {}
 func (c *nopCollector) GasEstimationIterations(count int)          {}
 func (c *nopCollector) BlockIngestionTime(blockCreation time.Time) {}
+func (c *nopCollector) RequestRateLimited(method string)           {}

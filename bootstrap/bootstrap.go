@@ -294,10 +294,17 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 		b.logger.Warn().Msg("no rate-limiting is set")
 		rateLimit = math.MaxInt
 	}
-	ratelimiter, err := memorystore.New(&memorystore.Config{Tokens: rateLimit, Interval: time.Second})
+
+	limiter, err := memorystore.New(
+		&memorystore.Config{
+			Tokens:   rateLimit,
+			Interval: time.Second,
+		},
+	)
 	if err != nil {
-		return fmt.Errorf("failed to create rate limiter: %w", err)
+		return fmt.Errorf("failed to create in-memory limiter store: %w", err)
 	}
+	rateLimiter := api.NewRateLimiter(limiter, b.collector, b.logger)
 
 	// get the height from which the indexing resumed since the last restart,
 	// this is needed for the `eth_syncing` endpoint.
@@ -313,7 +320,7 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 		b.storages.Blocks,
 		b.storages.Transactions,
 		b.storages.Receipts,
-		ratelimiter,
+		rateLimiter,
 		b.collector,
 		indexingResumedHeight,
 	)
@@ -335,7 +342,7 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 		b.storages.Blocks,
 		b.storages.Transactions,
 		b.storages.Receipts,
-		ratelimiter,
+		rateLimiter,
 	)
 
 	debugAPI := api.NewDebugAPI(
@@ -347,8 +354,7 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 		b.client,
 		b.config,
 		b.logger,
-		b.collector,
-		ratelimiter,
+		rateLimiter,
 	)
 
 	var walletAPI *api.WalletAPI

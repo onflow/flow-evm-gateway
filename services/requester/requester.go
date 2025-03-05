@@ -21,6 +21,8 @@ import (
 	"github.com/onflow/go-ethereum/core/txpool"
 	"github.com/onflow/go-ethereum/core/types"
 	"github.com/rs/zerolog"
+	"github.com/sethvargo/go-limiter"
+	"github.com/sethvargo/go-limiter/memorystore"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/onflow/flow-evm-gateway/config"
@@ -44,6 +46,7 @@ var (
 
 const minFlowBalance = 2
 const blockGasLimit = 120_000_000
+const txMaxGasLimit = 50_000_000
 
 // estimateGasErrorRatio is the amount of overestimation eth_estimateGas
 // is allowed to produce in order to speed up calculations.
@@ -109,6 +112,7 @@ type EVM struct {
 	evmSigner         types.Signer
 	validationOptions *txpool.ValidationOptions
 	collector         metrics.Collector
+	rateLimiter       limiter.Store
 }
 
 func NewEVM(
@@ -123,6 +127,9 @@ func NewEVM(
 ) (*EVM, error) {
 	logger = logger.With().Str("component", "requester").Logger()
 
+	// initialize the available keys metric since it is only updated when sending a tx
+	collector.AvailableSigningKeys(keystore.AvailableKeys())
+
 	if !config.IndexOnly {
 		address := config.COAAddress
 		acc, err := client.GetAccount(context.Background(), address)
@@ -133,6 +140,8 @@ func NewEVM(
 				err,
 			)
 		}
+		// initialize the operator balance metric since it is only updated when sending a tx
+		collector.OperatorBalance(acc)
 
 		if acc.Balance < minFlowBalance {
 			return nil, fmt.Errorf(
@@ -165,7 +174,17 @@ func NewEVM(
 		MinTip:  new(big.Int),
 	}
 
-	evm := &EVM{
+	rateLimiter, err := memorystore.New(
+		&memorystore.Config{
+			Tokens:   config.TxRequestLimit,
+			Interval: config.TxRequestLimitDuration,
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create TX rate limiter: %w", err)
+	}
+
+	return &EVM{
 		registerStore:     registerStore,
 		client:            client,
 		config:            config,
@@ -177,15 +196,18 @@ func NewEVM(
 		validationOptions: validationOptions,
 		collector:         collector,
 		keystore:          keystore,
-	}
-
-	return evm, nil
+		rateLimiter:       rateLimiter,
+	}, nil
 }
 
 func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash, error) {
 	tx := &types.Transaction{}
 	if err := tx.UnmarshalBinary(data); err != nil {
 		return common.Hash{}, err
+	}
+
+	if tx.Gas() > txMaxGasLimit {
+		return common.Hash{}, errs.NewTxGasLimitTooHighError(txMaxGasLimit)
 	}
 
 	if err := models.ValidateTransaction(tx, e.head, e.evmSigner, e.validationOptions); err != nil {
@@ -195,6 +217,17 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 	from, err := types.Sender(types.LatestSignerForChainID(tx.ChainId()), tx)
 	if err != nil {
 		return common.Hash{}, fmt.Errorf("failed to derive the sender: %w", err)
+	}
+
+	if e.config.TxRequestLimit > 0 {
+		_, _, _, ok, err := e.rateLimiter.Take(ctx, from.Hex())
+		if err != nil {
+			return common.Hash{}, fmt.Errorf("failed to check rate limit: %w", err)
+		}
+		if !ok {
+			e.collector.RequestRateLimited("SendRawTransaction")
+			return common.Hash{}, errs.ErrRateLimit
+		}
 	}
 
 	if tx.GasPrice().Cmp(e.config.GasPrice) < 0 {
@@ -328,7 +361,7 @@ func (e *EVM) EstimateGas(
 		passingGasLimit uint64 // lowest-known gas limit where tx execution succeeds
 	)
 	// Determine the highest gas limit that can be used during the estimation.
-	passingGasLimit = models.TxMaxGasLimit
+	passingGasLimit = blockGasLimit
 	if tx.Gas >= gethParams.TxGas {
 		passingGasLimit = tx.Gas
 	}
@@ -468,7 +501,7 @@ func (e *EVM) getBlockView(
 		evm.StorageAccountAddress(e.config.FlowNetworkID),
 		e.registerStore,
 		blocksProvider,
-		models.TxMaxGasLimit,
+		blockGasLimit,
 	)
 
 	return viewProvider.GetBlockView(height)

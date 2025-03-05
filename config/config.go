@@ -89,6 +89,11 @@ type Config struct {
 	// TxStateValidation sets the transaction validation mechanism. It can validate
 	// using the local state index, or wait for the outer Flow transaction to seal.
 	TxStateValidation string
+	// TxRequestLimit is the number of transaction submissions to allow per interval.
+	TxRequestLimit uint64
+	// TxRequestLimitDuration is the time interval upon which to enforce transaction submission
+	// rate limiting.
+	TxRequestLimitDuration time.Duration
 	// ExperimentalSoftFinalityEnabled enables the experimental soft finality feature which syncs
 	// EVM block and transaction data from the upstream Access node before the block is sealed.
 	// CAUTION: This feature is experimental and may return incorrect data in certain circumstances.

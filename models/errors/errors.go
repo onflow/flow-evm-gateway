@@ -19,7 +19,6 @@ var (
 
 	// General errors
 
-	ErrInternal            = errors.New("internal error")
 	ErrInvalid             = errors.New("invalid")
 	ErrRecoverable         = errors.New("recoverable")
 	ErrDisconnected        = NewRecoverableError(errors.New("disconnected"))
