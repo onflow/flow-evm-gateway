@@ -2,6 +2,7 @@ package ingestion
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -131,7 +132,7 @@ func (r *RPCBlockTrackingSubscriber) Subscribe(ctx context.Context) <-chan model
 func (r *RPCBlockTrackingSubscriber) subscribe(ctx context.Context, height uint64) <-chan models.BlockEvents {
 	eventsChan := make(chan models.BlockEvents)
 
-	var blockHeadersChan <-chan flow.BlockHeader
+	var blockHeadersChan <-chan *flow.BlockHeader
 	var errChan <-chan error
 
 	lastReceivedHeight := height
@@ -256,7 +257,7 @@ func (r *RPCBlockTrackingSubscriber) subscribe(ctx context.Context, height uint6
 
 func (r *RPCBlockTrackingSubscriber) evmEventsForBlock(
 	ctx context.Context,
-	blockHeader flow.BlockHeader,
+	blockHeader *flow.BlockHeader,
 ) (flow.BlockEvents, error) {
 	eventTypes := blocksFilter(r.chain).EventTypes
 
@@ -289,7 +290,7 @@ func (r *RPCBlockTrackingSubscriber) evmEventsForBlock(
 
 func (r *RPCBlockTrackingSubscriber) getEventsByType(
 	ctx context.Context,
-	blockHeader flow.BlockHeader,
+	blockHeader *flow.BlockHeader,
 	eventType string,
 ) (flow.BlockEvents, error) {
 	var evts []flow.BlockEvents
@@ -323,13 +324,30 @@ func (r *RPCBlockTrackingSubscriber) getEventsByType(
 	}
 
 	// The `EVM.BlockExecuted` event should be present for every Flow block.
-	if strings.Contains(eventType, string(events.EventTypeBlockExecuted)) {
-		if len(evts[0].Events) != 1 {
-			return flow.BlockEvents{}, fmt.Errorf(
-				"received unexpected number of EVM events in block: got: %d, expected: 1",
-				len(evts[0].Events),
+	if strings.Contains(eventType, string(events.EventTypeBlockExecuted)) && len(evts[0].Events) != 1 {
+		missingEventsErr := fmt.Errorf(
+			"received unexpected number of EVM events in block: got: %d, expected: 1",
+			len(evts[0].Events),
+		)
+
+		// EVM Blocks events are emitted from the system transaction. if the system transaction fails,
+		// there will be no EVM block events.
+		// Verify that the system transaction did fail, otherwise return an error
+		result, err := r.client.GetSystemTransactionResult(ctx, blockHeader.ID)
+		if err != nil {
+			return flow.BlockEvents{}, errors.Join(
+				missingEventsErr,
+				fmt.Errorf("failed to lookup system transaction result: %w", err),
 			)
 		}
+
+		// system transaction succeeded, return an error since this is an unexpected error case
+		if result.Error == nil {
+			return flow.BlockEvents{}, missingEventsErr
+		}
+
+		// system transaction failed, there will not be any EVM block events
+		return evts[0], nil
 	}
 
 	return evts[0], nil
