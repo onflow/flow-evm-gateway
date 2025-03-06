@@ -71,6 +71,8 @@ type KeyStore struct {
 	availableKeys chan *AccountKey
 	usedKeys      map[flowsdk.Identifier]*AccountKey
 	size          int
+
+	keyMu sync.RWMutex
 }
 
 var _ KeyLock = (*KeyStore)(nil)
@@ -91,10 +93,15 @@ func NewKeyStore(keys []*AccountKey) *KeyStore {
 	return ks
 }
 
+// AvailableKeys returns the number of keys available for use.
 func (k *KeyStore) AvailableKeys() int {
+	k.keyMu.RLock()
+	defer k.keyMu.RUnlock()
+
 	return k.size - len(k.usedKeys)
 }
 
+// Take reserves a key for use in a transaction.
 func (k *KeyStore) Take() (*AccountKey, error) {
 	select {
 	case key := <-k.availableKeys:
@@ -104,19 +111,30 @@ func (k *KeyStore) Take() (*AccountKey, error) {
 	}
 }
 
+// LockKey locks a key for use in a transaction.
 func (k *KeyStore) LockKey(
 	txID flowsdk.Identifier,
 	referenceBlockHeight uint64,
 	key *AccountKey,
 ) {
 	key.mu.Lock()
-	defer key.mu.Unlock()
-
 	key.lastUsedBlock = referenceBlockHeight
+	key.mu.Unlock()
+
+	k.keyMu.Lock()
 	k.usedKeys[txID] = key
+	k.keyMu.Unlock()
 }
 
+// UnlockKey unlocks a key after use and puts it back into the pool.
 func (k *KeyStore) UnlockKey(txID flowsdk.Identifier) {
+	k.keyMu.Lock()
+	defer k.keyMu.Unlock()
+
+	k.unlockKey(txID)
+}
+
+func (k *KeyStore) unlockKey(txID flowsdk.Identifier) {
 	key, ok := k.usedKeys[txID]
 	if ok && key != nil {
 		key.Done()
@@ -124,10 +142,15 @@ func (k *KeyStore) UnlockKey(txID flowsdk.Identifier) {
 	}
 }
 
+// Notify is called to notify the KeyStore of a new ingested block height.
+// This is used to expire locks on keys after the transaction expiry time.
 func (k *KeyStore) Notify(blockHeight uint64) {
+	k.keyMu.Lock()
+	defer k.keyMu.Unlock()
+
 	for txID, key := range k.usedKeys {
 		if blockHeight-key.lastUsedBlock >= accountKeyBlockExpiration {
-			k.UnlockKey(txID)
+			k.unlockKey(txID)
 		}
 	}
 }
