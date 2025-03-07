@@ -60,6 +60,10 @@ func NewSealingVerifier(
 	eventsHash *pebble.EventsHash,
 	startHeight uint64,
 ) *SealingVerifier {
+	lastProcessedUnsealedHeight := startHeight
+	if lastProcessedUnsealedHeight > 0 {
+		lastProcessedUnsealedHeight--
+	}
 	return &SealingVerifier{
 		EngineStatus:           models.NewEngineStatus(),
 		logger:                 logger.With().Str("component", "sealing_verifier").Logger(),
@@ -69,7 +73,7 @@ func NewSealingVerifier(
 		eventsHash:             eventsHash,
 		unsealedBlocksToVerify: make(map[uint64]flow.Identifier),
 		sealedBlocksToVerify:   make(map[uint64]flow.Identifier),
-		lastUnsealedHeight:     atomic.NewUint64(startHeight),
+		lastUnsealedHeight:     atomic.NewUint64(lastProcessedUnsealedHeight),
 	}
 }
 
