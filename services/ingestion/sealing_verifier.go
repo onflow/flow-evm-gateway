@@ -202,14 +202,7 @@ func (v *SealingVerifier) Run(ctx context.Context) error {
 // if unsealed events are found for the same height, the events are verified.
 // otherwise, the sealed events are cached for future verification.
 func (v *SealingVerifier) onSealedEvents(sealedEvents flow.BlockEvents) error {
-	if len(sealedEvents.Events) == 0 {
-		v.mu.Lock()
-		defer v.mu.Unlock()
-		if _, ok := v.unsealedBlocksToVerify[sealedEvents.Height]; ok {
-			return fmt.Errorf("found unsealed events but no sealed events for height %d", sealedEvents.Height)
-		}
-		return nil // skip empty blocks
-	}
+	// Note: there should be an unsealed event entry, even for blocks with no transactions
 
 	sealedHash, err := CalculateHash(sealedEvents)
 	if err != nil {

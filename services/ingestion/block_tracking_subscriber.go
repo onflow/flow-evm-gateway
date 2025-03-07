@@ -109,7 +109,7 @@ func (r *RPCBlockTrackingSubscriber) Subscribe(ctx context.Context) <-chan model
 		// start the verifier after backfilling since backfilled data is already sealed
 		if r.verifier != nil {
 			go func() {
-				r.verifier.SetStartHeight(r.height)
+				// r.verifier.SetStartHeight(r.height)
 				if err := r.verifier.Run(ctx); err != nil {
 					r.logger.Fatal().Err(err).Msg("failure running sealing verifier")
 					return
@@ -190,18 +190,20 @@ func (r *RPCBlockTrackingSubscriber) subscribe(ctx context.Context, height uint6
 					return
 				}
 
-				// this means that the system transaction failed AND there were no EVM transactions
-				// executed in the block. In this case, we can skip the block
-				if len(blockEvents.Events) == 0 {
-					continue
-				}
-
 				if r.verifier != nil {
 					// submit the block events to the verifier for future sealing verification
 					if err := r.verifier.AddFinalizedBlock(blockEvents); err != nil {
 						eventsChan <- models.NewBlockEventsError(err)
 						return
 					}
+				}
+
+				// this means that the system transaction failed AND there were no EVM transactions
+				// executed in the block. In this case, we can skip the block
+				// Note: put this after the verify step, so we can verify that there were no EVM
+				// blocks in the sealed data as well
+				if len(blockEvents.Events) == 0 {
+					continue
 				}
 
 				evmEvents := models.NewSingleBlockEvents(blockEvents)
