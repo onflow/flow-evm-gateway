@@ -21,7 +21,7 @@ type KeyStore struct {
 	availableKeys chan *AccountKey
 	usedKeys      map[flowsdk.Identifier]*AccountKey
 	size          int
-	keyMu         sync.RWMutex
+	keyMu         sync.Mutex
 }
 
 var _ KeyLock = (*KeyStore)(nil)

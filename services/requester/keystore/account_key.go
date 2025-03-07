@@ -2,7 +2,6 @@ package keystore
 
 import (
 	"fmt"
-	"sync"
 
 	flowsdk "github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/crypto"
@@ -12,7 +11,6 @@ import (
 type AccountKey struct {
 	flowsdk.AccountKey
 
-	mu      sync.Mutex
 	ks      *KeyStore
 	Address flowsdk.Address
 	Signer  crypto.Signer
