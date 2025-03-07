@@ -18,6 +18,7 @@ import (
 	"github.com/onflow/flow-evm-gateway/models"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/services/requester"
+	"github.com/onflow/flow-evm-gateway/services/requester/keystore"
 )
 
 var _ EventSubscriber = &RPCBlockTrackingSubscriber{}
@@ -45,7 +46,7 @@ func NewRPCBlockTrackingSubscriber(
 	logger zerolog.Logger,
 	client *requester.CrossSporkClient,
 	chainID flowGo.ChainID,
-	keyLock requester.KeyLock,
+	keyLock keystore.KeyLock,
 	startHeight uint64,
 	verifier *SealingVerifier,
 ) *RPCBlockTrackingSubscriber {
@@ -206,9 +207,9 @@ func (r *RPCBlockTrackingSubscriber) subscribe(ctx context.Context, height uint6
 				}
 
 				for _, evt := range blockEvents.Events {
-					r.keyLock.UnlockKey(evt.TransactionID)
+					r.keyLock.NotifyTransaction(evt.TransactionID)
 				}
-				r.keyLock.Notify(blockHeader.Height)
+				r.keyLock.NotifyBlock(blockHeader.Height)
 				lastReceivedHeight = blockHeader.Height
 
 				eventsChan <- evmEvents
