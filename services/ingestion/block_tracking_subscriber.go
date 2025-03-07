@@ -21,6 +21,8 @@ import (
 	"github.com/onflow/flow-evm-gateway/services/requester/keystore"
 )
 
+var ErrSystemTransactionFailed = errors.New("system transaction failed")
+
 var _ EventSubscriber = &RPCBlockTrackingSubscriber{}
 
 // RPCBlockTrackingSubscriber subscribes to new EVM block events for unsealed finalized blocks.
@@ -188,6 +190,12 @@ func (r *RPCBlockTrackingSubscriber) subscribe(ctx context.Context, height uint6
 					return
 				}
 
+				// this means that the system transaction failed AND there were no EVM transactions
+				// executed in the block. In this case, we can skip the block
+				if len(blockEvents.Events) == 0 {
+					continue
+				}
+
 				if r.verifier != nil {
 					// submit the block events to the verifier for future sealing verification
 					if err := r.verifier.AddFinalizedBlock(blockEvents); err != nil {
@@ -264,23 +272,38 @@ func (r *RPCBlockTrackingSubscriber) evmEventsForBlock(
 
 	// evm Block events
 	blockEvents, err := r.getEventsByType(ctx, blockHeader, eventTypes[0])
-	if err != nil {
-		return flow.BlockEvents{}, err
-	}
+	if err == nil {
+		payload, err := events.DecodeBlockEventPayload(blockEvents.Events[0].Value)
+		if err != nil {
+			return flow.BlockEvents{}, fmt.Errorf("failed to decode block event payload: %w", err)
+		}
 
-	payload, err := events.DecodeBlockEventPayload(blockEvents.Events[0].Value)
-	if err != nil {
-		return flow.BlockEvents{}, err
-	}
+		if payload.TransactionHashRoot == types.EmptyTxsHash {
+			return blockEvents, nil
+		}
+	} else if errors.Is(err, ErrSystemTransactionFailed) {
+		r.logger.Warn().
+			Uint64("cadence_height", blockHeader.Height).
+			Str("cadence_block_id", blockHeader.ID.String()).
+			Msg("no EVM block events: system transaction failed")
 
-	if payload.TransactionHashRoot == types.EmptyTxsHash {
-		return blockEvents, nil
+		// continue to check for EVM Transaction events since there may still be tx executed events
+		// even if the system transaction failed
+		blockEvents = flow.BlockEvents{
+			BlockID:        blockHeader.ID,
+			Height:         blockHeader.Height,
+			BlockTimestamp: blockHeader.Timestamp,
+		}
+	} else {
+		return flow.BlockEvents{}, fmt.Errorf("failed to get EVM block event for cadence block %d: %w",
+			blockHeader.Height, err)
 	}
 
 	// evm TX events
 	txEvents, err := r.getEventsByType(ctx, blockHeader, eventTypes[1])
 	if err != nil {
-		return flow.BlockEvents{}, err
+		return flow.BlockEvents{}, fmt.Errorf("failed to get EVM transaction events for cadence block %d: %w",
+			blockHeader.Height, err)
 	}
 
 	// combine block and tx events to be processed together
@@ -311,7 +334,7 @@ func (r *RPCBlockTrackingSubscriber) getEventsByType(
 				continue
 			}
 
-			return flow.BlockEvents{}, err
+			return flow.BlockEvents{}, fmt.Errorf("failed to get events from access node: %w", err)
 		}
 		break
 	}
@@ -319,8 +342,7 @@ func (r *RPCBlockTrackingSubscriber) getEventsByType(
 	if len(evts) != 1 {
 		// this shouldn't happen and probably indicates a bug on the Access node.
 		return flow.BlockEvents{}, fmt.Errorf(
-			"received unexpected number of block events for cadence block %d: got: %d, expected: 1",
-			blockHeader.Height,
+			"received unexpected number of BlockEvents from access node: got: %d, expected: 1",
 			len(evts),
 		)
 	}
@@ -350,7 +372,7 @@ func (r *RPCBlockTrackingSubscriber) getEventsByType(
 		}
 
 		// system transaction failed, there will not be any EVM block events
-		return event, nil
+		return flow.BlockEvents{}, ErrSystemTransactionFailed
 	}
 
 	return event, nil
