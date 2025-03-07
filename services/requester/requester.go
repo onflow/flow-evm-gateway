@@ -619,11 +619,6 @@ func (e *EVM) buildTransaction(
 		return nil, err
 	}
 
-	accKey, err := e.keystore.Take()
-	if err != nil {
-		return nil, err
-	}
-
 	flowTx := flow.NewTransaction().
 		SetScript(script).
 		SetReferenceBlockID(latestBlock.ID).
@@ -631,9 +626,13 @@ func (e *EVM) buildTransaction(
 
 	for _, arg := range args {
 		if err := flowTx.AddArgument(arg); err != nil {
-			accKey.Done()
 			return nil, fmt.Errorf("failed to add argument: %s, with %w", arg, err)
 		}
+	}
+
+	accKey, err := e.keystore.Take()
+	if err != nil {
+		return nil, err
 	}
 
 	if err := accKey.SetProposerPayerAndSign(flowTx, account); err != nil {

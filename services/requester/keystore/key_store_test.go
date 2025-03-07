@@ -56,7 +56,7 @@ func TestTake(t *testing.T) {
 		assert.Len(t, ks.usedKeys, 1)
 		assert.True(t, key.inUse.Load())
 		assert.Equal(t, blockHeight, key.lastLockedBlock.Load())
-		assert.NotNil(t, ks.usedKeys[txID])
+		assert.Equal(t, key, ks.usedKeys[txID])
 
 		ks.NotifyTransaction(txID)
 
@@ -79,13 +79,13 @@ func TestTake(t *testing.T) {
 		assert.Len(t, ks.usedKeys, 1)
 		assert.True(t, key.inUse.Load())
 		assert.Equal(t, blockHeight, key.lastLockedBlock.Load())
-		assert.NotNil(t, ks.usedKeys[txID])
+		assert.Equal(t, key, ks.usedKeys[txID])
 
 		// notify for one block before the expiration block, key should still be reserved
 		ks.NotifyBlock(blockHeight + accountKeyBlockExpiration - 1)
 
 		assert.True(t, key.inUse.Load())
-		assert.NotNil(t, ks.usedKeys[txID])
+		assert.Equal(t, key, ks.usedKeys[txID])
 
 		// notify for the expiration block
 		ks.NotifyBlock(blockHeight + accountKeyBlockExpiration)
