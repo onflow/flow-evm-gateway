@@ -133,9 +133,19 @@ func TestConcurrentUse(t *testing.T) {
 	keyGenerator := test.AccountKeyGenerator()
 	addrGenerator := test.AddressGenerator()
 
-	count := uint32(200)
-	keys := make([]*AccountKey, 0, count)
-	for i := range count {
+	// number of keys to add
+	keyCount := uint32(100)
+
+	// total tx to send
+	totalTxCount := 10_000
+
+	// number of tx to send in parallel
+	// should be less than keyCount otherwise the extra workers will just be spinning waiting for
+	// keys within the test code.
+	concurrentTxCount := 75
+
+	keys := make([]*AccountKey, 0, keyCount)
+	for i := range keyCount {
 		accountKey, signer := keyGenerator.NewWithSigner()
 		key := NewAccountKey(*accountKey, addrGenerator.New(), signer)
 		key.Index = i
@@ -147,18 +157,18 @@ func TestConcurrentUse(t *testing.T) {
 	ks := New(keys)
 
 	g := errgroup.Group{}
-	g.SetLimit(150)
+	g.SetLimit(concurrentTxCount)
 
 	wg := sync.WaitGroup{}
 
-	for i := range 10000 {
+	for i := range totalTxCount {
 		g.Go(func() error {
 			var key *AccountKey
 			for {
 				var err error
 				key, err = ks.Take()
 				if errors.Is(err, ErrNoKeysAvailable) {
-					time.Sleep(time.Millisecond)
+					time.Sleep(100 * time.Microsecond)
 					continue
 				}
 				require.NoError(t, err)
@@ -178,7 +188,7 @@ func TestConcurrentUse(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				time.Sleep(10 * time.Millisecond)
+				time.Sleep(3 * time.Millisecond)
 				ks.NotifyTransaction(txID)
 			}()
 
@@ -192,7 +202,7 @@ func TestConcurrentUse(t *testing.T) {
 	// all the notifier goroutines are finished by now
 	wg.Wait()
 
-	assert.Equal(t, int(count), ks.AvailableKeys(), "all keys should be available")
+	assert.Equal(t, int(keyCount), ks.AvailableKeys(), "all keys should be available")
 	assert.Empty(t, ks.usedKeys, "no keys should be in use")
 }
 
