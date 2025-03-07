@@ -319,7 +319,8 @@ func (r *RPCBlockTrackingSubscriber) getEventsByType(
 	if len(evts) != 1 {
 		// this shouldn't happen and probably indicates a bug on the Access node.
 		return flow.BlockEvents{}, fmt.Errorf(
-			"received unexpected number of block events: got: %d, expected: 1",
+			"received unexpected number of block events for cadence block %d: got: %d, expected: 1",
+			blockHeader.Height,
 			len(evts),
 		)
 	}
