@@ -230,7 +230,10 @@ func (v *SealingVerifier) onSealedEvents(sealedEvents flow.BlockEvents) error {
 		return fmt.Errorf("failed to verify block events for %d: %w", sealedEvents.Height, err)
 	}
 
-	v.logger.Debug().Uint64("height", sealedEvents.Height).Msg("verified sealed height")
+	v.logger.Info().
+		Uint64("height", sealedEvents.Height).
+		Int("num_events", len(sealedEvents.Events)).
+		Msg("verified sealed height")
 
 	return nil
 }
@@ -266,7 +269,10 @@ func (v *SealingVerifier) onUnsealedEvents(unsealedEvents flow.BlockEvents) erro
 		return fmt.Errorf("failed to verify block events for %d: %w", unsealedEvents.Height, err)
 	}
 
-	v.logger.Debug().Uint64("height", unsealedEvents.Height).Msg("verified unsealed height")
+	v.logger.Info().
+		Uint64("height", unsealedEvents.Height).
+		Int("num_events", len(unsealedEvents.Events)).
+		Msg("verified unsealed height")
 
 	return nil
 }
