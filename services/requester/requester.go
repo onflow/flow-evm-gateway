@@ -20,6 +20,7 @@ import (
 	gethCore "github.com/onflow/go-ethereum/core"
 	"github.com/onflow/go-ethereum/core/txpool"
 	"github.com/onflow/go-ethereum/core/types"
+	gethParams "github.com/onflow/go-ethereum/params"
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-limiter"
 	"github.com/sethvargo/go-limiter/memorystore"
@@ -30,10 +31,9 @@ import (
 	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/models"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
+	"github.com/onflow/flow-evm-gateway/services/requester/keystore"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
-
-	gethParams "github.com/onflow/go-ethereum/params"
 )
 
 var (
@@ -106,7 +106,7 @@ type EVM struct {
 	logger        zerolog.Logger
 	blocks        storage.BlockIndexer
 	mux           sync.Mutex
-	keystore      *KeyStore
+	keystore      *keystore.KeyStore
 
 	head              *types.Header
 	evmSigner         types.Signer
@@ -123,7 +123,7 @@ func NewEVM(
 	blocks storage.BlockIndexer,
 	txPool *TxPool,
 	collector metrics.Collector,
-	keystore *KeyStore,
+	keystore *keystore.KeyStore,
 ) (*EVM, error) {
 	logger = logger.With().Str("component", "requester").Logger()
 
@@ -631,14 +631,18 @@ func (e *EVM) buildTransaction(
 
 	for _, arg := range args {
 		if err := flowTx.AddArgument(arg); err != nil {
+			accKey.Done()
 			return nil, fmt.Errorf("failed to add argument: %s, with %w", arg, err)
 		}
 	}
 
 	if err := accKey.SetProposerPayerAndSign(flowTx, account); err != nil {
+		accKey.Done()
 		return nil, err
 	}
-	e.keystore.LockKey(flowTx.ID(), latestBlock.Height, accKey)
+
+	// now that the transaction is prepped, store the transaction's metadata
+	accKey.SetLockMetadata(flowTx.ID(), latestBlock.Height)
 
 	e.collector.OperatorBalance(account)
 

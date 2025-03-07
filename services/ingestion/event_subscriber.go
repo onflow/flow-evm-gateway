@@ -12,6 +12,7 @@ import (
 	"github.com/onflow/flow-evm-gateway/models"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/services/requester"
+	"github.com/onflow/flow-evm-gateway/services/requester/keystore"
 
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access"
@@ -35,7 +36,7 @@ type RPCEventSubscriber struct {
 
 	client  *requester.CrossSporkClient
 	chain   flowGo.ChainID
-	keyLock requester.KeyLock
+	keyLock keystore.KeyLock
 	height  uint64
 
 	recovery        bool
@@ -46,7 +47,7 @@ func NewRPCEventSubscriber(
 	logger zerolog.Logger,
 	client *requester.CrossSporkClient,
 	chainID flowGo.ChainID,
-	keyLock requester.KeyLock,
+	keyLock keystore.KeyLock,
 	startHeight uint64,
 ) *RPCEventSubscriber {
 	logger = logger.With().Str("component", "subscriber").Logger()
@@ -173,9 +174,9 @@ func (r *RPCEventSubscriber) subscribe(ctx context.Context, height uint64) <-cha
 					}
 				}
 				for _, evt := range blockEvents.Events {
-					r.keyLock.UnlockKey(evt.TransactionID)
+					r.keyLock.NotifyTransaction(evt.TransactionID)
 				}
-				r.keyLock.Notify(blockEvents.Height)
+				r.keyLock.NotifyBlock(blockEvents.Height)
 
 				eventsChan <- evmEvents
 

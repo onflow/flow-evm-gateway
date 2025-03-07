@@ -13,6 +13,7 @@ import (
 	"github.com/onflow/flow-evm-gateway/models"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/services/requester"
+	"github.com/onflow/flow-evm-gateway/services/requester/keystore"
 	"github.com/onflow/flow-evm-gateway/services/testutils"
 
 	flowGo "github.com/onflow/flow-go/model/flow"
@@ -43,7 +44,7 @@ func Test_Subscribing(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	subscriber := NewRPCEventSubscriber(zerolog.Nop(), client, flowGo.Previewnet, requester.NewKeyStore(nil), 1)
+	subscriber := NewRPCEventSubscriber(zerolog.Nop(), client, flowGo.Previewnet, keystore.New(nil), 1)
 
 	events := subscriber.Subscribe(context.Background())
 
@@ -83,7 +84,7 @@ func Test_MissingBlockEvent(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	subscriber := NewRPCEventSubscriber(zerolog.Nop(), client, flowGo.Previewnet, requester.NewKeyStore(nil), 1)
+	subscriber := NewRPCEventSubscriber(zerolog.Nop(), client, flowGo.Previewnet, keystore.New(nil), 1)
 
 	events := subscriber.Subscribe(context.Background())
 
@@ -185,7 +186,7 @@ func Test_SubscribingWithRetryOnError(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	subscriber := NewRPCEventSubscriber(zerolog.Nop(), client, flowGo.Previewnet, requester.NewKeyStore(nil), 1)
+	subscriber := NewRPCEventSubscriber(zerolog.Nop(), client, flowGo.Previewnet, keystore.New(nil), 1)
 
 	events := subscriber.Subscribe(context.Background())
 
@@ -248,7 +249,7 @@ func Test_SubscribingWithRetryOnErrorMultipleBlocks(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	subscriber := NewRPCEventSubscriber(zerolog.Nop(), client, flowGo.Previewnet, requester.NewKeyStore(nil), 1)
+	subscriber := NewRPCEventSubscriber(zerolog.Nop(), client, flowGo.Previewnet, keystore.New(nil), 1)
 
 	events := subscriber.Subscribe(context.Background())
 
@@ -310,7 +311,7 @@ func Test_SubscribingWithRetryOnErrorEmptyBlocks(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	subscriber := NewRPCEventSubscriber(zerolog.Nop(), client, flowGo.Previewnet, requester.NewKeyStore(nil), 1)
+	subscriber := NewRPCEventSubscriber(zerolog.Nop(), client, flowGo.Previewnet, keystore.New(nil), 1)
 
 	events := subscriber.Subscribe(context.Background())
 

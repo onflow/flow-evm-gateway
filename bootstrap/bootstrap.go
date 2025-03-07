@@ -32,6 +32,7 @@ import (
 	"github.com/onflow/flow-evm-gateway/services/ingestion"
 	"github.com/onflow/flow-evm-gateway/services/replayer"
 	"github.com/onflow/flow-evm-gateway/services/requester"
+	"github.com/onflow/flow-evm-gateway/services/requester/keystore"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
 )
@@ -76,7 +77,7 @@ type Bootstrap struct {
 	events     *ingestion.Engine
 	profiler   *api.ProfileServer
 	db         *pebbleDB.DB
-	keystore   *requester.KeyStore
+	keystore   *keystore.KeyStore
 }
 
 func New(config config.Config) (*Bootstrap, error) {
@@ -219,7 +220,7 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 		b.config,
 	)
 
-	accountKeys := make([]*requester.AccountKey, 0)
+	accountKeys := make([]*keystore.AccountKey, 0)
 	if !b.config.IndexOnly {
 		account, err := b.client.GetAccount(ctx, b.config.COAAddress)
 		if err != nil {
@@ -239,15 +240,15 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 			if !key.PublicKey.Equals(signer.PublicKey()) {
 				continue
 			}
-			accountKeys = append(accountKeys, &requester.AccountKey{
-				AccountKey: *key,
-				Address:    b.config.COAAddress,
-				Signer:     signer,
-			})
+			accountKeys = append(accountKeys, keystore.NewAccountKey(
+				*key,
+				b.config.COAAddress,
+				signer,
+			))
 		}
 	}
 
-	b.keystore = requester.NewKeyStore(accountKeys)
+	b.keystore = keystore.New(accountKeys)
 
 	evm, err := requester.NewEVM(
 		b.storages.Registers,
