@@ -48,6 +48,7 @@ type SealingVerifier struct {
 	sealedBlocksToVerify map[uint64]flow.Identifier
 
 	lastUnsealedHeight *atomic.Uint64
+	lastSealedHeight   *atomic.Uint64
 
 	mu sync.Mutex
 }
@@ -74,6 +75,7 @@ func NewSealingVerifier(
 		unsealedBlocksToVerify: make(map[uint64]flow.Identifier),
 		sealedBlocksToVerify:   make(map[uint64]flow.Identifier),
 		lastUnsealedHeight:     atomic.NewUint64(lastProcessedUnsealedHeight),
+		lastSealedHeight:       atomic.NewUint64(0),
 	}
 }
 
@@ -115,6 +117,7 @@ func (v *SealingVerifier) Run(ctx context.Context) error {
 			return fmt.Errorf("failed to initialize processed sealed height: %w", err)
 		}
 	}
+	v.lastSealedHeight.Store(lastVerifiedHeight)
 
 	var eventsChan <-chan flow.BlockEvents
 	var errChan <-chan error
@@ -148,7 +151,10 @@ func (v *SealingVerifier) Run(ctx context.Context) error {
 		}
 	}
 
-	v.logger.Info().Uint64("start_height", nextHeight).Msg("starting verifier")
+	v.logger.Info().
+		Uint64("start_sealed_height", nextHeight).
+		Uint64("start_unsealed_height", v.lastUnsealedHeight.Load()).
+		Msg("starting verifier")
 
 	if err := connect(nextHeight); err != nil {
 		return fmt.Errorf("failed to subscribe for finalized block events on height: %d, with: %w", nextHeight, err)
@@ -212,6 +218,13 @@ func (v *SealingVerifier) Run(ctx context.Context) error {
 func (v *SealingVerifier) onSealedEvents(sealedEvents flow.BlockEvents) error {
 	// Note: there should be an unsealed event entry, even for blocks with no transactions
 
+	// update the last sealed height after successfully storing the hash
+	if sealedEvents.Height > 0 && !v.lastSealedHeight.CompareAndSwap(sealedEvents.Height-1, sealedEvents.Height) {
+		// note: this conditional skips updating the lastSealedHeight if the height is 0. this is
+		// desired since it will be the last height when we process block 1.
+		return fmt.Errorf("received sealed events out of order: expected %d, got %d", v.lastSealedHeight.Load()+1, sealedEvents.Height)
+	}
+
 	sealedHash, err := CalculateHash(sealedEvents)
 	if err != nil {
 		return fmt.Errorf("failed to calculate hash for sealed events for height %d: %w", sealedEvents.Height, err)
@@ -229,6 +242,12 @@ func (v *SealingVerifier) onSealedEvents(sealedEvents flow.BlockEvents) error {
 	if errors.Is(err, errs.ErrEntityNotFound) || sealedEvents.Height > v.lastUnsealedHeight.Load() {
 		// we haven't processed the unsealed data for this block yet, cache the sealed hash
 		v.sealedBlocksToVerify[sealedEvents.Height] = sealedHash
+
+		v.logger.Info().
+			Uint64("height", sealedEvents.Height).
+			Int("num_events", len(sealedEvents.Events)).
+			Msg("no unsealed data available for verification. caching sealed data")
+
 		return nil
 	}
 	if err != nil {
@@ -272,11 +291,19 @@ func (v *SealingVerifier) onUnsealedEvents(unsealedEvents flow.BlockEvents) erro
 	if unsealedEvents.Height > 0 && !v.lastUnsealedHeight.CompareAndSwap(unsealedEvents.Height-1, unsealedEvents.Height) {
 		// note: this conditional skips updating the lastUnsealedHeight if the height is 0. this is
 		// desired since it will be the last height when we process block 1.
-		return fmt.Errorf("received unsealed events out of order: expected %d, got %d", v.lastUnsealedHeight.Load(), unsealedEvents.Height)
+		return fmt.Errorf("received unsealed events out of order: expected %d, got %d", v.lastUnsealedHeight.Load()+1, unsealedEvents.Height)
 	}
 
+	// loop though all cached sealed events and verify them
+	// this catches the case where
+	// for unsealedHeight := unsealedEvents.Height; unsealedHeight <= v.lastSealedHeight.Load(); unsealedHeight++ {
 	sealedHash, ok := v.sealedBlocksToVerify[unsealedEvents.Height]
 	if !ok {
+		v.logger.Info().
+			Uint64("height", unsealedEvents.Height).
+			Int("num_events", len(unsealedEvents.Events)).
+			Msg("no sealed data available for verification. caching unsealed data")
+
 		v.unsealedBlocksToVerify[unsealedEvents.Height] = unsealedHash
 		return nil
 	}
@@ -293,6 +320,7 @@ func (v *SealingVerifier) onUnsealedEvents(unsealedEvents flow.BlockEvents) erro
 		Uint64("height", unsealedEvents.Height).
 		Int("num_events", len(unsealedEvents.Events)).
 		Msg("verified unsealed height")
+	// }
 
 	return nil
 }
