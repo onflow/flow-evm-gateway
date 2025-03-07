@@ -66,7 +66,7 @@ func (k *KeyStore) NotifyTransaction(txID flowsdk.Identifier) {
 	k.keyMu.Lock()
 	defer k.keyMu.Unlock()
 
-	k.unlockKey(txID)
+	k.unsafeUnlockKey(txID)
 }
 
 // NotifyBlock is called to notify the KeyStore of a new ingested block height.
@@ -77,22 +77,27 @@ func (k *KeyStore) NotifyBlock(blockHeight uint64) {
 
 	for txID, key := range k.usedKeys {
 		if blockHeight-key.lastLockedBlock.Load() >= accountKeyBlockExpiration {
-			k.unlockKey(txID)
+			k.unsafeUnlockKey(txID)
 		}
 	}
 }
 
-func (k *KeyStore) unlockKey(txID flowsdk.Identifier) {
+// unsafeUnlockKey unlocks a key referenced by the transaction ID set during setLockMetadata
+// the caller must hold the keyMu lock
+func (k *KeyStore) unsafeUnlockKey(txID flowsdk.Identifier) {
 	if key, ok := k.usedKeys[txID]; ok {
 		key.Done()
 		delete(k.usedKeys, txID)
 	}
 }
 
+// release puts a key back into the pool.
 func (k *KeyStore) release(key *AccountKey) {
 	k.availableKeys <- key
 }
 
+// setLockMetadata sets the transaction ID for a key reservation.
+// this method is called by the key's SetLockMetadata method
 func (k *KeyStore) setLockMetadata(
 	key *AccountKey,
 	txID flowsdk.Identifier,
