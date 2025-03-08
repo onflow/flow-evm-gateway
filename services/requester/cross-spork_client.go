@@ -6,7 +6,6 @@ import (
 
 	"github.com/hashicorp/go-multierror"
 	"github.com/onflow/cadence"
-	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access"
 	"github.com/onflow/flow-go-sdk/access/grpc"
@@ -14,6 +13,8 @@ import (
 	"github.com/rs/zerolog"
 	"go.uber.org/ratelimit"
 	"golang.org/x/exp/slices"
+
+	errs "github.com/onflow/flow-evm-gateway/models/errors"
 )
 
 type sporkClient struct {
@@ -253,7 +254,7 @@ func (c *CrossSporkClient) GetEventsForHeightRange(
 func (c *CrossSporkClient) GetEventsForBlockHeader(
 	ctx context.Context,
 	eventType string,
-	blockHeader flow.BlockHeader,
+	blockHeader *flow.BlockHeader,
 ) ([]flow.BlockEvents, error) {
 	client, err := c.getClientForHeight(blockHeader.Height)
 	if err != nil {
@@ -266,7 +267,7 @@ func (c *CrossSporkClient) SubscribeBlockHeadersFromStartHeight(
 	ctx context.Context,
 	startHeight uint64,
 	blockStatus flow.BlockStatus,
-) (<-chan flow.BlockHeader, <-chan error, error) {
+) (<-chan *flow.BlockHeader, <-chan error, error) {
 	client, err := c.getClientForHeight(startHeight)
 	if err != nil {
 		return nil, nil, err
