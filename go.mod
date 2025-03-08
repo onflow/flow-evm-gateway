@@ -9,7 +9,7 @@ require (
 	github.com/onflow/atree v0.9.0
 	github.com/onflow/cadence v1.3.3
 	github.com/onflow/flow-go v0.38.1-0.20250218174738-2181389f9f7d
-	github.com/onflow/flow-go-sdk v1.3.4-0.20250305185710-21574a64879e
+	github.com/onflow/flow-go-sdk v1.3.4-0.20250308010136-4653c344a477
 	github.com/onflow/go-ethereum v1.14.7
 	github.com/prometheus/client_golang v1.20.5
 	github.com/rs/cors v1.8.0
