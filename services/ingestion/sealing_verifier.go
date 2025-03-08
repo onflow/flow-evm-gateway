@@ -244,12 +244,6 @@ func (v *SealingVerifier) onSealedEvents(sealedEvents flow.BlockEvents) error {
 	if errors.Is(err, errs.ErrEntityNotFound) || sealedEvents.Height > v.lastUnsealedHeight.Load() {
 		// we haven't processed the unsealed data for this block yet, cache the sealed hash
 		v.sealedBlocksToVerify[sealedEvents.Height] = sealedHash
-
-		v.logger.Info().
-			Uint64("height", sealedEvents.Height).
-			Int("num_events", len(sealedEvents.Events)).
-			Msg("no unsealed data available for verification. caching sealed data")
-
 		return nil
 	}
 	if err != nil {
@@ -267,7 +261,7 @@ func (v *SealingVerifier) onSealedEvents(sealedEvents flow.BlockEvents) error {
 	v.logger.Info().
 		Uint64("height", sealedEvents.Height).
 		Int("num_events", len(sealedEvents.Events)).
-		Msg("verified sealed height")
+		Msg("verified height from sealed events")
 
 	return nil
 }
@@ -298,11 +292,6 @@ func (v *SealingVerifier) onUnsealedEvents(unsealedEvents flow.BlockEvents) erro
 
 	sealedHash, ok := v.sealedBlocksToVerify[unsealedEvents.Height]
 	if !ok {
-		v.logger.Info().
-			Uint64("height", unsealedEvents.Height).
-			Int("num_events", len(unsealedEvents.Events)).
-			Msg("no sealed data available for verification. caching unsealed data")
-
 		v.unsealedBlocksToVerify[unsealedEvents.Height] = unsealedHash
 		return nil
 	}
@@ -318,7 +307,7 @@ func (v *SealingVerifier) onUnsealedEvents(unsealedEvents flow.BlockEvents) erro
 	v.logger.Info().
 		Uint64("height", unsealedEvents.Height).
 		Int("num_events", len(unsealedEvents.Events)).
-		Msg("verified unsealed height")
+		Msg("verified height from unsealed events")
 
 	return nil
 }
