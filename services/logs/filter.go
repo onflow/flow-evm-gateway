@@ -2,13 +2,12 @@ package logs
 
 import (
 	"fmt"
-
-	"github.com/onflow/go-ethereum/common"
-	gethTypes "github.com/onflow/go-ethereum/core/types"
-	"golang.org/x/exp/slices"
+	"slices"
 
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/storage"
+	"github.com/onflow/go-ethereum/common"
+	gethTypes "github.com/onflow/go-ethereum/core/types"
 )
 
 // The maximum number of topic criteria allowed
