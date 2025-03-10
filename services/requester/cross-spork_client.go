@@ -3,6 +3,7 @@ package requester
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/hashicorp/go-multierror"
 	"github.com/onflow/cadence"
@@ -12,7 +13,6 @@ import (
 	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/rs/zerolog"
 	"go.uber.org/ratelimit"
-	"golang.org/x/exp/slices"
 )
 
 type sporkClient struct {
