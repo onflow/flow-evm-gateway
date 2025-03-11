@@ -14,12 +14,8 @@ import (
 
 var Cmd = &cobra.Command{
 	Use:   "check-blocks-integrity",
-	Short: "Checks the EVM blocks integrity",
+	Short: "Checks the EVM blocks integrity. Note that the given DB dir should not be currently in use by a running node.",
 	RunE: func(*cobra.Command, []string) error {
-		if databaseDir == "" || chain == "" {
-			return fmt.Errorf("databaseDir, chain flags must be provided")
-		}
-
 		pebbleDB, err := pebble.OpenDB(databaseDir)
 		if err != nil {
 			return fmt.Errorf("failed to open pebble db: %w", err)
@@ -27,8 +23,7 @@ var Cmd = &cobra.Command{
 		defer pebbleDB.Close()
 		store := pebble.New(pebbleDB, log.Logger)
 
-		chainID := flowGo.ChainID(chain)
-		blocks := pebble.NewBlocks(store, chainID)
+		blocks := pebble.NewBlocks(store, flowGo.ChainID(chainID))
 
 		latestHeight, err := blocks.LatestEVMHeight()
 		if err != nil {
@@ -60,10 +55,12 @@ var Cmd = &cobra.Command{
 
 var (
 	databaseDir string
-	chain       string
+	chainID     string
 )
 
 func init() {
 	Cmd.Flags().StringVar(&databaseDir, "database-dir", "./db", "Path to the directory for the database")
-	Cmd.Flags().StringVar(&chain, "chain-id", "testnet", "Chain ID for the EVM network")
+	Cmd.Flags().StringVar(&chainID, "chain-id", "testnet", "Chain ID for the EVM network")
+	Cmd.MarkFlagRequired("database-dir")
+	Cmd.MarkFlagRequired("chain-id")
 }
