@@ -61,6 +61,11 @@ var (
 func init() {
 	Cmd.Flags().StringVar(&databaseDir, "database-dir", "./db", "Path to the directory for the database")
 	Cmd.Flags().StringVar(&chainID, "chain-id", "testnet", "Chain ID for the EVM network")
-	Cmd.MarkFlagRequired("database-dir")
-	Cmd.MarkFlagRequired("chain-id")
+
+	if err := Cmd.MarkFlagRequired("database-dir"); err != nil {
+		panic(err)
+	}
+	if err := Cmd.MarkFlagRequired("chain-id"); err != nil {
+		panic(err)
+	}
 }
