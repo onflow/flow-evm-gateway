@@ -29,7 +29,7 @@ var Cmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("failed to get latest EVM height: %w", err)
 		}
-		log.Info().Msgf("Checking for missing EVM blocks up to EVM height %d", latestHeight)
+		log.Info().Msgf("Checking for missing EVM blocks from genesis up to EVM height %d", latestHeight)
 
 		var missingBlocks []uint64
 		for height := uint64(0); height <= latestHeight; height++ {
