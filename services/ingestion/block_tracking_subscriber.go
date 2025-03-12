@@ -109,7 +109,7 @@ func (r *RPCBlockTrackingSubscriber) Subscribe(ctx context.Context) <-chan model
 		// start the verifier after backfilling since backfilled data is already sealed
 		if r.verifier != nil {
 			go func() {
-				// r.verifier.SetStartHeight(r.height)
+				r.verifier.SetStartHeight(r.height)
 				if err := r.verifier.Run(ctx); err != nil {
 					r.logger.Fatal().Err(err).Msg("failure running sealing verifier")
 					return

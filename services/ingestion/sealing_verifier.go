@@ -61,10 +61,12 @@ func NewSealingVerifier(
 	eventsHash *pebble.EventsHash,
 	startHeight uint64,
 ) *SealingVerifier {
+	// startHeight is the first height to verify, which is one block after the last processed height
 	lastProcessedUnsealedHeight := startHeight
 	if lastProcessedUnsealedHeight > 0 {
 		lastProcessedUnsealedHeight--
 	}
+
 	return &SealingVerifier{
 		EngineStatus:           models.NewEngineStatus(),
 		logger:                 logger.With().Str("component", "sealing_verifier").Logger(),
