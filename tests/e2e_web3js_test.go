@@ -235,6 +235,115 @@ func TestWeb3_E2E(t *testing.T) {
 		})
 	})
 
+	t.Run("test EVM.dryCall & COA.dryCall", func(t *testing.T) {
+		runWeb3TestWithSetup(t, "evm_dry_call_test", func(emu emulator.Emulator) {
+			contractCode, err := hex.DecodeString(storageByteCode)
+			require.NoError(t, err)
+			storageContract := testutils.TestContract{
+				ByteCode: contractCode,
+				ABI:      storageABI,
+			}
+
+			// create test account for contract deployment and contract calls
+			nonce := uint64(0)
+			accountKey, err := crypto.HexToECDSA("f6d5333177711e562cabf1f311916196ee6ffc2a07966d9d4628094073bd5442")
+			require.NoError(t, err)
+
+			// contract deployment transaction
+			deployPayload, _, err := evmSign(big.NewInt(0), 1_250_000, accountKey, nonce, nil, contractCode)
+			require.NoError(t, err)
+			nonce += 1
+
+			// contract call transaction (store)
+			contractAddress := common.HexToAddress("99a64c993965f8d69f985b5171bc20065cc32fab")
+			callData := storageContract.MakeCallData(t, "storeWithLog", big.NewInt(42))
+			callPayload, _, err := evmSign(big.NewInt(0), 55_000, accountKey, nonce, &contractAddress, callData)
+			require.NoError(t, err)
+			nonce += 1
+			payloads := [][]byte{deployPayload, callPayload}
+
+			const batchSize = 2
+			encodedTxs := make([]cadence.Value, batchSize)
+			for i := range encodedTxs {
+				tx, err := cadence.NewString(hex.EncodeToString(payloads[i]))
+				require.NoError(t, err)
+
+				encodedTxs[i] = tx
+			}
+
+			res, err := flowSendTransaction(
+				emu,
+				`transaction(encodedTxs: [String]) {
+					prepare(signer: auth(Storage) &Account) {
+						var txs: [[UInt8]] = []
+						for enc in encodedTxs {
+							txs.append(enc.decodeHex())
+						}
+
+						let txResults = EVM.batchRun(
+							txs: txs,
+							coinbase: EVM.EVMAddress(bytes: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19])
+						)
+						for txResult in txResults {
+							assert(
+								txResult.status == EVM.Status.successful,
+								message: txResult.errorCode.toString()
+							)
+						}
+
+						var callResult = EVM.dryCall(
+							from: EVM.addressFromString("0xFACF71692421039876a5BB4F10EF7A439D8ef61E"),
+							to: EVM.addressFromString("0x99a64c993965f8d69f985b5171bc20065cc32fab"),
+							data: EVM.encodeABIWithSignature("storeWithLog(uint256)", [UInt256(1453)]),
+							gasLimit: 30000,
+							value: EVM.Balance(attoflow: 0)
+						)
+						assert(callResult.status == EVM.Status.successful)
+
+						callResult = EVM.dryCall(
+							from: EVM.addressFromString("0xFACF71692421039876a5BB4F10EF7A439D8ef61E"),
+							to: EVM.addressFromString("0x99a64c993965f8d69f985b5171bc20065cc32fab"),
+							data: EVM.encodeABIWithSignature("retrieve()", []),
+							gasLimit: 30000,
+							value: EVM.Balance(attoflow: 0)
+						)
+						assert(callResult.status == EVM.Status.successful)
+						var returnData = EVM.decodeABI(types: [Type<UInt256>()], data: callResult.data)
+						// assert that the above EVM.dryCall with storeWithLog(1453), had no
+						// effect on the contract's state.
+						assert(returnData[0] as! UInt256 == 42)
+
+						let coa <- EVM.createCadenceOwnedAccount()
+						callResult = coa.dryCall(
+							to: EVM.addressFromString("0x99a64c993965f8d69f985b5171bc20065cc32fab"),
+							data: EVM.encodeABIWithSignature("storeWithLog(uint256)", [UInt256(1515)]),
+							gasLimit: 30000,
+							value: EVM.Balance(attoflow: 0)
+						)
+						assert(callResult.status == EVM.Status.successful)
+
+						callResult = coa.dryCall(
+							to: EVM.addressFromString("0x99a64c993965f8d69f985b5171bc20065cc32fab"),
+							data: EVM.encodeABIWithSignature("retrieve()", []),
+							gasLimit: 30000,
+							value: EVM.Balance(attoflow: 0)
+						)
+						assert(callResult.status == EVM.Status.successful)
+						returnData = EVM.decodeABI(types: [Type<UInt256>()], data: callResult.data)
+						// assert that the above coa.dryCall with storeWithLog(1515), had no
+						// effect on the contract's state.
+						assert(returnData[0] as! UInt256 == 42)
+
+						destroy <- coa
+					}
+				}`,
+				cadence.NewArray(encodedTxs),
+			)
+			require.NoError(t, err)
+			require.NoError(t, res.Error)
+		})
+	})
+
 	t.Run("streaming of entities and subscription", func(t *testing.T) {
 		runWeb3Test(t, "eth_streaming_test")
 	})
