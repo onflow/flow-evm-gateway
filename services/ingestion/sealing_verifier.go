@@ -13,6 +13,7 @@ import (
 	"github.com/onflow/flow-go-sdk/access"
 	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/rs/zerolog"
+	"go.uber.org/atomic"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -46,6 +47,9 @@ type SealingVerifier struct {
 	// data is available.
 	sealedBlocksToVerify map[uint64]flow.Identifier
 
+	lastUnsealedHeight *atomic.Uint64
+	lastSealedHeight   *atomic.Uint64
+
 	mu sync.Mutex
 }
 
@@ -57,6 +61,12 @@ func NewSealingVerifier(
 	eventsHash *pebble.EventsHash,
 	startHeight uint64,
 ) *SealingVerifier {
+	// startHeight is the first height to verify, which is one block after the last processed height
+	lastProcessedUnsealedHeight := startHeight
+	if lastProcessedUnsealedHeight > 0 {
+		lastProcessedUnsealedHeight--
+	}
+
 	return &SealingVerifier{
 		EngineStatus:           models.NewEngineStatus(),
 		logger:                 logger.With().Str("component", "sealing_verifier").Logger(),
@@ -66,6 +76,8 @@ func NewSealingVerifier(
 		eventsHash:             eventsHash,
 		unsealedBlocksToVerify: make(map[uint64]flow.Identifier),
 		sealedBlocksToVerify:   make(map[uint64]flow.Identifier),
+		lastUnsealedHeight:     atomic.NewUint64(lastProcessedUnsealedHeight),
+		lastSealedHeight:       atomic.NewUint64(0),
 	}
 }
 
@@ -107,6 +119,7 @@ func (v *SealingVerifier) Run(ctx context.Context) error {
 			return fmt.Errorf("failed to initialize processed sealed height: %w", err)
 		}
 	}
+	v.lastSealedHeight.Store(lastVerifiedHeight)
 
 	var eventsChan <-chan flow.BlockEvents
 	var errChan <-chan error
@@ -114,7 +127,7 @@ func (v *SealingVerifier) Run(ctx context.Context) error {
 	subscriptionCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	nextHeight := lastVerifiedHeight + 1
+	reconnectHeight := lastVerifiedHeight + 1
 	connect := func(height uint64) error {
 		var err error
 		for {
@@ -130,6 +143,7 @@ func (v *SealingVerifier) Run(ctx context.Context) error {
 				// this typically happens when the AN reboots and the stream is reconnected before
 				// it has sealed the next block
 				if status.Code(err) == codes.InvalidArgument && strings.Contains(err.Error(), "higher than highest indexed height") {
+					v.logger.Info().Err(err).Uint64("height", height).Msg("waiting for start block to be sealed")
 					time.Sleep(time.Second)
 					continue
 				}
@@ -140,10 +154,13 @@ func (v *SealingVerifier) Run(ctx context.Context) error {
 		}
 	}
 
-	v.logger.Info().Uint64("start_height", lastVerifiedHeight).Msg("starting verifier")
+	v.logger.Info().
+		Uint64("start_sealed_height", v.lastSealedHeight.Load()+1).
+		Uint64("start_unsealed_height", v.lastUnsealedHeight.Load()+1).
+		Msg("starting verifier")
 
-	if err := connect(nextHeight); err != nil {
-		return fmt.Errorf("failed to subscribe for finalized block events on height: %d, with: %w", nextHeight, err)
+	if err := connect(reconnectHeight); err != nil {
+		return fmt.Errorf("failed to subscribe for finalized block events on height: %d, with: %w", reconnectHeight, err)
 	}
 
 	v.MarkReady()
@@ -165,11 +182,12 @@ func (v *SealingVerifier) Run(ctx context.Context) error {
 				}
 				return fmt.Errorf("failed to receive block events: %w", err)
 			}
-			nextHeight = sealedEvents.Height + 1
 
 			if err := v.onSealedEvents(sealedEvents); err != nil {
 				return fmt.Errorf("failed to process sealed events: %w", err)
 			}
+
+			reconnectHeight = sealedEvents.Height + 1
 
 		case err, ok := <-errChan:
 			if !ok {
@@ -191,8 +209,8 @@ func (v *SealingVerifier) Run(ctx context.Context) error {
 				return fmt.Errorf("%w: %w", errs.ErrDisconnected, err)
 			}
 
-			if err := connect(nextHeight); err != nil {
-				return fmt.Errorf("failed to resubscribe for finalized block headers on height: %d, with: %w", nextHeight, err)
+			if err := connect(reconnectHeight); err != nil {
+				return fmt.Errorf("failed to resubscribe for finalized block headers on height: %d, with: %w", reconnectHeight, err)
 			}
 		}
 	}
@@ -202,13 +220,13 @@ func (v *SealingVerifier) Run(ctx context.Context) error {
 // if unsealed events are found for the same height, the events are verified.
 // otherwise, the sealed events are cached for future verification.
 func (v *SealingVerifier) onSealedEvents(sealedEvents flow.BlockEvents) error {
-	if len(sealedEvents.Events) == 0 {
-		v.mu.Lock()
-		defer v.mu.Unlock()
-		if _, ok := v.unsealedBlocksToVerify[sealedEvents.Height]; ok {
-			return fmt.Errorf("found unsealed events but no sealed events for height %d", sealedEvents.Height)
-		}
-		return nil // skip empty blocks
+	// Note: there should be an unsealed event entry, even for blocks with no transactions
+
+	// ensure we have received sealed data for all blocks
+	if sealedEvents.Height > 0 && !v.lastSealedHeight.CompareAndSwap(sealedEvents.Height-1, sealedEvents.Height) {
+		// note: this conditional skips updating the lastSealedHeight if the height is 0. this is
+		// desired since it will be the last height when we process block 1.
+		return fmt.Errorf("received sealed events out of order: expected %d, got %d", v.lastSealedHeight.Load()+1, sealedEvents.Height)
 	}
 
 	sealedHash, err := CalculateHash(sealedEvents)
@@ -220,12 +238,17 @@ func (v *SealingVerifier) onSealedEvents(sealedEvents flow.BlockEvents) error {
 	defer v.mu.Unlock()
 
 	unsealedHash, err := v.getUnsealedEventsHash(sealedEvents.Height)
+
+	// cache the sealed hash if
+	// 1. we haven't processed the unsealed data for this block yet
+	// 2. we have the data, but the state was rolled back to a previous height. In this case, wait
+	//    until we've reprocessed data for the height.
+	if errors.Is(err, errs.ErrEntityNotFound) || sealedEvents.Height > v.lastUnsealedHeight.Load() {
+		// we haven't processed the unsealed data for this block yet, cache the sealed hash
+		v.sealedBlocksToVerify[sealedEvents.Height] = sealedHash
+		return nil
+	}
 	if err != nil {
-		if errors.Is(err, errs.ErrEntityNotFound) {
-			// we haven't processed the unsealed data for this block yet, cache the sealed hash
-			v.sealedBlocksToVerify[sealedEvents.Height] = sealedHash
-			return nil
-		}
 		return fmt.Errorf("no unsealed events found for height %d: %w", sealedEvents.Height, err)
 	}
 
@@ -237,7 +260,10 @@ func (v *SealingVerifier) onSealedEvents(sealedEvents flow.BlockEvents) error {
 		return fmt.Errorf("failed to verify block events for %d: %w", sealedEvents.Height, err)
 	}
 
-	v.logger.Debug().Uint64("height", sealedEvents.Height).Msg("verified sealed height")
+	v.logger.Info().
+		Uint64("height", sealedEvents.Height).
+		Int("num_events", len(sealedEvents.Events)).
+		Msg("verified height from sealed events")
 
 	return nil
 }
@@ -259,6 +285,13 @@ func (v *SealingVerifier) onUnsealedEvents(unsealedEvents flow.BlockEvents) erro
 		return fmt.Errorf("failed to store events hash for block %d: %w", unsealedEvents.Height, err)
 	}
 
+	// update the last unsealed height after successfully storing the hash
+	if unsealedEvents.Height > 0 && !v.lastUnsealedHeight.CompareAndSwap(unsealedEvents.Height-1, unsealedEvents.Height) {
+		// note: this conditional skips updating the lastUnsealedHeight if the height is 0. this is
+		// desired since it will be the last height when we process block 1.
+		return fmt.Errorf("received unsealed events out of order: expected %d, got %d", v.lastUnsealedHeight.Load()+1, unsealedEvents.Height)
+	}
+
 	sealedHash, ok := v.sealedBlocksToVerify[unsealedEvents.Height]
 	if !ok {
 		v.unsealedBlocksToVerify[unsealedEvents.Height] = unsealedHash
@@ -273,7 +306,10 @@ func (v *SealingVerifier) onUnsealedEvents(unsealedEvents flow.BlockEvents) erro
 		return fmt.Errorf("failed to verify block events for %d: %w", unsealedEvents.Height, err)
 	}
 
-	v.logger.Debug().Uint64("height", unsealedEvents.Height).Msg("verified unsealed height")
+	v.logger.Info().
+		Uint64("height", unsealedEvents.Height).
+		Int("num_events", len(unsealedEvents.Events)).
+		Msg("verified height from unsealed events")
 
 	return nil
 }

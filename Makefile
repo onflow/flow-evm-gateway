@@ -77,10 +77,8 @@ e2e-test:
 
 .PHONY: check-tidy
 check-tidy:
-	go mod tidy
-	git diff --exit-code
-	cd tests
-	go mod tidy
+	go mod tidy -v
+	cd tests; go mod tidy -v
 	git diff --exit-code
 
 .PHONY: build
