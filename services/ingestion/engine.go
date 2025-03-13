@@ -298,12 +298,12 @@ func (e *Engine) indexEvents(events *models.CadenceEvents, batch *pebbleDB.Batch
 		txHash := tx.Hash()
 		traceResult, err := traceCollector.Collect(txHash)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to collect trace for transaction %s: %w", txHash, err)
 		}
 
 		err = e.traces.StoreTransaction(txHash, traceResult, batch)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to store trace for transaction %s: %w", txHash, err)
 		}
 	}
 

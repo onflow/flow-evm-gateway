@@ -142,7 +142,8 @@ func (v *SealingVerifier) Run(ctx context.Context) error {
 				// access node has not sealed the next height yet, wait and try again
 				// this typically happens when the AN reboots and the stream is reconnected before
 				// it has sealed the next block
-				if status.Code(err) == codes.InvalidArgument && strings.Contains(err.Error(), "higher than highest indexed height") {
+				if strings.Contains(err.Error(), "could not get start height") &&
+					strings.Contains(err.Error(), "higher than highest indexed height") {
 					v.logger.Info().Err(err).Uint64("height", height).Msg("waiting for start block to be sealed")
 					time.Sleep(time.Second)
 					continue
