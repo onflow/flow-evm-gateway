@@ -69,7 +69,7 @@ var gasEstimationIterations = prometheus.NewGauge(prometheus.GaugeOpts{
 var blockIngestionTime = prometheus.NewHistogram(prometheus.HistogramOpts{
 	Name:    prefixedName("block_ingestion_time_seconds"),
 	Help:    "Time taken to fully ingest an EVM block in the local state index",
-	Buckets: prometheus.DefBuckets,
+	Buckets: []float64{.5, 1, 2.5, 5, 10, 15, 20, 30, 45},
 })
 
 var requestRateLimitedCounters = prometheus.NewCounterVec(prometheus.CounterOpts{
