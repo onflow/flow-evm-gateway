@@ -4,13 +4,13 @@ go 1.23
 
 require (
 	github.com/goccy/go-json v0.10.2
-	github.com/onflow/cadence v1.3.1
+	github.com/onflow/cadence v1.3.3
 	github.com/onflow/crypto v0.25.2
-	github.com/onflow/flow-emulator v1.2.1-0.20250219181005-4205d790a414
+	github.com/onflow/flow-emulator v1.2.1-0.20250314161500-c55d0b34c1dc
 	github.com/onflow/flow-evm-gateway v0.0.0-20240201154855-4d4d3d3f19c7
-	github.com/onflow/flow-go v0.38.1-0.20250218174738-2181389f9f7d
-	github.com/onflow/flow-go-sdk v1.3.1
-	github.com/onflow/go-ethereum v1.14.7
+	github.com/onflow/flow-go v0.39.3-unsafe-cdp.0.0.20250314124202-6e06cf084313
+	github.com/onflow/flow-go-sdk v1.3.3
+	github.com/onflow/go-ethereum v1.14.8-0.20250313102023-d74083dc74d3
 	github.com/rs/zerolog v1.33.0
 	github.com/stretchr/testify v1.10.0
 )
@@ -100,7 +100,7 @@ require (
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/holiman/bloomfilter/v2 v2.0.3 // indirect
-	github.com/holiman/uint256 v1.3.0 // indirect
+	github.com/holiman/uint256 v1.3.1 // indirect
 	github.com/huandu/go-clone v1.6.0 // indirect
 	github.com/huandu/go-clone/generic v1.7.2 // indirect
 	github.com/huin/goupnp v1.3.0 // indirect
@@ -151,13 +151,13 @@ require (
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
 	github.com/onflow/atree v0.9.0 // indirect
 	github.com/onflow/bridged-usdc/lib/go/contracts v1.0.0 // indirect
-	github.com/onflow/flow-core-contracts/lib/go/contracts v1.5.1-preview // indirect
-	github.com/onflow/flow-core-contracts/lib/go/templates v1.5.1-preview // indirect
+	github.com/onflow/flow-core-contracts/lib/go/contracts v1.6.0 // indirect
+	github.com/onflow/flow-core-contracts/lib/go/templates v1.6.0 // indirect
 	github.com/onflow/flow-ft/lib/go/contracts v1.0.1 // indirect
 	github.com/onflow/flow-ft/lib/go/templates v1.0.1 // indirect
 	github.com/onflow/flow-nft/lib/go/contracts v1.2.3 // indirect
 	github.com/onflow/flow-nft/lib/go/templates v1.2.1 // indirect
-	github.com/onflow/flow/protobuf/go/flow v0.4.9 // indirect
+	github.com/onflow/flow/protobuf/go/flow v0.4.10 // indirect
 	github.com/onflow/nft-storefront/lib/go/contracts v1.0.0 // indirect
 	github.com/onflow/sdks v0.6.0-preview.1 // indirect
 	github.com/onflow/wal v1.0.2 // indirect
