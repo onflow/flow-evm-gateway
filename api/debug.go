@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/big"
 	"strings"
 
 	"github.com/goccy/go-json"
@@ -218,18 +217,18 @@ func (d *DebugAPI) TraceCall(
 			}
 			// Override account balance.
 			if account.Balance != nil {
-				opts = append(opts, query.WithStateOverrideBalance(addr, (*big.Int)(*account.Balance)))
+				opts = append(opts, query.WithStateOverrideBalance(addr, account.Balance.ToInt()))
 			}
 			if account.State != nil && account.StateDiff != nil {
 				return nil, fmt.Errorf("account %s has both 'state' and 'stateDiff'", addr.Hex())
 			}
 			// Replace entire state if caller requires.
 			if account.State != nil {
-				opts = append(opts, query.WithStateOverrideState(addr, *account.State))
+				opts = append(opts, query.WithStateOverrideState(addr, account.State))
 			}
 			// Apply state diff into specified accounts.
 			if account.StateDiff != nil {
-				opts = append(opts, query.WithStateOverrideStateDiff(addr, *account.StateDiff))
+				opts = append(opts, query.WithStateOverrideStateDiff(addr, account.StateDiff))
 			}
 		}
 	}
