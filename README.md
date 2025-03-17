@@ -287,10 +287,10 @@ The EVM Gateway implements APIs according to the Ethereum specification: https:/
 
 **Additional APIs**
 - Tracing APIs allows you to fetch execution traces
-    * debug_traceTransaction
-    * debug_traceBlockByNumber
-    * debug_traceBlockByHash
-- debug_flowHeightByBlock - returns the flow block height for the given EVM block (id or height)
+    * `debug_traceTransaction`
+    * `debug_traceBlockByNumber`
+    * `debug_traceBlockByHash`
+- `debug_flowHeightByBlock` - returns the flow block height for the given EVM block (id or height)
 
 **Unsupported APIs**
 - Wallet APIs: we don't officially support wallet APIs (`eth_accounts`, `eth_sign`, `eth_signTransaction`, `eth_sendTransaction`) due to security
