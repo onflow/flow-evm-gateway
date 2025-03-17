@@ -293,7 +293,7 @@ The EVM Gateway implements APIs according to the Ethereum specification: https:/
 - debug_flowHeightByBlock - returns the flow block height for the given EVM block (id or height)
 
 **Unsupported APIs**
-- Wallet APIs: we don't officially support wallet APIs (eth_accounts, eth_sign, eth_signTransaction, eth_sendTransaction) due to security
+- Wallet APIs: we don't officially support wallet APIs (`eth_accounts`, `eth_sign`, `eth_signTransaction`, `eth_sendTransaction`) due to security
   concerns that come with managing the keys on production environments, however, it is possible to configure the gateway to allow these
   methods for local development by using a special flag `--wallet-api-key`.
 - Proof API: we don't support obtaining proofs yet, Flow piggy-backs on the Flow consensus, and hence the Flow proofs can be used to verify
