@@ -8,9 +8,9 @@ require (
 	github.com/onflow/crypto v0.25.2
 	github.com/onflow/flow-emulator v1.2.1-0.20250314161500-c55d0b34c1dc
 	github.com/onflow/flow-evm-gateway v0.0.0-20240201154855-4d4d3d3f19c7
-	github.com/onflow/flow-go v0.39.3-unsafe-cdp.0.0.20250314124202-6e06cf084313
+	github.com/onflow/flow-go v0.39.3-unsafe-cdp.0.0.20250317121344-bd143eaf1b49
 	github.com/onflow/flow-go-sdk v1.3.3
-	github.com/onflow/go-ethereum v1.14.8-0.20250313102023-d74083dc74d3
+	github.com/onflow/go-ethereum v1.14.8-0.20250317120349-01f77f5201a0
 	github.com/rs/zerolog v1.33.0
 	github.com/stretchr/testify v1.10.0
 )
@@ -27,7 +27,7 @@ require (
 	github.com/allegro/bigcache v1.2.1 // indirect
 	github.com/benbjohnson/clock v1.3.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/bits-and-blooms/bitset v1.10.0 // indirect
+	github.com/bits-and-blooms/bitset v1.13.0 // indirect
 	github.com/btcsuite/btcd v0.21.0-beta // indirect
 	github.com/btcsuite/btcd/btcec/v2 v2.3.4 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
@@ -37,7 +37,7 @@ require (
 	github.com/cockroachdb/errors v1.11.3 // indirect
 	github.com/cockroachdb/fifo v0.0.0-20240606204812-0bbfbd93a7ce // indirect
 	github.com/cockroachdb/logtags v0.0.0-20230118201751-21c54148d20b // indirect
-	github.com/cockroachdb/pebble v1.1.1 // indirect
+	github.com/cockroachdb/pebble v1.1.2 // indirect
 	github.com/cockroachdb/redact v1.1.5 // indirect
 	github.com/cockroachdb/tokenbucket v0.0.0-20230807174530-cc333fc44b06 // indirect
 	github.com/consensys/bavard v0.1.13 // indirect
@@ -60,7 +60,7 @@ require (
 	github.com/ef-ds/deque v1.0.4 // indirect
 	github.com/ethereum/c-kzg-4844 v1.0.0 // indirect
 	github.com/ethereum/go-ethereum v1.13.10 // indirect
-	github.com/ethereum/go-verkle v0.1.1-0.20240306133620-7d920df305f0 // indirect
+	github.com/ethereum/go-verkle v0.1.1-0.20240829091221-dffa7562dbe9 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.4.1-0.20230228173756-c0c9f774e40c // indirect
