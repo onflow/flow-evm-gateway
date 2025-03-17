@@ -215,7 +215,7 @@ make docker-run
 ## Mainnet and Node Operations
 
 Guidance for EVM Gateway node operations including considerations for mainnet, hardware specs, monitoring setup and troubleshooting 
-can be found in the EVM Gateway [node operations docs](https://developers.flow.com/networks/node-ops/access-onchain-data/evm-gateway/evm-gateway-setup).
+can be found in the EVM Gateway [node operations docs](https://developers.flow.com/networks/node-ops/evm-gateway/evm-gateway-setup).
 
 ## Configuration Flags
 
