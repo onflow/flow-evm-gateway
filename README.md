@@ -280,7 +280,7 @@ EVM Gateway has public RPC endpoints available for the following environments:
 | Currency Symbol | FLOW                                   |
 | Block Explorer  | https://evm.flowscan.io                |
 
-To connect using Websockets you can use the same DNS names as above but change `https://` with `wss://`, eg: wss://testnet.evm.nodes.onflow.org
+To connect using Websockets you can use the same DNS names as above but change `https://` with `wss://`, eg: `wss://testnet.evm.nodes.onflow.org`
 
 # JSON-RPC API
 The EVM Gateway implements APIs according to the Ethereum specification: https://ethereum.org/en/developers/docs/apis/json-rpc/#json-rpc-methods.
