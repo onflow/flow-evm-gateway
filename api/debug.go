@@ -179,8 +179,8 @@ func (d *DebugAPI) TraceCall(
 		blocksProvider = blocksProvider.WithBlockOverrides(&ethTypes.BlockOverrides{
 			Number:   config.BlockOverrides.Number,
 			Time:     config.BlockOverrides.Time,
-			Coinbase: config.BlockOverrides.Coinbase,
-			Random:   config.BlockOverrides.Random,
+			Coinbase: config.BlockOverrides.FeeRecipient,
+			Random:   config.BlockOverrides.PrevRandao,
 		})
 	}
 	viewProvider := query.NewViewProvider(
