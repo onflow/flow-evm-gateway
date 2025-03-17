@@ -225,7 +225,7 @@ The application can be configured using the following flags at runtime:
 |--------------------------------|------------------|--------------------------------------------------------------------------------------------|
 | `database-dir`                 | `./db`           | Path to the directory for the database                                                     |
 | `rpc-host`                     | `""`             | Host for the RPC API server                                                                |
-| `rpc-port`                     | `8545`           | Port for the RPC API server                                                                |
+| `rpc-port`                     | `8545`           | Port for the RPC API server (also same for Websockets)                                     |
 | `ws-enabled`                   | `false`          | Enable websocket connections                                                               |
 | `access-node-grpc-host`        | `localhost:3569` | Host to the flow access node gRPC API                                                      |
 | `access-node-spork-hosts`      | `""`             | Previous spork AN hosts, defined as a comma-separated list (e.g. `"host-1.com,host2.com"`) |
@@ -280,6 +280,7 @@ EVM Gateway has public RPC endpoints available for the following environments:
 | Currency Symbol | FLOW                                   |
 | Block Explorer  | https://evm.flowscan.io                |
 
+To connect using Websockets you can use the same DNS names as above but change `https://` with `wss://`, eg: wss://testnet.evm.nodes.onflow.org
 
 # JSON-RPC API
 The EVM Gateway implements APIs according to the Ethereum specification: https://ethereum.org/en/developers/docs/apis/json-rpc/#json-rpc-methods.
