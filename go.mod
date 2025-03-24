@@ -8,9 +8,9 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/onflow/atree v0.9.0
 	github.com/onflow/cadence v1.3.3
-	github.com/onflow/flow-go v0.39.3-unsafe-cdp.0.0.20250319090518-0051e2af7c2a
+	github.com/onflow/flow-go v0.39.3-unsafe-cdp.0.0.20250324074443-e6846a9071d1
 	github.com/onflow/flow-go-sdk v1.3.3
-	github.com/onflow/go-ethereum v1.14.8-0.20250319084724-b2df0aaaabfc
+	github.com/onflow/go-ethereum v1.14.8-0.20250320104444-963b8ea1b09d
 	github.com/prometheus/client_golang v1.20.5
 	github.com/rs/cors v1.8.0
 	github.com/rs/zerolog v1.33.0
@@ -70,7 +70,6 @@ require (
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.4.1-0.20230228173756-c0c9f774e40c // indirect
 	github.com/fxamacker/circlehash v0.3.0 // indirect
-	github.com/gballet/go-libpcsclite v0.0.0-20190607065134-2772fd86a8ff // indirect
 	github.com/getsentry/sentry-go v0.27.0 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
@@ -171,7 +170,6 @@ require (
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/spf13/viper v1.15.0 // indirect
-	github.com/status-im/keycard-go v0.2.0 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/subosito/gotenv v1.4.2 // indirect
 	github.com/supranational/blst v0.3.13 // indirect
@@ -180,7 +178,6 @@ require (
 	github.com/tklauser/go-sysconf v0.3.12 // indirect
 	github.com/tklauser/numcpus v0.6.1 // indirect
 	github.com/turbolent/prettier v0.0.0-20220320183459-661cc755135d // indirect
-	github.com/tyler-smith/go-bip39 v1.1.0 // indirect
 	github.com/vmihailenco/msgpack v4.0.4+incompatible // indirect
 	github.com/vmihailenco/msgpack/v4 v4.3.11 // indirect
 	github.com/vmihailenco/tagparser v0.1.1 // indirect
