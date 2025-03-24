@@ -7,11 +7,13 @@ import (
 	"strings"
 
 	"github.com/goccy/go-json"
+	"github.com/onflow/flow-go/fvm/evm/emulator"
 	"github.com/onflow/flow-go/fvm/evm/offchain/query"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	gethCommon "github.com/onflow/go-ethereum/common"
 	"github.com/onflow/go-ethereum/eth/tracers"
 	"github.com/onflow/go-ethereum/eth/tracers/logger"
+	gethParams "github.com/onflow/go-ethereum/params"
 	"github.com/onflow/go-ethereum/rpc"
 	"github.com/rs/zerolog"
 
@@ -51,6 +53,7 @@ type DebugAPI struct {
 	client        *requester.CrossSporkClient
 	config        config.Config
 	rateLimiter   RateLimiter
+	chainConfig   *gethParams.ChainConfig
 }
 
 func NewDebugAPI(
@@ -64,6 +67,8 @@ func NewDebugAPI(
 	logger zerolog.Logger,
 	rateLimiter RateLimiter,
 ) *DebugAPI {
+	chainConfig := emulator.MakeChainConfig(config.EVMNetworkID)
+
 	return &DebugAPI{
 		registerStore: registerStore,
 		logger:        logger,
@@ -74,6 +79,7 @@ func NewDebugAPI(
 		client:        client,
 		config:        config,
 		rateLimiter:   rateLimiter,
+		chainConfig:   chainConfig,
 	}
 }
 
@@ -149,7 +155,7 @@ func (d *DebugAPI) TraceCall(
 		config = &tracers.TraceCallConfig{}
 	}
 
-	tracer, err := tracerForReceipt(&config.TraceConfig, nil)
+	tracer, err := d.tracerForReceipt(&config.TraceConfig, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -311,7 +317,7 @@ func (d *DebugAPI) traceTransaction(
 		return nil, err
 	}
 
-	tracer, err := tracerForReceipt(config, receipt)
+	tracer, err := d.tracerForReceipt(config, receipt)
 	if err != nil {
 		return nil, err
 	}
@@ -395,7 +401,7 @@ func (d *DebugAPI) traceBlockByNumber(
 			return nil, err
 		}
 
-		tracer, err := tracerForReceipt(config, receipt)
+		tracer, err := d.tracerForReceipt(config, receipt)
 		if err != nil {
 			return nil, err
 		}
@@ -435,7 +441,7 @@ func (d *DebugAPI) executorAtBlock(block *models.Block) (*evm.BlockExecutor, err
 	), nil
 }
 
-func tracerForReceipt(
+func (d *DebugAPI) tracerForReceipt(
 	config *tracers.TraceConfig,
 	receipt *models.Receipt,
 ) (*tracers.Tracer, error) {
@@ -463,7 +469,12 @@ func tracerForReceipt(
 		}
 	}
 
-	return tracers.DefaultDirectory.New(*config.Tracer, tracerCtx, config.TracerConfig)
+	return tracers.DefaultDirectory.New(
+		*config.Tracer,
+		tracerCtx,
+		config.TracerConfig,
+		d.chainConfig,
+	)
 }
 
 func isDefaultCallTracer(config *tracers.TraceConfig) bool {
