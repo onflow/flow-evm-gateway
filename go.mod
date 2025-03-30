@@ -8,9 +8,9 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/onflow/atree v0.9.0
 	github.com/onflow/cadence v1.3.3
-	github.com/onflow/flow-go v0.39.3-unsafe-cdp.0.0.20250327094703-46ae92d4713b
+	github.com/onflow/flow-go v0.39.3-unsafe-cdp.0.0.20250330092800-a43e5ece9c55
 	github.com/onflow/flow-go-sdk v1.3.3
-	github.com/onflow/go-ethereum v1.14.8-0.20250327092350-88fbc940c1b0
+	github.com/onflow/go-ethereum v1.14.8-0.20250327095627-0e03f79f9bfd
 	github.com/prometheus/client_golang v1.20.5
 	github.com/rs/cors v1.8.0
 	github.com/rs/zerolog v1.33.0
@@ -177,7 +177,7 @@ require (
 	github.com/spf13/viper v1.15.0 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/subosito/gotenv v1.4.2 // indirect
-	github.com/supranational/blst v0.3.13 // indirect
+	github.com/supranational/blst v0.3.14 // indirect
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7 // indirect
 	github.com/texttheater/golang-levenshtein/levenshtein v0.0.0-20200805054039-cae8b0eaed6c // indirect
 	github.com/tklauser/go-sysconf v0.3.12 // indirect
