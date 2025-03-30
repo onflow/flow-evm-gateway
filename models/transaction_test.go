@@ -362,9 +362,10 @@ func TestValidateTransaction(t *testing.T) {
 	}
 
 	head := &gethTypes.Header{
-		Number:   big.NewInt(20_182_324),
-		Time:     uint64(time.Now().Unix()),
-		GasLimit: 30_000_000,
+		Number:     big.NewInt(20_182_324),
+		Time:       uint64(time.Now().Unix()),
+		GasLimit:   30_000_000,
+		Difficulty: big.NewInt(0),
 	}
 	emulatorConfig := emulator.NewConfig(
 		emulator.WithChainID(types.FlowEVMPreviewNetChainID),
@@ -410,9 +411,10 @@ func TestValidateTransaction(t *testing.T) {
 func TestValidateConsensusRules(t *testing.T) {
 
 	head := &gethTypes.Header{
-		Number:   big.NewInt(20_182_324),
-		Time:     uint64(time.Now().Unix()),
-		GasLimit: 30_000_000,
+		Number:     big.NewInt(20_182_324),
+		Time:       uint64(time.Now().Unix()),
+		GasLimit:   30_000_000,
+		Difficulty: big.NewInt(0),
 	}
 	emulatorConfig := emulator.NewConfig(
 		emulator.WithChainID(types.FlowEVMPreviewNetChainID),
