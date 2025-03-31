@@ -136,7 +136,7 @@ func (s *StreamAPI) prepareBlockHeader(
 		ParentHash:       block.ParentBlockHash,
 		Nonce:            gethTypes.BlockNonce{0x1},
 		Sha3Uncles:       gethTypes.EmptyUncleHash,
-		LogsBloom:        gethTypes.LogsBloom([]*gethTypes.Log{}),
+		LogsBloom:        gethTypes.CreateBloom(&gethTypes.Receipt{}).Bytes(),
 		TransactionsRoot: block.TransactionHashRoot,
 		ReceiptsRoot:     block.ReceiptRoot,
 		Miner:            evmTypes.CoinbaseAddress.ToCommon(),
@@ -147,18 +147,18 @@ func (s *StreamAPI) prepareBlockHeader(
 	txHashes := block.TransactionHashes
 	if len(txHashes) > 0 {
 		totalGasUsed := hexutil.Uint64(0)
-		logs := make([]*gethTypes.Log, 0)
+		receipts := gethTypes.Receipts{}
 		for _, txHash := range txHashes {
 			txReceipt, err := s.receipts.GetByTransactionID(txHash)
 			if err != nil {
 				return nil, err
 			}
 			totalGasUsed += hexutil.Uint64(txReceipt.GasUsed)
-			logs = append(logs, txReceipt.Logs...)
+			receipts = append(receipts, txReceipt.ToGethReceipt())
 		}
 		blockHeader.GasUsed = totalGasUsed
 		// TODO(m-Peter): Consider if its worthwhile to move this in storage.
-		blockHeader.LogsBloom = gethTypes.LogsBloom(logs)
+		blockHeader.LogsBloom = gethTypes.MergeBloom(receipts).Bytes()
 	}
 
 	return blockHeader, nil
