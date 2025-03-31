@@ -35,6 +35,26 @@ type Receipt struct {
 	PrecompiledCalls  []byte
 }
 
+func (r *Receipt) ToGethReceipt() *gethTypes.Receipt {
+	return &gethTypes.Receipt{
+		Type:              r.Type,
+		PostState:         r.PostState,
+		Status:            r.Status,
+		CumulativeGasUsed: r.CumulativeGasUsed,
+		Bloom:             r.Bloom,
+		Logs:              r.Logs,
+		TxHash:            r.TxHash,
+		ContractAddress:   r.ContractAddress,
+		GasUsed:           r.GasUsed,
+		EffectiveGasPrice: r.EffectiveGasPrice,
+		BlobGasUsed:       r.BlobGasUsed,
+		BlobGasPrice:      r.BlobGasPrice,
+		BlockHash:         r.BlockHash,
+		BlockNumber:       r.BlockNumber,
+		TransactionIndex:  r.TransactionIndex,
+	}
+}
+
 func NewReceipt(
 	receipt *gethTypes.Receipt,
 	revertReason []byte,

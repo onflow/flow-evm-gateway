@@ -207,7 +207,7 @@ func decodeTransactionEvent(event cadence.Event) (
 		gethReceipt.Status = gethTypes.ReceiptStatusFailed
 	}
 
-	gethReceipt.Bloom = gethTypes.CreateBloom([]*gethTypes.Receipt{gethReceipt})
+	gethReceipt.Bloom = gethTypes.CreateBloom(gethReceipt)
 
 	var revertReason []byte
 	if txEvent.ErrorCode == uint16(types.ExecutionErrCodeExecutionReverted) {
