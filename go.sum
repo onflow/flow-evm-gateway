@@ -562,8 +562,8 @@ github.com/onflow/flow-ft/lib/go/contracts v1.0.1 h1:Ts5ob+CoCY2EjEd0W6vdLJ7hLL3
 github.com/onflow/flow-ft/lib/go/contracts v1.0.1/go.mod h1:PwsL8fC81cjnUnTfmyL/HOIyHnyaw/JA474Wfj2tl6A=
 github.com/onflow/flow-ft/lib/go/templates v1.0.1 h1:FDYKAiGowABtoMNusLuRCILIZDtVqJ/5tYI4VkF5zfM=
 github.com/onflow/flow-ft/lib/go/templates v1.0.1/go.mod h1:uQ8XFqmMK2jxyBSVrmyuwdWjTEb+6zGjRYotfDJ5pAE=
-github.com/onflow/flow-go v0.39.3-unsafe-cdp.0.0.20250330092800-a43e5ece9c55 h1:oAuFqbBmxg5p/vOGTOIW8Ur4Mj3F00UIOxcilaM7d3M=
-github.com/onflow/flow-go v0.39.3-unsafe-cdp.0.0.20250330092800-a43e5ece9c55/go.mod h1:/jh6QSva0hC88LPZbkMQ9iwcowqvdQDhnGS2JKM9nm4=
+github.com/onflow/flow-go v0.39.3-unsafe-cdp.0.0.20250331070246-0a1b938b4f05 h1:+9OBTMkZM1PhI1CuHrWOx/C0FfC3zob8+MBPGVfI564=
+github.com/onflow/flow-go v0.39.3-unsafe-cdp.0.0.20250331070246-0a1b938b4f05/go.mod h1:ChWk04tbIgVSS8zEbXD+hOluHzP1QTtf9L2YTk+JmH0=
 github.com/onflow/flow-go-sdk v1.3.3 h1:wj7llql3wesQYBePh3lEFI+jk3Df1sa13bRsL139JDo=
 github.com/onflow/flow-go-sdk v1.3.3/go.mod h1:tSLvYIac9DlmUEqKHSHbVRyv4mSB0va4AuiV3XB9ENc=
 github.com/onflow/flow-nft/lib/go/contracts v1.2.3 h1:4ju20g1xgDKWBT63rOj5f/Sa4Lc+naCSWT4p31x9yQk=
@@ -572,8 +572,8 @@ github.com/onflow/flow-nft/lib/go/templates v1.2.1 h1:SAALMZPDw9Eb9p5kSLnmnFxjyi
 github.com/onflow/flow-nft/lib/go/templates v1.2.1/go.mod h1:W6hOWU0xltPqNpv9gQX8Pj8Jtf0OmRxc1XX2V0kzJaI=
 github.com/onflow/flow/protobuf/go/flow v0.4.10 h1:CGEO3n96XZQd/k5HtkZyb90ouem9G+8fNcKyt8s2fvs=
 github.com/onflow/flow/protobuf/go/flow v0.4.10/go.mod h1:NA2pX2nw8zuaxfKphhKsk00kWLwfd+tv8mS23YXO4Sk=
-github.com/onflow/go-ethereum v1.14.8-0.20250327095627-0e03f79f9bfd h1:LqOCGUPOScOOF5ZPHLTOYdMB7bqOcYyaakjnqcXAvxc=
-github.com/onflow/go-ethereum v1.14.8-0.20250327095627-0e03f79f9bfd/go.mod h1:C4h5VtFDrnrtWYPGTR1lcSbroTZ5KahCfQkssg/W6as=
+github.com/onflow/go-ethereum v1.14.8-0.20250327095906-66cfed12c882 h1:BChGl9LW2qEQMqo0/7hyHXKZn/7055zyKSgNKKzdyX4=
+github.com/onflow/go-ethereum v1.14.8-0.20250327095906-66cfed12c882/go.mod h1:C4h5VtFDrnrtWYPGTR1lcSbroTZ5KahCfQkssg/W6as=
 github.com/onflow/nft-storefront/lib/go/contracts v1.0.0 h1:sxyWLqGm/p4EKT6DUlQESDG1ZNMN9GjPCm1gTq7NGfc=
 github.com/onflow/nft-storefront/lib/go/contracts v1.0.0/go.mod h1:kMeq9zUwCrgrSojEbTUTTJpZ4WwacVm2pA7LVFr+glk=
 github.com/onflow/sdks v0.6.0-preview.1 h1:mb/cUezuqWEP1gFZNAgUI4boBltudv4nlfxke1KBp9k=
