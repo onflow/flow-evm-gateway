@@ -1,16 +1,16 @@
 module github.com/onflow/flow-evm-gateway/integration
 
-go 1.23
+go 1.23.0
 
 require (
-	github.com/goccy/go-json v0.10.2
+	github.com/goccy/go-json v0.10.4
 	github.com/onflow/cadence v1.3.3
 	github.com/onflow/crypto v0.25.2
 	github.com/onflow/flow-emulator v1.2.1-0.20250314161500-c55d0b34c1dc
 	github.com/onflow/flow-evm-gateway v0.0.0-20240201154855-4d4d3d3f19c7
-	github.com/onflow/flow-go v0.39.3-unsafe-cdp.0.0.20250331070246-0a1b938b4f05
+	github.com/onflow/flow-go v0.39.3-unsafe-cdp.0.0.20250331091535-024f2e1a80d8
 	github.com/onflow/flow-go-sdk v1.3.3
-	github.com/onflow/go-ethereum v1.14.8-0.20250327095906-66cfed12c882
+	github.com/onflow/go-ethereum v1.14.8-0.20250327101549-e6d0051ec37a
 	github.com/rs/zerolog v1.33.0
 	github.com/stretchr/testify v1.10.0
 )
@@ -229,7 +229,7 @@ require (
 	golang.org/x/sys v0.29.0 // indirect
 	golang.org/x/term v0.28.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
-	golang.org/x/time v0.5.0 // indirect
+	golang.org/x/time v0.9.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
 	gonum.org/v1/gonum v0.15.0 // indirect
 	google.golang.org/api v0.169.0 // indirect
