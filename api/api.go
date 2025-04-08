@@ -965,7 +965,7 @@ func (b *BlockChainAPI) prepareBlockResponse(
 		Nonce:            types.BlockNonce{0x1},
 		Timestamp:        hexutil.Uint64(block.Timestamp),
 		BaseFeePerGas:    hexutil.Big(*models.BaseFeePerGas),
-		LogsBloom:        types.LogsBloom([]*types.Log{}),
+		LogsBloom:        types.CreateBloom(&types.Receipt{}).Bytes(),
 		Miner:            evmTypes.CoinbaseAddress.ToCommon(),
 		Sha3Uncles:       types.EmptyUncleHash,
 	}
@@ -983,19 +983,19 @@ func (b *BlockChainAPI) prepareBlockResponse(
 
 	if len(transactions) > 0 {
 		totalGasUsed := hexutil.Uint64(0)
-		logs := make([]*types.Log, 0)
+		receipts := types.Receipts{}
 		for _, tx := range transactions {
 			txReceipt, err := b.receipts.GetByTransactionID(tx.Hash)
 			if err != nil {
 				return nil, err
 			}
 			totalGasUsed += hexutil.Uint64(txReceipt.GasUsed)
-			logs = append(logs, txReceipt.Logs...)
+			receipts = append(receipts, txReceipt.ToGethReceipt())
 			blockSize += tx.Size()
 		}
 		blockResponse.GasUsed = totalGasUsed
 		// TODO(m-Peter): Consider if its worthwhile to move this in storage.
-		blockResponse.LogsBloom = types.LogsBloom(logs)
+		blockResponse.LogsBloom = types.MergeBloom(receipts).Bytes()
 	}
 	blockResponse.Size = hexutil.Uint64(rlp.ListSize(blockSize))
 
