@@ -8,9 +8,9 @@ require (
 	github.com/onflow/crypto v0.25.2
 	github.com/onflow/flow-emulator v1.2.1-0.20250314161500-c55d0b34c1dc
 	github.com/onflow/flow-evm-gateway v0.0.0-20240201154855-4d4d3d3f19c7
-	github.com/onflow/flow-go v0.39.3-unsafe-cdp.0.0.20250402073838-34a46fce721e
+	github.com/onflow/flow-go v0.39.3-unsafe-cdp.0.0.20250403084022-4954acba3e1e
 	github.com/onflow/flow-go-sdk v1.3.3
-	github.com/onflow/go-ethereum v1.14.8-0.20250327101549-e6d0051ec37a
+	github.com/onflow/go-ethereum v1.14.8-0.20250331101706-058c533b0b04
 	github.com/rs/zerolog v1.33.0
 	github.com/stretchr/testify v1.10.0
 )
