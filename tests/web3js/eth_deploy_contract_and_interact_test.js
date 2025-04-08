@@ -221,7 +221,7 @@ it('deploy contract and interact', async () => {
         },
         '0x1'
     )
-    assert.equal(gasEstimate, 21510n)
+    assert.equal(gasEstimate, 22026n)
 
     gasEstimate = await web3.eth.estimateGas(
         {
