@@ -153,9 +153,10 @@ func NewEVM(
 	}
 
 	head := &types.Header{
-		Number:   big.NewInt(20_182_324),
-		Time:     uint64(time.Now().Unix()),
-		GasLimit: blockGasLimit,
+		Number:     big.NewInt(20_182_324),
+		Time:       uint64(time.Now().Unix()),
+		GasLimit:   blockGasLimit,
+		Difficulty: big.NewInt(0),
 	}
 	emulatorConfig := emulator.NewConfig(
 		emulator.WithChainID(config.EVMNetworkID),

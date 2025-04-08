@@ -195,8 +195,8 @@ func TestWeb3_E2E(t *testing.T) {
 			payloads[0] = deployPayload
 			contractAddress := common.HexToAddress("99a64c993965f8d69f985b5171bc20065cc32fab")
 			// contract call transactions, these emit logs/events
-			for i := 1; i <= 5; i++ {
-				callData := storageContract.MakeCallData(t, "sum", big.NewInt(10), big.NewInt(20))
+			for i := int64(1); i <= 5; i++ {
+				callData := storageContract.MakeCallData(t, "sum", big.NewInt(i*10), big.NewInt(i*20))
 				callPayload, _, err := evmSign(big.NewInt(0), 55_000, accountKey, nonce, &contractAddress, callData)
 				require.NoError(t, err)
 				payloads[i] = callPayload
