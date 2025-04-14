@@ -351,4 +351,12 @@ func TestWeb3_E2E(t *testing.T) {
 	t.Run("streaming of entities and subscription with filters", func(t *testing.T) {
 		runWeb3Test(t, "eth_streaming_filters_test")
 	})
+
+	t.Run("test EIP-7720 contract writes", func(t *testing.T) {
+		runWeb3Test(t, "eth_eip_7702_contract_write_test")
+	})
+
+	t.Run("test EIP-7720 sending transactions", func(t *testing.T) {
+		runWeb3Test(t, "eth_eip_7702_sending_transactions_test")
+	})
 }

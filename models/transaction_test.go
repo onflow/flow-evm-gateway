@@ -379,7 +379,8 @@ func TestValidateTransaction(t *testing.T) {
 			1<<gethTypes.LegacyTxType |
 			1<<gethTypes.AccessListTxType |
 			1<<gethTypes.DynamicFeeTxType |
-			1<<gethTypes.BlobTxType,
+			1<<gethTypes.BlobTxType |
+			1<<gethTypes.SetCodeTxType,
 		MaxSize: TxMaxSize,
 		MinTip:  new(big.Int),
 	}
@@ -429,7 +430,8 @@ func TestValidateConsensusRules(t *testing.T) {
 			1<<gethTypes.LegacyTxType |
 			1<<gethTypes.AccessListTxType |
 			1<<gethTypes.DynamicFeeTxType |
-			1<<gethTypes.BlobTxType,
+			1<<gethTypes.BlobTxType |
+			1<<gethTypes.SetCodeTxType,
 		MaxSize: TxMaxSize,
 		MinTip:  new(big.Int),
 	}

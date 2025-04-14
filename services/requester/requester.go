@@ -170,7 +170,8 @@ func NewEVM(
 			1<<types.LegacyTxType |
 			1<<types.AccessListTxType |
 			1<<types.DynamicFeeTxType |
-			1<<types.BlobTxType,
+			1<<types.BlobTxType |
+			1<<types.SetCodeTxType,
 		MaxSize: models.TxMaxSize,
 		MinTip:  new(big.Int),
 	}
