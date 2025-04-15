@@ -17,6 +17,8 @@ before(async () => {
     let serializedTransaction = await walletClient.signTransaction(request)
 
     let hash = await walletClient.sendRawTransaction({ serializedTransaction })
+
+    await new Promise((res) => setTimeout(() => res(), 1500))
     let transaction = await publicClient.getTransactionReceipt({
         hash: hash
     })
@@ -28,6 +30,7 @@ before(async () => {
         bytecode: bytecode,
     })
 
+    await new Promise((res) => setTimeout(() => res(), 1500))
     transaction = await publicClient.getTransactionReceipt({
         hash: hash
     })
@@ -53,6 +56,7 @@ it('should send transactions with relay account', async () => {
         to: eoa.address,
     })
 
+    await new Promise((res) => setTimeout(() => res(), 1500))
     let transaction = await publicClient.getTransactionReceipt({
         hash: hash
     })
@@ -67,6 +71,7 @@ it('should send transactions with relay account', async () => {
         to: eoa.address,
     })
 
+    await new Promise((res) => setTimeout(() => res(), 1500))
     transaction = await publicClient.getTransactionReceipt({
         hash: hash
     })
@@ -91,6 +96,7 @@ it('should send self-executing transactions', async () => {
         to: walletClient.account.address,
     })
 
+    await new Promise((res) => setTimeout(() => res(), 1500))
     let transaction = await publicClient.getTransactionReceipt({
         hash: hash
     })
@@ -105,6 +111,7 @@ it('should send self-executing transactions', async () => {
         to: walletClient.account.address,
     })
 
+    await new Promise((res) => setTimeout(() => res(), 1500))
     transaction = await publicClient.getTransactionReceipt({
         hash: hash
     })
