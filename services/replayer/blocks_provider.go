@@ -3,6 +3,7 @@ package replayer
 import (
 	"fmt"
 
+	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-go/fvm/evm/offchain/blocks"
@@ -20,7 +21,7 @@ type blockSnapshot struct {
 var _ evmTypes.BlockSnapshot = (*blockSnapshot)(nil)
 
 func (bs *blockSnapshot) BlockContext() (evmTypes.BlockContext, error) {
-	return blocks.NewBlockContext(
+	blockContext, err := blocks.NewBlockContext(
 		bs.chainID,
 		bs.block.Height,
 		bs.block.Timestamp,
@@ -39,6 +40,13 @@ func (bs *blockSnapshot) BlockContext() (evmTypes.BlockContext, error) {
 		bs.block.PrevRandao,
 		bs.tracer,
 	)
+	if err != nil {
+		return evmTypes.BlockContext{}, err
+	}
+
+	blockContext.IsPrague = config.IsPrague(bs.block.Height, bs.chainID)
+
+	return blockContext, nil
 }
 
 // This BlocksProvider implementation is used in the EVM events ingestion pipeline.

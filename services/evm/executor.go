@@ -14,6 +14,7 @@ import (
 	"github.com/onflow/go-ethereum/eth/tracers"
 	"github.com/rs/zerolog"
 
+	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/storage"
 )
@@ -142,6 +143,7 @@ func (s *BlockExecutor) blockContext(
 		return types.BlockContext{}, err
 	}
 
+	ctx.IsPrague = config.IsPrague(s.block.Height, s.chainID)
 	ctx.TxCountSoFar = s.txIndex
 	ctx.TotalGasUsedSoFar = s.gasUsed
 
