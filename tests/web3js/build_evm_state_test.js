@@ -175,7 +175,7 @@ it('should handle a large number of EVM interactions', async () => {
     assert.lengthOf(code, 9806)
 
     // Add calls to verify correctness of eth_call on historical heights
-    let callRetrieve = await deployed.contract.methods.retrieve().encodeABI()
+    let callRetrieve = deployed.contract.methods.retrieve().encodeABI()
     let result = await web3.eth.call({ to: contractAddress, data: callRetrieve }, 82n)
     assert.equal(result, '0x')
 

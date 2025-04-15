@@ -562,18 +562,13 @@ func (b *BlockChainAPI) Call(
 		return handleError[hexutil.Bytes](err, l, b.collector)
 	}
 
-	tx, err := encodeTxFromArgs(args)
-	if err != nil {
-		return handleError[hexutil.Bytes](err, l, b.collector)
-	}
-
 	// Default address in case user does not provide one
 	from := b.config.Coinbase
 	if args.From != nil {
 		from = *args.From
 	}
 
-	res, err := b.evm.Call(tx, from, height, stateOverrides, blockOverrides)
+	res, err := b.evm.Call(args, from, height, stateOverrides, blockOverrides)
 	if err != nil {
 		return handleError[hexutil.Bytes](err, l, b.collector)
 	}
@@ -722,11 +717,6 @@ func (b *BlockChainAPI) EstimateGas(
 		return handleError[hexutil.Uint64](err, l, b.collector)
 	}
 
-	tx, err := encodeTxFromArgs(args)
-	if err != nil {
-		return hexutil.Uint64(BlockGasLimit), nil // return block gas limit
-	}
-
 	// Default address in case user does not provide one
 	from := b.config.Coinbase
 	if args.From != nil {
@@ -742,7 +732,7 @@ func (b *BlockChainAPI) EstimateGas(
 		return handleError[hexutil.Uint64](err, l, b.collector)
 	}
 
-	estimatedGas, err := b.evm.EstimateGas(tx, from, height, stateOverrides)
+	estimatedGas, err := b.evm.EstimateGas(args, from, height, stateOverrides)
 	if err != nil {
 		return handleError[hexutil.Uint64](err, l, b.collector)
 	}

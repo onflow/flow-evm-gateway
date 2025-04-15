@@ -11,6 +11,7 @@ import (
 	"github.com/onflow/flow-go/fvm/evm/offchain/query"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	gethCommon "github.com/onflow/go-ethereum/common"
+	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/onflow/go-ethereum/eth/tracers"
 	"github.com/onflow/go-ethereum/eth/tracers/logger"
 	gethParams "github.com/onflow/go-ethereum/params"
@@ -39,7 +40,7 @@ import (
 // txTraceResult is the result of a single transaction trace.
 type txTraceResult struct {
 	TxHash gethCommon.Hash `json:"txHash"`           // transaction hash
-	Result interface{}     `json:"result,omitempty"` // Trace results produced by the tracer
+	Result any             `json:"result,omitempty"` // Trace results produced by the tracer
 	Error  string          `json:"error,omitempty"`  // Trace failure produced by the tracer
 }
 
@@ -135,15 +136,12 @@ func (d *DebugAPI) TraceCall(
 	args ethTypes.TransactionArgs,
 	blockNrOrHash rpc.BlockNumberOrHash,
 	config *tracers.TraceCallConfig,
-) (interface{}, error) {
+) (any, error) {
 	if err := d.rateLimiter.Apply(ctx, "TraceCall"); err != nil {
 		return nil, err
 	}
 
-	tx, err := encodeTxFromArgs(args)
-	if err != nil {
-		return nil, err
-	}
+	tx := args.ToTransaction(gethTypes.LegacyTxType, BlockGasLimit)
 
 	// Default address in case user does not provide one
 	from := d.config.Coinbase
@@ -203,8 +201,8 @@ func (d *DebugAPI) TraceCall(
 	}
 
 	to := gethCommon.Address{}
-	if tx.To != nil {
-		to = *tx.To
+	if tx.To() != nil {
+		to = *tx.To()
 	}
 	rca := requester.NewRemoteCadenceArch(cdcHeight, d.client, d.config.FlowNetworkID)
 
@@ -241,9 +239,9 @@ func (d *DebugAPI) TraceCall(
 	_, err = view.DryCall(
 		from,
 		to,
-		tx.Data,
-		tx.Value,
-		tx.Gas,
+		tx.Data(),
+		tx.Value(),
+		tx.Gas(),
 		opts...,
 	)
 	if err != nil {
