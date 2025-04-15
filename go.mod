@@ -8,9 +8,9 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/onflow/atree v0.9.0
 	github.com/onflow/cadence v1.3.3
-	github.com/onflow/flow-go v0.39.3-unsafe-cdp.0.0.20250404125742-5490f423248c
+	github.com/onflow/flow-go v0.39.3-unsafe-cdp.0.0.20250410112831-d5fdbe30ff6d
 	github.com/onflow/flow-go-sdk v1.3.3
-	github.com/onflow/go-ethereum v1.14.8-0.20250404085700-1d8aa94550b6
+	github.com/onflow/go-ethereum v1.15.7
 	github.com/prometheus/client_golang v1.20.5
 	github.com/rs/cors v1.8.0
 	github.com/rs/zerolog v1.33.0
