@@ -149,7 +149,7 @@ func (b *BlockChainAPI) Syncing(ctx context.Context) (interface{}, error) {
 		return handleError[any](err, b.logger, b.collector)
 	}
 
-	if currentBlock == highestBlock {
+	if currentBlock >= highestBlock {
 		return false, nil
 	}
 
