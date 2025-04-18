@@ -179,7 +179,7 @@ it('should apply block overrides on debug_traceCall', async () => {
 
     // Override the `block.prevrandao` value to `0x7914bb5b13bac6f621bc37bbf6e406fbf4472aaaaf17ec2f309a92aca4e27fc0`.
     let random = '0x7914bb5b13bac6f621bc37bbf6e406fbf4472aaaaf17ec2f309a92aca4e27fc0'
-    callTracer.blockOverrides = { random: random }
+    callTracer.blockOverrides = { prevRandao: random }
     response = await helpers.callRPCMethod(
         'debug_traceCall',
         [call, 'latest', callTracer]

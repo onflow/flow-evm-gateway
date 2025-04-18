@@ -12,6 +12,7 @@ it('should retrieve batch transactions with logs', async () => {
     assert.lengthOf(block.transactions, batchSize)
 
     let blockLogs = []
+    let logsBlooms = []
 
     for (let i = 0; i < block.transactions.length; i++) {
         let tx = await web3.eth.getTransactionFromBlock(latestHeight, i)
@@ -41,6 +42,20 @@ it('should retrieve batch transactions with logs', async () => {
 
             blockLogs.push(log)
         }
+        logsBlooms.push(receipt.logsBloom)
+    }
+
+    let expectedBlockLogsBloom = '0x00000000008000000000004000040000000000000000000000000000000000000002000000000800080000000420000000012200040000000020000000080000000000000000008000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000010001000000000010000000000010000000080000000000000000400000000000000000000000000000100000020000000000000000000000000000002000000000000000000000000800000000000000000000000000020000000000000000028000800000000000000000000080000400000000000000000000000008000000000000000'
+    assert.equal(
+        block.logsBloom,
+        expectedBlockLogsBloom
+    )
+
+    for (const logsBloom of logsBlooms) {
+        assert.notEqual(
+            logsBloom,
+            expectedBlockLogsBloom
+        )
     }
 
     let logs = await web3.eth.getPastLogs({

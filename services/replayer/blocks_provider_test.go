@@ -12,6 +12,7 @@ import (
 	"github.com/onflow/flow-evm-gateway/storage/mocks"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
 	"github.com/onflow/flow-go-sdk"
+	"github.com/onflow/flow-go/fvm/evm/emulator"
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/onflow/go-ethereum/common"
@@ -301,6 +302,7 @@ func newCallTracer(t *testing.T) *tracers.Tracer {
 		"callTracer",
 		&tracers.Context{},
 		json.RawMessage(`{ "onlyTopCall": true }`),
+		emulator.DefaultChainConfig,
 	)
 	require.NoError(t, err)
 

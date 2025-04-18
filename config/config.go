@@ -23,6 +23,29 @@ const EmulatorInitCadenceHeight = uint64(0)
 // We don't use 0 as it has a special meaning to represent latest block in the AN API context.
 const LiveNetworkInitCadenceHeight = uint64(1)
 
+// TODO: Update with the actual value, when Prague is deployed
+// on testnet. The first EVM block with Prague deployed, is
+// the proper value to set for this constant.
+const testnetPragueHeightActivation = uint64(0)
+
+// TODO: Update with the actual value, when Prague is deployed
+// on mainnet. The first EVM block with Prague deployed, is
+// the proper value to set for this constant.
+const mainnetPragueHeightActivation = uint64(0)
+
+// Checks whether the given EVM block height, for the given Flow network,
+// is before or after the Prague hard-fork.
+func IsPrague(evmHeight uint64, chainID flowGo.ChainID) bool {
+	switch chainID {
+	case flowGo.Testnet:
+		return evmHeight >= testnetPragueHeightActivation
+	case flowGo.Mainnet:
+		return evmHeight >= mainnetPragueHeightActivation
+	default:
+		return true
+	}
+}
+
 type TxStateValidation string
 
 const (

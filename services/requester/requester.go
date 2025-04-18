@@ -17,6 +17,7 @@ import (
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/onflow/go-ethereum/common"
+	"github.com/onflow/go-ethereum/common/hexutil"
 	gethCore "github.com/onflow/go-ethereum/core"
 	"github.com/onflow/go-ethereum/core/txpool"
 	"github.com/onflow/go-ethereum/core/types"
@@ -65,7 +66,7 @@ type Requester interface {
 	// Note, this function doesn't make and changes in the state/blockchain and is
 	// useful to execute and retrieve values.
 	Call(
-		tx *types.DynamicFeeTx,
+		txArgs ethTypes.TransactionArgs,
 		from common.Address,
 		height uint64,
 		stateOverrides *ethTypes.StateOverride,
@@ -76,7 +77,7 @@ type Requester interface {
 	// Note, this function doesn't make any changes in the state/blockchain and is
 	// useful to executed and retrieve the gas consumption and possible failures.
 	EstimateGas(
-		tx *types.DynamicFeeTx,
+		txArgs ethTypes.TransactionArgs,
 		from common.Address,
 		height uint64,
 		stateOverrides *ethTypes.StateOverride,
@@ -153,9 +154,10 @@ func NewEVM(
 	}
 
 	head := &types.Header{
-		Number:   big.NewInt(20_182_324),
-		Time:     uint64(time.Now().Unix()),
-		GasLimit: blockGasLimit,
+		Number:     big.NewInt(20_182_324),
+		Time:       uint64(time.Now().Unix()),
+		GasLimit:   blockGasLimit,
+		Difficulty: big.NewInt(0),
 	}
 	emulatorConfig := emulator.NewConfig(
 		emulator.WithChainID(config.EVMNetworkID),
@@ -169,7 +171,8 @@ func NewEVM(
 			1<<types.LegacyTxType |
 			1<<types.AccessListTxType |
 			1<<types.DynamicFeeTxType |
-			1<<types.BlobTxType,
+			1<<types.BlobTxType |
+			1<<types.SetCodeTxType,
 		MaxSize: models.TxMaxSize,
 		MinTip:  new(big.Int),
 	}
@@ -315,12 +318,13 @@ func (e *EVM) GetStorageAt(
 }
 
 func (e *EVM) Call(
-	tx *types.DynamicFeeTx,
+	txArgs ethTypes.TransactionArgs,
 	from common.Address,
 	height uint64,
 	stateOverrides *ethTypes.StateOverride,
 	blockOverrides *ethTypes.BlockOverrides,
 ) ([]byte, error) {
+	tx := txArgs.ToTransaction(types.LegacyTxType, blockGasLimit)
 	result, err := e.dryRunTx(tx, from, height, stateOverrides, blockOverrides)
 	if err != nil {
 		return nil, err
@@ -338,7 +342,7 @@ func (e *EVM) Call(
 }
 
 func (e *EVM) EstimateGas(
-	tx *types.DynamicFeeTx,
+	txArgs ethTypes.TransactionArgs,
 	from common.Address,
 	height uint64,
 	stateOverrides *ethTypes.StateOverride,
@@ -346,7 +350,9 @@ func (e *EVM) EstimateGas(
 	iterations := 0
 
 	dryRun := func(gasLimit uint64) (*evmTypes.Result, error) {
-		tx.Gas = gasLimit
+		gas := hexutil.Uint64(gasLimit)
+		txArgs.Gas = &gas
+		tx := txArgs.ToTransaction(types.LegacyTxType, blockGasLimit)
 		result, err := e.dryRunTx(tx, from, height, stateOverrides, nil)
 		iterations += 1
 		return result, err
@@ -362,8 +368,8 @@ func (e *EVM) EstimateGas(
 	)
 	// Determine the highest gas limit that can be used during the estimation.
 	passingGasLimit = blockGasLimit
-	if tx.Gas >= gethParams.TxGas {
-		passingGasLimit = tx.Gas
+	if txArgs.Gas != nil && (uint64(*txArgs.Gas) >= gethParams.TxGas) {
+		passingGasLimit = uint64(*txArgs.Gas)
 	}
 
 	// We first execute the transaction at the highest allowable gas limit,
@@ -438,9 +444,12 @@ func (e *EVM) EstimateGas(
 		}
 	}
 
-	if tx.AccessList != nil {
-		passingGasLimit += uint64(len(tx.AccessList)) * gethParams.TxAccessListAddressGas
-		passingGasLimit += uint64(tx.AccessList.StorageKeys()) * gethParams.TxAccessListStorageKeyGas
+	if txArgs.AccessList != nil {
+		passingGasLimit += uint64(len(*txArgs.AccessList)) * gethParams.TxAccessListAddressGas
+		passingGasLimit += uint64(txArgs.AccessList.StorageKeys()) * gethParams.TxAccessListStorageKeyGas
+	}
+	if txArgs.AuthorizationList != nil {
+		passingGasLimit += uint64(len(txArgs.AuthorizationList)) * gethParams.CallNewAccountGas
 	}
 
 	return passingGasLimit, nil
@@ -521,7 +530,7 @@ func (e *EVM) evmToCadenceHeight(height uint64) (uint64, error) {
 }
 
 func (e *EVM) dryRunTx(
-	tx *types.DynamicFeeTx,
+	tx *types.Transaction,
 	from common.Address,
 	height uint64,
 	stateOverrides *ethTypes.StateOverride,
@@ -533,8 +542,8 @@ func (e *EVM) dryRunTx(
 	}
 
 	to := common.Address{}
-	if tx.To != nil {
-		to = *tx.To
+	if tx.To() != nil {
+		to = *tx.To()
 	}
 	cdcHeight, err := e.evmToCadenceHeight(height)
 	if err != nil {
@@ -573,9 +582,9 @@ func (e *EVM) dryRunTx(
 	result, err := view.DryCall(
 		from,
 		to,
-		tx.Data,
-		tx.Value,
-		tx.Gas,
+		tx.Data(),
+		tx.Value(),
+		tx.Gas(),
 		opts...,
 	)
 	if err != nil {

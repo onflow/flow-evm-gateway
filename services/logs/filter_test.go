@@ -113,7 +113,7 @@ func blockStorage() storage.BlockIndexer {
 func receiptStorage() storage.ReceiptIndexer {
 	for _, r := range receipts { // calculate bloom filters
 		rcp := toGethReceipt(r)
-		r.Bloom = gethTypes.CreateBloom(gethTypes.Receipts{rcp})
+		r.Bloom = gethTypes.CreateBloom(rcp)
 	}
 
 	receiptStorage := &mocks.ReceiptIndexer{}
