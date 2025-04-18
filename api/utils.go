@@ -55,29 +55,31 @@ func resolveBlockTag(
 }
 
 func resolveBlockNumber(
-	number rpc.BlockNumber,
+	blockNumber rpc.BlockNumber,
 	blocksDB storage.BlockIndexer,
 ) (uint64, error) {
-	height := number.Int64()
-
 	// if special values (latest) we return latest executed height
 	//
 	// all the special values are:
+	//	EarliestBlockNumber  = BlockNumber(-5)
 	//	SafeBlockNumber      = BlockNumber(-4)
 	//	FinalizedBlockNumber = BlockNumber(-3)
 	//	LatestBlockNumber    = BlockNumber(-2)
 	//	PendingBlockNumber   = BlockNumber(-1)
 	//
 	// EVM on Flow does not have these concepts, but the latest block is the closest fit
-	if height < 0 {
-		executed, err := blocksDB.LatestEVMHeight()
+	height := uint64(blockNumber)
+	var err error
+	if blockNumber == rpc.EarliestBlockNumber {
+		height = 0
+	} else if blockNumber <= rpc.PendingBlockNumber {
+		height, err = blocksDB.LatestEVMHeight()
 		if err != nil {
 			return 0, err
 		}
-		height = int64(executed)
 	}
 
-	return uint64(height), nil
+	return height, nil
 }
 
 // decodeHash parses a hex-encoded 32-byte hash. The input may optionally

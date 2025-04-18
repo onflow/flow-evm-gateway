@@ -14,9 +14,12 @@ import (
 )
 
 var (
-	LatestBlockNumber   = big.NewInt(-2)
-	EarliestBlockNumber = big.NewInt(0)
-	zeroGethHash        = gethCommon.HexToHash("0x0")
+	EarliestBlockNumber  = big.NewInt(-5)
+	SafeBlockNumber      = big.NewInt(-4)
+	FinalizedBlockNumber = big.NewInt(-3)
+	LatestBlockNumber    = big.NewInt(-2)
+	PendingBlockNumber   = big.NewInt(-1)
+	zeroGethHash         = gethCommon.HexToHash("0x0")
 )
 
 func GenesisBlock(chainID flow.ChainID) *Block {

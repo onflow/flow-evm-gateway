@@ -387,6 +387,7 @@ func (b *BlockChainAPI) GetBlockByHash(
 //   - When blockNr is -2 the chain latest block is returned.
 //   - When blockNr is -3 the chain finalized block is returned.
 //   - When blockNr is -4 the chain safe block is returned.
+//   - When blockNr is -5 the chain earliest block is returned.
 //   - When fullTx is true all transactions in the block are returned, otherwise
 //     only the transaction hash is returned.
 func (b *BlockChainAPI) GetBlockByNumber(
@@ -405,7 +406,9 @@ func (b *BlockChainAPI) GetBlockByNumber(
 
 	height := uint64(blockNumber)
 	var err error
-	if blockNumber < 0 {
+	if blockNumber == rpc.EarliestBlockNumber {
+		height = 0
+	} else if blockNumber <= rpc.PendingBlockNumber {
 		height, err = b.blocks.LatestEVMHeight()
 		if err != nil {
 			return handleError[*ethTypes.Block](err, l, b.collector)
@@ -510,15 +513,18 @@ func (b *BlockChainAPI) GetBlockTransactionCountByNumber(
 		return nil, err
 	}
 
-	if blockNumber < rpc.EarliestBlockNumber {
-		latestBlockNumber, err := b.blocks.LatestEVMHeight()
+	height := uint64(blockNumber)
+	var err error
+	if blockNumber == rpc.EarliestBlockNumber {
+		height = 0
+	} else if blockNumber <= rpc.PendingBlockNumber {
+		height, err = b.blocks.LatestEVMHeight()
 		if err != nil {
 			return handleError[*hexutil.Uint](err, l, b.collector)
 		}
-		blockNumber = rpc.BlockNumber(latestBlockNumber)
 	}
 
-	block, err := b.blocks.GetByHeight(uint64(blockNumber))
+	block, err := b.blocks.GetByHeight(height)
 	if err != nil {
 		return handleError[*hexutil.Uint](err, l, b.collector)
 	}
@@ -638,10 +644,15 @@ func (b *BlockChainAPI) GetLogs(
 	latest := big.NewInt(int64(h))
 
 	// if special value, use latest block number
-	if from.Cmp(models.EarliestBlockNumber) < 0 {
+	if from.Cmp(models.EarliestBlockNumber) == 0 {
+		from = big.NewInt(0)
+	} else if from.Cmp(models.PendingBlockNumber) < 0 {
 		from = latest
 	}
-	if to.Cmp(models.EarliestBlockNumber) < 0 {
+
+	if to.Cmp(models.EarliestBlockNumber) == 0 {
+		to = big.NewInt(0)
+	} else if to.Cmp(models.PendingBlockNumber) < 0 {
 		to = latest
 	}
 
