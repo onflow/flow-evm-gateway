@@ -25,8 +25,8 @@ import (
 	"github.com/onflow/flow-evm-gateway/services/requester"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
-	flowEVM "github.com/onflow/flow-go/fvm/evm"
 
+	flowEVM "github.com/onflow/flow-go/fvm/evm"
 	offchain "github.com/onflow/flow-go/fvm/evm/offchain/storage"
 
 	// this import is needed for side-effects, because the
@@ -472,7 +472,7 @@ func isDefaultCallTracer(config *tracers.TraceConfig) bool {
 		return false
 	}
 
-	if *config.Tracer != replayer.TracerName {
+	if config.Tracer == nil || *config.Tracer != replayer.TracerName {
 		return false
 	}
 
