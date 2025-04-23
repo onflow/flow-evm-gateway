@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/onflow/flow-go/fvm/evm/emulator"
 	"github.com/onflow/go-ethereum/common"
 	"github.com/onflow/go-ethereum/core/tracing"
 	"github.com/onflow/go-ethereum/core/types"
@@ -17,11 +18,14 @@ const (
 	TracerName   = "callTracer"
 )
 
-func DefaultCallTracer() (*tracers.Tracer, error) {
+func DefaultCallTracer(evmChainID *big.Int) (*tracers.Tracer, error) {
+	evmChainConfig := emulator.MakeChainConfig(evmChainID)
+
 	tracer, err := tracers.DefaultDirectory.New(
 		TracerName,
 		&tracers.Context{},
 		json.RawMessage(TracerConfig),
+		evmChainConfig,
 	)
 	if err != nil {
 		return nil, err
@@ -40,15 +44,16 @@ type CallTracerCollector struct {
 	tracer        *tracers.Tracer
 	resultsByTxID map[common.Hash]json.RawMessage
 	logger        zerolog.Logger
+	evmChainID    *big.Int
 }
 
 var _ EVMTracer = (*CallTracerCollector)(nil)
 
-func NewCallTracerCollector(logger zerolog.Logger) (
+func NewCallTracerCollector(evmChainID *big.Int, logger zerolog.Logger) (
 	*CallTracerCollector,
 	error,
 ) {
-	tracer, err := DefaultCallTracer()
+	tracer, err := DefaultCallTracer(evmChainID)
 	if err != nil {
 		return nil, err
 	}
@@ -57,6 +62,7 @@ func NewCallTracerCollector(logger zerolog.Logger) (
 		tracer:        tracer,
 		resultsByTxID: make(map[common.Hash]json.RawMessage),
 		logger:        logger.With().Str("component", "evm-tracer").Logger(),
+		evmChainID:    evmChainID,
 	}, nil
 }
 
@@ -66,7 +72,7 @@ func (t *CallTracerCollector) TxTracer() *tracers.Tracer {
 
 func (t *CallTracerCollector) ResetTracer() error {
 	var err error
-	t.tracer, err = DefaultCallTracer()
+	t.tracer, err = DefaultCallTracer(t.evmChainID)
 	return err
 }
 

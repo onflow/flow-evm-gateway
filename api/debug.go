@@ -4,15 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/big"
 	"strings"
 
 	"github.com/goccy/go-json"
+	"github.com/onflow/flow-go/fvm/evm/emulator"
 	"github.com/onflow/flow-go/fvm/evm/offchain/query"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	gethCommon "github.com/onflow/go-ethereum/common"
+	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/onflow/go-ethereum/eth/tracers"
 	"github.com/onflow/go-ethereum/eth/tracers/logger"
+	gethParams "github.com/onflow/go-ethereum/params"
 	"github.com/onflow/go-ethereum/rpc"
 	"github.com/rs/zerolog"
 
@@ -43,15 +45,16 @@ type txTraceResult struct {
 }
 
 type DebugAPI struct {
-	registerStore *pebble.RegisterStorage
-	logger        zerolog.Logger
-	tracer        storage.TraceIndexer
-	blocks        storage.BlockIndexer
-	transactions  storage.TransactionIndexer
-	receipts      storage.ReceiptIndexer
-	client        *requester.CrossSporkClient
-	config        config.Config
-	rateLimiter   RateLimiter
+	registerStore  *pebble.RegisterStorage
+	logger         zerolog.Logger
+	tracer         storage.TraceIndexer
+	blocks         storage.BlockIndexer
+	transactions   storage.TransactionIndexer
+	receipts       storage.ReceiptIndexer
+	client         *requester.CrossSporkClient
+	config         config.Config
+	rateLimiter    RateLimiter
+	evmChainConfig *gethParams.ChainConfig
 }
 
 func NewDebugAPI(
@@ -65,16 +68,19 @@ func NewDebugAPI(
 	logger zerolog.Logger,
 	rateLimiter RateLimiter,
 ) *DebugAPI {
+	evmChainConfig := emulator.MakeChainConfig(config.EVMNetworkID)
+
 	return &DebugAPI{
-		registerStore: registerStore,
-		logger:        logger,
-		tracer:        tracer,
-		blocks:        blocks,
-		transactions:  transactions,
-		receipts:      receipts,
-		client:        client,
-		config:        config,
-		rateLimiter:   rateLimiter,
+		registerStore:  registerStore,
+		logger:         logger,
+		tracer:         tracer,
+		blocks:         blocks,
+		transactions:   transactions,
+		receipts:       receipts,
+		client:         client,
+		config:         config,
+		rateLimiter:    rateLimiter,
+		evmChainConfig: evmChainConfig,
 	}
 }
 
@@ -135,10 +141,7 @@ func (d *DebugAPI) TraceCall(
 		return nil, err
 	}
 
-	tx, err := encodeTxFromArgs(args)
-	if err != nil {
-		return nil, err
-	}
+	tx := args.ToTransaction(gethTypes.LegacyTxType, BlockGasLimit)
 
 	// Default address in case user does not provide one
 	from := d.config.Coinbase
@@ -150,7 +153,7 @@ func (d *DebugAPI) TraceCall(
 		config = &tracers.TraceCallConfig{}
 	}
 
-	tracer, err := tracerForReceipt(&config.TraceConfig, nil)
+	tracer, err := d.tracerForReceipt(&config.TraceConfig, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -180,8 +183,8 @@ func (d *DebugAPI) TraceCall(
 		blocksProvider = blocksProvider.WithBlockOverrides(&ethTypes.BlockOverrides{
 			Number:   config.BlockOverrides.Number,
 			Time:     config.BlockOverrides.Time,
-			Coinbase: config.BlockOverrides.Coinbase,
-			Random:   config.BlockOverrides.Random,
+			Coinbase: config.BlockOverrides.FeeRecipient,
+			Random:   config.BlockOverrides.PrevRandao,
 		})
 	}
 	viewProvider := query.NewViewProvider(
@@ -198,8 +201,8 @@ func (d *DebugAPI) TraceCall(
 	}
 
 	to := gethCommon.Address{}
-	if tx.To != nil {
-		to = *tx.To
+	if tx.To() != nil {
+		to = *tx.To()
 	}
 	rca := requester.NewRemoteCadenceArch(cdcHeight, d.client, d.config.FlowNetworkID)
 
@@ -218,27 +221,27 @@ func (d *DebugAPI) TraceCall(
 			}
 			// Override account balance.
 			if account.Balance != nil {
-				opts = append(opts, query.WithStateOverrideBalance(addr, (*big.Int)(*account.Balance)))
+				opts = append(opts, query.WithStateOverrideBalance(addr, account.Balance.ToInt()))
 			}
 			if account.State != nil && account.StateDiff != nil {
 				return nil, fmt.Errorf("account %s has both 'state' and 'stateDiff'", addr.Hex())
 			}
 			// Replace entire state if caller requires.
 			if account.State != nil {
-				opts = append(opts, query.WithStateOverrideState(addr, *account.State))
+				opts = append(opts, query.WithStateOverrideState(addr, account.State))
 			}
 			// Apply state diff into specified accounts.
 			if account.StateDiff != nil {
-				opts = append(opts, query.WithStateOverrideStateDiff(addr, *account.StateDiff))
+				opts = append(opts, query.WithStateOverrideStateDiff(addr, account.StateDiff))
 			}
 		}
 	}
 	_, err = view.DryCall(
 		from,
 		to,
-		tx.Data,
-		tx.Value,
-		tx.Gas,
+		tx.Data(),
+		tx.Value(),
+		tx.Gas(),
 		opts...,
 	)
 	if err != nil {
@@ -312,7 +315,7 @@ func (d *DebugAPI) traceTransaction(
 		return nil, err
 	}
 
-	tracer, err := tracerForReceipt(config, receipt)
+	tracer, err := d.tracerForReceipt(config, receipt)
 	if err != nil {
 		return nil, err
 	}
@@ -356,7 +359,11 @@ func (d *DebugAPI) traceBlockByNumber(
 	number rpc.BlockNumber,
 	config *tracers.TraceConfig,
 ) ([]*txTraceResult, error) {
-	block, err := d.blocks.GetByHeight(uint64(number.Int64()))
+	height, err := resolveBlockNumber(number, d.blocks)
+	if err != nil {
+		return nil, err
+	}
+	block, err := d.blocks.GetByHeight(height)
 	if err != nil {
 		return nil, err
 	}
@@ -396,7 +403,7 @@ func (d *DebugAPI) traceBlockByNumber(
 			return nil, err
 		}
 
-		tracer, err := tracerForReceipt(config, receipt)
+		tracer, err := d.tracerForReceipt(config, receipt)
 		if err != nil {
 			return nil, err
 		}
@@ -436,7 +443,7 @@ func (d *DebugAPI) executorAtBlock(block *models.Block) (*evm.BlockExecutor, err
 	), nil
 }
 
-func tracerForReceipt(
+func (d *DebugAPI) tracerForReceipt(
 	config *tracers.TraceConfig,
 	receipt *models.Receipt,
 ) (*tracers.Tracer, error) {
@@ -464,7 +471,12 @@ func tracerForReceipt(
 		}
 	}
 
-	return tracers.DefaultDirectory.New(*config.Tracer, tracerCtx, config.TracerConfig)
+	return tracers.DefaultDirectory.New(
+		*config.Tracer,
+		tracerCtx,
+		config.TracerConfig,
+		d.evmChainConfig,
+	)
 }
 
 func isDefaultCallTracer(config *tracers.TraceConfig) bool {

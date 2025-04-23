@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/holiman/uint256"
 	"github.com/onflow/flow-evm-gateway/models"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
 
 	"github.com/onflow/go-ethereum/common"
 	"github.com/onflow/go-ethereum/common/hexutil"
 	"github.com/onflow/go-ethereum/core/types"
+	"github.com/onflow/go-ethereum/crypto/kzg4844"
 )
 
 // TransactionArgs represents the arguments to construct a new transaction
@@ -35,6 +37,18 @@ type TransactionArgs struct {
 	// Introduced by AccessListTxType transaction.
 	AccessList *types.AccessList `json:"accessList,omitempty"`
 	ChainID    *hexutil.Big      `json:"chainId,omitempty"`
+
+	// For BlobTxType
+	BlobFeeCap *hexutil.Big  `json:"maxFeePerBlobGas"`
+	BlobHashes []common.Hash `json:"blobVersionedHashes,omitempty"`
+
+	// For BlobTxType transactions with blob sidecar
+	Blobs       []kzg4844.Blob       `json:"blobs"`
+	Commitments []kzg4844.Commitment `json:"commitments"`
+	Proofs      []kzg4844.Proof      `json:"proofs"`
+
+	// For SetCodeTxType
+	AuthorizationList []types.SetCodeAuthorization `json:"authorizationList"`
 }
 
 func (txArgs TransactionArgs) Validate() error {
@@ -81,6 +95,145 @@ func (txArgs TransactionArgs) Validate() error {
 		if bytes.Equal(to.Address().Bytes(), common.Address{}.Bytes()) {
 			return errs.NewInvalidTransactionError(errors.New("transaction recipient is the zero address"))
 		}
+	}
+
+	return nil
+}
+
+// ToTransaction converts the arguments to a transaction.
+func (txArgs TransactionArgs) ToTransaction(
+	defaultType int,
+	defaultGas uint64,
+) *types.Transaction {
+	nonce := uint64(0)
+	if txArgs.Nonce != nil {
+		nonce = uint64(*txArgs.Nonce)
+	}
+
+	if txArgs.Gas == nil {
+		gas := hexutil.Uint64(defaultGas)
+		txArgs.Gas = &gas
+	}
+
+	usedType := types.LegacyTxType
+	switch {
+	case txArgs.AuthorizationList != nil || defaultType == types.SetCodeTxType:
+		usedType = types.SetCodeTxType
+	case txArgs.BlobHashes != nil || defaultType == types.BlobTxType:
+		usedType = types.BlobTxType
+	case txArgs.MaxFeePerGas != nil || defaultType == types.DynamicFeeTxType:
+		usedType = types.DynamicFeeTxType
+	case txArgs.AccessList != nil || defaultType == types.AccessListTxType:
+		usedType = types.AccessListTxType
+	}
+	// Make it possible to default to newer tx, but use legacy if gasprice is provided
+	if txArgs.GasPrice != nil {
+		usedType = types.LegacyTxType
+	}
+	var data types.TxData
+	switch usedType {
+	case types.SetCodeTxType:
+		al := types.AccessList{}
+		if txArgs.AccessList != nil {
+			al = *txArgs.AccessList
+		}
+		authList := []types.SetCodeAuthorization{}
+		if txArgs.AuthorizationList != nil {
+			authList = txArgs.AuthorizationList
+		}
+		data = &types.SetCodeTx{
+			To:         *txArgs.To,
+			ChainID:    uint256.MustFromBig(txArgs.ChainID.ToInt()),
+			Nonce:      nonce,
+			Gas:        uint64(*txArgs.Gas),
+			GasFeeCap:  uint256.MustFromBig((*big.Int)(txArgs.MaxFeePerGas)),
+			GasTipCap:  uint256.MustFromBig((*big.Int)(txArgs.MaxPriorityFeePerGas)),
+			Value:      uint256.MustFromBig((*big.Int)(txArgs.Value)),
+			Data:       txArgs.data(),
+			AccessList: al,
+			AuthList:   authList,
+		}
+
+	case types.BlobTxType:
+		al := types.AccessList{}
+		if txArgs.AccessList != nil {
+			al = *txArgs.AccessList
+		}
+		data = &types.BlobTx{
+			To:         *txArgs.To,
+			ChainID:    uint256.MustFromBig((*big.Int)(txArgs.ChainID)),
+			Nonce:      nonce,
+			Gas:        uint64(*txArgs.Gas),
+			GasFeeCap:  uint256.MustFromBig((*big.Int)(txArgs.MaxFeePerGas)),
+			GasTipCap:  uint256.MustFromBig((*big.Int)(txArgs.MaxPriorityFeePerGas)),
+			Value:      uint256.MustFromBig((*big.Int)(txArgs.Value)),
+			Data:       txArgs.data(),
+			AccessList: al,
+			BlobHashes: txArgs.BlobHashes,
+			BlobFeeCap: uint256.MustFromBig((*big.Int)(txArgs.BlobFeeCap)),
+		}
+		if txArgs.Blobs != nil {
+			data.(*types.BlobTx).Sidecar = &types.BlobTxSidecar{
+				Blobs:       txArgs.Blobs,
+				Commitments: txArgs.Commitments,
+				Proofs:      txArgs.Proofs,
+			}
+		}
+
+	case types.DynamicFeeTxType:
+		al := types.AccessList{}
+		if txArgs.AccessList != nil {
+			al = *txArgs.AccessList
+		}
+		data = &types.DynamicFeeTx{
+			To:         txArgs.To,
+			ChainID:    (*big.Int)(txArgs.ChainID),
+			Nonce:      nonce,
+			Gas:        uint64(*txArgs.Gas),
+			GasFeeCap:  (*big.Int)(txArgs.MaxFeePerGas),
+			GasTipCap:  (*big.Int)(txArgs.MaxPriorityFeePerGas),
+			Value:      (*big.Int)(txArgs.Value),
+			Data:       txArgs.data(),
+			AccessList: al,
+		}
+
+	case types.AccessListTxType:
+		al := types.AccessList{}
+		if txArgs.AccessList != nil {
+			al = *txArgs.AccessList
+		}
+		data = &types.AccessListTx{
+			To:         txArgs.To,
+			ChainID:    (*big.Int)(txArgs.ChainID),
+			Nonce:      nonce,
+			Gas:        uint64(*txArgs.Gas),
+			GasPrice:   (*big.Int)(txArgs.GasPrice),
+			Value:      (*big.Int)(txArgs.Value),
+			Data:       txArgs.data(),
+			AccessList: al,
+		}
+
+	default:
+		data = &types.LegacyTx{
+			To:       txArgs.To,
+			Nonce:    nonce,
+			Gas:      uint64(*txArgs.Gas),
+			GasPrice: (*big.Int)(txArgs.GasPrice),
+			Value:    (*big.Int)(txArgs.Value),
+			Data:     txArgs.data(),
+		}
+	}
+
+	return types.NewTx(data)
+}
+
+// data retrieves the transaction calldata. Input field is preferred.
+func (txArgs *TransactionArgs) data() []byte {
+	if txArgs.Input != nil {
+		return *txArgs.Input
+	}
+	if txArgs.Data != nil {
+		return *txArgs.Data
 	}
 
 	return nil

@@ -30,7 +30,7 @@ it('should retrieve transaction traces', async () => {
     let txTrace = response.body.result
     assert.equal(txTrace.gas, 1130512)
     assert.equal(txTrace.failed, false)
-    assert.isNotNull(txTrace.returnValue)
+    assert.lengthOf(txTrace.returnValue, 9806n)
     assert.deepEqual(
         txTrace.structLogs[0],
         {
@@ -186,7 +186,7 @@ it('should retrieve transaction traces', async () => {
     assert.equal(txTraces[0].txHash, '0x59a48269f0f57fdbfe53fed4a27d95deee3d12aad62b40d22562ad2270732c8d')
     assert.equal(txTraces[0].result.gas, 28223)
     assert.equal(txTraces[0].result.failed, false)
-    assert.equal(txTraces[0].result.returnValue, '')
+    assert.equal(txTraces[0].result.returnValue, '0x')
     assert.deepEqual(
         txTraces[0].result.structLogs[0],
         { pc: 0, op: 'PUSH1', gas: 7366, gasCost: 3, depth: 1, stack: [] }
@@ -195,7 +195,7 @@ it('should retrieve transaction traces', async () => {
     assert.equal(txTraces[1].txHash, '0x828d174e7fbdd7de2224f0204953356d9ccd5b1783780e27340a745a96d6e9e4')
     assert.equal(txTraces[1].result.gas, 21000)
     assert.equal(txTraces[1].result.failed, false)
-    assert.equal(txTraces[1].result.returnValue, '')
+    assert.equal(txTraces[1].result.returnValue, '0x')
     assert.deepEqual(txTraces[1].result.structLogs, [])
 
     response = await helpers.callRPCMethod(
@@ -261,7 +261,7 @@ it('should retrieve transaction traces', async () => {
     assert.equal(txTraces[0].txHash, '0x59a48269f0f57fdbfe53fed4a27d95deee3d12aad62b40d22562ad2270732c8d')
     assert.equal(txTraces[0].result.gas, 28223)
     assert.equal(txTraces[0].result.failed, false)
-    assert.equal(txTraces[0].result.returnValue, '')
+    assert.equal(txTraces[0].result.returnValue, '0x')
     assert.deepEqual(
         txTraces[0].result.structLogs[0],
         { pc: 0, op: 'PUSH1', gas: 7366, gasCost: 3, depth: 1, stack: [] }
@@ -270,7 +270,7 @@ it('should retrieve transaction traces', async () => {
     assert.equal(txTraces[1].txHash, '0x828d174e7fbdd7de2224f0204953356d9ccd5b1783780e27340a745a96d6e9e4')
     assert.equal(txTraces[1].result.gas, 21000)
     assert.equal(txTraces[1].result.failed, false)
-    assert.equal(txTraces[1].result.returnValue, '')
+    assert.equal(txTraces[1].result.returnValue, '0x')
     assert.deepEqual(txTraces[1].result.structLogs, [])
 
     response = await helpers.callRPCMethod(
@@ -355,7 +355,7 @@ it('should retrieve transaction traces', async () => {
         txTrace,
         {
             from: conf.eoa.address.toLowerCase(),
-            gas: '0xb50d',
+            gas: '0xb56b',
             gasUsed: '0x6147',
             to: contractAddress.toLowerCase(),
             input: '0xc550f90f',
@@ -363,7 +363,7 @@ it('should retrieve transaction traces', async () => {
             calls: [
                 {
                     from: contractAddress.toLowerCase(),
-                    gas: '0x54e1',
+                    gas: '0x553d',
                     gasUsed: '0x2',
                     to: '0x0000000000000000000000010000000000000001',
                     input: '0x53e87d66',
@@ -409,7 +409,7 @@ it('should retrieve call traces', async () => {
     let updateTrace = response.body.result
     assert.equal(updateTrace.gas, 28235)
     assert.equal(updateTrace.failed, false)
-    assert.equal(updateTrace.returnValue, '')
+    assert.equal(updateTrace.returnValue, '0x')
     assert.deepEqual(
         updateTrace.structLogs[0],
         { pc: 0, op: 'PUSH1', gas: 17099, gasCost: 3, depth: 1, stack: [] }
@@ -685,7 +685,7 @@ it('should retrieve call traces', async () => {
         {
             from: conf.eoa.address.toLowerCase(),
             gas: '0xcdd4',
-            gasUsed: '0xb38f',
+            gasUsed: '0xb3ed',
             to: contractAddress.toLowerCase(),
             input: '0xc550f90f',
             output: '0x0000000000000000000000000000000000000000000000000000000000000007',
@@ -693,7 +693,7 @@ it('should retrieve call traces', async () => {
                 {
                     from: contractAddress.toLowerCase(),
                     gas: '0x6d44',
-                    gasUsed: '0x524a',
+                    gasUsed: '0x52a8',
                     to: '0x0000000000000000000000010000000000000001',
                     input: '0x53e87d66',
                     output: '0x0000000000000000000000000000000000000000000000000000000000000007',
