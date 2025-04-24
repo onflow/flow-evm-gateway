@@ -10,7 +10,6 @@ import (
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 	flowGo "github.com/onflow/flow-go/model/flow"
 	gethCommon "github.com/onflow/go-ethereum/common"
-	"github.com/onflow/go-ethereum/eth/tracers"
 )
 
 type blockSnapshot struct {
@@ -38,7 +37,7 @@ func (bs *blockSnapshot) BlockContext() (evmTypes.BlockContext, error) {
 			return blockHash
 		},
 		bs.block.PrevRandao,
-		bs.tracer,
+		nil, // Set by the sync.ReplayBlockExecution method
 	)
 	if err != nil {
 		return evmTypes.BlockContext{}, err
@@ -59,7 +58,6 @@ func (bs *blockSnapshot) BlockContext() (evmTypes.BlockContext, error) {
 type BlocksProvider struct {
 	blocks      storage.BlockIndexer
 	chainID     flowGo.ChainID
-	tracer      *tracers.Tracer
 	latestBlock *models.Block
 }
 
@@ -68,12 +66,10 @@ var _ evmTypes.BlockSnapshotProvider = (*BlocksProvider)(nil)
 func NewBlocksProvider(
 	blocks storage.BlockIndexer,
 	chainID flowGo.ChainID,
-	tracer *tracers.Tracer,
 ) *BlocksProvider {
 	return &BlocksProvider{
 		blocks:  blocks,
 		chainID: chainID,
-		tracer:  tracer,
 	}
 }
 

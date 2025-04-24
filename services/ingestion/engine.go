@@ -236,13 +236,19 @@ func (e *Engine) indexEvents(events *models.CadenceEvents, batch *pebbleDB.Batch
 		return err
 	}
 
+	traceCollector := e.replayerConfig.CallTracerCollector
+	txTracer, err := traceCollector.TxTracer(events.Block().Height)
+	if err != nil {
+		return err
+	}
+
 	replayer := sync.NewReplayer(
 		e.replayerConfig.ChainID,
 		e.replayerConfig.RootAddr,
 		e.registerStore,
 		e.blocksProvider,
 		e.log,
-		e.replayerConfig.CallTracerCollector.TxTracer(),
+		txTracer,
 		e.replayerConfig.ValidateResults,
 	)
 
@@ -293,7 +299,6 @@ func (e *Engine) indexEvents(events *models.CadenceEvents, batch *pebbleDB.Batch
 		return fmt.Errorf("failed to index receipts for block %d event: %w", events.Block().Height, err)
 	}
 
-	traceCollector := e.replayerConfig.CallTracerCollector
 	for _, tx := range events.Transactions() {
 		txHash := tx.Hash()
 		traceResult, err := traceCollector.Collect(txHash)
