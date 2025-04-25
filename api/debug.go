@@ -153,17 +153,17 @@ func (d *DebugAPI) TraceCall(
 		return nil, err
 	}
 
-	tracer, err := d.tracerForReceipt(&config.TraceConfig, height, nil)
+	block, err := d.blocks.GetByHeight(height)
+	if err != nil {
+		return nil, err
+	}
+
+	tracer, err := d.tracerForReceipt(&config.TraceConfig, block.Timestamp, nil)
 	if err != nil {
 		return nil, err
 	}
 
 	cdcHeight, err := d.blocks.GetCadenceHeight(height)
-	if err != nil {
-		return nil, err
-	}
-
-	block, err := d.blocks.GetByHeight(height)
 	if err != nil {
 		return nil, err
 	}
@@ -310,7 +310,7 @@ func (d *DebugAPI) traceTransaction(
 		return nil, err
 	}
 
-	tracer, err := d.tracerForReceipt(config, block.Height, receipt)
+	tracer, err := d.tracerForReceipt(config, block.Timestamp, receipt)
 	if err != nil {
 		return nil, err
 	}
@@ -398,7 +398,7 @@ func (d *DebugAPI) traceBlockByNumber(
 			return nil, err
 		}
 
-		tracer, err := d.tracerForReceipt(config, height, receipt)
+		tracer, err := d.tracerForReceipt(config, block.Timestamp, receipt)
 		if err != nil {
 			return nil, err
 		}
@@ -440,7 +440,7 @@ func (d *DebugAPI) executorAtBlock(block *models.Block) (*evm.BlockExecutor, err
 
 func (d *DebugAPI) tracerForReceipt(
 	traceConfig *tracers.TraceConfig,
-	evmHeight uint64,
+	evmBlockTimestamp uint64,
 	receipt *models.Receipt,
 ) (*tracers.Tracer, error) {
 	if traceConfig == nil {
@@ -468,7 +468,7 @@ func (d *DebugAPI) tracerForReceipt(
 	}
 
 	evmChainConfig := emulator.MakeChainConfig(d.config.EVMNetworkID)
-	if !config.IsPrague(evmHeight, d.config.FlowNetworkID) {
+	if !config.IsPrague(evmBlockTimestamp, d.config.FlowNetworkID) {
 		evmChainConfig.PragueTime = nil
 	}
 

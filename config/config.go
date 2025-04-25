@@ -9,6 +9,7 @@ import (
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/crypto"
 	flowGoKMS "github.com/onflow/flow-go-sdk/crypto/cloudkms"
+	"github.com/onflow/flow-go/fvm/evm/emulator"
 	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/onflow/go-ethereum/common"
 	"github.com/rs/zerolog"
@@ -23,17 +24,7 @@ const EmulatorInitCadenceHeight = uint64(0)
 // We don't use 0 as it has a special meaning to represent latest block in the AN API context.
 const LiveNetworkInitCadenceHeight = uint64(1)
 
-// TODO: Update with the actual value, when Prague is deployed
-// on testnet. The first EVM block with Prague deployed, is
-// the proper value to set for this constant.
-const testnetPragueHeightActivation = uint64(0)
-
-// TODO: Update with the actual value, when Prague is deployed
-// on mainnet. The first EVM block with Prague deployed, is
-// the proper value to set for this constant.
-const mainnetPragueHeightActivation = uint64(0)
-
-// IsPrague determines if the Prague hard-fork is active for a given EVM block height
+// IsPrague determines if the Prague hard-fork is active for a given EVM block timestamp
 // on the specified Flow network. The Prague hard-fork introduces several EVM features
 // including EIP-7702 and other Pectra updates.
 //
@@ -41,12 +32,12 @@ const mainnetPragueHeightActivation = uint64(0)
 //   - true if the block height is at or after the Prague activation height for the network
 //   - false if the block height is before the Prague activation height
 //   - true for networks other than testnet/mainnet (development, emulator, etc.)
-func IsPrague(evmHeight uint64, chainID flowGo.ChainID) bool {
+func IsPrague(blockTimestamp uint64, chainID flowGo.ChainID) bool {
 	switch chainID {
 	case flowGo.Testnet:
-		return evmHeight >= testnetPragueHeightActivation
+		return blockTimestamp >= emulator.TestnetPragueActivation
 	case flowGo.Mainnet:
-		return evmHeight >= mainnetPragueHeightActivation
+		return blockTimestamp >= emulator.MainnetPragueActivation
 	default:
 		return true // Prague is always enabled for development/emulator environments
 	}

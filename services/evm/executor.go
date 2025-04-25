@@ -143,7 +143,7 @@ func (s *BlockExecutor) blockContext(
 		return types.BlockContext{}, err
 	}
 
-	ctx.IsPrague = config.IsPrague(s.block.Height, s.chainID)
+	ctx.IsPrague = config.IsPrague(s.block.Timestamp, s.chainID)
 	ctx.TxCountSoFar = s.txIndex
 	ctx.TotalGasUsedSoFar = s.gasUsed
 

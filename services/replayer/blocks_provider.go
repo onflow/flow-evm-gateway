@@ -43,7 +43,7 @@ func (bs *blockSnapshot) BlockContext() (evmTypes.BlockContext, error) {
 		return evmTypes.BlockContext{}, err
 	}
 
-	blockContext.IsPrague = config.IsPrague(bs.block.Height, bs.chainID)
+	blockContext.IsPrague = config.IsPrague(bs.block.Timestamp, bs.chainID)
 
 	return blockContext, nil
 }

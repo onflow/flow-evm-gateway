@@ -237,7 +237,7 @@ func (e *Engine) indexEvents(events *models.CadenceEvents, batch *pebbleDB.Batch
 	}
 
 	traceCollector := e.replayerConfig.CallTracerCollector
-	txTracer, err := traceCollector.TxTracer(events.Block().Height)
+	txTracer, err := traceCollector.TxTracer(events.Block().Timestamp)
 	if err != nil {
 		return err
 	}
