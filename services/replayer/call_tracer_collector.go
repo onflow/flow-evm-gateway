@@ -19,9 +19,12 @@ const (
 	TracerName   = "callTracer"
 )
 
-func DefaultCallTracer(evmHeight uint64, cfg config.Config) (*tracers.Tracer, error) {
+func DefaultCallTracer(evmBlockTimestamp uint64, cfg config.Config) (
+	*tracers.Tracer,
+	error,
+) {
 	evmChainConfig := emulator.MakeChainConfig(cfg.EVMNetworkID)
-	if !config.IsPrague(evmHeight, cfg.FlowNetworkID) {
+	if !config.IsPrague(evmBlockTimestamp, cfg.FlowNetworkID) {
 		evmChainConfig.PragueTime = nil
 	}
 
@@ -45,11 +48,11 @@ type EVMTracer interface {
 }
 
 type CallTracerCollector struct {
-	tracer        *tracers.Tracer
-	resultsByTxID map[common.Hash]json.RawMessage
-	config        config.Config
-	logger        zerolog.Logger
-	lastEvmHeight uint64
+	tracer            *tracers.Tracer
+	resultsByTxID     map[common.Hash]json.RawMessage
+	config            config.Config
+	logger            zerolog.Logger
+	evmBlockTimestamp uint64
 }
 
 var _ EVMTracer = (*CallTracerCollector)(nil)
@@ -62,23 +65,23 @@ func NewCallTracerCollector(config config.Config, logger zerolog.Logger) *CallTr
 	}
 }
 
-func (t *CallTracerCollector) TxTracer(evmHeight uint64) (
+func (t *CallTracerCollector) TxTracer(evmBlockTimestamp uint64) (
 	*tracers.Tracer,
 	error,
 ) {
 	var err error
-	t.tracer, err = DefaultCallTracer(evmHeight, t.config)
+	t.tracer, err = DefaultCallTracer(evmBlockTimestamp, t.config)
 	if err != nil {
 		return nil, err
 	}
-	t.lastEvmHeight = evmHeight
+	t.evmBlockTimestamp = evmBlockTimestamp
 
 	return NewSafeTxTracer(t), nil
 }
 
 func (t *CallTracerCollector) ResetTracer() error {
 	var err error
-	t.tracer, err = DefaultCallTracer(t.lastEvmHeight, t.config)
+	t.tracer, err = DefaultCallTracer(t.evmBlockTimestamp, t.config)
 	return err
 }
 
