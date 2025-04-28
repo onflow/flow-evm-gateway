@@ -3,13 +3,13 @@ package replayer
 import (
 	"fmt"
 
-	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-go/fvm/evm/offchain/blocks"
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 	flowGo "github.com/onflow/flow-go/model/flow"
 	gethCommon "github.com/onflow/go-ethereum/common"
+	"github.com/onflow/go-ethereum/eth/tracers"
 )
 
 type blockSnapshot struct {
@@ -20,7 +20,7 @@ type blockSnapshot struct {
 var _ evmTypes.BlockSnapshot = (*blockSnapshot)(nil)
 
 func (bs *blockSnapshot) BlockContext() (evmTypes.BlockContext, error) {
-	blockContext, err := blocks.NewBlockContext(
+	return blocks.NewBlockContext(
 		bs.chainID,
 		bs.block.Height,
 		bs.block.Timestamp,
@@ -37,15 +37,8 @@ func (bs *blockSnapshot) BlockContext() (evmTypes.BlockContext, error) {
 			return blockHash
 		},
 		bs.block.PrevRandao,
-		nil, // Set by the sync.ReplayBlockExecution method
+		bs.tracer,
 	)
-	if err != nil {
-		return evmTypes.BlockContext{}, err
-	}
-
-	blockContext.IsPrague = config.IsPrague(bs.block.Timestamp, bs.chainID)
-
-	return blockContext, nil
 }
 
 // This BlocksProvider implementation is used in the EVM events ingestion pipeline.
@@ -58,6 +51,7 @@ func (bs *blockSnapshot) BlockContext() (evmTypes.BlockContext, error) {
 type BlocksProvider struct {
 	blocks      storage.BlockIndexer
 	chainID     flowGo.ChainID
+	tracer      *tracers.Tracer
 	latestBlock *models.Block
 }
 
@@ -66,10 +60,12 @@ var _ evmTypes.BlockSnapshotProvider = (*BlocksProvider)(nil)
 func NewBlocksProvider(
 	blocks storage.BlockIndexer,
 	chainID flowGo.ChainID,
+	tracer *tracers.Tracer,
 ) *BlocksProvider {
 	return &BlocksProvider{
 		blocks:  blocks,
 		chainID: chainID,
+		tracer:  tracer,
 	}
 }
 

@@ -5,15 +5,18 @@ import (
 
 	pebble2 "github.com/cockroachdb/pebble"
 
+	"github.com/goccy/go-json"
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/mocks"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
 	"github.com/onflow/flow-go-sdk"
+	"github.com/onflow/flow-go/fvm/evm/emulator"
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/onflow/go-ethereum/common"
+	"github.com/onflow/go-ethereum/eth/tracers"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -28,7 +31,7 @@ func TestOnBlockReceived(t *testing.T) {
 	t.Run("without latest block", func(t *testing.T) {
 		_, blocks := setupBlocksDB(t)
 
-		blocksProvider := NewBlocksProvider(blocks, flowGo.Emulator)
+		blocksProvider := NewBlocksProvider(blocks, flowGo.Emulator, nil)
 
 		block := mocks.NewBlock(1)
 		err := blocksProvider.OnBlockReceived(block)
@@ -37,7 +40,7 @@ func TestOnBlockReceived(t *testing.T) {
 
 	t.Run("with new block non-sequential to latest block", func(t *testing.T) {
 		_, blocks := setupBlocksDB(t)
-		blocksProvider := NewBlocksProvider(blocks, flowGo.Emulator)
+		blocksProvider := NewBlocksProvider(blocks, flowGo.Emulator, nil)
 
 		block1 := mocks.NewBlock(1)
 		err := blocksProvider.OnBlockReceived(block1)
@@ -55,7 +58,7 @@ func TestOnBlockReceived(t *testing.T) {
 
 	t.Run("with new block non-sequential to latest block", func(t *testing.T) {
 		_, blocks := setupBlocksDB(t)
-		blocksProvider := NewBlocksProvider(blocks, flowGo.Emulator)
+		blocksProvider := NewBlocksProvider(blocks, flowGo.Emulator, nil)
 
 		block1 := mocks.NewBlock(10)
 		err := blocksProvider.OnBlockReceived(block1)
@@ -71,7 +74,8 @@ func TestBlockContext(t *testing.T) {
 
 	t.Run("for latest block", func(t *testing.T) {
 		_, blocks := setupBlocksDB(t)
-		blocksProvider := NewBlocksProvider(blocks, flowGo.Emulator)
+		tracer := newCallTracer(t)
+		blocksProvider := NewBlocksProvider(blocks, flowGo.Emulator, tracer)
 
 		block := mocks.NewBlock(1)
 		err := blocksProvider.OnBlockReceived(block)
@@ -92,6 +96,7 @@ func TestBlockContext(t *testing.T) {
 		blockHash := blockContext.GetHashFunc(block.Height)
 		assert.Equal(t, common.Hash{}, blockHash)
 		assert.Equal(t, block.PrevRandao, blockContext.Random)
+		assert.Equal(t, tracer, blockContext.Tracer)
 	})
 }
 
@@ -118,7 +123,8 @@ func TestGetHashFunc(t *testing.T) {
 	}
 
 	t.Run("with requested height >= latest block height", func(t *testing.T) {
-		blocksProvider := NewBlocksProvider(blocks, flowGo.Emulator)
+		tracer := newCallTracer(t)
+		blocksProvider := NewBlocksProvider(blocks, flowGo.Emulator, tracer)
 
 		latestBlock := blockMapping[200]
 		err := blocksProvider.OnBlockReceived(latestBlock)
@@ -140,7 +146,8 @@ func TestGetHashFunc(t *testing.T) {
 	})
 
 	t.Run("with requested height within 256 block height range", func(t *testing.T) {
-		blocksProvider := NewBlocksProvider(blocks, flowGo.Emulator)
+		tracer := newCallTracer(t)
+		blocksProvider := NewBlocksProvider(blocks, flowGo.Emulator, tracer)
 
 		latestBlock := blockMapping[257]
 		err := blocksProvider.OnBlockReceived(latestBlock)
@@ -161,7 +168,8 @@ func TestGetHashFunc(t *testing.T) {
 	})
 
 	t.Run("with requested height outside the 256 block height range", func(t *testing.T) {
-		blocksProvider := NewBlocksProvider(blocks, flowGo.Emulator)
+		tracer := newCallTracer(t)
+		blocksProvider := NewBlocksProvider(blocks, flowGo.Emulator, tracer)
 
 		latestBlock := blockMapping[260]
 		err := blocksProvider.OnBlockReceived(latestBlock)
@@ -179,7 +187,8 @@ func TestGetHashFunc(t *testing.T) {
 	})
 
 	t.Run("with requested height missing from Blocks DB", func(t *testing.T) {
-		blocksProvider := NewBlocksProvider(blocks, flowGo.Emulator)
+		tracer := newCallTracer(t)
+		blocksProvider := NewBlocksProvider(blocks, flowGo.Emulator, tracer)
 
 		latestBlock := blockMapping[260]
 		err := blocksProvider.OnBlockReceived(latestBlock)
@@ -201,7 +210,8 @@ func TestGetSnapshotAt(t *testing.T) {
 
 	t.Run("for latest block", func(t *testing.T) {
 		_, blocks := setupBlocksDB(t)
-		blocksProvider := NewBlocksProvider(blocks, flowGo.Emulator)
+		tracer := newCallTracer(t)
+		blocksProvider := NewBlocksProvider(blocks, flowGo.Emulator, tracer)
 
 		block := mocks.NewBlock(1)
 		err := blocksProvider.OnBlockReceived(block)
@@ -215,11 +225,13 @@ func TestGetSnapshotAt(t *testing.T) {
 		assert.Equal(t, block.Height, blockContext.BlockNumber)
 		assert.Equal(t, block.Timestamp, blockContext.BlockTimestamp)
 		assert.Equal(t, block.PrevRandao, blockContext.Random)
+		assert.Equal(t, tracer, blockContext.Tracer)
 	})
 
 	t.Run("for historic block", func(t *testing.T) {
 		db, blocks := setupBlocksDB(t)
-		blocksProvider := NewBlocksProvider(blocks, flowGo.Emulator)
+		tracer := newCallTracer(t)
+		blocksProvider := NewBlocksProvider(blocks, flowGo.Emulator, tracer)
 
 		block1 := mocks.NewBlock(1)
 		batch := db.NewBatch()
@@ -241,11 +253,13 @@ func TestGetSnapshotAt(t *testing.T) {
 		assert.Equal(t, block1.Height, blockContext.BlockNumber)
 		assert.Equal(t, block1.Timestamp, blockContext.BlockTimestamp)
 		assert.Equal(t, block1.PrevRandao, blockContext.Random)
+		assert.Equal(t, tracer, blockContext.Tracer)
 	})
 
 	t.Run("for missing historic block", func(t *testing.T) {
 		_, blocks := setupBlocksDB(t)
-		blocksProvider := NewBlocksProvider(blocks, flowGo.Emulator)
+		tracer := newCallTracer(t)
+		blocksProvider := NewBlocksProvider(blocks, flowGo.Emulator, tracer)
 
 		// `block1` is not stored on Blocks DB
 		block1 := mocks.NewBlock(1)
@@ -281,4 +295,16 @@ func setupBlocksDB(t *testing.T) (*pebble.Storage, storage.BlockIndexer) {
 	require.NoError(t, err)
 
 	return db, blocks
+}
+
+func newCallTracer(t *testing.T) *tracers.Tracer {
+	tracer, err := tracers.DefaultDirectory.New(
+		"callTracer",
+		&tracers.Context{},
+		json.RawMessage(`{ "onlyTopCall": true }`),
+		emulator.DefaultChainConfig,
+	)
+	require.NoError(t, err)
+
+	return tracer
 }

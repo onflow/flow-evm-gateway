@@ -1,7 +1,6 @@
 package requester
 
 import (
-	"github.com/onflow/flow-evm-gateway/config"
 	ethTypes "github.com/onflow/flow-evm-gateway/eth/types"
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/storage"
@@ -42,8 +41,6 @@ func (bs *blockSnapshot) BlockContext() (evmTypes.BlockContext, error) {
 	if err != nil {
 		return evmTypes.BlockContext{}, err
 	}
-
-	blockContext.IsPrague = config.IsPrague(bs.block.Timestamp, bs.chainID)
 
 	if bs.blockOverrides == nil {
 		return blockContext, nil

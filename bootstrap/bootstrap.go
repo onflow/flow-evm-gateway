@@ -162,13 +162,17 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 		nextCadenceHeight,
 	)
 
-	callTracerCollector := replayer.NewCallTracerCollector(
-		b.config,
+	callTracerCollector, err := replayer.NewCallTracerCollector(
+		b.config.EVMNetworkID,
 		b.logger,
 	)
+	if err != nil {
+		return err
+	}
 	blocksProvider := replayer.NewBlocksProvider(
 		b.storages.Blocks,
 		chainID,
+		callTracerCollector.TxTracer(),
 	)
 	replayerConfig := replayer.Config{
 		ChainID:             chainID,

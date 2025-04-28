@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-go/fvm/evm/emulator"
 	"github.com/onflow/go-ethereum/common"
 	"github.com/onflow/go-ethereum/core/tracing"
@@ -19,14 +18,8 @@ const (
 	TracerName   = "callTracer"
 )
 
-func DefaultCallTracer(evmBlockTimestamp uint64, cfg config.Config) (
-	*tracers.Tracer,
-	error,
-) {
-	evmChainConfig := emulator.MakeChainConfig(cfg.EVMNetworkID)
-	if !config.IsPrague(evmBlockTimestamp, cfg.FlowNetworkID) {
-		evmChainConfig.PragueTime = nil
-	}
+func DefaultCallTracer(evmChainID *big.Int) (*tracers.Tracer, error) {
+	evmChainConfig := emulator.MakeChainConfig(evmChainID)
 
 	tracer, err := tracers.DefaultDirectory.New(
 		TracerName,
@@ -42,46 +35,44 @@ func DefaultCallTracer(evmBlockTimestamp uint64, cfg config.Config) (
 }
 
 type EVMTracer interface {
-	TxTracer(evmHeight uint64) (*tracers.Tracer, error)
+	TxTracer() *tracers.Tracer
 	ResetTracer() error
 	Collect(txID common.Hash) (json.RawMessage, error)
 }
 
 type CallTracerCollector struct {
-	tracer            *tracers.Tracer
-	resultsByTxID     map[common.Hash]json.RawMessage
-	config            config.Config
-	logger            zerolog.Logger
-	evmBlockTimestamp uint64
+	tracer        *tracers.Tracer
+	resultsByTxID map[common.Hash]json.RawMessage
+	logger        zerolog.Logger
+	evmChainID    *big.Int
 }
 
 var _ EVMTracer = (*CallTracerCollector)(nil)
 
-func NewCallTracerCollector(config config.Config, logger zerolog.Logger) *CallTracerCollector {
-	return &CallTracerCollector{
-		resultsByTxID: make(map[common.Hash]json.RawMessage),
-		config:        config,
-		logger:        logger.With().Str("component", "evm-tracer").Logger(),
-	}
-}
-
-func (t *CallTracerCollector) TxTracer(evmBlockTimestamp uint64) (
-	*tracers.Tracer,
+func NewCallTracerCollector(evmChainID *big.Int, logger zerolog.Logger) (
+	*CallTracerCollector,
 	error,
 ) {
-	var err error
-	t.tracer, err = DefaultCallTracer(evmBlockTimestamp, t.config)
+	tracer, err := DefaultCallTracer(evmChainID)
 	if err != nil {
 		return nil, err
 	}
-	t.evmBlockTimestamp = evmBlockTimestamp
 
-	return NewSafeTxTracer(t), nil
+	return &CallTracerCollector{
+		tracer:        tracer,
+		resultsByTxID: make(map[common.Hash]json.RawMessage),
+		logger:        logger.With().Str("component", "evm-tracer").Logger(),
+		evmChainID:    evmChainID,
+	}, nil
+}
+
+func (t *CallTracerCollector) TxTracer() *tracers.Tracer {
+	return NewSafeTxTracer(t)
 }
 
 func (t *CallTracerCollector) ResetTracer() error {
 	var err error
-	t.tracer, err = DefaultCallTracer(t.evmBlockTimestamp, t.config)
+	t.tracer, err = DefaultCallTracer(t.evmChainID)
 	return err
 }
 
@@ -216,8 +207,8 @@ var _ EVMTracer = (*nopTracer)(nil)
 
 type nopTracer struct{}
 
-func (n nopTracer) TxTracer(_ uint64) (*tracers.Tracer, error) {
-	return nil, nil
+func (n nopTracer) TxTracer() *tracers.Tracer {
+	return nil
 }
 
 func (n nopTracer) Collect(_ common.Hash) (json.RawMessage, error) {

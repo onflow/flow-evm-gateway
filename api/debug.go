@@ -14,6 +14,7 @@ import (
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/onflow/go-ethereum/eth/tracers"
 	"github.com/onflow/go-ethereum/eth/tracers/logger"
+	gethParams "github.com/onflow/go-ethereum/params"
 	"github.com/onflow/go-ethereum/rpc"
 	"github.com/rs/zerolog"
 
@@ -44,15 +45,16 @@ type txTraceResult struct {
 }
 
 type DebugAPI struct {
-	registerStore *pebble.RegisterStorage
-	logger        zerolog.Logger
-	tracer        storage.TraceIndexer
-	blocks        storage.BlockIndexer
-	transactions  storage.TransactionIndexer
-	receipts      storage.ReceiptIndexer
-	client        *requester.CrossSporkClient
-	config        config.Config
-	rateLimiter   RateLimiter
+	registerStore  *pebble.RegisterStorage
+	logger         zerolog.Logger
+	tracer         storage.TraceIndexer
+	blocks         storage.BlockIndexer
+	transactions   storage.TransactionIndexer
+	receipts       storage.ReceiptIndexer
+	client         *requester.CrossSporkClient
+	config         config.Config
+	rateLimiter    RateLimiter
+	evmChainConfig *gethParams.ChainConfig
 }
 
 func NewDebugAPI(
@@ -66,16 +68,19 @@ func NewDebugAPI(
 	logger zerolog.Logger,
 	rateLimiter RateLimiter,
 ) *DebugAPI {
+	evmChainConfig := emulator.MakeChainConfig(config.EVMNetworkID)
+
 	return &DebugAPI{
-		registerStore: registerStore,
-		logger:        logger,
-		tracer:        tracer,
-		blocks:        blocks,
-		transactions:  transactions,
-		receipts:      receipts,
-		client:        client,
-		config:        config,
-		rateLimiter:   rateLimiter,
+		registerStore:  registerStore,
+		logger:         logger,
+		tracer:         tracer,
+		blocks:         blocks,
+		transactions:   transactions,
+		receipts:       receipts,
+		client:         client,
+		config:         config,
+		rateLimiter:    rateLimiter,
+		evmChainConfig: evmChainConfig,
 	}
 }
 
@@ -148,17 +153,17 @@ func (d *DebugAPI) TraceCall(
 		config = &tracers.TraceCallConfig{}
 	}
 
+	tracer, err := d.tracerForReceipt(&config.TraceConfig, nil)
+	if err != nil {
+		return nil, err
+	}
+
 	height, err := resolveBlockTag(&blockNrOrHash, d.blocks, d.logger)
 	if err != nil {
 		return nil, err
 	}
 
 	block, err := d.blocks.GetByHeight(height)
-	if err != nil {
-		return nil, err
-	}
-
-	tracer, err := d.tracerForReceipt(&config.TraceConfig, block.Timestamp, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -310,7 +315,7 @@ func (d *DebugAPI) traceTransaction(
 		return nil, err
 	}
 
-	tracer, err := d.tracerForReceipt(config, block.Timestamp, receipt)
+	tracer, err := d.tracerForReceipt(config, receipt)
 	if err != nil {
 		return nil, err
 	}
@@ -398,7 +403,7 @@ func (d *DebugAPI) traceBlockByNumber(
 			return nil, err
 		}
 
-		tracer, err := d.tracerForReceipt(config, block.Timestamp, receipt)
+		tracer, err := d.tracerForReceipt(config, receipt)
 		if err != nil {
 			return nil, err
 		}
@@ -439,17 +444,16 @@ func (d *DebugAPI) executorAtBlock(block *models.Block) (*evm.BlockExecutor, err
 }
 
 func (d *DebugAPI) tracerForReceipt(
-	traceConfig *tracers.TraceConfig,
-	evmBlockTimestamp uint64,
+	config *tracers.TraceConfig,
 	receipt *models.Receipt,
 ) (*tracers.Tracer, error) {
-	if traceConfig == nil {
-		traceConfig = &tracers.TraceConfig{}
+	if config == nil {
+		config = &tracers.TraceConfig{}
 	}
 
 	// Default tracer is the struct logger
-	if traceConfig.Tracer == nil {
-		logger := logger.NewStructLogger(traceConfig.Config)
+	if config.Tracer == nil {
+		logger := logger.NewStructLogger(config.Config)
 		return &tracers.Tracer{
 			Hooks:     logger.Hooks(),
 			GetResult: logger.GetResult,
@@ -467,16 +471,11 @@ func (d *DebugAPI) tracerForReceipt(
 		}
 	}
 
-	evmChainConfig := emulator.MakeChainConfig(d.config.EVMNetworkID)
-	if !config.IsPrague(evmBlockTimestamp, d.config.FlowNetworkID) {
-		evmChainConfig.PragueTime = nil
-	}
-
 	return tracers.DefaultDirectory.New(
-		*traceConfig.Tracer,
+		*config.Tracer,
 		tracerCtx,
-		traceConfig.TracerConfig,
-		evmChainConfig,
+		config.TracerConfig,
+		d.evmChainConfig,
 	)
 }
 

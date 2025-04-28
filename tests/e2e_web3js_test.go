@@ -5,9 +5,11 @@ import (
 	"encoding/hex"
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-emulator/emulator"
+	evmEmulator "github.com/onflow/flow-go/fvm/evm/emulator"
 	"github.com/onflow/flow-go/fvm/evm/testutils"
 	"github.com/onflow/go-ethereum/common"
 	"github.com/onflow/go-ethereum/crypto"
@@ -358,5 +360,16 @@ func TestWeb3_E2E(t *testing.T) {
 
 	t.Run("test EIP-7720 sending transactions", func(t *testing.T) {
 		runWeb3Test(t, "eth_eip_7702_sending_transactions_test")
+	})
+
+	t.Run("test pre-Pectra changes", func(t *testing.T) {
+		// set the Prague hard-fork activation to 24 hours from now
+		evmEmulator.PreviewnetPragueActivation = uint64(time.Now().Add(24 * time.Hour).Unix())
+		defer func() {
+			// set it back to its original value
+			evmEmulator.PreviewnetPragueActivation = uint64(0)
+		}()
+
+		runWeb3Test(t, "eth_pectra_upgrade_test")
 	})
 }
