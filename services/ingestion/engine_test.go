@@ -66,7 +66,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 
 		engine := NewEventIngestionEngine(
 			subscriber,
-			replayer.NewBlocksProvider(blocks, flowGo.Emulator),
+			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
 			store,
 			registerStore,
 			blocks,
@@ -145,7 +145,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 
 		engine := NewEventIngestionEngine(
 			subscriber,
-			replayer.NewBlocksProvider(blocks, flowGo.Emulator),
+			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
 			store,
 			registerStore,
 			blocks,
@@ -266,7 +266,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 
 		engine := NewEventIngestionEngine(
 			subscriber,
-			replayer.NewBlocksProvider(blocks, flowGo.Emulator),
+			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
 			store,
 			registerStore,
 			blocks,
@@ -374,7 +374,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 
 		engine := NewEventIngestionEngine(
 			subscriber,
-			replayer.NewBlocksProvider(blocks, flowGo.Emulator),
+			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
 			store,
 			registerStore,
 			blocks,
@@ -468,7 +468,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 
 		engine := NewEventIngestionEngine(
 			subscriber,
-			replayer.NewBlocksProvider(blocks, flowGo.Emulator),
+			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
 			store,
 			registerStore,
 			blocks,
