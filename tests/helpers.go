@@ -165,6 +165,7 @@ func servicesSetup(t *testing.T) (emulator.Emulator, func()) {
 		COAAddress:        *coaAddress,
 		COAKey:            privateKey,
 		GasPrice:          new(big.Int).SetUint64(150),
+		EnforceGasPrice:   true,
 		LogLevel:          zerolog.DebugLevel,
 		LogWriter:         testLogWriter(),
 		RateLimit:         500,
