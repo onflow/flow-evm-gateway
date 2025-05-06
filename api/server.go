@@ -60,6 +60,9 @@ const (
 	shutdownTimeout      = 5 * time.Second
 	batchRequestLimit    = 50
 	batchResponseMaxSize = 10 * 1000 * 1000 // 10 MB
+	// setting this to 10 minutes, so it can handle lengthy
+	// requests for `debug_trace*` JSON-RPC endpoints
+	writeTimeout = 10 * time.Minute
 )
 
 func NewServer(
@@ -187,7 +190,7 @@ func (h *Server) Start() error {
 		CheckTimeouts(h.logger, &h.timeouts)
 		h.server.ReadTimeout = h.timeouts.ReadTimeout
 		h.server.ReadHeaderTimeout = h.timeouts.ReadHeaderTimeout
-		h.server.WriteTimeout = h.timeouts.WriteTimeout
+		h.server.WriteTimeout = writeTimeout
 		h.server.IdleTimeout = h.timeouts.IdleTimeout
 	}
 
