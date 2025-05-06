@@ -230,7 +230,7 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 		}
 	}
 
-	if tx.GasPrice().Cmp(e.config.GasPrice) < 0 {
+	if tx.GasPrice().Cmp(e.config.GasPrice) < 0 && e.config.EnforceGasPrice {
 		return common.Hash{}, errs.NewTxGasPriceTooLowError(e.config.GasPrice)
 	}
 

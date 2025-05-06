@@ -247,7 +247,6 @@ var (
 	cloudKMSKeyRingID,
 	walletKey,
 	txStateValidation string
-
 	initHeight,
 	forceStartHeight uint64
 
@@ -267,6 +266,7 @@ func init() {
 	Cmd.Flags().StringVar(&coinbase, "coinbase", "", "Coinbase address to use for fee collection")
 	Cmd.Flags().Uint64Var(&initHeight, "init-cadence-height", 0, "Define the Cadence block height at which to start the indexing, if starting on a new network this flag should not be used.")
 	Cmd.Flags().StringVar(&gas, "gas-price", "1", "Static gas price used for EVM transactions")
+	Cmd.Flags().BoolVar(&cfg.EnforceGasPrice, "enforce-gas-price", true, "Enable enforcing minimum gas price for EVM transactions. When true (default), transactions must specify a gas price greater than or equal to the configured gas price.")
 	Cmd.Flags().StringVar(&coa, "coa-address", "", "Flow address that holds COA account used for submitting transactions")
 	Cmd.Flags().StringVar(&key, "coa-key", "", "Private key value for the COA address used for submitting transactions")
 	Cmd.Flags().StringVar(&keyAlg, "coa-key-alg", "ECDSA_P256", "Private key algorithm for the COA private key, only effective if coa-key/coa-key-file is present. Available values (ECDSA_P256 / ECDSA_secp256k1 / BLS_BLS12_381), defaults to ECDSA_P256.")

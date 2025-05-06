@@ -233,6 +233,7 @@ The application can be configured using the following flags at runtime:
 | `coinbase`                     | `""`             | Coinbase address to use for fee collection                                                 |
 | `init-cadence-height`          | `0`              | Cadence block height to start indexing; avoid using on a new network                       |
 | `gas-price`                    | `1`              | Static gas price for EVM transactions                                                      |
+| `enforce-gas-price`            | `true`           | Enable enforcing minimum gas price for EVM transactions. When true (default), transactions must specify a gas price greater than or equal to the configured gas price. |
 | `coa-address`                  | `""`             | Flow address holding COA account for submitting transactions                               |
 | `coa-key`                      | `""`             | Private key for the COA address used for transactions                                      |
 | `coa-key-file`                 | `""`             | Path to a JSON file of COA keys for key-rotation (exclusive with `coa-key` flag)           |

@@ -71,6 +71,7 @@ func Test_ConcurrentTransactionSubmissionWithTxSeal(t *testing.T) {
 		COAAddress:        *createdAddr,
 		COAKey:            privateKey,
 		GasPrice:          new(big.Int).SetUint64(0),
+		EnforceGasPrice:   true,
 		LogLevel:          zerolog.DebugLevel,
 		LogWriter:         testLogWriter(),
 		TxStateValidation: config.TxSealValidation,
@@ -181,6 +182,7 @@ func Test_ConcurrentTransactionSubmissionWithLocalIndex(t *testing.T) {
 		COAAddress:        *createdAddr,
 		COAKey:            privateKey,
 		GasPrice:          new(big.Int).SetUint64(0),
+		EnforceGasPrice:   true,
 		LogLevel:          zerolog.DebugLevel,
 		LogWriter:         testLogWriter(),
 		TxStateValidation: config.LocalIndexValidation,
@@ -275,18 +277,19 @@ func Test_EthClientTest(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := config.Config{
-		DatabaseDir:    t.TempDir(),
-		AccessNodeHost: grpcHost,
-		RPCPort:        8545,
-		RPCHost:        "127.0.0.1",
-		FlowNetworkID:  "flow-emulator",
-		EVMNetworkID:   types.FlowEVMPreviewNetChainID,
-		Coinbase:       eoaTestAccount,
-		COAAddress:     *createdAddr,
-		COAKey:         privateKey,
-		GasPrice:       new(big.Int).SetUint64(150),
-		LogLevel:       zerolog.DebugLevel,
-		LogWriter:      testLogWriter(),
+		DatabaseDir:     t.TempDir(),
+		AccessNodeHost:  grpcHost,
+		RPCPort:         8545,
+		RPCHost:         "127.0.0.1",
+		FlowNetworkID:   "flow-emulator",
+		EVMNetworkID:    types.FlowEVMPreviewNetChainID,
+		Coinbase:        eoaTestAccount,
+		COAAddress:      *createdAddr,
+		COAKey:          privateKey,
+		GasPrice:        new(big.Int).SetUint64(150),
+		EnforceGasPrice: true,
+		LogLevel:        zerolog.DebugLevel,
+		LogWriter:       testLogWriter(),
 	}
 
 	ready := make(chan struct{})
@@ -371,18 +374,19 @@ func Test_CloudKMSConcurrentTransactionSubmission(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := config.Config{
-		DatabaseDir:    t.TempDir(),
-		AccessNodeHost: grpcHost,
-		RPCPort:        8545,
-		RPCHost:        "127.0.0.1",
-		FlowNetworkID:  "flow-emulator",
-		EVMNetworkID:   types.FlowEVMPreviewNetChainID,
-		Coinbase:       eoaTestAccount,
-		COAAddress:     *createdAddr,
-		COACloudKMSKey: &kmsKey,
-		GasPrice:       new(big.Int).SetUint64(0),
-		LogLevel:       zerolog.DebugLevel,
-		LogWriter:      testLogWriter(),
+		DatabaseDir:     t.TempDir(),
+		AccessNodeHost:  grpcHost,
+		RPCPort:         8545,
+		RPCHost:         "127.0.0.1",
+		FlowNetworkID:   "flow-emulator",
+		EVMNetworkID:    types.FlowEVMPreviewNetChainID,
+		Coinbase:        eoaTestAccount,
+		COAAddress:      *createdAddr,
+		COACloudKMSKey:  &kmsKey,
+		GasPrice:        new(big.Int).SetUint64(0),
+		EnforceGasPrice: true,
+		LogLevel:        zerolog.DebugLevel,
+		LogWriter:       testLogWriter(),
 	}
 
 	// todo change this test to use ingestion and emulator directly so we can completely remove
@@ -486,6 +490,7 @@ func Test_ForceStartHeightIdempotency(t *testing.T) {
 		COAAddress:        *createdAddr,
 		COAKey:            privateKey,
 		GasPrice:          new(big.Int).SetUint64(0),
+		EnforceGasPrice:   true,
 		LogLevel:          zerolog.DebugLevel,
 		LogWriter:         testLogWriter(),
 		TxStateValidation: config.LocalIndexValidation,

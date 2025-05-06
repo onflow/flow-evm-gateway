@@ -58,6 +58,8 @@ type Config struct {
 	COACloudKMSKey *flowGoKMS.Key
 	// GasPrice is a fixed gas price that will be used when submitting transactions.
 	GasPrice *big.Int
+	// EnforceGasPrice defines whether the minimum gas price should be enforced.
+	EnforceGasPrice bool
 	// InitCadenceHeight is used for initializing the database on a local emulator or a live network.
 	InitCadenceHeight uint64
 	// LogLevel defines how verbose the output log is
