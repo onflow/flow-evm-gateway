@@ -38,7 +38,7 @@ import (
 // txTraceResult is the result of a single transaction trace.
 type txTraceResult struct {
 	TxHash gethCommon.Hash `json:"txHash"`           // transaction hash
-	Result interface{}     `json:"result,omitempty"` // Trace results produced by the tracer
+	Result any             `json:"result,omitempty"` // Trace results produced by the tracer
 	Error  string          `json:"error,omitempty"`  // Trace failure produced by the tracer
 }
 
@@ -130,7 +130,7 @@ func (d *DebugAPI) TraceCall(
 	args ethTypes.TransactionArgs,
 	blockNrOrHash rpc.BlockNumberOrHash,
 	config *tracers.TraceCallConfig,
-) (interface{}, error) {
+) (any, error) {
 	if err := d.rateLimiter.Apply(ctx, "TraceCall"); err != nil {
 		return nil, err
 	}

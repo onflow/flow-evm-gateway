@@ -215,7 +215,7 @@ make docker-run
 ## Mainnet and Node Operations
 
 Guidance for EVM Gateway node operations including considerations for mainnet, hardware specs, monitoring setup and troubleshooting 
-can be found in the EVM Gateway [node operations docs](https://developers.flow.com/networks/node-ops/access-onchain-data/evm-gateway/evm-gateway-setup).
+can be found in the EVM Gateway [node operations docs](https://developers.flow.com/networks/node-ops/evm-gateway/evm-gateway-setup).
 
 ## Configuration Flags
 
@@ -225,7 +225,7 @@ The application can be configured using the following flags at runtime:
 |--------------------------------|------------------|--------------------------------------------------------------------------------------------|
 | `database-dir`                 | `./db`           | Path to the directory for the database                                                     |
 | `rpc-host`                     | `""`             | Host for the RPC API server                                                                |
-| `rpc-port`                     | `8545`           | Port for the RPC API server                                                                |
+| `rpc-port`                     | `8545`           | Port for the RPC API server (also same for Websockets)                                     |
 | `ws-enabled`                   | `false`          | Enable websocket connections                                                               |
 | `access-node-grpc-host`        | `localhost:3569` | Host to the flow access node gRPC API                                                      |
 | `access-node-spork-hosts`      | `""`             | Previous spork AN hosts, defined as a comma-separated list (e.g. `"host-1.com,host2.com"`) |
@@ -281,19 +281,20 @@ EVM Gateway has public RPC endpoints available for the following environments:
 | Currency Symbol | FLOW                                   |
 | Block Explorer  | https://evm.flowscan.io                |
 
+To connect using Websockets you can use the same DNS names as above but change `https://` with `wss://`, eg: `wss://testnet.evm.nodes.onflow.org`
 
 # JSON-RPC API
 The EVM Gateway implements APIs according to the Ethereum specification: https://ethereum.org/en/developers/docs/apis/json-rpc/#json-rpc-methods.
 
 **Additional APIs**
 - Tracing APIs allows you to fetch execution traces
-    * debug_traceTransaction
-    * debug_traceBlockByNumber
-    * debug_traceBlockByHash
-- debug_flowHeightByBlock - returns the flow block height for the given EVM block (id or height)
+    * `debug_traceTransaction`
+    * `debug_traceBlockByNumber`
+    * `debug_traceBlockByHash`
+- `debug_flowHeightByBlock` - returns the flow block height for the given EVM block (id or height)
 
 **Unsupported APIs**
-- Wallet APIs: we don't officially support wallet APIs (eth_accounts, eth_sign, eth_signTransaction, eth_sendTransaction) due to security
+- Wallet APIs: we don't officially support wallet APIs (`eth_accounts`, `eth_sign`, `eth_signTransaction`, `eth_sendTransaction`) due to security
   concerns that come with managing the keys on production environments, however, it is possible to configure the gateway to allow these
   methods for local development by using a special flag `--wallet-api-key`.
 - Proof API: we don't support obtaining proofs yet, Flow piggy-backs on the Flow consensus, and hence the Flow proofs can be used to verify
