@@ -19,6 +19,30 @@ it('should retrieve transaction traces', async () => {
     let receipt = await web3.eth.getTransactionReceipt(deployed.receipt.transactionHash)
     assert.equal(receipt.contractAddress, contractAddress)
 
+    let response = await helpers.callRPCMethod(
+        'debug_traceTransaction',
+        [receipt.transactionHash, { tracer: null }]
+    )
+    assert.equal(response.status, 200)
+    assert.isDefined(response.body.result)
+
+    // Assert proper response for `structLog`
+    let txTrace = response.body.result
+    assert.equal(txTrace.gas, 1130512)
+    assert.equal(txTrace.failed, false)
+    assert.isNotNull(txTrace.returnValue)
+    assert.deepEqual(
+        txTrace.structLogs[0],
+        {
+            pc: 0,
+            op: 'PUSH1',
+            gas: 1013648,
+            gasCost: 3,
+            depth: 1,
+            stack: []
+        }
+    )
+
     let callTracer = {
         tracer: 'callTracer',
         tracerConfig: {
@@ -34,7 +58,7 @@ it('should retrieve transaction traces', async () => {
     assert.isDefined(response.body.result)
 
     // Assert proper response for `callTracer`
-    let txTrace = response.body.result
+    txTrace = response.body.result
     assert.equal(txTrace.from, '0xfacf71692421039876a5bb4f10ef7a439d8ef61e')
     assert.equal(txTrace.gas, '0x1167ac')
     assert.equal(txTrace.gasUsed, '0x114010')
@@ -152,12 +176,36 @@ it('should retrieve transaction traces', async () => {
 
     response = await helpers.callRPCMethod(
         'debug_traceBlockByNumber',
+        [web3.utils.toHex(receipt.blockNumber), { tracer: null }]
+    )
+    assert.equal(response.status, 200)
+    assert.isDefined(response.body.result)
+
+    // Assert proper response for `structLog`
+    let txTraces = response.body.result
+    assert.equal(txTraces[0].txHash, '0x59a48269f0f57fdbfe53fed4a27d95deee3d12aad62b40d22562ad2270732c8d')
+    assert.equal(txTraces[0].result.gas, 28223)
+    assert.equal(txTraces[0].result.failed, false)
+    assert.equal(txTraces[0].result.returnValue, '')
+    assert.deepEqual(
+        txTraces[0].result.structLogs[0],
+        { pc: 0, op: 'PUSH1', gas: 7366, gasCost: 3, depth: 1, stack: [] }
+    )
+
+    assert.equal(txTraces[1].txHash, '0x828d174e7fbdd7de2224f0204953356d9ccd5b1783780e27340a745a96d6e9e4')
+    assert.equal(txTraces[1].result.gas, 21000)
+    assert.equal(txTraces[1].result.failed, false)
+    assert.equal(txTraces[1].result.returnValue, '')
+    assert.deepEqual(txTraces[1].result.structLogs, [])
+
+    response = await helpers.callRPCMethod(
+        'debug_traceBlockByNumber',
         [web3.utils.toHex(receipt.blockNumber), callTracer]
     )
     assert.equal(response.status, 200)
     assert.isDefined(response.body.result)
 
-    let txTraces = response.body.result
+    txTraces = response.body.result
     assert.lengthOf(txTraces, 2) // the 2nd tx trace is from the transfer of fees to coinbase
     assert.deepEqual(
         txTraces,
@@ -200,6 +248,30 @@ it('should retrieve transaction traces', async () => {
             }
         ]
     )
+
+    response = await helpers.callRPCMethod(
+        'debug_traceBlockByHash',
+        [web3.utils.toHex(receipt.blockHash), { tracer: null }]
+    )
+    assert.equal(response.status, 200)
+    assert.isDefined(response.body.result)
+
+    // Assert proper response for `structLog`
+    txTraces = response.body.result
+    assert.equal(txTraces[0].txHash, '0x59a48269f0f57fdbfe53fed4a27d95deee3d12aad62b40d22562ad2270732c8d')
+    assert.equal(txTraces[0].result.gas, 28223)
+    assert.equal(txTraces[0].result.failed, false)
+    assert.equal(txTraces[0].result.returnValue, '')
+    assert.deepEqual(
+        txTraces[0].result.structLogs[0],
+        { pc: 0, op: 'PUSH1', gas: 7366, gasCost: 3, depth: 1, stack: [] }
+    )
+
+    assert.equal(txTraces[1].txHash, '0x828d174e7fbdd7de2224f0204953356d9ccd5b1783780e27340a745a96d6e9e4')
+    assert.equal(txTraces[1].result.gas, 21000)
+    assert.equal(txTraces[1].result.failed, false)
+    assert.equal(txTraces[1].result.returnValue, '')
+    assert.deepEqual(txTraces[1].result.structLogs, [])
 
     response = await helpers.callRPCMethod(
         'debug_traceBlockByHash',
@@ -326,6 +398,34 @@ it('should retrieve call traces', async () => {
         gasPrice: web3.utils.toHex(conf.minGasPrice),
         gas: '0x95ab'
     }
+
+    let response = await helpers.callRPCMethod(
+        'debug_traceCall',
+        [traceCall, 'latest', { tracer: null }]
+    )
+    assert.equal(response.status, 200)
+    assert.isDefined(response.body)
+
+    let updateTrace = response.body.result
+    assert.equal(updateTrace.gas, 28235)
+    assert.equal(updateTrace.failed, false)
+    assert.equal(updateTrace.returnValue, '')
+    assert.deepEqual(
+        updateTrace.structLogs[0],
+        { pc: 0, op: 'PUSH1', gas: 17099, gasCost: 3, depth: 1, stack: [] }
+    )
+    assert.deepEqual(
+        updateTrace.structLogs[1],
+        {
+            pc: 2,
+            op: 'PUSH1',
+            gas: 17096,
+            gasCost: 3,
+            depth: 1,
+            stack: ['0x80']
+        }
+    )
+
     response = await helpers.callRPCMethod(
         'debug_traceCall',
         [traceCall, 'latest', callTracer]
@@ -333,7 +433,7 @@ it('should retrieve call traces', async () => {
     assert.equal(response.status, 200)
     assert.isDefined(response.body)
 
-    let updateTrace = response.body.result
+    updateTrace = response.body.result
     assert.equal(updateTrace.from, '0xfacf71692421039876a5bb4f10ef7a439d8ef61e')
     assert.equal(updateTrace.gas, '0x95ab')
     assert.equal(updateTrace.gasUsed, '0x6e4b')
