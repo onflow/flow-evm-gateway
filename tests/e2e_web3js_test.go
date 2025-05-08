@@ -5,9 +5,11 @@ import (
 	"encoding/hex"
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-emulator/emulator"
+	evmEmulator "github.com/onflow/flow-go/fvm/evm/emulator"
 	"github.com/onflow/flow-go/fvm/evm/testutils"
 	"github.com/onflow/go-ethereum/common"
 	"github.com/onflow/go-ethereum/crypto"
@@ -195,8 +197,8 @@ func TestWeb3_E2E(t *testing.T) {
 			payloads[0] = deployPayload
 			contractAddress := common.HexToAddress("99a64c993965f8d69f985b5171bc20065cc32fab")
 			// contract call transactions, these emit logs/events
-			for i := 1; i <= 5; i++ {
-				callData := storageContract.MakeCallData(t, "sum", big.NewInt(10), big.NewInt(20))
+			for i := int64(1); i <= 5; i++ {
+				callData := storageContract.MakeCallData(t, "sum", big.NewInt(i*10), big.NewInt(i*20))
 				callPayload, _, err := evmSign(big.NewInt(0), 55_000, accountKey, nonce, &contractAddress, callData)
 				require.NoError(t, err)
 				payloads[i] = callPayload
@@ -350,5 +352,24 @@ func TestWeb3_E2E(t *testing.T) {
 
 	t.Run("streaming of entities and subscription with filters", func(t *testing.T) {
 		runWeb3Test(t, "eth_streaming_filters_test")
+	})
+
+	t.Run("test EIP-7720 contract writes", func(t *testing.T) {
+		runWeb3Test(t, "eth_eip_7702_contract_write_test")
+	})
+
+	t.Run("test EIP-7720 sending transactions", func(t *testing.T) {
+		runWeb3Test(t, "eth_eip_7702_sending_transactions_test")
+	})
+
+	t.Run("test pre-Pectra changes", func(t *testing.T) {
+		// set the Prague hard-fork activation to 24 hours from now
+		evmEmulator.PreviewnetPragueActivation = uint64(time.Now().Add(24 * time.Hour).Unix())
+		defer func() {
+			// set it back to its original value
+			evmEmulator.PreviewnetPragueActivation = uint64(0)
+		}()
+
+		runWeb3Test(t, "eth_pectra_upgrade_test")
 	})
 }

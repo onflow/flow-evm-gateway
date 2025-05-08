@@ -186,7 +186,10 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 		)
 	}
 
-	callTracerCollector, err := replayer.NewCallTracerCollector(b.logger)
+	callTracerCollector, err := replayer.NewCallTracerCollector(
+		b.config.EVMNetworkID,
+		b.logger,
+	)
 	if err != nil {
 		return err
 	}
