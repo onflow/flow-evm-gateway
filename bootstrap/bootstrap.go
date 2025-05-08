@@ -608,15 +608,10 @@ func setupStorage(
 			return nil, nil, fmt.Errorf("failed to set latest cadence height: %w", err)
 		}
 
-		verifiedHeight, err := eventsHash.ProcessedSealedHeight()
-		if err != nil && !errors.Is(err, errs.ErrStorageNotInitialized) {
-			return nil, nil, fmt.Errorf("failed to get latest verified sealed height: %w", err)
+		if err := eventsHash.SetProcessedSealedHeight(config.ForceStartCadenceHeight); err != nil {
+			return nil, nil, fmt.Errorf("failed to set latest verified sealed height: %w", err)
 		}
-		if verifiedHeight > config.ForceStartCadenceHeight {
-			if err := eventsHash.SetProcessedSealedHeight(config.ForceStartCadenceHeight); err != nil {
-				return nil, nil, fmt.Errorf("failed to set latest verified sealed height: %w", err)
-			}
-		}
+		logger.Fatal().Msgf("SetProcessedSealedHeight to %v", config.ForceStartCadenceHeight)
 	}
 
 	// if database is not initialized require init height
