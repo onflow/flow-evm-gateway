@@ -223,6 +223,9 @@ func parseConfigFromFlags() error {
 		return fmt.Errorf("unknown tx state validation: %s", txStateValidation)
 	}
 
+	cfg.ExperimentalSoftFinalityEnabled = experimentalSoftFinalityEnabled
+	cfg.ExperimentalSealingVerificationEnabled = experimentalSealingVerificationEnabled
+
 	return nil
 }
 
@@ -246,6 +249,9 @@ var (
 	txStateValidation string
 	initHeight,
 	forceStartHeight uint64
+
+	experimentalSoftFinalityEnabled,
+	experimentalSealingVerificationEnabled bool
 )
 
 func init() {
@@ -283,4 +289,6 @@ func init() {
 	Cmd.Flags().StringVar(&txStateValidation, "tx-state-validation", "tx-seal", "Sets the transaction validation mechanism. It can validate using the local state index, or wait for the outer Flow transaction to seal. Available values ('local-index' / 'tx-seal'), defaults to 'tx-seal'.")
 	Cmd.Flags().Uint64Var(&cfg.TxRequestLimit, "tx-request-limit", 0, "Number of transaction submissions to allow per the specified interval.")
 	Cmd.Flags().DurationVar(&cfg.TxRequestLimitDuration, "tx-request-limit-duration", time.Second*3, "Time interval upon which to enforce transaction submission rate limiting.")
+	Cmd.Flags().BoolVar(&experimentalSoftFinalityEnabled, "experimental-soft-finality-enabled", false, "Sets whether the gateway should use the experimental soft finality feature. WARNING: This may result in incorrect results being returned in certain circumstances. Use only if you know what you are doing.")
+	Cmd.Flags().BoolVar(&experimentalSealingVerificationEnabled, "experimental-sealing-verification-enabled", true, "Sets whether the gateway should use the experimental soft finality sealing verification feature. WARNING: This may result in indexing halts if events do not match. Use only if you know what you are doing.")
 }
