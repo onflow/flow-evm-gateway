@@ -66,20 +66,24 @@ func resolveBlockNumber(
 	//	FinalizedBlockNumber = BlockNumber(-3)
 	//	LatestBlockNumber    = BlockNumber(-2)
 	//	PendingBlockNumber   = BlockNumber(-1)
-	//
-	// EVM on Flow does not have these concepts, but the latest block is the closest fit
-	height := uint64(blockNumber)
-	var err error
-	if blockNumber == rpc.EarliestBlockNumber {
-		height = 0
-	} else if blockNumber <= rpc.PendingBlockNumber {
-		height, err = blocksDB.LatestEVMHeight()
+	switch blockNumber {
+	case rpc.EarliestBlockNumber:
+		// the earliest block is the genesis block, which has a block number of `0`
+		return 0, nil
+	case rpc.SafeBlockNumber,
+		rpc.FinalizedBlockNumber,
+		rpc.LatestBlockNumber,
+		rpc.PendingBlockNumber:
+		// EVM on Flow does not have these concepts,
+		// but the latest block is the closest fit
+		height, err := blocksDB.LatestEVMHeight()
 		if err != nil {
 			return 0, err
 		}
+		return height, nil
 	}
 
-	return height, nil
+	return uint64(blockNumber), nil
 }
 
 // decodeHash parses a hex-encoded 32-byte hash. The input may optionally
