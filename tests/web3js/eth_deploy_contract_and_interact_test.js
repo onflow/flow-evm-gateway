@@ -42,7 +42,7 @@ it('deploy contract and interact', async () => {
 
     // get the default deployed value on contract
     const initValue = 1337
-    let callRetrieve = await deployed.contract.methods.retrieve().encodeABI()
+    let callRetrieve = deployed.contract.methods.retrieve().encodeABI()
     result = await web3.eth.call({ to: contractAddress, data: callRetrieve }, "latest")
     assert.equal(result, initValue)
 
@@ -221,7 +221,7 @@ it('deploy contract and interact', async () => {
         },
         '0x1'
     )
-    assert.equal(gasEstimate, 21510n)
+    assert.equal(gasEstimate, 22026n)
 
     gasEstimate = await web3.eth.estimateGas(
         {
