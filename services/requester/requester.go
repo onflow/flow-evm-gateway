@@ -109,11 +109,8 @@ type EVM struct {
 	mux           sync.Mutex
 	keystore      *keystore.KeyStore
 
-	head              *types.Header
-	evmSigner         types.Signer
-	validationOptions *txpool.ValidationOptions
-	collector         metrics.Collector
-	rateLimiter       limiter.Store
+	collector   metrics.Collector
+	rateLimiter limiter.Store
 }
 
 func NewEVM(
@@ -153,6 +150,39 @@ func NewEVM(
 		}
 	}
 
+	rateLimiter, err := memorystore.New(
+		&memorystore.Config{
+			Tokens:   config.TxRequestLimit,
+			Interval: config.TxRequestLimitDuration,
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create TX rate limiter: %w", err)
+	}
+
+	return &EVM{
+		registerStore: registerStore,
+		client:        client,
+		config:        config,
+		logger:        logger,
+		blocks:        blocks,
+		txPool:        txPool,
+		collector:     collector,
+		keystore:      keystore,
+		rateLimiter:   rateLimiter,
+	}, nil
+}
+
+func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash, error) {
+	tx := &types.Transaction{}
+	if err := tx.UnmarshalBinary(data); err != nil {
+		return common.Hash{}, err
+	}
+
+	if tx.Gas() > txMaxGasLimit {
+		return common.Hash{}, errs.NewTxGasLimitTooHighError(txMaxGasLimit)
+	}
+
 	head := &types.Header{
 		Number:     big.NewInt(20_182_324),
 		Time:       uint64(time.Now().Unix()),
@@ -160,7 +190,7 @@ func NewEVM(
 		Difficulty: big.NewInt(0),
 	}
 	emulatorConfig := emulator.NewConfig(
-		emulator.WithChainID(config.EVMNetworkID),
+		emulator.WithChainID(e.config.EVMNetworkID),
 		emulator.WithBlockNumber(head.Number),
 		emulator.WithBlockTime(head.Time),
 	)
@@ -176,44 +206,7 @@ func NewEVM(
 		MaxSize: models.TxMaxSize,
 		MinTip:  new(big.Int),
 	}
-
-	rateLimiter, err := memorystore.New(
-		&memorystore.Config{
-			Tokens:   config.TxRequestLimit,
-			Interval: config.TxRequestLimitDuration,
-		},
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create TX rate limiter: %w", err)
-	}
-
-	return &EVM{
-		registerStore:     registerStore,
-		client:            client,
-		config:            config,
-		logger:            logger,
-		blocks:            blocks,
-		txPool:            txPool,
-		head:              head,
-		evmSigner:         evmSigner,
-		validationOptions: validationOptions,
-		collector:         collector,
-		keystore:          keystore,
-		rateLimiter:       rateLimiter,
-	}, nil
-}
-
-func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash, error) {
-	tx := &types.Transaction{}
-	if err := tx.UnmarshalBinary(data); err != nil {
-		return common.Hash{}, err
-	}
-
-	if tx.Gas() > txMaxGasLimit {
-		return common.Hash{}, errs.NewTxGasLimitTooHighError(txMaxGasLimit)
-	}
-
-	if err := models.ValidateTransaction(tx, e.head, e.evmSigner, e.validationOptions); err != nil {
+	if err := models.ValidateTransaction(tx, head, evmSigner, validationOptions); err != nil {
 		return common.Hash{}, err
 	}
 
