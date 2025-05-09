@@ -184,7 +184,15 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 	}
 
 	head := &types.Header{
-		Number:     big.NewInt(20_182_324),
+		// `Number` is only useful to detect hard-forks which were
+		// activated with block numbers. However, Ethereum now
+		// activates hard-forks with timestamps, so the `Number`
+		// field is not really necessary. Anyway, we set it to
+		// the latest finalized block on Ethereum mainnet.
+		Number: big.NewInt(22_446_370),
+		// The `Time` field is what's actually used for detecting
+		// whether we're in a certain hard-fork, and what kind of
+		// tx validations to run.
 		Time:       uint64(time.Now().Unix()),
 		GasLimit:   blockGasLimit,
 		Difficulty: big.NewInt(0),
