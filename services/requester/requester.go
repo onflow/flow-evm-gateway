@@ -109,11 +109,8 @@ type EVM struct {
 	mux           sync.Mutex
 	keystore      *keystore.KeyStore
 
-	head              *types.Header
-	evmSigner         types.Signer
-	validationOptions *txpool.ValidationOptions
-	collector         metrics.Collector
-	rateLimiter       limiter.Store
+	collector   metrics.Collector
+	rateLimiter limiter.Store
 }
 
 func NewEVM(
@@ -153,14 +150,55 @@ func NewEVM(
 		}
 	}
 
+	rateLimiter, err := memorystore.New(
+		&memorystore.Config{
+			Tokens:   config.TxRequestLimit,
+			Interval: config.TxRequestLimitDuration,
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create TX rate limiter: %w", err)
+	}
+
+	return &EVM{
+		registerStore: registerStore,
+		client:        client,
+		config:        config,
+		logger:        logger,
+		blocks:        blocks,
+		txPool:        txPool,
+		collector:     collector,
+		keystore:      keystore,
+		rateLimiter:   rateLimiter,
+	}, nil
+}
+
+func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash, error) {
+	tx := &types.Transaction{}
+	if err := tx.UnmarshalBinary(data); err != nil {
+		return common.Hash{}, err
+	}
+
+	if tx.Gas() > txMaxGasLimit {
+		return common.Hash{}, errs.NewTxGasLimitTooHighError(txMaxGasLimit)
+	}
+
 	head := &types.Header{
-		Number:     big.NewInt(20_182_324),
+		// `Number` is only useful to detect hard-forks which were
+		// activated with block numbers. However, Ethereum now
+		// activates hard-forks with timestamps, so the `Number`
+		// field is not really necessary. Anyway, we set it to
+		// the latest finalized block on Ethereum mainnet.
+		Number: big.NewInt(22_446_370),
+		// The `Time` field is what's actually used for detecting
+		// whether we're in a certain hard-fork, and what kind of
+		// tx validations to run.
 		Time:       uint64(time.Now().Unix()),
 		GasLimit:   blockGasLimit,
 		Difficulty: big.NewInt(0),
 	}
 	emulatorConfig := emulator.NewConfig(
-		emulator.WithChainID(config.EVMNetworkID),
+		emulator.WithChainID(e.config.EVMNetworkID),
 		emulator.WithBlockNumber(head.Number),
 		emulator.WithBlockTime(head.Time),
 	)
@@ -176,44 +214,7 @@ func NewEVM(
 		MaxSize: models.TxMaxSize,
 		MinTip:  new(big.Int),
 	}
-
-	rateLimiter, err := memorystore.New(
-		&memorystore.Config{
-			Tokens:   config.TxRequestLimit,
-			Interval: config.TxRequestLimitDuration,
-		},
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create TX rate limiter: %w", err)
-	}
-
-	return &EVM{
-		registerStore:     registerStore,
-		client:            client,
-		config:            config,
-		logger:            logger,
-		blocks:            blocks,
-		txPool:            txPool,
-		head:              head,
-		evmSigner:         evmSigner,
-		validationOptions: validationOptions,
-		collector:         collector,
-		keystore:          keystore,
-		rateLimiter:       rateLimiter,
-	}, nil
-}
-
-func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash, error) {
-	tx := &types.Transaction{}
-	if err := tx.UnmarshalBinary(data); err != nil {
-		return common.Hash{}, err
-	}
-
-	if tx.Gas() > txMaxGasLimit {
-		return common.Hash{}, errs.NewTxGasLimitTooHighError(txMaxGasLimit)
-	}
-
-	if err := models.ValidateTransaction(tx, e.head, e.evmSigner, e.validationOptions); err != nil {
+	if err := models.ValidateTransaction(tx, head, evmSigner, validationOptions); err != nil {
 		return common.Hash{}, err
 	}
 
