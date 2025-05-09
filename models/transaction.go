@@ -49,6 +49,7 @@ type Transaction interface {
 	BlobHashes() []common.Hash
 	Size() uint64
 	AccessList() gethTypes.AccessList
+	SetCodeAuthorizations() []gethTypes.SetCodeAuthorization
 	MarshalBinary() ([]byte, error)
 }
 
@@ -138,6 +139,10 @@ func (dc DirectCall) Size() uint64 {
 
 func (dc DirectCall) AccessList() gethTypes.AccessList {
 	return gethTypes.AccessList{}
+}
+
+func (dc DirectCall) SetCodeAuthorizations() []gethTypes.SetCodeAuthorization {
+	return []gethTypes.SetCodeAuthorization{}
 }
 
 func (dc DirectCall) MarshalBinary() ([]byte, error) {
