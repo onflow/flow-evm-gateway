@@ -57,11 +57,31 @@ it('should send transactions with relay account', async () => {
     })
 
     await new Promise((res) => setTimeout(() => res(), 1500))
-    let transaction = await publicClient.getTransactionReceipt({
+
+    let transaction = await publicClient.getTransaction({ hash: hash })
+    assert.equal(transaction.from, relay.address)
+    assert.equal(transaction.type, 'eip7702')
+    assert.equal(transaction.input, '0x8129fc1c')
+    assert.deepEqual(
+        transaction.authorizationList,
+        [
+            {
+                address: '0x313af46a48eeb56d200fae0edb741628255d379f',
+                chainId: 646,
+                nonce: 1,
+                r: '0xa79ca044cfc5754e1fcd7e0007755dc1a98894f40a2a60436fd007fe3e0298d1',
+                s: '0x2897829f726104b4175474d2100d6b11d7a26498debb1917d24fae324e91275c',
+                yParity: 0
+            }
+        ]
+    )
+
+    let txReceipt = await publicClient.getTransactionReceipt({
         hash: hash
     })
-    assert.equal(transaction.status, 'success')
-    assert.equal(transaction.type, 'eip7702')
+    assert.equal(txReceipt.from, relay.address)
+    assert.equal(txReceipt.status, 'success')
+    assert.equal(txReceipt.type, 'eip7702')
 
     hash = await walletClient.sendTransaction({
         data: encodeFunctionData({
@@ -72,11 +92,13 @@ it('should send transactions with relay account', async () => {
     })
 
     await new Promise((res) => setTimeout(() => res(), 1500))
-    transaction = await publicClient.getTransactionReceipt({
+
+    txReceipt = await publicClient.getTransactionReceipt({
         hash: hash
     })
-    assert.equal(transaction.status, 'success')
-    assert.equal(transaction.type, 'eip1559')
+    assert.equal(txReceipt.from, relay.address)
+    assert.equal(txReceipt.status, 'success')
+    assert.equal(txReceipt.type, 'eip1559')
 })
 
 it('should send self-executing transactions', async () => {
@@ -97,11 +119,31 @@ it('should send self-executing transactions', async () => {
     })
 
     await new Promise((res) => setTimeout(() => res(), 1500))
-    let transaction = await publicClient.getTransactionReceipt({
+
+    let transaction = await publicClient.getTransaction({ hash: hash })
+    assert.equal(transaction.from, relay.address)
+    assert.equal(transaction.type, 'eip7702')
+    assert.equal(transaction.input, '0x8129fc1c')
+    assert.deepEqual(
+        transaction.authorizationList,
+        [
+            {
+                address: '0x313af46a48eeb56d200fae0edb741628255d379f',
+                chainId: 646,
+                nonce: 4,
+                r: '0xf4bc19cca28390f3628cfcda9076a8744b77cc87fa4f7745efa83b7a06cc3514',
+                s: '0x1d736fecc68ee92ab6fd805d91a3e3dbf27097d3578561402d7105eeeee00bb7',
+                yParity: 0
+            }
+        ]
+    )
+
+    let txReceipt = await publicClient.getTransactionReceipt({
         hash: hash
     })
-    assert.equal(transaction.status, 'success')
-    assert.equal(transaction.type, 'eip7702')
+    assert.equal(txReceipt.from, relay.address)
+    assert.equal(txReceipt.status, 'success')
+    assert.equal(txReceipt.type, 'eip7702')
 
     hash = await walletClient.sendTransaction({
         data: encodeFunctionData({
@@ -112,9 +154,11 @@ it('should send self-executing transactions', async () => {
     })
 
     await new Promise((res) => setTimeout(() => res(), 1500))
-    transaction = await publicClient.getTransactionReceipt({
+
+    txReceipt = await publicClient.getTransactionReceipt({
         hash: hash
     })
-    assert.equal(transaction.status, 'success')
-    assert.equal(transaction.type, 'eip1559')
+    assert.equal(txReceipt.from, relay.address)
+    assert.equal(txReceipt.status, 'success')
+    assert.equal(txReceipt.type, 'eip1559')
 })
