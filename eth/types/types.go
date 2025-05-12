@@ -345,6 +345,7 @@ func NewTransaction(
 
 	v, r, s := tx.RawSignatureValues()
 
+	// These are the common fields through all the transaction types
 	result := &Transaction{
 		Type:     hexutil.Uint64(tx.Type()),
 		From:     from,
@@ -361,6 +362,29 @@ func NewTransaction(
 		ChainID:  (*hexutil.Big)(networkID),
 		size:     tx.Size(),
 	}
+
+	// After the Pectra hard-fork, the full list of supported tx types is:
+	// LegacyTxType     = 0x00
+	// AccessListTxType = 0x01
+	// DynamicFeeTxType = 0x02
+	// BlobTxType       = 0x03
+	// SetCodeTxType    = 0x04
+
+	// Each newly-added tx type, is backwards-compatible.
+	// It supports the fields of previous tx types and it
+	// introduces its own fields as well. By comparing
+	// with `if tx.Type() > SomeTxType`, we are
+	// able to save some duplicated lines of code, and
+	// incrementally apply the extra fields to their
+	// respective tx type. For example, when:
+	// `tx.Type()` is `DynamicFeeTxType`, the
+	// following conditions are true:
+	// `tx.Type() > LegacyTxType`
+	// `tx.Type() > AccessListTxType`
+	// but the rest are not.
+	// A `DynamicFeeTxType` supports the fields of
+	// `LegacyTxType` & `AccessListTxType`, but not
+	// the fields of `SetCodeTxType`.
 
 	if tx.Type() > types.LegacyTxType {
 		al := tx.AccessList()
@@ -382,6 +406,8 @@ func NewTransaction(
 		result.BlobVersionedHashes = tx.BlobHashes()
 	}
 
+	// The `AuthorizationList` field became available with the introduction
+	// of https://eip7702.io/#specification, under the `SetCodeTxType`
 	if tx.Type() > types.BlobTxType {
 		result.AuthorizationList = tx.SetCodeAuthorizations()
 	}
