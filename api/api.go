@@ -116,7 +116,7 @@ func NewBlockChainAPI(
 
 // BlockNumber returns the block number of the chain head.
 func (b *BlockChainAPI) BlockNumber(ctx context.Context) (hexutil.Uint64, error) {
-	if err := b.rateLimiter.Apply(ctx, "BlockNumber"); err != nil {
+	if err := b.rateLimiter.Apply(ctx, EthBlockNumber); err != nil {
 		return 0, err
 	}
 
@@ -135,7 +135,7 @@ func (b *BlockChainAPI) BlockNumber(ctx context.Context) (hexutil.Uint64, error)
 // - currentBlock:  block number this node is currently importing
 // - highestBlock:  block number of the highest block header this node has received from peers
 func (b *BlockChainAPI) Syncing(ctx context.Context) (interface{}, error) {
-	if err := b.rateLimiter.Apply(ctx, "Syncing"); err != nil {
+	if err := b.rateLimiter.Apply(ctx, EthSyncing); err != nil {
 		return nil, err
 	}
 
@@ -171,11 +171,11 @@ func (b *BlockChainAPI) SendRawTransaction(
 	}
 
 	l := b.logger.With().
-		Str("endpoint", "sendRawTransaction").
+		Str("endpoint", EthSendRawTransaction).
 		Str("input", input.String()).
 		Logger()
 
-	if err := b.rateLimiter.Apply(ctx, "SendRawTransaction"); err != nil {
+	if err := b.rateLimiter.Apply(ctx, EthSendRawTransaction); err != nil {
 		return common.Hash{}, err
 	}
 
@@ -196,11 +196,11 @@ func (b *BlockChainAPI) GetBalance(
 	blockNumberOrHash rpc.BlockNumberOrHash,
 ) (*hexutil.Big, error) {
 	l := b.logger.With().
-		Str("endpoint", "getBalance").
+		Str("endpoint", EthGetBalance).
 		Str("address", address.String()).
 		Logger()
 
-	if err := b.rateLimiter.Apply(ctx, "GetBalance"); err != nil {
+	if err := b.rateLimiter.Apply(ctx, EthGetBalance); err != nil {
 		return nil, err
 	}
 
@@ -223,11 +223,11 @@ func (b *BlockChainAPI) GetTransactionByHash(
 	hash common.Hash,
 ) (*ethTypes.Transaction, error) {
 	l := b.logger.With().
-		Str("endpoint", "getTransactionByHash").
+		Str("endpoint", EthGetTransactionByHash).
 		Str("hash", hash.String()).
 		Logger()
 
-	if err := b.rateLimiter.Apply(ctx, "GetTransactionByHash"); err != nil {
+	if err := b.rateLimiter.Apply(ctx, EthGetTransactionByHash); err != nil {
 		return nil, err
 	}
 
@@ -251,12 +251,12 @@ func (b *BlockChainAPI) GetTransactionByBlockHashAndIndex(
 	index hexutil.Uint,
 ) (*ethTypes.Transaction, error) {
 	l := b.logger.With().
-		Str("endpoint", "getTransactionByBlockHashAndIndex").
+		Str("endpoint", EthGetTransactionByBlockHashAndIndex).
 		Str("hash", blockHash.String()).
 		Str("index", index.String()).
 		Logger()
 
-	if err := b.rateLimiter.Apply(ctx, "GetTransactionByBlockHashAndIndex"); err != nil {
+	if err := b.rateLimiter.Apply(ctx, EthGetTransactionByBlockHashAndIndex); err != nil {
 		return nil, err
 	}
 
@@ -286,12 +286,12 @@ func (b *BlockChainAPI) GetTransactionByBlockNumberAndIndex(
 	index hexutil.Uint,
 ) (*ethTypes.Transaction, error) {
 	l := b.logger.With().
-		Str("endpoint", "getTransactionByBlockNumberAndIndex").
+		Str("endpoint", EthGetTransactionByBlockNumberAndIndex).
 		Str("number", blockNumber.String()).
 		Str("index", index.String()).
 		Logger()
 
-	if err := b.rateLimiter.Apply(ctx, "GetTransactionByBlockNumberAndIndex"); err != nil {
+	if err := b.rateLimiter.Apply(ctx, EthGetTransactionByBlockNumberAndIndex); err != nil {
 		return nil, err
 	}
 
@@ -324,11 +324,11 @@ func (b *BlockChainAPI) GetTransactionReceipt(
 	hash common.Hash,
 ) (map[string]interface{}, error) {
 	l := b.logger.With().
-		Str("endpoint", "getTransactionReceipt").
+		Str("endpoint", EthGetTransactionReceipt).
 		Str("hash", hash.String()).
 		Logger()
 
-	if err := b.rateLimiter.Apply(ctx, "GetTransactionReceipt"); err != nil {
+	if err := b.rateLimiter.Apply(ctx, EthGetTransactionReceipt); err != nil {
 		return nil, err
 	}
 
@@ -358,11 +358,11 @@ func (b *BlockChainAPI) GetBlockByHash(
 	fullTx bool,
 ) (*ethTypes.Block, error) {
 	l := b.logger.With().
-		Str("endpoint", "getBlockByHash").
+		Str("endpoint", EthGetBlockByHash).
 		Str("hash", hash.String()).
 		Logger()
 
-	if err := b.rateLimiter.Apply(ctx, "GetBlockByHash"); err != nil {
+	if err := b.rateLimiter.Apply(ctx, EthGetBlockByHash); err != nil {
 		return nil, err
 	}
 
@@ -393,11 +393,11 @@ func (b *BlockChainAPI) GetBlockByNumber(
 	fullTx bool,
 ) (*ethTypes.Block, error) {
 	l := b.logger.With().
-		Str("endpoint", "getBlockByNumber").
+		Str("endpoint", EthGetBlockByNumber).
 		Str("blockNumber", blockNumber.String()).
 		Logger()
 
-	if err := b.rateLimiter.Apply(ctx, "GetBlockByNumber"); err != nil {
+	if err := b.rateLimiter.Apply(ctx, EthGetBlockByNumber); err != nil {
 		return nil, err
 	}
 
@@ -426,11 +426,11 @@ func (b *BlockChainAPI) GetBlockReceipts(
 	blockNumberOrHash rpc.BlockNumberOrHash,
 ) ([]map[string]any, error) {
 	l := b.logger.With().
-		Str("endpoint", "getBlockReceipts").
+		Str("endpoint", EthGetBlockReceipts).
 		Str("hash", blockNumberOrHash.String()).
 		Logger()
 
-	if err := b.rateLimiter.Apply(ctx, "GetBlockReceipts"); err != nil {
+	if err := b.rateLimiter.Apply(ctx, EthGetBlockReceipts); err != nil {
 		return nil, err
 	}
 
@@ -472,11 +472,11 @@ func (b *BlockChainAPI) GetBlockTransactionCountByHash(
 	blockHash common.Hash,
 ) (*hexutil.Uint, error) {
 	l := b.logger.With().
-		Str("endpoint", "getBlockTransactionCountByHash").
+		Str("endpoint", EthGetBlockTransactionCountByHash).
 		Str("hash", blockHash.String()).
 		Logger()
 
-	if err := b.rateLimiter.Apply(ctx, "GetBlockTransactionCountByHash"); err != nil {
+	if err := b.rateLimiter.Apply(ctx, EthGetBlockTransactionCountByHash); err != nil {
 		return nil, err
 	}
 
@@ -496,11 +496,11 @@ func (b *BlockChainAPI) GetBlockTransactionCountByNumber(
 	blockNumber rpc.BlockNumber,
 ) (*hexutil.Uint, error) {
 	l := b.logger.With().
-		Str("endpoint", "getBlockTransactionCountByNumber").
+		Str("endpoint", EthGetBlockTransactionCountByNumber).
 		Str("number", blockNumber.String()).
 		Logger()
 
-	if err := b.rateLimiter.Apply(ctx, "GetBlockTransactionCountByNumber"); err != nil {
+	if err := b.rateLimiter.Apply(ctx, EthGetBlockTransactionCountByNumber); err != nil {
 		return nil, err
 	}
 
@@ -530,11 +530,11 @@ func (b *BlockChainAPI) Call(
 	blockOverrides *ethTypes.BlockOverrides,
 ) (hexutil.Bytes, error) {
 	l := b.logger.With().
-		Str("endpoint", "call").
+		Str("endpoint", EthCall).
 		Str("args", fmt.Sprintf("%v", args)).
 		Logger()
 
-	if err := b.rateLimiter.Apply(ctx, "Call"); err != nil {
+	if err := b.rateLimiter.Apply(ctx, EthCall); err != nil {
 		return nil, err
 	}
 
@@ -573,11 +573,11 @@ func (b *BlockChainAPI) GetLogs(
 	criteria filters.FilterCriteria,
 ) ([]*types.Log, error) {
 	l := b.logger.With().
-		Str("endpoint", "getLogs").
+		Str("endpoint", EthGetLogs).
 		Str("criteria", fmt.Sprintf("%v", criteria)).
 		Logger()
 
-	if err := b.rateLimiter.Apply(ctx, "GetLogs"); err != nil {
+	if err := b.rateLimiter.Apply(ctx, EthGetLogs); err != nil {
 		return nil, err
 	}
 
@@ -667,11 +667,11 @@ func (b *BlockChainAPI) GetTransactionCount(
 	blockNumberOrHash rpc.BlockNumberOrHash,
 ) (*hexutil.Uint64, error) {
 	l := b.logger.With().
-		Str("endpoint", "getTransactionCount").
+		Str("endpoint", EthGetTransactionCount).
 		Str("address", address.String()).
 		Logger()
 
-	if err := b.rateLimiter.Apply(ctx, "GetTransactionCount"); err != nil {
+	if err := b.rateLimiter.Apply(ctx, EthGetTransactionCount); err != nil {
 		return nil, err
 	}
 
@@ -700,11 +700,11 @@ func (b *BlockChainAPI) EstimateGas(
 	stateOverrides *ethTypes.StateOverride,
 ) (hexutil.Uint64, error) {
 	l := b.logger.With().
-		Str("endpoint", "estimateGas").
+		Str("endpoint", EthEstimateGas).
 		Str("args", fmt.Sprintf("%v", args)).
 		Logger()
 
-	if err := b.rateLimiter.Apply(ctx, "EstimateGas"); err != nil {
+	if err := b.rateLimiter.Apply(ctx, EthEstimateGas); err != nil {
 		return 0, err
 	}
 
@@ -744,11 +744,11 @@ func (b *BlockChainAPI) GetCode(
 	blockNumberOrHash rpc.BlockNumberOrHash,
 ) (hexutil.Bytes, error) {
 	l := b.logger.With().
-		Str("endpoint", "getCode").
+		Str("endpoint", EthGetCode).
 		Str("address", address.String()).
 		Logger()
 
-	if err := b.rateLimiter.Apply(ctx, "GetCode"); err != nil {
+	if err := b.rateLimiter.Apply(ctx, EthGetCode); err != nil {
 		return nil, err
 	}
 
@@ -781,7 +781,7 @@ func (b *BlockChainAPI) FeeHistory(
 	rewardPercentiles []float64,
 ) (*ethTypes.FeeHistoryResult, error) {
 	l := b.logger.With().
-		Str("endpoint", "feeHistory").
+		Str("endpoint", EthFeeHistory).
 		Str("block", lastBlock.String()).
 		Logger()
 
@@ -855,11 +855,11 @@ func (b *BlockChainAPI) GetStorageAt(
 	blockNumberOrHash rpc.BlockNumberOrHash,
 ) (hexutil.Bytes, error) {
 	l := b.logger.With().
-		Str("endpoint", "getStorageAt").
+		Str("endpoint", EthGetStorageAt).
 		Str("address", address.String()).
 		Logger()
 
-	if err := b.rateLimiter.Apply(ctx, "GetStorageAt"); err != nil {
+	if err := b.rateLimiter.Apply(ctx, EthGetStorageAt); err != nil {
 		return nil, err
 	}
 

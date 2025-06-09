@@ -169,7 +169,7 @@ func (api *PullAPI) NewPendingTransactionFilter(
 	ctx context.Context,
 	fullTx *bool,
 ) (rpc.ID, error) {
-	if err := api.rateLimiter.Apply(ctx, "NewPendingTransactionFilter"); err != nil {
+	if err := api.rateLimiter.Apply(ctx, EthNewPendingTransactionFilter); err != nil {
 		return "", err
 	}
 
@@ -197,7 +197,7 @@ func (api *PullAPI) NewPendingTransactionFilter(
 // NewBlockFilter creates a filter that fetches blocks that are imported into the chain.
 // It is part of the filter package since polling goes with eth_getFilterChanges.
 func (api *PullAPI) NewBlockFilter(ctx context.Context) (rpc.ID, error) {
-	if err := api.rateLimiter.Apply(ctx, "NewBlockFilter"); err != nil {
+	if err := api.rateLimiter.Apply(ctx, EthNewBlockFilter); err != nil {
 		return "", err
 	}
 
@@ -246,7 +246,7 @@ func (api *PullAPI) uninstallFilter(id rpc.ID) bool {
 //
 // In case "fromBlock" > "toBlock" an error is returned.
 func (api *PullAPI) NewFilter(ctx context.Context, criteria filters.FilterCriteria) (rpc.ID, error) {
-	if err := api.rateLimiter.Apply(ctx, "NewFilter"); err != nil {
+	if err := api.rateLimiter.Apply(ctx, EthNewFilter); err != nil {
 		return "", err
 	}
 
@@ -290,7 +290,7 @@ func (api *PullAPI) GetFilterLogs(
 	ctx context.Context,
 	id rpc.ID,
 ) ([]*gethTypes.Log, error) {
-	if err := api.rateLimiter.Apply(ctx, "GetFilterLogs"); err != nil {
+	if err := api.rateLimiter.Apply(ctx, EthGetFilterLogs); err != nil {
 		return nil, err
 	}
 
@@ -340,7 +340,7 @@ func (api *PullAPI) GetFilterLogs(
 // For pending transaction and block filters the result is []common.Hash.
 // (pending)Log filters return []Log.
 func (api *PullAPI) GetFilterChanges(ctx context.Context, id rpc.ID) (any, error) {
-	if err := api.rateLimiter.Apply(ctx, "GetFilterChanges"); err != nil {
+	if err := api.rateLimiter.Apply(ctx, EthGetFilterChanges); err != nil {
 		return nil, err
 	}
 
