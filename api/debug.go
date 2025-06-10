@@ -90,7 +90,7 @@ func (d *DebugAPI) TraceTransaction(
 	hash gethCommon.Hash,
 	config *tracers.TraceConfig,
 ) (json.RawMessage, error) {
-	if err := d.rateLimiter.Apply(ctx, "TraceTransaction"); err != nil {
+	if err := d.rateLimiter.Apply(ctx, DebugTraceTransaction); err != nil {
 		return nil, err
 	}
 
@@ -102,7 +102,7 @@ func (d *DebugAPI) TraceBlockByNumber(
 	number rpc.BlockNumber,
 	config *tracers.TraceConfig,
 ) ([]*txTraceResult, error) {
-	if err := d.rateLimiter.Apply(ctx, "TraceBlockByNumber"); err != nil {
+	if err := d.rateLimiter.Apply(ctx, DebugTraceBlockByNumber); err != nil {
 		return nil, err
 	}
 
@@ -119,7 +119,7 @@ func (d *DebugAPI) TraceBlockByHash(
 	hash gethCommon.Hash,
 	config *tracers.TraceConfig,
 ) ([]*txTraceResult, error) {
-	if err := d.rateLimiter.Apply(ctx, "TraceBlockByHash"); err != nil {
+	if err := d.rateLimiter.Apply(ctx, DebugTraceBlockByHash); err != nil {
 		return nil, err
 	}
 
@@ -137,7 +137,7 @@ func (d *DebugAPI) TraceCall(
 	blockNrOrHash rpc.BlockNumberOrHash,
 	config *tracers.TraceCallConfig,
 ) (any, error) {
-	if err := d.rateLimiter.Apply(ctx, "TraceCall"); err != nil {
+	if err := d.rateLimiter.Apply(ctx, DebugTraceCall); err != nil {
 		return nil, err
 	}
 
@@ -257,7 +257,7 @@ func (d *DebugAPI) FlowHeightByBlock(
 	ctx context.Context,
 	blockNrOrHash rpc.BlockNumberOrHash,
 ) (uint64, error) {
-	if err := d.rateLimiter.Apply(ctx, "FlowHeightByBlock"); err != nil {
+	if err := d.rateLimiter.Apply(ctx, DebugFlowHeightByBlock); err != nil {
 		return 0, err
 	}
 
