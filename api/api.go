@@ -785,6 +785,10 @@ func (b *BlockChainAPI) FeeHistory(
 		Str("block", lastBlock.String()).
 		Logger()
 
+	if err := b.rateLimiter.Apply(ctx, EthFeeHistory); err != nil {
+		return nil, err
+	}
+
 	if blockCount > maxFeeHistoryBlockCount {
 		return handleError[*ethTypes.FeeHistoryResult](
 			fmt.Errorf("block count has to be between 1 and %d, got: %d", maxFeeHistoryBlockCount, blockCount),
