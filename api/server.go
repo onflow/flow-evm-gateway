@@ -15,6 +15,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -60,6 +61,7 @@ const (
 	shutdownTimeout      = 5 * time.Second
 	batchRequestLimit    = 50
 	batchResponseMaxSize = 10 * 1000 * 1000 // 10 MB
+	contentType          = "application/json"
 )
 
 func NewServer(
@@ -449,10 +451,11 @@ type jsonMessage struct {
 }
 
 func (w *responseHandler) Write(data []byte) (int, error) {
+	w.ResponseWriter.Header().Set("content-type", contentType)
+
 	var message *jsonMessage
-	err := json.Unmarshal(data, &message)
 	// if we couldn't parse response just return it as fallback
-	if err != nil {
+	if err := json.Unmarshal(data, &message); err != nil {
 		return w.ResponseWriter.Write(data)
 	}
 
@@ -465,16 +468,47 @@ func (w *responseHandler) Write(data []byte) (int, error) {
 		w.metrics.ServerPanicked(message.Error.Message)
 	}
 
+	// It's an error response and requires special treatment.
+	if message.Error != nil {
+		// The logic below is taken from:
+		// https://github.com/ethereum/go-ethereum/blob/v1.15.10/rpc/http.go#L265-L288
+		//
+		// In case of a timeout error, the response must be written before the HTTP
+		// server's write timeout occurs. So we need to flush the response. The
+		// Content-Length header also needs to be set to ensure the client knows
+		// when it has the full response.
+		encdata, err := json.Marshal(message)
+		if err != nil {
+			return 0, err
+		}
+		w.ResponseWriter.Header().Set("content-length", strconv.Itoa(len(encdata)))
+
+		// If this request is wrapped in a handler that might remove Content-Length (such
+		// as the automatic gzip we do in package node), we need to ensure the HTTP server
+		// doesn't perform chunked encoding. In case WriteTimeout is reached, the chunked
+		// encoding might not be finished correctly, and some clients do not like it when
+		// the final chunk is missing.
+		w.ResponseWriter.Header().Set("transfer-encoding", "identity")
+
+		_, err = w.ResponseWriter.Write(encdata)
+		if f, ok := w.ResponseWriter.(http.Flusher); ok {
+			f.Flush()
+		}
+		return 0, err
+	}
+
 	// log all response results of successful requests,
 	// as errors are logged with error log level.
-	if message.Error == nil {
-		r, _ := message.Result.MarshalJSON()
-		log.RawJSON("result", r).Msg("API response")
-	}
+	r, _ := message.Result.MarshalJSON()
+	log.RawJSON("result", r).Msg("API response")
 
 	return w.ResponseWriter.Write(data)
 }
 
 func (w *responseHandler) WriteHeader(statusCode int) {
 	w.ResponseWriter.WriteHeader(statusCode)
+}
+
+func (w *responseHandler) Header() http.Header {
+	return w.ResponseWriter.Header()
 }
