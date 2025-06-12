@@ -442,6 +442,135 @@ func Test_CloudKMSConcurrentTransactionSubmission(t *testing.T) {
 	}
 }
 
+func Test_IgnoreNonceMismatchFailure(t *testing.T) {
+	srv, err := startEmulator(true)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer func() {
+		cancel()
+		srv.Stop()
+	}()
+
+	grpcHost := "localhost:3569"
+	emu := srv.Emulator()
+	service := emu.ServiceKey()
+
+	client, err := grpc.NewClient(grpcHost)
+	require.NoError(t, err)
+
+	time.Sleep(500 * time.Millisecond) // some time to startup
+
+	// create new account with keys used for key-rotation
+	keyCount := 5
+	createdAddr, privateKey, err := bootstrap.CreateMultiKeyAccount(
+		client,
+		keyCount,
+		service.Address,
+		sc.FungibleToken.Address.HexWithPrefix(),
+		sc.FlowToken.Address.HexWithPrefix(),
+		service.PrivateKey,
+	)
+	require.NoError(t, err)
+
+	cfg := config.Config{
+		DatabaseDir:       t.TempDir(),
+		AccessNodeHost:    grpcHost,
+		RPCPort:           8545,
+		RPCHost:           "127.0.0.1",
+		FlowNetworkID:     "flow-emulator",
+		EVMNetworkID:      types.FlowEVMPreviewNetChainID,
+		Coinbase:          eoaTestAccount,
+		COAAddress:        *createdAddr,
+		COAKey:            privateKey,
+		GasPrice:          new(big.Int).SetUint64(0),
+		EnforceGasPrice:   true,
+		LogLevel:          zerolog.DebugLevel,
+		LogWriter:         testLogWriter(),
+		TxStateValidation: config.TxSealValidation,
+	}
+
+	rpcTester := &rpcTest{
+		url: fmt.Sprintf("%s:%d", cfg.RPCHost, cfg.RPCPort),
+	}
+
+	ready := make(chan struct{})
+	go func() {
+		err := bootstrap.Run(ctx, cfg, func() {
+			close(ready)
+		})
+		require.NoError(t, err)
+	}()
+
+	<-ready
+
+	eoaKey, err := crypto.HexToECDSA(eoaTestPrivateKey)
+	require.NoError(t, err)
+
+	testAddr := common.HexToAddress("55253ed90B70b96C73092D8680915aaF50081194")
+
+	// disable auto-mine so we can control delays
+	emu.DisableAutoMine()
+
+	nonce := uint64(0)
+
+	// Sign and send a tx with the correct nonce
+	signed, _, err := evmSign(big.NewInt(10), 21000, eoaKey, nonce, &testAddr, nil)
+	require.NoError(t, err)
+
+	go rpcTester.sendRawTx(signed)
+	time.Sleep(200 * time.Millisecond)
+
+	_, txResults, _ := emu.ExecuteAndCommitBlock()
+	require.Len(t, txResults, 1)
+	assert.True(t, txResults[0].Succeeded())
+
+	// Sign and send a tx with the previous nonce, "nonce too low" case
+	// Invalid transaction that doesn't go through.
+	signed, _, err = evmSign(big.NewInt(10), 21000, eoaKey, nonce, &testAddr, nil)
+	require.NoError(t, err)
+
+	go rpcTester.sendRawTx(signed)
+	time.Sleep(200 * time.Millisecond)
+
+	_, txResults, _ = emu.ExecuteAndCommitBlock()
+	require.Len(t, txResults, 1)
+	// "nonce too low" validation doesn't revert the Cadence transaction
+	assert.True(t, txResults[0].Succeeded())
+
+	// Sign and send a tx with a higher nonce, "nonce too high" case
+	// Invalid transaction that doesn't go through.
+	signed, _, err = evmSign(big.NewInt(10), 21000, eoaKey, nonce+10, &testAddr, nil)
+	require.NoError(t, err)
+
+	go rpcTester.sendRawTx(signed)
+	time.Sleep(200 * time.Millisecond)
+
+	_, txResults, _ = emu.ExecuteAndCommitBlock()
+	require.Len(t, txResults, 1)
+	// "nonce too high" validation doesn't revert the Cadence transaction
+	assert.True(t, txResults[0].Succeeded())
+
+	// Sign and send a tx with the correct nonce, but with a high transfer amount
+	// Invalid transaction that doesn't go through.
+	weiValue := new(big.Int).Mul(big.NewInt(100000000000000000), big.NewInt(100000000000000000))
+	signed, _, err = evmSign(weiValue, 21000, eoaKey, nonce+1, &testAddr, nil)
+	require.NoError(t, err)
+
+	go rpcTester.sendRawTx(signed)
+	time.Sleep(200 * time.Millisecond)
+
+	_, txResults, _ = emu.ExecuteAndCommitBlock()
+	require.Len(t, txResults, 1)
+	assert.ErrorContains(
+		t,
+		txResults[0].Error,
+		"insufficient funds for gas * price + value: address 0xFACF71692421039876a5BB4F10EF7A439D8ef61E",
+	)
+	// This kind of validation error, reverts the Cadence transaction.
+	assert.True(t, txResults[0].Reverted())
+}
+
 // Test_ForceStartHeightIdempotency verifies that the ingestion process
 // remains idempotent when restarting with ForceStartHeight set to an
 // earlier block. This ensures that:
