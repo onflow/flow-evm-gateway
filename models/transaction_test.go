@@ -123,7 +123,7 @@ func Test_DecodeEVMTransaction(t *testing.T) {
 	assert.Equal(t, big.NewInt(0), decTx.Value())
 	assert.Equal(t, uint8(0), decTx.Type())
 	assert.Equal(t, uint64(125_000), decTx.Gas())
-	assert.Equal(t, big.NewInt(0), decTx.GasPrice())
+	assert.Equal(t, BaseFeePerGas, decTx.GasPrice())
 	assert.Equal(t, uint64(0), decTx.BlobGas())
 	assert.Equal(t, uint64(347), decTx.Size())
 }
@@ -223,7 +223,7 @@ func Test_UnmarshalTransaction(t *testing.T) {
 		assert.Equal(t, big.NewInt(0), decTx.Value())
 		assert.Equal(t, uint8(0), decTx.Type())
 		assert.Equal(t, uint64(125_000), decTx.Gas())
-		assert.Equal(t, big.NewInt(0), decTx.GasPrice())
+		assert.Equal(t, BaseFeePerGas, decTx.GasPrice())
 		assert.Equal(t, uint64(0), decTx.BlobGas())
 		assert.Equal(t, uint64(347), decTx.Size())
 	})
