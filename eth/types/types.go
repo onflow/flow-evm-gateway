@@ -536,7 +536,13 @@ func MarshalReceipt(
 		"effectiveGasPrice": (*hexutil.Big)(receipt.EffectiveGasPrice),
 	}
 
-	if _, ok := tx.(models.DirectCall); ok {
+	// We add this in order to avoid re-indexing the whole chain.
+	// For any transaction that had a `0` gas price, regardless
+	// whether they were COA interactions or regular EVM, we
+	// set the `effectiveGasPrice` to the value of `BaseFeePerGas`,
+	// which is the minimum amount of gas price required by any
+	// transaction, in order to comply with EIP-1559.
+	if receipt.EffectiveGasPrice.Cmp(big.NewInt(0)) == 0 {
 		fields["effectiveGasPrice"] = (*hexutil.Big)(models.BaseFeePerGas)
 	}
 

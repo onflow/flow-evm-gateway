@@ -160,6 +160,27 @@ type TransactionCall struct {
 	*gethTypes.Transaction
 }
 
+func (tc TransactionCall) GasPrice() *big.Int {
+	if tc.Transaction.GasPrice().Cmp(big.NewInt(0)) == 0 {
+		return BaseFeePerGas
+	}
+	return tc.Transaction.GasPrice()
+}
+
+func (tc TransactionCall) GasFeeCap() *big.Int {
+	if tc.Transaction.GasFeeCap().Cmp(big.NewInt(0)) == 0 {
+		return BaseFeePerGas
+	}
+	return tc.Transaction.GasFeeCap()
+}
+
+func (tc TransactionCall) GasTipCap() *big.Int {
+	if tc.Transaction.GasTipCap().Cmp(big.NewInt(0)) == 0 {
+		return BaseFeePerGas
+	}
+	return tc.Transaction.GasTipCap()
+}
+
 func (tc TransactionCall) Hash() common.Hash {
 	return tc.Transaction.Hash()
 }
@@ -246,7 +267,11 @@ func decodeTransactionEvent(event cadence.Event) (
 				err,
 			)
 		}
-		receipt.EffectiveGasPrice = gethTx.EffectiveGasTipValue(nil)
+		if gethTx.GasPrice().Cmp(big.NewInt(0)) == 0 {
+			receipt.EffectiveGasPrice = BaseFeePerGas
+		} else {
+			receipt.EffectiveGasPrice = gethTx.EffectiveGasTipValue(nil)
+		}
 		tx = TransactionCall{Transaction: gethTx}
 	}
 
