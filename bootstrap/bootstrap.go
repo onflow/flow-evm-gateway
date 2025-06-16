@@ -215,14 +215,6 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 
 	b.server = api.NewServer(b.logger, b.collector, b.config)
 
-	// create transaction pool
-	txPool := requester.NewTxPool(
-		b.client,
-		b.publishers.Transaction,
-		b.logger,
-		b.config,
-	)
-
 	accountKeys := make([]*keystore.AccountKey, 0)
 	if !b.config.IndexOnly {
 		account, err := b.client.GetAccount(ctx, b.config.COAAddress)
@@ -253,6 +245,28 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 
 	b.keystore = keystore.New(accountKeys)
 
+	// create transaction pool
+	var txPool requester.TxPool
+	if b.config.TxBatchMode {
+		txPool = requester.NewBatchTxPool(
+			b.client,
+			b.publishers.Transaction,
+			b.logger,
+			b.config,
+			b.collector,
+			b.keystore,
+		)
+	} else {
+		txPool = requester.NewSingleTxPool(
+			b.client,
+			b.publishers.Transaction,
+			b.logger,
+			b.config,
+			b.collector,
+			b.keystore,
+		)
+	}
+
 	evm, err := requester.NewEVM(
 		b.storages.Registers,
 		b.client,
@@ -261,7 +275,6 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 		b.storages.Blocks,
 		txPool,
 		b.collector,
-		b.keystore,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create EVM requester: %w", err)
