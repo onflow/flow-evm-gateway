@@ -555,11 +555,15 @@ func Test_ForceStartHeightIdempotency(t *testing.T) {
 
 	// Stop the EVM GW service
 	boot.Stop()
+
 	// Set `ForceStartHeight` to an earlier block, to verify that
 	// the ingestion process is idempotent
 	cfg.ForceStartCadenceHeight = 1
 
 	boot, err = bootstrap.New(cfg)
+	defer func() {
+		boot.Stop()
+	}()
 	require.NoError(t, err)
 
 	ready2 := make(chan struct{})
