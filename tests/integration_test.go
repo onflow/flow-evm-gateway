@@ -561,10 +561,12 @@ func Test_ForceStartHeightIdempotency(t *testing.T) {
 	cfg.ForceStartCadenceHeight = 1
 
 	boot, err = bootstrap.New(cfg)
-	defer func() {
-		boot.Stop()
-	}()
 	require.NoError(t, err)
+	defer func() {
+		if boot != nil {
+			boot.Stop()
+		}
+	}()
 
 	ready2 := make(chan struct{})
 	go func() {
