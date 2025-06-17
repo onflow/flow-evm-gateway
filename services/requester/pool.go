@@ -237,15 +237,8 @@ type pooledEvmTx struct {
 // re-ordering of Cadence transactions that happens from Collection nodes.
 type BatchTxPool struct {
 	*SingleTxPool
-	logger      zerolog.Logger
-	client      *CrossSporkClient
-	txPublisher *models.Publisher[*gethTypes.Transaction]
-	config      config.Config
-	mux         sync.Mutex
-	keystore    *keystore.KeyStore
-	collector   metrics.Collector
-	pooledTxs   map[gethCommon.Address][]pooledEvmTx
-	txMux       sync.Mutex
+	pooledTxs map[gethCommon.Address][]pooledEvmTx
+	txMux     sync.Mutex
 }
 
 var _ TxPool = &BatchTxPool{}
@@ -271,13 +264,6 @@ func NewBatchTxPool(
 	)
 	batchPool := &BatchTxPool{
 		SingleTxPool: singleTxPool,
-		logger:       logger,
-		client:       client,
-		txPublisher:  transactionsPublisher,
-		config:       config,
-		mux:          sync.Mutex{},
-		keystore:     keystore,
-		collector:    collector,
 		pooledTxs:    make(map[gethCommon.Address][]pooledEvmTx),
 		txMux:        sync.Mutex{},
 	}
