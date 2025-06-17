@@ -352,7 +352,9 @@ func (t *BatchTxPool) batchSubmitTransactions(
 	}
 
 	script := replaceAddresses(batchRunTxScript, t.config.FlowNetworkID)
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
 	flowTx, err := t.buildTransaction(
 		ctx,
 		script,
