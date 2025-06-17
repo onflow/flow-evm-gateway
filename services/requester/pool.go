@@ -323,12 +323,16 @@ func (t *BatchTxPool) Add(
 
 func (t *BatchTxPool) processPooledTransactions() {
 	for range time.Tick(t.config.TxBatchInterval) {
+		t.txMux.Lock()
+
 		for address, pooledTxs := range t.pooledTxs {
 			if err := t.batchSubmitTransactions(address, pooledTxs); err != nil {
 				t.logger.Error().Err(err).Msg("failed to send Flow transaction from BatchPool")
 				continue
 			}
 		}
+
+		t.txMux.Unlock()
 	}
 }
 
@@ -336,9 +340,6 @@ func (t *BatchTxPool) batchSubmitTransactions(
 	address gethCommon.Address,
 	pooledTxs []pooledEvmTx,
 ) error {
-	t.txMux.Lock()
-	defer t.txMux.Unlock()
-
 	// Sort the transactions based on their nonce, to make sure
 	// that no re-ordering has happened due to races etc.
 	sort.Slice(pooledTxs, func(i, j int) bool {
