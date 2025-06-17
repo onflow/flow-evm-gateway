@@ -309,16 +309,23 @@ func (t *BatchTxPool) Add(
 
 func (t *BatchTxPool) processPooledTransactions() {
 	for range time.Tick(t.config.TxBatchInterval) {
-		t.txMux.Lock()
+		// Take a snapshot here to allow `Add()` continue accepted
+		// incoming EVM transactions, without blocking until the
+		// batch transactions are submitted.
+		snapshot := func() map[gethCommon.Address][]pooledEvmTx {
+			t.txMux.Lock()
+			defer t.txMux.Unlock()
+			copy := t.pooledTxs
+			t.pooledTxs = make(map[gethCommon.Address][]pooledEvmTx)
+			return copy
+		}()
 
-		for address, pooledTxs := range t.pooledTxs {
+		for address, pooledTxs := range snapshot {
 			if err := t.batchSubmitTransactions(address, pooledTxs); err != nil {
 				t.logger.Error().Err(err).Msg("failed to send Flow transaction from BatchPool")
 				continue
 			}
 		}
-
-		t.txMux.Unlock()
 	}
 }
 
