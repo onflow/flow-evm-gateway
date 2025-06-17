@@ -223,6 +223,10 @@ func parseConfigFromFlags() error {
 		return fmt.Errorf("unknown tx state validation: %s", txStateValidation)
 	}
 
+	if cfg.TxBatchMode && cfg.TxBatchInterval <= 0 {
+		return fmt.Errorf("tx-batch-interval must be > 0 when tx-batch-mode is enabled")
+	}
+
 	return nil
 }
 
