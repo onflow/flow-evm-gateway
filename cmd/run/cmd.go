@@ -227,6 +227,10 @@ func parseConfigFromFlags() error {
 		return fmt.Errorf("tx-batch-interval must be > 0 when tx-batch-mode is enabled")
 	}
 
+	if cfg.TxBatchMode && cfg.TxStateValidation == config.TxSealValidation {
+		return fmt.Errorf("tx-batch-mode should be enabled with tx-state-validation=local-index")
+	}
+
 	return nil
 }
 
