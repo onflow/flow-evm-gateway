@@ -321,8 +321,11 @@ func (t *BatchTxPool) processPooledTransactions() {
 		}()
 
 		for address, pooledTxs := range snapshot {
-			if err := t.batchSubmitTransactions(address, pooledTxs); err != nil {
-				t.logger.Error().Err(err).Msg("failed to send Flow transaction from BatchPool")
+			if err := t.batchSubmitTransactions(pooledTxs); err != nil {
+				t.logger.Error().Err(err).Msgf(
+					"failed to send Flow transaction from BatchPool for EOA: %s",
+					address.Hex(),
+				)
 				continue
 			}
 		}
@@ -330,7 +333,6 @@ func (t *BatchTxPool) processPooledTransactions() {
 }
 
 func (t *BatchTxPool) batchSubmitTransactions(
-	address gethCommon.Address,
 	pooledTxs []pooledEvmTx,
 ) error {
 	// Sort the transactions based on their nonce, to make sure
@@ -364,7 +366,6 @@ func (t *BatchTxPool) batchSubmitTransactions(
 	if err := t.client.SendTransaction(ctx, *flowTx); err != nil {
 		return err
 	}
-	delete(t.pooledTxs, address)
 
 	return nil
 }
