@@ -161,10 +161,6 @@ func (t *SingleTxPool) buildTransaction(
 	script []byte,
 	args ...cadence.Value,
 ) (*flow.Transaction, error) {
-	// building and signing transactions should be blocking, so we don't have keys conflict
-	t.mux.Lock()
-	defer t.mux.Unlock()
-
 	defer func() {
 		t.collector.AvailableSigningKeys(t.keystore.AvailableKeys())
 	}()
@@ -198,6 +194,11 @@ func (t *SingleTxPool) buildTransaction(
 			return nil, fmt.Errorf("failed to add argument: %s, with %w", arg, err)
 		}
 	}
+
+	// building and signing transactions should be blocking,
+	// so we don't have keys conflict
+	t.mux.Lock()
+	defer t.mux.Unlock()
 
 	accKey, err := t.keystore.Take()
 	if err != nil {
