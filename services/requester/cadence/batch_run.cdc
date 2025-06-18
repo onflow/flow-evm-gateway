@@ -21,8 +21,8 @@ transaction(hexEncodedTxs: [String], coinbase: String) {
             }
         }
 
-        // Otherwise, we fail the Cadence transaction with the error message
-        // from the first invalid EVM transaction.
+        // Otherwise, all EVM transactions are invalid txs, can't be executed (such as nonce too low). In this case, 
+        // we fail the Cadence transaction with the error message from the first EVM transaction.
         var invalidTx: EVM.Result? = nil
         for txResult in txResults {
             if txResult.status == EVM.Status.unknown || txResult.status == EVM.Status.invalid {
