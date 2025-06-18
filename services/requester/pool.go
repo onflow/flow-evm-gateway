@@ -310,7 +310,15 @@ func (t *BatchTxPool) Add(
 
 func (t *BatchTxPool) processPooledTransactions() {
 	for range time.Tick(t.config.TxBatchInterval) {
-		// Take a snapshot here to allow `Add()` continue accepted
+		latestBlock, account, err := t.fetchFlowLatestBlockAndCOA()
+		if err != nil {
+			t.logger.Error().Err(err).Msg(
+				"failed to get COA / latest Flow block on batch tx submission",
+			)
+			continue
+		}
+
+		// Take a snapshot here to allow `Add()` to continue accept
 		// incoming EVM transactions, without blocking until the
 		// batch transactions are submitted.
 		txsGroupedByAddress := func() map[gethCommon.Address][]pooledEvmTx {
@@ -322,7 +330,12 @@ func (t *BatchTxPool) processPooledTransactions() {
 		}()
 
 		for address, pooledTxs := range txsGroupedByAddress {
-			if err := t.batchSubmitTransactionsForSameAddress(pooledTxs); err != nil {
+			err := t.batchSubmitTransactionsForSameAddress(
+				latestBlock,
+				account,
+				pooledTxs,
+			)
+			if err != nil {
 				t.logger.Error().Err(err).Msgf(
 					"failed to send Flow transaction from BatchPool for EOA: %s",
 					address.Hex(),
@@ -334,6 +347,8 @@ func (t *BatchTxPool) processPooledTransactions() {
 }
 
 func (t *BatchTxPool) batchSubmitTransactionsForSameAddress(
+	latestBlock *flow.Block,
+	account *flow.Account,
 	pooledTxs []pooledEvmTx,
 ) error {
 	// Sort the transactions based on their nonce, to make sure
@@ -353,11 +368,9 @@ func (t *BatchTxPool) batchSubmitTransactionsForSameAddress(
 	}
 
 	script := replaceAddresses(batchRunTxScript, t.config.FlowNetworkID)
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-
 	flowTx, err := t.buildTransaction(
-		ctx,
+		latestBlock,
+		account,
 		script,
 		cadence.NewArray(hexEncodedTxs),
 		coinbaseAddress,
@@ -366,11 +379,91 @@ func (t *BatchTxPool) batchSubmitTransactionsForSameAddress(
 		return err
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
 	if err := t.client.SendTransaction(ctx, *flowTx); err != nil {
 		return err
 	}
 
 	return nil
+}
+
+// buildTransaction creates a Cadence transaction from the provided script,
+// with the given arguments and signs it with the configured COA account.
+func (t *BatchTxPool) buildTransaction(
+	latestBlock *flow.Block,
+	account *flow.Account,
+	script []byte,
+	args ...cadence.Value,
+) (*flow.Transaction, error) {
+	defer func() {
+		t.collector.AvailableSigningKeys(t.keystore.AvailableKeys())
+	}()
+
+	flowTx := flow.NewTransaction().
+		SetScript(script).
+		SetReferenceBlockID(latestBlock.ID).
+		SetComputeLimit(flowGo.DefaultMaxTransactionGasLimit)
+
+	for _, arg := range args {
+		if err := flowTx.AddArgument(arg); err != nil {
+			return nil, fmt.Errorf("failed to add argument: %s, with %w", arg, err)
+		}
+	}
+
+	// building and signing transactions should be blocking,
+	// so we don't have keys conflict
+	t.mux.Lock()
+	defer t.mux.Unlock()
+
+	accKey, err := t.keystore.Take()
+	if err != nil {
+		return nil, err
+	}
+
+	if err := accKey.SetProposerPayerAndSign(flowTx, account); err != nil {
+		accKey.Done()
+		return nil, err
+	}
+
+	// now that the transaction is prepared, store the transaction's metadata
+	accKey.SetLockMetadata(flowTx.ID(), latestBlock.Height)
+
+	t.collector.OperatorBalance(account)
+
+	return flowTx, nil
+}
+
+func (t *BatchTxPool) fetchFlowLatestBlockAndCOA() (
+	*flow.Block,
+	*flow.Account,
+	error,
+) {
+	var (
+		g           = errgroup.Group{}
+		err1, err2  error
+		latestBlock *flow.Block
+		account     *flow.Account
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	// execute concurrently so we can speed up all the information we need for tx
+	g.Go(func() error {
+		latestBlock, err1 = t.client.GetLatestBlock(ctx, true)
+		return err1
+	})
+	g.Go(func() error {
+		account, err2 = t.client.GetAccount(ctx, t.config.COAAddress)
+		return err2
+	})
+	if err := g.Wait(); err != nil {
+
+		return nil, nil, err
+	}
+
+	return latestBlock, account, nil
 }
 
 // this will extract the evm specific error from the Flow transaction error message
