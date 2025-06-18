@@ -281,12 +281,12 @@ func (t *BatchTxPool) Add(
 	ctx context.Context,
 	tx *gethTypes.Transaction,
 ) error {
+	t.txPublisher.Publish(tx) // publish pending transaction event
+
 	// tx sending should be blocking, so we don't have races when
 	// pooled transactions are being processed in the background.
 	t.txMux.Lock()
 	defer t.txMux.Unlock()
-
-	t.txPublisher.Publish(tx) // publish pending transaction event
 
 	from, err := gethTypes.Sender(gethTypes.LatestSignerForChainID(tx.ChainId()), tx)
 	if err != nil {
