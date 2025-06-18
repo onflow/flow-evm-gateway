@@ -333,7 +333,7 @@ func (t *BatchTxPool) processPooledTransactions() {
 	}
 }
 
-func (t *BatchTxPool) batchSubmitTransactions(
+func (t *BatchTxPool) batchSubmitTransactionsForSameAccount(
 	pooledTxs []pooledEvmTx,
 ) error {
 	// Sort the transactions based on their nonce, to make sure
