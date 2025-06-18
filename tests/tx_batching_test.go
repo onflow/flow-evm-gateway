@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"math/rand/v2"
 	"testing"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 )
 
 func Test_TransactionBatchingMode(t *testing.T) {
@@ -246,4 +248,142 @@ func Test_TransactionBatchingMode(t *testing.T) {
 
 		nonce += 3
 	})
+}
+
+func Test_TransactionBatchingModeWithConcurrentTxSubmissions(t *testing.T) {
+	srv, err := startEmulator(true)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer func() {
+		cancel()
+		srv.Stop()
+	}()
+
+	grpcHost := "localhost:3569"
+	emu := srv.Emulator()
+	service := emu.ServiceKey()
+
+	client, err := grpc.NewClient(grpcHost)
+	require.NoError(t, err)
+
+	time.Sleep(500 * time.Millisecond) // some time to startup
+
+	// create new account with keys used for key-rotation
+	keyCount := 5
+	createdAddr, privateKey, err := bootstrap.CreateMultiKeyAccount(
+		client,
+		keyCount,
+		service.Address,
+		sc.FungibleToken.Address.HexWithPrefix(),
+		sc.FlowToken.Address.HexWithPrefix(),
+		service.PrivateKey,
+	)
+	require.NoError(t, err)
+
+	cfg := config.Config{
+		DatabaseDir:       t.TempDir(),
+		AccessNodeHost:    grpcHost,
+		RPCPort:           8545,
+		RPCHost:           "127.0.0.1",
+		FlowNetworkID:     "flow-emulator",
+		EVMNetworkID:      types.FlowEVMPreviewNetChainID,
+		Coinbase:          eoaTestAccount,
+		COAAddress:        *createdAddr,
+		COAKey:            privateKey,
+		GasPrice:          new(big.Int).SetUint64(0),
+		EnforceGasPrice:   true,
+		LogLevel:          zerolog.DebugLevel,
+		LogWriter:         testLogWriter(),
+		TxStateValidation: config.TxSealValidation,
+		TxBatchMode:       true,
+		TxBatchInterval:   time.Millisecond * 1200,
+	}
+
+	rpcTester := &rpcTest{
+		url: fmt.Sprintf("%s:%d", cfg.RPCHost, cfg.RPCPort),
+	}
+
+	ready := make(chan struct{})
+	go func() {
+		err = bootstrap.Run(ctx, cfg, func() {
+			close(ready)
+		})
+		require.NoError(t, err)
+	}()
+
+	<-ready
+
+	time.Sleep(3 * time.Second) // some time to startup
+
+	eoaKey, err := crypto.HexToECDSA(eoaTestPrivateKey)
+	require.NoError(t, err)
+
+	testAddresses := map[common.Address]string{
+		common.HexToAddress("0x061B63D29332e4de81bD9F51A48609824CD113a8"): "ddcb1e965557474fd13de3a66a40e4bc9b759a306e5db1046bac5ca47aafd584",
+		common.HexToAddress("0xF38079479cB8e3da977AF567c4B415c7f74f949E"): "ebac9d0795684b28d64402de1ad767ae875531929e15d105846781f8e3e2c214",
+		common.HexToAddress("0xA675E5a2a26186cb5e70e7007e9c44F7fE6007F3"): "a39c2fcfc2a8f83d6cbbcd12b1c9184b7c03d71f3438b6b5a0b20a7f565c63ac",
+		common.HexToAddress("0xc2a4d1f8A5A9308F65aDBb6f930Fb43BD73de533"): "21dc0a4f0ac11aded6ff24fd7f2c5d28af7bfee0daac26f3236956370d0cd751",
+	}
+	nonce := uint64(0)
+
+	// Add a sufficient amount of funds to the test addresses
+	for testAddr := range testAddresses {
+		signed, _, err := evmSign(big.NewInt(1_000_000_000), 23_500, eoaKey, nonce, &testAddr, nil)
+		require.NoError(t, err)
+
+		_, err = rpcTester.sendRawTx(signed)
+		require.NoError(t, err)
+
+		nonce += 1
+	}
+
+	time.Sleep(3 * time.Second) // some time to process the transfer transactions
+
+	testEoaReceiver := common.HexToAddress("0x6F416dcC9BEFe43b7dDF53f2662F76dD34A9fc11")
+
+	totalTxs := 25
+	g := errgroup.Group{}
+	var err1 error
+
+	for _, testPrivatekey := range testAddresses {
+		privateKey, err := crypto.HexToECDSA(testPrivatekey)
+		require.NoError(t, err)
+
+		g.Go(func() error {
+			nonce := uint64(0)
+
+			for range totalTxs {
+				signed, _, err := evmSign(big.NewInt(50_000), 23_500, privateKey, nonce, &testEoaReceiver, nil)
+				if err != nil {
+					return err
+				}
+
+				_, err = rpcTester.sendRawTx(signed)
+				if err != nil {
+					return err
+				}
+
+				waitTime := rand.IntN(5) * 100
+				time.Sleep(time.Duration(waitTime) * time.Millisecond)
+
+				nonce += 1
+			}
+
+			return nil
+		})
+	}
+
+	err = g.Wait()
+	require.NoError(t, err)
+	require.NoError(t, err1)
+
+	expectedBalance := int64(4 * totalTxs * 50_000)
+
+	assert.Eventually(t, func() bool {
+		balance, err := rpcTester.getBalance(testEoaReceiver)
+		require.NoError(t, err)
+
+		return balance.Cmp(big.NewInt(expectedBalance)) == 0
+	}, time.Second*10, time.Second*1, "all transactions were not executed")
 }

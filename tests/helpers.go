@@ -33,6 +33,7 @@ import (
 	"github.com/onflow/flow-go/fvm/systemcontracts"
 	"github.com/onflow/flow-go/model/flow"
 	"github.com/onflow/go-ethereum/common"
+	"github.com/onflow/go-ethereum/common/hexutil"
 	"github.com/onflow/go-ethereum/core/types"
 	"github.com/rs/zerolog"
 
@@ -454,4 +455,19 @@ func (r *rpcTest) sendRawTx(signed []byte) (common.Hash, error) {
 	}
 
 	return h, nil
+}
+
+func (r *rpcTest) getBalance(address common.Address) (*big.Int, error) {
+	balanceRes, err := r.request("eth_getBalance", fmt.Sprintf(`["%s", "latest"]`, address))
+	if err != nil {
+		return nil, err
+	}
+
+	var balance hexutil.Big
+	err = json.Unmarshal(balanceRes, &balance)
+	if err != nil {
+		return nil, err
+	}
+
+	return balance.ToInt(), nil
 }
