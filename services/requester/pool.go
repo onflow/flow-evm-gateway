@@ -459,7 +459,6 @@ func (t *BatchTxPool) fetchFlowLatestBlockAndCOA() (
 		return err2
 	})
 	if err := g.Wait(); err != nil {
-
 		return nil, nil, err
 	}
 
