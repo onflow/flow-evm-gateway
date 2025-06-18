@@ -313,7 +313,7 @@ func (t *BatchTxPool) processPooledTransactions() {
 		// Take a snapshot here to allow `Add()` continue accepted
 		// incoming EVM transactions, without blocking until the
 		// batch transactions are submitted.
-		snapshot := func() map[gethCommon.Address][]pooledEvmTx {
+		txsGroupedByAddress := func() map[gethCommon.Address][]pooledEvmTx {
 			t.txMux.Lock()
 			defer t.txMux.Unlock()
 			copy := t.pooledTxs
@@ -321,8 +321,8 @@ func (t *BatchTxPool) processPooledTransactions() {
 			return copy
 		}()
 
-		for address, pooledTxs := range snapshot {
-			if err := t.batchSubmitTransactions(pooledTxs); err != nil {
+		for address, pooledTxs := range txsGroupedByAddress {
+			if err := t.batchSubmitTransactionsForSameAddress(pooledTxs); err != nil {
 				t.logger.Error().Err(err).Msgf(
 					"failed to send Flow transaction from BatchPool for EOA: %s",
 					address.Hex(),
@@ -333,7 +333,7 @@ func (t *BatchTxPool) processPooledTransactions() {
 	}
 }
 
-func (t *BatchTxPool) batchSubmitTransactionsForSameAccount(
+func (t *BatchTxPool) batchSubmitTransactionsForSameAddress(
 	pooledTxs []pooledEvmTx,
 ) error {
 	// Sort the transactions based on their nonce, to make sure

@@ -12,7 +12,7 @@ transaction(hexEncodedTxs: [String], coinbase: String) {
             coinbase: EVM.addressFromString(coinbase)
         )
 
-        // If at least one of the EVM transactions in the batch was either
+        // If at least one of the EVM transactions in the batch is either
         // failed or successful, in other words not invalid, we let the
         // Cadence transaction succeed.
         for txResult in txResults {
@@ -21,11 +21,13 @@ transaction(hexEncodedTxs: [String], coinbase: String) {
             }
         }
 
-        // Otherwise, all EVM transactions are invalid txs, can't be executed (such as nonce too low). In this case, 
-        // we fail the Cadence transaction with the error message from the first EVM transaction.
+        // Otherwise, all EVM transactions are invalid txs and can't be
+        // executed (such as nonce too low).
+        // In this case, we fail the Cadence transaction with the error
+        // message from the first EVM transaction.
         var invalidTx: EVM.Result? = nil
         for txResult in txResults {
-            if txResult.status == EVM.Status.unknown || txResult.status == EVM.Status.invalid {
+            if !(txResult.status == EVM.Status.failed || txResult.status == EVM.Status.successful) {
                 invalidTx = txResult
                 break
             }
