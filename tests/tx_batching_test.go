@@ -343,6 +343,7 @@ func Test_TransactionBatchingModeWithConcurrentTxSubmissions(t *testing.T) {
 	testEoaReceiver := common.HexToAddress("0x6F416dcC9BEFe43b7dDF53f2662F76dD34A9fc11")
 
 	totalTxs := 25
+	transferAmount := int64(50_000)
 	g := errgroup.Group{}
 	var err1 error
 
@@ -354,7 +355,14 @@ func Test_TransactionBatchingModeWithConcurrentTxSubmissions(t *testing.T) {
 			nonce := uint64(0)
 
 			for range totalTxs {
-				signed, _, err := evmSign(big.NewInt(50_000), 23_500, privateKey, nonce, &testEoaReceiver, nil)
+				signed, _, err := evmSign(
+					big.NewInt(transferAmount),
+					23_500,
+					privateKey,
+					nonce,
+					&testEoaReceiver,
+					nil,
+				)
 				if err != nil {
 					return err
 				}
@@ -378,7 +386,7 @@ func Test_TransactionBatchingModeWithConcurrentTxSubmissions(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, err1)
 
-	expectedBalance := int64(4 * totalTxs * 50_000)
+	expectedBalance := int64(len(testAddresses)) * int64(totalTxs) * transferAmount
 
 	assert.Eventually(t, func() bool {
 		balance, err := rpcTester.getBalance(testEoaReceiver)
