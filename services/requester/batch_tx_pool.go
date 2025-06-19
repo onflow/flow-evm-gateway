@@ -44,6 +44,7 @@ type BatchTxPool struct {
 	*SingleTxPool
 	pooledTxs map[gethCommon.Address][]pooledEvmTx
 	txMux     sync.Mutex
+	ctx       context.Context
 }
 
 var _ TxPool = &BatchTxPool{}
@@ -55,6 +56,7 @@ func NewBatchTxPool(
 	config config.Config,
 	collector metrics.Collector,
 	keystore *keystore.KeyStore,
+	ctx context.Context,
 ) *BatchTxPool {
 	// initialize the available keys metric since it is only updated when sending a tx
 	collector.AvailableSigningKeys(keystore.AvailableKeys())
@@ -71,6 +73,7 @@ func NewBatchTxPool(
 		SingleTxPool: singleTxPool,
 		pooledTxs:    make(map[gethCommon.Address][]pooledEvmTx),
 		txMux:        sync.Mutex{},
+		ctx:          ctx,
 	}
 
 	go batchPool.processPooledTransactions()
@@ -113,38 +116,46 @@ func (t *BatchTxPool) Add(
 }
 
 func (t *BatchTxPool) processPooledTransactions() {
-	for range time.Tick(t.config.TxBatchInterval) {
-		latestBlock, account, err := t.fetchFlowLatestBlockAndCOA()
-		if err != nil {
-			t.logger.Error().Err(err).Msg(
-				"failed to get COA / latest Flow block on batch tx submission",
-			)
-			continue
-		}
+	ticker := time.NewTicker(t.config.TxBatchInterval)
+	defer ticker.Stop()
 
-		// Take a snapshot here to allow `Add()` to continue accept
-		// incoming EVM transactions, without blocking until the
-		// batch transactions are submitted.
-		txsGroupedByAddress := func() map[gethCommon.Address][]pooledEvmTx {
-			t.txMux.Lock()
-			defer t.txMux.Unlock()
-			copy := t.pooledTxs
-			t.pooledTxs = make(map[gethCommon.Address][]pooledEvmTx)
-			return copy
-		}()
-
-		for address, pooledTxs := range txsGroupedByAddress {
-			err := t.batchSubmitTransactionsForSameAddress(
-				latestBlock,
-				account,
-				pooledTxs,
-			)
+	for {
+		select {
+		case <-t.ctx.Done():
+			return
+		case <-ticker.C:
+			latestBlock, account, err := t.fetchFlowLatestBlockAndCOA()
 			if err != nil {
-				t.logger.Error().Err(err).Msgf(
-					"failed to send Flow transaction from BatchPool for EOA: %s",
-					address.Hex(),
+				t.logger.Error().Err(err).Msg(
+					"failed to get COA / latest Flow block on batch tx submission",
 				)
 				continue
+			}
+
+			// Take a snapshot here to allow `Add()` to continue accept
+			// incoming EVM transactions, without blocking until the
+			// batch transactions are submitted.
+			txsGroupedByAddress := func() map[gethCommon.Address][]pooledEvmTx {
+				t.txMux.Lock()
+				defer t.txMux.Unlock()
+				copy := t.pooledTxs
+				t.pooledTxs = make(map[gethCommon.Address][]pooledEvmTx)
+				return copy
+			}()
+
+			for address, pooledTxs := range txsGroupedByAddress {
+				err := t.batchSubmitTransactionsForSameAddress(
+					latestBlock,
+					account,
+					pooledTxs,
+				)
+				if err != nil {
+					t.logger.Error().Err(err).Msgf(
+						"failed to send Flow transaction from BatchPool for EOA: %s",
+						address.Hex(),
+					)
+					continue
+				}
 			}
 		}
 	}
