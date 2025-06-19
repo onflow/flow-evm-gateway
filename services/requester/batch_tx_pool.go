@@ -132,16 +132,17 @@ func (t *BatchTxPool) processPooledTransactions() {
 				continue
 			}
 
-			// Take a snapshot here to allow `Add()` to continue accept
-			// incoming EVM transactions, without blocking until the
-			// batch transactions are submitted.
-			txsGroupedByAddress := func() map[gethCommon.Address][]pooledEvmTx {
+			snapshot := func() map[gethCommon.Address][]pooledEvmTx {
 				t.txMux.Lock()
 				defer t.txMux.Unlock()
 				copy := t.pooledTxs
 				t.pooledTxs = make(map[gethCommon.Address][]pooledEvmTx)
 				return copy
-			}()
+			}
+			// Take a snapshot here to allow `Add()` to continue accept
+			// incoming EVM transactions, without blocking until the
+			// batch transactions are submitted.
+			txsGroupedByAddress := snapshot()
 
 			for address, pooledTxs := range txsGroupedByAddress {
 				err := t.batchSubmitTransactionsForSameAddress(
