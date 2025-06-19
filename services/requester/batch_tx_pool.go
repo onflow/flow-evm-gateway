@@ -135,9 +135,13 @@ func (t *BatchTxPool) processPooledTransactions() {
 			snapshot := func() map[gethCommon.Address][]pooledEvmTx {
 				t.txMux.Lock()
 				defer t.txMux.Unlock()
-				copy := t.pooledTxs
+				poolCopy := make(map[gethCommon.Address][]pooledEvmTx)
+				for addr, txs := range t.pooledTxs {
+					poolCopy[addr] = make([]pooledEvmTx, len(txs))
+					copy(poolCopy[addr], txs)
+				}
 				t.pooledTxs = make(map[gethCommon.Address][]pooledEvmTx)
-				return copy
+				return poolCopy
 			}
 			// Take a snapshot here to allow `Add()` to continue accept
 			// incoming EVM transactions, without blocking until the
