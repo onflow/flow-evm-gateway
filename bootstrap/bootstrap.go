@@ -255,6 +255,7 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 			b.config,
 			b.collector,
 			b.keystore,
+			ctx,
 		)
 	} else {
 		txPool = requester.NewSingleTxPool(
