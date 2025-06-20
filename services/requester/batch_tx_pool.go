@@ -14,7 +14,6 @@ import (
 	gethCommon "github.com/onflow/go-ethereum/common"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/rs/zerolog"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/metrics"
@@ -242,32 +241,4 @@ func (t *BatchTxPool) buildTransaction(
 	t.collector.OperatorBalance(account)
 
 	return flowTx, nil
-}
-
-func (t *BatchTxPool) fetchFlowLatestBlockAndCOA(ctx context.Context) (
-	*flow.Block,
-	*flow.Account,
-	error,
-) {
-	var (
-		g           = errgroup.Group{}
-		err1, err2  error
-		latestBlock *flow.Block
-		account     *flow.Account
-	)
-
-	// execute concurrently so we can speed up all the information we need for tx
-	g.Go(func() error {
-		latestBlock, err1 = t.client.GetLatestBlock(ctx, true)
-		return err1
-	})
-	g.Go(func() error {
-		account, err2 = t.client.GetAccount(ctx, t.config.COAAddress)
-		return err2
-	})
-	if err := g.Wait(); err != nil {
-		return nil, nil, err
-	}
-
-	return latestBlock, account, nil
 }
