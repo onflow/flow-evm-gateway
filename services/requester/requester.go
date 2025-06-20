@@ -3,19 +3,15 @@ package requester
 import (
 	"context"
 	_ "embed"
-	"encoding/hex"
 	"fmt"
 	"math/big"
-	"sync"
 	"time"
 
 	"github.com/onflow/cadence"
-	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go/fvm/evm"
 	"github.com/onflow/flow-go/fvm/evm/emulator"
 	"github.com/onflow/flow-go/fvm/evm/offchain/query"
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
-	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/onflow/go-ethereum/common"
 	"github.com/onflow/go-ethereum/common/hexutil"
 	gethCore "github.com/onflow/go-ethereum/core"
@@ -25,14 +21,12 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-limiter"
 	"github.com/sethvargo/go-limiter/memorystore"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/onflow/flow-evm-gateway/config"
 	ethTypes "github.com/onflow/flow-evm-gateway/eth/types"
 	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/models"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
-	"github.com/onflow/flow-evm-gateway/services/requester/keystore"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
 )
@@ -40,6 +34,9 @@ import (
 var (
 	//go:embed cadence/run.cdc
 	runTxScript []byte
+
+	//go:embed cadence/batch_run.cdc
+	batchRunTxScript []byte
 
 	//go:embed cadence/get_latest_evm_height.cdc
 	getLatestEVMHeight []byte
@@ -103,11 +100,9 @@ type EVM struct {
 	registerStore *pebble.RegisterStorage
 	client        *CrossSporkClient
 	config        config.Config
-	txPool        *TxPool
+	txPool        TxPool
 	logger        zerolog.Logger
 	blocks        storage.BlockIndexer
-	mux           sync.Mutex
-	keystore      *keystore.KeyStore
 
 	collector   metrics.Collector
 	rateLimiter limiter.Store
@@ -119,14 +114,10 @@ func NewEVM(
 	config config.Config,
 	logger zerolog.Logger,
 	blocks storage.BlockIndexer,
-	txPool *TxPool,
+	txPool TxPool,
 	collector metrics.Collector,
-	keystore *keystore.KeyStore,
 ) (*EVM, error) {
 	logger = logger.With().Str("component", "requester").Logger()
-
-	// initialize the available keys metric since it is only updated when sending a tx
-	collector.AvailableSigningKeys(keystore.AvailableKeys())
 
 	if !config.IndexOnly {
 		address := config.COAAddress
@@ -168,7 +159,6 @@ func NewEVM(
 		blocks:        blocks,
 		txPool:        txPool,
 		collector:     collector,
-		keystore:      keystore,
 		rateLimiter:   rateLimiter,
 	}, nil
 }
@@ -244,23 +234,7 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 		}
 	}
 
-	txData := hex.EncodeToString(data)
-	hexEncodedTx, err := cadence.NewString(txData)
-	if err != nil {
-		return common.Hash{}, err
-	}
-	coinbaseAddress, err := cadence.NewString(e.config.Coinbase.Hex())
-	if err != nil {
-		return common.Hash{}, err
-	}
-
-	script := replaceAddresses(runTxScript, e.config.FlowNetworkID)
-	flowTx, err := e.buildTransaction(ctx, script, hexEncodedTx, coinbaseAddress)
-	if err != nil {
-		return common.Hash{}, err
-	}
-
-	if err := e.txPool.Send(ctx, flowTx, tx); err != nil {
+	if err := e.txPool.Add(ctx, tx); err != nil {
 		return common.Hash{}, err
 	}
 
@@ -272,11 +246,10 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 
 	e.logger.Info().
 		Str("evm-id", tx.Hash().Hex()).
-		Str("flow-id", flowTx.ID().Hex()).
 		Str("to", to).
 		Str("from", from.Hex()).
 		Str("value", tx.Value().String()).
-		Msg("raw transaction sent")
+		Msg("raw transaction submitted")
 
 	return tx.Hash(), nil
 }
@@ -593,69 +566,6 @@ func (e *EVM) dryRunTx(
 	}
 
 	return result, nil
-}
-
-// buildTransaction creates a flow transaction from the provided script,
-// with the arguments and signs it with the configured COA account.
-func (e *EVM) buildTransaction(
-	ctx context.Context,
-	script []byte,
-	args ...cadence.Value,
-) (*flow.Transaction, error) {
-	// building and signing transactions should be blocking, so we don't have keys conflict
-	e.mux.Lock()
-	defer e.mux.Unlock()
-
-	defer func() {
-		e.collector.AvailableSigningKeys(e.keystore.AvailableKeys())
-	}()
-
-	var (
-		g           = errgroup.Group{}
-		err1, err2  error
-		latestBlock *flow.Block
-		account     *flow.Account
-	)
-	// execute concurrently so we can speed up all the information we need for tx
-	g.Go(func() error {
-		latestBlock, err1 = e.client.GetLatestBlock(ctx, true)
-		return err1
-	})
-	g.Go(func() error {
-		account, err2 = e.client.GetAccount(ctx, e.config.COAAddress)
-		return err2
-	})
-	if err := g.Wait(); err != nil {
-		return nil, err
-	}
-
-	flowTx := flow.NewTransaction().
-		SetScript(script).
-		SetReferenceBlockID(latestBlock.ID).
-		SetComputeLimit(flowGo.DefaultMaxTransactionGasLimit)
-
-	for _, arg := range args {
-		if err := flowTx.AddArgument(arg); err != nil {
-			return nil, fmt.Errorf("failed to add argument: %s, with %w", arg, err)
-		}
-	}
-
-	accKey, err := e.keystore.Take()
-	if err != nil {
-		return nil, err
-	}
-
-	if err := accKey.SetProposerPayerAndSign(flowTx, account); err != nil {
-		accKey.Done()
-		return nil, err
-	}
-
-	// now that the transaction is prepped, store the transaction's metadata
-	accKey.SetLockMetadata(flowTx.ID(), latestBlock.Height)
-
-	e.collector.OperatorBalance(account)
-
-	return flowTx, nil
 }
 
 // validateTransactionWithState checks if the given tx has the correct
