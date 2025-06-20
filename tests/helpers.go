@@ -92,6 +92,8 @@ func startEmulator(createTestAccounts bool) (*server.EmulatorServer, error) {
 		Host:                   "localhost",
 		TransactionExpiry:      10,
 		TransactionMaxGasLimit: flow.DefaultMaxTransactionGasLimit,
+		SetupEVMEnabled:        true,
+		SetupVMBridgeEnabled:   false,
 	})
 
 	go func() {
