@@ -44,19 +44,18 @@ type BatchTxPool struct {
 	*SingleTxPool
 	pooledTxs map[gethCommon.Address][]pooledEvmTx
 	txMux     sync.Mutex
-	ctx       context.Context
 }
 
 var _ TxPool = &BatchTxPool{}
 
 func NewBatchTxPool(
+	ctx context.Context,
 	client *CrossSporkClient,
 	transactionsPublisher *models.Publisher[*gethTypes.Transaction],
 	logger zerolog.Logger,
 	config config.Config,
 	collector metrics.Collector,
 	keystore *keystore.KeyStore,
-	ctx context.Context,
 ) *BatchTxPool {
 	// initialize the available keys metric since it is only updated when sending a tx
 	collector.AvailableSigningKeys(keystore.AvailableKeys())
@@ -73,10 +72,9 @@ func NewBatchTxPool(
 		SingleTxPool: singleTxPool,
 		pooledTxs:    make(map[gethCommon.Address][]pooledEvmTx),
 		txMux:        sync.Mutex{},
-		ctx:          ctx,
 	}
 
-	go batchPool.processPooledTransactions()
+	go batchPool.processPooledTransactions(ctx)
 
 	return batchPool
 }
@@ -115,16 +113,16 @@ func (t *BatchTxPool) Add(
 	return nil
 }
 
-func (t *BatchTxPool) processPooledTransactions() {
+func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 	ticker := time.NewTicker(t.config.TxBatchInterval)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-t.ctx.Done():
+		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			latestBlock, account, err := t.fetchFlowLatestBlockAndCOA()
+			latestBlock, account, err := t.fetchFlowLatestBlockAndCOA(ctx)
 			if err != nil {
 				t.logger.Error().Err(err).Msg(
 					"failed to get COA / latest Flow block on batch tx submission",
@@ -150,6 +148,7 @@ func (t *BatchTxPool) processPooledTransactions() {
 
 			for address, pooledTxs := range txsGroupedByAddress {
 				err := t.batchSubmitTransactionsForSameAddress(
+					ctx,
 					latestBlock,
 					account,
 					pooledTxs,
@@ -167,6 +166,7 @@ func (t *BatchTxPool) processPooledTransactions() {
 }
 
 func (t *BatchTxPool) batchSubmitTransactionsForSameAddress(
+	ctx context.Context,
 	latestBlock *flow.Block,
 	account *flow.Account,
 	pooledTxs []pooledEvmTx,
@@ -199,8 +199,6 @@ func (t *BatchTxPool) batchSubmitTransactionsForSameAddress(
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
 	if err := t.client.SendTransaction(ctx, *flowTx); err != nil {
 		return err
 	}
@@ -254,7 +252,7 @@ func (t *BatchTxPool) buildTransaction(
 	return flowTx, nil
 }
 
-func (t *BatchTxPool) fetchFlowLatestBlockAndCOA() (
+func (t *BatchTxPool) fetchFlowLatestBlockAndCOA(ctx context.Context) (
 	*flow.Block,
 	*flow.Account,
 	error,
@@ -265,9 +263,6 @@ func (t *BatchTxPool) fetchFlowLatestBlockAndCOA() (
 		latestBlock *flow.Block
 		account     *flow.Account
 	)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
 
 	// execute concurrently so we can speed up all the information we need for tx
 	g.Go(func() error {
