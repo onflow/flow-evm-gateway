@@ -93,8 +93,19 @@ func (t *SingleTxPool) Add(
 		return err
 	}
 
+	latestBlock, account, err := t.fetchFlowLatestBlockAndCOA(ctx)
+	if err != nil {
+		return err
+	}
+
 	script := replaceAddresses(runTxScript, t.config.FlowNetworkID)
-	flowTx, err := t.buildTransaction(ctx, script, hexEncodedTx, coinbaseAddress)
+	flowTx, err := t.buildTransaction(
+		latestBlock,
+		account,
+		script,
+		hexEncodedTx,
+		coinbaseAddress,
+	)
 	if err != nil {
 		return err
 	}
@@ -143,32 +154,14 @@ func (t *SingleTxPool) Add(
 // buildTransaction creates a Cadence transaction from the provided script,
 // with the given arguments and signs it with the configured COA account.
 func (t *SingleTxPool) buildTransaction(
-	ctx context.Context,
+	latestBlock *flow.Block,
+	account *flow.Account,
 	script []byte,
 	args ...cadence.Value,
 ) (*flow.Transaction, error) {
 	defer func() {
 		t.collector.AvailableSigningKeys(t.keystore.AvailableKeys())
 	}()
-
-	var (
-		g           = errgroup.Group{}
-		err1, err2  error
-		latestBlock *flow.Block
-		account     *flow.Account
-	)
-	// execute concurrently so we can speed up all the information we need for tx
-	g.Go(func() error {
-		latestBlock, err1 = t.client.GetLatestBlock(ctx, true)
-		return err1
-	})
-	g.Go(func() error {
-		account, err2 = t.client.GetAccount(ctx, t.config.COAAddress)
-		return err2
-	})
-	if err := g.Wait(); err != nil {
-		return nil, err
-	}
 
 	flowTx := flow.NewTransaction().
 		SetScript(script).
@@ -202,4 +195,32 @@ func (t *SingleTxPool) buildTransaction(
 	t.collector.OperatorBalance(account)
 
 	return flowTx, nil
+}
+
+func (t *SingleTxPool) fetchFlowLatestBlockAndCOA(ctx context.Context) (
+	*flow.Block,
+	*flow.Account,
+	error,
+) {
+	var (
+		g           = errgroup.Group{}
+		err1, err2  error
+		latestBlock *flow.Block
+		account     *flow.Account
+	)
+
+	// execute concurrently so we can speed up all the information we need for tx
+	g.Go(func() error {
+		latestBlock, err1 = t.client.GetLatestBlock(ctx, true)
+		return err1
+	})
+	g.Go(func() error {
+		account, err2 = t.client.GetAccount(ctx, t.config.COAAddress)
+		return err2
+	})
+	if err := g.Wait(); err != nil {
+		return nil, nil, err
+	}
+
+	return latestBlock, account, nil
 }
