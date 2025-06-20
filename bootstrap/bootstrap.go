@@ -249,13 +249,13 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 	var txPool requester.TxPool
 	if b.config.TxBatchMode {
 		txPool = requester.NewBatchTxPool(
+			ctx,
 			b.client,
 			b.publishers.Transaction,
 			b.logger,
 			b.config,
 			b.collector,
 			b.keystore,
-			ctx,
 		)
 	} else {
 		txPool = requester.NewSingleTxPool(
