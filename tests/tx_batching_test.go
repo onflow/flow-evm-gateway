@@ -206,7 +206,7 @@ func Test_TransactionBatchingMode(t *testing.T) {
 
 	t.Run("same EOA transactions with valid nonce but non-sequential", func(t *testing.T) {
 		// the three nonces below are all valid, but they are
-		// non-sequential. Due to the thread nature of the EVM GW,
+		// non-sequential. Due to the threaded nature of the EVM GW,
 		// we sort the grouped transactions of EOAs by their nonce.
 		nonces := []uint64{nonce + 2, nonce, nonce + 1}
 		hashes := make([]common.Hash, len(nonces))
@@ -345,7 +345,6 @@ func Test_TransactionBatchingModeWithConcurrentTxSubmissions(t *testing.T) {
 	totalTxs := 25
 	transferAmount := int64(50_000)
 	g := errgroup.Group{}
-	var err1 error
 
 	for _, testPrivatekey := range testAddresses {
 		privateKey, err := crypto.HexToECDSA(testPrivatekey)
@@ -384,7 +383,6 @@ func Test_TransactionBatchingModeWithConcurrentTxSubmissions(t *testing.T) {
 
 	err = g.Wait()
 	require.NoError(t, err)
-	require.NoError(t, err1)
 
 	expectedBalance := int64(len(testAddresses)) * int64(totalTxs) * transferAmount
 
