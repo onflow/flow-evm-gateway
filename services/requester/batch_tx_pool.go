@@ -35,7 +35,7 @@ type pooledEvmTx struct {
 //
 // The main advantage of this implementation over the `SingleTxPool`, is the
 // guarantee that transactions originated from the same EOA address, which
-// arrive in a short time interval (about the same as Flow's block productionrate),
+// arrive in a short time interval (about the same as Flow's block production rate),
 // will be executed in the same order their arrived.
 // This helps to reduce the nonce mismatch errors which mainly occur from the
 // re-ordering of Cadence transactions that happens from Collection nodes.
@@ -88,7 +88,7 @@ func (t *BatchTxPool) Add(
 ) error {
 	t.txPublisher.Publish(tx) // publish pending transaction event
 
-	// tx sending should be blocking, so we don't have races when
+	// tx adding should be blocking, so we don't have races when
 	// pooled transactions are being processed in the background.
 	t.txMux.Lock()
 	defer t.txMux.Unlock()
@@ -146,7 +146,7 @@ func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 				)
 				if err != nil {
 					t.logger.Error().Err(err).Msgf(
-						"failed to send Flow transaction from BatchPool for EOA: %s",
+						"failed to send Flow transaction from BatchTxPool for EOA: %s",
 						address.Hex(),
 					)
 					continue
