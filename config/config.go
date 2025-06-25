@@ -96,6 +96,13 @@ type Config struct {
 	// TxRequestLimitDuration is the time interval upon which to enforce transaction submission
 	// rate limiting.
 	TxRequestLimitDuration time.Duration
+	// TxBatchMode configures the gateway to send transactions in batches grouped by EOA address,
+	// to avoid the re-ordering issue for EOAs with a high-volume of transaction submission
+	// in small intervals.
+	TxBatchMode bool
+	// TxBatchInterval is the time interval upon which to submit the transaction batches to the
+	// Flow network.
+	TxBatchInterval time.Duration
 	// ExperimentalSoftFinalityEnabled enables the experimental soft finality feature which syncs
 	// EVM block and transaction data from the upstream Access node before the block is sealed.
 	// CAUTION: This feature is experimental and may return incorrect data in certain circumstances.

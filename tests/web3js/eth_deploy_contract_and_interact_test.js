@@ -42,7 +42,7 @@ it('deploy contract and interact', async () => {
 
     // get the default deployed value on contract
     const initValue = 1337
-    let callRetrieve = await deployed.contract.methods.retrieve().encodeABI()
+    let callRetrieve = deployed.contract.methods.retrieve().encodeABI()
     result = await web3.eth.call({ to: contractAddress, data: callRetrieve }, "latest")
     assert.equal(result, initValue)
 
