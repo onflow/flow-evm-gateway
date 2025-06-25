@@ -92,6 +92,8 @@ func startEmulator(createTestAccounts bool) (*server.EmulatorServer, error) {
 		Host:                   "localhost",
 		TransactionExpiry:      10,
 		TransactionMaxGasLimit: flow.DefaultMaxTransactionGasLimit,
+		SetupEVMEnabled:        true,
+		SetupVMBridgeEnabled:   false,
 	})
 
 	go func() {
@@ -231,6 +233,7 @@ func setupTestAccounts(emu emulator.Emulator) error {
 	transaction(eoaAddress: [UInt8; 20]) {
 		let fundVault: @FlowToken.Vault
 		let auth: auth(Capabilities, Storage) &Account
+		let coa: auth(EVM.Call) &EVM.CadenceOwnedAccount
 	
 		prepare(signer: auth(Capabilities, Storage) &Account) {
 			let vaultRef = signer.storage.borrow<auth(FungibleToken.Withdraw) &FlowToken.Vault>(
@@ -239,27 +242,32 @@ func setupTestAccounts(emu emulator.Emulator) error {
 	
 			self.fundVault <- vaultRef.withdraw(amount: 10.0) as! @FlowToken.Vault
 			self.auth = signer
+
+			if !signer.storage.check<@EVM.CadenceOwnedAccount>(from: /storage/evm) {
+				signer.storage.save<@EVM.CadenceOwnedAccount>(
+					<- EVM.createCadenceOwnedAccount(),
+					to: /storage/evm
+				)
+			}
+			
+			if !signer.capabilities.exists(/public/evm) {
+				let cap = signer.capabilities.storage.issue<&EVM.CadenceOwnedAccount>(/storage/evm)
+				signer.capabilities.publish(cap, at: /public/evm)
+			}
+			
+			self.coa = signer.storage.borrow<auth(EVM.Call) &EVM.CadenceOwnedAccount>(from: /storage/evm)!
 		}
 	
 		execute {
-			let account <- EVM.createCadenceOwnedAccount()
-			account.deposit(from: <-self.fundVault)
+			self.coa.deposit(from: <-self.fundVault)
 			
 			let weiAmount: UInt = 5000000000000000000 // 5 Flow
-			let result = account.call(
+			let result = self.coa.call(
 				to: EVM.EVMAddress(bytes: eoaAddress), 
 				data: [], 
 				gasLimit: 300000, 
 				value: EVM.Balance(attoflow: weiAmount)
 			)
-
-			self.auth.storage.save<@EVM.CadenceOwnedAccount>(
-				<-account,
-				to: /storage/evm
-			)
-
-			let cap = self.auth.capabilities.storage.issue<&EVM.CadenceOwnedAccount>(/storage/evm)
-			self.auth.capabilities.publish(cap, at: /public/evm)
 		}
 	}`
 
