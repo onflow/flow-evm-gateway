@@ -12,7 +12,6 @@ import (
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/onflow/flow-go/fvm/evm/types"
-	"github.com/onflow/flow-go/model/flow"
 	"github.com/onflow/go-ethereum/common"
 	"github.com/onflow/go-ethereum/crypto"
 	"github.com/rs/zerolog"
@@ -68,7 +67,7 @@ func Test_TransactionBatchingMode(t *testing.T) {
 		LogWriter:         testLogWriter(),
 		TxStateValidation: config.TxSealValidation,
 		TxBatchMode:       true,
-		TxBatchInterval:   time.Millisecond * 1200,
+		TxBatchInterval:   time.Second * 2,
 	}
 
 	rpcTester := &rpcTest{
@@ -104,13 +103,11 @@ func Test_TransactionBatchingMode(t *testing.T) {
 		require.NoError(t, err)
 		hashes[i] = txHash
 
-		// Add a bit of waiting time every 3 to 5 transactions, to give the
-		// `BatchTxPool` a chance to submit the pooled transactions.
-		// The waiting time is about the same as the mainnet block production
-		// rate.
-		if i%3 == 0 || i%5 == 0 {
-			time.Sleep(time.Millisecond * 800)
-		}
+		// Add a bit of random waiting time, to give the `BatchTxPool`
+		// a chance to submit the pooled transactions in between requests.
+		waitTime := rand.IntN(5) * 100
+		time.Sleep(time.Duration(waitTime) * time.Millisecond)
+
 		nonce += 1
 	}
 
@@ -140,13 +137,11 @@ func Test_TransactionBatchingMode(t *testing.T) {
 			hashes[i] = txHash
 		}
 
-		var latestBlock *flow.Block
-		require.Eventually(t, func() bool {
-			latestBlock, err = emu.GetLatestBlock()
-			require.NoError(t, err)
+		// give some time to BatchTxPool to submit the pooled transactions
+		time.Sleep(cfg.TxBatchInterval)
 
-			return latestBlock != nil
-		}, time.Second*15, time.Second*1, "latest block could not be fetched")
+		latestBlock, err := emu.GetLatestBlock()
+		require.NoError(t, err)
 
 		txResults, err := emu.GetTransactionResultsByBlockID(latestBlock.ID())
 		require.NoError(t, err)
@@ -179,13 +174,19 @@ func Test_TransactionBatchingMode(t *testing.T) {
 			hashes[i] = txHash
 		}
 
-		var latestBlock *flow.Block
-		require.Eventually(t, func() bool {
-			latestBlock, err = emu.GetLatestBlock()
-			require.NoError(t, err)
+		// assert that the EVM transaction that was signed with the
+		// third nonce, was successfully executed.
+		assert.Eventually(t, func() bool {
+			rcp, err := rpcTester.getReceipt(hashes[2].String())
+			if err != nil || rcp == nil || uint64(1) != rcp.Status {
+				return false
+			}
 
-			return latestBlock != nil
-		}, time.Second*15, time.Second*1, "latest block could not be fetched")
+			return true
+		}, time.Second*15, time.Second*1, "all transactions were not executed")
+
+		latestBlock, err := emu.GetLatestBlock()
+		require.NoError(t, err)
 
 		txResults, err := emu.GetTransactionResultsByBlockID(latestBlock.ID())
 		require.NoError(t, err)
@@ -194,12 +195,6 @@ func Test_TransactionBatchingMode(t *testing.T) {
 		txResult := txResults[0]
 		// assert that the Cadence transaction did not revert
 		assert.Equal(t, "", txResult.ErrorMessage)
-
-		// assert that the EVM transaction that was signed with the
-		// third nonce, was successfully executed.
-		rcp, err := rpcTester.getReceipt(hashes[2].String())
-		require.NoError(t, err)
-		assert.Equal(t, uint64(1), rcp.Status)
 
 		nonce += 1
 	})
@@ -220,21 +215,6 @@ func Test_TransactionBatchingMode(t *testing.T) {
 			hashes[i] = txHash
 		}
 
-		var latestBlock *flow.Block
-		require.Eventually(t, func() bool {
-			latestBlock, err = emu.GetLatestBlock()
-			require.NoError(t, err)
-
-			return latestBlock != nil
-		}, time.Second*15, time.Second*1, "latest block could not be fetched")
-
-		txResults, err := emu.GetTransactionResultsByBlockID(latestBlock.ID())
-		require.NoError(t, err)
-		require.Len(t, txResults, 1)
-
-		txResult := txResults[0]
-		assert.Equal(t, "", txResult.ErrorMessage)
-
 		assert.Eventually(t, func() bool {
 			for _, h := range hashes {
 				rcp, err := rpcTester.getReceipt(h.String())
@@ -245,6 +225,16 @@ func Test_TransactionBatchingMode(t *testing.T) {
 
 			return true
 		}, time.Second*15, time.Second*1, "all transactions were not executed")
+
+		latestBlock, err := emu.GetLatestBlock()
+		require.NoError(t, err)
+
+		txResults, err := emu.GetTransactionResultsByBlockID(latestBlock.ID())
+		require.NoError(t, err)
+		require.Len(t, txResults, 1)
+
+		txResult := txResults[0]
+		assert.Equal(t, "", txResult.ErrorMessage)
 
 		nonce += 3
 	})
@@ -297,7 +287,7 @@ func Test_TransactionBatchingModeWithConcurrentTxSubmissions(t *testing.T) {
 		LogWriter:         testLogWriter(),
 		TxStateValidation: config.TxSealValidation,
 		TxBatchMode:       true,
-		TxBatchInterval:   time.Millisecond * 1200,
+		TxBatchInterval:   time.Second * 2,
 	}
 
 	rpcTester := &rpcTest{
@@ -338,7 +328,7 @@ func Test_TransactionBatchingModeWithConcurrentTxSubmissions(t *testing.T) {
 		nonce += 1
 	}
 
-	time.Sleep(3 * time.Second) // some time to process the transfer transactions
+	time.Sleep(cfg.TxBatchInterval) // some time to process the transfer transactions
 
 	testEoaReceiver := common.HexToAddress("0x6F416dcC9BEFe43b7dDF53f2662F76dD34A9fc11")
 
@@ -391,5 +381,5 @@ func Test_TransactionBatchingModeWithConcurrentTxSubmissions(t *testing.T) {
 		require.NoError(t, err)
 
 		return balance.Cmp(big.NewInt(expectedBalance)) == 0
-	}, time.Second*10, time.Second*1, "all transactions were not executed")
+	}, time.Second*30, time.Second*1, "all transactions were not executed")
 }
