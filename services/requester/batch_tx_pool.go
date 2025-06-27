@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go-sdk"
 	flowGo "github.com/onflow/flow-go/model/flow"
@@ -19,6 +20,13 @@ import (
 	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/services/requester/keystore"
+)
+
+const (
+	eoaActivityCacheSize = 10_000
+	eoaActivityCacheTTL  = 120 * time.Second
+
+	EoaActivityThreshold = 5 * time.Second
 )
 
 type pooledEvmTx struct {
@@ -41,8 +49,10 @@ type pooledEvmTx struct {
 // re-ordering of Cadence transactions that happens from Collection nodes.
 type BatchTxPool struct {
 	*SingleTxPool
-	pooledTxs map[gethCommon.Address][]pooledEvmTx
-	txMux     sync.Mutex
+	pooledTxs   map[gethCommon.Address][]pooledEvmTx
+	txChan      chan cadence.String
+	txMux       sync.Mutex
+	eoaActivity *expirable.LRU[gethCommon.Address, time.Time]
 }
 
 var _ TxPool = &BatchTxPool{}
@@ -67,10 +77,18 @@ func NewBatchTxPool(
 		collector,
 		keystore,
 	)
+
+	eoaActivity := expirable.NewLRU[gethCommon.Address, time.Time](
+		eoaActivityCacheSize,
+		nil,
+		eoaActivityCacheTTL,
+	)
 	batchPool := &BatchTxPool{
 		SingleTxPool: singleTxPool,
 		pooledTxs:    make(map[gethCommon.Address][]pooledEvmTx),
+		txChan:       make(chan cadence.String, 1000),
 		txMux:        sync.Mutex{},
+		eoaActivity:  eoaActivity,
 	}
 
 	go batchPool.processPooledTransactions(ctx)
@@ -106,8 +124,32 @@ func (t *BatchTxPool) Add(
 		return err
 	}
 
-	userTx := pooledEvmTx{txPayload: hexEncodedTx, nonce: tx.Nonce()}
-	t.pooledTxs[from] = append(t.pooledTxs[from], userTx)
+	// Scenarios
+	// 1. EOA activity not found:
+	// => We send the transaction individually, without adding it
+	// to the batch pool.
+	//
+	// 2. EOA activity found AND it was more than or equal to [X] seconds ago:
+	// => We send the transaction individually, without adding it
+	// to the batch pool.
+	//
+	// 3. EOA activity found AND it was less than [X] seconds ago:
+	// => We add the transaction to the batch pool, so that it gets
+	// processed and submitted according to the configured
+	// `TxBatchInterval`.
+	//
+	// For all 3 cases, we record the activity time for the next
+	// transactions that might come from the same EOA.
+	// [X] refers to the value defined in the constant `EoaActivityThreshold`.
+	lastActivityTime, found := t.eoaActivity.Get(from)
+	if !found || time.Since(lastActivityTime) >= EoaActivityThreshold {
+		t.txChan <- hexEncodedTx
+	} else {
+		userTx := pooledEvmTx{txPayload: hexEncodedTx, nonce: tx.Nonce()}
+		t.pooledTxs[from] = append(t.pooledTxs[from], userTx)
+	}
+
+	t.eoaActivity.Add(from, time.Now())
 
 	return nil
 }
@@ -146,11 +188,18 @@ func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 				)
 				if err != nil {
 					t.logger.Error().Err(err).Msgf(
-						"failed to send Flow transaction from BatchTxPool for EOA: %s",
+						"failed to submit Flow transaction from BatchTxPool for EOA: %s",
 						address.Hex(),
 					)
 					continue
 				}
+			}
+		case hexEncodedTx := <-t.txChan:
+			if err := t.submitSingleTransaction(ctx, hexEncodedTx); err != nil {
+				t.logger.Error().Err(err).Msg(
+					"failed to submit Flow transaction from BatchTxPool for single EOA tx",
+				)
+				continue
 			}
 		}
 	}
@@ -184,6 +233,39 @@ func (t *BatchTxPool) batchSubmitTransactionsForSameAddress(
 		account,
 		script,
 		cadence.NewArray(hexEncodedTxs),
+		coinbaseAddress,
+	)
+	if err != nil {
+		return err
+	}
+
+	if err := t.client.SendTransaction(ctx, *flowTx); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (t *BatchTxPool) submitSingleTransaction(
+	ctx context.Context,
+	hexEncodedTx cadence.String,
+) error {
+	latestBlock, account, err := t.fetchFlowLatestBlockAndCOA(ctx)
+	if err != nil {
+		return err
+	}
+
+	coinbaseAddress, err := cadence.NewString(t.config.Coinbase.Hex())
+	if err != nil {
+		return err
+	}
+
+	script := replaceAddresses(runTxScript, t.config.FlowNetworkID)
+	flowTx, err := t.buildTransaction(
+		latestBlock,
+		account,
+		script,
+		hexEncodedTx,
 		coinbaseAddress,
 	)
 	if err != nil {
