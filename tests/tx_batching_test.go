@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/onflow/flow-emulator/emulator"
 	"github.com/onflow/flow-evm-gateway/bootstrap"
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-go-sdk/access/grpc"
@@ -21,70 +22,11 @@ import (
 )
 
 func Test_TransactionBatchingMode(t *testing.T) {
-	srv, err := startEmulator(true)
-	require.NoError(t, err)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer func() {
-		cancel()
-		srv.Stop()
-	}()
-
-	grpcHost := "localhost:3569"
-	emu := srv.Emulator()
-	service := emu.ServiceKey()
-
-	client, err := grpc.NewClient(grpcHost)
-	require.NoError(t, err)
-
-	time.Sleep(500 * time.Millisecond) // some time to startup
-
-	// create new account with keys used for key-rotation
-	keyCount := 5
-	createdAddr, privateKey, err := bootstrap.CreateMultiKeyAccount(
-		client,
-		keyCount,
-		service.Address,
-		sc.FungibleToken.Address.HexWithPrefix(),
-		sc.FlowToken.Address.HexWithPrefix(),
-		service.PrivateKey,
-	)
-	require.NoError(t, err)
-
-	cfg := config.Config{
-		DatabaseDir:       t.TempDir(),
-		AccessNodeHost:    grpcHost,
-		RPCPort:           8545,
-		RPCHost:           "127.0.0.1",
-		FlowNetworkID:     "flow-emulator",
-		EVMNetworkID:      types.FlowEVMPreviewNetChainID,
-		Coinbase:          eoaTestAccount,
-		COAAddress:        *createdAddr,
-		COAKey:            privateKey,
-		GasPrice:          new(big.Int).SetUint64(0),
-		EnforceGasPrice:   true,
-		LogLevel:          zerolog.DebugLevel,
-		LogWriter:         testLogWriter(),
-		TxStateValidation: config.TxSealValidation,
-		TxBatchMode:       true,
-		TxBatchInterval:   time.Second * 2,
-	}
+	emu, cfg, stop := setupGatewayNode(t)
 
 	rpcTester := &rpcTest{
 		url: fmt.Sprintf("%s:%d", cfg.RPCHost, cfg.RPCPort),
 	}
-
-	ready := make(chan struct{})
-	go func() {
-		err = bootstrap.Run(ctx, cfg, func() {
-			close(ready)
-		})
-		require.NoError(t, err)
-	}()
-
-	<-ready
-
-	time.Sleep(3 * time.Second) // some time to startup
 
 	eoaKey, err := crypto.HexToECDSA(eoaTestPrivateKey)
 	require.NoError(t, err)
@@ -93,7 +35,7 @@ func Test_TransactionBatchingMode(t *testing.T) {
 	nonce := uint64(0)
 
 	// test scenario for multiple same-EOA transactions with increasing nonce
-	totalTxs := keyCount*5 + 3
+	totalTxs := 5*5 + 3
 	hashes := make([]common.Hash, totalTxs)
 	for i := range totalTxs {
 		signed, _, err := evmSign(big.NewInt(10), 21000, eoaKey, nonce, &testAddr, nil)
@@ -138,7 +80,7 @@ func Test_TransactionBatchingMode(t *testing.T) {
 		}
 
 		// give some time to BatchTxPool to submit the pooled transactions
-		time.Sleep(cfg.TxBatchInterval)
+		time.Sleep(cfg.TxBatchInterval + (1 * time.Second))
 
 		latestBlock, err := emu.GetLatestBlock()
 		require.NoError(t, err)
@@ -238,73 +180,16 @@ func Test_TransactionBatchingMode(t *testing.T) {
 
 		nonce += 3
 	})
+
+	stop()
 }
 
 func Test_TransactionBatchingModeWithConcurrentTxSubmissions(t *testing.T) {
-	srv, err := startEmulator(true)
-	require.NoError(t, err)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer func() {
-		cancel()
-		srv.Stop()
-	}()
-
-	grpcHost := "localhost:3569"
-	emu := srv.Emulator()
-	service := emu.ServiceKey()
-
-	client, err := grpc.NewClient(grpcHost)
-	require.NoError(t, err)
-
-	time.Sleep(500 * time.Millisecond) // some time to startup
-
-	// create new account with keys used for key-rotation
-	keyCount := 5
-	createdAddr, privateKey, err := bootstrap.CreateMultiKeyAccount(
-		client,
-		keyCount,
-		service.Address,
-		sc.FungibleToken.Address.HexWithPrefix(),
-		sc.FlowToken.Address.HexWithPrefix(),
-		service.PrivateKey,
-	)
-	require.NoError(t, err)
-
-	cfg := config.Config{
-		DatabaseDir:       t.TempDir(),
-		AccessNodeHost:    grpcHost,
-		RPCPort:           8545,
-		RPCHost:           "127.0.0.1",
-		FlowNetworkID:     "flow-emulator",
-		EVMNetworkID:      types.FlowEVMPreviewNetChainID,
-		Coinbase:          eoaTestAccount,
-		COAAddress:        *createdAddr,
-		COAKey:            privateKey,
-		GasPrice:          new(big.Int).SetUint64(0),
-		EnforceGasPrice:   true,
-		LogLevel:          zerolog.DebugLevel,
-		LogWriter:         testLogWriter(),
-		TxStateValidation: config.TxSealValidation,
-		TxBatchMode:       true,
-		TxBatchInterval:   time.Second * 2,
-	}
+	_, cfg, stop := setupGatewayNode(t)
 
 	rpcTester := &rpcTest{
 		url: fmt.Sprintf("%s:%d", cfg.RPCHost, cfg.RPCPort),
 	}
-
-	ready := make(chan struct{})
-	go func() {
-		err = bootstrap.Run(ctx, cfg, func() {
-			close(ready)
-		})
-		require.NoError(t, err)
-	}()
-
-	<-ready
-
-	time.Sleep(3 * time.Second) // some time to startup
 
 	eoaKey, err := crypto.HexToECDSA(eoaTestPrivateKey)
 	require.NoError(t, err)
@@ -328,7 +213,8 @@ func Test_TransactionBatchingModeWithConcurrentTxSubmissions(t *testing.T) {
 		nonce += 1
 	}
 
-	time.Sleep(cfg.TxBatchInterval) // some time to process the transfer transactions
+	// some time to process the transfer transactions
+	time.Sleep(cfg.TxBatchInterval + (1 * time.Second))
 
 	testEoaReceiver := common.HexToAddress("0x6F416dcC9BEFe43b7dDF53f2662F76dD34A9fc11")
 
@@ -382,4 +268,333 @@ func Test_TransactionBatchingModeWithConcurrentTxSubmissions(t *testing.T) {
 
 		return balance.Cmp(big.NewInt(expectedBalance)) == 0
 	}, time.Second*30, time.Second*1, "all transactions were not executed")
+
+	stop()
+}
+
+func Test_MultipleTransactionSubmissionsWithinSmallInterval(t *testing.T) {
+	emu, cfg, stop := setupGatewayNode(t)
+
+	rpcTester := &rpcTest{
+		url: fmt.Sprintf("%s:%d", cfg.RPCHost, cfg.RPCPort),
+	}
+
+	eoaKey, err := crypto.HexToECDSA(eoaTestPrivateKey)
+	require.NoError(t, err)
+
+	testAddr := common.HexToAddress("0x061B63D29332e4de81bD9F51A48609824CD113a8")
+	privatekey, err := crypto.HexToECDSA("ddcb1e965557474fd13de3a66a40e4bc9b759a306e5db1046bac5ca47aafd584")
+	require.NoError(t, err)
+
+	// Add a sufficient amount of funds to the test address
+	signed, _, err := evmSign(big.NewInt(1_000_000_000), 23_500, eoaKey, 0, &testAddr, nil)
+	require.NoError(t, err)
+
+	_, err = rpcTester.sendRawTx(signed)
+	require.NoError(t, err)
+
+	time.Sleep(cfg.TxBatchInterval + (1 * time.Second))
+
+	latestBlock, err := emu.GetLatestBlock()
+	require.NoError(t, err)
+
+	testEoaReceiver := common.HexToAddress("0x6F416dcC9BEFe43b7dDF53f2662F76dD34A9fc11")
+
+	// We send 2 transactions without any delay between them.
+	// Since there's no previous activity from the EOA,
+	// the 1st transaction is submitted individually,
+	// the 2nd transaction is added in the batch pool.
+	for i := range uint64(2) {
+		signed, _, err := evmSign(
+			big.NewInt(500_000),
+			23_500,
+			privatekey,
+			i,
+			&testEoaReceiver,
+			nil,
+		)
+		require.NoError(t, err)
+
+		_, err = rpcTester.sendRawTx(signed)
+		require.NoError(t, err)
+	}
+
+	time.Sleep(cfg.TxBatchInterval + (1 * time.Second))
+
+	block1, err := emu.GetBlockByHeight(latestBlock.Header.Height + 1)
+	require.NoError(t, err)
+
+	txResults, err := emu.GetTransactionsByBlockID(block1.ID())
+	require.NoError(t, err)
+	require.Len(t, txResults, 1)
+
+	// Assert that the 1st transaction was submitted individually.
+	// The easiest way to check that is by making sure that the
+	// Cadence tx used `EVM.run` instead of `EVM.batchRun`.
+	assert.Contains(
+		t,
+		string(txResults[0].Script),
+		"EVM.run",
+	)
+
+	block2, err := emu.GetBlockByHeight(latestBlock.Header.Height + 2)
+	require.NoError(t, err)
+
+	txResults, err = emu.GetTransactionsByBlockID(block2.ID())
+	require.NoError(t, err)
+	require.Len(t, txResults, 1)
+
+	// Assert that the 2nd transaction was submitted in a batch.
+	// The easiest way to check that is by making sure that the
+	// Cadence tx used `EVM.batchRun` instead of `EVM.run`.
+	assert.Contains(
+		t,
+		string(txResults[0].Script),
+		"EVM.batchRun",
+	)
+
+	stop()
+}
+
+func Test_MultipleTransactionSubmissionsWithinRecentInterval(t *testing.T) {
+	emu, cfg, stop := setupGatewayNode(t)
+
+	rpcTester := &rpcTest{
+		url: fmt.Sprintf("%s:%d", cfg.RPCHost, cfg.RPCPort),
+	}
+
+	eoaKey, err := crypto.HexToECDSA(eoaTestPrivateKey)
+	require.NoError(t, err)
+
+	testAddr := common.HexToAddress("0x061B63D29332e4de81bD9F51A48609824CD113a8")
+	privatekey, err := crypto.HexToECDSA("ddcb1e965557474fd13de3a66a40e4bc9b759a306e5db1046bac5ca47aafd584")
+	require.NoError(t, err)
+
+	// Add a sufficient amount of funds to the test address
+	signed, _, err := evmSign(big.NewInt(1_000_000_000), 23_500, eoaKey, 0, &testAddr, nil)
+	require.NoError(t, err)
+
+	_, err = rpcTester.sendRawTx(signed)
+	require.NoError(t, err)
+
+	time.Sleep(cfg.TxBatchInterval + (1 * time.Second))
+
+	latestBlock, err := emu.GetLatestBlock()
+	require.NoError(t, err)
+
+	testEoaReceiver := common.HexToAddress("0x6F416dcC9BEFe43b7dDF53f2662F76dD34A9fc11")
+
+	// We send 2 transactions with a 3 second delay between them.
+	// Since there's no previous activity from the EOA,
+	// the 1st transaction is submitted individually,
+	// the 2nd transaction is added in the batch pool,
+	// because the previous EOA activity is considered
+	// recent (3 seconds ago).
+	for i := range uint64(2) {
+		signed, _, err := evmSign(
+			big.NewInt(500_000),
+			23_500,
+			privatekey,
+			i,
+			&testEoaReceiver,
+			nil,
+		)
+		require.NoError(t, err)
+
+		// Add a 3 second delay before submitting the 2nd
+		// transaction
+		if i == 1 {
+			time.Sleep(time.Second * 3)
+		}
+
+		_, err = rpcTester.sendRawTx(signed)
+		require.NoError(t, err)
+	}
+
+	time.Sleep(cfg.TxBatchInterval + (1 * time.Second))
+
+	block1, err := emu.GetBlockByHeight(latestBlock.Header.Height + 1)
+	require.NoError(t, err)
+
+	txResults, err := emu.GetTransactionsByBlockID(block1.ID())
+	require.NoError(t, err)
+	require.Len(t, txResults, 1)
+
+	// Assert that the 1st transaction was submitted individually.
+	// The easiest way to check that is by making sure that the
+	// Cadence tx used `EVM.run` instead of `EVM.batchRun`.
+	assert.Contains(
+		t,
+		string(txResults[0].Script),
+		"EVM.run",
+	)
+
+	block2, err := emu.GetBlockByHeight(latestBlock.Header.Height + 2)
+	require.NoError(t, err)
+
+	txResults, err = emu.GetTransactionsByBlockID(block2.ID())
+	require.NoError(t, err)
+	require.Len(t, txResults, 1)
+
+	// Assert that the 2nd transaction was submitted in a batch.
+	// The easiest way to check that is by making sure that the
+	// Cadence tx used `EVM.batchRun` instead of `EVM.run`.
+	assert.Contains(
+		t,
+		string(txResults[0].Script),
+		"EVM.batchRun",
+	)
+
+	stop()
+}
+
+func Test_MultipleTransactionSubmissionsWithinNonRecentInterval(t *testing.T) {
+	emu, cfg, stop := setupGatewayNode(t)
+
+	rpcTester := &rpcTest{
+		url: fmt.Sprintf("%s:%d", cfg.RPCHost, cfg.RPCPort),
+	}
+
+	eoaKey, err := crypto.HexToECDSA(eoaTestPrivateKey)
+	require.NoError(t, err)
+
+	testAddr := common.HexToAddress("0x061B63D29332e4de81bD9F51A48609824CD113a8")
+	privatekey, err := crypto.HexToECDSA("ddcb1e965557474fd13de3a66a40e4bc9b759a306e5db1046bac5ca47aafd584")
+	require.NoError(t, err)
+
+	// Add a sufficient amount of funds to the test address
+	signed, _, err := evmSign(big.NewInt(1_000_000_000), 23_500, eoaKey, 0, &testAddr, nil)
+	require.NoError(t, err)
+
+	_, err = rpcTester.sendRawTx(signed)
+	require.NoError(t, err)
+
+	time.Sleep(cfg.TxBatchInterval + (1 * time.Second))
+
+	latestBlock, err := emu.GetLatestBlock()
+	require.NoError(t, err)
+
+	testEoaReceiver := common.HexToAddress("0x6F416dcC9BEFe43b7dDF53f2662F76dD34A9fc11")
+
+	// We send 2 transactions with a 5 second delay between them.
+	// Since there's no previous activity from the EOA,
+	// the 1st transaction is submitted individually,
+	// the 2nd transaction is added in the batch pool,
+	// because the previous EOA activity is considered
+	// non-recent (5 seconds ago).
+	for i := range uint64(2) {
+		signed, _, err := evmSign(
+			big.NewInt(500_000),
+			23_500,
+			privatekey,
+			i,
+			&testEoaReceiver,
+			nil,
+		)
+		require.NoError(t, err)
+
+		// Add a 5 second delay before submitting the 2nd
+		// transaction
+		if i == 1 {
+			time.Sleep(time.Second * 5)
+		}
+
+		_, err = rpcTester.sendRawTx(signed)
+		require.NoError(t, err)
+	}
+
+	time.Sleep(cfg.TxBatchInterval + (1 * time.Second))
+
+	block1, err := emu.GetBlockByHeight(latestBlock.Header.Height + 1)
+	require.NoError(t, err)
+
+	txResults, err := emu.GetTransactionsByBlockID(block1.ID())
+	require.NoError(t, err)
+	require.Len(t, txResults, 1)
+
+	// Assert that the 1st transaction was submitted individually.
+	// The easiest way to check that is by making sure that the
+	// Cadence tx used `EVM.run` instead of `EVM.batchRun`.
+	assert.Contains(
+		t,
+		string(txResults[0].Script),
+		"EVM.run",
+	)
+
+	block2, err := emu.GetBlockByHeight(latestBlock.Header.Height + 2)
+	require.NoError(t, err)
+
+	txResults, err = emu.GetTransactionsByBlockID(block2.ID())
+	require.NoError(t, err)
+	require.Len(t, txResults, 1)
+
+	// Assert that the 2nd transaction was also submitted individually.
+	// The easiest way to check that is by making sure that the
+	// Cadence tx used `EVM.run` instead of `EVM.batchRun`.
+	assert.Contains(
+		t,
+		string(txResults[0].Script),
+		"EVM.run",
+	)
+
+	stop()
+}
+
+func setupGatewayNode(t *testing.T) (emulator.Emulator, config.Config, func()) {
+	srv, err := startEmulator(true)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	emu := srv.Emulator()
+	service := emu.ServiceKey()
+
+	grpcHost := "localhost:3569"
+	client, err := grpc.NewClient(grpcHost)
+	require.NoError(t, err)
+
+	// create new account with keys used for key-rotation
+	keyCount := 5
+	coaAddress, privateKey, err := bootstrap.CreateMultiKeyAccount(
+		client,
+		keyCount,
+		service.Address,
+		sc.FungibleToken.Address.HexWithPrefix(),
+		sc.FlowToken.Address.HexWithPrefix(),
+		service.PrivateKey,
+	)
+	require.NoError(t, err)
+
+	cfg := config.Config{
+		DatabaseDir:       t.TempDir(),
+		AccessNodeHost:    grpcHost,
+		RPCPort:           8545,
+		RPCHost:           "127.0.0.1",
+		FlowNetworkID:     "flow-emulator",
+		EVMNetworkID:      types.FlowEVMPreviewNetChainID,
+		Coinbase:          eoaTestAccount,
+		COAAddress:        *coaAddress,
+		COAKey:            privateKey,
+		GasPrice:          new(big.Int).SetUint64(0),
+		EnforceGasPrice:   true,
+		LogLevel:          zerolog.DebugLevel,
+		LogWriter:         testLogWriter(),
+		TxStateValidation: config.TxSealValidation,
+		TxBatchMode:       true,
+		TxBatchInterval:   time.Millisecond * 1200,
+	}
+
+	bootstrapDone := make(chan struct{})
+	go func() {
+		err = bootstrap.Run(ctx, cfg, func() {
+			close(bootstrapDone)
+		})
+		require.NoError(t, err)
+	}()
+
+	<-bootstrapDone
+
+	return emu, cfg, func() {
+		cancel()
+		srv.Stop()
+	}
 }
