@@ -479,7 +479,7 @@ func Test_MultipleTransactionSubmissionsWithinNonRecentInterval(t *testing.T) {
 	// We send 2 transactions with a 5 second delay between them.
 	// Since there's no previous activity from the EOA,
 	// the 1st transaction is submitted individually,
-	// the 2nd transaction is added in the batch pool,
+	// the 2nd transaction is also submitted individually,
 	// because the previous EOA activity is considered
 	// non-recent (5 seconds ago).
 	for i := range uint64(2) {
