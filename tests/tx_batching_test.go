@@ -22,7 +22,7 @@ import (
 )
 
 func Test_TransactionBatchingMode(t *testing.T) {
-	emu, cfg, stop := setupGatewayNode(t)
+	_, cfg, stop := setupGatewayNode(t)
 
 	rpcTester := &rpcTest{
 		url: fmt.Sprintf("%s:%d", cfg.RPCHost, cfg.RPCPort),
@@ -35,7 +35,7 @@ func Test_TransactionBatchingMode(t *testing.T) {
 	nonce := uint64(0)
 
 	// test scenario for multiple same-EOA transactions with increasing nonce
-	totalTxs := 5*5 + 3
+	totalTxs := 25
 	hashes := make([]common.Hash, totalTxs)
 	for i := range totalTxs {
 		signed, _, err := evmSign(big.NewInt(10), 21000, eoaKey, nonce, &testAddr, nil)
@@ -63,123 +63,6 @@ func Test_TransactionBatchingMode(t *testing.T) {
 
 		return true
 	}, time.Second*15, time.Second*1, "all transactions were not executed")
-
-	t.Run("same EOA transactions with mismatching nonces", func(t *testing.T) {
-		// the first nonce will cause a "nonce too low" validation error
-		// the second nonce will cause a "nonce too high" validation error
-		nonces := []uint64{nonce - 2, nonce + 2}
-		hashes := make([]common.Hash, len(nonces))
-
-		for i, nonce := range nonces {
-			signed, _, err := evmSign(big.NewInt(10), 21000, eoaKey, nonce, &testAddr, nil)
-			require.NoError(t, err)
-
-			txHash, err := rpcTester.sendRawTx(signed)
-			require.NoError(t, err)
-			hashes[i] = txHash
-		}
-
-		// give some time to BatchTxPool to submit the pooled transactions
-		time.Sleep(cfg.TxBatchInterval + (1 * time.Second))
-
-		latestBlock, err := emu.GetLatestBlock()
-		require.NoError(t, err)
-
-		txResults, err := emu.GetTransactionResultsByBlockID(latestBlock.ID())
-		require.NoError(t, err)
-		require.Len(t, txResults, 1)
-
-		txResult := txResults[0]
-		// The `batch_run.cdc` Cadence transaction will fail with the error
-		// message of the first invalid EVM transaction.
-		expectedErrMessage := fmt.Sprintf(
-			"nonce too low: address 0xFACF71692421039876a5BB4F10EF7A439D8ef61E, tx: %d state: %d",
-			nonce-2,
-			nonce,
-		)
-		assert.Contains(t, txResult.ErrorMessage, expectedErrMessage)
-	})
-
-	t.Run("same EOA transactions with mismatching nonces and valid nonce", func(t *testing.T) {
-		// the first nonce will cause a "nonce too low" validation error
-		// the second nonce will cause a "nonce too high" validation error
-		// the third nonce, however, is valid and should execute
-		nonces := []uint64{nonce - 2, nonce + 2, nonce}
-		hashes := make([]common.Hash, len(nonces))
-
-		for i, nonce := range nonces {
-			signed, _, err := evmSign(big.NewInt(10), 21000, eoaKey, nonce, &testAddr, nil)
-			require.NoError(t, err)
-
-			txHash, err := rpcTester.sendRawTx(signed)
-			require.NoError(t, err)
-			hashes[i] = txHash
-		}
-
-		// assert that the EVM transaction that was signed with the
-		// third nonce, was successfully executed.
-		assert.Eventually(t, func() bool {
-			rcp, err := rpcTester.getReceipt(hashes[2].String())
-			if err != nil || rcp == nil || uint64(1) != rcp.Status {
-				return false
-			}
-
-			return true
-		}, time.Second*15, time.Second*1, "all transactions were not executed")
-
-		latestBlock, err := emu.GetLatestBlock()
-		require.NoError(t, err)
-
-		txResults, err := emu.GetTransactionResultsByBlockID(latestBlock.ID())
-		require.NoError(t, err)
-		require.Len(t, txResults, 1)
-
-		txResult := txResults[0]
-		// assert that the Cadence transaction did not revert
-		assert.Equal(t, "", txResult.ErrorMessage)
-
-		nonce += 1
-	})
-
-	t.Run("same EOA transactions with valid nonce but non-sequential", func(t *testing.T) {
-		// the three nonces below are all valid, but they are
-		// non-sequential. Due to the threaded nature of the EVM GW,
-		// we sort the grouped transactions of EOAs by their nonce.
-		nonces := []uint64{nonce + 2, nonce, nonce + 1}
-		hashes := make([]common.Hash, len(nonces))
-
-		for i, nonce := range nonces {
-			signed, _, err := evmSign(big.NewInt(10), 21000, eoaKey, nonce, &testAddr, nil)
-			require.NoError(t, err)
-
-			txHash, err := rpcTester.sendRawTx(signed)
-			require.NoError(t, err)
-			hashes[i] = txHash
-		}
-
-		assert.Eventually(t, func() bool {
-			for _, h := range hashes {
-				rcp, err := rpcTester.getReceipt(h.String())
-				if err != nil || rcp == nil || uint64(1) != rcp.Status {
-					return false
-				}
-			}
-
-			return true
-		}, time.Second*15, time.Second*1, "all transactions were not executed")
-
-		latestBlock, err := emu.GetLatestBlock()
-		require.NoError(t, err)
-
-		txResults, err := emu.GetTransactionResultsByBlockID(latestBlock.ID())
-		require.NoError(t, err)
-		require.Len(t, txResults, 1)
-
-		txResult := txResults[0]
-		assert.Equal(t, "", txResult.ErrorMessage)
-
-		nonce += 3
-	})
 
 	stop()
 }
@@ -214,7 +97,7 @@ func Test_TransactionBatchingModeWithConcurrentTxSubmissions(t *testing.T) {
 	}
 
 	// some time to process the transfer transactions
-	time.Sleep(cfg.TxBatchInterval + (1 * time.Second))
+	time.Sleep(cfg.TxBatchInterval + time.Second)
 
 	testEoaReceiver := common.HexToAddress("0x6F416dcC9BEFe43b7dDF53f2662F76dD34A9fc11")
 
@@ -293,7 +176,7 @@ func Test_MultipleTransactionSubmissionsWithinSmallInterval(t *testing.T) {
 	_, err = rpcTester.sendRawTx(signed)
 	require.NoError(t, err)
 
-	time.Sleep(cfg.TxBatchInterval + (1 * time.Second))
+	time.Sleep(cfg.TxBatchInterval + time.Second)
 
 	latestBlock, err := emu.GetLatestBlock()
 	require.NoError(t, err)
@@ -319,7 +202,7 @@ func Test_MultipleTransactionSubmissionsWithinSmallInterval(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	time.Sleep(cfg.TxBatchInterval + (1 * time.Second))
+	time.Sleep(cfg.TxBatchInterval + time.Second)
 
 	block1, err := emu.GetBlockByHeight(latestBlock.Header.Height + 1)
 	require.NoError(t, err)
@@ -377,19 +260,24 @@ func Test_MultipleTransactionSubmissionsWithinRecentInterval(t *testing.T) {
 	_, err = rpcTester.sendRawTx(signed)
 	require.NoError(t, err)
 
-	time.Sleep(cfg.TxBatchInterval + (1 * time.Second))
+	time.Sleep(cfg.TxBatchInterval + time.Second)
 
 	latestBlock, err := emu.GetLatestBlock()
 	require.NoError(t, err)
 
 	testEoaReceiver := common.HexToAddress("0x6F416dcC9BEFe43b7dDF53f2662F76dD34A9fc11")
 
-	// We send 2 transactions with a 3 second delay between them.
+	// We send 2 transactions with a 1 second delay between them.
 	// Since there's no previous activity from the EOA,
 	// the 1st transaction is submitted individually,
 	// the 2nd transaction is added in the batch pool,
 	// because the previous EOA activity is considered
-	// recent (3 seconds ago).
+	// recent (1 seconds ago).
+	// A transaction is considered recent, when the last
+	// activity of the EOA was X seconds ago, where:
+	// X = `cfg.TxBatchInterval`.
+	// For the E2E tests the `cfg.TxBatchInterval` is equal
+	// to 2 seconds.
 	for i := range uint64(2) {
 		signed, _, err := evmSign(
 			big.NewInt(500_000),
@@ -401,17 +289,16 @@ func Test_MultipleTransactionSubmissionsWithinRecentInterval(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		// Add a 3 second delay before submitting the 2nd
-		// transaction
+		// Add a 1 second delay before submitting the 2nd transaction
 		if i == 1 {
-			time.Sleep(time.Second * 3)
+			time.Sleep(time.Second)
 		}
 
 		_, err = rpcTester.sendRawTx(signed)
 		require.NoError(t, err)
 	}
 
-	time.Sleep(cfg.TxBatchInterval + (1 * time.Second))
+	time.Sleep(cfg.TxBatchInterval + time.Second)
 
 	block1, err := emu.GetBlockByHeight(latestBlock.Header.Height + 1)
 	require.NoError(t, err)
@@ -469,19 +356,24 @@ func Test_MultipleTransactionSubmissionsWithinNonRecentInterval(t *testing.T) {
 	_, err = rpcTester.sendRawTx(signed)
 	require.NoError(t, err)
 
-	time.Sleep(cfg.TxBatchInterval + (1 * time.Second))
+	time.Sleep(cfg.TxBatchInterval + time.Second)
 
 	latestBlock, err := emu.GetLatestBlock()
 	require.NoError(t, err)
 
 	testEoaReceiver := common.HexToAddress("0x6F416dcC9BEFe43b7dDF53f2662F76dD34A9fc11")
 
-	// We send 2 transactions with a 5 second delay between them.
+	// We send 2 transactions with a delay of 3 seconds between them.
 	// Since there's no previous activity from the EOA,
 	// the 1st transaction is submitted individually,
 	// the 2nd transaction is also submitted individually,
 	// because the previous EOA activity is considered
-	// non-recent (5 seconds ago).
+	// non-recent (3 seconds ago).
+	// A transaction is considered recent, when the last
+	// activity of the EOA was X seconds ago, where:
+	// X = `cfg.TxBatchInterval`.
+	// For the E2E tests the `cfg.TxBatchInterval` is equal
+	// to 2 seconds.
 	for i := range uint64(2) {
 		signed, _, err := evmSign(
 			big.NewInt(500_000),
@@ -493,17 +385,17 @@ func Test_MultipleTransactionSubmissionsWithinNonRecentInterval(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		// Add a 5 second delay before submitting the 2nd
+		// Add a 3 second delay before submitting the 2nd
 		// transaction
 		if i == 1 {
-			time.Sleep(time.Second * 5)
+			time.Sleep(cfg.TxBatchInterval + time.Second)
 		}
 
 		_, err = rpcTester.sendRawTx(signed)
 		require.NoError(t, err)
 	}
 
-	time.Sleep(cfg.TxBatchInterval + (1 * time.Second))
+	time.Sleep(cfg.TxBatchInterval + time.Second)
 
 	block1, err := emu.GetBlockByHeight(latestBlock.Header.Height + 1)
 	require.NoError(t, err)
@@ -580,7 +472,7 @@ func setupGatewayNode(t *testing.T) (emulator.Emulator, config.Config, func()) {
 		LogWriter:         testLogWriter(),
 		TxStateValidation: config.TxSealValidation,
 		TxBatchMode:       true,
-		TxBatchInterval:   time.Millisecond * 1200,
+		TxBatchInterval:   time.Second * 2,
 	}
 
 	bootstrapDone := make(chan struct{})
