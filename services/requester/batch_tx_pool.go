@@ -24,9 +24,13 @@ import (
 
 const (
 	eoaActivityCacheSize = 10_000
-	eoaActivityCacheTTL  = 120 * time.Second
-
-	EoaActivityThreshold = 5 * time.Second
+	// Buffer capacity of the channel used for individual transaction
+	// submission. Since `BatchTxPool.Add()` is called quite frequently,
+	// we don't want sending to the channel to block, until there's a
+	// receive ready. That's why we set a high buffer capacity, to allow
+	// `BatchTxPool.Add()` to do its job quickly and release any resources
+	// held, like locks etc.
+	txChanBufferSize = 1_000
 )
 
 type pooledEvmTx struct {
@@ -81,12 +85,12 @@ func NewBatchTxPool(
 	eoaActivity := expirable.NewLRU[gethCommon.Address, time.Time](
 		eoaActivityCacheSize,
 		nil,
-		eoaActivityCacheTTL,
+		config.TxBatchInterval,
 	)
 	batchPool := &BatchTxPool{
 		SingleTxPool: singleTxPool,
 		pooledTxs:    make(map[gethCommon.Address][]pooledEvmTx),
-		txChan:       make(chan cadence.String, 1000),
+		txChan:       make(chan cadence.String, txChanBufferSize),
 		txMux:        sync.Mutex{},
 		eoaActivity:  eoaActivity,
 	}
@@ -129,7 +133,7 @@ func (t *BatchTxPool) Add(
 	// => We send the transaction individually, without adding it
 	// to the batch pool.
 	//
-	// 2. EOA activity found AND it was more than or equal to [X] seconds ago:
+	// 2. EOA activity found AND it was more than [X] seconds ago:
 	// => We send the transaction individually, without adding it
 	// to the batch pool.
 	//
@@ -140,9 +144,9 @@ func (t *BatchTxPool) Add(
 	//
 	// For all 3 cases, we record the activity time for the next
 	// transactions that might come from the same EOA.
-	// [X] refers to the value defined in the constant `EoaActivityThreshold`.
+	// [X] is equal to the configured `TxBatchInterval` duration.
 	lastActivityTime, found := t.eoaActivity.Get(from)
-	if !found || time.Since(lastActivityTime) >= EoaActivityThreshold {
+	if !found || time.Since(lastActivityTime) > t.config.TxBatchInterval {
 		t.txChan <- hexEncodedTx
 	} else {
 		userTx := pooledEvmTx{txPayload: hexEncodedTx, nonce: tx.Nonce()}
