@@ -161,6 +161,9 @@ func (t *BatchTxPool) Add(
 func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 	ticker := time.NewTicker(t.config.TxBatchInterval)
 	defer ticker.Stop()
+	defer func() {
+		close(t.txChan)
+	}()
 
 	for {
 		select {
