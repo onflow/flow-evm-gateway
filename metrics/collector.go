@@ -41,7 +41,7 @@ var evmBlockIndexedCounter = prometheus.NewCounter(prometheus.CounterOpts{
 
 var evmTxIndexedCounter = prometheus.NewCounter(prometheus.CounterOpts{
 	Name: prefixedName("txs_indexed_total"),
-	Help: "Total number transactions indexed",
+	Help: "Total number of transactions indexed",
 })
 
 var evmAccountCallCounters = prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -77,6 +77,11 @@ var requestRateLimitedCounters = prometheus.NewCounterVec(prometheus.CounterOpts
 	Help: "Total number of rate limits by JSON-RPC method",
 }, []string{"method"})
 
+var transactionsDroppedCounter = prometheus.NewCounter(prometheus.CounterOpts{
+	Name: prefixedName("transactions_dropped_total"),
+	Help: "Total number of EVM transactions dropped due to service errors",
+})
+
 var metrics = []prometheus.Collector{
 	apiErrors,
 	serverPanicsCounters,
@@ -91,6 +96,7 @@ var metrics = []prometheus.Collector{
 	gasEstimationIterations,
 	blockIngestionTime,
 	requestRateLimitedCounters,
+	transactionsDroppedCounter,
 }
 
 type Collector interface {
@@ -106,6 +112,7 @@ type Collector interface {
 	GasEstimationIterations(count int)
 	BlockIngestionTime(blockCreation time.Time)
 	RequestRateLimited(method string)
+	TransactionsDropped(count int)
 }
 
 var _ Collector = &DefaultCollector{}
@@ -125,6 +132,7 @@ type DefaultCollector struct {
 	gasEstimationIterations    prometheus.Gauge
 	blockIngestionTime         prometheus.Histogram
 	requestRateLimitedCounters *prometheus.CounterVec
+	transactionsDroppedCounter prometheus.Counter
 }
 
 func NewCollector(logger zerolog.Logger) Collector {
@@ -147,6 +155,7 @@ func NewCollector(logger zerolog.Logger) Collector {
 		gasEstimationIterations:    gasEstimationIterations,
 		blockIngestionTime:         blockIngestionTime,
 		requestRateLimitedCounters: requestRateLimitedCounters,
+		transactionsDroppedCounter: transactionsDroppedCounter,
 	}
 }
 
@@ -219,6 +228,10 @@ func (c *DefaultCollector) RequestRateLimited(method string) {
 			"method": method,
 		},
 	).Inc()
+}
+
+func (c *DefaultCollector) TransactionsDropped(count int) {
+	c.transactionsDroppedCounter.Add(float64(count))
 }
 
 func prefixedName(name string) string {
