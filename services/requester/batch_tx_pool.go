@@ -95,6 +95,7 @@ func NewBatchTxPool(
 	}
 
 	go batchPool.processPooledTransactions(ctx)
+	go batchPool.processIndividualTransactions(ctx)
 
 	return batchPool
 }
@@ -160,9 +161,6 @@ func (t *BatchTxPool) Add(
 func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 	ticker := time.NewTicker(t.config.TxBatchInterval)
 	defer ticker.Stop()
-	defer func() {
-		close(t.txChan)
-	}()
 
 	for {
 		select {
@@ -200,6 +198,19 @@ func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 					continue
 				}
 			}
+		}
+	}
+}
+
+func (t *BatchTxPool) processIndividualTransactions(ctx context.Context) {
+	defer func() {
+		close(t.txChan)
+	}()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
 		case hexEncodedTx := <-t.txChan:
 			if err := t.submitSingleTransaction(ctx, hexEncodedTx); err != nil {
 				t.logger.Error().Err(err).Msg(

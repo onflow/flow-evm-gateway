@@ -122,7 +122,7 @@ func Test_TransactionBatchingModeWithConcurrentTxSubmissions(t *testing.T) {
 		g.Go(func() error {
 			nonce := uint64(0)
 
-			for range totalTxs {
+			for i := range totalTxs {
 				signed, _, err := evmSign(
 					big.NewInt(transferAmount),
 					23_500,
@@ -140,8 +140,14 @@ func Test_TransactionBatchingModeWithConcurrentTxSubmissions(t *testing.T) {
 					return err
 				}
 
-				waitTime := rand.IntN(5) * 100
-				time.Sleep(time.Duration(waitTime) * time.Millisecond)
+				// Every 5 transactions, add a bit of waiting time to
+				// trigger individual transaction submission for the EOAs.
+				if i%5 == 0 {
+					time.Sleep(cfg.TxBatchInterval + 100)
+				} else {
+					waitTime := rand.IntN(5) * 100
+					time.Sleep(time.Duration(waitTime) * time.Millisecond)
+				}
 
 				nonce += 1
 			}
