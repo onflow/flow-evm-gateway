@@ -11,7 +11,6 @@ import (
 	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go-sdk"
-	flowGo "github.com/onflow/flow-go/model/flow"
 	gethCommon "github.com/onflow/go-ethereum/common"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/rs/zerolog"
@@ -284,50 +283,4 @@ func (t *BatchTxPool) submitSingleTransaction(
 	}
 
 	return nil
-}
-
-// buildTransaction creates a Cadence transaction from the provided script,
-// with the given arguments and signs it with the configured COA account.
-func (t *BatchTxPool) buildTransaction(
-	latestBlock *flow.Block,
-	account *flow.Account,
-	script []byte,
-	args ...cadence.Value,
-) (*flow.Transaction, error) {
-	defer func() {
-		t.collector.AvailableSigningKeys(t.keystore.AvailableKeys())
-	}()
-
-	flowTx := flow.NewTransaction().
-		SetScript(script).
-		SetReferenceBlockID(latestBlock.ID).
-		SetComputeLimit(flowGo.DefaultMaxTransactionGasLimit)
-
-	for _, arg := range args {
-		if err := flowTx.AddArgument(arg); err != nil {
-			return nil, fmt.Errorf("failed to add argument: %s, with %w", arg, err)
-		}
-	}
-
-	// building and signing transactions should be blocking,
-	// so we don't have keys conflict
-	t.mux.Lock()
-	defer t.mux.Unlock()
-
-	accKey, err := t.keystore.Take()
-	if err != nil {
-		return nil, err
-	}
-
-	if err := accKey.SetProposerPayerAndSign(flowTx, account); err != nil {
-		accKey.Done()
-		return nil, err
-	}
-
-	// now that the transaction is prepared, store the transaction's metadata
-	accKey.SetLockMetadata(flowTx.ID(), latestBlock.Height)
-
-	t.collector.OperatorBalance(account)
-
-	return flowTx, nil
 }
