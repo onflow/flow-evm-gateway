@@ -507,10 +507,9 @@ func setupGatewayNode(t *testing.T) (emulator.Emulator, config.Config, func()) {
 	require.NoError(t, err)
 
 	// create new account with keys used for key-rotation
-	keyCount := 5
 	coaAddress, privateKey, err := bootstrap.CreateMultiKeyAccount(
 		client,
-		keyCount,
+		200,
 		service.Address,
 		sc.FungibleToken.Address.HexWithPrefix(),
 		sc.FlowToken.Address.HexWithPrefix(),
