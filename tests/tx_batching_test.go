@@ -23,6 +23,7 @@ import (
 
 func Test_TransactionBatchingMode(t *testing.T) {
 	_, cfg, stop := setupGatewayNode(t)
+	defer stop()
 
 	rpcTester := &rpcTest{
 		url: fmt.Sprintf("%s:%d", cfg.RPCHost, cfg.RPCPort),
@@ -56,19 +57,18 @@ func Test_TransactionBatchingMode(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		for _, h := range hashes {
 			rcp, err := rpcTester.getReceipt(h.String())
-			if err != nil || rcp == nil || uint64(1) != rcp.Status {
+			if err != nil || rcp == nil || rcp.Status != 1 {
 				return false
 			}
 		}
 
 		return true
 	}, time.Second*15, time.Second*1, "all transactions were not executed")
-
-	stop()
 }
 
 func Test_TransactionBatchingModeWithConcurrentTxSubmissions(t *testing.T) {
 	_, cfg, stop := setupGatewayNode(t)
+	defer stop()
 
 	rpcTester := &rpcTest{
 		url: fmt.Sprintf("%s:%d", cfg.RPCHost, cfg.RPCPort),
@@ -84,20 +84,30 @@ func Test_TransactionBatchingModeWithConcurrentTxSubmissions(t *testing.T) {
 		common.HexToAddress("0xc2a4d1f8A5A9308F65aDBb6f930Fb43BD73de533"): "21dc0a4f0ac11aded6ff24fd7f2c5d28af7bfee0daac26f3236956370d0cd751",
 	}
 	nonce := uint64(0)
+	hashes := []common.Hash{}
 
 	// Add a sufficient amount of funds to the test addresses
 	for testAddr := range testAddresses {
 		signed, _, err := evmSign(big.NewInt(1_000_000_000), 23_500, eoaKey, nonce, &testAddr, nil)
 		require.NoError(t, err)
 
-		_, err = rpcTester.sendRawTx(signed)
+		txHash, err := rpcTester.sendRawTx(signed)
 		require.NoError(t, err)
+		hashes = append(hashes, txHash)
 
 		nonce += 1
 	}
 
-	// some time to process the transfer transactions
-	time.Sleep(cfg.TxBatchInterval + time.Second)
+	assert.Eventually(t, func() bool {
+		for _, h := range hashes {
+			rcp, err := rpcTester.getReceipt(h.String())
+			if err != nil || rcp == nil || rcp.Status != 1 {
+				return false
+			}
+		}
+
+		return true
+	}, time.Second*15, time.Second*1, "all transactions were not executed")
 
 	testEoaReceiver := common.HexToAddress("0x6F416dcC9BEFe43b7dDF53f2662F76dD34A9fc11")
 
@@ -151,12 +161,11 @@ func Test_TransactionBatchingModeWithConcurrentTxSubmissions(t *testing.T) {
 
 		return balance.Cmp(big.NewInt(expectedBalance)) == 0
 	}, time.Second*30, time.Second*1, "all transactions were not executed")
-
-	stop()
 }
 
 func Test_MultipleTransactionSubmissionsWithinSmallInterval(t *testing.T) {
 	emu, cfg, stop := setupGatewayNode(t)
+	defer stop()
 
 	rpcTester := &rpcTest{
 		url: fmt.Sprintf("%s:%d", cfg.RPCHost, cfg.RPCPort),
@@ -173,15 +182,23 @@ func Test_MultipleTransactionSubmissionsWithinSmallInterval(t *testing.T) {
 	signed, _, err := evmSign(big.NewInt(1_000_000_000), 23_500, eoaKey, 0, &testAddr, nil)
 	require.NoError(t, err)
 
-	_, err = rpcTester.sendRawTx(signed)
+	txHash, err := rpcTester.sendRawTx(signed)
 	require.NoError(t, err)
 
-	time.Sleep(cfg.TxBatchInterval + time.Second)
+	assert.Eventually(t, func() bool {
+		rcp, err := rpcTester.getReceipt(txHash.String())
+		if err != nil || rcp == nil || rcp.Status != 1 {
+			return false
+		}
+
+		return true
+	}, time.Second*15, time.Second*1, "all transactions were not executed")
 
 	latestBlock, err := emu.GetLatestBlock()
 	require.NoError(t, err)
 
 	testEoaReceiver := common.HexToAddress("0x6F416dcC9BEFe43b7dDF53f2662F76dD34A9fc11")
+	hashes := []common.Hash{}
 
 	// We send 2 transactions without any delay between them.
 	// Since there's no previous activity from the EOA,
@@ -198,11 +215,22 @@ func Test_MultipleTransactionSubmissionsWithinSmallInterval(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		_, err = rpcTester.sendRawTx(signed)
+		txHash, err := rpcTester.sendRawTx(signed)
 		require.NoError(t, err)
+
+		hashes = append(hashes, txHash)
 	}
 
-	time.Sleep(cfg.TxBatchInterval + time.Second)
+	assert.Eventually(t, func() bool {
+		for _, h := range hashes {
+			rcp, err := rpcTester.getReceipt(h.String())
+			if err != nil || rcp == nil || rcp.Status != 1 {
+				return false
+			}
+		}
+
+		return true
+	}, time.Second*15, time.Second*1, "all transactions were not executed")
 
 	block1, err := emu.GetBlockByHeight(latestBlock.Header.Height + 1)
 	require.NoError(t, err)
@@ -235,12 +263,11 @@ func Test_MultipleTransactionSubmissionsWithinSmallInterval(t *testing.T) {
 		string(txResults[0].Script),
 		"EVM.batchRun",
 	)
-
-	stop()
 }
 
 func Test_MultipleTransactionSubmissionsWithinRecentInterval(t *testing.T) {
 	emu, cfg, stop := setupGatewayNode(t)
+	defer stop()
 
 	rpcTester := &rpcTest{
 		url: fmt.Sprintf("%s:%d", cfg.RPCHost, cfg.RPCPort),
@@ -257,15 +284,23 @@ func Test_MultipleTransactionSubmissionsWithinRecentInterval(t *testing.T) {
 	signed, _, err := evmSign(big.NewInt(1_000_000_000), 23_500, eoaKey, 0, &testAddr, nil)
 	require.NoError(t, err)
 
-	_, err = rpcTester.sendRawTx(signed)
+	txHash, err := rpcTester.sendRawTx(signed)
 	require.NoError(t, err)
 
-	time.Sleep(cfg.TxBatchInterval + time.Second)
+	assert.Eventually(t, func() bool {
+		rcp, err := rpcTester.getReceipt(txHash.String())
+		if err != nil || rcp == nil || rcp.Status != 1 {
+			return false
+		}
+
+		return true
+	}, time.Second*15, time.Second*1, "all transactions were not executed")
 
 	latestBlock, err := emu.GetLatestBlock()
 	require.NoError(t, err)
 
 	testEoaReceiver := common.HexToAddress("0x6F416dcC9BEFe43b7dDF53f2662F76dD34A9fc11")
+	hashes := []common.Hash{}
 
 	// We send 2 transactions with a 1 second delay between them.
 	// Since there's no previous activity from the EOA,
@@ -294,11 +329,22 @@ func Test_MultipleTransactionSubmissionsWithinRecentInterval(t *testing.T) {
 			time.Sleep(time.Second)
 		}
 
-		_, err = rpcTester.sendRawTx(signed)
+		txHash, err = rpcTester.sendRawTx(signed)
 		require.NoError(t, err)
+
+		hashes = append(hashes, txHash)
 	}
 
-	time.Sleep(cfg.TxBatchInterval + time.Second)
+	assert.Eventually(t, func() bool {
+		for _, h := range hashes {
+			rcp, err := rpcTester.getReceipt(h.String())
+			if err != nil || rcp == nil || rcp.Status != 1 {
+				return false
+			}
+		}
+
+		return true
+	}, time.Second*15, time.Second*1, "all transactions were not executed")
 
 	block1, err := emu.GetBlockByHeight(latestBlock.Header.Height + 1)
 	require.NoError(t, err)
@@ -331,12 +377,11 @@ func Test_MultipleTransactionSubmissionsWithinRecentInterval(t *testing.T) {
 		string(txResults[0].Script),
 		"EVM.batchRun",
 	)
-
-	stop()
 }
 
 func Test_MultipleTransactionSubmissionsWithinNonRecentInterval(t *testing.T) {
 	emu, cfg, stop := setupGatewayNode(t)
+	defer stop()
 
 	rpcTester := &rpcTest{
 		url: fmt.Sprintf("%s:%d", cfg.RPCHost, cfg.RPCPort),
@@ -353,15 +398,23 @@ func Test_MultipleTransactionSubmissionsWithinNonRecentInterval(t *testing.T) {
 	signed, _, err := evmSign(big.NewInt(1_000_000_000), 23_500, eoaKey, 0, &testAddr, nil)
 	require.NoError(t, err)
 
-	_, err = rpcTester.sendRawTx(signed)
+	txHash, err := rpcTester.sendRawTx(signed)
 	require.NoError(t, err)
 
-	time.Sleep(cfg.TxBatchInterval + time.Second)
+	assert.Eventually(t, func() bool {
+		rcp, err := rpcTester.getReceipt(txHash.String())
+		if err != nil || rcp == nil || rcp.Status != 1 {
+			return false
+		}
+
+		return true
+	}, time.Second*15, time.Second*1, "all transactions were not executed")
 
 	latestBlock, err := emu.GetLatestBlock()
 	require.NoError(t, err)
 
 	testEoaReceiver := common.HexToAddress("0x6F416dcC9BEFe43b7dDF53f2662F76dD34A9fc11")
+	hashes := []common.Hash{}
 
 	// We send 2 transactions with a delay of 3 seconds between them.
 	// Since there's no previous activity from the EOA,
@@ -391,11 +444,22 @@ func Test_MultipleTransactionSubmissionsWithinNonRecentInterval(t *testing.T) {
 			time.Sleep(cfg.TxBatchInterval + time.Second)
 		}
 
-		_, err = rpcTester.sendRawTx(signed)
+		txHash, err = rpcTester.sendRawTx(signed)
 		require.NoError(t, err)
+
+		hashes = append(hashes, txHash)
 	}
 
-	time.Sleep(cfg.TxBatchInterval + time.Second)
+	assert.Eventually(t, func() bool {
+		for _, h := range hashes {
+			rcp, err := rpcTester.getReceipt(h.String())
+			if err != nil || rcp == nil || rcp.Status != 1 {
+				return false
+			}
+		}
+
+		return true
+	}, time.Second*15, time.Second*1, "all transactions were not executed")
 
 	block1, err := emu.GetBlockByHeight(latestBlock.Header.Height + 1)
 	require.NoError(t, err)
@@ -428,8 +492,6 @@ func Test_MultipleTransactionSubmissionsWithinNonRecentInterval(t *testing.T) {
 		string(txResults[0].Script),
 		"EVM.run",
 	)
-
-	stop()
 }
 
 func setupGatewayNode(t *testing.T) (emulator.Emulator, config.Config, func()) {
