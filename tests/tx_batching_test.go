@@ -67,7 +67,7 @@ func Test_TransactionBatchingMode(t *testing.T) {
 }
 
 func Test_TransactionBatchingModeWithConcurrentTxSubmissions(t *testing.T) {
-	_, cfg, stop := setupGatewayNode(t)
+	emu, cfg, stop := setupGatewayNode(t)
 	defer stop()
 
 	rpcTester := &rpcTest{
@@ -115,6 +115,9 @@ func Test_TransactionBatchingModeWithConcurrentTxSubmissions(t *testing.T) {
 	transferAmount := int64(50_000)
 	g := errgroup.Group{}
 
+	startBlock, err := emu.GetLatestBlock()
+	require.NoError(t, err)
+
 	for _, testPrivatekey := range testAddresses {
 		privateKey, err := crypto.HexToECDSA(testPrivatekey)
 		require.NoError(t, err)
@@ -122,7 +125,7 @@ func Test_TransactionBatchingModeWithConcurrentTxSubmissions(t *testing.T) {
 		g.Go(func() error {
 			nonce := uint64(0)
 
-			for i := range totalTxs {
+			for range totalTxs {
 				signed, _, err := evmSign(
 					big.NewInt(transferAmount),
 					23_500,
@@ -140,14 +143,8 @@ func Test_TransactionBatchingModeWithConcurrentTxSubmissions(t *testing.T) {
 					return err
 				}
 
-				// Every 5 transactions, add a bit of waiting time to
-				// trigger individual transaction submission for the EOAs.
-				if i%5 == 0 {
-					time.Sleep(cfg.TxBatchInterval + 100)
-				} else {
-					waitTime := rand.IntN(5) * 100
-					time.Sleep(time.Duration(waitTime) * time.Millisecond)
-				}
+				waitTime := rand.IntN(5) * 100
+				time.Sleep(time.Duration(waitTime) * time.Millisecond)
 
 				nonce += 1
 			}
@@ -167,6 +164,22 @@ func Test_TransactionBatchingModeWithConcurrentTxSubmissions(t *testing.T) {
 
 		return balance.Cmp(big.NewInt(expectedBalance)) == 0
 	}, time.Second*30, time.Second*1, "all transactions were not executed")
+
+	endBlock, err := emu.GetLatestBlock()
+	require.NoError(t, err)
+
+	blockEvents, err := emu.GetEventsForHeightRange(
+		"A.f8d6e0586b0a20c7.EVM.TransactionExecuted",
+		startBlock.Header.Height+1,
+		endBlock.Header.Height,
+	)
+
+	totalEVMEvents := 0
+	for _, blockEvent := range blockEvents {
+		totalEVMEvents += len(blockEvent.Events)
+	}
+
+	assert.Equal(t, 100, totalEVMEvents)
 }
 
 func Test_MultipleTransactionSubmissionsWithinSmallInterval(t *testing.T) {
