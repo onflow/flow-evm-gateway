@@ -219,7 +219,7 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 			return common.Hash{}, fmt.Errorf("failed to check rate limit: %w", err)
 		}
 		if !ok {
-			e.collector.RequestRateLimited("SendRawTransaction")
+			e.collector.EOARateLimited(from.Hex())
 			return common.Hash{}, errs.ErrRateLimit
 		}
 	}
