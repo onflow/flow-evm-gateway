@@ -77,6 +77,11 @@ var requestRateLimitedCounters = prometheus.NewCounterVec(prometheus.CounterOpts
 	Help: "Total number of rate limits by JSON-RPC method",
 }, []string{"method"})
 
+var eoaRateLimitedTransactions = prometheus.NewCounterVec(prometheus.CounterOpts{
+	Name: prefixedName("eoa_rate_limited_transactions"),
+	Help: "Total number of rate limited transactions by EOA",
+}, []string{"address"})
+
 var metrics = []prometheus.Collector{
 	apiErrors,
 	serverPanicsCounters,
@@ -91,6 +96,7 @@ var metrics = []prometheus.Collector{
 	gasEstimationIterations,
 	blockIngestionTime,
 	requestRateLimitedCounters,
+	eoaRateLimitedTransactions,
 }
 
 type Collector interface {
@@ -106,6 +112,7 @@ type Collector interface {
 	GasEstimationIterations(count int)
 	BlockIngestionTime(blockCreation time.Time)
 	RequestRateLimited(method string)
+	EOARateLimited(address string)
 }
 
 var _ Collector = &DefaultCollector{}
@@ -125,6 +132,7 @@ type DefaultCollector struct {
 	gasEstimationIterations    prometheus.Gauge
 	blockIngestionTime         prometheus.Histogram
 	requestRateLimitedCounters *prometheus.CounterVec
+	eoaRateLimitedTransactions *prometheus.CounterVec
 }
 
 func NewCollector(logger zerolog.Logger) Collector {
@@ -147,6 +155,7 @@ func NewCollector(logger zerolog.Logger) Collector {
 		gasEstimationIterations:    gasEstimationIterations,
 		blockIngestionTime:         blockIngestionTime,
 		requestRateLimitedCounters: requestRateLimitedCounters,
+		eoaRateLimitedTransactions: eoaRateLimitedTransactions,
 	}
 }
 
@@ -219,6 +228,12 @@ func (c *DefaultCollector) RequestRateLimited(method string) {
 			"method": method,
 		},
 	).Inc()
+}
+
+func (c *DefaultCollector) EOARateLimited(address string) {
+	c.eoaRateLimitedTransactions.
+		With(prometheus.Labels{"address": address}).
+		Inc()
 }
 
 func prefixedName(name string) string {
