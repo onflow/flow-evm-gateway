@@ -203,10 +203,6 @@ func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 }
 
 func (t *BatchTxPool) processIndividualTransactions(ctx context.Context) {
-	defer func() {
-		close(t.txChan)
-	}()
-
 	for {
 		select {
 		case <-ctx.Done():
