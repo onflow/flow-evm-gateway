@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go-sdk"
-	flowGo "github.com/onflow/flow-go/model/flow"
 	gethCommon "github.com/onflow/go-ethereum/common"
 	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/rs/zerolog"
@@ -19,6 +19,17 @@ import (
 	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/services/requester/keystore"
+)
+
+const (
+	eoaActivityCacheSize = 10_000
+	// Buffer capacity of the channel used for individual transaction
+	// submission. Since `BatchTxPool.Add()` is called quite frequently,
+	// we don't want sending to the channel to block, until there's a
+	// receive ready. That's why we set a high buffer capacity, to allow
+	// `BatchTxPool.Add()` to do its job quickly and release any resources
+	// held, like locks etc.
+	txChanBufferSize = 1_000
 )
 
 type pooledEvmTx struct {
@@ -41,8 +52,14 @@ type pooledEvmTx struct {
 // re-ordering of Cadence transactions that happens from Collection nodes.
 type BatchTxPool struct {
 	*SingleTxPool
-	pooledTxs map[gethCommon.Address][]pooledEvmTx
-	txMux     sync.Mutex
+	pooledTxs   map[gethCommon.Address][]pooledEvmTx
+	txChan      chan cadence.String
+	txMux       sync.Mutex
+	eoaActivity *expirable.LRU[gethCommon.Address, time.Time]
+
+	// Signal channel used to prevent blocking writes
+	// on `txChan` when the node is shutting down.
+	done chan struct{}
 }
 
 var _ TxPool = &BatchTxPool{}
@@ -67,13 +84,23 @@ func NewBatchTxPool(
 		collector,
 		keystore,
 	)
+
+	eoaActivity := expirable.NewLRU[gethCommon.Address, time.Time](
+		eoaActivityCacheSize,
+		nil,
+		config.TxBatchInterval,
+	)
 	batchPool := &BatchTxPool{
 		SingleTxPool: singleTxPool,
 		pooledTxs:    make(map[gethCommon.Address][]pooledEvmTx),
+		txChan:       make(chan cadence.String, txChanBufferSize),
 		txMux:        sync.Mutex{},
+		eoaActivity:  eoaActivity,
+		done:         make(chan struct{}),
 	}
 
 	go batchPool.processPooledTransactions(ctx)
+	go batchPool.processIndividualTransactions(ctx)
 
 	return batchPool
 }
@@ -106,8 +133,37 @@ func (t *BatchTxPool) Add(
 		return err
 	}
 
-	userTx := pooledEvmTx{txPayload: hexEncodedTx, nonce: tx.Nonce()}
-	t.pooledTxs[from] = append(t.pooledTxs[from], userTx)
+	// Scenarios
+	// 1. EOA activity not found:
+	// => We send the transaction individually, without adding it
+	// to the batch pool.
+	//
+	// 2. EOA activity found AND it was more than [X] seconds ago:
+	// => We send the transaction individually, without adding it
+	// to the batch pool.
+	//
+	// 3. EOA activity found AND it was less than [X] seconds ago:
+	// => We add the transaction to the batch pool, so that it gets
+	// processed and submitted according to the configured
+	// `TxBatchInterval`.
+	//
+	// For all 3 cases, we record the activity time for the next
+	// transactions that might come from the same EOA.
+	// [X] is equal to the configured `TxBatchInterval` duration.
+	lastActivityTime, found := t.eoaActivity.Get(from)
+	if !found || time.Since(lastActivityTime) > t.config.TxBatchInterval {
+		select {
+		case <-t.done:
+			return fmt.Errorf("the server is shutting down")
+		default:
+			t.txChan <- hexEncodedTx
+		}
+	} else {
+		userTx := pooledEvmTx{txPayload: hexEncodedTx, nonce: tx.Nonce()}
+		t.pooledTxs[from] = append(t.pooledTxs[from], userTx)
+	}
+
+	t.eoaActivity.Add(from, time.Now())
 
 	return nil
 }
@@ -146,11 +202,28 @@ func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 				)
 				if err != nil {
 					t.logger.Error().Err(err).Msgf(
-						"failed to send Flow transaction from BatchTxPool for EOA: %s",
+						"failed to submit Flow transaction from BatchTxPool for EOA: %s",
 						address.Hex(),
 					)
 					continue
 				}
+			}
+		}
+	}
+}
+
+func (t *BatchTxPool) processIndividualTransactions(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			close(t.done)
+			return
+		case hexEncodedTx := <-t.txChan:
+			if err := t.submitSingleTransaction(ctx, hexEncodedTx); err != nil {
+				t.logger.Error().Err(err).Msg(
+					"failed to submit Flow transaction from BatchTxPool for single EOA tx",
+				)
+				continue
 			}
 		}
 	}
@@ -197,48 +270,35 @@ func (t *BatchTxPool) batchSubmitTransactionsForSameAddress(
 	return nil
 }
 
-// buildTransaction creates a Cadence transaction from the provided script,
-// with the given arguments and signs it with the configured COA account.
-func (t *BatchTxPool) buildTransaction(
-	latestBlock *flow.Block,
-	account *flow.Account,
-	script []byte,
-	args ...cadence.Value,
-) (*flow.Transaction, error) {
-	defer func() {
-		t.collector.AvailableSigningKeys(t.keystore.AvailableKeys())
-	}()
-
-	flowTx := flow.NewTransaction().
-		SetScript(script).
-		SetReferenceBlockID(latestBlock.ID).
-		SetComputeLimit(flowGo.DefaultMaxTransactionGasLimit)
-
-	for _, arg := range args {
-		if err := flowTx.AddArgument(arg); err != nil {
-			return nil, fmt.Errorf("failed to add argument: %s, with %w", arg, err)
-		}
-	}
-
-	// building and signing transactions should be blocking,
-	// so we don't have keys conflict
-	t.mux.Lock()
-	defer t.mux.Unlock()
-
-	accKey, err := t.keystore.Take()
+func (t *BatchTxPool) submitSingleTransaction(
+	ctx context.Context,
+	hexEncodedTx cadence.String,
+) error {
+	latestBlock, account, err := t.fetchFlowLatestBlockAndCOA(ctx)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	if err := accKey.SetProposerPayerAndSign(flowTx, account); err != nil {
-		accKey.Done()
-		return nil, err
+	coinbaseAddress, err := cadence.NewString(t.config.Coinbase.Hex())
+	if err != nil {
+		return err
 	}
 
-	// now that the transaction is prepared, store the transaction's metadata
-	accKey.SetLockMetadata(flowTx.ID(), latestBlock.Height)
+	script := replaceAddresses(runTxScript, t.config.FlowNetworkID)
+	flowTx, err := t.buildTransaction(
+		latestBlock,
+		account,
+		script,
+		hexEncodedTx,
+		coinbaseAddress,
+	)
+	if err != nil {
+		return err
+	}
 
-	t.collector.OperatorBalance(account)
+	if err := t.client.SendTransaction(ctx, *flowTx); err != nil {
+		return err
+	}
 
-	return flowTx, nil
+	return nil
 }
