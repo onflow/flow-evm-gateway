@@ -77,10 +77,10 @@ var requestRateLimitedCounters = prometheus.NewCounterVec(prometheus.CounterOpts
 	Help: "Total number of rate limits by JSON-RPC method",
 }, []string{"method"})
 
-var eoaRateLimitedTransactions = prometheus.NewCounterVec(prometheus.CounterOpts{
-	Name: prefixedName("eoa_rate_limited_transactions"),
-	Help: "Total number of rate limited transactions by EOA",
-}, []string{"address"})
+var rateLimitedTransactionsCounter = prometheus.NewCounter(prometheus.CounterOpts{
+	Name: prefixedName("rate_limited_transactions_total"),
+	Help: "Total number of rate-limited transactions",
+})
 
 var metrics = []prometheus.Collector{
 	apiErrors,
@@ -96,7 +96,7 @@ var metrics = []prometheus.Collector{
 	gasEstimationIterations,
 	blockIngestionTime,
 	requestRateLimitedCounters,
-	eoaRateLimitedTransactions,
+	rateLimitedTransactionsCounter,
 }
 
 type Collector interface {
@@ -112,27 +112,27 @@ type Collector interface {
 	GasEstimationIterations(count int)
 	BlockIngestionTime(blockCreation time.Time)
 	RequestRateLimited(method string)
-	EOARateLimited(address string)
+	TransactionRateLimited()
 }
 
 var _ Collector = &DefaultCollector{}
 
 type DefaultCollector struct {
 	// TODO: for now we cannot differentiate which api request failed number of times
-	apiErrorsCounter           prometheus.Counter
-	serverPanicsCounters       *prometheus.CounterVec
-	cadenceBlockHeight         prometheus.Gauge
-	evmBlockHeight             prometheus.Gauge
-	evmBlockIndexedCounter     prometheus.Counter
-	evmTxIndexedCounter        prometheus.Counter
-	operatorBalance            prometheus.Gauge
-	evmAccountCallCounters     *prometheus.CounterVec
-	requestDurations           *prometheus.HistogramVec
-	availableSigningkeys       prometheus.Gauge
-	gasEstimationIterations    prometheus.Gauge
-	blockIngestionTime         prometheus.Histogram
-	requestRateLimitedCounters *prometheus.CounterVec
-	eoaRateLimitedTransactions *prometheus.CounterVec
+	apiErrorsCounter               prometheus.Counter
+	serverPanicsCounters           *prometheus.CounterVec
+	cadenceBlockHeight             prometheus.Gauge
+	evmBlockHeight                 prometheus.Gauge
+	evmBlockIndexedCounter         prometheus.Counter
+	evmTxIndexedCounter            prometheus.Counter
+	operatorBalance                prometheus.Gauge
+	evmAccountCallCounters         *prometheus.CounterVec
+	requestDurations               *prometheus.HistogramVec
+	availableSigningkeys           prometheus.Gauge
+	gasEstimationIterations        prometheus.Gauge
+	blockIngestionTime             prometheus.Histogram
+	requestRateLimitedCounters     *prometheus.CounterVec
+	rateLimitedTransactionsCounter prometheus.Counter
 }
 
 func NewCollector(logger zerolog.Logger) Collector {
@@ -142,20 +142,20 @@ func NewCollector(logger zerolog.Logger) Collector {
 	}
 
 	return &DefaultCollector{
-		apiErrorsCounter:           apiErrors,
-		serverPanicsCounters:       serverPanicsCounters,
-		cadenceBlockHeight:         cadenceBlockHeight,
-		evmBlockHeight:             evmBlockHeight,
-		evmBlockIndexedCounter:     evmBlockIndexedCounter,
-		evmTxIndexedCounter:        evmTxIndexedCounter,
-		evmAccountCallCounters:     evmAccountCallCounters,
-		requestDurations:           requestDurations,
-		operatorBalance:            operatorBalance,
-		availableSigningkeys:       availableSigningKeys,
-		gasEstimationIterations:    gasEstimationIterations,
-		blockIngestionTime:         blockIngestionTime,
-		requestRateLimitedCounters: requestRateLimitedCounters,
-		eoaRateLimitedTransactions: eoaRateLimitedTransactions,
+		apiErrorsCounter:               apiErrors,
+		serverPanicsCounters:           serverPanicsCounters,
+		cadenceBlockHeight:             cadenceBlockHeight,
+		evmBlockHeight:                 evmBlockHeight,
+		evmBlockIndexedCounter:         evmBlockIndexedCounter,
+		evmTxIndexedCounter:            evmTxIndexedCounter,
+		evmAccountCallCounters:         evmAccountCallCounters,
+		requestDurations:               requestDurations,
+		operatorBalance:                operatorBalance,
+		availableSigningkeys:           availableSigningKeys,
+		gasEstimationIterations:        gasEstimationIterations,
+		blockIngestionTime:             blockIngestionTime,
+		requestRateLimitedCounters:     requestRateLimitedCounters,
+		rateLimitedTransactionsCounter: rateLimitedTransactionsCounter,
 	}
 }
 
@@ -230,10 +230,8 @@ func (c *DefaultCollector) RequestRateLimited(method string) {
 	).Inc()
 }
 
-func (c *DefaultCollector) EOARateLimited(address string) {
-	c.eoaRateLimitedTransactions.
-		With(prometheus.Labels{"address": address}).
-		Inc()
+func (c *DefaultCollector) TransactionRateLimited() {
+	c.rateLimitedTransactionsCounter.Inc()
 }
 
 func prefixedName(name string) string {
