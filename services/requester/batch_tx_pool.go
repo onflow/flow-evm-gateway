@@ -56,6 +56,10 @@ type BatchTxPool struct {
 	txChan      chan cadence.String
 	txMux       sync.Mutex
 	eoaActivity *expirable.LRU[gethCommon.Address, time.Time]
+
+	// Signal channel used to prevent blocking writes
+	// on `txChan` when the node is shutting down.
+	done chan struct{}
 }
 
 var _ TxPool = &BatchTxPool{}
@@ -92,6 +96,7 @@ func NewBatchTxPool(
 		txChan:       make(chan cadence.String, txChanBufferSize),
 		txMux:        sync.Mutex{},
 		eoaActivity:  eoaActivity,
+		done:         make(chan struct{}),
 	}
 
 	go batchPool.processPooledTransactions(ctx)
@@ -147,7 +152,12 @@ func (t *BatchTxPool) Add(
 	// [X] is equal to the configured `TxBatchInterval` duration.
 	lastActivityTime, found := t.eoaActivity.Get(from)
 	if !found || time.Since(lastActivityTime) > t.config.TxBatchInterval {
-		t.txChan <- hexEncodedTx
+		select {
+		case <-t.done:
+			return fmt.Errorf("the server is shutting down")
+		default:
+			t.txChan <- hexEncodedTx
+		}
 	} else {
 		userTx := pooledEvmTx{txPayload: hexEncodedTx, nonce: tx.Nonce()}
 		t.pooledTxs[from] = append(t.pooledTxs[from], userTx)
@@ -206,6 +216,7 @@ func (t *BatchTxPool) processIndividualTransactions(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
+			close(t.done)
 			return
 		case hexEncodedTx := <-t.txChan:
 			if err := t.submitSingleTransaction(ctx, hexEncodedTx); err != nil {
