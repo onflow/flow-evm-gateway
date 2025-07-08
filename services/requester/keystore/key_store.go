@@ -1,11 +1,14 @@
 package keystore
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
 	flowsdk "github.com/onflow/flow-go-sdk"
+	"github.com/onflow/flow-go-sdk/access"
 	"github.com/onflow/flow-go/model/flow"
+	"github.com/rs/zerolog"
 )
 
 var ErrNoKeysAvailable = fmt.Errorf("no signing keys available")
@@ -14,30 +17,57 @@ const accountKeyBlockExpiration = flow.DefaultTransactionExpiry
 
 type KeyLock interface {
 	NotifyTransaction(txID flowsdk.Identifier)
-	NotifyBlock(blockHeight uint64)
+	NotifyBlock(blockID flowsdk.Identifier)
 }
 
 type KeyStore struct {
+	client        access.Client
 	availableKeys chan *AccountKey
 	usedKeys      map[flowsdk.Identifier]*AccountKey
 	size          int
 	keyMu         sync.Mutex
+	blockChan     chan flowsdk.Identifier
+	logger        zerolog.Logger
+
+	// Signal channel used to prevent blocking writes
+	// on `blockChan` when the node is shutting down.
+	done chan struct{}
 }
 
 var _ KeyLock = (*KeyStore)(nil)
 
-func New(keys []*AccountKey) *KeyStore {
+func New(
+	ctx context.Context,
+	keys []*AccountKey,
+	client access.Client,
+	logger zerolog.Logger,
+) *KeyStore {
+	totalKeys := len(keys)
+
 	ks := &KeyStore{
-		usedKeys: map[flowsdk.Identifier]*AccountKey{},
+		client:        client,
+		availableKeys: make(chan *AccountKey, totalKeys),
+		usedKeys:      map[flowsdk.Identifier]*AccountKey{},
+		size:          totalKeys,
+		// `KeyStore.NotifyBlock` is called for each new Flow block,
+		// so we use a buffered channel to write the new block IDs
+		// to the `blockChan`, and read them through `processLockedKeys`.
+		blockChan: make(chan flowsdk.Identifier, 100),
+		logger:    logger,
+		done:      make(chan struct{}),
 	}
 
-	availableKeys := make(chan *AccountKey, len(keys))
 	for _, key := range keys {
 		key.ks = ks
-		availableKeys <- key
+		ks.availableKeys <- key
 	}
-	ks.size = len(keys)
-	ks.availableKeys = availableKeys
+
+	// For cases where the EVM Gateway is run in an index-mode,
+	// there is no need to release any keys, since transaction
+	// submission is not allowed.
+	if ks.size > 0 {
+		go ks.processLockedKeys(ctx)
+	}
 
 	return ks
 }
@@ -69,16 +99,17 @@ func (k *KeyStore) NotifyTransaction(txID flowsdk.Identifier) {
 	k.unsafeUnlockKey(txID)
 }
 
-// NotifyBlock is called to notify the KeyStore of a new ingested block height.
+// NotifyBlock is called to notify the KeyStore of a newly ingested block.
 // Pending transactions older than a threshold number of blocks are removed.
-func (k *KeyStore) NotifyBlock(blockHeight uint64) {
-	k.keyMu.Lock()
-	defer k.keyMu.Unlock()
-
-	for txID, key := range k.usedKeys {
-		if blockHeight-key.lastLockedBlock.Load() >= accountKeyBlockExpiration {
-			k.unsafeUnlockKey(txID)
-		}
+func (k *KeyStore) NotifyBlock(blockID flowsdk.Identifier) {
+	select {
+	case <-k.done:
+		k.logger.Warn().Msg(
+			"received `NotifyBlock` while the server is shutting down",
+		)
+		return
+	default:
+		k.blockChan <- blockID
 	}
 }
 
@@ -105,4 +136,72 @@ func (k *KeyStore) setLockMetadata(
 	k.keyMu.Lock()
 	defer k.keyMu.Unlock()
 	k.usedKeys[txID] = key
+}
+
+// processLockedKeys reads from the `blockChan` channel, and for each new
+// Flow block, it fetches the transaction results of the given block and
+// releases the account keys associated with those transactions.
+func (k *KeyStore) processLockedKeys(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			close(k.done)
+			return
+		case blockID := <-k.blockChan:
+			// TODO: If calling `k.client.GetTransactionResultsByBlockID` for each
+			// new block, seems to be problematic for ANs, we can take an approach
+			// like the one below:
+			// If the available keys ratio is >= 60% of the total signing keys,
+			// then we can skip checking the transaction result statuses.
+			// The signing keys from invalid EVM transactions, will eventually
+			// come again into availability, after `accountKeyBlockExpiration`
+			// blocks have passed.
+			// availablekeysRatio := float64(k.AvailableKeys()) / float64(k.size)
+			// if availablekeysRatio >= 0.6 {
+			// 	continue
+			// }
+
+			// Optimization to avoid AN calls when no signing keys have
+			// been used. For example, when back-filling the EVM GW state,
+			// we don't care about releasing signing keys.
+			if k.AvailableKeys() == k.size {
+				continue
+			}
+
+			txResults, err := k.client.GetTransactionResultsByBlockID(ctx, blockID)
+			if err != nil {
+				k.logger.Error().Err(err).Msgf(
+					"failed to get transaction results for block ID: %s",
+					blockID.Hex(),
+				)
+				continue
+			}
+
+			k.releasekeys(txResults)
+		}
+	}
+}
+
+// releasekeys accepts a slice of `TransactionResult` objects and
+// releases the account keys used for signing the given transactions.
+// It also releases the account keys which were last locked more than
+// or equal to `accountKeyBlockExpiration` blocks in the past.
+func (k *KeyStore) releasekeys(txResults []*flowsdk.TransactionResult) {
+	if len(txResults) == 0 {
+		return
+	}
+
+	k.keyMu.Lock()
+	defer k.keyMu.Unlock()
+
+	for _, txResult := range txResults {
+		k.unsafeUnlockKey(txResult.TransactionID)
+	}
+
+	blockHeight := txResults[0].BlockHeight
+	for txID, key := range k.usedKeys {
+		if blockHeight-key.lastLockedBlock.Load() >= accountKeyBlockExpiration {
+			k.unsafeUnlockKey(txID)
+		}
+	}
 }

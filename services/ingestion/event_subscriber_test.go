@@ -44,9 +44,13 @@ func Test_Subscribing(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	subscriber := NewRPCEventSubscriber(zerolog.Nop(), client, flowGo.Previewnet, keystore.New(nil), 1)
+	ctx := context.Background()
+	logger := zerolog.Nop()
+	ks := keystore.New(ctx, nil, client, logger)
 
-	events := subscriber.Subscribe(context.Background())
+	subscriber := NewRPCEventSubscriber(logger, client, flowGo.Previewnet, ks, 1)
+
+	events := subscriber.Subscribe(ctx)
 
 	var prevHeight uint64
 
@@ -84,9 +88,13 @@ func Test_MissingBlockEvent(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	subscriber := NewRPCEventSubscriber(zerolog.Nop(), client, flowGo.Previewnet, keystore.New(nil), 1)
+	ctx := context.Background()
+	logger := zerolog.Nop()
+	ks := keystore.New(ctx, nil, client, logger)
 
-	events := subscriber.Subscribe(context.Background())
+	subscriber := NewRPCEventSubscriber(logger, client, flowGo.Previewnet, ks, 1)
+
+	events := subscriber.Subscribe(ctx)
 
 	missingHashes := make([]gethCommon.Hash, 0)
 
@@ -186,9 +194,13 @@ func Test_SubscribingWithRetryOnError(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	subscriber := NewRPCEventSubscriber(zerolog.Nop(), client, flowGo.Previewnet, keystore.New(nil), 1)
+	ctx := context.Background()
+	logger := zerolog.Nop()
+	ks := keystore.New(ctx, nil, client, logger)
 
-	events := subscriber.Subscribe(context.Background())
+	subscriber := NewRPCEventSubscriber(logger, client, flowGo.Previewnet, ks, 1)
+
+	events := subscriber.Subscribe(ctx)
 
 	var prevHeight uint64
 
@@ -249,9 +261,13 @@ func Test_SubscribingWithRetryOnErrorMultipleBlocks(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	subscriber := NewRPCEventSubscriber(zerolog.Nop(), client, flowGo.Previewnet, keystore.New(nil), 1)
+	ctx := context.Background()
+	logger := zerolog.Nop()
+	ks := keystore.New(ctx, nil, client, logger)
 
-	events := subscriber.Subscribe(context.Background())
+	subscriber := NewRPCEventSubscriber(logger, client, flowGo.Previewnet, ks, 1)
+
+	events := subscriber.Subscribe(ctx)
 
 	var prevHeight uint64
 
@@ -311,9 +327,13 @@ func Test_SubscribingWithRetryOnErrorEmptyBlocks(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	subscriber := NewRPCEventSubscriber(zerolog.Nop(), client, flowGo.Previewnet, keystore.New(nil), 1)
+	ctx := context.Background()
+	logger := zerolog.Nop()
+	ks := keystore.New(ctx, nil, client, logger)
 
-	events := subscriber.Subscribe(context.Background())
+	subscriber := NewRPCEventSubscriber(logger, client, flowGo.Previewnet, ks, 1)
+
+	events := subscriber.Subscribe(ctx)
 
 	var prevHeight uint64
 
