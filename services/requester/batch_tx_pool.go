@@ -260,6 +260,9 @@ func (t *BatchTxPool) batchSubmitTransactionsForSameAddress(
 		coinbaseAddress,
 	)
 	if err != nil {
+		// If there was any error during the transaction build
+		// process, we record all transactions as dropped.
+		t.collector.TransactionsDropped(len(hexEncodedTxs))
 		return err
 	}
 
@@ -293,6 +296,9 @@ func (t *BatchTxPool) submitSingleTransaction(
 		coinbaseAddress,
 	)
 	if err != nil {
+		// If there was any error during the transaction build
+		// process, we record it as a dropped transaction.
+		t.collector.TransactionsDropped(1)
 		return err
 	}
 
