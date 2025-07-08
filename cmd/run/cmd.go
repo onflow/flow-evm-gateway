@@ -231,6 +231,9 @@ func parseConfigFromFlags() error {
 		return fmt.Errorf("tx-batch-mode should be enabled with tx-state-validation=local-index")
 	}
 
+	cfg.ExperimentalSoftFinalityEnabled = experimentalSoftFinalityEnabled
+	cfg.ExperimentalSealingVerificationEnabled = experimentalSealingVerificationEnabled
+
 	return nil
 }
 
@@ -254,6 +257,9 @@ var (
 	txStateValidation string
 	initHeight,
 	forceStartHeight uint64
+
+	experimentalSoftFinalityEnabled,
+	experimentalSealingVerificationEnabled bool
 )
 
 func init() {
@@ -293,4 +299,6 @@ func init() {
 	Cmd.Flags().DurationVar(&cfg.TxRequestLimitDuration, "tx-request-limit-duration", time.Second*3, "Time interval upon which to enforce transaction submission rate limiting.")
 	Cmd.Flags().BoolVar(&cfg.TxBatchMode, "tx-batch-mode", false, "Enable batch transaction submission, to avoid nonce mismatch issues for high-volume EOAs.")
 	Cmd.Flags().DurationVar(&cfg.TxBatchInterval, "tx-batch-interval", time.Millisecond*1200, "Time interval upon which to submit the transaction batches to the Flow network.")
+	Cmd.Flags().BoolVar(&experimentalSoftFinalityEnabled, "experimental-soft-finality-enabled", false, "Sets whether the gateway should use the experimental soft finality feature. WARNING: This may result in incorrect results being returned in certain circumstances. Use only if you know what you are doing.")
+	Cmd.Flags().BoolVar(&experimentalSealingVerificationEnabled, "experimental-sealing-verification-enabled", true, "Sets whether the gateway should use the experimental soft finality sealing verification feature. WARNING: This may result in indexing halts if events do not match. Use only if you know what you are doing.")
 }
