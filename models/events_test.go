@@ -69,7 +69,7 @@ func TestNewSingleBlockEvents(t *testing.T) {
 	events := make([]flow.Event, 0)
 
 	// generate txs
-	for i := 0; i < txCount; i++ {
+	for i := range txCount {
 		tx, _, txEvent, err := newTransaction(uint64(i), uint16(i))
 		require.NoError(t, err)
 		hashes[i] = tx.Hash()
@@ -246,7 +246,7 @@ func TestNewSingleBlockEvents(t *testing.T) {
 
 		// assert that EVM transactions & receipts are sorted by their
 		// TransactionIndex field
-		for i := 0; i < txCount; i++ {
+		for i := range txCount {
 			tx := cdcEvents.transactions[i]
 			receipt := cdcEvents.receipts[i]
 			assert.Equal(t, tx.Hash(), receipt.TxHash)
@@ -315,7 +315,7 @@ func TestNewMultiBlockEvents(t *testing.T) {
 	evmTxEvents := make([]flow.BlockEvents, txCount)
 
 	// generate txs
-	for i := 0; i < txCount; i++ {
+	for i := range txCount {
 		tx, _, txEvent, err := newTransaction(uint64(i), uint16(i))
 		require.NoError(t, err)
 		hashes[i] = tx.Hash()
@@ -338,7 +338,7 @@ func TestNewMultiBlockEvents(t *testing.T) {
 
 		// Below we add all the EVM transaction events, but we have omitted
 		// the EVM.BlockExecuted event.
-		for i := 0; i < txCount; i++ {
+		for i := range txCount {
 			blockEvents.Events = append(blockEvents.Events, evmTxEvents[i].Events...)
 		}
 
@@ -388,7 +388,7 @@ func TestNewMultiBlockEvents(t *testing.T) {
 		}
 
 		// Below we add all the EVM transaction events
-		for i := 0; i < txCount; i++ {
+		for i := range txCount {
 			blockEvents.Events = append(blockEvents.Events, evmTxEvents[i].Events...)
 		}
 
@@ -508,7 +508,7 @@ func Test_EventDecoding(t *testing.T) {
 	}
 
 	// generate txs
-	for i := 0; i < txCount; i++ {
+	for i := range txCount {
 		var err error
 		txs[i], results[i], txEvents[i], err = newTransaction(uint64(i), uint16(i))
 		require.NoError(t, err)
@@ -535,7 +535,7 @@ func Test_EventDecoding(t *testing.T) {
 
 	cumulative := uint64(1)
 	logIndex := uint(0)
-	for i := 0; i < txCount; i++ {
+	for i := range txCount {
 		tx := cadenceEvents.Transactions()[i]
 		rcp := cadenceEvents.Receipts()[i]
 		blockHash, err := block.Hash()
