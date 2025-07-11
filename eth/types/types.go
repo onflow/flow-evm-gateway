@@ -468,7 +468,7 @@ type Block struct {
 	GasLimit         hexutil.Uint64   `json:"gasLimit"`
 	GasUsed          hexutil.Uint64   `json:"gasUsed"`
 	Timestamp        hexutil.Uint64   `json:"timestamp"`
-	Transactions     interface{}      `json:"transactions"`
+	Transactions     any              `json:"transactions"`
 	Uncles           []common.Hash    `json:"uncles"`
 	MixHash          common.Hash      `json:"mixHash"`
 	BaseFeePerGas    hexutil.Big      `json:"baseFeePerGas"`
@@ -504,15 +504,15 @@ type SyncStatus struct {
 func MarshalReceipt(
 	receipt *models.Receipt,
 	tx models.Transaction,
-) (map[string]interface{}, error) {
+) (map[string]any, error) {
 	from, err := tx.From()
 	if err != nil {
-		return map[string]interface{}{}, err
+		return map[string]any{}, err
 	}
 
 	txHash := tx.Hash()
 
-	fields := map[string]interface{}{
+	fields := map[string]any{
 		"blockHash":         receipt.BlockHash,
 		"blockNumber":       hexutil.Uint64(receipt.BlockNumber.Uint64()),
 		"transactionHash":   txHash,

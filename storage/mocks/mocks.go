@@ -48,7 +48,7 @@ func NewReceipt(height uint64, ID common.Hash) *models.Receipt {
 				TxIndex:     1,
 				BlockHash:   ID,
 				Index:       0,
-				Data:        []byte(fmt.Sprintf("data-1%d", height)),
+				Data:        fmt.Appendf(nil, "data-1%d", height),
 			},
 			{
 				Address:     common.BytesToAddress([]byte{0x02, 0x22}),
@@ -58,7 +58,7 @@ func NewReceipt(height uint64, ID common.Hash) *models.Receipt {
 				TxIndex:     1,
 				BlockHash:   ID,
 				Index:       1,
-				Data:        []byte(fmt.Sprintf("data-2%d", height)),
+				Data:        fmt.Appendf(nil, "data-2%d", height),
 			},
 		},
 		TxHash:            txHash,

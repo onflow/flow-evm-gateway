@@ -76,11 +76,11 @@ func Test_Stream(t *testing.T) {
 		// and then unsubscribe all
 		waitAllSubscribed.Add(10)
 		waitAllUnsubscribed.Add(10)
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			go func() {
 				subscriptions := make([]*mockSubscription, 10)
 
-				for j := 0; j < 10; j++ {
+				for j := range 10 {
 					s := newMockSubscription()
 					subscriptions[j] = s
 					p.Subscribe(s)
@@ -90,7 +90,7 @@ func Test_Stream(t *testing.T) {
 				waitAllSubscribed.Wait()
 
 				// wait for all subscribers to receive data
-				for i := 0; i < 10; i++ {
+				for range 10 {
 					<-published
 				}
 
@@ -99,7 +99,7 @@ func Test_Stream(t *testing.T) {
 				}
 
 				// there should be at least 1 call
-				for j := 0; j < 10; j++ {
+				for j := range 10 {
 					require.GreaterOrEqual(t, subscriptions[j].CallCount(), uint64(10))
 				}
 

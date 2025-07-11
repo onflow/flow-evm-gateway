@@ -81,7 +81,7 @@ func CreateMultiKeyAccount(
 	}
 
 	accountKeys := make([]*flow.AccountKey, keyCount)
-	for i := 0; i < keyCount; i++ {
+	for i := range keyCount {
 		accountKeys[i] = &flow.AccountKey{
 			Index:     uint32(i),
 			PublicKey: privateKey.PublicKey(),

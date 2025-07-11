@@ -400,13 +400,11 @@ func (e *EVM) EstimateGas(
 		if float64(passingGasLimit-failingGasLimit)/float64(passingGasLimit) < estimateGasErrorRatio {
 			break
 		}
-		mid := (passingGasLimit + failingGasLimit) / 2
-		if mid > failingGasLimit*2 {
+		mid := min((passingGasLimit+failingGasLimit)/2,
 			// Most txs don't need much higher gas limit than their gas used, and most txs don't
 			// require near the full block limit of gas, so the selection of where to bisect the
 			// range here is skewed to favor the low side.
-			mid = failingGasLimit * 2
-		}
+			failingGasLimit*2)
 		result, err := dryRun(mid)
 		if err != nil {
 			return 0, err

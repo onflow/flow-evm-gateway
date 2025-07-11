@@ -496,7 +496,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		eventCount := 5
 		txHashes := make([]gethCommon.Hash, eventCount)
 
-		for i := 0; i < eventCount; i++ {
+		for i := range eventCount {
 			txCdc, txEvent, transaction, res, err := newTransaction(evmHeight)
 			txHashes[i] = res.TxHash
 			require.NoError(t, err)
