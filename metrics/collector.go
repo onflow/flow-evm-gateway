@@ -41,7 +41,7 @@ var evmBlockIndexedCounter = prometheus.NewCounter(prometheus.CounterOpts{
 
 var evmTxIndexedCounter = prometheus.NewCounter(prometheus.CounterOpts{
 	Name: prefixedName("txs_indexed_total"),
-	Help: "Total number transactions indexed",
+	Help: "Total number of transactions indexed",
 })
 
 var evmAccountCallCounters = prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -77,6 +77,16 @@ var requestRateLimitedCounters = prometheus.NewCounterVec(prometheus.CounterOpts
 	Help: "Total number of rate limits by JSON-RPC method",
 }, []string{"method"})
 
+var transactionsDroppedCounter = prometheus.NewCounter(prometheus.CounterOpts{
+	Name: prefixedName("transactions_dropped_total"),
+	Help: "Total number of EVM transactions dropped due to service errors",
+})
+
+var rateLimitedTransactionsCounter = prometheus.NewCounter(prometheus.CounterOpts{
+	Name: prefixedName("rate_limited_transactions_total"),
+	Help: "Total number of rate-limited transactions",
+})
+
 var metrics = []prometheus.Collector{
 	apiErrors,
 	serverPanicsCounters,
@@ -91,6 +101,8 @@ var metrics = []prometheus.Collector{
 	gasEstimationIterations,
 	blockIngestionTime,
 	requestRateLimitedCounters,
+	transactionsDroppedCounter,
+	rateLimitedTransactionsCounter,
 }
 
 type Collector interface {
@@ -106,25 +118,29 @@ type Collector interface {
 	GasEstimationIterations(count int)
 	BlockIngestionTime(blockCreation time.Time)
 	RequestRateLimited(method string)
+	TransactionsDropped(count int)
+	TransactionRateLimited()
 }
 
 var _ Collector = &DefaultCollector{}
 
 type DefaultCollector struct {
 	// TODO: for now we cannot differentiate which api request failed number of times
-	apiErrorsCounter           prometheus.Counter
-	serverPanicsCounters       *prometheus.CounterVec
-	cadenceBlockHeight         prometheus.Gauge
-	evmBlockHeight             prometheus.Gauge
-	evmBlockIndexedCounter     prometheus.Counter
-	evmTxIndexedCounter        prometheus.Counter
-	operatorBalance            prometheus.Gauge
-	evmAccountCallCounters     *prometheus.CounterVec
-	requestDurations           *prometheus.HistogramVec
-	availableSigningkeys       prometheus.Gauge
-	gasEstimationIterations    prometheus.Gauge
-	blockIngestionTime         prometheus.Histogram
-	requestRateLimitedCounters *prometheus.CounterVec
+	apiErrorsCounter               prometheus.Counter
+	serverPanicsCounters           *prometheus.CounterVec
+	cadenceBlockHeight             prometheus.Gauge
+	evmBlockHeight                 prometheus.Gauge
+	evmBlockIndexedCounter         prometheus.Counter
+	evmTxIndexedCounter            prometheus.Counter
+	operatorBalance                prometheus.Gauge
+	evmAccountCallCounters         *prometheus.CounterVec
+	requestDurations               *prometheus.HistogramVec
+	availableSigningkeys           prometheus.Gauge
+	gasEstimationIterations        prometheus.Gauge
+	blockIngestionTime             prometheus.Histogram
+	requestRateLimitedCounters     *prometheus.CounterVec
+	transactionsDroppedCounter     prometheus.Counter
+	rateLimitedTransactionsCounter prometheus.Counter
 }
 
 func NewCollector(logger zerolog.Logger) Collector {
@@ -134,19 +150,21 @@ func NewCollector(logger zerolog.Logger) Collector {
 	}
 
 	return &DefaultCollector{
-		apiErrorsCounter:           apiErrors,
-		serverPanicsCounters:       serverPanicsCounters,
-		cadenceBlockHeight:         cadenceBlockHeight,
-		evmBlockHeight:             evmBlockHeight,
-		evmBlockIndexedCounter:     evmBlockIndexedCounter,
-		evmTxIndexedCounter:        evmTxIndexedCounter,
-		evmAccountCallCounters:     evmAccountCallCounters,
-		requestDurations:           requestDurations,
-		operatorBalance:            operatorBalance,
-		availableSigningkeys:       availableSigningKeys,
-		gasEstimationIterations:    gasEstimationIterations,
-		blockIngestionTime:         blockIngestionTime,
-		requestRateLimitedCounters: requestRateLimitedCounters,
+		apiErrorsCounter:               apiErrors,
+		serverPanicsCounters:           serverPanicsCounters,
+		cadenceBlockHeight:             cadenceBlockHeight,
+		evmBlockHeight:                 evmBlockHeight,
+		evmBlockIndexedCounter:         evmBlockIndexedCounter,
+		evmTxIndexedCounter:            evmTxIndexedCounter,
+		evmAccountCallCounters:         evmAccountCallCounters,
+		requestDurations:               requestDurations,
+		operatorBalance:                operatorBalance,
+		availableSigningkeys:           availableSigningKeys,
+		gasEstimationIterations:        gasEstimationIterations,
+		blockIngestionTime:             blockIngestionTime,
+		requestRateLimitedCounters:     requestRateLimitedCounters,
+		transactionsDroppedCounter:     transactionsDroppedCounter,
+		rateLimitedTransactionsCounter: rateLimitedTransactionsCounter,
 	}
 }
 
@@ -219,6 +237,14 @@ func (c *DefaultCollector) RequestRateLimited(method string) {
 			"method": method,
 		},
 	).Inc()
+}
+
+func (c *DefaultCollector) TransactionsDropped(count int) {
+	c.transactionsDroppedCounter.Add(float64(count))
+}
+
+func (c *DefaultCollector) TransactionRateLimited() {
+	c.rateLimitedTransactionsCounter.Inc()
 }
 
 func prefixedName(name string) string {

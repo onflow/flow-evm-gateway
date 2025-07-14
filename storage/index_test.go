@@ -151,7 +151,7 @@ func (b *BlockTestSuite) TestStore() {
 
 	b.Run("store multiple blocks, and get one", func() {
 
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			batch := b.DB.NewBatch()
 
 			err := b.Blocks.Store(uint64(i+5), flow.Identifier{byte(i)}, mocks.NewBlock(uint64(10+i)), batch)
@@ -175,7 +175,7 @@ func (b *BlockTestSuite) TestStore() {
 func (b *BlockTestSuite) TestHeights() {
 
 	b.Run("last EVM height", func() {
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			lastHeight := uint64(100 + i)
 			batch := b.DB.NewBatch()
 
@@ -221,7 +221,7 @@ func (b *BlockTestSuite) TestHeights() {
 	})
 
 	b.Run("last Cadence height", func() {
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			lastHeight := uint64(100 + i)
 			batch := b.DB.NewBatch()
 			err := b.Blocks.Store(lastHeight, flow.Identifier{byte(i)}, mocks.NewBlock(lastHeight-10), batch)
@@ -427,7 +427,7 @@ func (s *ReceiptTestSuite) TestBloomsForBlockRange() {
 		s.Require().NoError(err)
 		s.Require().Len(bloomsHeights, subsetSize)
 
-		for i := 0; i < subsetSize; i++ {
+		for i := range subsetSize {
 			s.Require().Len(bloomsHeights[i].Blooms, 1)
 			s.Require().Equal(bloomsHeights[i].Blooms[0], testBlooms[i])
 			s.Require().Equal(bloomsHeights[i].Height, testHeights[i])
@@ -622,7 +622,7 @@ func (s *TransactionTestSuite) TestGetTransaction() {
 
 	s.Run("store multiple transactions and get single", func() {
 		var tx models.Transaction
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			tx = mocks.NewTransaction(uint64(10 + i))
 			batch := s.DB.NewBatch()
 			err := s.TransactionIndexer.Store(tx, batch)
@@ -670,7 +670,7 @@ func (s *TraceTestSuite) TestStore() {
 	})
 
 	s.Run("overwrite existing trace", func() {
-		for i := 0; i < 2; i++ {
+		for range 2 {
 			id := common.Hash{0x01}
 			trace := json.RawMessage(`{ "test": "foo" }`)
 

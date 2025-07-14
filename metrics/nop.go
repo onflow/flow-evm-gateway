@@ -24,3 +24,5 @@ func (c *nopCollector) AvailableSigningKeys(count int)             {}
 func (c *nopCollector) GasEstimationIterations(count int)          {}
 func (c *nopCollector) BlockIngestionTime(blockCreation time.Time) {}
 func (c *nopCollector) RequestRateLimited(method string)           {}
+func (c *nopCollector) TransactionsDropped(count int)              {}
+func (c *nopCollector) TransactionRateLimited()                    {}

@@ -107,6 +107,9 @@ func (t *SingleTxPool) Add(
 		coinbaseAddress,
 	)
 	if err != nil {
+		// If there was any error during the transaction build
+		// process, we record it as a dropped transaction.
+		t.collector.TransactionsDropped(1)
 		return err
 	}
 
