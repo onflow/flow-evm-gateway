@@ -134,7 +134,7 @@ func (b *BlockChainAPI) BlockNumber(ctx context.Context) (hexutil.Uint64, error)
 // - startingBlock: block number this node started to synchronize from
 // - currentBlock:  block number this node is currently importing
 // - highestBlock:  block number of the highest block header this node has received from peers
-func (b *BlockChainAPI) Syncing(ctx context.Context) (interface{}, error) {
+func (b *BlockChainAPI) Syncing(ctx context.Context) (any, error) {
 	if err := b.rateLimiter.Apply(ctx, EthSyncing); err != nil {
 		return nil, err
 	}
@@ -322,7 +322,7 @@ func (b *BlockChainAPI) GetTransactionByBlockNumberAndIndex(
 func (b *BlockChainAPI) GetTransactionReceipt(
 	ctx context.Context,
 	hash common.Hash,
-) (map[string]interface{}, error) {
+) (map[string]any, error) {
 	l := b.logger.With().
 		Str("endpoint", EthGetTransactionReceipt).
 		Str("hash", hash.String()).
@@ -334,17 +334,17 @@ func (b *BlockChainAPI) GetTransactionReceipt(
 
 	tx, err := b.transactions.Get(hash)
 	if err != nil {
-		return handleError[map[string]interface{}](err, l, b.collector)
+		return handleError[map[string]any](err, l, b.collector)
 	}
 
 	receipt, err := b.receipts.GetByTransactionID(hash)
 	if err != nil {
-		return handleError[map[string]interface{}](err, l, b.collector)
+		return handleError[map[string]any](err, l, b.collector)
 	}
 
 	txReceipt, err := ethTypes.MarshalReceipt(receipt, tx)
 	if err != nil {
-		return handleError[map[string]interface{}](err, l, b.collector)
+		return handleError[map[string]any](err, l, b.collector)
 	}
 
 	return txReceipt, nil
@@ -809,10 +809,7 @@ func (b *BlockChainAPI) FeeHistory(
 		gasUsedRatios []float64
 	)
 
-	maxCount := uint64(blockCount)
-	if maxCount > lastBlockNumber {
-		maxCount = lastBlockNumber
-	}
+	maxCount := min(uint64(blockCount), lastBlockNumber)
 
 	blockRewards := make([]*hexutil.Big, len(rewardPercentiles))
 	for i := range rewardPercentiles {

@@ -207,7 +207,7 @@ func Test_SubscribingWithRetryOnError(t *testing.T) {
 
 		if eventHeight == cadenceHeight {
 			require.Equal(t, evmBlock, ev.Events.Block())
-			for i := 0; i < len(txHashes); i++ {
+			for i := range txHashes {
 				tx := ev.Events.Transactions()[i]
 				require.Equal(t, txHashes[i], tx.Hash())
 			}
@@ -352,7 +352,7 @@ func generateEvmTxEvents(t *testing.T, cadenceHeight uint64) (
 	flowEvents := make([]flow.Event, 0)
 
 	// generate txs
-	for i := 0; i < txCount; i++ {
+	for i := range txCount {
 		cdcEvent, txEvent, tx, _, err := newTransaction(cadenceHeight)
 		require.NoError(t, err)
 		hashes[i] = tx.Hash()

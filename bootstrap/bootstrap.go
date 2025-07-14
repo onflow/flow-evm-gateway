@@ -531,7 +531,7 @@ func retryInterceptor(maxDuration, pauseDuration time.Duration) grpcOpts.UnaryCl
 	return func(
 		ctx context.Context,
 		method string,
-		req, reply interface{},
+		req, reply any,
 		cc *grpcOpts.ClientConn,
 		invoker grpcOpts.UnaryInvoker,
 		opts ...grpcOpts.CallOption,

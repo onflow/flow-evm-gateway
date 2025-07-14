@@ -272,10 +272,7 @@ func (r *RPCEventSubscriber) backfillSporkFromHeight(ctx context.Context, fromCa
 		r.logger.Debug().Msg(fmt.Sprintf("backfilling [%d / %d] ...", fromCadenceHeight, lastHeight))
 
 		startHeight := fromCadenceHeight
-		endHeight := fromCadenceHeight + maxRangeForGetEvents
-		if endHeight > lastHeight {
-			endHeight = lastHeight
-		}
+		endHeight := min(fromCadenceHeight+maxRangeForGetEvents, lastHeight)
 
 		blocks, err := r.client.GetEventsForHeightRange(ctx, blockExecutedEvent, startHeight, endHeight)
 		if err != nil {

@@ -141,7 +141,7 @@ func TestBatch(t *testing.T) {
 	runDB("multiple batch stores", t, func(t *testing.T, db *Storage) {
 		blocks := NewBlocks(db, flowGo.Emulator)
 
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			cadenceHeight := uint64(1 + i)
 			evmHeight := uint64(10 + i)
 			bl := mocks.NewBlock(evmHeight)
