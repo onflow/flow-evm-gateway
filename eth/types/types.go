@@ -359,8 +359,12 @@ func NewTransaction(
 		V:        (*hexutil.Big)(v),
 		R:        (*hexutil.Big)(r),
 		S:        (*hexutil.Big)(s),
-		ChainID:  (*hexutil.Big)(networkID),
 		size:     tx.Size(),
+	}
+
+	// if a legacy transaction has an EIP-155 chain id, include it explicitly
+	if id := tx.ChainId(); id.Sign() != 0 {
+		result.ChainID = (*hexutil.Big)(id)
 	}
 
 	// After the Pectra hard-fork, the full list of supported tx types is:
@@ -391,6 +395,7 @@ func NewTransaction(
 		yparity := hexutil.Uint64(v.Sign())
 		result.Accesses = &al
 		result.YParity = &yparity
+		result.ChainID = (*hexutil.Big)(tx.ChainId())
 	}
 
 	if tx.Type() > types.AccessListTxType {
@@ -399,17 +404,20 @@ func NewTransaction(
 		// Since BaseFee is `0`, this is the max gas price
 		// the sender is willing to pay.
 		result.GasPrice = (*hexutil.Big)(tx.GasFeeCap())
+		result.ChainID = (*hexutil.Big)(tx.ChainId())
 	}
 
 	if tx.Type() > types.DynamicFeeTxType {
 		result.MaxFeePerBlobGas = (*hexutil.Big)(tx.BlobGasFeeCap())
 		result.BlobVersionedHashes = tx.BlobHashes()
+		result.ChainID = (*hexutil.Big)(tx.ChainId())
 	}
 
 	// The `AuthorizationList` field became available with the introduction
 	// of https://eip7702.io/#specification, under the `SetCodeTxType`
 	if tx.Type() > types.BlobTxType {
 		result.AuthorizationList = tx.SetCodeAuthorizations()
+		result.ChainID = (*hexutil.Big)(tx.ChainId())
 	}
 
 	return result, nil
