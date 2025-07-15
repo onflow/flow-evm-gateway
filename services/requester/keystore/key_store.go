@@ -77,6 +77,11 @@ func (k *KeyStore) AvailableKeys() int {
 	return len(k.availableKeys)
 }
 
+// HasKeysInUse returns whether any of the keys are currently being used.
+func (k *KeyStore) HasKeysInUse() bool {
+	return k.AvailableKeys() != k.size
+}
+
 // Take reserves a key for use in a transaction.
 func (k *KeyStore) Take() (*AccountKey, error) {
 	select {
@@ -164,7 +169,7 @@ func (k *KeyStore) processLockedKeys(ctx context.Context) {
 			// Optimization to avoid AN calls when no signing keys have
 			// been used. For example, when back-filling the EVM GW state,
 			// we don't care about releasing signing keys.
-			if k.AvailableKeys() == k.size {
+			if !k.HasKeysInUse() {
 				continue
 			}
 
