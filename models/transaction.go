@@ -161,21 +161,27 @@ type TransactionCall struct {
 }
 
 func (tc TransactionCall) GasPrice() *big.Int {
-	if tc.Transaction.GasPrice().Cmp(big.NewInt(0)) == 0 {
+	// If `GasPrice` is 0, return the configured `BaseFeePerGas`,
+	// in order to comply with EIP-1559.
+	if tc.Transaction.GasPrice().Sign() == 0 {
 		return BaseFeePerGas
 	}
 	return tc.Transaction.GasPrice()
 }
 
 func (tc TransactionCall) GasFeeCap() *big.Int {
-	if tc.Transaction.GasFeeCap().Cmp(big.NewInt(0)) == 0 {
+	// If `GasFeeCap` is 0, return the configured `BaseFeePerGas`,
+	// in order to comply with EIP-1559.
+	if tc.Transaction.GasFeeCap().Sign() == 0 {
 		return BaseFeePerGas
 	}
 	return tc.Transaction.GasFeeCap()
 }
 
 func (tc TransactionCall) GasTipCap() *big.Int {
-	if tc.Transaction.GasTipCap().Cmp(big.NewInt(0)) == 0 {
+	// If `GasTipCap` is 0, return the configured `BaseFeePerGas`,
+	// in order to comply with EIP-1559.
+	if tc.Transaction.GasTipCap().Sign() == 0 {
 		return BaseFeePerGas
 	}
 	return tc.Transaction.GasTipCap()
@@ -267,7 +273,7 @@ func decodeTransactionEvent(event cadence.Event) (
 				err,
 			)
 		}
-		if gethTx.GasPrice().Cmp(big.NewInt(0)) == 0 {
+		if gethTx.GasPrice().Sign() == 0 {
 			receipt.EffectiveGasPrice = BaseFeePerGas
 		} else {
 			receipt.EffectiveGasPrice = gethTx.EffectiveGasTipValue(nil)
