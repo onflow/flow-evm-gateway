@@ -116,9 +116,11 @@ func (k *KeyStore) NotifyBlock(blockHeader flowsdk.BlockHeader) {
 		k.logger.Warn().Msg(
 			"received `NotifyBlock` while the server is shutting down",
 		)
-		return
-	default:
-		k.blockChan <- blockHeader
+	case k.blockChan <- blockHeader:
+		k.logger.Info().Msgf(
+			"received `NotifyBlock` for block with ID: %s",
+			blockHeader.ID,
+		)
 	}
 }
 
