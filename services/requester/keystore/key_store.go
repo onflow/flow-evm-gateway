@@ -17,7 +17,20 @@ var ErrNoKeysAvailable = fmt.Errorf("no signing keys available")
 const accountKeyBlockExpiration = flow.DefaultTransactionExpiry
 
 type KeyLock interface {
+	// This method is intended for the happy path of valid EVM transactions.
+	// The event subscriber module only subscribes to EVM-related events:
+	// - `EVM.TransactionExecuted`
+	// - `EVM.BlockExecuted`
+	//
+	// Valid EVM transactions do emit `EVM.TransactionExecuted` events, so we
+	// release the account key that was used by the Flow tx which emitted
+	// the above EVM event.
 	NotifyTransaction(txID flowsdk.Identifier)
+	// This method is intended for the unhappy path of invalid EVM transactions.
+	// For each new Flow block, we check the result status of all included Flow
+	// transactions, and we release the account keys which they used. This also
+	// handles the release of expired transactions, that weren't even included
+	// in a Flow block.
 	NotifyBlock(blockHeader flowsdk.BlockHeader)
 }
 
