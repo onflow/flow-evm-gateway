@@ -536,7 +536,8 @@ func MarshalReceipt(
 		"effectiveGasPrice": (*hexutil.Big)(receipt.EffectiveGasPrice),
 	}
 
-	// We add this in order to avoid re-indexing the whole chain.
+	// Dynamically fallback to BaseFeePerGas when computing EffectiveGasPrice to fix historical gasPrice = 0 issues.
+	// This avoids the need to re-index the entire chain for previously stored transactions.
 	// For any transaction that had a `0` gas price, regardless
 	// whether they were COA interactions or regular EVM, we
 	// set the `effectiveGasPrice` to the value of `BaseFeePerGas`,
