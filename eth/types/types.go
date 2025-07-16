@@ -544,7 +544,7 @@ func MarshalReceipt(
 	// set the `effectiveGasPrice` to the value of `BaseFeePerGas`,
 	// which is the minimum amount of gas price required by any
 	// transaction, in order to comply with EIP-1559.
-	if receipt.EffectiveGasPrice.Cmp(big.NewInt(0)) == 0 {
+	if receipt.EffectiveGasPrice.Sign() == 0 {
 		fields["effectiveGasPrice"] = (*hexutil.Big)(models.BaseFeePerGas)
 	}
 
