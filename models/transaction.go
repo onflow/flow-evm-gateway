@@ -179,8 +179,12 @@ func (tc TransactionCall) GasPrice() *big.Int {
 }
 
 func (tc TransactionCall) GasFeeCap() *big.Int {
-	// If `GasFeeCap` is 0, return the configured `BaseFeePerGas`,
-	// in order to comply with EIP-1559.
+    // `GasFeeCap` represents the `MaxFeePerGas` in EIP-1559 — the maximum fee a user is willing to pay.
+    // Ethereum clients expect a non-zero value when calculating effective gas prices for compatibility.
+    // 
+    // If the user does not provide a value (zero), this method returns the configured `BaseFeePerGas`
+    // to avoid confusion and comply with expected EVM behaviors. This ensures Ethereum tooling can 
+    // still function correctly when interacting with Flow EVM.
 	if tc.Transaction.GasFeeCap().Sign() == 0 {
 		return BaseFeePerGas
 	}
