@@ -44,6 +44,7 @@ type Transaction interface {
 	GasFeeCap() *big.Int
 	GasTipCap() *big.Int
 	GasPrice() *big.Int
+	ChainId() *big.Int
 	BlobGas() uint64
 	BlobGasFeeCap() *big.Int
 	BlobHashes() []common.Hash
@@ -117,6 +118,10 @@ func (dc DirectCall) GasPrice() *big.Int {
 	return BaseFeePerGas
 }
 
+func (dc DirectCall) ChainId() *big.Int {
+	return big.NewInt(0)
+}
+
 func (dc DirectCall) BlobGas() uint64 {
 	return 0
 }
@@ -160,10 +165,7 @@ func (tc TransactionCall) Hash() common.Hash {
 }
 
 func (tc TransactionCall) From() (common.Address, error) {
-	return gethTypes.Sender(
-		gethTypes.LatestSignerForChainID(tc.ChainId()),
-		tc.Transaction,
-	)
+	return DeriveTxSender(tc.Transaction)
 }
 
 func (tc TransactionCall) MarshalBinary() ([]byte, error) {
@@ -304,4 +306,23 @@ func ValidateTransaction(
 	}
 
 	return nil
+}
+
+// DeriveTxSender returns the address derived from the signature (V, R, S)
+// using secp256k1 elliptic curve and an error if it failed deriving or
+// upon an incorrect signature.
+func DeriveTxSender(tx *gethTypes.Transaction) (common.Address, error) {
+	var signer gethTypes.Signer
+	if chainID := tx.ChainId(); chainID.Sign() != 0 {
+		signer = gethTypes.LatestSignerForChainID(chainID)
+	} else {
+		signer = gethTypes.HomesteadSigner{}
+	}
+
+	from, err := gethTypes.Sender(signer, tx)
+	if err != nil {
+		return common.Address{}, fmt.Errorf("failed to derive the sender: %w", err)
+	}
+
+	return from, nil
 }
