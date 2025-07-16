@@ -161,8 +161,17 @@ type TransactionCall struct {
 }
 
 func (tc TransactionCall) GasPrice() *big.Int {
-	// If `GasPrice` is 0, return the configured `BaseFeePerGas`,
-	// in order to comply with EIP-1559.
+	// EIP-1559 introduced a new fee model in Ethereum that replaces the legacy `GasPrice`
+	// with `MaxFeePerGas` and `MaxPriorityFeePerGas`. However, many Ethereum tools and 
+	// wallets (such as MetaMask, Hardhat, etc.) still rely on reading `GasPrice`, even if it’s not explicitly set.
+	//
+	// When a user submits an EIP-1559 style transaction, `GasPrice` is not sepcified,
+	// Ethereum nodes typically return the current `BaseFeePerGas` as the effective `GasPrice`
+	// for compatibility reasons.
+	// 
+	// This behavior is mirrored here in Flow EVM Gateway: if `GasPrice` is zero, we return 
+	// the configured `BaseFeePerGas` to satisfy these tool expectations.
+	// This does NOT affect Flow’s actual transaction fee calculation — this is purely for compatibility.
 	if tc.Transaction.GasPrice().Sign() == 0 {
 		return BaseFeePerGas
 	}
