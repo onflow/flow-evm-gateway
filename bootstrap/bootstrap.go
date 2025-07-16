@@ -243,7 +243,7 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 		}
 	}
 
-	b.keystore = keystore.New(ctx, accountKeys, b.client, b.logger)
+	b.keystore = keystore.New(ctx, accountKeys, b.client, b.config, b.logger)
 
 	// create transaction pool
 	var txPool requester.TxPool

@@ -10,6 +10,7 @@ import (
 	"github.com/onflow/flow-go-sdk/access"
 	gethCommon "github.com/onflow/go-ethereum/common"
 
+	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/models"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/services/requester"
@@ -46,7 +47,8 @@ func Test_Subscribing(t *testing.T) {
 
 	ctx := context.Background()
 	logger := zerolog.Nop()
-	ks := keystore.New(ctx, nil, client, logger)
+	cfg := config.Config{COATxLookupEnabled: true}
+	ks := keystore.New(ctx, nil, client, cfg, logger)
 
 	subscriber := NewRPCEventSubscriber(logger, client, flowGo.Previewnet, ks, 1)
 
@@ -90,7 +92,8 @@ func Test_MissingBlockEvent(t *testing.T) {
 
 	ctx := context.Background()
 	logger := zerolog.Nop()
-	ks := keystore.New(ctx, nil, client, logger)
+	cfg := config.Config{COATxLookupEnabled: true}
+	ks := keystore.New(ctx, nil, client, cfg, logger)
 
 	subscriber := NewRPCEventSubscriber(logger, client, flowGo.Previewnet, ks, 1)
 
@@ -196,7 +199,8 @@ func Test_SubscribingWithRetryOnError(t *testing.T) {
 
 	ctx := context.Background()
 	logger := zerolog.Nop()
-	ks := keystore.New(ctx, nil, client, logger)
+	cfg := config.Config{COATxLookupEnabled: true}
+	ks := keystore.New(ctx, nil, client, cfg, logger)
 
 	subscriber := NewRPCEventSubscriber(logger, client, flowGo.Previewnet, ks, 1)
 
@@ -263,7 +267,8 @@ func Test_SubscribingWithRetryOnErrorMultipleBlocks(t *testing.T) {
 
 	ctx := context.Background()
 	logger := zerolog.Nop()
-	ks := keystore.New(ctx, nil, client, logger)
+	cfg := config.Config{COATxLookupEnabled: true}
+	ks := keystore.New(ctx, nil, client, cfg, logger)
 
 	subscriber := NewRPCEventSubscriber(logger, client, flowGo.Previewnet, ks, 1)
 
@@ -329,7 +334,8 @@ func Test_SubscribingWithRetryOnErrorEmptyBlocks(t *testing.T) {
 
 	ctx := context.Background()
 	logger := zerolog.Nop()
-	ks := keystore.New(ctx, nil, client, logger)
+	cfg := config.Config{COATxLookupEnabled: true}
+	ks := keystore.New(ctx, nil, client, cfg, logger)
 
 	subscriber := NewRPCEventSubscriber(logger, client, flowGo.Previewnet, ks, 1)
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/onflow/flow-evm-gateway/config"
 	flowsdk "github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access"
 	"github.com/onflow/flow-go/model/flow"
@@ -17,16 +18,17 @@ const accountKeyBlockExpiration = flow.DefaultTransactionExpiry
 
 type KeyLock interface {
 	NotifyTransaction(txID flowsdk.Identifier)
-	NotifyBlock(blockID flowsdk.Identifier)
+	NotifyBlock(blockHeader flowsdk.BlockHeader)
 }
 
 type KeyStore struct {
 	client        access.Client
+	config        config.Config
 	availableKeys chan *AccountKey
 	usedKeys      map[flowsdk.Identifier]*AccountKey
 	size          int
 	keyMu         sync.Mutex
-	blockChan     chan flowsdk.Identifier
+	blockChan     chan flowsdk.BlockHeader
 	logger        zerolog.Logger
 
 	// Signal channel used to prevent blocking writes
@@ -40,19 +42,21 @@ func New(
 	ctx context.Context,
 	keys []*AccountKey,
 	client access.Client,
+	config config.Config,
 	logger zerolog.Logger,
 ) *KeyStore {
 	totalKeys := len(keys)
 
 	ks := &KeyStore{
 		client:        client,
+		config:        config,
 		availableKeys: make(chan *AccountKey, totalKeys),
 		usedKeys:      map[flowsdk.Identifier]*AccountKey{},
 		size:          totalKeys,
 		// `KeyStore.NotifyBlock` is called for each new Flow block,
-		// so we use a buffered channel to write the new block IDs
+		// so we use a buffered channel to write the new block headers
 		// to the `blockChan`, and read them through `processLockedKeys`.
-		blockChan: make(chan flowsdk.Identifier, 100),
+		blockChan: make(chan flowsdk.BlockHeader, 100),
 		logger:    logger,
 		done:      make(chan struct{}),
 	}
@@ -106,7 +110,7 @@ func (k *KeyStore) NotifyTransaction(txID flowsdk.Identifier) {
 
 // NotifyBlock is called to notify the KeyStore of a newly ingested block.
 // Pending transactions older than a threshold number of blocks are removed.
-func (k *KeyStore) NotifyBlock(blockID flowsdk.Identifier) {
+func (k *KeyStore) NotifyBlock(blockHeader flowsdk.BlockHeader) {
 	select {
 	case <-k.done:
 		k.logger.Warn().Msg(
@@ -114,7 +118,7 @@ func (k *KeyStore) NotifyBlock(blockID flowsdk.Identifier) {
 		)
 		return
 	default:
-		k.blockChan <- blockID
+		k.blockChan <- blockHeader
 	}
 }
 
@@ -152,7 +156,7 @@ func (k *KeyStore) processLockedKeys(ctx context.Context) {
 		case <-ctx.Done():
 			close(k.done)
 			return
-		case blockID := <-k.blockChan:
+		case blockHeader := <-k.blockChan:
 			// TODO: If calling `k.client.GetTransactionResultsByBlockID` for each
 			// new block, seems to be problematic for ANs, we can take an approach
 			// like the one below:
@@ -173,29 +177,30 @@ func (k *KeyStore) processLockedKeys(ctx context.Context) {
 				continue
 			}
 
-			txResults, err := k.client.GetTransactionResultsByBlockID(ctx, blockID)
-			if err != nil {
-				k.logger.Error().Err(err).Msgf(
-					"failed to get transaction results for block ID: %s",
-					blockID.Hex(),
-				)
-				continue
+			txResults := []*flowsdk.TransactionResult{}
+			var err error
+			if k.config.COATxLookupEnabled {
+				txResults, err = k.client.GetTransactionResultsByBlockID(ctx, blockHeader.ID)
+				if err != nil {
+					k.logger.Error().Err(err).Msgf(
+						"failed to get transaction results for block ID: %s",
+						blockHeader.ID.Hex(),
+					)
+					continue
+				}
 			}
 
-			k.releasekeys(txResults)
+			k.releasekeys(blockHeader.Height, txResults)
 		}
 	}
 }
 
-// releasekeys accepts a slice of `TransactionResult` objects and
-// releases the account keys used for signing the given transactions.
+// releasekeys accepts a block height and a slice of `TransactionResult`
+// objects and releases the account keys used for signing the given
+// transactions.
 // It also releases the account keys which were last locked more than
 // or equal to `accountKeyBlockExpiration` blocks in the past.
-func (k *KeyStore) releasekeys(txResults []*flowsdk.TransactionResult) {
-	if len(txResults) == 0 {
-		return
-	}
-
+func (k *KeyStore) releasekeys(blockHeight uint64, txResults []*flowsdk.TransactionResult) {
 	k.keyMu.Lock()
 	defer k.keyMu.Unlock()
 
@@ -203,7 +208,6 @@ func (k *KeyStore) releasekeys(txResults []*flowsdk.TransactionResult) {
 		k.unsafeUnlockKey(txResult.TransactionID)
 	}
 
-	blockHeight := txResults[0].BlockHeight
 	for txID, key := range k.usedKeys {
 		if blockHeight-key.lastLockedBlock.Load() >= accountKeyBlockExpiration {
 			k.unsafeUnlockKey(txID)

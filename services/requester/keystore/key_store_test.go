@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/services/testutils"
 	sdk "github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access/mocks"
@@ -29,7 +30,13 @@ func TestTake(t *testing.T) {
 		keys = append(keys, NewAccountKey(*accountKey, addrGenerator.New(), signer))
 	}
 
-	ks := New(context.Background(), keys, testutils.SetupClientForRange(1, 100), zerolog.Nop())
+	ks := New(
+		context.Background(),
+		keys,
+		testutils.SetupClientForRange(1, 100),
+		config.Config{COATxLookupEnabled: true},
+		zerolog.Nop(),
+	)
 
 	t.Run("Take with no metadata updates", func(t *testing.T) {
 		key, err := ks.Take()
@@ -110,7 +117,13 @@ func TestTake(t *testing.T) {
 				}, nil
 			},
 		}
-		ks := New(context.Background(), keys, client, zerolog.Nop())
+		ks := New(
+			context.Background(),
+			keys,
+			client,
+			config.Config{COATxLookupEnabled: true},
+			zerolog.Nop(),
+		)
 
 		key, err := ks.Take()
 		require.NoError(t, err)
@@ -126,7 +139,12 @@ func TestTake(t *testing.T) {
 		assert.Equal(t, key, ks.usedKeys[txID])
 
 		// notify for one block before the expiration block, key should still be reserved
-		ks.NotifyBlock(blockIDNonExpired)
+		ks.NotifyBlock(
+			sdk.BlockHeader{
+				ID:     blockIDNonExpired,
+				Height: blockHeight + accountKeyBlockExpiration - 1,
+			},
+		)
 
 		// Give some time to allow the KeyStore to check for the
 		// transaction result statuses in the background.
@@ -136,7 +154,12 @@ func TestTake(t *testing.T) {
 		assert.Equal(t, key, ks.usedKeys[txID])
 
 		// notify for the expiration block
-		ks.NotifyBlock(identifierFixture())
+		ks.NotifyBlock(
+			sdk.BlockHeader{
+				ID:     identifierFixture(),
+				Height: blockHeight + accountKeyBlockExpiration,
+			},
+		)
 
 		// Give some time to allow the KeyStore to check for the
 		// transaction result statuses in the background.
@@ -164,6 +187,7 @@ func TestKeySigning(t *testing.T) {
 			NewAccountKey(*accountKey, address, signer),
 		},
 		testutils.SetupClientForRange(1, 100),
+		config.Config{COATxLookupEnabled: true},
 		zerolog.Nop(),
 	)
 
@@ -211,7 +235,13 @@ func TestConcurrentUse(t *testing.T) {
 		keys = append(keys, key)
 	}
 
-	ks := New(context.Background(), keys, testutils.SetupClientForRange(1, 100), zerolog.Nop())
+	ks := New(
+		context.Background(),
+		keys,
+		testutils.SetupClientForRange(1, 100),
+		config.Config{COATxLookupEnabled: true},
+		zerolog.Nop(),
+	)
 
 	g := errgroup.Group{}
 	g.SetLimit(concurrentTxCount)
