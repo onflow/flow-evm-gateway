@@ -161,17 +161,21 @@ type TransactionCall struct {
 }
 
 func (tc TransactionCall) GasPrice() *big.Int {
-	// EIP-1559 introduced a new fee model in Ethereum that replaces the legacy `GasPrice`
-	// with `MaxFeePerGas` and `MaxPriorityFeePerGas`. However, many Ethereum tools and 
-	// wallets (such as MetaMask, Hardhat, etc.) still rely on reading `GasPrice`, even if it’s not explicitly set.
+	// EIP-1559 introduced a new fee model in Ethereum that replaces the
+	// legacy `GasPrice` with `MaxFeePerGas` and `MaxPriorityFeePerGas`.
+	// However, many Ethereum tools and wallets (such as MetaMask, Hardhat, etc.)
+	// still rely on reading `GasPrice`, even if it’s not explicitly set.
 	//
-	// When a user submits an EIP-1559 style transaction, `GasPrice` is not sepcified,
-	// Ethereum nodes typically return the current `BaseFeePerGas` as the effective `GasPrice`
-	// for compatibility reasons.
-	// 
-	// This behavior is mirrored here in Flow EVM Gateway: if `GasPrice` is zero, we return 
-	// the configured `BaseFeePerGas` to satisfy these tool expectations.
-	// This does NOT affect Flow’s actual transaction fee calculation — this is purely for compatibility.
+	// When a user submits an EIP-1559 transaction type, `GasPrice` is not
+	// specified, Ethereum nodes typically return the current `BaseFeePerGas`
+	// as the effective `GasPrice` for compatibility reasons.
+	//
+	// This behavior is mirrored here in Flow EVM Gateway: if `GasPrice` is zero,
+	// we return the configured `BaseFeePerGas` to satisfy the expectations of
+	// these tools.
+	//
+	// This does NOT affect Flow’s actual transaction fee calculation,
+	// this is purely for compatibility.
 	if tc.Transaction.GasPrice().Sign() == 0 {
 		return BaseFeePerGas
 	}
@@ -179,12 +183,14 @@ func (tc TransactionCall) GasPrice() *big.Int {
 }
 
 func (tc TransactionCall) GasFeeCap() *big.Int {
-    // `GasFeeCap` represents the `MaxFeePerGas` in EIP-1559 — the maximum fee a user is willing to pay.
-    // Ethereum clients expect a non-zero value when calculating effective gas prices for compatibility.
-    // 
-    // If the user does not provide a value (zero), this method returns the configured `BaseFeePerGas`
-    // to avoid confusion and comply with expected EVM behaviors. This ensures Ethereum tooling can 
-    // still function correctly when interacting with Flow EVM.
+	// `GasFeeCap` represents the `MaxFeePerGas` in EIP-1559, the maximum fee
+	// a user is willing to pay. Ethereum clients expect a non-zero value when
+	// calculating effective gas prices for compatibility.
+	//
+	// If the user does not provide a value (zero), this method returns the
+	// configured `BaseFeePerGas` to avoid confusion and comply with expected
+	// EVM behavior. This ensures Ethereum tooling can still function correctly
+	// when interacting with Flow EVM.
 	if tc.Transaction.GasFeeCap().Sign() == 0 {
 		return BaseFeePerGas
 	}
@@ -192,12 +198,14 @@ func (tc TransactionCall) GasFeeCap() *big.Int {
 }
 
 func (tc TransactionCall) GasTipCap() *big.Int {
-    // `GasTipCap` represents the `MaxPriorityFeePerGas` in EIP-1559 — the optional "tip" to incentivize block inclusion.
-    // Ethereum expects this value to be explicitly defined or it defaults to something reasonable like the base fee.
-    //
-    // To satisfy Ethereum clients and maintain expected behavior, when this value is zero,
-    // Flow EVM returns the configured `BaseFeePerGas` as a safe default.
-    // This ensures Ethereum tools can continue to compute `EffectiveGasPrice` without errors.
+	// `GasTipCap` represents the `MaxPriorityFeePerGas` in EIP-1559, the optional
+	// "tip" to incentivize block inclusion. Ethereum expects this value to be
+	// explicitly defined or it defaults to something reasonable like the base fee.
+	//
+	// To satisfy Ethereum clients and maintain expected behavior, when this value
+	// is zero, Flow EVM returns the configured `BaseFeePerGas` as a safe default.
+	// This ensures Ethereum tools can continue to compute `EffectiveGasPrice`
+	// without errors.
 	if tc.Transaction.GasTipCap().Sign() == 0 {
 		return BaseFeePerGas
 	}
