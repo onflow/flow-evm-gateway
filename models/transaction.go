@@ -179,8 +179,12 @@ func (tc TransactionCall) GasFeeCap() *big.Int {
 }
 
 func (tc TransactionCall) GasTipCap() *big.Int {
-	// If `GasTipCap` is 0, return the configured `BaseFeePerGas`,
-	// in order to comply with EIP-1559.
+    // `GasTipCap` represents the `MaxPriorityFeePerGas` in EIP-1559 — the optional "tip" to incentivize block inclusion.
+    // Ethereum expects this value to be explicitly defined or it defaults to something reasonable like the base fee.
+    //
+    // To satisfy Ethereum clients and maintain expected behavior, when this value is zero,
+    // Flow EVM returns the configured `BaseFeePerGas` as a safe default.
+    // This ensures Ethereum tools can continue to compute `EffectiveGasPrice` without errors.
 	if tc.Transaction.GasTipCap().Sign() == 0 {
 		return BaseFeePerGas
 	}
