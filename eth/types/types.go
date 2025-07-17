@@ -470,7 +470,6 @@ type Block struct {
 	ReceiptsRoot     common.Hash      `json:"receiptsRoot"`
 	Miner            common.Address   `json:"miner"`
 	Difficulty       hexutil.Uint64   `json:"difficulty"`
-	TotalDifficulty  hexutil.Uint64   `json:"totalDifficulty"`
 	ExtraData        hexutil.Bytes    `json:"extraData"`
 	Size             hexutil.Uint64   `json:"size"`
 	GasLimit         hexutil.Uint64   `json:"gasLimit"`
