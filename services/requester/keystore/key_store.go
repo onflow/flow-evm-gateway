@@ -82,7 +82,7 @@ func New(
 	// For cases where the EVM Gateway is run in an index-mode,
 	// there is no need to release any keys, since transaction
 	// submission is not allowed.
-	if ks.size > 0 {
+	if !ks.config.IndexOnly {
 		go ks.processLockedKeys(ctx)
 	}
 
@@ -115,6 +115,15 @@ func (k *KeyStore) Take() (*AccountKey, error) {
 
 // NotifyTransaction unlocks a key after use and puts it back into the pool.
 func (k *KeyStore) NotifyTransaction(txID flowsdk.Identifier) {
+	// For cases where the EVM Gateway is run in an index-mode,
+	// there is no need to release any keys, since transaction
+	// submission is not allowed. We return early here, to avoid
+	// any unnecessary steps such as lock acquisition and unlocking
+	// keys.
+	if k.config.IndexOnly {
+		return
+	}
+
 	k.keyMu.Lock()
 	defer k.keyMu.Unlock()
 
@@ -124,6 +133,16 @@ func (k *KeyStore) NotifyTransaction(txID flowsdk.Identifier) {
 // NotifyBlock is called to notify the KeyStore of a newly ingested block.
 // Pending transactions older than a threshold number of blocks are removed.
 func (k *KeyStore) NotifyBlock(blockHeader flowsdk.BlockHeader) {
+	// For cases where the EVM Gateway is run in an index-mode,
+	// there is no need to release any keys, since transaction
+	// submission is not allowed. We return early here, to avoid
+	// blocking forever on writes to `k.blockChan`, because the
+	// `k.processLockedKeys()` function won't perform any reads
+	// from `k.blockChan`.
+	if k.config.IndexOnly {
+		return
+	}
+
 	select {
 	case <-k.done:
 		k.logger.Warn().Msg(
