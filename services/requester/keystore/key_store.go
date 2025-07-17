@@ -172,19 +172,6 @@ func (k *KeyStore) processLockedKeys(ctx context.Context) {
 			close(k.done)
 			return
 		case blockHeader := <-k.blockChan:
-			// TODO: If calling `k.client.GetTransactionResultsByBlockID` for each
-			// new block, seems to be problematic for ANs, we can take an approach
-			// like the one below:
-			// If the available keys ratio is >= 60% of the total signing keys,
-			// then we can skip checking the transaction result statuses.
-			// The signing keys from invalid EVM transactions, will eventually
-			// come again into availability, after `accountKeyBlockExpiration`
-			// blocks have passed.
-			// availablekeysRatio := float64(k.AvailableKeys()) / float64(k.size)
-			// if availablekeysRatio >= 0.6 {
-			// 	continue
-			// }
-
 			// Optimization to avoid AN calls when no signing keys have
 			// been used. For example, when back-filling the EVM GW state,
 			// we don't care about releasing signing keys.
