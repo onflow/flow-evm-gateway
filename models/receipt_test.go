@@ -13,6 +13,8 @@ func Test_DecodeReceipts(t *testing.T) {
 	_, receipt, _, err := decodeTransactionEvent(cdcEv)
 	require.NoError(t, err)
 
+	assert.Equal(t, BaseFeePerGas, receipt.EffectiveGasPrice)
+
 	for i, l := range rec.Logs {
 		assert.ObjectsAreEqualValues(l, receipt.Logs[i])
 		for j, tt := range l.Topics {

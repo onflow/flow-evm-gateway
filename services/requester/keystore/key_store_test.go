@@ -1,14 +1,19 @@
 package keystore
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/onflow/flow-evm-gateway/config"
+	"github.com/onflow/flow-evm-gateway/services/testutils"
 	sdk "github.com/onflow/flow-go-sdk"
+	"github.com/onflow/flow-go-sdk/access/mocks"
 	"github.com/onflow/flow-go-sdk/test"
 	"github.com/onflow/flow-go/utils/unittest"
+	"github.com/rs/zerolog"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/stretchr/testify/assert"
@@ -25,7 +30,13 @@ func TestTake(t *testing.T) {
 		keys = append(keys, NewAccountKey(*accountKey, addrGenerator.New(), signer))
 	}
 
-	ks := New(keys)
+	ks := New(
+		context.Background(),
+		keys,
+		testutils.SetupClientForRange(1, 100),
+		config.Config{COATxLookupEnabled: true},
+		zerolog.Nop(),
+	)
 
 	t.Run("Take with no metadata updates", func(t *testing.T) {
 		key, err := ks.Take()
@@ -67,10 +78,56 @@ func TestTake(t *testing.T) {
 	})
 
 	t.Run("Take with expiration", func(t *testing.T) {
+		blockHeight := uint64(10)
+		blockID10 := identifierFixture()
+		blockIDNonExpired := identifierFixture()
+		client := &testutils.MockClient{
+			Client: &mocks.Client{},
+			GetTransactionResultsByBlockIDFunc: func(ctx context.Context, blockID sdk.Identifier) ([]*sdk.TransactionResult, error) {
+				if blockID == blockID10 {
+					return []*sdk.TransactionResult{}, nil
+				}
+
+				if blockID == blockIDNonExpired {
+					return []*sdk.TransactionResult{
+						{
+							Status:           sdk.TransactionStatusFinalized,
+							Error:            nil,
+							Events:           []sdk.Event{},
+							BlockID:          blockID,
+							BlockHeight:      blockHeight + accountKeyBlockExpiration - 1,
+							TransactionID:    identifierFixture(),
+							CollectionID:     identifierFixture(),
+							ComputationUsage: 104_512,
+						},
+					}, nil
+				}
+
+				return []*sdk.TransactionResult{
+					{
+						Status:           sdk.TransactionStatusFinalized,
+						Error:            nil,
+						Events:           []sdk.Event{},
+						BlockID:          blockID,
+						BlockHeight:      blockHeight + accountKeyBlockExpiration,
+						TransactionID:    identifierFixture(),
+						CollectionID:     identifierFixture(),
+						ComputationUsage: 104_512,
+					},
+				}, nil
+			},
+		}
+		ks := New(
+			context.Background(),
+			keys,
+			client,
+			config.Config{COATxLookupEnabled: true},
+			zerolog.Nop(),
+		)
+
 		key, err := ks.Take()
 		require.NoError(t, err)
 
-		blockHeight := uint64(10)
 		txID := identifierFixture()
 		key.SetLockMetadata(txID, blockHeight)
 
@@ -82,13 +139,31 @@ func TestTake(t *testing.T) {
 		assert.Equal(t, key, ks.usedKeys[txID])
 
 		// notify for one block before the expiration block, key should still be reserved
-		ks.NotifyBlock(blockHeight + accountKeyBlockExpiration - 1)
+		ks.NotifyBlock(
+			sdk.BlockHeader{
+				ID:     blockIDNonExpired,
+				Height: blockHeight + accountKeyBlockExpiration - 1,
+			},
+		)
+
+		// Give some time to allow the KeyStore to check for the
+		// transaction result statuses in the background.
+		time.Sleep(time.Second * 2)
 
 		assert.True(t, key.inUse.Load())
 		assert.Equal(t, key, ks.usedKeys[txID])
 
 		// notify for the expiration block
-		ks.NotifyBlock(blockHeight + accountKeyBlockExpiration)
+		ks.NotifyBlock(
+			sdk.BlockHeader{
+				ID:     identifierFixture(),
+				Height: blockHeight + accountKeyBlockExpiration,
+			},
+		)
+
+		// Give some time to allow the KeyStore to check for the
+		// transaction result statuses in the background.
+		time.Sleep(time.Second * 2)
 
 		// keystore and key should be reset
 		assert.Equal(t, 2, ks.AvailableKeys())
@@ -106,9 +181,15 @@ func TestKeySigning(t *testing.T) {
 	accountKey.Index = 0 // the fixture starts from index 1
 	accountKey.SequenceNumber = 42
 
-	ks := New([]*AccountKey{
-		NewAccountKey(*accountKey, address, signer),
-	})
+	ks := New(
+		context.Background(),
+		[]*AccountKey{
+			NewAccountKey(*accountKey, address, signer),
+		},
+		testutils.SetupClientForRange(1, 100),
+		config.Config{COATxLookupEnabled: true},
+		zerolog.Nop(),
+	)
 
 	key, err := ks.Take()
 	require.NoError(t, err)
@@ -154,7 +235,13 @@ func TestConcurrentUse(t *testing.T) {
 		keys = append(keys, key)
 	}
 
-	ks := New(keys)
+	ks := New(
+		context.Background(),
+		keys,
+		testutils.SetupClientForRange(1, 100),
+		config.Config{COATxLookupEnabled: true},
+		zerolog.Nop(),
+	)
 
 	g := errgroup.Group{}
 	g.SetLimit(concurrentTxCount)

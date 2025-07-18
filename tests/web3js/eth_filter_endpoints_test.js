@@ -421,7 +421,6 @@ describe('eth_getFilterChanges', async () => {
             transactionIndex: '0x1',
             value: '0x388fb0',
             type: '0x0',
-            chainId: '0x286',
             v: '0xff',
             r: '0x30000000000000000',
             s: '0x3'

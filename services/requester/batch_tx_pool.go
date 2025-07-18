@@ -120,10 +120,11 @@ func (t *BatchTxPool) Add(
 	t.txMux.Lock()
 	defer t.txMux.Unlock()
 
-	from, err := gethTypes.Sender(gethTypes.LatestSignerForChainID(tx.ChainId()), tx)
+	from, err := models.DeriveTxSender(tx)
 	if err != nil {
-		return fmt.Errorf("failed to derive the sender: %w", err)
+		return err
 	}
+
 	txData, err := tx.MarshalBinary()
 	if err != nil {
 		return err
