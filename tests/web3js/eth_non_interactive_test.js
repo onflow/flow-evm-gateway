@@ -261,6 +261,7 @@ it('should get transaction', async () => {
     assert.isNotEmpty(tx.r)
     assert.isNotEmpty(tx.s)
     assert.equal(tx.transactionIndex, 2)
+    assert.equal(tx.gasPrice, 1n)
 
     let rcp = await web3.eth.getTransactionReceipt(tx.hash)
     assert.isNotEmpty(rcp)
@@ -272,6 +273,7 @@ it('should get transaction', async () => {
     assert.equal(rcp.cumulativeGasUsed, 744655n)
     assert.equal(rcp.transactionHash, tx.hash)
     assert.equal(rcp.status, conf.successStatus)
+    assert.equal(rcp.effectiveGasPrice, 1n)
 })
 
 it('should return null for non-existing blocks and receipts', async () => {

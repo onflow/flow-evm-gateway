@@ -56,6 +56,10 @@ type Config struct {
 	COAKey crypto.PrivateKey
 	// COACloudKMSKey is a Cloud KMS key that will be used for signing transactions.
 	COACloudKMSKey *flowGoKMS.Key
+	// COATxLookupEnabled enables tracking of Cadence transactions to release COA signing
+	// keys much faster. Increases capacity of the available COA signing keys for nodes
+	// with high tx volume.
+	COATxLookupEnabled bool
 	// GasPrice is a fixed gas price that will be used when submitting transactions.
 	GasPrice *big.Int
 	// EnforceGasPrice defines whether the minimum gas price should be enforced.

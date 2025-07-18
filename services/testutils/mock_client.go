@@ -18,6 +18,7 @@ type MockClient struct {
 	GetEventsForHeightRangeFunc      func(
 		ctx context.Context, eventType string, startHeight uint64, endHeight uint64,
 	) ([]flow.BlockEvents, error)
+	GetTransactionResultsByBlockIDFunc func(ctx context.Context, blockID flow.Identifier) ([]*flow.TransactionResult, error)
 }
 
 func (c *MockClient) GetBlockHeaderByHeight(ctx context.Context, height uint64) (*flow.BlockHeader, error) {
@@ -48,6 +49,16 @@ func (c *MockClient) GetEventsForHeightRange(
 		return c.GetEventsForHeightRangeFunc(ctx, eventType, startHeight, endHeight)
 	}
 	return c.Client.GetEventsForHeightRange(ctx, eventType, startHeight, endHeight)
+}
+
+func (c *MockClient) GetTransactionResultsByBlockID(
+	ctx context.Context,
+	blockID flow.Identifier,
+) ([]*flow.TransactionResult, error) {
+	if c.GetTransactionResultsByBlockIDFunc != nil {
+		return c.GetTransactionResultsByBlockIDFunc(ctx, blockID)
+	}
+	return c.Client.GetTransactionResultsByBlockID(ctx, blockID)
 }
 
 func SetupClientForRange(startHeight uint64, endHeight uint64) *MockClient {

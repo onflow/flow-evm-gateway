@@ -44,6 +44,7 @@ type Transaction interface {
 	GasFeeCap() *big.Int
 	GasTipCap() *big.Int
 	GasPrice() *big.Int
+	ChainId() *big.Int
 	BlobGas() uint64
 	BlobGasFeeCap() *big.Int
 	BlobHashes() []common.Hash
@@ -117,6 +118,10 @@ func (dc DirectCall) GasPrice() *big.Int {
 	return BaseFeePerGas
 }
 
+func (dc DirectCall) ChainId() *big.Int {
+	return big.NewInt(0)
+}
+
 func (dc DirectCall) BlobGas() uint64 {
 	return 0
 }
@@ -155,15 +160,64 @@ type TransactionCall struct {
 	*gethTypes.Transaction
 }
 
+func (tc TransactionCall) GasPrice() *big.Int {
+	// EIP-1559 introduced a new fee model in Ethereum that replaces the
+	// legacy `GasPrice` with `MaxFeePerGas` and `MaxPriorityFeePerGas`.
+	// However, many Ethereum tools and wallets (such as MetaMask, Hardhat, etc.)
+	// still rely on reading `GasPrice`, even if it’s not explicitly set.
+	//
+	// When a user submits an EIP-1559 transaction type, `GasPrice` is not
+	// specified, Ethereum nodes typically return the current `BaseFeePerGas`
+	// as the effective `GasPrice` for compatibility reasons.
+	//
+	// This behavior is mirrored here in Flow EVM Gateway: if `GasPrice` is zero,
+	// we return the configured `BaseFeePerGas` to satisfy the expectations of
+	// these tools.
+	//
+	// This does NOT affect Flow’s actual transaction fee calculation,
+	// this is purely for compatibility.
+	if tc.Transaction.GasPrice().Sign() == 0 {
+		return BaseFeePerGas
+	}
+	return tc.Transaction.GasPrice()
+}
+
+func (tc TransactionCall) GasFeeCap() *big.Int {
+	// `GasFeeCap` represents the `MaxFeePerGas` in EIP-1559, the maximum fee
+	// a user is willing to pay. Ethereum clients expect a non-zero value when
+	// calculating effective gas prices for compatibility.
+	//
+	// If the user does not provide a value (zero), this method returns the
+	// configured `BaseFeePerGas` to avoid confusion and comply with expected
+	// EVM behavior. This ensures Ethereum tooling can still function correctly
+	// when interacting with Flow EVM.
+	if tc.Transaction.GasFeeCap().Sign() == 0 {
+		return BaseFeePerGas
+	}
+	return tc.Transaction.GasFeeCap()
+}
+
+func (tc TransactionCall) GasTipCap() *big.Int {
+	// `GasTipCap` represents the `MaxPriorityFeePerGas` in EIP-1559, the optional
+	// "tip" to incentivize block inclusion. Ethereum expects this value to be
+	// explicitly defined or it defaults to something reasonable like the base fee.
+	//
+	// To satisfy Ethereum clients and maintain expected behavior, when this value
+	// is zero, Flow EVM returns the configured `BaseFeePerGas` as a safe default.
+	// This ensures Ethereum tools can continue to compute `EffectiveGasPrice`
+	// without errors.
+	if tc.Transaction.GasTipCap().Sign() == 0 {
+		return BaseFeePerGas
+	}
+	return tc.Transaction.GasTipCap()
+}
+
 func (tc TransactionCall) Hash() common.Hash {
 	return tc.Transaction.Hash()
 }
 
 func (tc TransactionCall) From() (common.Address, error) {
-	return gethTypes.Sender(
-		gethTypes.LatestSignerForChainID(tc.ChainId()),
-		tc.Transaction,
-	)
+	return DeriveTxSender(tc.Transaction)
 }
 
 func (tc TransactionCall) MarshalBinary() ([]byte, error) {
@@ -244,7 +298,11 @@ func decodeTransactionEvent(event cadence.Event) (
 				err,
 			)
 		}
-		receipt.EffectiveGasPrice = gethTx.EffectiveGasTipValue(nil)
+		if gethTx.GasPrice().Sign() == 0 {
+			receipt.EffectiveGasPrice = BaseFeePerGas
+		} else {
+			receipt.EffectiveGasPrice = gethTx.EffectiveGasTipValue(nil)
+		}
 		tx = TransactionCall{Transaction: gethTx}
 	}
 
@@ -304,4 +362,23 @@ func ValidateTransaction(
 	}
 
 	return nil
+}
+
+// DeriveTxSender returns the address derived from the signature (V, R, S)
+// using secp256k1 elliptic curve and an error if it failed deriving or
+// upon an incorrect signature.
+func DeriveTxSender(tx *gethTypes.Transaction) (common.Address, error) {
+	var signer gethTypes.Signer
+	if chainID := tx.ChainId(); chainID.Sign() != 0 {
+		signer = gethTypes.LatestSignerForChainID(chainID)
+	} else {
+		signer = gethTypes.HomesteadSigner{}
+	}
+
+	from, err := gethTypes.Sender(signer, tx)
+	if err != nil {
+		return common.Address{}, fmt.Errorf("failed to derive the sender: %w", err)
+	}
+
+	return from, nil
 }
