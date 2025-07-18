@@ -10,6 +10,8 @@ import (
 	"github.com/onflow/flow-go-sdk/access"
 	"github.com/onflow/flow-go/model/flow"
 	"github.com/rs/zerolog"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 var ErrNoKeysAvailable = fmt.Errorf("no signing keys available")
@@ -69,7 +71,7 @@ func New(
 		// `KeyStore.NotifyBlock` is called for each new Flow block,
 		// so we use a buffered channel to write the new block headers
 		// to the `blockChan`, and read them through `processLockedKeys`.
-		blockChan: make(chan flowsdk.BlockHeader, 100),
+		blockChan: make(chan flowsdk.BlockHeader, 200),
 		logger:    logger,
 		done:      make(chan struct{}),
 	}
@@ -153,6 +155,12 @@ func (k *KeyStore) NotifyBlock(blockHeader flowsdk.BlockHeader) {
 			"received `NotifyBlock` for block with ID: %s",
 			blockHeader.ID,
 		)
+	default:
+		// In this case, we only release the account keys which were last
+		// locked more than or equal to `accountKeyBlockExpiration` blocks
+		// in the past, in order to avoid slowing down the EVM event
+		// ingestion engine.
+		k.releasekeys(blockHeader.Height, nil)
 	}
 }
 
@@ -198,11 +206,11 @@ func (k *KeyStore) processLockedKeys(ctx context.Context) {
 				continue
 			}
 
-			txResults := []*flowsdk.TransactionResult{}
+			var txResults []*flowsdk.TransactionResult
 			var err error
 			if k.config.COATxLookupEnabled {
 				txResults, err = k.client.GetTransactionResultsByBlockID(ctx, blockHeader.ID)
-				if err != nil {
+				if err != nil && status.Code(err) != codes.Canceled {
 					k.logger.Error().Err(err).Msgf(
 						"failed to get transaction results for block ID: %s",
 						blockHeader.ID.Hex(),
