@@ -198,7 +198,7 @@ func servicesSetup(t *testing.T) (emulator.Emulator, func()) {
 // and will report failure or success of the test.
 func executeTest(t *testing.T, testFile string) {
 	command := fmt.Sprintf(
-		"./web3js/node_modules/.bin/mocha ./web3js/%s.js --timeout 150s",
+		"./web3js/node_modules/.bin/mocha ./web3js/%s.js --timeout 150s --exit",
 		testFile,
 	)
 	parts := strings.Fields(command)
