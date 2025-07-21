@@ -190,3 +190,78 @@ it('emit logs and retrieve them using different filters', async () => {
         ]
     )
 })
+
+it('validates max number of allowed topics', async () => {
+    let latestBlockNumber = await web3.eth.getBlockNumber()
+    let latestBlock = await web3.eth.getBlock(latestBlockNumber)
+
+    let blockRangeFilter = {
+        fromBlock: web3.utils.numberToHex(latestBlock.number),
+        toBlock: web3.utils.numberToHex(latestBlock.number),
+        address: ['0x0000000071727de22e5e9d8baf0edac6f37da032'],
+        topics: [
+            '0x76efea95e5da1fa661f235b2921ae1d89b99e457ec73fb88e34a1d150f95c64b',
+            '0x000000000000000000000000facf71692421039876a5bb4f10ef7a439d8ef61e',
+            '0x000000000000000000000000000000000000000000000000000000000000000a',
+            '0x0000000000000000000000000000000000000000000000000000000000000190',
+            '0x000000000000000000000000000000000000000000000000000000000000001a',
+        ]
+    }
+
+    let response = await helpers.callRPCMethod('eth_getLogs', [blockRangeFilter])
+    assert.equal(response.status, 200)
+    assert.isDefined(response.body.error)
+    assert.equal(response.body.error.message, 'invalid argument 0: exceed max topics')
+
+    let blockHashFilter = {
+        blockHash: latestBlock.hash,
+        address: ['0x0000000071727de22e5e9d8baf0edac6f37da032'],
+        topics: [
+            '0x76efea95e5da1fa661f235b2921ae1d89b99e457ec73fb88e34a1d150f95c64b',
+            '0x000000000000000000000000facf71692421039876a5bb4f10ef7a439d8ef61e',
+            '0x000000000000000000000000000000000000000000000000000000000000000a',
+            '0x0000000000000000000000000000000000000000000000000000000000000190',
+            '0x000000000000000000000000000000000000000000000000000000000000001a',
+        ]
+    }
+
+    response = await helpers.callRPCMethod('eth_getLogs', [blockHashFilter])
+    assert.equal(response.status, 200)
+    assert.isDefined(response.body.error)
+    assert.equal(response.body.error.message, 'invalid argument 0: exceed max topics')
+})
+
+it('validates max number of allowed sub-topics', async () => {
+    let latestBlockNumber = await web3.eth.getBlockNumber()
+    let latestBlock = await web3.eth.getBlock(latestBlockNumber)
+
+    let subTopics = []
+    for (i = 0; i <= 1000; i++) {
+        subTopics.push(
+            '0x76efea95e5da1fa661f235b2921ae1d89b99e457ec73fb88e34a1d150f95c64b'
+        )
+    }
+
+    let blockRangeFilter = {
+        fromBlock: web3.utils.numberToHex(latestBlock.number),
+        toBlock: web3.utils.numberToHex(latestBlock.number),
+        address: ['0x0000000071727de22e5e9d8baf0edac6f37da032'],
+        topics: [subTopics]
+    }
+
+    let response = await helpers.callRPCMethod('eth_getLogs', [blockRangeFilter])
+    assert.equal(response.status, 200)
+    assert.isDefined(response.body.error)
+    assert.equal(response.body.error.message, 'invalid argument 0: exceed max topics')
+
+    let blockHashFilter = {
+        blockHash: latestBlock.hash,
+        address: ['0x0000000071727de22e5e9d8baf0edac6f37da032'],
+        topics: [subTopics]
+    }
+
+    response = await helpers.callRPCMethod('eth_getLogs', [blockHashFilter])
+    assert.equal(response.status, 200)
+    assert.isDefined(response.body.error)
+    assert.equal(response.body.error.message, 'invalid argument 0: exceed max topics')
+})
