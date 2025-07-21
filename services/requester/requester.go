@@ -208,9 +208,9 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 		return common.Hash{}, err
 	}
 
-	from, err := types.Sender(types.LatestSignerForChainID(tx.ChainId()), tx)
+	from, err := models.DeriveTxSender(tx)
 	if err != nil {
-		return common.Hash{}, fmt.Errorf("failed to derive the sender: %w", err)
+		return common.Hash{}, err
 	}
 
 	if e.config.TxRequestLimit > 0 {

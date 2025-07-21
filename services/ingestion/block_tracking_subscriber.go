@@ -219,7 +219,12 @@ func (r *RPCBlockTrackingSubscriber) subscribe(ctx context.Context, height uint6
 				for _, evt := range blockEvents.Events {
 					r.keyLock.NotifyTransaction(evt.TransactionID)
 				}
-				r.keyLock.NotifyBlock(blockHeader.Height)
+				r.keyLock.NotifyBlock(
+					flow.BlockHeader{
+						ID:     blockEvents.BlockID,
+						Height: blockEvents.Height,
+					},
+				)
 				lastReceivedHeight = blockHeader.Height
 
 				eventsChan <- evmEvents

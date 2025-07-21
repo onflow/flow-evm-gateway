@@ -19,10 +19,12 @@ it('should retrieve batch transactions', async () => {
         assert.equal(tx.type, 0, "wrong type")
         assert.equal(tx.transactionIndex, i, "wrong index")
         assert.isBelow(i, batchSize, "wrong batch size")
+        assert.equal(tx.gasPrice, 1n)
 
         let receipt = await web3.eth.getTransactionReceipt(tx.hash)
         cumulativeGasUsed += receipt.gasUsed
 
         assert.equal(receipt.cumulativeGasUsed, cumulativeGasUsed)
+        assert.equal(receipt.effectiveGasPrice, 1n)
     }
 })
