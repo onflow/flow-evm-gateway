@@ -166,6 +166,8 @@ func (r *RPCBlockTrackingSubscriber) subscribe(ctx context.Context, height uint6
 			close(eventsChan)
 		}()
 
+		blockHeadersQueue := []flow.BlockHeader{}
+
 		for ctx.Err() == nil {
 			select {
 			case <-ctx.Done():
@@ -219,13 +221,23 @@ func (r *RPCBlockTrackingSubscriber) subscribe(ctx context.Context, height uint6
 				for _, evt := range blockEvents.Events {
 					r.keyLock.NotifyTransaction(evt.TransactionID)
 				}
-				r.keyLock.NotifyBlock(
-					flow.BlockHeader{
-						ID:     blockEvents.BlockID,
-						Height: blockEvents.Height,
-					},
-				)
 				lastReceivedHeight = blockHeader.Height
+
+				blockHeadersQueue = append(blockHeadersQueue, *blockHeader)
+
+				// The current `blockHeader` has a status of `BlockStatusFinalized`,
+				// but calling `NotifyBlock` might fail if the AN has not actually
+				// finished syncing all collections.
+				// Hence, we keep a small queue of the incoming block headers, so
+				// that we can call `NotifyBlock` on block N-5, where N is the
+				// height of the current block header. This will give enough time
+				// for the block to be sealed.
+				if len(blockHeadersQueue) > 5 {
+					earliestBlockHeader := blockHeadersQueue[0]
+					r.keyLock.NotifyBlock(earliestBlockHeader)
+
+					blockHeadersQueue = blockHeadersQueue[1:]
+				}
 
 				eventsChan <- evmEvents
 
