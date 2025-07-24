@@ -137,11 +137,19 @@ func (t *BatchTxPool) Add(
 	// transactions that might come from the same EOA.
 	// [X] is equal to the configured `TxBatchInterval` duration.
 	lastActivityTime, found := t.eoaActivity.Get(from)
-	if !found || time.Since(lastActivityTime) > t.config.TxBatchInterval {
+
+	if !found {
+		// Case 1. EOA activity not found:
+		if err := t.submitSingleTransaction(ctx, hexEncodedTx); err != nil {
+			return err
+		}
+	} else if time.Since(lastActivityTime) > t.config.TxBatchInterval {
+		// Case 2. EOA activity found AND it was more than [X] seconds ago:
 		if err := t.submitSingleTransaction(ctx, hexEncodedTx); err != nil {
 			return err
 		}
 	} else {
+		// Case 3. EOA activity found AND it was less than [X] seconds ago:
 		userTx := pooledEvmTx{txPayload: hexEncodedTx, nonce: tx.Nonce()}
 		t.pooledTxs[from] = append(t.pooledTxs[from], userTx)
 	}
