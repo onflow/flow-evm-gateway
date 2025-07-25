@@ -3,7 +3,6 @@ package requester
 import (
 	"context"
 	"encoding/hex"
-	"fmt"
 	"sort"
 	"sync"
 	"time"
@@ -21,16 +20,7 @@ import (
 	"github.com/onflow/flow-evm-gateway/services/requester/keystore"
 )
 
-const (
-	eoaActivityCacheSize = 10_000
-	// Buffer capacity of the channel used for individual transaction
-	// submission. Since `BatchTxPool.Add()` is called quite frequently,
-	// we don't want sending to the channel to block, until there's a
-	// receive ready. That's why we set a high buffer capacity, to allow
-	// `BatchTxPool.Add()` to do its job quickly and release any resources
-	// held, like locks etc.
-	txChanBufferSize = 1_000
-)
+const eoaActivityCacheSize = 10_000
 
 type pooledEvmTx struct {
 	txPayload cadence.String
@@ -53,13 +43,8 @@ type pooledEvmTx struct {
 type BatchTxPool struct {
 	*SingleTxPool
 	pooledTxs   map[gethCommon.Address][]pooledEvmTx
-	txChan      chan cadence.String
 	txMux       sync.Mutex
 	eoaActivity *expirable.LRU[gethCommon.Address, time.Time]
-
-	// Signal channel used to prevent blocking writes
-	// on `txChan` when the node is shutting down.
-	done chan struct{}
 }
 
 var _ TxPool = &BatchTxPool{}
@@ -88,19 +73,16 @@ func NewBatchTxPool(
 	eoaActivity := expirable.NewLRU[gethCommon.Address, time.Time](
 		eoaActivityCacheSize,
 		nil,
-		config.TxBatchInterval,
+		config.EOAActivityCacheTTL,
 	)
 	batchPool := &BatchTxPool{
 		SingleTxPool: singleTxPool,
 		pooledTxs:    make(map[gethCommon.Address][]pooledEvmTx),
-		txChan:       make(chan cadence.String, txChanBufferSize),
 		txMux:        sync.Mutex{},
 		eoaActivity:  eoaActivity,
-		done:         make(chan struct{}),
 	}
 
 	go batchPool.processPooledTransactions(ctx)
-	go batchPool.processIndividualTransactions(ctx)
 
 	return batchPool
 }
@@ -152,21 +134,22 @@ func (t *BatchTxPool) Add(
 	// transactions that might come from the same EOA.
 	// [X] is equal to the configured `TxBatchInterval` duration.
 	lastActivityTime, found := t.eoaActivity.Get(from)
-	if !found || time.Since(lastActivityTime) > t.config.TxBatchInterval {
-		select {
-		case <-t.done:
-			return fmt.Errorf("the server is shutting down")
-		default:
-			t.txChan <- hexEncodedTx
-		}
+
+	if !found {
+		// Case 1. EOA activity not found:
+		err = t.submitSingleTransaction(ctx, hexEncodedTx)
+	} else if time.Since(lastActivityTime) > t.config.TxBatchInterval {
+		// Case 2. EOA activity found AND it was more than [X] seconds ago:
+		err = t.submitSingleTransaction(ctx, hexEncodedTx)
 	} else {
+		// Case 3. EOA activity found AND it was less than [X] seconds ago:
 		userTx := pooledEvmTx{txPayload: hexEncodedTx, nonce: tx.Nonce()}
 		t.pooledTxs[from] = append(t.pooledTxs[from], userTx)
 	}
 
 	t.eoaActivity.Add(from, time.Now())
 
-	return nil
+	return err
 }
 
 func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
@@ -208,23 +191,6 @@ func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 					)
 					continue
 				}
-			}
-		}
-	}
-}
-
-func (t *BatchTxPool) processIndividualTransactions(ctx context.Context) {
-	for {
-		select {
-		case <-ctx.Done():
-			close(t.done)
-			return
-		case hexEncodedTx := <-t.txChan:
-			if err := t.submitSingleTransaction(ctx, hexEncodedTx); err != nil {
-				t.logger.Error().Err(err).Msg(
-					"failed to submit Flow transaction from BatchTxPool for single EOA tx",
-				)
-				continue
 			}
 		}
 	}

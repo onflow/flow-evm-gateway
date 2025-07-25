@@ -116,4 +116,8 @@ type Config struct {
 	// of the events from the sealed block in the Flow network.
 	// CAUTION: This feature is experimental and will cause the node to halt if the events don't match.
 	ExperimentalSealingVerificationEnabled bool
+	// EOAActivityCacheTTL is the time interval used to track EOA activity. Tx send more
+	// frequently than this interval will be batched.
+	// Useful only when batch transaction submission is enabled.
+	EOAActivityCacheTTL time.Duration
 }
