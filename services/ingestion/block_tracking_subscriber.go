@@ -229,10 +229,10 @@ func (r *RPCBlockTrackingSubscriber) subscribe(ctx context.Context, height uint6
 				// but calling `NotifyBlock` might fail if the AN has not actually
 				// finished syncing all collections.
 				// Hence, we keep a small queue of the incoming block headers, so
-				// that we can call `NotifyBlock` on block N-5, where N is the
+				// that we can call `NotifyBlock` on block N-15, where N is the
 				// height of the current block header. This will give enough time
 				// for the block to be sealed.
-				if len(blockHeadersQueue) > 5 {
+				if len(blockHeadersQueue) > 15 {
 					earliestBlockHeader := blockHeadersQueue[0]
 					r.keyLock.NotifyBlock(earliestBlockHeader)
 
