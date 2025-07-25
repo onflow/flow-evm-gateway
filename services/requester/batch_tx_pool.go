@@ -137,14 +137,10 @@ func (t *BatchTxPool) Add(
 
 	if !found {
 		// Case 1. EOA activity not found:
-		if err := t.submitSingleTransaction(ctx, hexEncodedTx); err != nil {
-			return err
-		}
+		err = t.submitSingleTransaction(ctx, hexEncodedTx)
 	} else if time.Since(lastActivityTime) > t.config.TxBatchInterval {
 		// Case 2. EOA activity found AND it was more than [X] seconds ago:
-		if err := t.submitSingleTransaction(ctx, hexEncodedTx); err != nil {
-			return err
-		}
+		err = t.submitSingleTransaction(ctx, hexEncodedTx)
 	} else {
 		// Case 3. EOA activity found AND it was less than [X] seconds ago:
 		userTx := pooledEvmTx{txPayload: hexEncodedTx, nonce: tx.Nonce()}
@@ -153,7 +149,7 @@ func (t *BatchTxPool) Add(
 
 	t.eoaActivity.Add(from, time.Now())
 
-	return nil
+	return err
 }
 
 func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
