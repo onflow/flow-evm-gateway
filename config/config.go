@@ -107,7 +107,8 @@ type Config struct {
 	// TxBatchInterval is the time interval upon which to submit the transaction batches to the
 	// Flow network.
 	TxBatchInterval time.Duration
-	// EOAActivityCacheTTL is the time interval after which entries from the EOA activity cache
-	// will expire. Useful only when batch transaction submission is enabled.
+	// EOAActivityCacheTTL is the time interval used to track EOA activity. Tx send more
+	// frequently than this interval will be batched.
+	// Useful only when batch transaction submission is enabled.
 	EOAActivityCacheTTL time.Duration
 }
