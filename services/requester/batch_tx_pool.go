@@ -20,10 +20,7 @@ import (
 	"github.com/onflow/flow-evm-gateway/services/requester/keystore"
 )
 
-const (
-	eoaActivityCacheSize = 10_000
-	eoaActivityCacheTTL  = 10 * time.Second
-)
+const eoaActivityCacheSize = 10_000
 
 type pooledEvmTx struct {
 	txPayload cadence.String
@@ -76,7 +73,7 @@ func NewBatchTxPool(
 	eoaActivity := expirable.NewLRU[gethCommon.Address, time.Time](
 		eoaActivityCacheSize,
 		nil,
-		eoaActivityCacheTTL,
+		config.EOAActivityCacheTTL,
 	)
 	batchPool := &BatchTxPool{
 		SingleTxPool: singleTxPool,
