@@ -301,7 +301,10 @@ func decodeTransactionEvent(event cadence.Event) (
 		if gethTx.GasPrice().Sign() == 0 {
 			receipt.EffectiveGasPrice = BaseFeePerGas
 		} else {
-			receipt.EffectiveGasPrice = gethTx.EffectiveGasTipValue(nil)
+			receipt.EffectiveGasPrice, err = gethTx.EffectiveGasTip(nil)
+			if err != nil {
+				return nil, nil, nil, err
+			}
 		}
 		tx = TransactionCall{Transaction: gethTx}
 	}
