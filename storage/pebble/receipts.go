@@ -130,6 +130,16 @@ func (r *Receipts) getByBlockHeight(height []byte) ([]*models.Receipt, error) {
 		return nil, err
 	}
 
+	blockBytes, err := r.store.get(blockHeightKey, height)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get block: %w", err)
+	}
+
+	block, err := models.NewBlockFromBytes(blockBytes)
+	if err != nil {
+		return nil, err
+	}
+
 	// Log index field holds the index position in the entire block
 	logIndex := uint(0)
 	for _, rcp := range receipts {
@@ -137,6 +147,7 @@ func (r *Receipts) getByBlockHeight(height []byte) ([]*models.Receipt, error) {
 		for _, l := range rcp.Logs {
 			l.BlockNumber = rcp.BlockNumber.Uint64()
 			l.BlockHash = rcp.BlockHash
+			l.BlockTimestamp = block.Timestamp
 			l.TxHash = rcp.TxHash
 			l.TxIndex = rcp.TransactionIndex
 			l.Index = logIndex

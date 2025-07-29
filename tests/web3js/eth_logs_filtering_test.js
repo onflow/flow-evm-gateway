@@ -146,6 +146,7 @@ it('emit logs and retrieve them using different filters', async () => {
                 transactionHash: '0x0c2b2477ab81c9132c5c4fd4f50935bc5807fbf4cf3bf3b69173491b68d2ca8b',
                 transactionIndex: '0x0',
                 blockHash: latestBlock.hash,
+                blockTimestamp: web3.utils.toHex(latestBlock.timestamp),
                 logIndex: '0x0',
                 removed: false
             }
@@ -182,6 +183,7 @@ it('emit logs and retrieve them using different filters', async () => {
                 transactionHash: '0x0c2b2477ab81c9132c5c4fd4f50935bc5807fbf4cf3bf3b69173491b68d2ca8b',
                 transactionIndex: '0x0',
                 blockHash: latestBlock.hash,
+                blockTimestamp: web3.utils.toHex(latestBlock.timestamp),
                 logIndex: '0x0',
                 removed: false
             }
