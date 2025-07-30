@@ -5,9 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/onflow/cadence/common"
 	"github.com/onflow/flow-go/fvm/evm/events"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/onflow/flow-evm-gateway/models"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
@@ -128,17 +131,30 @@ func (r *RPCEventSubscriber) subscribe(ctx context.Context, height uint64) <-cha
 		return eventsChan
 	}
 
-	// we always use heartbeat interval of 1 to have the least amount of delay from the access node
-	eventStream, errChan, err := r.client.SubscribeEventsByBlockHeight(
-		ctx,
-		height,
-		blocksFilter(r.chain),
-		access.WithHeartbeatInterval(1),
-	)
-	if err != nil {
+	var blockEventsStream <-chan flow.BlockEvents
+	var errChan <-chan error
+
+	lastReceivedHeight := height
+	connect := func(height uint64) error {
+		var err error
+
+		// we always use heartbeat interval of 1 to have the
+		// least amount of delay from the access node
+		blockEventsStream, errChan, err = r.client.SubscribeEventsByBlockHeight(
+			ctx,
+			height,
+			blocksFilter(r.chain),
+			access.WithHeartbeatInterval(1),
+		)
+
+		return err
+	}
+
+	if err := connect(lastReceivedHeight); err != nil {
 		eventsChan <- models.NewBlockEventsError(
 			fmt.Errorf("failed to subscribe to events by block height: %d, with: %w", height, err),
 		)
+		close(eventsChan)
 		return eventsChan
 	}
 
@@ -153,8 +169,9 @@ func (r *RPCEventSubscriber) subscribe(ctx context.Context, height uint64) <-cha
 				r.logger.Info().Msg("event ingestion received done signal")
 				return
 
-			case blockEvents, ok := <-eventStream:
+			case blockEvents, ok := <-blockEventsStream:
 				if !ok {
+					// typically we receive an error in the errChan before the channels are closed
 					var err error
 					err = errs.ErrDisconnected
 					if ctx.Err() != nil {
@@ -183,10 +200,13 @@ func (r *RPCEventSubscriber) subscribe(ctx context.Context, height uint64) <-cha
 					},
 				)
 
+				lastReceivedHeight = blockEvents.Height
+
 				eventsChan <- evmEvents
 
 			case err, ok := <-errChan:
 				if !ok {
+					// typically we receive an error in the errChan before the channels are closed
 					var err error
 					err = errs.ErrDisconnected
 					if ctx.Err() != nil {
@@ -196,8 +216,29 @@ func (r *RPCEventSubscriber) subscribe(ctx context.Context, height uint64) <-cha
 					return
 				}
 
-				eventsChan <- models.NewBlockEventsError(fmt.Errorf("%w: %w", errs.ErrDisconnected, err))
-				return
+				switch status.Code(err) {
+				case codes.NotFound:
+					// we can get not found when reconnecting after a disconnect/restart before the
+					// next block is finalized. just wait briefly and try again
+					time.Sleep(200 * time.Millisecond)
+				case codes.DeadlineExceeded, codes.Internal:
+					// these are sometimes returned when the stream is disconnected by a middleware or the server
+				default:
+					// skip reconnect on all other errors
+					eventsChan <- models.NewBlockEventsError(fmt.Errorf("%w: %w", errs.ErrDisconnected, err))
+					return
+				}
+
+				if err := connect(lastReceivedHeight + 1); err != nil {
+					eventsChan <- models.NewBlockEventsError(
+						fmt.Errorf(
+							"failed to resubscribe for events on height: %d, with: %w",
+							lastReceivedHeight+1,
+							err,
+						),
+					)
+					return
+				}
 			}
 		}
 	}()
