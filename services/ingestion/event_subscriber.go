@@ -122,12 +122,15 @@ func (r *RPCEventSubscriber) Subscribe(ctx context.Context) <-chan models.BlockE
 // Subscribing to EVM specific events and handle any disconnection errors
 // as well as context cancellations.
 func (r *RPCEventSubscriber) subscribe(ctx context.Context, height uint64) <-chan models.BlockEvents {
-	eventsChan := make(chan models.BlockEvents)
+	// create the channel with a buffer size of 1,
+	// to avoid blocking on the two error cases below
+	eventsChan := make(chan models.BlockEvents, 1)
 
 	_, err := r.client.GetBlockHeaderByHeight(ctx, height)
 	if err != nil {
 		err = fmt.Errorf("failed to subscribe for events, the block height %d doesn't exist: %w", height, err)
 		eventsChan <- models.NewBlockEventsError(err)
+		close(eventsChan)
 		return eventsChan
 	}
 
