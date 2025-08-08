@@ -3,8 +3,8 @@ package api
 import (
 	"fmt"
 
-	"github.com/onflow/go-ethereum/common/hexutil"
-	"github.com/onflow/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 var Version = "development"

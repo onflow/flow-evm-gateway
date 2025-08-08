@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/onflow/flow-evm-gateway/metrics"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/storage"
-	"github.com/onflow/go-ethereum/common"
-	"github.com/onflow/go-ethereum/core"
-	"github.com/onflow/go-ethereum/rpc"
 	"github.com/rs/zerolog"
 )
 

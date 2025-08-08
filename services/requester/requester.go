@@ -7,17 +7,17 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	gethCore "github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/txpool"
+	"github.com/ethereum/go-ethereum/core/types"
+	gethParams "github.com/ethereum/go-ethereum/params"
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go/fvm/evm"
 	"github.com/onflow/flow-go/fvm/evm/emulator"
 	"github.com/onflow/flow-go/fvm/evm/offchain/query"
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
-	"github.com/onflow/go-ethereum/common"
-	"github.com/onflow/go-ethereum/common/hexutil"
-	gethCore "github.com/onflow/go-ethereum/core"
-	"github.com/onflow/go-ethereum/core/txpool"
-	"github.com/onflow/go-ethereum/core/types"
-	gethParams "github.com/onflow/go-ethereum/params"
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-limiter"
 	"github.com/sethvargo/go-limiter/memorystore"
@@ -333,7 +333,7 @@ func (e *EVM) EstimateGas(
 	}
 
 	// Note: The following algorithm, is largely inspired from
-	// https://github.com/onflow/go-ethereum/blob/master/eth/gasestimator/gasestimator.go#L49-L192,
+	// https://github.com/ethereum/go-ethereum/blob/master/eth/gasestimator/gasestimator.go#L49-L192,
 	// and adapted to fit our use-case.
 	// Binary search the gas limit, as it may need to be higher than the amount used
 	var (
