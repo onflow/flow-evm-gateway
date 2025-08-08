@@ -2,7 +2,7 @@ package pebble
 
 import (
 	"github.com/cockroachdb/pebble"
-	"github.com/onflow/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/storage"

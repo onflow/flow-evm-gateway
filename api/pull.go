@@ -7,10 +7,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/onflow/go-ethereum/common"
-	gethTypes "github.com/onflow/go-ethereum/core/types"
-	"github.com/onflow/go-ethereum/eth/filters"
-	"github.com/onflow/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/common"
+	gethTypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth/filters"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/rs/zerolog"
 
 	"github.com/onflow/flow-evm-gateway/config"

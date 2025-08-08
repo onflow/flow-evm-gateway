@@ -5,7 +5,7 @@ package mocks
 import (
 	json "encoding/json"
 
-	common "github.com/onflow/go-ethereum/common"
+	common "github.com/ethereum/go-ethereum/common"
 
 	mock "github.com/stretchr/testify/mock"
 

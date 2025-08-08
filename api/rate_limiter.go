@@ -7,7 +7,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-limiter"
 
-	"github.com/onflow/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/rpc"
 
 	"github.com/onflow/flow-evm-gateway/metrics"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"

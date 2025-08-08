@@ -5,14 +5,14 @@ go 1.23.7
 toolchain go1.23.8
 
 require (
+	github.com/ethereum/go-ethereum v1.16.2
 	github.com/goccy/go-json v0.10.4
 	github.com/onflow/cadence v1.6.3
 	github.com/onflow/crypto v0.25.3
 	github.com/onflow/flow-emulator v1.5.2-0.20250620100838-4e2f7bc18c24
 	github.com/onflow/flow-evm-gateway v0.0.0-20240201154855-4d4d3d3f19c7
-	github.com/onflow/flow-go v0.41.0-rc.1.0.20250806190000-5788375a9a3c
+	github.com/onflow/flow-go v0.41.0-rc.1.0.20250807061657-1ff6abcc39a8
 	github.com/onflow/flow-go-sdk v1.6.2
-	github.com/onflow/go-ethereum v1.16.2
 	github.com/rs/zerolog v1.33.0
 	github.com/stretchr/testify v1.10.0
 	golang.org/x/sync v0.14.0
@@ -69,7 +69,6 @@ require (
 	github.com/ef-ds/deque v1.0.4 // indirect
 	github.com/emicklei/dot v1.6.2 // indirect
 	github.com/ethereum/c-kzg-4844/v2 v2.1.0 // indirect
-	github.com/ethereum/go-ethereum v1.13.10 // indirect
 	github.com/ethereum/go-verkle v0.2.2 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/ferranbt/fastssz v0.1.4 // indirect
@@ -166,6 +165,7 @@ require (
 	github.com/onflow/flow-nft/lib/go/contracts v1.2.4 // indirect
 	github.com/onflow/flow-nft/lib/go/templates v1.2.1 // indirect
 	github.com/onflow/flow/protobuf/go/flow v0.4.10 // indirect
+	github.com/onflow/go-ethereum v1.16.2 // indirect
 	github.com/onflow/nft-storefront/lib/go/contracts v1.0.0 // indirect
 	github.com/onflow/sdks v0.6.0-preview.1 // indirect
 	github.com/onflow/wal v1.0.2 // indirect

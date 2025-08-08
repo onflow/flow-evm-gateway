@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"math/big"
 
+	gethCommon "github.com/ethereum/go-ethereum/common"
+	gethCrypto "github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go/fvm/evm/events"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/flow-go/model/flow"
-	gethCommon "github.com/onflow/go-ethereum/common"
-	gethCrypto "github.com/onflow/go-ethereum/crypto"
-	"github.com/onflow/go-ethereum/rlp"
 )
 
 var (

@@ -7,14 +7,14 @@ import (
 	"fmt"
 	"math/big"
 
+	gethCommon "github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/onflow/cadence"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	evmImpl "github.com/onflow/flow-go/fvm/evm/impl"
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/flow-go/model/flow"
-	gethCommon "github.com/onflow/go-ethereum/common"
-	"github.com/onflow/go-ethereum/core/types"
-	"github.com/onflow/go-ethereum/crypto"
 )
 
 const cadenceArchCallGasLimit = 155_000

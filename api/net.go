@@ -3,8 +3,8 @@ package api
 import (
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/onflow/flow-evm-gateway/config"
-	"github.com/onflow/go-ethereum/common/hexutil"
 )
 
 // NetAPI offers network related RPC methods

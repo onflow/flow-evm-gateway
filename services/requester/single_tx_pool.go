@@ -7,10 +7,10 @@ import (
 	"sync"
 	"time"
 
+	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go-sdk"
 	flowGo "github.com/onflow/flow-go/model/flow"
-	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-retry"
 	"golang.org/x/sync/errgroup"
