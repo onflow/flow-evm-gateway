@@ -7,12 +7,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-emulator/emulator"
 	evmEmulator "github.com/onflow/flow-go/fvm/evm/emulator"
 	"github.com/onflow/flow-go/fvm/evm/testutils"
-	"github.com/onflow/go-ethereum/common"
-	"github.com/onflow/go-ethereum/crypto"
 	"github.com/stretchr/testify/require"
 )
 

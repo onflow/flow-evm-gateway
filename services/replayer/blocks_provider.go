@@ -3,13 +3,13 @@ package replayer
 import (
 	"fmt"
 
+	gethCommon "github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-go/fvm/evm/offchain/blocks"
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 	flowGo "github.com/onflow/flow-go/model/flow"
-	gethCommon "github.com/onflow/go-ethereum/common"
-	"github.com/onflow/go-ethereum/eth/tracers"
 )
 
 type blockSnapshot struct {

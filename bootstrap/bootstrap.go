@@ -8,6 +8,7 @@ import (
 	"time"
 
 	pebbleDB "github.com/cockroachdb/pebble"
+	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/onflow/flow-go-sdk/access"
 	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/onflow/flow-go/fvm/environment"
@@ -17,7 +18,6 @@ import (
 	"github.com/onflow/flow-go/module/irrecoverable"
 	flowMetrics "github.com/onflow/flow-go/module/metrics"
 	"github.com/onflow/flow-go/module/util"
-	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-limiter/memorystore"
 	grpcOpts "google.golang.org/grpc"
