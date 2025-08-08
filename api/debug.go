@@ -6,16 +6,16 @@ import (
 	"fmt"
 	"strings"
 
+	gethCommon "github.com/ethereum/go-ethereum/common"
+	gethTypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth/tracers"
+	"github.com/ethereum/go-ethereum/eth/tracers/logger"
+	gethParams "github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/goccy/go-json"
 	"github.com/onflow/flow-go/fvm/evm/emulator"
 	"github.com/onflow/flow-go/fvm/evm/offchain/query"
 	"github.com/onflow/flow-go/fvm/evm/types"
-	gethCommon "github.com/onflow/go-ethereum/common"
-	gethTypes "github.com/onflow/go-ethereum/core/types"
-	"github.com/onflow/go-ethereum/eth/tracers"
-	"github.com/onflow/go-ethereum/eth/tracers/logger"
-	gethParams "github.com/onflow/go-ethereum/params"
-	"github.com/onflow/go-ethereum/rpc"
 	"github.com/rs/zerolog"
 
 	"github.com/onflow/flow-evm-gateway/config"
@@ -33,8 +33,8 @@ import (
 
 	// this import is needed for side-effects, because the
 	// tracers.DefaultDirectory is relying on the init function
-	_ "github.com/onflow/go-ethereum/eth/tracers/js"
-	_ "github.com/onflow/go-ethereum/eth/tracers/native"
+	_ "github.com/ethereum/go-ethereum/eth/tracers/js"
+	_ "github.com/ethereum/go-ethereum/eth/tracers/native"
 )
 
 // txTraceResult is the result of a single transaction trace.

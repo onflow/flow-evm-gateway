@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
+	gethCommon "github.com/ethereum/go-ethereum/common"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access"
-	gethCommon "github.com/onflow/go-ethereum/common"
 
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/models"

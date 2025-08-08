@@ -3,6 +3,8 @@ package evm
 import (
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/onflow/atree"
 	"github.com/onflow/flow-go/fvm/evm"
 	"github.com/onflow/flow-go/fvm/evm/emulator"
@@ -10,8 +12,6 @@ import (
 	"github.com/onflow/flow-go/fvm/evm/precompiles"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	flowGo "github.com/onflow/flow-go/model/flow"
-	"github.com/onflow/go-ethereum/common"
-	"github.com/onflow/go-ethereum/eth/tracers"
 	"github.com/rs/zerolog"
 
 	"github.com/onflow/flow-evm-gateway/models"

@@ -5,6 +5,8 @@ import (
 
 	pebble2 "github.com/cockroachdb/pebble"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/goccy/go-json"
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/models"
@@ -15,15 +17,13 @@ import (
 	"github.com/onflow/flow-go/fvm/evm/emulator"
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 	flowGo "github.com/onflow/flow-go/model/flow"
-	"github.com/onflow/go-ethereum/common"
-	"github.com/onflow/go-ethereum/eth/tracers"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	// this import is needed for side-effects, because the
 	// tracers.DefaultDirectory is relying on the init function
-	_ "github.com/onflow/go-ethereum/eth/tracers/native"
+	_ "github.com/ethereum/go-ethereum/eth/tracers/native"
 )
 
 func TestOnBlockReceived(t *testing.T) {
