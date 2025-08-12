@@ -231,12 +231,47 @@ it('validates max number of allowed topics', async () => {
     assert.equal(response.body.error.message, 'invalid argument 0: exceed max topics')
 })
 
+it('validates max number of allowed addresses', async () => {
+    let latestBlockNumber = await web3.eth.getBlockNumber()
+    let latestBlock = await web3.eth.getBlock(latestBlockNumber)
+
+    let addresses = []
+    for (let i = 0; i <= 1000; i++) {
+        addresses.push(
+            '0x0000000071727de22e5e9d8baf0edac6f37da032'
+        )
+    }
+
+    let blockRangeFilter = {
+        fromBlock: web3.utils.numberToHex(latestBlock.number),
+        toBlock: web3.utils.numberToHex(latestBlock.number),
+        address: addresses,
+        topics: []
+    }
+
+    let response = await helpers.callRPCMethod('eth_getLogs', [blockRangeFilter])
+    assert.equal(response.status, 200)
+    assert.isDefined(response.body.error)
+    assert.equal(response.body.error.message, 'invalid argument 0: exceed max addresses')
+
+    let blockHashFilter = {
+        blockHash: latestBlock.hash,
+        address: addresses,
+        topics: []
+    }
+
+    response = await helpers.callRPCMethod('eth_getLogs', [blockHashFilter])
+    assert.equal(response.status, 200)
+    assert.isDefined(response.body.error)
+    assert.equal(response.body.error.message, 'invalid argument 0: exceed max addresses')
+})
+
 it('validates max number of allowed sub-topics', async () => {
     let latestBlockNumber = await web3.eth.getBlockNumber()
     let latestBlock = await web3.eth.getBlock(latestBlockNumber)
 
     let subTopics = []
-    for (i = 0; i <= 1000; i++) {
+    for (let i = 0; i <= 1000; i++) {
         subTopics.push(
             '0x76efea95e5da1fa661f235b2921ae1d89b99e457ec73fb88e34a1d150f95c64b'
         )
