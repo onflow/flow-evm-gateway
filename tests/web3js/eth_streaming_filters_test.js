@@ -3,6 +3,7 @@ const { Web3 } = require("web3");
 const conf = require("./config");
 const { assert } = require("chai");
 const storageABI = require('../fixtures/storageABI.json')
+const web3 = conf.web3
 
 async function assertFilterLogs(subscription, expectedLogs) {
     let allLogs = []
@@ -22,8 +23,6 @@ async function assertFilterLogs(subscription, expectedLogs) {
             // wait for a bit and re-check, so there's no new logs that came in after delay
             await new Promise(res => setTimeout(() => res(), 1000))
             assert.equal(allLogs.length, expectedLogs.length)
-
-            console.log("## unsubscribe", subscription.id)
 
             subscription.unsubscribe()
 
@@ -172,5 +171,158 @@ it('streaming of logs using filters', async () => {
     // make sure we can also get logs streamed after the transactions were executed (historic)
     await assertFilterLogs(await rawSubscribe({ address: contractAddress, fromBlock: "0x0" }), testValues)
 
-    process.exit(0)
+    ws.currentProvider.disconnect()
+})
+
+it('should validate max number of topics', async () => {
+    let latestBlockNumber = await web3.eth.getBlockNumber()
+    let latestBlock = await web3.eth.getBlock(latestBlockNumber)
+
+    let blockRangeFilter = {
+        fromBlock: web3.utils.numberToHex(latestBlock.number),
+        toBlock: web3.utils.numberToHex(latestBlock.number),
+        address: ['0x0000000071727de22e5e9d8baf0edac6f37da032'],
+        topics: [
+            '0x76efea95e5da1fa661f235b2921ae1d89b99e457ec73fb88e34a1d150f95c64b',
+            '0x000000000000000000000000facf71692421039876a5bb4f10ef7a439d8ef61e',
+            '0x000000000000000000000000000000000000000000000000000000000000000a',
+            '0x0000000000000000000000000000000000000000000000000000000000000190',
+            '0x000000000000000000000000000000000000000000000000000000000000001a',
+        ]
+    }
+
+    let ws = new Web3('ws://127.0.0.1:8545')
+
+    try {
+        await ws.eth.subscribe('logs', blockRangeFilter)
+        assert.fail('should have received response error')
+    } catch (err) {
+        assert.equal(
+            err.innerError.message,
+            'invalid argument 1: exceed max topics'
+        )
+    }
+
+    let blockHashFilter = {
+        blockHash: latestBlock.hash,
+        address: ['0x0000000071727de22e5e9d8baf0edac6f37da032'],
+        topics: [
+            '0x76efea95e5da1fa661f235b2921ae1d89b99e457ec73fb88e34a1d150f95c64b',
+            '0x000000000000000000000000facf71692421039876a5bb4f10ef7a439d8ef61e',
+            '0x000000000000000000000000000000000000000000000000000000000000000a',
+            '0x0000000000000000000000000000000000000000000000000000000000000190',
+            '0x000000000000000000000000000000000000000000000000000000000000001a',
+        ]
+    }
+
+    try {
+        await ws.eth.subscribe('logs', blockHashFilter)
+        assert.fail('should have received response error')
+    } catch (err) {
+        assert.equal(
+            err.innerError.message,
+            'invalid argument 1: exceed max topics'
+        )
+    }
+
+    ws.currentProvider.disconnect()
+})
+
+it('should validate max number of addresses', async () => {
+    let latestBlockNumber = await web3.eth.getBlockNumber()
+    let latestBlock = await web3.eth.getBlock(latestBlockNumber)
+
+    let addresses = []
+    for (let i = 0; i <= 1000; i++) {
+        addresses.push(
+            '0x0000000071727de22e5e9d8baf0edac6f37da032'
+        )
+    }
+
+    let blockRangeFilter = {
+        fromBlock: web3.utils.numberToHex(latestBlock.number),
+        toBlock: web3.utils.numberToHex(latestBlock.number),
+        address: addresses,
+        topics: []
+    }
+
+    let ws = new Web3('ws://127.0.0.1:8545')
+
+    try {
+        await ws.eth.subscribe('logs', blockRangeFilter)
+        assert.fail('should have received response error')
+    } catch (err) {
+        assert.equal(
+            err.innerError.message,
+            'invalid argument 1: exceed max addresses'
+        )
+    }
+
+    let blockHashFilter = {
+        blockHash: latestBlock.hash,
+        address: addresses,
+        topics: []
+    }
+
+    try {
+        await ws.eth.subscribe('logs', blockHashFilter)
+        assert.fail('should have received response error')
+    } catch (err) {
+        assert.equal(
+            err.innerError.message,
+            'invalid argument 1: exceed max addresses'
+        )
+    }
+
+    ws.currentProvider.disconnect()
+})
+
+
+it('should validate max number of sub-topics', async () => {
+    let latestBlockNumber = await web3.eth.getBlockNumber()
+    let latestBlock = await web3.eth.getBlock(latestBlockNumber)
+
+    let subTopics = []
+    for (let i = 0; i <= 1000; i++) {
+        subTopics.push(
+            '0x76efea95e5da1fa661f235b2921ae1d89b99e457ec73fb88e34a1d150f95c64b'
+        )
+    }
+
+    let blockRangeFilter = {
+        fromBlock: web3.utils.numberToHex(latestBlock.number),
+        toBlock: web3.utils.numberToHex(latestBlock.number),
+        address: ['0x0000000071727de22e5e9d8baf0edac6f37da032'],
+        topics: [subTopics]
+    }
+
+    let ws = new Web3('ws://127.0.0.1:8545')
+
+    try {
+        await ws.eth.subscribe('logs', blockRangeFilter)
+        assert.fail('should have received response error')
+    } catch (err) {
+        assert.equal(
+            err.innerError.message,
+            'invalid argument 1: exceed max topics'
+        )
+    }
+
+    let blockHashFilter = {
+        blockHash: latestBlock.hash,
+        address: ['0x0000000071727de22e5e9d8baf0edac6f37da032'],
+        topics: [subTopics]
+    }
+
+    try {
+        await ws.eth.subscribe('logs', blockHashFilter)
+        assert.fail('should have received response error')
+    } catch (err) {
+        assert.equal(
+            err.innerError.message,
+            'invalid argument 1: exceed max topics'
+        )
+    }
+
+    ws.currentProvider.disconnect()
 })

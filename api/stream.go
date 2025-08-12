@@ -92,11 +92,6 @@ func (s *StreamAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) (*
 
 // Logs creates a subscription that fires for all new log that match the given filter criteria.
 func (s *StreamAPI) Logs(ctx context.Context, criteria filters.FilterCriteria) (*rpc.Subscription, error) {
-	logCriteria, err := logs.NewFilterCriteria(criteria.Addresses, criteria.Topics)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create log subscription filter: %w", err)
-	}
-
 	return newSubscription(
 		ctx,
 		s.logger,
@@ -106,7 +101,7 @@ func (s *StreamAPI) Logs(ctx context.Context, criteria filters.FilterCriteria) (
 				for _, log := range allLogs {
 					// todo we could optimize this matching for cases where we have multiple subscriptions
 					// using the same filter criteria, we could only filter once and stream to all subscribers
-					if !logs.ExactMatch(log, logCriteria) {
+					if !logs.ExactMatch(log, criteria) {
 						continue
 					}
 
