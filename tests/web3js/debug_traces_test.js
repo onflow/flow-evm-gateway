@@ -175,6 +175,53 @@ it('should retrieve transaction traces', async () => {
     )
 
     response = await helpers.callRPCMethod(
+        'debug_traceTransaction',
+        [receipt.transactionHash, { tracer: 'erc7562Tracer' }]
+    )
+    assert.equal(response.status, 200)
+    assert.isDefined(response.body.result)
+
+    // Assert proper response for `erc7562Tracer`
+    txTrace = response.body.result
+    assert.deepEqual(
+        txTrace,
+        {
+            from: '0xfacf71692421039876a5bb4f10ef7a439d8ef61e',
+            gas: '0x6f9a',
+            gasUsed: '0x6e3f',
+            to: '0x99a64c993965f8d69f985b5171bc20065cc32fab',
+            input: '0x6babb2240000000000000000000000000000000000000000000000000000000000000064',
+            value: '0x0',
+            accessedSlots: {
+                reads: {},
+                writes: {
+                    '0x0000000000000000000000000000000000000000000000000000000000000000': 1
+                },
+                transientReads: {},
+                transientWrites: {}
+            },
+            extCodeAccessInfo: [],
+            usedOpcodes: {
+                '0x0': 1,
+                '0x33': 1,
+                '0x34': 1,
+                '0x35': 2,
+                '0x36': 2,
+                '0x51': 2,
+                '0x52': 1,
+                '0x55': 1,
+                '0x56': 10,
+                '0x57': 9,
+                '0x5b': 15,
+                '0xa3': 1
+            },
+            contractSize: {},
+            outOfGas: false,
+            type: 'CALL'
+        }
+    )
+
+    response = await helpers.callRPCMethod(
         'debug_traceBlockByNumber',
         [web3.utils.toHex(receipt.blockNumber), { tracer: null }]
     )
@@ -533,6 +580,54 @@ it('should retrieve call traces', async () => {
     assert.deepEqual(
         txTrace,
         { '0x2e64cec1-0': 1 }
+    )
+
+    response = await helpers.callRPCMethod(
+        'debug_traceCall',
+        [traceCall, 'latest', { tracer: 'erc7562Tracer' }]
+    )
+    assert.equal(response.status, 200)
+    assert.isDefined(response.body)
+
+    // Assert proper response for `erc7562Tracer`
+    txTrace = response.body.result
+    assert.deepEqual(
+        txTrace,
+        {
+            from: '0xfacf71692421039876a5bb4f10ef7a439d8ef61e',
+            gas: '0x75ab',
+            gasUsed: '0x5be0',
+            to: '0x99a64c993965f8d69f985b5171bc20065cc32fab',
+            input: '0x2e64cec1',
+            output: '0x0000000000000000000000000000000000000000000000000000000000000064',
+            value: '0x0',
+            accessedSlots: {
+                reads: {
+                    '0x0000000000000000000000000000000000000000000000000000000000000000': [
+                        '0x0000000000000000000000000000000000000000000000000000000000000064'
+                    ]
+                },
+                writes: {},
+                transientReads: {},
+                transientWrites: {}
+            },
+            extCodeAccessInfo: [],
+            usedOpcodes: {
+                '0x34': 1,
+                '0x35': 1,
+                '0x36': 1,
+                '0x51': 2,
+                '0x52': 2,
+                '0x54': 1,
+                '0x56': 8,
+                '0x57': 5,
+                '0x5b': 12,
+                '0xf3': 1
+            },
+            contractSize: {},
+            outOfGas: false,
+            type: 'CALL'
+        }
     )
 
     let jsTracer = '{hist: {}, nops: 0, step: function(log, db) { var op = log.op.toString(); if (this.hist[op]){ this.hist[op]++; } else { this.hist[op] = 1; } this.nops++; }, fault: function(log, db) {}, result: function(ctx) { return this.hist; }}'
