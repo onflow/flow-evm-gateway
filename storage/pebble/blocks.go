@@ -10,7 +10,7 @@ import (
 	"github.com/onflow/flow-go-sdk"
 	flowGo "github.com/onflow/flow-go/model/flow"
 
-	"github.com/onflow/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/onflow/flow-evm-gateway/models"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"

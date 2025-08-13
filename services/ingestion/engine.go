@@ -8,8 +8,8 @@ import (
 	flowGo "github.com/onflow/flow-go/model/flow"
 
 	pebbleDB "github.com/cockroachdb/pebble"
+	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/onflow/flow-go-sdk"
-	gethTypes "github.com/onflow/go-ethereum/core/types"
 	"github.com/rs/zerolog"
 
 	"github.com/onflow/flow-evm-gateway/metrics"
