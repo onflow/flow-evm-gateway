@@ -19,8 +19,8 @@ import (
 	"strings"
 	"time"
 
-	gethLog "github.com/onflow/go-ethereum/log"
-	"github.com/onflow/go-ethereum/rpc"
+	gethLog "github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/rs/cors"
 	"github.com/rs/zerolog"
 	slogzerolog "github.com/samber/slog-zerolog"

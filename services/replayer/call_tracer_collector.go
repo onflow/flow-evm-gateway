@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/tracing"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/onflow/flow-go/fvm/evm/emulator"
-	"github.com/onflow/go-ethereum/common"
-	"github.com/onflow/go-ethereum/core/tracing"
-	"github.com/onflow/go-ethereum/core/types"
-	"github.com/onflow/go-ethereum/eth/tracers"
 	"github.com/rs/zerolog"
 )
 

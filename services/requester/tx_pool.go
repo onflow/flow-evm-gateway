@@ -4,7 +4,7 @@ import (
 	"context"
 	"regexp"
 
-	gethTypes "github.com/onflow/go-ethereum/core/types"
+	gethTypes "github.com/ethereum/go-ethereum/core/types"
 
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
 )

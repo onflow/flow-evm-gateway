@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/onflow/go-ethereum/accounts/abi"
-	"github.com/onflow/go-ethereum/common/hexutil"
-	gethVM "github.com/onflow/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	gethVM "github.com/ethereum/go-ethereum/core/vm"
 )
 
 var (

@@ -4,10 +4,10 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
+	gethTypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth/filters"
 	"github.com/onflow/flow-go/fvm/evm/types"
-	"github.com/onflow/go-ethereum/common"
-	gethTypes "github.com/onflow/go-ethereum/core/types"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
@@ -178,40 +178,40 @@ func toGethReceipt(sr *models.Receipt) *gethTypes.Receipt {
 
 func TestIDFilter(t *testing.T) {
 	logs := receipts[0].Logs
+	blockHash := mustHash(blocks[0])
 
 	tests := []struct {
 		desc       string
-		id         common.Hash
 		expectLogs []*gethTypes.Log
-		criteria   FilterCriteria
+		criteria   filters.FilterCriteria
 	}{{
 		desc: "wildcard all logs",
-		id:   mustHash(blocks[0]),
-		criteria: FilterCriteria{
+		criteria: filters.FilterCriteria{
+			BlockHash: &blockHash,
 			Addresses: []common.Address{},
 			Topics:    [][]common.Hash{},
 		},
 		expectLogs: logs[:], // block 0 has 3 logs in total
 	}, {
 		desc: "single topic no address match single log",
-		id:   mustHash(blocks[0]),
-		criteria: FilterCriteria{
+		criteria: filters.FilterCriteria{
+			BlockHash: &blockHash,
 			Addresses: []common.Address{},
 			Topics:    [][]common.Hash{logs[0].Topics[:1]},
 		},
 		expectLogs: logs[:1],
 	}, {
 		desc: "single out of order topic no address match no logs",
-		id:   mustHash(blocks[0]),
-		criteria: FilterCriteria{
+		criteria: filters.FilterCriteria{
+			BlockHash: &blockHash,
 			Addresses: []common.Address{},
 			Topics:    [][]common.Hash{logs[0].Topics[1:]},
 		},
 		expectLogs: []*gethTypes.Log{},
 	}, {
 		desc: "single topic with first position wildcard match single log",
-		id:   mustHash(blocks[0]),
-		criteria: FilterCriteria{
+		criteria: filters.FilterCriteria{
+			BlockHash: &blockHash,
 			Addresses: []common.Address{},
 			Topics: [][]common.Hash{
 				{},
@@ -221,8 +221,8 @@ func TestIDFilter(t *testing.T) {
 		expectLogs: logs[:1],
 	}, {
 		desc: "single topic with second position wildcard match single log",
-		id:   mustHash(blocks[0]),
-		criteria: FilterCriteria{
+		criteria: filters.FilterCriteria{
+			BlockHash: &blockHash,
 			Addresses: []common.Address{},
 			Topics: [][]common.Hash{
 				{logs[0].Topics[0]},
@@ -232,40 +232,40 @@ func TestIDFilter(t *testing.T) {
 		expectLogs: logs[:1],
 	}, {
 		desc: "single topic, single address match single log",
-		id:   mustHash(blocks[0]),
-		criteria: FilterCriteria{
+		criteria: filters.FilterCriteria{
+			BlockHash: &blockHash,
 			Addresses: []common.Address{logs[0].Address},
 			Topics:    [][]common.Hash{logs[0].Topics[:1]},
 		},
 		expectLogs: logs[:1],
 	}, {
 		desc: "single address no topic match two logs",
-		id:   mustHash(blocks[0]),
-		criteria: FilterCriteria{
+		criteria: filters.FilterCriteria{
+			BlockHash: &blockHash,
 			Addresses: []common.Address{logs[0].Address},
 			Topics:    [][]common.Hash{},
 		},
 		expectLogs: logs[:2],
 	}, {
 		desc: "single address, both topics match single log",
-		id:   mustHash(blocks[0]),
-		criteria: FilterCriteria{
+		criteria: filters.FilterCriteria{
+			BlockHash: &blockHash,
 			Addresses: []common.Address{logs[0].Address},
 			Topics:    [][]common.Hash{logs[0].Topics},
 		},
 		expectLogs: logs[:1],
 	}, {
 		desc: "invalid topic match no logs",
-		id:   mustHash(blocks[0]),
-		criteria: FilterCriteria{
-			Topics: [][]common.Hash{{common.HexToHash("123")}},
+		criteria: filters.FilterCriteria{
+			BlockHash: &blockHash,
+			Topics:    [][]common.Hash{{common.HexToHash("123")}},
 		},
 		expectLogs: []*gethTypes.Log{},
 	}}
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			filter, err := NewIDFilter(tt.id, tt.criteria, blockStorage(), receiptStorage())
+			filter, err := NewIDFilter(tt.criteria, blockStorage(), receiptStorage())
 			require.NoError(t, err)
 
 			matchedLogs, err := filter.Match()
@@ -274,30 +274,6 @@ func TestIDFilter(t *testing.T) {
 			require.Equal(t, tt.expectLogs, matchedLogs)
 		})
 	}
-
-	t.Run("with topics count exceeding limit", func(t *testing.T) {
-		_, err := NewIDFilter(
-			common.HexToHash("123"),
-			FilterCriteria{
-				Topics: [][]common.Hash{
-					{common.HexToHash("123")},
-					{common.HexToHash("456")},
-					{common.HexToHash("789")},
-					{common.HexToHash("101")},
-					{common.HexToHash("120")},
-				},
-			},
-			blockStorage(),
-			receiptStorage(),
-		)
-
-		require.Error(t, err)
-		assert.ErrorContains(
-			t,
-			err,
-			"max topics exceeded, only 4 allowed",
-		)
-	})
 }
 
 func TestRangeFilter(t *testing.T) {
@@ -307,12 +283,12 @@ func TestRangeFilter(t *testing.T) {
 		desc       string
 		start, end uint64
 		expectLogs []*gethTypes.Log
-		criteria   FilterCriteria
+		criteria   filters.FilterCriteria
 	}{{
 		desc:  "single topic, single address, single block match single log",
 		start: 0,
 		end:   1,
-		criteria: FilterCriteria{
+		criteria: filters.FilterCriteria{
 			Addresses: []common.Address{logs[0][0].Address},
 			Topics:    [][]common.Hash{logs[0][0].Topics[:1]},
 		},
@@ -321,7 +297,7 @@ func TestRangeFilter(t *testing.T) {
 		desc:  "single topic, single address, all blocks match multiple logs",
 		start: 0,
 		end:   4,
-		criteria: FilterCriteria{
+		criteria: filters.FilterCriteria{
 			Addresses: []common.Address{logs[0][0].Address},
 			Topics:    [][]common.Hash{logs[0][0].Topics[:1]},
 		},
@@ -330,7 +306,7 @@ func TestRangeFilter(t *testing.T) {
 		desc:  "single topic, single address, subset of blocks match single log",
 		start: 2,
 		end:   4,
-		criteria: FilterCriteria{
+		criteria: filters.FilterCriteria{
 			Addresses: []common.Address{logs[0][0].Address},
 			Topics:    [][]common.Hash{logs[0][0].Topics[:1]},
 		},
@@ -339,7 +315,7 @@ func TestRangeFilter(t *testing.T) {
 		desc:  "single address, all blocks match multiple logs",
 		start: 0,
 		end:   4,
-		criteria: FilterCriteria{
+		criteria: filters.FilterCriteria{
 			Addresses: []common.Address{logs[0][0].Address},
 		},
 		expectLogs: []*gethTypes.Log{logs[0][0], logs[0][1], logs[1][0], logs[3][1]},
@@ -347,7 +323,7 @@ func TestRangeFilter(t *testing.T) {
 		desc:  "invalid address, all blocks no match",
 		start: 0,
 		end:   4,
-		criteria: FilterCriteria{
+		criteria: filters.FilterCriteria{
 			Addresses: []common.Address{common.HexToAddress("0x123")},
 		},
 		expectLogs: nil,
@@ -355,7 +331,7 @@ func TestRangeFilter(t *testing.T) {
 		desc:  "single address, non-existing range no match",
 		start: 5,
 		end:   10,
-		criteria: FilterCriteria{
+		criteria: filters.FilterCriteria{
 			Addresses: []common.Address{logs[0][0].Address},
 		},
 		expectLogs: nil,
@@ -372,30 +348,6 @@ func TestRangeFilter(t *testing.T) {
 			require.Equal(t, tt.expectLogs, matchedLogs)
 		})
 	}
-
-	t.Run("with topics count exceeding limit", func(t *testing.T) {
-		_, err := NewRangeFilter(
-			0,
-			4,
-			FilterCriteria{
-				Topics: [][]common.Hash{
-					{common.HexToHash("123")},
-					{common.HexToHash("456")},
-					{common.HexToHash("789")},
-					{common.HexToHash("101")},
-					{common.HexToHash("120")},
-				},
-			},
-			receiptStorage(),
-		)
-
-		require.Error(t, err)
-		assert.ErrorContains(
-			t,
-			err,
-			"max topics exceeded, only 4 allowed",
-		)
-	})
 }
 
 func TestStreamFilter(t *testing.T) {
