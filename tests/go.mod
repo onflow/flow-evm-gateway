@@ -9,7 +9,7 @@ require (
 	github.com/goccy/go-json v0.10.4
 	github.com/onflow/cadence v1.7.0-preview.1
 	github.com/onflow/crypto v0.25.3
-	github.com/onflow/flow-emulator v1.5.2-0.20250620100838-4e2f7bc18c24
+	github.com/onflow/flow-emulator v1.7.0-preview.1
 	github.com/onflow/flow-evm-gateway v0.0.0-20240201154855-4d4d3d3f19c7
 	github.com/onflow/flow-go v0.42.3-util-fix.0.20250819165158-ea886bab7c19
 	github.com/onflow/flow-go-sdk v1.7.0
@@ -157,8 +157,8 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
 	github.com/onflow/atree v0.10.0 // indirect
-	github.com/onflow/flow-core-contracts/lib/go/contracts v1.7.3 // indirect
-	github.com/onflow/flow-core-contracts/lib/go/templates v1.7.1 // indirect
+	github.com/onflow/flow-core-contracts/lib/go/contracts v1.7.4-0.20250807122906-29940d8821f0 // indirect
+	github.com/onflow/flow-core-contracts/lib/go/templates v1.7.2-0.20250807122906-29940d8821f0 // indirect
 	github.com/onflow/flow-evm-bridge v0.1.0 // indirect
 	github.com/onflow/flow-ft/lib/go/contracts v1.0.1 // indirect
 	github.com/onflow/flow-ft/lib/go/templates v1.0.1 // indirect
