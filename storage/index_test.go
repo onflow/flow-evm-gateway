@@ -10,10 +10,10 @@ import (
 	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/stretchr/testify/require"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/goccy/go-json"
 	"github.com/onflow/flow-go-sdk"
-	"github.com/onflow/go-ethereum/common"
-	"github.com/onflow/go-ethereum/core/types"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/onflow/flow-evm-gateway/models"
