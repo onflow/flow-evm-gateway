@@ -86,6 +86,7 @@ type BlockChainAPI struct {
 	blocks                storage.BlockIndexer
 	transactions          storage.TransactionIndexer
 	receipts              storage.ReceiptIndexer
+	feeParameters         storage.FeeParametersIndexer
 	indexingResumedHeight uint64
 	rateLimiter           RateLimiter
 	collector             metrics.Collector
@@ -98,6 +99,7 @@ func NewBlockChainAPI(
 	blocks storage.BlockIndexer,
 	transactions storage.TransactionIndexer,
 	receipts storage.ReceiptIndexer,
+	feeParameters storage.FeeParametersIndexer,
 	rateLimiter RateLimiter,
 	collector metrics.Collector,
 	indexingResumedHeight uint64,
@@ -109,6 +111,7 @@ func NewBlockChainAPI(
 		blocks:                blocks,
 		transactions:          transactions,
 		receipts:              receipts,
+		feeParameters:         feeParameters,
 		indexingResumedHeight: indexingResumedHeight,
 		rateLimiter:           rateLimiter,
 		collector:             collector,
@@ -1050,7 +1053,16 @@ func (b *BlockChainAPI) Coinbase(ctx context.Context) (common.Address, error) {
 
 // GasPrice returns a suggestion for a gas price for legacy transactions.
 func (b *BlockChainAPI) GasPrice(ctx context.Context) (*hexutil.Big, error) {
-	return (*hexutil.Big)(b.config.GasPrice), nil
+	feeParams, err := b.feeParameters.Get()
+	if err != nil {
+		return nil, err
+	}
+
+	surgeFactor := uint64(feeParams.SurgeFactor)
+	multiplier := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(8)), nil)
+	gp := b.config.GasPrice.Uint64()
+	gasPrice := new(big.Int).SetUint64(uint64(gp * surgeFactor))
+	return (*hexutil.Big)(new(big.Int).Div(gasPrice, multiplier)), nil
 }
 
 // GetUncleCountByBlockHash returns number of uncles in the block for the given block hash
