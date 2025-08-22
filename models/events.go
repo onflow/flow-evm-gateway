@@ -13,8 +13,9 @@ import (
 )
 
 const (
-	BlockExecutedQualifiedIdentifier       = string(events.EventTypeBlockExecuted)
-	TransactionExecutedQualifiedIdentifier = string(events.EventTypeTransactionExecuted)
+	BlockExecutedQualifiedIdentifier        = string(events.EventTypeBlockExecuted)
+	TransactionExecutedQualifiedIdentifier  = string(events.EventTypeTransactionExecuted)
+	FeeParametersChangedQualifiedIdentifier = "FlowFees.FeeParametersChanged"
 )
 
 // isBlockExecutedEvent checks whether the given event contains block executed data.
@@ -33,6 +34,15 @@ func isTransactionExecutedEvent(event cadence.Event) bool {
 	return event.EventType.QualifiedIdentifier == TransactionExecutedQualifiedIdentifier
 }
 
+// isFeeParametersChangedEvent checks whether the given event contains updates
+// to Flow fees parameters.
+func isFeeParametersChangedEvent(event cadence.Event) bool {
+	if event.EventType == nil {
+		return false
+	}
+	return event.EventType.QualifiedIdentifier == FeeParametersChangedQualifiedIdentifier
+}
+
 // CadenceEvents contains Flow emitted events containing one or zero evm block executed event,
 // and multiple or zero evm transaction events.
 type CadenceEvents struct {
@@ -42,6 +52,7 @@ type CadenceEvents struct {
 	transactions      []Transaction                    // transactions in the EVM block
 	txEventPayloads   []events.TransactionEventPayload // EVM.TransactionExecuted event payloads
 	receipts          []*Receipt                       // receipts for transactions
+	feeParameters     *FeeParameters                   // updates to Flow fees parameters
 }
 
 // NewCadenceEvents decodes the events into evm types.
@@ -124,6 +135,15 @@ func decodeCadenceEvents(events flow.BlockEvents) (*CadenceEvents, error) {
 			e.txEventPayloads = append(e.txEventPayloads, *txEventPayload)
 			e.receipts = append(e.receipts, receipt)
 		}
+
+		if isFeeParametersChangedEvent(val) {
+			feeParameters, err := decodeFeeParametersChangedEvent(val)
+			if err != nil {
+				return nil, err
+			}
+
+			e.feeParameters = feeParameters
+		}
 	}
 
 	// safety check, we have a missing block in the events
@@ -180,6 +200,11 @@ func (c *CadenceEvents) TxEventPayloads() []events.TransactionEventPayload {
 // contain EVM transactions the return value is nil.
 func (c *CadenceEvents) Receipts() []*Receipt {
 	return c.receipts
+}
+
+// FeeParameters returns any updates to the Flow fees parameters.
+func (c *CadenceEvents) FeeParameters() *FeeParameters {
+	return c.feeParameters
 }
 
 // Empty checks if there is an EVM block included in the events.

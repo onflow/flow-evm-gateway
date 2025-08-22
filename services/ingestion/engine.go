@@ -48,6 +48,7 @@ type Engine struct {
 	receipts        storage.ReceiptIndexer
 	transactions    storage.TransactionIndexer
 	traces          storage.TraceIndexer
+	feeParameters   storage.FeeParametersIndexer
 	log             zerolog.Logger
 	evmLastHeight   *models.SequentialHeight
 	blocksPublisher *models.Publisher[*models.Block]
@@ -65,6 +66,7 @@ func NewEventIngestionEngine(
 	receipts storage.ReceiptIndexer,
 	transactions storage.TransactionIndexer,
 	traces storage.TraceIndexer,
+	feeParameters storage.FeeParametersIndexer,
 	blocksPublisher *models.Publisher[*models.Block],
 	logsPublisher *models.Publisher[[]*gethTypes.Log],
 	log zerolog.Logger,
@@ -84,6 +86,7 @@ func NewEventIngestionEngine(
 		receipts:        receipts,
 		transactions:    transactions,
 		traces:          traces,
+		feeParameters:   feeParameters,
 		log:             log,
 		blocksPublisher: blocksPublisher,
 		logsPublisher:   logsPublisher,
@@ -217,6 +220,16 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 
 // indexEvents will replay the evm transactions using the block events and index all results.
 func (e *Engine) indexEvents(events *models.CadenceEvents, batch *pebbleDB.Batch) error {
+	if events.FeeParameters() != nil {
+		if err := e.feeParameters.Store(events.FeeParameters(), batch); err != nil {
+			return fmt.Errorf(
+				"failed to update fee parameters for height: %d, during events ingestion: %w",
+				events.CadenceHeight(),
+				err,
+			)
+		}
+	}
+
 	// if heartbeat interval with no data still update the cadence height
 	if events.Empty() {
 		if err := e.blocks.SetLatestCadenceHeight(events.CadenceHeight(), batch); err != nil {

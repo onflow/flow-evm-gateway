@@ -27,6 +27,9 @@ const (
 	// registers
 	registerKeyMarker = byte(50)
 
+	// fee parameters keys
+	feeParametersKey = byte(60)
+
 	// special keys
 	latestEVMHeightKey     = byte(100)
 	latestCadenceHeightKey = byte(102)

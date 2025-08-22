@@ -51,12 +51,13 @@ const (
 )
 
 type Storages struct {
-	Storage      *pebble.Storage
-	Registers    *pebble.RegisterStorage
-	Blocks       storage.BlockIndexer
-	Transactions storage.TransactionIndexer
-	Receipts     storage.ReceiptIndexer
-	Traces       storage.TraceIndexer
+	Storage       *pebble.Storage
+	Registers     *pebble.RegisterStorage
+	Blocks        storage.BlockIndexer
+	Transactions  storage.TransactionIndexer
+	Receipts      storage.ReceiptIndexer
+	Traces        storage.TraceIndexer
+	FeeParameters storage.FeeParametersIndexer
 }
 
 type Publishers struct {
@@ -191,6 +192,7 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 		b.storages.Receipts,
 		b.storages.Transactions,
 		b.storages.Traces,
+		b.storages.FeeParameters,
 		b.publishers.Block,
 		b.publishers.Logs,
 		b.logger,
@@ -645,6 +647,13 @@ func setupStorage(
 	//	// TODO(JanezP): verify storage account owner is correct
 	// }
 
+	feeParameters := pebble.NewFeeParameters(store)
+	if _, err = feeParameters.Get(); errors.Is(err, errs.ErrEntityNotFound) {
+		if err := feeParameters.Store(models.DefaultFeeParameters, batch); err != nil {
+			return nil, nil, fmt.Errorf("failed to bootstrap fee parameters: %w", err)
+		}
+	}
+
 	if batch.Count() > 0 {
 		err = batch.Commit(pebbleDB.Sync)
 		if err != nil {
@@ -653,12 +662,13 @@ func setupStorage(
 	}
 
 	return db, &Storages{
-		Storage:      store,
-		Blocks:       blocks,
-		Registers:    registerStore,
-		Transactions: pebble.NewTransactions(store),
-		Receipts:     pebble.NewReceipts(store),
-		Traces:       pebble.NewTraces(store),
+		Storage:       store,
+		Blocks:        blocks,
+		Registers:     registerStore,
+		Transactions:  pebble.NewTransactions(store),
+		Receipts:      pebble.NewReceipts(store),
+		Traces:        pebble.NewTraces(store),
+		FeeParameters: feeParameters,
 	}, nil
 }
 
