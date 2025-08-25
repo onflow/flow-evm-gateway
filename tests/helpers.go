@@ -21,6 +21,9 @@ import (
 
 	"github.com/onflow/flow-evm-gateway/bootstrap"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/goccy/go-json"
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-emulator/adapters"
@@ -32,9 +35,6 @@ import (
 	evmEmulator "github.com/onflow/flow-go/fvm/evm/emulator"
 	"github.com/onflow/flow-go/fvm/systemcontracts"
 	"github.com/onflow/flow-go/model/flow"
-	"github.com/onflow/go-ethereum/common"
-	"github.com/onflow/go-ethereum/common/hexutil"
-	"github.com/onflow/go-ethereum/core/types"
 	"github.com/rs/zerolog"
 
 	"github.com/onflow/flow-evm-gateway/config"
@@ -198,7 +198,7 @@ func servicesSetup(t *testing.T) (emulator.Emulator, func()) {
 // and will report failure or success of the test.
 func executeTest(t *testing.T, testFile string) {
 	command := fmt.Sprintf(
-		"./web3js/node_modules/.bin/mocha ./web3js/%s.js --timeout 150s",
+		"./web3js/node_modules/.bin/mocha ./web3js/%s.js --timeout 150s --exit",
 		testFile,
 	)
 	parts := strings.Fields(command)

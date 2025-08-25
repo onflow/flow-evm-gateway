@@ -1,8 +1,8 @@
 package api
 
 import (
-	"github.com/onflow/go-ethereum/common"
-	"github.com/onflow/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
 type TxPool struct{}

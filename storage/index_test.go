@@ -1,7 +1,6 @@
 package storage_test
 
 import (
-	"fmt"
 	"testing"
 
 	pebble2 "github.com/cockroachdb/pebble"
@@ -11,10 +10,10 @@ import (
 	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/stretchr/testify/require"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/goccy/go-json"
 	"github.com/onflow/flow-go-sdk"
-	"github.com/onflow/go-ethereum/common"
-	"github.com/onflow/go-ethereum/core/types"
 	"github.com/stretchr/testify/suite"
 
 	"github.com/onflow/flow-evm-gateway/models"
@@ -58,6 +57,7 @@ func TestReceipts(t *testing.T) {
 		require.NoError(t, err)
 
 		suite.Run(t, &ReceiptTestSuite{
+			BlocksIndexer:  bl,
 			ReceiptIndexer: pebble.NewReceipts(db),
 			DB:             db,
 		})
@@ -277,6 +277,7 @@ func (b *BlockTestSuite) TestHeights() {
 
 type ReceiptTestSuite struct {
 	suite.Suite
+	BlocksIndexer  storage.BlockIndexer
 	ReceiptIndexer storage.ReceiptIndexer
 	DB             *pebble.Storage
 }
@@ -284,9 +285,15 @@ type ReceiptTestSuite struct {
 func (s *ReceiptTestSuite) TestStoreReceipt() {
 
 	s.Run("store receipt successfully", func() {
-		receipt := mocks.NewReceipt(1, common.HexToHash("0xf1"))
 		batch := s.DB.NewBatch()
-		err := s.ReceiptIndexer.Store([]*models.Receipt{receipt}, batch)
+		flowID := flow.Identifier{0x01}
+		block := mocks.NewBlock(1)
+
+		err := s.BlocksIndexer.Store(block.Height+1, flowID, block, batch)
+		s.Require().NoError(err)
+
+		receipt := mocks.NewReceipt(block)
+		err = s.ReceiptIndexer.Store([]*models.Receipt{receipt}, batch)
 		s.Require().NoError(err)
 
 		err = batch.Commit(pebble2.Sync)
@@ -295,10 +302,17 @@ func (s *ReceiptTestSuite) TestStoreReceipt() {
 
 	s.Run("store multiple receipts at same height", func() {
 		const height = 5
+		batch := s.DB.NewBatch()
+		flowID := flow.Identifier{0x01}
+		block := mocks.NewBlock(height)
+
+		err := s.BlocksIndexer.Store(height+1, flowID, block, batch)
+		s.Require().NoError(err)
+
 		receipts := []*models.Receipt{
-			mocks.NewReceipt(height, common.HexToHash("0x1")),
-			mocks.NewReceipt(height, common.HexToHash("0x2")),
-			mocks.NewReceipt(height, common.HexToHash("0x3")),
+			mocks.NewReceipt(block),
+			mocks.NewReceipt(block),
+			mocks.NewReceipt(block),
 		}
 		// Log index field holds the index position in the entire block
 		logIndex := uint(0)
@@ -309,8 +323,7 @@ func (s *ReceiptTestSuite) TestStoreReceipt() {
 			}
 		}
 
-		batch := s.DB.NewBatch()
-		err := s.ReceiptIndexer.Store(receipts, batch)
+		err = s.ReceiptIndexer.Store(receipts, batch)
 		s.Require().NoError(err)
 
 		err = batch.Commit(pebble2.Sync)
@@ -325,22 +338,39 @@ func (s *ReceiptTestSuite) TestStoreReceipt() {
 	})
 
 	s.Run("fail to store multiple receipts with different heights", func() {
+		batch := s.DB.NewBatch()
+		flowID := flow.Identifier{0x01}
+		block1 := mocks.NewBlock(1)
+
+		err := s.BlocksIndexer.Store(block1.Height+1, flowID, block1, batch)
+		s.Require().NoError(err)
+
+		block2 := mocks.NewBlock(2)
+
+		err = s.BlocksIndexer.Store(block2.Height+1, flowID, block2, batch)
+		s.Require().NoError(err)
+
 		receipts := []*models.Receipt{
-			mocks.NewReceipt(1, common.HexToHash("0x1")),
-			mocks.NewReceipt(2, common.HexToHash("0x2")),
+			mocks.NewReceipt(block1),
+			mocks.NewReceipt(block2),
 		}
 
-		batch := s.DB.NewBatch()
-		err := s.ReceiptIndexer.Store(receipts, batch)
+		err = s.ReceiptIndexer.Store(receipts, batch)
 		s.Require().EqualError(err, "can't store receipts for multiple heights")
 	})
 }
 
 func (s *ReceiptTestSuite) TestGetReceiptByTransactionID() {
 	s.Run("existing transaction ID", func() {
-		receipt := mocks.NewReceipt(2, common.HexToHash("0xf2"))
 		batch := s.DB.NewBatch()
-		err := s.ReceiptIndexer.Store([]*models.Receipt{receipt}, batch)
+		flowID := flow.Identifier{0x01}
+		block := mocks.NewBlock(2)
+
+		err := s.BlocksIndexer.Store(block.Height+1, flowID, block, batch)
+		s.Require().NoError(err)
+
+		receipt := mocks.NewReceipt(block)
+		err = s.ReceiptIndexer.Store([]*models.Receipt{receipt}, batch)
 		s.Require().NoError(err)
 
 		err = batch.Commit(pebble2.Sync)
@@ -361,9 +391,15 @@ func (s *ReceiptTestSuite) TestGetReceiptByTransactionID() {
 
 func (s *ReceiptTestSuite) TestGetReceiptByBlockHeight() {
 	s.Run("existing block height", func() {
-		receipt := mocks.NewReceipt(3, common.HexToHash("0x1"))
 		batch := s.DB.NewBatch()
-		err := s.ReceiptIndexer.Store([]*models.Receipt{receipt}, batch)
+		flowID := flow.Identifier{0x01}
+		block := mocks.NewBlock(3)
+
+		err := s.BlocksIndexer.Store(block.Height+1, flowID, block, batch)
+		s.Require().NoError(err)
+
+		receipt := mocks.NewReceipt(block)
+		err = s.ReceiptIndexer.Store([]*models.Receipt{receipt}, batch)
 		s.Require().NoError(err)
 
 		err = batch.Commit(pebble2.Sync)
@@ -372,7 +408,13 @@ func (s *ReceiptTestSuite) TestGetReceiptByBlockHeight() {
 		batch = s.DB.NewBatch()
 
 		// add one more receipt that shouldn't be retrieved
-		r := mocks.NewReceipt(4, common.HexToHash("0x2"))
+		flowID = flow.Identifier{0x04}
+		block4 := mocks.NewBlock(4)
+
+		err = s.BlocksIndexer.Store(block4.Height+1, flowID, block4, batch)
+		s.Require().NoError(err)
+
+		r := mocks.NewReceipt(block4)
 		s.Require().NoError(s.ReceiptIndexer.Store([]*models.Receipt{r}, batch))
 
 		err = batch.Commit(pebble2.Sync)
@@ -399,11 +441,18 @@ func (s *ReceiptTestSuite) TestBloomsForBlockRange() {
 		testHeights := make([]uint64, 0)
 
 		for i := start; i < end; i++ {
-			r := mocks.NewReceipt(i, common.HexToHash(fmt.Sprintf("0xf1%d", i)))
+			batch := s.DB.NewBatch()
+			flowID := flow.Identifier{0x0i}
+			block := mocks.NewBlock(i)
+
+			err := s.BlocksIndexer.Store(block.Height+1, flowID, block, batch)
+			s.Require().NoError(err)
+
+			r := mocks.NewReceipt(block)
 			testBlooms = append(testBlooms, &r.Bloom)
 			testHeights = append(testHeights, i)
-			batch := s.DB.NewBatch()
-			err := s.ReceiptIndexer.Store([]*models.Receipt{r}, batch)
+			batch = s.DB.NewBatch()
+			err = s.ReceiptIndexer.Store([]*models.Receipt{r}, batch)
 			s.Require().NoError(err)
 
 			err = batch.Commit(pebble2.Sync)
@@ -441,13 +490,20 @@ func (s *ReceiptTestSuite) TestBloomsForBlockRange() {
 		testHeights := make([]uint64, 0)
 
 		for i := start; i < end; i++ {
-			r1 := mocks.NewReceipt(i, common.HexToHash(fmt.Sprintf("0x%d", i)))
-			r2 := mocks.NewReceipt(i, common.HexToHash(fmt.Sprintf("0x%d", i)))
+			batch := s.DB.NewBatch()
+			flowID := flow.Identifier{0x0i}
+			block := mocks.NewBlock(i)
+
+			err := s.BlocksIndexer.Store(block.Height+1, flowID, block, batch)
+			s.Require().NoError(err)
+
+			r1 := mocks.NewReceipt(block)
+			r2 := mocks.NewReceipt(block)
 			receipts := []*models.Receipt{r1, r2}
 
-			batch := s.DB.NewBatch()
+			batch = s.DB.NewBatch()
 			s.Require().NoError(s.ReceiptIndexer.Store(receipts, batch))
-			err := batch.Commit(pebble2.Sync)
+			err = batch.Commit(pebble2.Sync)
 			s.Require().NoError(err)
 
 			testBlooms = append(testBlooms, &r1.Bloom, &r2.Bloom)
@@ -494,13 +550,20 @@ func (s *ReceiptTestSuite) TestBloomsForBlockRange() {
 
 		var expectedBloom *types.Bloom
 		for i := start; i < end; i++ {
-			r1 := mocks.NewReceipt(i, common.HexToHash(fmt.Sprintf("0x%d", i)))
+			batch := s.DB.NewBatch()
+			flowID := flow.Identifier{0x0i}
+			block := mocks.NewBlock(i)
+
+			err := s.BlocksIndexer.Store(block.Height+1, flowID, block, batch)
+			s.Require().NoError(err)
+
+			r1 := mocks.NewReceipt(block)
 			receipts := []*models.Receipt{r1}
 
-			batch := s.DB.NewBatch()
+			batch = s.DB.NewBatch()
 			s.Require().NoError(s.ReceiptIndexer.Store(receipts, batch))
 
-			err := batch.Commit(pebble2.Sync)
+			err = batch.Commit(pebble2.Sync)
 			s.Require().NoError(err)
 
 			if i == specific {

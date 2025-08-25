@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"github.com/cockroachdb/pebble"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/goccy/go-json"
-	"github.com/onflow/go-ethereum/common"
 
 	"github.com/onflow/flow-evm-gateway/storage"
 )

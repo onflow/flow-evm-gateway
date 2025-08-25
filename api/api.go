@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/onflow/go-ethereum/common"
-	"github.com/onflow/go-ethereum/common/hexutil"
-	"github.com/onflow/go-ethereum/common/math"
-	"github.com/onflow/go-ethereum/core/types"
-	"github.com/onflow/go-ethereum/eth/filters"
-	"github.com/onflow/go-ethereum/rlp"
-	"github.com/onflow/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/math"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth/filters"
+	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/rs/zerolog"
 
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
@@ -581,11 +581,6 @@ func (b *BlockChainAPI) GetLogs(
 		return nil, err
 	}
 
-	filter := logs.FilterCriteria{
-		Addresses: criteria.Addresses,
-		Topics:    criteria.Topics,
-	}
-
 	// if filter provided specific block ID
 	if criteria.BlockHash != nil {
 		// Check if the block exists, and return an error if not.
@@ -598,7 +593,7 @@ func (b *BlockChainAPI) GetLogs(
 			return []*types.Log{}, nil
 		}
 
-		f, err := logs.NewIDFilter(*criteria.BlockHash, filter, b.blocks, b.receipts)
+		f, err := logs.NewIDFilter(criteria, b.blocks, b.receipts)
 		if err != nil {
 			return handleError[[]*types.Log](err, l, b.collector)
 		}
@@ -641,7 +636,7 @@ func (b *BlockChainAPI) GetLogs(
 		to = latest
 	}
 
-	f, err := logs.NewRangeFilter(from.Uint64(), to.Uint64(), filter, b.receipts)
+	f, err := logs.NewRangeFilter(from.Uint64(), to.Uint64(), criteria, b.receipts)
 	if err != nil {
 		return handleError[[]*types.Log](err, l, b.collector)
 	}

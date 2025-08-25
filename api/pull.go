@@ -7,10 +7,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/onflow/go-ethereum/common"
-	gethTypes "github.com/onflow/go-ethereum/core/types"
-	"github.com/onflow/go-ethereum/eth/filters"
-	"github.com/onflow/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/common"
+	gethTypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/eth/filters"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/rs/zerolog"
 
 	"github.com/onflow/flow-evm-gateway/config"
@@ -112,13 +112,13 @@ func newTransactionsFilter(expiry time.Duration, latestHeight uint64, fullTx boo
 // Criteria parameter filters the logs according to the criteria values.
 type logsFilter struct {
 	*baseFilter
-	criteria *filters.FilterCriteria
+	criteria filters.FilterCriteria
 }
 
 func newLogsFilter(
 	expiry time.Duration,
 	latestHeight uint64,
-	criteria *filters.FilterCriteria,
+	criteria filters.FilterCriteria,
 ) *logsFilter {
 	return &logsFilter{
 		newBaseFilter(expiry, latestHeight),
@@ -272,7 +272,7 @@ func (api *PullAPI) NewFilter(ctx context.Context, criteria filters.FilterCriter
 		// todo we should check for max range of from-to heights
 	}
 
-	f := newLogsFilter(api.config.FilterExpiry, latest, &criteria)
+	f := newLogsFilter(api.config.FilterExpiry, latest, criteria)
 
 	api.logger.Debug().
 		Str("id", string(f.id())).
@@ -483,10 +483,6 @@ func (api *PullAPI) getTransactions(latestHeight uint64, filter *transactionsFil
 
 func (api *PullAPI) getLogs(latestHeight uint64, filter *logsFilter) (any, error) {
 	nextHeight := filter.next()
-	criteria := logs.FilterCriteria{
-		Addresses: filter.criteria.Addresses,
-		Topics:    filter.criteria.Topics,
-	}
 
 	to := filter.criteria.ToBlock
 	// we use latest as default for end range
@@ -506,7 +502,7 @@ func (api *PullAPI) getLogs(latestHeight uint64, filter *logsFilter) (any, error
 		return []*gethTypes.Log{}, nil
 	}
 
-	f, err := logs.NewRangeFilter(start, end, criteria, api.receipts)
+	f, err := logs.NewRangeFilter(start, end, filter.criteria, api.receipts)
 	if err != nil {
 		return nil, fmt.Errorf("could not create range filter from %d to %d: %w", start, end, err)
 	}

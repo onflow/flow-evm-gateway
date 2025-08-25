@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go/fvm/evm/events"
 	flowGo "github.com/onflow/flow-go/model/flow"
-	"github.com/onflow/go-ethereum/core/types"
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
