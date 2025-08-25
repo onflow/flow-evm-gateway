@@ -183,7 +183,12 @@ func (b *BlockChainAPI) SendRawTransaction(
 		return common.Hash{}, err
 	}
 
-	id, err := b.evm.SendRawTransaction(ctx, input)
+	feeParams, err := b.feeParameters.Get()
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	id, err := b.evm.SendRawTransaction(ctx, input, feeParams)
 	if err != nil {
 		return handleError[common.Hash](err, l, b.collector)
 	}
