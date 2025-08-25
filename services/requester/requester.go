@@ -233,14 +233,9 @@ func (e *EVM) SendRawTransaction(
 		}
 	}
 
-	surgeFactor := uint64(feeParams.SurgeFactor)
-	multiplier := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(8)), nil)
-	gp := e.config.GasPrice.Uint64()
-	gasPrice := new(big.Int).SetUint64(uint64(gp * surgeFactor))
-	newGasPrice := new(big.Int).Div(gasPrice, multiplier)
-
-	if tx.GasPrice().Cmp(newGasPrice) < 0 && e.config.EnforceGasPrice {
-		return common.Hash{}, errs.NewTxGasPriceTooLowError(newGasPrice)
+	gasPrice := feeParams.CalculateGasPrice(e.config.GasPrice)
+	if tx.GasPrice().Cmp(gasPrice) < 0 && e.config.EnforceGasPrice {
+		return common.Hash{}, errs.NewTxGasPriceTooLowError(gasPrice)
 	}
 
 	if e.config.TxStateValidation == config.LocalIndexValidation {

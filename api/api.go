@@ -1063,11 +1063,8 @@ func (b *BlockChainAPI) GasPrice(ctx context.Context) (*hexutil.Big, error) {
 		return nil, err
 	}
 
-	surgeFactor := uint64(feeParams.SurgeFactor)
-	multiplier := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(8)), nil)
-	gp := b.config.GasPrice.Uint64()
-	gasPrice := new(big.Int).SetUint64(uint64(gp * surgeFactor))
-	return (*hexutil.Big)(new(big.Int).Div(gasPrice, multiplier)), nil
+	gasPrice := feeParams.CalculateGasPrice(b.config.GasPrice)
+	return (*hexutil.Big)(gasPrice), nil
 }
 
 // GetUncleCountByBlockHash returns number of uncles in the block for the given block hash
@@ -1113,11 +1110,8 @@ func (b *BlockChainAPI) MaxPriorityFeePerGas(ctx context.Context) (*hexutil.Big,
 		return nil, err
 	}
 
-	surgeFactor := uint64(feeParams.SurgeFactor)
-	multiplier := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(8)), nil)
-	gp := b.config.GasPrice.Uint64()
-	gasPrice := new(big.Int).SetUint64(uint64(gp * surgeFactor))
-	return (*hexutil.Big)(new(big.Int).Div(gasPrice, multiplier)), nil
+	gasPrice := feeParams.CalculateGasPrice(b.config.GasPrice)
+	return (*hexutil.Big)(gasPrice), nil
 }
 
 // Mining returns true if client is actively mining new blocks.
