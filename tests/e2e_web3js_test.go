@@ -122,7 +122,7 @@ func TestWeb3_E2E(t *testing.T) {
 		})
 	})
 
-	t.Run("gas price with surge factor multipler", func(t *testing.T) {
+	t.Run("gas price updated with surge factor multipler", func(t *testing.T) {
 		runWeb3TestWithSetup(t, "eth_gas_price_surge_test", func(emu emulator.Emulator) {
 			res, err := flowSendTransaction(
 				emu,

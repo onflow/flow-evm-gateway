@@ -4,31 +4,40 @@ const conf = require('./config')
 const helpers = require('./helpers')
 const web3 = conf.web3
 
-it('updates the gas price', async () => {
+it('should update the value of eth_gasPrice', async () => {
     let gasPrice = await web3.eth.getGasPrice()
+    // The surge factor was set to 2.0
+    assert.equal(gasPrice, 2n * conf.minGasPrice)
+})
+
+it('should update the value of eth_MaxPriorityFeePerGas', async () => {
+    let response = await helpers.callRPCMethod(
+        'eth_maxPriorityFeePerGas',
+        []
+    )
+    assert.equal(response.status, 200)
+    assert.isDefined(response.body.result)
+    let maxPriorityFeePerGas = utils.hexToNumber(response.body.result)
+    // The surge factor was set to 2.0
+    assert.equal(maxPriorityFeePerGas, 2n * conf.minGasPrice)
+})
+
+it('should reject transactions with gas price lower than the updated value', async () => {
+    let receiver = web3.eth.accounts.create()
+    let transferValue = utils.toWei('2.5', 'ether')
+
+    let gasPrice = await web3.eth.getGasPrice()
+    // The surge factor was set to 2.0
     assert.equal(gasPrice, 2n * conf.minGasPrice)
 
-    let receiver = web3.eth.accounts.create()
-
-    // make sure receiver balance is initially 0
-    let receiverWei = await web3.eth.getBalance(receiver.address)
-    assert.equal(receiverWei, 0n)
-
-    // get sender balance
-    let senderBalance = await web3.eth.getBalance(conf.eoa.address)
-    assert.equal(senderBalance, utils.toWei(conf.fundedAmount, 'ether'))
-
-    let txCount = await web3.eth.getTransactionCount(conf.eoa.address)
-    assert.equal(0n, txCount)
-
-    let transferValue = utils.toWei('2.5', 'ether')
-    // assert that the minimum acceptable gas price has been multiplied by the surge factor
+    // assert that the minimum acceptable gas price
+    // has been multiplied by the surge factor
     try {
-        let transfer = await helpers.signAndSend({
+        await helpers.signAndSend({
             from: conf.eoa.address,
             to: receiver.address,
             value: transferValue,
-            gasPrice: gasPrice - 10n,
+            gasPrice: gasPrice - 10n, // provide a lower gas price
             gasLimit: 55_000,
         })
         assert.fail('should not have gotten here')
@@ -38,12 +47,21 @@ it('updates the gas price', async () => {
             `the minimum accepted gas price for transactions is: ${gasPrice}`
         )
     }
+})
+
+it('should accept transactions with the updated gas price', async () => {
+    let receiver = web3.eth.accounts.create()
+    let transferValue = utils.toWei('2.5', 'ether')
+
+    let gasPrice = await web3.eth.getGasPrice()
+    // The surge factor was set to 2.0
+    assert.equal(gasPrice, 2n * conf.minGasPrice)
 
     let transfer = await helpers.signAndSend({
         from: conf.eoa.address,
         to: receiver.address,
         value: transferValue,
-        gasPrice: gasPrice,
+        gasPrice: gasPrice, // provide the updated gas price
         gasLimit: 55_000,
     })
     assert.equal(transfer.receipt.status, conf.successStatus)

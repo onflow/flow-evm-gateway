@@ -1108,7 +1108,16 @@ func (b *BlockChainAPI) GetUncleByBlockNumberAndIndex(
 
 // MaxPriorityFeePerGas returns a suggestion for a gas tip cap for dynamic fee transactions.
 func (b *BlockChainAPI) MaxPriorityFeePerGas(ctx context.Context) (*hexutil.Big, error) {
-	return (*hexutil.Big)(b.config.GasPrice), nil
+	feeParams, err := b.feeParameters.Get()
+	if err != nil {
+		return nil, err
+	}
+
+	surgeFactor := uint64(feeParams.SurgeFactor)
+	multiplier := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(8)), nil)
+	gp := b.config.GasPrice.Uint64()
+	gasPrice := new(big.Int).SetUint64(uint64(gp * surgeFactor))
+	return (*hexutil.Big)(new(big.Int).Div(gasPrice, multiplier)), nil
 }
 
 // Mining returns true if client is actively mining new blocks.
