@@ -53,7 +53,11 @@ const estimateGasErrorRatio = 0.015
 type Requester interface {
 	// SendRawTransaction will submit signed transaction data to the network.
 	// The submitted EVM transaction hash is returned.
-	SendRawTransaction(ctx context.Context, data []byte) (common.Hash, error)
+	SendRawTransaction(
+		ctx context.Context,
+		data []byte,
+		feeParams *models.FeeParameters,
+	) (common.Hash, error)
 
 	// GetBalance returns the amount of wei for the given address in the state of the
 	// given EVM block height.
@@ -163,7 +167,11 @@ func NewEVM(
 	}, nil
 }
 
-func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash, error) {
+func (e *EVM) SendRawTransaction(
+	ctx context.Context,
+	data []byte,
+	feeParams *models.FeeParameters,
+) (common.Hash, error) {
 	tx := &types.Transaction{}
 	if err := tx.UnmarshalBinary(data); err != nil {
 		return common.Hash{}, err
@@ -224,8 +232,14 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 		}
 	}
 
-	if tx.GasPrice().Cmp(e.config.GasPrice) < 0 && e.config.EnforceGasPrice {
-		return common.Hash{}, errs.NewTxGasPriceTooLowError(e.config.GasPrice)
+	surgeFactor := uint64(feeParams.SurgeFactor)
+	multiplier := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(8)), nil)
+	gp := e.config.GasPrice.Uint64()
+	gasPrice := new(big.Int).SetUint64(uint64(gp * surgeFactor))
+	newGasPrice := new(big.Int).Div(gasPrice, multiplier)
+
+	if tx.GasPrice().Cmp(newGasPrice) < 0 && e.config.EnforceGasPrice {
+		return common.Hash{}, errs.NewTxGasPriceTooLowError(newGasPrice)
 	}
 
 	if e.config.TxStateValidation == config.LocalIndexValidation {
