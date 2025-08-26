@@ -6,8 +6,8 @@ const web3 = conf.web3
 
 it('should update the value of eth_gasPrice', async () => {
     let gasPrice = await web3.eth.getGasPrice()
-    // The surge factor was set to 2.0
-    assert.equal(gasPrice, 2n * conf.minGasPrice)
+    // The surge factor was last set to 100.0
+    assert.equal(gasPrice, 100n * conf.minGasPrice)
 })
 
 it('should update the value of eth_MaxPriorityFeePerGas', async () => {
@@ -18,8 +18,8 @@ it('should update the value of eth_MaxPriorityFeePerGas', async () => {
     assert.equal(response.status, 200)
     assert.isDefined(response.body.result)
     let maxPriorityFeePerGas = utils.hexToNumber(response.body.result)
-    // The surge factor was set to 2.0
-    assert.equal(maxPriorityFeePerGas, 2n * conf.minGasPrice)
+    // The surge factor was last set to 100.0
+    assert.equal(maxPriorityFeePerGas, 100n * conf.minGasPrice)
 })
 
 it('should reject transactions with gas price lower than the updated value', async () => {
@@ -27,8 +27,8 @@ it('should reject transactions with gas price lower than the updated value', asy
     let transferValue = utils.toWei('2.5', 'ether')
 
     let gasPrice = await web3.eth.getGasPrice()
-    // The surge factor was set to 2.0
-    assert.equal(gasPrice, 2n * conf.minGasPrice)
+    // The surge factor was last set to 100.0
+    assert.equal(gasPrice, 100n * conf.minGasPrice)
 
     // assert that the minimum acceptable gas price
     // has been multiplied by the surge factor
@@ -54,8 +54,8 @@ it('should accept transactions with the updated gas price', async () => {
     let transferValue = utils.toWei('2.5', 'ether')
 
     let gasPrice = await web3.eth.getGasPrice()
-    // The surge factor was set to 2.0
-    assert.equal(gasPrice, 2n * conf.minGasPrice)
+    // The surge factor was last set to 100.0
+    assert.equal(gasPrice, 100n * conf.minGasPrice)
 
     let transfer = await helpers.signAndSend({
         from: conf.eoa.address,
@@ -78,4 +78,29 @@ it('should accept transactions with the updated gas price', async () => {
 
     let coinbaseFeesTx = await web3.eth.getTransactionFromBlock(latestBlockNumber, 1)
     assert.equal(coinbaseFeesTx.value, transferTxReceipt.gasUsed * gasPrice)
+})
+
+it('should update gas price for eth_feeFistory', async () => {
+    let response = await web3.eth.getFeeHistory(10, 'latest', [20])
+    console.log('Response: ', response)
+
+    assert.deepEqual(
+        response,
+        {
+            oldestBlock: 1n,
+            reward: [
+                ['0x3a98'], // 100 * gas price = 15000
+                ['0x3a98'], // 100 * gas price = 15000
+                ['0x3a98'], // 100 * gas price = 15000
+                ['0x3a98'], // 100 * gas price = 15000
+                ['0x3a98'], // 100 * gas price = 15000
+                ['0x3a98'], // 100 * gas price = 15000
+                ['0x3a98'], // 100 * gas price = 15000
+                ['0x3a98'], // 100 * gas price = 15000
+                ['0x3a98'], // 100 * gas price = 15000
+            ],
+            baseFeePerGas: [1n, 1n, 1n, 1n, 1n, 1n, 1n, 1n, 1n],
+            gasUsedRatio: [0, 0.006205458333333334, 0, 0, 0, 0, 0, 0, 0.00035]
+        }
+    )
 })
