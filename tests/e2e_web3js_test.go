@@ -3,6 +3,7 @@ package tests
 import (
 	_ "embed"
 	"encoding/hex"
+	"fmt"
 	"math/big"
 	"testing"
 	"time"
@@ -124,35 +125,40 @@ func TestWeb3_E2E(t *testing.T) {
 
 	t.Run("gas price updated with surge factor multipler", func(t *testing.T) {
 		runWeb3TestWithSetup(t, "eth_gas_price_surge_test", func(emu emulator.Emulator) {
-			res, err := flowSendTransaction(
-				emu,
-				`
-					import FlowFees from 0xe5a8b7f23e8b548f
+			surgeFactorValues := []string{"1.1", "2.0", "4.0", "10.0", "100.0"}
+			for _, surgeFactor := range surgeFactorValues {
+				res, err := flowSendTransaction(
+					emu,
+					fmt.Sprintf(
+						`
+							import FlowFees from 0xe5a8b7f23e8b548f
 
-					// This transaction sets the FlowFees parameters
-					transaction() {
-						let flowFeesAccountAdmin: &FlowFees.Administrator
+							// This transaction sets the FlowFees parameters
+							transaction() {
+								let flowFeesAccountAdmin: &FlowFees.Administrator
 
-						prepare(signer: auth(BorrowValue) &Account) {
-							self.flowFeesAccountAdmin = signer.storage.borrow<&FlowFees.Administrator>(
-								from: /storage/flowFeesAdmin
-							)
-							?? panic("Unable to borrow reference to administrator resource")
-						}
+								prepare(signer: auth(BorrowValue) &Account) {
+									self.flowFeesAccountAdmin = signer.storage.borrow<&FlowFees.Administrator>(
+										from: /storage/flowFeesAdmin
+									) ?? panic("Unable to borrow reference to administrator resource")
+								}
 
-						execute {
-							self.flowFeesAccountAdmin.setFeeParameters(
-								surgeFactor: 2.0,
-								inclusionEffortCost: 1.0,
-								executionEffortCost: 1.0
-							)
-						}
-					}
+								execute {
+									self.flowFeesAccountAdmin.setFeeParameters(
+										surgeFactor: %s,
+										inclusionEffortCost: 1.0,
+										executionEffortCost: 1.0
+									)
+								}
+							}
 
-				`,
-			)
-			require.NoError(t, err)
-			require.NoError(t, res.Error)
+						`,
+						surgeFactor,
+					),
+				)
+				require.NoError(t, err)
+				require.NoError(t, res.Error)
+			}
 		})
 	})
 
