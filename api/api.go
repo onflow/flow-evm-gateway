@@ -875,6 +875,11 @@ func (b *BlockChainAPI) FeeHistory(
 		blockRewards := make([]*hexutil.Big, len(rewardPercentiles))
 		feeParams, err := b.feeParameters.Get()
 		if err != nil {
+			b.logger.Warn().
+				Uint64("height", blockHeight).
+				Err(err).
+				Msg("failed to get fee parameters for block in fee history")
+
 			continue
 		}
 		gasPrice := feeParams.CalculateGasPrice(b.config.GasPrice)
@@ -1064,9 +1069,9 @@ func (b *BlockChainAPI) Coinbase(ctx context.Context) (common.Address, error) {
 func (b *BlockChainAPI) GasPrice(ctx context.Context) (*hexutil.Big, error) {
 	feeParams, err := b.feeParameters.Get()
 	if err != nil {
-		return nil, err
+		b.logger.Warn().Err(err).Msg("fee parameters unavailable; falling back to base gas price")
+		return (*hexutil.Big)(b.config.GasPrice), nil
 	}
-
 	gasPrice := feeParams.CalculateGasPrice(b.config.GasPrice)
 	return (*hexutil.Big)(gasPrice), nil
 }
@@ -1111,9 +1116,9 @@ func (b *BlockChainAPI) GetUncleByBlockNumberAndIndex(
 func (b *BlockChainAPI) MaxPriorityFeePerGas(ctx context.Context) (*hexutil.Big, error) {
 	feeParams, err := b.feeParameters.Get()
 	if err != nil {
-		return nil, err
+		b.logger.Warn().Err(err).Msg("fee parameters unavailable; falling back to base gas price")
+		return (*hexutil.Big)(b.config.GasPrice), nil
 	}
-
 	gasPrice := feeParams.CalculateGasPrice(b.config.GasPrice)
 	return (*hexutil.Big)(gasPrice), nil
 }
