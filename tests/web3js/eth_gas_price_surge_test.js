@@ -17,7 +17,8 @@ it('should update the value of eth_MaxPriorityFeePerGas', async () => {
     )
     assert.equal(response.status, 200)
     assert.isDefined(response.body.result)
-    let maxPriorityFeePerGas = utils.hexToNumber(response.body.result)
+    // Convert hex quantity to BigInt (e.g., "0x3a98" -> 15000n)
+    const maxPriorityFeePerGas = BigInt(response.body.result)
     // The surge factor was last set to 100.0
     assert.equal(maxPriorityFeePerGas, 100n * conf.minGasPrice)
 })
