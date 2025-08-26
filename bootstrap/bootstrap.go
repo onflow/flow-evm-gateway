@@ -653,6 +653,8 @@ func setupStorage(
 		if err := feeParameters.Store(models.DefaultFeeParameters, batch); err != nil {
 			return nil, nil, fmt.Errorf("failed to bootstrap fee parameters: %w", err)
 		}
+	} else if err != nil {
+		return nil, nil, fmt.Errorf("failed to load latest fee parameters: %w", err)
 	}
 
 	if batch.Count() > 0 {

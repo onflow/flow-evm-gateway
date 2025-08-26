@@ -29,8 +29,14 @@ func (f *FeeParameters) ToBytes() ([]byte, error) {
 }
 
 func (f *FeeParameters) CalculateGasPrice(currentGasPrice *big.Int) *big.Int {
-	gasPrice := new(big.Int).SetUint64(currentGasPrice.Uint64() * uint64(f.SurgeFactor))
-	return new(big.Int).Div(gasPrice, surgeFactorScale)
+	if currentGasPrice == nil {
+		return new(big.Int) // zero
+	}
+
+	// gasPrice = (currentGasPrice * surgeFactor) / feeParamsPrecision
+	surgeFactor := new(big.Int).SetUint64(uint64(f.SurgeFactor))
+	gasPrice := new(big.Int).Mul(currentGasPrice, surgeFactor)
+	return new(big.Int).Quo(gasPrice, surgeFactorScale)
 }
 
 func NewFeeParametersFromBytes(data []byte) (*FeeParameters, error) {
