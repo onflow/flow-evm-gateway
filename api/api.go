@@ -813,12 +813,6 @@ func (b *BlockChainAPI) FeeHistory(
 	)
 
 	maxCount := min(uint64(blockCount), lastBlockNumber)
-
-	blockRewards := make([]*hexutil.Big, len(rewardPercentiles))
-	for i := range rewardPercentiles {
-		blockRewards[i] = (*hexutil.Big)(b.config.GasPrice)
-	}
-
 	for i := maxCount; i >= uint64(1); i-- {
 		// If the requested block count is 5, and the last block number
 		// is 20, then we need the blocks [16, 17, 18, 19, 20] in this
@@ -834,6 +828,16 @@ func (b *BlockChainAPI) FeeHistory(
 		}
 
 		baseFees = append(baseFees, (*hexutil.Big)(models.BaseFeePerGas))
+
+		blockRewards := make([]*hexutil.Big, len(rewardPercentiles))
+		feeParams, err := b.feeParameters.Get()
+		if err != nil {
+			continue
+		}
+		gasPrice := feeParams.CalculateGasPrice(b.config.GasPrice)
+		for i := range rewardPercentiles {
+			blockRewards[i] = (*hexutil.Big)(gasPrice)
+		}
 
 		rewards = append(rewards, blockRewards)
 
