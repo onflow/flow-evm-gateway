@@ -146,7 +146,7 @@ func (r *RPCEventSubscriber) subscribe(ctx context.Context, height uint64) <-cha
 		blockEventsStream, errChan, err = r.client.SubscribeEventsByBlockHeight(
 			ctx,
 			height,
-			blocksEventFilter(r.chain),
+			evmEventFilter(r.chain),
 			access.WithHeartbeatInterval(1),
 		)
 
@@ -550,29 +550,6 @@ func (r *RPCEventSubscriber) recover(
 	}
 
 	return models.NewBlockEventsError(err)
-}
-
-// blocksEventFilter defines the full set of events we subscribe to:
-// - A.{evm}.EVM.BlockExecuted
-// - A.{evm}.EVM.TransactionExecuted,
-// - A.{flow_fees}.FlowFees.FeeParametersChanged,
-// where {evm} is the EVM deployed contract address, which depends on the
-// configured chain ID and {flow_fees} is the FlowFees deployed contract
-// address for the configured chain ID.
-func blocksEventFilter(chainID flowGo.ChainID) flow.EventFilter {
-	contracts := systemcontracts.SystemContractsForChain(chainID)
-	flowFeesAddress := common.Address(contracts.FlowFees.Address)
-	eventFilter := evmEventFilter(chainID)
-
-	feeParametersChangedEvent := common.NewAddressLocation(
-		nil,
-		flowFeesAddress,
-		models.FeeParametersChangedQualifiedIdentifier,
-	).ID()
-
-	eventFilter.EventTypes = append(eventFilter.EventTypes, feeParametersChangedEvent)
-
-	return eventFilter
 }
 
 // evmEventFilter defines the EVM-related events we subscribe to:

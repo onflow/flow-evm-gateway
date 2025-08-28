@@ -40,25 +40,27 @@ var _ models.Engine = &Engine{}
 type Engine struct {
 	*models.EngineStatus
 
-	subscriber      EventSubscriber
-	blocksProvider  *replayer.BlocksProvider
-	store           *pebble.Storage
-	registerStore   *pebble.RegisterStorage
-	blocks          storage.BlockIndexer
-	receipts        storage.ReceiptIndexer
-	transactions    storage.TransactionIndexer
-	traces          storage.TraceIndexer
-	feeParameters   storage.FeeParametersIndexer
-	log             zerolog.Logger
-	evmLastHeight   *models.SequentialHeight
-	blocksPublisher *models.Publisher[*models.Block]
-	logsPublisher   *models.Publisher[[]*gethTypes.Log]
-	collector       metrics.Collector
-	replayerConfig  replayer.Config
+	subscriber          EventSubscriber
+	feeParamsSubscriber FeeParamsSubscriber
+	blocksProvider      *replayer.BlocksProvider
+	store               *pebble.Storage
+	registerStore       *pebble.RegisterStorage
+	blocks              storage.BlockIndexer
+	receipts            storage.ReceiptIndexer
+	transactions        storage.TransactionIndexer
+	traces              storage.TraceIndexer
+	feeParameters       storage.FeeParametersIndexer
+	log                 zerolog.Logger
+	evmLastHeight       *models.SequentialHeight
+	blocksPublisher     *models.Publisher[*models.Block]
+	logsPublisher       *models.Publisher[[]*gethTypes.Log]
+	collector           metrics.Collector
+	replayerConfig      replayer.Config
 }
 
 func NewEventIngestionEngine(
 	subscriber EventSubscriber,
+	feeParamsSubscriber FeeParamsSubscriber,
 	blocksProvider *replayer.BlocksProvider,
 	store *pebble.Storage,
 	registerStore *pebble.RegisterStorage,
@@ -78,20 +80,21 @@ func NewEventIngestionEngine(
 	return &Engine{
 		EngineStatus: models.NewEngineStatus(),
 
-		subscriber:      subscriber,
-		blocksProvider:  blocksProvider,
-		store:           store,
-		registerStore:   registerStore,
-		blocks:          blocks,
-		receipts:        receipts,
-		transactions:    transactions,
-		traces:          traces,
-		feeParameters:   feeParameters,
-		log:             log,
-		blocksPublisher: blocksPublisher,
-		logsPublisher:   logsPublisher,
-		collector:       collector,
-		replayerConfig:  replayerConfig,
+		subscriber:          subscriber,
+		feeParamsSubscriber: feeParamsSubscriber,
+		blocksProvider:      blocksProvider,
+		store:               store,
+		registerStore:       registerStore,
+		blocks:              blocks,
+		receipts:            receipts,
+		transactions:        transactions,
+		traces:              traces,
+		feeParameters:       feeParameters,
+		log:                 log,
+		blocksPublisher:     blocksPublisher,
+		logsPublisher:       logsPublisher,
+		collector:           collector,
+		replayerConfig:      replayerConfig,
 	}
 }
 
@@ -123,6 +126,7 @@ func (e *Engine) Run(ctx context.Context) error {
 	defer e.MarkStopped()
 
 	events := e.subscriber.Subscribe(ctx)
+	feeParamsEvents := e.feeParamsSubscriber.Subscribe(ctx)
 
 	for {
 		select {
@@ -143,6 +147,20 @@ func (e *Engine) Run(ctx context.Context) error {
 			err := e.processEvents(events.Events)
 			if err != nil {
 				e.log.Error().Err(err).Msg("failed to process EVM events")
+				return err
+			}
+		case feeParams, ok := <-feeParamsEvents:
+			if !ok {
+				return nil
+			}
+			if feeParams.Err != nil {
+				return fmt.Errorf(
+					"failure in FeeParametersChanged event subscription with: %w",
+					feeParams.Err,
+				)
+			}
+			if err := e.processFeeParamsEvents(feeParams); err != nil {
+				e.log.Error().Err(err).Msg("failed to process FeeParametersChanged events")
 				return err
 			}
 		}
@@ -167,6 +185,23 @@ func (e *Engine) withBatch(f func(batch *pebbleDB.Batch) error) error {
 
 	if err := batch.Commit(pebbleDB.Sync); err != nil {
 		return fmt.Errorf("failed to commit batch: %w", err)
+	}
+
+	return nil
+}
+
+func (e *Engine) processFeeParamsEvents(events *models.FeeParamsEvents) error {
+	err := e.withBatch(
+		func(batch *pebbleDB.Batch) error {
+			return e.feeParameters.Store(events.FeeParameters, batch)
+		},
+	)
+	if err != nil {
+		return fmt.Errorf(
+			"failed to update fee parameters for height: %d, during events ingestion: %w",
+			1,
+			err,
+		)
 	}
 
 	return nil
@@ -220,16 +255,6 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 
 // indexEvents will replay the evm transactions using the block events and index all results.
 func (e *Engine) indexEvents(events *models.CadenceEvents, batch *pebbleDB.Batch) error {
-	if events.FeeParameters() != nil {
-		if err := e.feeParameters.Store(events.FeeParameters(), batch); err != nil {
-			return fmt.Errorf(
-				"failed to update fee parameters for height: %d, during events ingestion: %w",
-				events.CadenceHeight(),
-				err,
-			)
-		}
-	}
-
 	// if heartbeat interval with no data still update the cadence height
 	if events.Empty() {
 		if err := e.blocks.SetLatestCadenceHeight(events.CadenceHeight(), batch); err != nil {

@@ -182,9 +182,17 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 		ValidateResults:     true,
 	}
 
+	feeParamsSubscriber := ingestion.NewFeeParamsEventSubscriber(
+		b.logger,
+		b.client,
+		chainID,
+		nextCadenceHeight,
+	)
+
 	// initialize event ingestion engine
 	b.events = ingestion.NewEventIngestionEngine(
 		subscriber,
+		feeParamsSubscriber,
 		blocksProvider,
 		b.storages.Storage,
 		b.storages.Registers,
