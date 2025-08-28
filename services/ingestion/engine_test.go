@@ -65,8 +65,15 @@ func TestSerialBlockIngestion(t *testing.T) {
 				return eventsChan
 			})
 
+		feeParamsSubscriber := &mocks.FeeParamsSubscriber{}
+		feeParamsSubscriber.On("Subscribe", mock.Anything).
+			Return(func(ctx context.Context) <-chan *models.FeeParamsEvents {
+				return make(chan *models.FeeParamsEvents)
+			})
+
 		engine := NewEventIngestionEngine(
 			subscriber,
+			feeParamsSubscriber,
 			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
 			store,
 			registerStore,
@@ -146,8 +153,15 @@ func TestSerialBlockIngestion(t *testing.T) {
 				return eventsChan
 			})
 
+		feeParamsSubscriber := &mocks.FeeParamsSubscriber{}
+		feeParamsSubscriber.On("Subscribe", mock.Anything).
+			Return(func(ctx context.Context) <-chan *models.FeeParamsEvents {
+				return make(chan *models.FeeParamsEvents)
+			})
+
 		engine := NewEventIngestionEngine(
 			subscriber,
+			feeParamsSubscriber,
 			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
 			store,
 			registerStore,
@@ -270,8 +284,15 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 
 		feeParams := &storageMock.FeeParametersIndexer{}
 
+		feeParamsSubscriber := &mocks.FeeParamsSubscriber{}
+		feeParamsSubscriber.On("Subscribe", mock.Anything).
+			Return(func(ctx context.Context) <-chan *models.FeeParamsEvents {
+				return make(chan *models.FeeParamsEvents)
+			})
+
 		engine := NewEventIngestionEngine(
 			subscriber,
+			feeParamsSubscriber,
 			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
 			store,
 			registerStore,
@@ -366,6 +387,12 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 				return eventsChan
 			})
 
+		feeParamsSubscriber := &mocks.FeeParamsSubscriber{}
+		feeParamsSubscriber.On("Subscribe", mock.Anything).
+			Return(func(ctx context.Context) <-chan *models.FeeParamsEvents {
+				return make(chan *models.FeeParamsEvents)
+			})
+
 		txCdc, txEvent, transaction, res, err := newTransaction(nextHeight)
 		require.NoError(t, err)
 		blockCdc, _, blockEvent, err := newBlock(nextHeight, []gethCommon.Hash{res.TxHash})
@@ -383,6 +410,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 
 		engine := NewEventIngestionEngine(
 			subscriber,
+			feeParamsSubscriber,
 			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
 			store,
 			registerStore,
@@ -477,8 +505,15 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			}).
 			Once()
 
+		feeParamsSubscriber := &mocks.FeeParamsSubscriber{}
+		feeParamsSubscriber.On("Subscribe", mock.Anything).
+			Return(func(ctx context.Context) <-chan *models.FeeParamsEvents {
+				return make(chan *models.FeeParamsEvents)
+			})
+
 		engine := NewEventIngestionEngine(
 			subscriber,
+			feeParamsSubscriber,
 			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
 			store,
 			registerStore,

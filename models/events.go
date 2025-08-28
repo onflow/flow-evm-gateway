@@ -52,7 +52,6 @@ type CadenceEvents struct {
 	transactions      []Transaction                    // transactions in the EVM block
 	txEventPayloads   []events.TransactionEventPayload // EVM.TransactionExecuted event payloads
 	receipts          []*Receipt                       // receipts for transactions
-	feeParameters     *FeeParameters                   // updates to Flow fees parameters
 }
 
 // NewCadenceEvents decodes the events into evm types.
@@ -135,15 +134,6 @@ func decodeCadenceEvents(events flow.BlockEvents) (*CadenceEvents, error) {
 			e.txEventPayloads = append(e.txEventPayloads, *txEventPayload)
 			e.receipts = append(e.receipts, receipt)
 		}
-
-		if isFeeParametersChangedEvent(val) {
-			feeParameters, err := decodeFeeParametersChangedEvent(val)
-			if err != nil {
-				return nil, err
-			}
-
-			e.feeParameters = feeParameters
-		}
 	}
 
 	// safety check, we have a missing block in the events
@@ -200,11 +190,6 @@ func (c *CadenceEvents) TxEventPayloads() []events.TransactionEventPayload {
 // contain EVM transactions the return value is nil.
 func (c *CadenceEvents) Receipts() []*Receipt {
 	return c.receipts
-}
-
-// FeeParameters returns any updates to the Flow fees parameters.
-func (c *CadenceEvents) FeeParameters() *FeeParameters {
-	return c.feeParameters
 }
 
 // Empty checks if there is an EVM block included in the events.
@@ -276,6 +261,37 @@ func NewSingleBlockEvents(events flow.BlockEvents) BlockEvents {
 
 func NewBlockEventsError(err error) BlockEvents {
 	return BlockEvents{
+		Err: err,
+	}
+}
+
+type FeeParamsEvents struct {
+	FeeParameters *FeeParameters // updates to Flow fees parameters
+	Err           error
+}
+
+func NewFeeParamsEvents(events flow.BlockEvents) *FeeParamsEvents {
+	for _, event := range events.Events {
+		val := event.Value
+		if isFeeParametersChangedEvent(val) {
+			feeParameters, err := decodeFeeParametersChangedEvent(val)
+			return &FeeParamsEvents{
+				FeeParameters: feeParameters,
+				Err:           err,
+			}
+		}
+	}
+
+	return &FeeParamsEvents{
+		Err: fmt.Errorf(
+			"could not find any %s events",
+			FeeParametersChangedQualifiedIdentifier,
+		),
+	}
+}
+
+func NewFeeParamsEventsError(err error) *FeeParamsEvents {
+	return &FeeParamsEvents{
 		Err: err,
 	}
 }
