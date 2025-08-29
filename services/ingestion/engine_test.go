@@ -54,6 +54,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 			Once() // make sure this isn't called multiple times
 
 		traces := &storageMock.TraceIndexer{}
+		feeParams := &storageMock.FeeParametersIndexer{}
 
 		eventsChan := make(chan models.BlockEvents)
 
@@ -64,8 +65,15 @@ func TestSerialBlockIngestion(t *testing.T) {
 				return eventsChan
 			})
 
+		feeParamsSubscriber := &mocks.FeeParamsSubscriber{}
+		feeParamsSubscriber.On("Subscribe", mock.Anything).
+			Return(func(ctx context.Context) <-chan *models.FeeParamsEvents {
+				return make(chan *models.FeeParamsEvents)
+			})
+
 		engine := NewEventIngestionEngine(
 			subscriber,
+			feeParamsSubscriber,
 			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
 			store,
 			registerStore,
@@ -73,6 +81,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 			receipts,
 			transactions,
 			traces,
+			feeParams,
 			models.NewPublisher[*models.Block](),
 			models.NewPublisher[[]*gethTypes.Log](),
 			zerolog.Nop(),
@@ -134,6 +143,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 			Once() // make sure this isn't called multiple times
 
 		traces := &storageMock.TraceIndexer{}
+		feeParams := &storageMock.FeeParametersIndexer{}
 
 		eventsChan := make(chan models.BlockEvents)
 		subscriber := &mocks.EventSubscriber{}
@@ -143,8 +153,15 @@ func TestSerialBlockIngestion(t *testing.T) {
 				return eventsChan
 			})
 
+		feeParamsSubscriber := &mocks.FeeParamsSubscriber{}
+		feeParamsSubscriber.On("Subscribe", mock.Anything).
+			Return(func(ctx context.Context) <-chan *models.FeeParamsEvents {
+				return make(chan *models.FeeParamsEvents)
+			})
+
 		engine := NewEventIngestionEngine(
 			subscriber,
+			feeParamsSubscriber,
 			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
 			store,
 			registerStore,
@@ -152,6 +169,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 			receipts,
 			transactions,
 			traces,
+			feeParams,
 			models.NewPublisher[*models.Block](),
 			models.NewPublisher[[]*gethTypes.Log](),
 			zerolog.Nop(),
@@ -264,8 +282,17 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 				return nil
 			})
 
+		feeParams := &storageMock.FeeParametersIndexer{}
+
+		feeParamsSubscriber := &mocks.FeeParamsSubscriber{}
+		feeParamsSubscriber.On("Subscribe", mock.Anything).
+			Return(func(ctx context.Context) <-chan *models.FeeParamsEvents {
+				return make(chan *models.FeeParamsEvents)
+			})
+
 		engine := NewEventIngestionEngine(
 			subscriber,
+			feeParamsSubscriber,
 			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
 			store,
 			registerStore,
@@ -273,6 +300,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			receipts,
 			transactions,
 			traces,
+			feeParams,
 			models.NewPublisher[*models.Block](),
 			models.NewPublisher[[]*gethTypes.Log](),
 			zerolog.Nop(),
@@ -359,6 +387,12 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 				return eventsChan
 			})
 
+		feeParamsSubscriber := &mocks.FeeParamsSubscriber{}
+		feeParamsSubscriber.On("Subscribe", mock.Anything).
+			Return(func(ctx context.Context) <-chan *models.FeeParamsEvents {
+				return make(chan *models.FeeParamsEvents)
+			})
+
 		txCdc, txEvent, transaction, res, err := newTransaction(nextHeight)
 		require.NoError(t, err)
 		blockCdc, _, blockEvent, err := newBlock(nextHeight, []gethCommon.Hash{res.TxHash})
@@ -372,8 +406,11 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 				return nil
 			})
 
+		feeParams := &storageMock.FeeParametersIndexer{}
+
 		engine := NewEventIngestionEngine(
 			subscriber,
+			feeParamsSubscriber,
 			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
 			store,
 			registerStore,
@@ -381,6 +418,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			receipts,
 			transactions,
 			traces,
+			feeParams,
 			models.NewPublisher[*models.Block](),
 			models.NewPublisher[[]*gethTypes.Log](),
 			zerolog.Nop(),
@@ -456,6 +494,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			Once() // make sure this isn't called multiple times
 
 		traces := &storageMock.TraceIndexer{}
+		feeParams := &storageMock.FeeParametersIndexer{}
 
 		eventsChan := make(chan models.BlockEvents)
 		subscriber := &mocks.EventSubscriber{}
@@ -466,8 +505,15 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			}).
 			Once()
 
+		feeParamsSubscriber := &mocks.FeeParamsSubscriber{}
+		feeParamsSubscriber.On("Subscribe", mock.Anything).
+			Return(func(ctx context.Context) <-chan *models.FeeParamsEvents {
+				return make(chan *models.FeeParamsEvents)
+			})
+
 		engine := NewEventIngestionEngine(
 			subscriber,
+			feeParamsSubscriber,
 			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
 			store,
 			registerStore,
@@ -475,6 +521,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			receipts,
 			transactions,
 			traces,
+			feeParams,
 			models.NewPublisher[*models.Block](),
 			models.NewPublisher[[]*gethTypes.Log](),
 			zerolog.Nop(),

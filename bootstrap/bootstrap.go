@@ -51,13 +51,14 @@ const (
 )
 
 type Storages struct {
-	Storage      *pebble.Storage
-	Registers    *pebble.RegisterStorage
-	Blocks       storage.BlockIndexer
-	Transactions storage.TransactionIndexer
-	Receipts     storage.ReceiptIndexer
-	Traces       storage.TraceIndexer
-	EventsHash   *pebble.EventsHash
+	Storage       *pebble.Storage
+	Registers     *pebble.RegisterStorage
+	Blocks        storage.BlockIndexer
+	Transactions  storage.TransactionIndexer
+	Receipts      storage.ReceiptIndexer
+	Traces        storage.TraceIndexer
+	FeeParameters storage.FeeParametersIndexer
+	EventsHash    *pebble.EventsHash
 }
 
 type Publishers struct {
@@ -205,9 +206,17 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 		ValidateResults:     true,
 	}
 
+	feeParamsSubscriber := ingestion.NewFeeParamsEventSubscriber(
+		b.logger,
+		b.client,
+		chainID,
+		nextCadenceHeight,
+	)
+
 	// initialize event ingestion engine
 	b.events = ingestion.NewEventIngestionEngine(
 		subscriber,
+		feeParamsSubscriber,
 		blocksProvider,
 		b.storages.Storage,
 		b.storages.Registers,
@@ -215,6 +224,7 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 		b.storages.Receipts,
 		b.storages.Transactions,
 		b.storages.Traces,
+		b.storages.FeeParameters,
 		b.publishers.Block,
 		b.publishers.Logs,
 		b.logger,
@@ -338,6 +348,7 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 		b.storages.Blocks,
 		b.storages.Transactions,
 		b.storages.Receipts,
+		b.storages.FeeParameters,
 		rateLimiter,
 		b.collector,
 		indexingResumedHeight,
@@ -680,6 +691,15 @@ func setupStorage(
 	//	// TODO(JanezP): verify storage account owner is correct
 	// }
 
+	feeParameters := pebble.NewFeeParameters(store)
+	if _, err = feeParameters.Get(); errors.Is(err, errs.ErrEntityNotFound) {
+		if err := feeParameters.Store(models.DefaultFeeParameters, batch); err != nil {
+			return nil, nil, fmt.Errorf("failed to bootstrap fee parameters: %w", err)
+		}
+	} else if err != nil {
+		return nil, nil, fmt.Errorf("failed to load latest fee parameters: %w", err)
+	}
+
 	if batch.Count() > 0 {
 		err = batch.Commit(pebbleDB.Sync)
 		if err != nil {
@@ -688,13 +708,14 @@ func setupStorage(
 	}
 
 	return db, &Storages{
-		Storage:      store,
-		Blocks:       blocks,
-		Registers:    registerStore,
-		Transactions: pebble.NewTransactions(store),
-		Receipts:     pebble.NewReceipts(store),
-		Traces:       pebble.NewTraces(store),
-		EventsHash:   eventsHash,
+		Storage:       store,
+		Blocks:        blocks,
+		Registers:     registerStore,
+		Transactions:  pebble.NewTransactions(store),
+		Receipts:      pebble.NewReceipts(store),
+		Traces:        pebble.NewTraces(store),
+		FeeParameters: feeParameters,
+		EventsHash:    eventsHash,
 	}, nil
 }
 

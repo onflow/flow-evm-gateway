@@ -102,3 +102,9 @@ type TraceIndexer interface {
 	// GetTransaction will retrieve transaction trace by the transaction ID.
 	GetTransaction(ID common.Hash) (json.RawMessage, error)
 }
+
+type FeeParametersIndexer interface {
+	Store(feeParameters *models.FeeParameters, batch *pebble.Batch) error
+
+	Get() (*models.FeeParameters, error)
+}
