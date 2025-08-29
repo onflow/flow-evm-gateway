@@ -134,7 +134,7 @@ func (v *SealingVerifier) Run(ctx context.Context) error {
 			eventsChan, errChan, err = v.client.SubscribeEventsByBlockHeight(
 				subscriptionCtx,
 				height,
-				blocksFilter(v.chain),
+				evmEventFilter(v.chain),
 				access.WithHeartbeatInterval(1),
 			)
 
