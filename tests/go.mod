@@ -9,11 +9,11 @@ require (
 	github.com/onflow/crypto v0.25.3
 	github.com/onflow/flow-emulator v1.7.2-0.20250916183715-baa3aeb95f6a
 	github.com/onflow/flow-evm-gateway v0.0.0-20240201154855-4d4d3d3f19c7
-	github.com/onflow/flow-go v0.43.0
-	github.com/onflow/flow-go-sdk v1.8.1
-	github.com/rs/zerolog v1.34.0
-	github.com/stretchr/testify v1.11.1
-	golang.org/x/sync v0.16.0
+	github.com/onflow/flow-go v0.42.3-util-fix.0.20250905072050-dc2d576024e9
+	github.com/onflow/flow-go-sdk v1.7.0
+	github.com/rs/zerolog v1.33.0
+	github.com/stretchr/testify v1.10.0
+	golang.org/x/sync v0.15.0
 )
 
 require (
