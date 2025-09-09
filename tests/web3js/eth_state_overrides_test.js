@@ -10,8 +10,9 @@ it('should apply state overrides on previously deployed contract', async () => {
     let callGetDeployer = deployed.contract.methods.getDeployer().encodeABI()
 
     const initValue = 1337
-    let result = await web3.eth.call({ to: contractAddress, data: callRetrieve }, 'latest')
-    assert.equal(result, initValue)
+    const raw = await web3.eth.call({ to: contractAddress, data: callRetrieve }, 'latest')
+    const decoded = web3.eth.abi.decodeParameter('uint256', raw)
+    assert.strictEqual(Number(decoded), initValue)
 
     // check that `eth_call` can handle `stateDiff` state overrides
     // override only the first storage slot
@@ -188,8 +189,9 @@ it('should apply state overrides on non-existent contract', async () => {
     let callGetDeployer = deployed.contract.methods.getDeployer().encodeABI()
 
     const initValue = 1337
-    let result = await web3.eth.call({ to: deployed.receipt.contractAddress, data: callRetrieve }, 'latest')
-    assert.equal(result, initValue)
+    const raw = await web3.eth.call({ to: deployed.receipt.contractAddress, data: callRetrieve }, 'latest')
+    const decoded = web3.eth.abi.decodeParameter('uint256', raw)
+    assert.strictEqual(Number(decoded), initValue)
 
     // check that `eth_call` can handle `stateDiff` state overrides
     // override only the first storage slot
