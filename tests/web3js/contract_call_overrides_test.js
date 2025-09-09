@@ -87,7 +87,7 @@ it('should apply block overrides on eth_call', async () => {
     let random = '0x7914bb5b13bac6f621bc37bbf6e406fbf4472aaaaf17ec2f309a92aca4e27fc0'
     response = await helpers.callRPCMethod(
         'eth_call',
-        [call, 'latest', null, { random: random }]
+        [call, 'latest', null, { prevRandao: random }]
     )
     assert.equal(response.status, 200)
     assert.isDefined(response.body)

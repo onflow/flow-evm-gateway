@@ -11,6 +11,7 @@ contract Storage {
     error MyCustomError(uint value, string message);
 
     uint256 number;
+    address deployer = 0xea02F564664A477286B93712829180be4764fAe2;
 
     constructor() payable {
         number = 1337;
@@ -30,8 +31,16 @@ contract Storage {
         revert();
     }
 
-    function retrieve() public view returns (uint256){
+    function retrieve() public view returns (uint256) {
         return number;
+    }
+
+    function getDeployer() public view returns (address) {
+        return deployer;
+    }
+
+    function getBalance(address addr) public view returns (uint256) {
+        return addr.balance;
     }
 
     function sum(int A, int B) public returns (int) {
@@ -64,11 +73,11 @@ contract Storage {
         selfdestruct(payable(msg.sender));
     }
 
-    function assertError() public pure{
+    function assertError() public pure {
         require(false, "Assert Error Message");
     }
 
-    function customError() public pure{
+    function customError() public pure {
        revert MyCustomError(5, "Value is too low");
     }
 
@@ -86,14 +95,14 @@ contract Storage {
         return output;
     }
 
-    function verifyArchCallToFlowBlockHeight() public view returns (uint64){
+    function verifyArchCallToFlowBlockHeight() public view returns (uint64) {
         (bool ok, bytes memory data) = cadenceArch.staticcall(abi.encodeWithSignature("flowBlockHeight()"));
         require(ok, "unsuccessful call to arch ");
         uint64 output = abi.decode(data, (uint64));
         return output;
     }
 
-    function verifyArchCallToVerifyCOAOwnershipProof(address arg0 , bytes32 arg1 , bytes memory arg2 ) public view returns (bool){
+    function verifyArchCallToVerifyCOAOwnershipProof(address arg0, bytes32 arg1, bytes memory arg2) public view returns (bool) {
         (bool ok, bytes memory data) = cadenceArch.staticcall(abi.encodeWithSignature("verifyCOAOwnershipProof(address,bytes32,bytes)", arg0, arg1, arg2));
         require(ok, "unsuccessful call to arch");
         bool output = abi.decode(data, (bool));
