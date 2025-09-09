@@ -30,7 +30,7 @@ it('should retrieve transaction traces', async () => {
     let txTrace = response.body.result
     assert.equal(txTrace.gas, 1200498)
     assert.equal(txTrace.failed, false)
-    assert.lengthOf(txTrace.returnValue, 10236n)
+    assert.lengthOf(txTrace.returnValue, 10236)
     assert.deepEqual(
         txTrace.structLogs[0],
         {
@@ -63,8 +63,8 @@ it('should retrieve transaction traces', async () => {
     assert.equal(txTrace.gas, '0x127b39')
     assert.equal(txTrace.gasUsed, '0x125172')
     assert.equal(txTrace.to, '0x99a64c993965f8d69f985b5171bc20065cc32fab')
-    assert.lengthOf(txTrace.input, 10454n)
-    assert.lengthOf(txTrace.output, 10236n)
+    assert.lengthOf(txTrace.input, 10454)
+    assert.lengthOf(txTrace.output, 10236)
     assert.isUndefined(txTrace.logs)
     assert.equal(txTrace.value, '0x0')
     assert.equal(txTrace.type, 'CREATE')
