@@ -54,12 +54,12 @@ func (bs *blockSnapshot) BlockContext() (evmTypes.BlockContext, error) {
 		blockContext.BlockTimestamp = uint64(*bs.blockOverrides.Time)
 	}
 
-	if bs.blockOverrides.Random != nil {
-		blockContext.Random = *bs.blockOverrides.Random
+	if bs.blockOverrides.PrevRandao != nil {
+		blockContext.Random = *bs.blockOverrides.PrevRandao
 	}
 
-	if bs.blockOverrides.Coinbase != nil {
-		blockContext.GasFeeCollector = evmTypes.NewAddress(*bs.blockOverrides.Coinbase)
+	if bs.blockOverrides.FeeRecipient != nil {
+		blockContext.GasFeeCollector = evmTypes.NewAddress(*bs.blockOverrides.FeeRecipient)
 	}
 
 	return blockContext, nil
