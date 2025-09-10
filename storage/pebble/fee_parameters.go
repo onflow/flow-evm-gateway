@@ -32,7 +32,7 @@ func (f *FeeParameters) Store(feeParameters *models.FeeParameters, batch *pebble
 	}
 
 	if err := f.store.set(feeParametersKey, nil, val, batch); err != nil {
-		return fmt.Errorf("failed to store fee parameters %s: %w", feeParameters, err)
+		return fmt.Errorf("failed to store fee parameters %v: %w", feeParameters, err)
 	}
 
 	return nil
