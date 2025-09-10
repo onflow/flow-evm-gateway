@@ -103,7 +103,7 @@ func (rca *RemoteCadenceArch) runCall(input []byte) (*evmTypes.ResultSummary, er
 	scriptResult, err := rca.client.ExecuteScriptAtBlockHeight(
 		context.Background(),
 		rca.blockHeight,
-		replaceAddresses(dryRunScript, rca.chainID),
+		ReplaceAddresses(dryRunScript, rca.chainID),
 		[]cadence.Value{hexEncodedTx, hexEncodedAddress},
 	)
 	if err != nil {

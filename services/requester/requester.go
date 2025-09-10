@@ -451,7 +451,7 @@ func (e *EVM) GetCode(
 func (e *EVM) GetLatestEVMHeight(ctx context.Context) (uint64, error) {
 	val, err := e.client.ExecuteScriptAtLatestBlock(
 		ctx,
-		replaceAddresses(getLatestEVMHeight, e.config.FlowNetworkID),
+		ReplaceAddresses(getLatestEVMHeight, e.config.FlowNetworkID),
 		nil,
 	)
 	if err != nil {

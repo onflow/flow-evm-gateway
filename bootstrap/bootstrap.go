@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	_ "embed"
 	"errors"
 	"fmt"
 	"math"
@@ -9,6 +10,7 @@ import (
 
 	pebbleDB "github.com/cockroachdb/pebble"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go-sdk/access"
 	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/onflow/flow-go/fvm/environment"
@@ -48,6 +50,11 @@ const (
 	// DefaultResourceExhaustedMaxRetryDelay is the default max request duration when retrying server
 	// ResourceExhausted errors.
 	DefaultResourceExhaustedMaxRetryDelay = 30 * time.Second
+)
+
+var (
+	//go:embed cadence/get_fees_surge_factor.cdc
+	getFeesSurgeFactor []byte
 )
 
 type Storages struct {
@@ -692,12 +699,12 @@ func setupStorage(
 	// }
 
 	feeParameters := pebble.NewFeeParameters(store)
-	if _, err = feeParameters.Get(); errors.Is(err, errs.ErrEntityNotFound) {
-		if err := feeParameters.Store(models.DefaultFeeParameters, batch); err != nil {
-			return nil, nil, fmt.Errorf("failed to bootstrap fee parameters: %w", err)
-		}
-	} else if err != nil {
-		return nil, nil, fmt.Errorf("failed to load latest fee parameters: %w", err)
+	currentFeeParams, err := getNetworkFeeParams(context.Background(), config, client, logger)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to fetch current fees surge factor: %w", err)
+	}
+	if err := feeParameters.Store(currentFeeParams, batch); err != nil {
+		return nil, nil, fmt.Errorf("failed to bootstrap fee parameters: %w", err)
 	}
 
 	if batch.Count() > 0 {
@@ -837,4 +844,37 @@ func (m *metricsWrapper) Stop() {
 	// especially in testing scenarios.
 	m.stopFN()
 	<-m.Done()
+}
+
+// getNetworkFeeParams returns the network's current Flow fees parameters
+func getNetworkFeeParams(
+	ctx context.Context,
+	config config.Config,
+	client *requester.CrossSporkClient,
+	logger zerolog.Logger,
+) (*models.FeeParameters, error) {
+	val, err := client.ExecuteScriptAtLatestBlock(
+		ctx,
+		requester.ReplaceAddresses(getFeesSurgeFactor, config.FlowNetworkID),
+		nil,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// sanity check, should never occur
+	if _, ok := val.(cadence.UFix64); !ok {
+		return nil, fmt.Errorf("failed to convert surgeFactor %v to UFix64, got type: %T", val, val)
+	}
+
+	surgeFactor := val.(cadence.UFix64)
+
+	logger.Debug().
+		Uint64("surge-factor", uint64(surgeFactor)).
+		Msg("get current surge factor executed")
+
+	feeParameters := models.DefaultFeeParameters()
+	feeParameters.SurgeFactor = surgeFactor
+
+	return feeParameters, nil
 }

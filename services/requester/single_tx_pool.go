@@ -98,7 +98,7 @@ func (t *SingleTxPool) Add(
 		return err
 	}
 
-	script := replaceAddresses(runTxScript, t.config.FlowNetworkID)
+	script := ReplaceAddresses(runTxScript, t.config.FlowNetworkID)
 	flowTx, err := t.buildTransaction(
 		latestBlock,
 		account,
