@@ -267,7 +267,7 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		r.Body = io.NopCloser(bytes.NewBuffer(b))
-		r.Body.Close()
+		_ = r.Body.Close()
 	}
 
 	// additional response handling
@@ -324,10 +324,10 @@ func (h *Server) Stop() {
 	err := h.server.Shutdown(ctx)
 	if err != nil && err == ctx.Err() {
 		h.logger.Warn().Msg("HTTP server graceful shutdown timed out")
-		h.server.Close()
+		_ = h.server.Close()
 	}
 
-	h.listener.Close()
+	_ = h.listener.Close()
 	h.logger.Info().Msgf(
 		"HTTP server stopped, endpoint: %s", h.listener.Addr(),
 	)
