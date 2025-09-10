@@ -12,10 +12,12 @@ const feeParamsPrecision = 100_000_000
 
 var surgeFactorScale = big.NewInt(feeParamsPrecision)
 
-var DefaultFeeParameters = &FeeParameters{
-	SurgeFactor:         cadence.UFix64(feeParamsPrecision),
-	InclusionEffortCost: cadence.UFix64(feeParamsPrecision),
-	ExecutionEffortCost: cadence.UFix64(feeParamsPrecision),
+func DefaultFeeParameters() *FeeParameters {
+	return &FeeParameters{
+		SurgeFactor:         cadence.UFix64(feeParamsPrecision),
+		InclusionEffortCost: cadence.UFix64(feeParamsPrecision),
+		ExecutionEffortCost: cadence.UFix64(feeParamsPrecision),
+	}
 }
 
 type FeeParameters struct {

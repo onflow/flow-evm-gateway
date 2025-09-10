@@ -218,7 +218,7 @@ func (t *BatchTxPool) batchSubmitTransactionsForSameAddress(
 		return err
 	}
 
-	script := replaceAddresses(batchRunTxScript, t.config.FlowNetworkID)
+	script := ReplaceAddresses(batchRunTxScript, t.config.FlowNetworkID)
 	flowTx, err := t.buildTransaction(
 		latestBlock,
 		account,
@@ -254,7 +254,7 @@ func (t *BatchTxPool) submitSingleTransaction(
 		return err
 	}
 
-	script := replaceAddresses(runTxScript, t.config.FlowNetworkID)
+	script := ReplaceAddresses(runTxScript, t.config.FlowNetworkID)
 	flowTx, err := t.buildTransaction(
 		latestBlock,
 		account,
