@@ -215,11 +215,12 @@ func parseConfigFromFlags() error {
 		cfg.ForceStartCadenceHeight = forceStartHeight
 	}
 
-	if txStateValidation == config.LocalIndexValidation {
+	switch txStateValidation {
+	case config.LocalIndexValidation:
 		cfg.TxStateValidation = config.LocalIndexValidation
-	} else if txStateValidation == config.TxSealValidation {
+	case config.TxSealValidation:
 		cfg.TxStateValidation = config.TxSealValidation
-	} else {
+	default:
 		return fmt.Errorf("unknown tx state validation: %s", txStateValidation)
 	}
 
