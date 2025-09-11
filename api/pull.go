@@ -178,10 +178,7 @@ func (api *PullAPI) NewPendingTransactionFilter(
 		return "", err
 	}
 
-	full := false
-	if fullTx != nil && *fullTx {
-		full = true
-	}
+	full := fullTx != nil && *fullTx
 
 	f := newTransactionsFilter(api.config.FilterExpiry, last, full)
 
