@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/onflow/cadence"
 	evmImpl "github.com/onflow/flow-go/fvm/evm/impl"
+	evmPrecompiles "github.com/onflow/flow-go/fvm/evm/precompiles"
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/flow-go/model/flow"
 
@@ -50,7 +51,7 @@ func NewRemoteCadenceArch(
 }
 
 func (rca *RemoteCadenceArch) Name() string {
-	return "cadenceArch"
+	return evmPrecompiles.CADENCE_ARCH_PRECOMPILE_NAME
 }
 
 func (rca *RemoteCadenceArch) Address() evmTypes.Address {
