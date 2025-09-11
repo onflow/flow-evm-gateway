@@ -79,7 +79,7 @@ func (dc DirectCall) To() *common.Address {
 	}
 
 	var to *common.Address
-	if !dc.DirectCall.EmptyToField() {
+	if !dc.EmptyToField() {
 		ct := dc.DirectCall.To.ToCommon()
 		to = &ct
 	}
@@ -103,7 +103,7 @@ func (dc DirectCall) Type() uint8 {
 }
 
 func (dc DirectCall) Gas() uint64 {
-	return dc.DirectCall.GasLimit
+	return dc.GasLimit
 }
 
 func (dc DirectCall) GasFeeCap() *big.Int {
@@ -151,7 +151,7 @@ func (dc DirectCall) SetCodeAuthorizations() []gethTypes.SetCodeAuthorization {
 }
 
 func (dc DirectCall) MarshalBinary() ([]byte, error) {
-	return dc.DirectCall.Encode()
+	return dc.Encode()
 }
 
 var _ Transaction = &TransactionCall{}

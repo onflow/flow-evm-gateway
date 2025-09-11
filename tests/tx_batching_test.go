@@ -11,14 +11,15 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/onflow/flow-emulator/emulator"
-	"github.com/onflow/flow-evm-gateway/bootstrap"
-	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/onflow/flow-evm-gateway/bootstrap"
+	"github.com/onflow/flow-evm-gateway/config"
 )
 
 func Test_TransactionBatchingMode(t *testing.T) {
@@ -170,8 +171,8 @@ func Test_TransactionBatchingModeWithConcurrentTxSubmissions(t *testing.T) {
 
 	blockEvents, err := emu.GetEventsForHeightRange(
 		"A.f8d6e0586b0a20c7.EVM.TransactionExecuted",
-		startBlock.Header.Height+1,
-		endBlock.Header.Height,
+		startBlock.Height+1,
+		endBlock.Height,
 	)
 
 	totalEVMEvents := 0
@@ -251,7 +252,7 @@ func Test_MultipleTransactionSubmissionsWithinSmallInterval(t *testing.T) {
 		return true
 	}, time.Second*15, time.Second*1, "all transactions were not executed")
 
-	block1, err := emu.GetBlockByHeight(latestBlock.Header.Height + 1)
+	block1, err := emu.GetBlockByHeight(latestBlock.Height + 1)
 	require.NoError(t, err)
 
 	txResults, err := emu.GetTransactionsByBlockID(block1.ID())
@@ -267,7 +268,7 @@ func Test_MultipleTransactionSubmissionsWithinSmallInterval(t *testing.T) {
 		"EVM.run",
 	)
 
-	block2, err := emu.GetBlockByHeight(latestBlock.Header.Height + 2)
+	block2, err := emu.GetBlockByHeight(latestBlock.Height + 2)
 	require.NoError(t, err)
 
 	txResults, err = emu.GetTransactionsByBlockID(block2.ID())
@@ -365,7 +366,7 @@ func Test_MultipleTransactionSubmissionsWithinRecentInterval(t *testing.T) {
 		return true
 	}, time.Second*15, time.Second*1, "all transactions were not executed")
 
-	block1, err := emu.GetBlockByHeight(latestBlock.Header.Height + 1)
+	block1, err := emu.GetBlockByHeight(latestBlock.Height + 1)
 	require.NoError(t, err)
 
 	txResults, err := emu.GetTransactionsByBlockID(block1.ID())
@@ -381,7 +382,7 @@ func Test_MultipleTransactionSubmissionsWithinRecentInterval(t *testing.T) {
 		"EVM.run",
 	)
 
-	block2, err := emu.GetBlockByHeight(latestBlock.Header.Height + 2)
+	block2, err := emu.GetBlockByHeight(latestBlock.Height + 2)
 	require.NoError(t, err)
 
 	txResults, err = emu.GetTransactionsByBlockID(block2.ID())
@@ -480,7 +481,7 @@ func Test_MultipleTransactionSubmissionsWithinNonRecentInterval(t *testing.T) {
 		return true
 	}, time.Second*15, time.Second*1, "all transactions were not executed")
 
-	block1, err := emu.GetBlockByHeight(latestBlock.Header.Height + 1)
+	block1, err := emu.GetBlockByHeight(latestBlock.Height + 1)
 	require.NoError(t, err)
 
 	txResults, err := emu.GetTransactionsByBlockID(block1.ID())
@@ -496,7 +497,7 @@ func Test_MultipleTransactionSubmissionsWithinNonRecentInterval(t *testing.T) {
 		"EVM.run",
 	)
 
-	block2, err := emu.GetBlockByHeight(latestBlock.Header.Height + 2)
+	block2, err := emu.GetBlockByHeight(latestBlock.Height + 2)
 	require.NoError(t, err)
 
 	txResults, err = emu.GetTransactionsByBlockID(block2.ID())

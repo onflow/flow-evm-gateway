@@ -28,7 +28,7 @@ transaction(hexEncodedTxs: [String], coinbase: String) {
         for txResult in txResults {
             assert(
                 txResult.status == EVM.Status.failed || txResult.status == EVM.Status.successful,
-                message: "evm_error=".concat(txResult.errorMessage).concat("\n")
+                message: "evm_error=\(txResult.errorMessage);evm_error_code=\(txResult.errorCode)"
             )
         }
     }
