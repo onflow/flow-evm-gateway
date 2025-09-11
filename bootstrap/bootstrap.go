@@ -471,7 +471,7 @@ func (b *Bootstrap) StopProfilerServer() {
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
 			b.logger.Warn().Msg("Profiler server graceful shutdown timed out")
-			b.profiler.Close()
+			_ = b.profiler.Close()
 		} else {
 			b.logger.Err(err).Msg("Profiler server graceful shutdown failed")
 		}

@@ -4,10 +4,11 @@ import (
 	"errors"
 	"fmt"
 
-	errs "github.com/onflow/flow-evm-gateway/models/errors"
-	"github.com/onflow/flow-evm-gateway/storage/pebble"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
+
+	errs "github.com/onflow/flow-evm-gateway/models/errors"
+	"github.com/onflow/flow-evm-gateway/storage/pebble"
 
 	flowGo "github.com/onflow/flow-go/model/flow"
 )
@@ -20,7 +21,9 @@ var Cmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("failed to open pebble db: %w", err)
 		}
-		defer pebbleDB.Close()
+		defer func() {
+			_ = pebbleDB.Close()
+		}()
 		store := pebble.New(pebbleDB, log.Logger)
 
 		blocks := pebble.NewBlocks(store, flowGo.ChainID(chainID))
