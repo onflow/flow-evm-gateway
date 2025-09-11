@@ -4,6 +4,11 @@ on:
   push:
     tags:
       - '*'
+  workflow_dispatch:
+    inputs:
+      version:
+        required: true
+        type: string
 
 env:
   DOCKER_IMAGE_URL: ${{ vars.REPO_DOCKER_IMAGE_URL }}
@@ -22,7 +27,7 @@ jobs:
 
       - name: Set Gateway Version
         id: set_version
-        run: echo "GATEWAY_VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo 'unknown')" >> $GITHUB_OUTPUT
+        run: echo "GATEWAY_VERSION=$(echo '${{ inputs.version }}' || git describe --tags --abbrev=0 2>/dev/null || echo 'unknown')" >> $GITHUB_OUTPUT
 
       - name: Google auth
         id: auth
