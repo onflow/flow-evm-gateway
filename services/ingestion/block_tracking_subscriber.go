@@ -287,7 +287,7 @@ func (r *RPCBlockTrackingSubscriber) evmEventsForBlock(
 	ctx context.Context,
 	blockHeader *flow.BlockHeader,
 ) (flow.BlockEvents, error) {
-	eventTypes := blocksFilter(r.chain).EventTypes
+	eventTypes := evmEventFilter(r.chain).EventTypes
 
 	// evm Block events
 	blockEvents, err := r.getEventsByType(ctx, blockHeader, eventTypes[0])
