@@ -1,0 +1,16 @@
+[
+    {
+        "inputs": [],
+        "name": "sumValues",
+        "outputs": [],
+        "stateMutability": "pure",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "test",
+        "outputs": [],
+        "stateMutability": "view",
+        "type": "function"
+    }
+]
