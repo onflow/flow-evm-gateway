@@ -78,6 +78,7 @@ type Requester interface {
 		from common.Address,
 		height uint64,
 		stateOverrides *ethTypes.StateOverride,
+		blockOverrides *ethTypes.BlockOverrides,
 	) (uint64, error)
 
 	// GetNonce gets nonce from the network at the given EVM block height.
@@ -320,6 +321,7 @@ func (e *EVM) EstimateGas(
 	from common.Address,
 	height uint64,
 	stateOverrides *ethTypes.StateOverride,
+	blockOverrides *ethTypes.BlockOverrides,
 ) (uint64, error) {
 	iterations := 0
 
@@ -327,7 +329,7 @@ func (e *EVM) EstimateGas(
 		gas := hexutil.Uint64(gasLimit)
 		txArgs.Gas = &gas
 		tx := txArgs.ToTransaction(types.LegacyTxType, blockGasLimit)
-		result, err := e.dryRunTx(tx, from, height, stateOverrides, nil)
+		result, err := e.dryRunTx(tx, from, height, stateOverrides, blockOverrides)
 		iterations += 1
 		return result, err
 	}
