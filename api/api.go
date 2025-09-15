@@ -185,7 +185,8 @@ func (b *BlockChainAPI) SendRawTransaction(
 
 	feeParams, err := b.feeParameters.Get()
 	if err != nil {
-		return common.Hash{}, err
+		b.logger.Warn().Err(err).Msg("fee parameters unavailable; falling back to base gas price")
+		feeParams = models.DefaultFeeParameters()
 	}
 
 	id, err := b.evm.SendRawTransaction(ctx, input, feeParams)
