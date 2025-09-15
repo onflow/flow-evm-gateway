@@ -83,7 +83,6 @@ it('should accept transactions with the updated gas price', async () => {
 
 it('should update gas price for eth_feeFistory', async () => {
     let response = await web3.eth.getFeeHistory(10, 'latest', [20])
-    console.log('Response: ', response)
 
     assert.deepEqual(
         response,
