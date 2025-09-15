@@ -819,11 +819,10 @@ func getNetworkFeeParams(
 	}
 
 	// sanity check, should never occur
-	if _, ok := val.(cadence.UFix64); !ok {
+	surgeFactor, ok := val.(cadence.UFix64)
+	if !ok {
 		return nil, fmt.Errorf("failed to convert surgeFactor %v to UFix64, got type: %T", val, val)
 	}
-
-	surgeFactor := val.(cadence.UFix64)
 
 	logger.Debug().
 		Uint64("surge-factor", uint64(surgeFactor)).
