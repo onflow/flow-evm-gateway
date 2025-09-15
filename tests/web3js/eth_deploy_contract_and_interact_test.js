@@ -211,6 +211,39 @@ it('deploy contract and interact', async () => {
         )
     }
 
+    // check that gas estimation reports proper error code and data for empty reverts
+    try {
+        let callStoreButRevert = deployed.contract.methods.storeButRevert(150n).encodeABI()
+        result = await web3.eth.estimateGas({
+            from: conf.eoa.address,
+            to: contractAddress,
+            data: callStoreButRevert,
+            gas: 1_000_000,
+            gasPrice: conf.minGasPrice
+        })
+    } catch (error) {
+        assert.equal(error.innerError.code, 3)
+        assert.equal(error.innerError.data, '0x')
+        assert.equal(error.innerError.message, 'execution reverted')
+    }
+
+    // check that contract call reports proper error code and data for empty reverts
+    try {
+        let callStoreButRevert = deployed.contract.methods.storeButRevert(150n).encodeABI()
+        result = await web3.eth.call({
+            from: conf.eoa.address,
+            to: contractAddress,
+            data: callStoreButRevert,
+            gas: 1_000_000,
+            gasPrice: conf.minGasPrice
+        })
+    } catch (error) {
+        assert.equal(error.innerError.code, 3)
+        assert.equal(error.innerError.data, '0x')
+        assert.equal(error.innerError.message, 'execution reverted')
+    }
+
+    // check that block height is properly handled by gas estimation endpoint
     let gasEstimate = await web3.eth.estimateGas(
         {
             from: conf.eoa.address,
@@ -219,7 +252,7 @@ it('deploy contract and interact', async () => {
             gas: 1_000_000,
             gasPrice: 0
         },
-        '0x1'
+        '0x1' // give a block height at which the contract did not exist
     )
     assert.equal(gasEstimate, 22026n)
 
@@ -231,7 +264,7 @@ it('deploy contract and interact', async () => {
             gas: 1_000_000,
             gasPrice: 0
         },
-        'latest'
+        'latest' // give a block height at which the contract did exist
     )
     assert.equal(gasEstimate, 25050n)
 
