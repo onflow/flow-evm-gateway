@@ -146,7 +146,7 @@ func (r *RPCEventSubscriber) subscribe(ctx context.Context, height uint64) <-cha
 		blockEventsStream, errChan, err = r.client.SubscribeEventsByBlockHeight(
 			ctx,
 			height,
-			blocksFilter(r.chain),
+			evmEventFilter(r.chain),
 			access.WithHeartbeatInterval(1),
 		)
 
@@ -471,7 +471,7 @@ func (r *RPCEventSubscriber) fetchMissingData(
 	// remove existing events
 	blockEvents.Events = nil
 
-	for _, eventType := range blocksFilter(r.chain).EventTypes {
+	for _, eventType := range evmEventFilter(r.chain).EventTypes {
 		recoveredEvents, err := r.client.GetEventsForHeightRange(
 			ctx,
 			eventType,
@@ -552,11 +552,14 @@ func (r *RPCEventSubscriber) recover(
 	return models.NewBlockEventsError(err)
 }
 
-// blockFilter define events we subscribe to:
-// A.{evm}.EVM.BlockExecuted and A.{evm}.EVM.TransactionExecuted,
-// where {evm} is EVM deployed contract address, which depends on the chain ID we configure.
-func blocksFilter(chainId flowGo.ChainID) flow.EventFilter {
-	evmAddress := common.Address(systemcontracts.SystemContractsForChain(chainId).EVMContract.Address)
+// evmEventFilter defines the EVM-related events we subscribe to:
+// - A.{evm}.EVM.BlockExecuted,
+// - A.{evm}.EVM.TransactionExecuted,
+// where {evm} is the EVM deployed contract address, which depends on the
+// configured chain ID.
+func evmEventFilter(chainID flowGo.ChainID) flow.EventFilter {
+	contracts := systemcontracts.SystemContractsForChain(chainID)
+	evmAddress := common.Address(contracts.EVMContract.Address)
 
 	blockExecutedEvent := common.NewAddressLocation(
 		nil,

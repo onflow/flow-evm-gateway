@@ -13,8 +13,9 @@ import (
 )
 
 const (
-	BlockExecutedQualifiedIdentifier       = string(events.EventTypeBlockExecuted)
-	TransactionExecutedQualifiedIdentifier = string(events.EventTypeTransactionExecuted)
+	BlockExecutedQualifiedIdentifier        = string(events.EventTypeBlockExecuted)
+	TransactionExecutedQualifiedIdentifier  = string(events.EventTypeTransactionExecuted)
+	FeeParametersChangedQualifiedIdentifier = "FlowFees.FeeParametersChanged"
 )
 
 // isBlockExecutedEvent checks whether the given event contains block executed data.
@@ -31,6 +32,15 @@ func isTransactionExecutedEvent(event cadence.Event) bool {
 		return false
 	}
 	return event.EventType.QualifiedIdentifier == TransactionExecutedQualifiedIdentifier
+}
+
+// isFeeParametersChangedEvent checks whether the given event contains updates
+// to Flow fees parameters.
+func isFeeParametersChangedEvent(event cadence.Event) bool {
+	if event.EventType == nil {
+		return false
+	}
+	return event.EventType.QualifiedIdentifier == FeeParametersChangedQualifiedIdentifier
 }
 
 // CadenceEvents contains Flow emitted events containing one or zero evm block executed event,
@@ -251,6 +261,37 @@ func NewSingleBlockEvents(events flow.BlockEvents) BlockEvents {
 
 func NewBlockEventsError(err error) BlockEvents {
 	return BlockEvents{
+		Err: err,
+	}
+}
+
+type FeeParamsEvents struct {
+	FeeParameters *FeeParameters // updates to Flow fees parameters
+	Err           error
+}
+
+func NewFeeParamsEvents(events flow.BlockEvents) *FeeParamsEvents {
+	for _, event := range events.Events {
+		val := event.Value
+		if isFeeParametersChangedEvent(val) {
+			feeParameters, err := decodeFeeParametersChangedEvent(val)
+			return &FeeParamsEvents{
+				FeeParameters: feeParameters,
+				Err:           err,
+			}
+		}
+	}
+
+	return &FeeParamsEvents{
+		Err: fmt.Errorf(
+			"could not find any %s events",
+			FeeParametersChangedQualifiedIdentifier,
+		),
+	}
+}
+
+func NewFeeParamsEventsError(err error) *FeeParamsEvents {
+	return &FeeParamsEvents{
 		Err: err,
 	}
 }
