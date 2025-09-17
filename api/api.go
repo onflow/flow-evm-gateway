@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/big"
 
@@ -529,23 +530,40 @@ func (b *BlockChainAPI) Call(
 	stateOverrides *ethTypes.StateOverride,
 	blockOverrides *ethTypes.BlockOverrides,
 ) (hexutil.Bytes, error) {
+	// Default to "latest" block tag
+	if blockNumberOrHash == nil {
+		blockNumberOrHash = &latestBlockNumberOrHash
+	}
+
+	stateOverridesArgs, err := json.Marshal(stateOverrides)
+	if err != nil {
+		return handleError[hexutil.Bytes](err, b.logger, b.collector)
+	}
+
+	blockOverridesArgs, err := json.Marshal(blockOverrides)
+	if err != nil {
+		return handleError[hexutil.Bytes](err, b.logger, b.collector)
+	}
+
+	txArgs, err := json.Marshal(args)
+	if err != nil {
+		return handleError[hexutil.Bytes](err, b.logger, b.collector)
+	}
+
 	l := b.logger.With().
 		Str("endpoint", EthCall).
-		Str("args", fmt.Sprintf("%v", args)).
+		RawJSON("args", txArgs).
+		Str("blockTag", fmt.Sprintf("%v", blockNumberOrHash)).
+		RawJSON("stateOverrides", stateOverridesArgs).
+		RawJSON("blockOverrides", blockOverridesArgs).
 		Logger()
 
 	if err := b.rateLimiter.Apply(ctx, EthCall); err != nil {
 		return nil, err
 	}
 
-	err := args.Validate()
-	if err != nil {
+	if err := args.Validate(); err != nil {
 		return handleError[hexutil.Bytes](err, l, b.collector)
-	}
-
-	// Default to "latest" block tag
-	if blockNumberOrHash == nil {
-		blockNumberOrHash = &latestBlockNumberOrHash
 	}
 
 	height, err := resolveBlockTag(blockNumberOrHash, b.blocks, b.logger)
@@ -695,17 +713,33 @@ func (b *BlockChainAPI) EstimateGas(
 	stateOverrides *ethTypes.StateOverride,
 	blockOverrides *ethTypes.BlockOverrides,
 ) (hexutil.Uint64, error) {
+	// Default to "latest" block tag
+	if blockNumberOrHash == nil {
+		blockNumberOrHash = &latestBlockNumberOrHash
+	}
+
+	stateOverridesArgs, err := json.Marshal(stateOverrides)
+	if err != nil {
+		return handleError[hexutil.Uint64](err, b.logger, b.collector)
+	}
+
+	txArgs, err := json.Marshal(args)
+	if err != nil {
+		return handleError[hexutil.Uint64](err, b.logger, b.collector)
+	}
+
 	l := b.logger.With().
 		Str("endpoint", EthEstimateGas).
-		Str("args", fmt.Sprintf("%v", args)).
+		RawJSON("args", txArgs).
+		Str("blockTag", fmt.Sprintf("%v", blockNumberOrHash)).
+		RawJSON("stateOverrides", stateOverridesArgs).
 		Logger()
 
 	if err := b.rateLimiter.Apply(ctx, EthEstimateGas); err != nil {
 		return 0, err
 	}
 
-	err := args.Validate()
-	if err != nil {
+	if err := args.Validate(); err != nil {
 		return handleError[hexutil.Uint64](err, l, b.collector)
 	}
 
@@ -713,10 +747,6 @@ func (b *BlockChainAPI) EstimateGas(
 	from := b.config.Coinbase
 	if args.From != nil {
 		from = *args.From
-	}
-
-	if blockNumberOrHash == nil {
-		blockNumberOrHash = &latestBlockNumberOrHash
 	}
 
 	height, err := resolveBlockTag(blockNumberOrHash, b.blocks, b.logger)
