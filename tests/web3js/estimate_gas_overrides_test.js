@@ -78,7 +78,7 @@ it('should apply block overrides on eth_estimateGas', async () => {
     let random = '0x7914bb5b13bac6f621bc37bbf6e406fbf4472aaaaf17ec2f309a92aca4e27fc0'
     response = await helpers.callRPCMethod(
         'eth_estimateGas',
-        [txArgs, 'latest', null, { random: random }]
+        [txArgs, 'latest', null, { prevRandao: random }]
     )
     assert.equal(response.status, 200)
     assert.isDefined(response.body)
@@ -96,7 +96,7 @@ it('should apply block overrides on eth_estimateGas', async () => {
     // Override the `block.coinbase` value to `0x658Bdf435d810C91414eC09147DAA6DB62406379`.
     response = await helpers.callRPCMethod(
         'eth_estimateGas',
-        [txArgs, 'latest', null, { coinbase: '0x658Bdf435d810C91414eC09147DAA6DB62406379' }]
+        [txArgs, 'latest', null, { feeRecipient: '0x658Bdf435d810C91414eC09147DAA6DB62406379' }]
     )
     assert.equal(response.status, 200)
     assert.isDefined(response.body)
