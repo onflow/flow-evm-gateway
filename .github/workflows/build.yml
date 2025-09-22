@@ -1,9 +1,6 @@
 name: "Build & Push EVM Gateway Image to Public Repo"
 
 on:
-  push:
-    tags:
-      - '*'
   workflow_dispatch:
     inputs:
       tag:
