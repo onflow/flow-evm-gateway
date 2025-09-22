@@ -181,10 +181,10 @@ func (d *DebugAPI) TraceCall(
 
 	if config.BlockOverrides != nil {
 		blocksProvider = blocksProvider.WithBlockOverrides(&ethTypes.BlockOverrides{
-			Number:   config.BlockOverrides.Number,
-			Time:     config.BlockOverrides.Time,
-			Coinbase: config.BlockOverrides.FeeRecipient,
-			Random:   config.BlockOverrides.PrevRandao,
+			Number:       config.BlockOverrides.Number,
+			Time:         config.BlockOverrides.Time,
+			FeeRecipient: config.BlockOverrides.FeeRecipient,
+			PrevRandao:   config.BlockOverrides.PrevRandao,
 		})
 	}
 	viewProvider := query.NewViewProvider(

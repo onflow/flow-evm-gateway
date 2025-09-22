@@ -170,21 +170,16 @@ func parseConfigFromFlags() error {
 	case "flow-testnet":
 		cfg.FlowNetworkID = flowGo.Testnet
 		cfg.EVMNetworkID = types.FlowEVMTestNetChainID
-		cfg.InitCadenceHeight = config.LiveNetworkInitCadenceHeight
+		cfg.InitCadenceHeight = config.TestnetInitCadenceHeight
 	case "flow-mainnet":
 		cfg.FlowNetworkID = flowGo.Mainnet
 		cfg.EVMNetworkID = types.FlowEVMMainNetChainID
-		cfg.InitCadenceHeight = config.LiveNetworkInitCadenceHeight
+		cfg.InitCadenceHeight = config.MainnetInitCadenceHeight
 	default:
 		return fmt.Errorf(
 			"flow network ID: %s not supported, valid values are ('flow-emulator', 'flow-previewnet', 'flow-testnet', 'flow-mainnet')",
 			flowNetwork,
 		)
-	}
-
-	// if a specific value was provided use it
-	if initHeight != 0 {
-		cfg.InitCadenceHeight = initHeight
 	}
 
 	// configure logging
@@ -304,4 +299,9 @@ func init() {
 	Cmd.Flags().BoolVar(&experimentalSoftFinalityEnabled, "experimental-soft-finality-enabled", false, "Sets whether the gateway should use the experimental soft finality feature. WARNING: This may result in incorrect results being returned in certain circumstances. Use only if you know what you are doing.")
 	Cmd.Flags().BoolVar(&experimentalSealingVerificationEnabled, "experimental-sealing-verification-enabled", true, "Sets whether the gateway should use the experimental soft finality sealing verification feature. WARNING: This may result in indexing halts if events do not match. Use only if you know what you are doing.")
 	Cmd.Flags().DurationVar(&cfg.EOAActivityCacheTTL, "eoa-activity-cache-ttl", time.Second*10, "Time interval used to track EOA activity. Tx send more frequently than this interval will be batched. Useful only when batch transaction submission is enabled.")
+
+	err := Cmd.Flags().MarkDeprecated("init-cadence-height", "This flag is no longer necessary and will be removed in future version. The initial Cadence height is known for testnet/mainnet and this was only required for fresh deployments of EVM Gateway. Once the DB has been initialized, the latest index Cadence height will be used upon start-up.")
+	if err != nil {
+		panic(err)
+	}
 }
