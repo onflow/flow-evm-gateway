@@ -14,14 +14,24 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// Default InitCadenceHeight for initializing the database on a local emulator.
-// TODO: temporary fix until https://github.com/onflow/flow-go/issues/5481 is
-// fixed upstream and released.
-const EmulatorInitCadenceHeight = uint64(0)
+const (
+	// Default InitCadenceHeight for initializing the database on a local emulator.
+	// TODO: temporary fix until https://github.com/onflow/flow-go/issues/5481 is
+	// fixed upstream and released.
+	EmulatorInitCadenceHeight = uint64(0)
 
-// Default InitCadenceHeight for initializing the database on a live network.
-// We don't use 0 as it has a special meaning to represent latest block in the AN API context.
-const LiveNetworkInitCadenceHeight = uint64(1)
+	// Default InitCadenceHeight for initializing the database on a live network.
+	// We don't use 0 as it has a special meaning to represent latest block in the AN API context.
+	LiveNetworkInitCadenceHeight = uint64(1)
+
+	// Testnet height at which the `EVM` system contract was first deployed.
+	// This is the first height at which the EVM state starts.
+	TestnetInitCadenceHeight = uint64(211176670)
+
+	// Mainnet height at which the `EVM` system contract was first deployed.
+	// This is the first height at which the EVM state starts.
+	MainnetInitCadenceHeight = uint64(85981134)
+)
 
 type TxStateValidation string
 
