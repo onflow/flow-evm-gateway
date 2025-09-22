@@ -221,6 +221,7 @@ it('deploy contract and interact', async () => {
             gas: 1_000_000,
             gasPrice: conf.minGasPrice
         })
+        assert.fail('expected eth_estimateGas to revert with empty revert data')
     } catch (error) {
         assert.equal(error.innerError.code, 3)
         assert.equal(error.innerError.data, '0x')
@@ -237,6 +238,7 @@ it('deploy contract and interact', async () => {
             gas: 1_000_000,
             gasPrice: conf.minGasPrice
         })
+        assert.fail('expected eth_call to revert with empty revert data')
     } catch (error) {
         assert.equal(error.innerError.code, 3)
         assert.equal(error.innerError.data, '0x')

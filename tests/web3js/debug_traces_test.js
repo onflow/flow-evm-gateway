@@ -859,4 +859,50 @@ it('should retrieve call traces', async () => {
     )
     assert.equal(updateTrace.value, '0x0')
     assert.equal(updateTrace.type, 'CALL')
+
+    // assert return value of empty revert data for default struct logger tracer
+    let callStoreButRevert = deployed.contract.methods.storeButRevert(150n).encodeABI()
+    traceCall = {
+        from: conf.eoa.address,
+        to: contractAddress,
+        data: callStoreButRevert,
+        value: '0x0',
+        gasPrice: web3.utils.toHex(conf.minGasPrice),
+        gas: '0x95ab'
+    }
+    response = await helpers.callRPCMethod(
+        'debug_traceCall',
+        [traceCall, 'latest', { tracer: null }]
+    )
+    assert.equal(response.status, 200)
+    assert.isDefined(response.body)
+
+    let traceResult = response.body.result
+    assert.equal(traceResult.gas, 26677)
+    assert.equal(traceResult.failed, true)
+    assert.equal(traceResult.returnValue, '0x')
+    assert.lengthOf(traceResult.structLogs, 138)
+
+    // assert return value of non-empty revert data for default struct logger tracer
+    let callCustomError = deployed.contract.methods.customError().encodeABI()
+    traceCall = {
+        from: conf.eoa.address,
+        to: contractAddress,
+        data: callCustomError,
+        value: '0x0',
+        gasPrice: web3.utils.toHex(conf.minGasPrice),
+        gas: '0x95ab'
+    }
+    response = await helpers.callRPCMethod(
+        'debug_traceCall',
+        [traceCall, 'latest', { tracer: null }]
+    )
+    assert.equal(response.status, 200)
+    assert.isDefined(response.body)
+
+    traceResult = response.body.result
+    assert.equal(traceResult.gas, 21786)
+    assert.equal(traceResult.failed, true)
+    assert.equal(traceResult.returnValue, '0x9195785a00000000000000000000000000000000000000000000000000000000000000050000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000001056616c756520697320746f6f206c6f7700000000000000000000000000000000')
+    assert.lengthOf(traceResult.structLogs, 210)
 })
