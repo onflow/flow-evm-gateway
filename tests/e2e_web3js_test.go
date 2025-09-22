@@ -78,6 +78,10 @@ func TestWeb3_E2E(t *testing.T) {
 		runWeb3Test(t, "eth_deploy_contract_and_interact_test")
 	})
 
+	t.Run("apply state overrides", func(t *testing.T) {
+		runWeb3Test(t, "eth_state_overrides_test")
+	})
+
 	t.Run("test retrieval of contract storage slots", func(t *testing.T) {
 		runWeb3Test(t, "eth_get_storage_at_test")
 	})

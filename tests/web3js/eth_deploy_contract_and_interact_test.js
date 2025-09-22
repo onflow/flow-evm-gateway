@@ -18,7 +18,7 @@ it('deploy contract and interact', async () => {
     assert.equal(rcp.contractAddress, contractAddress)
     assert.equal(rcp.status, conf.successStatus)
     assert.isUndefined(rcp.to)
-    assert.equal(rcp.gasUsed, 1130512n)
+    assert.equal(rcp.gasUsed, 1200498n)
     assert.equal(rcp.gasUsed, rcp.cumulativeGasUsed)
 
     // check if latest block contains the deploy results
@@ -233,7 +233,7 @@ it('deploy contract and interact', async () => {
         },
         'latest'
     )
-    assert.equal(gasEstimate, 25052n)
+    assert.equal(gasEstimate, 25050n)
 
     // check that `eth_call` can handle state overrides
     let stateOverrides = {
@@ -274,7 +274,7 @@ it('deploy contract and interact', async () => {
     assert.isDefined(response.body)
 
     result = response.body.result
-    assert.equal(result, '0x697f')
+    assert.equal(result, '0x6969')
 
     stateOverrides = {
         [contractAddress]: {
@@ -295,5 +295,5 @@ it('deploy contract and interact', async () => {
     // setting a storage slot from a zero-value, to a non-zero value has an
     // increase of about 20,000 gas. Which is quite different to `0x72c3`.
     result = response.body.result
-    assert.equal(result, '0xac6d')
+    assert.equal(result, '0xac56')
 })

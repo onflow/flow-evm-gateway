@@ -165,14 +165,14 @@ it('should handle a large number of EVM interactions', async () => {
         gas: 55_000,
         gasPrice: conf.minGasPrice
     }, latest)
-    assert.equal(estimatedGas, 26811n)
+    assert.equal(estimatedGas, 26789n)
 
     // Add calls to verify correctness of eth_getCode on historical heights
     let code = await web3.eth.getCode(contractAddress, 82n)
     assert.equal(code, '0x')
 
     code = await web3.eth.getCode(contractAddress, latest)
-    assert.lengthOf(code, 9806)
+    assert.lengthOf(code, 10236)
 
     // Add calls to verify correctness of eth_call on historical heights
     let callRetrieve = deployed.contract.methods.retrieve().encodeABI()

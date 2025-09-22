@@ -723,6 +723,11 @@ func (b *BlockChainAPI) EstimateGas(
 		return handleError[hexutil.Uint64](err, b.logger, b.collector)
 	}
 
+	blockOverridesArgs, err := json.Marshal(blockOverrides)
+	if err != nil {
+		return handleError[hexutil.Uint64](err, b.logger, b.collector)
+	}
+
 	txArgs, err := json.Marshal(args)
 	if err != nil {
 		return handleError[hexutil.Uint64](err, b.logger, b.collector)
@@ -733,6 +738,7 @@ func (b *BlockChainAPI) EstimateGas(
 		RawJSON("args", txArgs).
 		Str("blockTag", fmt.Sprintf("%v", blockNumberOrHash)).
 		RawJSON("stateOverrides", stateOverridesArgs).
+		RawJSON("blockOverrides", blockOverridesArgs).
 		Logger()
 
 	if err := b.rateLimiter.Apply(ctx, EthEstimateGas); err != nil {
