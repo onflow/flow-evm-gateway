@@ -376,9 +376,9 @@ func (e *EVM) EstimateGas(
 	failingGasLimit = result.GasConsumed - 1
 
 	// There's a fairly high chance for the transaction to execute successfully
-	// with gasLimit set to the first execution's GasConsumed + GasRefund.
+	// with gasLimit set to the first execution's MaxGasConsumed + CallStipend.
 	// Explicitly check that gas amount and use as a limit for the binary search.
-	optimisticGasLimit := (result.GasConsumed + result.GasRefund + gethParams.CallStipend) * 64 / 63
+	optimisticGasLimit := (result.MaxGasConsumed + gethParams.CallStipend) * 64 / 63
 	if optimisticGasLimit < passingGasLimit {
 		result, err := dryRun(optimisticGasLimit)
 		if err != nil {
