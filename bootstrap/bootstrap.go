@@ -22,6 +22,8 @@ import (
 	"github.com/sethvargo/go-limiter/memorystore"
 	grpcOpts "google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/status"
 
 	"github.com/onflow/flow-evm-gateway/api"
@@ -493,16 +495,53 @@ func StartEngine(
 // setupCrossSporkClient sets up a cross-spork AN client.
 func setupCrossSporkClient(config config.Config, logger zerolog.Logger) (*requester.CrossSporkClient, error) {
 	// create access client with cross-spork capabilities
-	currentSporkClient, err := grpc.NewClient(
-		config.AccessNodeHost,
-		grpc.WithGRPCDialOptions(
-			grpcOpts.WithDefaultCallOptions(grpcOpts.MaxCallRecvMsgSize(DefaultMaxMessageSize)),
-			grpcOpts.WithUnaryInterceptor(retryInterceptor(
-				DefaultResourceExhaustedMaxRetryDelay,
-				DefaultResourceExhaustedRetryDelay,
-			)),
-		),
-	)
+	var currentSporkClient *grpc.Client
+	var err error
+
+	if len(config.AccessNodeBackupHosts) > 0 {
+		mr := manual.NewBuilderWithScheme("dns")
+		defer mr.Close()
+
+		json := `{"loadBalancingConfig": [{"pick_first":{}}]}`
+		endpoints := []resolver.Endpoint{
+			{Addresses: []resolver.Address{{Addr: config.AccessNodeHost}}},
+		}
+
+		for _, accessNodeBackupAddr := range config.AccessNodeBackupHosts {
+			endpoints = append(endpoints, resolver.Endpoint{
+				Addresses: []resolver.Address{{Addr: accessNodeBackupAddr}},
+			})
+		}
+
+		mr.InitialState(resolver.State{
+			Endpoints: endpoints,
+		})
+
+		currentSporkClient, err = grpc.NewClient(
+			mr.Scheme(),
+			grpc.WithGRPCDialOptions(
+				grpcOpts.WithDefaultCallOptions(grpcOpts.MaxCallRecvMsgSize(DefaultMaxMessageSize)),
+				grpcOpts.WithResolvers(mr),
+				grpcOpts.WithDefaultServiceConfig(json),
+				grpcOpts.WithUnaryInterceptor(retryInterceptor(
+					DefaultResourceExhaustedMaxRetryDelay,
+					DefaultResourceExhaustedRetryDelay,
+				)),
+			),
+		)
+	} else {
+		currentSporkClient, err = grpc.NewClient(
+			config.AccessNodeHost,
+			grpc.WithGRPCDialOptions(
+				grpcOpts.WithDefaultCallOptions(grpcOpts.MaxCallRecvMsgSize(DefaultMaxMessageSize)),
+				grpcOpts.WithUnaryInterceptor(retryInterceptor(
+					DefaultResourceExhaustedMaxRetryDelay,
+					DefaultResourceExhaustedRetryDelay,
+				)),
+			),
+		)
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf(
 			"failed to create client connection for host: %s, with error: %w",
