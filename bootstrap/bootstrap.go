@@ -21,10 +21,8 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-limiter/memorystore"
 	grpcOpts "google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
-	"google.golang.org/grpc/status"
 
 	"github.com/onflow/flow-evm-gateway/api"
 	"github.com/onflow/flow-evm-gateway/config"
@@ -43,13 +41,13 @@ const (
 	// DefaultMaxMessageSize is the default maximum message size for gRPC responses
 	DefaultMaxMessageSize = 1024 * 1024 * 1024
 
-	// DefaultResourceExhaustedRetryDelay is the default delay between retries when the server returns
-	// a ResourceExhausted error.
-	DefaultResourceExhaustedRetryDelay = 100 * time.Millisecond
+	// DefaultRetryDelay is the default delay between retries when a gRPC request
+	// to one of the Access Nodes has errored out.
+	DefaultRetryDelay = 100 * time.Millisecond
 
-	// DefaultResourceExhaustedMaxRetryDelay is the default max request duration when retrying server
-	// ResourceExhausted errors.
-	DefaultResourceExhaustedMaxRetryDelay = 30 * time.Second
+	// DefaultMaxRetryDelay is the default max request duration when retrying failed
+	// gRPC requests to one of the Access Nodes.
+	DefaultMaxRetryDelay = 30 * time.Second
 )
 
 type Storages struct {
@@ -524,8 +522,8 @@ func setupCrossSporkClient(config config.Config, logger zerolog.Logger) (*reques
 				grpcOpts.WithResolvers(mr),
 				grpcOpts.WithDefaultServiceConfig(json),
 				grpcOpts.WithUnaryInterceptor(retryInterceptor(
-					DefaultResourceExhaustedMaxRetryDelay,
-					DefaultResourceExhaustedRetryDelay,
+					DefaultMaxRetryDelay,
+					DefaultRetryDelay,
 				)),
 			),
 		)
@@ -535,8 +533,8 @@ func setupCrossSporkClient(config config.Config, logger zerolog.Logger) (*reques
 			grpc.WithGRPCDialOptions(
 				grpcOpts.WithDefaultCallOptions(grpcOpts.MaxCallRecvMsgSize(DefaultMaxMessageSize)),
 				grpcOpts.WithUnaryInterceptor(retryInterceptor(
-					DefaultResourceExhaustedMaxRetryDelay,
-					DefaultResourceExhaustedRetryDelay,
+					DefaultMaxRetryDelay,
+					DefaultRetryDelay,
 				)),
 			),
 		)
@@ -592,10 +590,6 @@ func retryInterceptor(maxDuration, pauseDuration time.Duration) grpcOpts.UnaryCl
 			err := invoker(ctx, method, req, reply, cc, opts...)
 			if err == nil {
 				return nil
-			}
-
-			if status.Code(err) != codes.ResourceExhausted {
-				return err
 			}
 
 			attempts++
