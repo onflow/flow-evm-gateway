@@ -86,6 +86,7 @@ type BlockChainAPI struct {
 	blocks                storage.BlockIndexer
 	transactions          storage.TransactionIndexer
 	receipts              storage.ReceiptIndexer
+	feeParameters         storage.FeeParametersIndexer
 	indexingResumedHeight uint64
 	rateLimiter           RateLimiter
 	collector             metrics.Collector
@@ -98,6 +99,7 @@ func NewBlockChainAPI(
 	blocks storage.BlockIndexer,
 	transactions storage.TransactionIndexer,
 	receipts storage.ReceiptIndexer,
+	feeParameters storage.FeeParametersIndexer,
 	rateLimiter RateLimiter,
 	collector metrics.Collector,
 	indexingResumedHeight uint64,
@@ -109,6 +111,7 @@ func NewBlockChainAPI(
 		blocks:                blocks,
 		transactions:          transactions,
 		receipts:              receipts,
+		feeParameters:         feeParameters,
 		indexingResumedHeight: indexingResumedHeight,
 		rateLimiter:           rateLimiter,
 		collector:             collector,
@@ -180,7 +183,13 @@ func (b *BlockChainAPI) SendRawTransaction(
 		return common.Hash{}, err
 	}
 
-	id, err := b.evm.SendRawTransaction(ctx, input)
+	feeParams, err := b.feeParameters.Get()
+	if err != nil {
+		b.logger.Warn().Err(err).Msg("fee parameters unavailable; falling back to base gas price")
+		feeParams = models.DefaultFeeParameters()
+	}
+
+	id, err := b.evm.SendRawTransaction(ctx, input, feeParams)
 	if err != nil {
 		return handleError[common.Hash](err, l, b.collector)
 	}
@@ -850,8 +859,17 @@ func (b *BlockChainAPI) FeeHistory(
 	maxCount := min(uint64(blockCount), lastBlockNumber)
 
 	blockRewards := make([]*hexutil.Big, len(rewardPercentiles))
+	gasPrice := b.config.GasPrice
+
+	feeParams, err := b.feeParameters.Get()
+	if err != nil {
+		b.logger.Warn().Err(err).Msg("fee parameters unavailable; falling back to base gas price")
+	} else {
+		gasPrice = feeParams.CalculateGasPrice(b.config.GasPrice)
+	}
+
 	for i := range rewardPercentiles {
-		blockRewards[i] = (*hexutil.Big)(b.config.GasPrice)
+		blockRewards[i] = (*hexutil.Big)(gasPrice)
 	}
 
 	for i := maxCount; i >= uint64(1); i-- {
@@ -1050,7 +1068,13 @@ func (b *BlockChainAPI) Coinbase(ctx context.Context) (common.Address, error) {
 
 // GasPrice returns a suggestion for a gas price for legacy transactions.
 func (b *BlockChainAPI) GasPrice(ctx context.Context) (*hexutil.Big, error) {
-	return (*hexutil.Big)(b.config.GasPrice), nil
+	feeParams, err := b.feeParameters.Get()
+	if err != nil {
+		b.logger.Warn().Err(err).Msg("fee parameters unavailable; falling back to base gas price")
+		return (*hexutil.Big)(b.config.GasPrice), nil
+	}
+	gasPrice := feeParams.CalculateGasPrice(b.config.GasPrice)
+	return (*hexutil.Big)(gasPrice), nil
 }
 
 // GetUncleCountByBlockHash returns number of uncles in the block for the given block hash
@@ -1091,7 +1115,13 @@ func (b *BlockChainAPI) GetUncleByBlockNumberAndIndex(
 
 // MaxPriorityFeePerGas returns a suggestion for a gas tip cap for dynamic fee transactions.
 func (b *BlockChainAPI) MaxPriorityFeePerGas(ctx context.Context) (*hexutil.Big, error) {
-	return (*hexutil.Big)(b.config.GasPrice), nil
+	feeParams, err := b.feeParameters.Get()
+	if err != nil {
+		b.logger.Warn().Err(err).Msg("fee parameters unavailable; falling back to base gas price")
+		return (*hexutil.Big)(b.config.GasPrice), nil
+	}
+	gasPrice := feeParams.CalculateGasPrice(b.config.GasPrice)
+	return (*hexutil.Big)(gasPrice), nil
 }
 
 // Mining returns true if client is actively mining new blocks.

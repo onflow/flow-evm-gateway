@@ -99,8 +99,8 @@ generate:
 	mockery --dir=storage --name=BlockIndexer --output=storage/mocks
 	mockery --dir=storage --name=ReceiptIndexer --output=storage/mocks
 	mockery --dir=storage --name=TransactionIndexer --output=storage/mocks
-	mockery --dir=storage --name=AccountIndexer --output=storage/mocks
 	mockery --dir=storage --name=TraceIndexer --output=storage/mocks
+	mockery --dir=storage --name=FeeParametersIndexer --output=storage/mocks
 	mockery --all --dir=services/traces --output=services/traces/mocks
 	mockery --all --dir=services/ingestion --output=services/ingestion/mocks
 	mockery --dir=models --name=Engine --output=models/mocks
