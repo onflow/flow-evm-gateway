@@ -21,8 +21,8 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-limiter/memorystore"
 	grpcOpts "google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver/manual"
 
 	"github.com/onflow/flow-evm-gateway/api"
 	"github.com/onflow/flow-evm-gateway/config"
@@ -41,13 +41,13 @@ const (
 	// DefaultMaxMessageSize is the default maximum message size for gRPC responses
 	DefaultMaxMessageSize = 1024 * 1024 * 1024
 
-	// DefaultResourceExhaustedRetryDelay is the default delay between retries when the server returns
-	// a ResourceExhausted error.
-	DefaultResourceExhaustedRetryDelay = 100 * time.Millisecond
+	// DefaultRetryDelay is the default delay between retries when a gRPC request
+	// to one of the Access Nodes has errored out.
+	DefaultRetryDelay = 100 * time.Millisecond
 
-	// DefaultResourceExhaustedMaxRetryDelay is the default max request duration when retrying server
-	// ResourceExhausted errors.
-	DefaultResourceExhaustedMaxRetryDelay = 30 * time.Second
+	// DefaultMaxRetryDelay is the default max request duration when retrying failed
+	// gRPC requests to one of the Access Nodes.
+	DefaultMaxRetryDelay = 30 * time.Second
 )
 
 type Storages struct {
@@ -482,16 +482,53 @@ func StartEngine(
 // setupCrossSporkClient sets up a cross-spork AN client.
 func setupCrossSporkClient(config config.Config, logger zerolog.Logger) (*requester.CrossSporkClient, error) {
 	// create access client with cross-spork capabilities
-	currentSporkClient, err := grpc.NewClient(
-		config.AccessNodeHost,
-		grpc.WithGRPCDialOptions(
-			grpcOpts.WithDefaultCallOptions(grpcOpts.MaxCallRecvMsgSize(DefaultMaxMessageSize)),
-			grpcOpts.WithUnaryInterceptor(retryInterceptor(
-				DefaultResourceExhaustedMaxRetryDelay,
-				DefaultResourceExhaustedRetryDelay,
-			)),
-		),
-	)
+	var currentSporkClient *grpc.Client
+	var err error
+
+	if len(config.AccessNodeBackupHosts) > 0 {
+		mr := manual.NewBuilderWithScheme("dns")
+		defer mr.Close()
+
+		json := `{"loadBalancingConfig": [{"pick_first":{}}]}`
+		endpoints := []resolver.Endpoint{
+			{Addresses: []resolver.Address{{Addr: config.AccessNodeHost}}},
+		}
+
+		for _, accessNodeBackupAddr := range config.AccessNodeBackupHosts {
+			endpoints = append(endpoints, resolver.Endpoint{
+				Addresses: []resolver.Address{{Addr: accessNodeBackupAddr}},
+			})
+		}
+
+		mr.InitialState(resolver.State{
+			Endpoints: endpoints,
+		})
+
+		currentSporkClient, err = grpc.NewClient(
+			mr.Scheme(),
+			grpc.WithGRPCDialOptions(
+				grpcOpts.WithDefaultCallOptions(grpcOpts.MaxCallRecvMsgSize(DefaultMaxMessageSize)),
+				grpcOpts.WithResolvers(mr),
+				grpcOpts.WithDefaultServiceConfig(json),
+				grpcOpts.WithUnaryInterceptor(retryInterceptor(
+					DefaultMaxRetryDelay,
+					DefaultRetryDelay,
+				)),
+			),
+		)
+	} else {
+		currentSporkClient, err = grpc.NewClient(
+			config.AccessNodeHost,
+			grpc.WithGRPCDialOptions(
+				grpcOpts.WithDefaultCallOptions(grpcOpts.MaxCallRecvMsgSize(DefaultMaxMessageSize)),
+				grpcOpts.WithUnaryInterceptor(retryInterceptor(
+					DefaultMaxRetryDelay,
+					DefaultRetryDelay,
+				)),
+			),
+		)
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf(
 			"failed to create client connection for host: %s, with error: %w",
@@ -542,10 +579,6 @@ func retryInterceptor(maxDuration, pauseDuration time.Duration) grpcOpts.UnaryCl
 			err := invoker(ctx, method, req, reply, cc, opts...)
 			if err == nil {
 				return nil
-			}
-
-			if status.Code(err) != codes.ResourceExhausted {
-				return err
 			}
 
 			attempts++

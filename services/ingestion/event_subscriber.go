@@ -224,7 +224,7 @@ func (r *RPCEventSubscriber) subscribe(ctx context.Context, height uint64) <-cha
 					// we can get not found when reconnecting after a disconnect/restart before the
 					// next block is finalized. just wait briefly and try again
 					time.Sleep(200 * time.Millisecond)
-				case codes.DeadlineExceeded, codes.Internal:
+				case codes.DeadlineExceeded, codes.Internal, codes.Unavailable:
 					// these are sometimes returned when the stream is disconnected by a middleware or the server
 				default:
 					// skip reconnect on all other errors
