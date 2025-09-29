@@ -515,8 +515,9 @@ func setupCrossSporkClient(config config.Config, logger zerolog.Logger) (*reques
 			Endpoints: endpoints,
 		})
 
+		targetHost := fmt.Sprintf("%s:///%s", mr.Scheme(), "flow-access")
 		currentSporkClient, err = grpc.NewClient(
-			mr.Scheme(),
+			targetHost,
 			grpc.WithGRPCDialOptions(
 				grpcOpts.WithDefaultCallOptions(grpcOpts.MaxCallRecvMsgSize(DefaultMaxMessageSize)),
 				grpcOpts.WithResolvers(mr),
