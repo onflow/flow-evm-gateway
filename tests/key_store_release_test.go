@@ -20,7 +20,7 @@ import (
 )
 
 func Test_KeyStoreSigningKeysRelease(t *testing.T) {
-	srv, err := startEmulator(true)
+	srv, err := startEmulator(true, defaultServerConfig())
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())

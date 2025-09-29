@@ -67,23 +67,18 @@ func testLogWriter() io.Writer {
 	return zerolog.NewConsoleWriter()
 }
 
-func startEmulator(createTestAccounts bool) (*server.EmulatorServer, error) {
+func defaultServerConfig() *server.Config {
 	pkey, err := crypto.DecodePrivateKeyHex(sigAlgo, servicePrivateKey)
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 
 	genesisToken, err := cadence.NewUFix64("10000.0")
 	if err != nil {
-		return nil, err
+		panic(err)
 	}
 
-	log := logger.With().Timestamp().Str("component", "emulator").Logger().Level(zerolog.DebugLevel)
-	if logOutput == "false" {
-		log = zerolog.Nop()
-	}
-
-	srv := server.NewEmulatorServer(&log, &server.Config{
+	return &server.Config{
 		ServicePrivateKey:      pkey,
 		ServiceKeySigAlgo:      sigAlgo,
 		ServiceKeyHashAlgo:     hashAlgo,
@@ -94,7 +89,19 @@ func startEmulator(createTestAccounts bool) (*server.EmulatorServer, error) {
 		TransactionMaxGasLimit: flow.DefaultMaxTransactionGasLimit,
 		SetupEVMEnabled:        true,
 		SetupVMBridgeEnabled:   true,
-	})
+	}
+}
+
+func startEmulator(createTestAccounts bool, conf *server.Config) (
+	*server.EmulatorServer,
+	error,
+) {
+	log := logger.With().Timestamp().Str("component", "emulator").Logger().Level(zerolog.DebugLevel)
+	if logOutput == "false" {
+		log = zerolog.Nop()
+	}
+
+	srv := server.NewEmulatorServer(&log, conf)
 
 	go func() {
 		srv.Start()
@@ -133,7 +140,7 @@ func runWeb3TestWithSetup(
 // servicesSetup starts up an emulator and the gateway
 // engines required for operation of the evm gateway.
 func servicesSetup(t *testing.T) (emulator.Emulator, func()) {
-	srv, err := startEmulator(true)
+	srv, err := startEmulator(true, defaultServerConfig())
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
