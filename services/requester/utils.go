@@ -8,14 +8,15 @@ import (
 	"github.com/onflow/flow-go/model/flow"
 )
 
-// replaceAddresses replace the addresses based on the network
-func replaceAddresses(script []byte, chainID flow.ChainID) []byte {
+// ReplaceAddresses replace the addresses based on the network
+func ReplaceAddresses(script []byte, chainID flow.ChainID) []byte {
 	// make the list of all contracts we should replace address for
 	sc := systemcontracts.SystemContractsForChain(chainID)
 	contracts := []systemcontracts.SystemContract{
 		sc.EVMContract,
 		sc.FungibleToken,
 		sc.FlowToken,
+		sc.FlowFees,
 	}
 
 	s := string(script)
