@@ -595,7 +595,7 @@ func Test_ForceStartHeightIdempotency(t *testing.T) {
 
 // Test_AccessNodeBackupFunctionality verifies that the specified AccessNode
 // backup hosts, are used when the primary `AccessNodeHost` is unavailable
-// or whatever reason.
+// for whatever reason.
 func Test_AccessNodeBackupFunctionality(t *testing.T) {
 	srv, err := startEmulator(true, defaultServerConfig())
 	require.NoError(t, err)
@@ -614,7 +614,7 @@ func Test_AccessNodeBackupFunctionality(t *testing.T) {
 	backupSrv, err := startEmulator(true, backupConfg)
 	require.NoError(t, err)
 
-	_, backupCancel := context.WithCancel(context.Background())
+	backupCtx, backupCancel := context.WithCancel(context.Background())
 	defer func() {
 		backupCancel()
 		backupSrv.Stop()
@@ -686,7 +686,7 @@ func Test_AccessNodeBackupFunctionality(t *testing.T) {
 	// This endpoint (`eth_syncing`), will make the following gRPC call,
 	// `ExecuteScriptAtLatestBlock`. This gRPC call is served by the
 	// first Emulator process, that is configured as the `AccessNodeHost`.
-	_, err = ethClient.SyncProgress(context.Background())
+	_, err = ethClient.SyncProgress(ctx)
 	require.NoError(t, err)
 
 	// Shutdown the first Emulator process, that is configured as the
@@ -701,7 +701,7 @@ func Test_AccessNodeBackupFunctionality(t *testing.T) {
 	assert.Eventually(
 		t,
 		func() bool {
-			_, err := ethClient.SyncProgress(context.Background())
+			_, err := ethClient.SyncProgress(backupCtx)
 			return err == nil
 		},
 		time.Second*5,
