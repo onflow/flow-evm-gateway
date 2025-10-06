@@ -21,8 +21,10 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-limiter/memorystore"
 	grpcOpts "google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
+	"google.golang.org/grpc/status"
 
 	"github.com/onflow/flow-evm-gateway/api"
 	"github.com/onflow/flow-evm-gateway/config"
@@ -596,6 +598,19 @@ func retryInterceptor(maxDuration, pauseDuration time.Duration) grpcOpts.UnaryCl
 			err := invoker(ctx, method, req, reply, cc, opts...)
 			if err == nil {
 				return nil
+			}
+
+			switch status.Code(err) {
+			case codes.Canceled, codes.DeadlineExceeded:
+				// these kind of errors are guaranteed to fail all requests,
+				// if the source was a local context
+				return err
+			case codes.ResourceExhausted, codes.OutOfRange, codes.NotFound:
+				// when we receive these errors, we pause briefly, so that
+				// the next request on the same AN, has a higher chance
+				// of success.
+			default:
+				return err
 			}
 
 			attempts++
