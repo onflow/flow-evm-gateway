@@ -698,6 +698,14 @@ func Test_AccessNodeBackupFunctionality(t *testing.T) {
 	// `ExecuteScriptAtLatestBlock`. This gRPC call is served by the
 	// first-available AccessNode specified in `AccessNodeBackupHosts`.
 	// In this E2E test, that would be the second Emulator process.
-	_, err = ethClient.SyncProgress(context.Background())
-	require.NoError(t, err)
+	assert.Eventually(
+		t,
+		func() bool {
+			_, err := ethClient.SyncProgress(context.Background())
+			return err == nil
+		},
+		time.Second*5,
+		time.Millisecond*500,
+		"backup AN should serve requests after primary shutdown",
+	)
 }
