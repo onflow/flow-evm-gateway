@@ -232,11 +232,11 @@ func (r *RPCEventSubscriber) subscribe(ctx context.Context, height uint64) <-cha
 					return
 				}
 
-				if err := connect(lastReceivedHeight + 1); err != nil {
+				if err := connect(lastReceivedHeight); err != nil {
 					eventsChan <- models.NewBlockEventsError(
 						fmt.Errorf(
 							"failed to resubscribe for events on height: %d, with: %w",
-							lastReceivedHeight+1,
+							lastReceivedHeight,
 							err,
 						),
 					)
