@@ -500,6 +500,11 @@ func setupCrossSporkClient(config config.Config, logger zerolog.Logger) (*reques
 		mr := manual.NewBuilderWithScheme("dns")
 		defer mr.Close()
 
+		// `pick_first` tries to connect to the first address, uses it for all RPCs
+		// if it connects, or try the next address if it fails
+		// (and keep doing that until one connection is successful).
+		// Because of this, all the RPCs will be sent to the same backend. See more on:
+		// https://github.com/grpc/grpc-go/tree/master/examples/features/load_balancing#pick_first
 		json := `{"loadBalancingConfig": [{"pick_first":{}}]}`
 		endpoints := []resolver.Endpoint{
 			{Addresses: []resolver.Address{{Addr: config.AccessNodeHost}}},
