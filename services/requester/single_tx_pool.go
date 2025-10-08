@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
@@ -25,15 +26,17 @@ var blockHeaderUpdateFrequency = time.Second * 5
 // SingleTxPool is a simple implementation of the `TxPool` interface that submits
 // transactions as soon as they arrive, without any delays or batching strategies.
 type SingleTxPool struct {
-	logger            zerolog.Logger
-	client            *CrossSporkClient
-	pool              *sync.Map
-	txPublisher       *models.Publisher[*gethTypes.Transaction]
-	config            config.Config
-	mux               sync.Mutex
-	keystore          *keystore.KeyStore
-	collector         metrics.Collector
-	latestBlockHeader *flow.BlockHeader
+	logger      zerolog.Logger
+	client      *CrossSporkClient
+	pool        *sync.Map
+	txPublisher *models.Publisher[*gethTypes.Transaction]
+	config      config.Config
+	mux         sync.Mutex
+	keystore    *keystore.KeyStore
+	collector   metrics.Collector
+	// latestBlockHeader is stored atomically to avoid races
+	// between request path and ticker updates.
+	latestBlockHeader atomic.Value // stores *flow.BlockHeader
 	// todo add methods to inspect transaction pool state
 }
 
@@ -57,15 +60,15 @@ func NewSingleTxPool(
 	collector.AvailableSigningKeys(keystore.AvailableKeys())
 
 	singleTxPool := &SingleTxPool{
-		logger:            logger.With().Str("component", "tx-pool").Logger(),
-		client:            client,
-		txPublisher:       transactionsPublisher,
-		pool:              &sync.Map{},
-		config:            config,
-		collector:         collector,
-		keystore:          keystore,
-		latestBlockHeader: latestBlockHeader,
+		logger:      logger.With().Str("component", "tx-pool").Logger(),
+		client:      client,
+		txPublisher: transactionsPublisher,
+		pool:        &sync.Map{},
+		config:      config,
+		collector:   collector,
+		keystore:    keystore,
 	}
+	singleTxPool.latestBlockHeader.Store(latestBlockHeader)
 
 	go singleTxPool.trackLatestBlockHeader(ctx)
 
@@ -113,7 +116,7 @@ func (t *SingleTxPool) Add(
 
 	script := replaceAddresses(runTxScript, t.config.FlowNetworkID)
 	flowTx, err := t.buildTransaction(
-		t.latestBlockHeader,
+		t.getLatestBlockHeader(),
 		account,
 		script,
 		hexEncodedTx,
@@ -229,7 +232,14 @@ func (t *SingleTxPool) trackLatestBlockHeader(ctx context.Context) {
 				)
 				continue
 			}
-			t.latestBlockHeader = blockHeader
+			t.latestBlockHeader.Store(blockHeader)
 		}
 	}
+}
+
+func (t *SingleTxPool) getLatestBlockHeader() *flow.BlockHeader {
+	if v := t.latestBlockHeader.Load(); v != nil {
+		return v.(*flow.BlockHeader)
+	}
+	return nil
 }

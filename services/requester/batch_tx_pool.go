@@ -184,7 +184,7 @@ func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 			for address, pooledTxs := range txsGroupedByAddress {
 				err := t.batchSubmitTransactionsForSameAddress(
 					ctx,
-					t.latestBlockHeader,
+					t.getLatestBlockHeader(),
 					account,
 					pooledTxs,
 				)
@@ -260,7 +260,7 @@ func (t *BatchTxPool) submitSingleTransaction(
 
 	script := replaceAddresses(runTxScript, t.config.FlowNetworkID)
 	flowTx, err := t.buildTransaction(
-		t.latestBlockHeader,
+		t.getLatestBlockHeader(),
 		account,
 		script,
 		hexEncodedTx,
