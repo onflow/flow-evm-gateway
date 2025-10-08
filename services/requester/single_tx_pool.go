@@ -13,7 +13,6 @@ import (
 	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-retry"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/metrics"
@@ -21,42 +20,56 @@ import (
 	"github.com/onflow/flow-evm-gateway/services/requester/keystore"
 )
 
+var blockHeaderUpdateFrequency = time.Second * 5
+
 // SingleTxPool is a simple implementation of the `TxPool` interface that submits
 // transactions as soon as they arrive, without any delays or batching strategies.
 type SingleTxPool struct {
-	logger      zerolog.Logger
-	client      *CrossSporkClient
-	pool        *sync.Map
-	txPublisher *models.Publisher[*gethTypes.Transaction]
-	config      config.Config
-	mux         sync.Mutex
-	keystore    *keystore.KeyStore
-	collector   metrics.Collector
+	logger            zerolog.Logger
+	client            *CrossSporkClient
+	pool              *sync.Map
+	txPublisher       *models.Publisher[*gethTypes.Transaction]
+	config            config.Config
+	mux               sync.Mutex
+	keystore          *keystore.KeyStore
+	collector         metrics.Collector
+	latestBlockHeader *flow.BlockHeader
 	// todo add methods to inspect transaction pool state
 }
 
 var _ TxPool = &SingleTxPool{}
 
 func NewSingleTxPool(
+	ctx context.Context,
 	client *CrossSporkClient,
 	transactionsPublisher *models.Publisher[*gethTypes.Transaction],
 	logger zerolog.Logger,
 	config config.Config,
 	collector metrics.Collector,
 	keystore *keystore.KeyStore,
-) *SingleTxPool {
+) (*SingleTxPool, error) {
+	latestBlockHeader, err := client.GetLatestBlockHeader(ctx, false)
+	if err != nil {
+		return nil, err
+	}
+
 	// initialize the available keys metric since it is only updated when sending a tx
 	collector.AvailableSigningKeys(keystore.AvailableKeys())
 
-	return &SingleTxPool{
-		logger:      logger.With().Str("component", "tx-pool").Logger(),
-		client:      client,
-		txPublisher: transactionsPublisher,
-		pool:        &sync.Map{},
-		config:      config,
-		collector:   collector,
-		keystore:    keystore,
+	singleTxPool := &SingleTxPool{
+		logger:            logger.With().Str("component", "tx-pool").Logger(),
+		client:            client,
+		txPublisher:       transactionsPublisher,
+		pool:              &sync.Map{},
+		config:            config,
+		collector:         collector,
+		keystore:          keystore,
+		latestBlockHeader: latestBlockHeader,
 	}
+
+	go singleTxPool.trackLatestBlockHeader(ctx)
+
+	return singleTxPool, nil
 }
 
 // Add creates a Cadence transaction that wraps the given EVM transaction in
@@ -93,14 +106,14 @@ func (t *SingleTxPool) Add(
 		return err
 	}
 
-	latestBlock, account, err := t.fetchFlowLatestBlockAndCOA(ctx)
+	account, err := t.client.GetAccount(ctx, t.config.COAAddress)
 	if err != nil {
 		return err
 	}
 
 	script := replaceAddresses(runTxScript, t.config.FlowNetworkID)
 	flowTx, err := t.buildTransaction(
-		latestBlock,
+		t.latestBlockHeader,
 		account,
 		script,
 		hexEncodedTx,
@@ -157,7 +170,7 @@ func (t *SingleTxPool) Add(
 // buildTransaction creates a Cadence transaction from the provided script,
 // with the given arguments and signs it with the configured COA account.
 func (t *SingleTxPool) buildTransaction(
-	latestBlock *flow.Block,
+	latestBlockHeader *flow.BlockHeader,
 	account *flow.Account,
 	script []byte,
 	args ...cadence.Value,
@@ -168,7 +181,7 @@ func (t *SingleTxPool) buildTransaction(
 
 	flowTx := flow.NewTransaction().
 		SetScript(script).
-		SetReferenceBlockID(latestBlock.ID).
+		SetReferenceBlockID(latestBlockHeader.ID).
 		SetComputeLimit(flowGo.DefaultMaxTransactionGasLimit)
 
 	for _, arg := range args {
@@ -193,37 +206,30 @@ func (t *SingleTxPool) buildTransaction(
 	}
 
 	// now that the transaction is prepared, store the transaction's metadata
-	accKey.SetLockMetadata(flowTx.ID(), latestBlock.Height)
+	accKey.SetLockMetadata(flowTx.ID(), latestBlockHeader.Height)
 
 	t.collector.OperatorBalance(account)
 
 	return flowTx, nil
 }
 
-func (t *SingleTxPool) fetchFlowLatestBlockAndCOA(ctx context.Context) (
-	*flow.Block,
-	*flow.Account,
-	error,
-) {
-	var (
-		g           = errgroup.Group{}
-		err1, err2  error
-		latestBlock *flow.Block
-		account     *flow.Account
-	)
+func (t *SingleTxPool) trackLatestBlockHeader(ctx context.Context) {
+	ticker := time.NewTicker(blockHeaderUpdateFrequency)
+	defer ticker.Stop()
 
-	// execute concurrently so we can speed up all the information we need for tx
-	g.Go(func() error {
-		latestBlock, err1 = t.client.GetLatestBlock(ctx, true)
-		return err1
-	})
-	g.Go(func() error {
-		account, err2 = t.client.GetAccount(ctx, t.config.COAAddress)
-		return err2
-	})
-	if err := g.Wait(); err != nil {
-		return nil, nil, err
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			blockHeader, err := t.client.GetLatestBlockHeader(ctx, false)
+			if err != nil {
+				t.logger.Error().Err(err).Msg(
+					"failed to update latest Flow block header",
+				)
+				continue
+			}
+			t.latestBlockHeader = blockHeader
+		}
 	}
-
-	return latestBlock, account, nil
 }
