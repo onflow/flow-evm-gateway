@@ -239,8 +239,9 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 
 	// create transaction pool
 	var txPool requester.TxPool
+	var err error
 	if b.config.TxBatchMode {
-		txPool = requester.NewBatchTxPool(
+		txPool, err = requester.NewBatchTxPool(
 			ctx,
 			b.client,
 			b.publishers.Transaction,
@@ -250,7 +251,8 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 			b.keystore,
 		)
 	} else {
-		txPool = requester.NewSingleTxPool(
+		txPool, err = requester.NewSingleTxPool(
+			ctx,
 			b.client,
 			b.publishers.Transaction,
 			b.logger,
@@ -258,6 +260,9 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 			b.collector,
 			b.keystore,
 		)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to create transaction pool: %w", err)
 	}
 
 	evm, err := requester.NewEVM(
