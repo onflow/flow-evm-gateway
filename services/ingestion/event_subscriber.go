@@ -232,15 +232,30 @@ func (r *RPCEventSubscriber) subscribe(ctx context.Context, height uint64) <-cha
 					return
 				}
 
-				if err := connect(lastReceivedHeight); err != nil {
-					eventsChan <- models.NewBlockEventsError(
-						fmt.Errorf(
-							"failed to resubscribe for events on height: %d, with: %w",
-							lastReceivedHeight,
-							err,
-						),
-					)
-					return
+				start := time.Now()
+				attempts := 0
+				pauseDuration, maxDuration := 200*time.Millisecond, 30*time.Second
+				// Allow reconnect retries for up to 30 seconds, with retry
+				// attempts every 200 ms.
+				for {
+					err := connect(lastReceivedHeight)
+					if err == nil {
+						break
+					}
+
+					attempts++
+					duration := time.Since(start)
+					if duration >= maxDuration {
+						eventsChan <- models.NewBlockEventsError(
+							fmt.Errorf(
+								"failed to resubscribe for events on height: %d, with: %w",
+								lastReceivedHeight,
+								err,
+							),
+						)
+						return
+					}
+					time.Sleep(pauseDuration)
 				}
 			}
 		}
