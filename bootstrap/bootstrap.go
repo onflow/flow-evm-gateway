@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"context"
+	_ "embed"
 	"errors"
 	"fmt"
 	"math"
@@ -9,6 +10,7 @@ import (
 
 	pebbleDB "github.com/cockroachdb/pebble"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go-sdk/access"
 	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/onflow/flow-go/fvm/environment"
@@ -50,13 +52,19 @@ const (
 	DefaultResourceExhaustedMaxRetryDelay = 30 * time.Second
 )
 
+var (
+	//go:embed cadence/get_fees_surge_factor.cdc
+	getFeesSurgeFactor []byte
+)
+
 type Storages struct {
-	Storage      *pebble.Storage
-	Registers    *pebble.RegisterStorage
-	Blocks       storage.BlockIndexer
-	Transactions storage.TransactionIndexer
-	Receipts     storage.ReceiptIndexer
-	Traces       storage.TraceIndexer
+	Storage       *pebble.Storage
+	Registers     *pebble.RegisterStorage
+	Blocks        storage.BlockIndexer
+	Transactions  storage.TransactionIndexer
+	Receipts      storage.ReceiptIndexer
+	Traces        storage.TraceIndexer
+	FeeParameters storage.FeeParametersIndexer
 }
 
 type Publishers struct {
@@ -183,6 +191,7 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 		b.storages.Receipts,
 		b.storages.Transactions,
 		b.storages.Traces,
+		b.storages.FeeParameters,
 		b.publishers.Block,
 		b.publishers.Logs,
 		b.logger,
@@ -306,6 +315,7 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 		b.storages.Blocks,
 		b.storages.Transactions,
 		b.storages.Receipts,
+		b.storages.FeeParameters,
 		rateLimiter,
 		b.collector,
 		indexingResumedHeight,
@@ -637,6 +647,15 @@ func setupStorage(
 	//	// TODO(JanezP): verify storage account owner is correct
 	// }
 
+	feeParameters := pebble.NewFeeParameters(store)
+	currentFeeParams, err := getNetworkFeeParams(context.Background(), config, client, logger)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to fetch current fees surge factor: %w", err)
+	}
+	if err := feeParameters.Store(currentFeeParams, batch); err != nil {
+		return nil, nil, fmt.Errorf("failed to bootstrap fee parameters: %w", err)
+	}
+
 	if batch.Count() > 0 {
 		err = batch.Commit(pebbleDB.Sync)
 		if err != nil {
@@ -645,12 +664,13 @@ func setupStorage(
 	}
 
 	return db, &Storages{
-		Storage:      store,
-		Blocks:       blocks,
-		Registers:    registerStore,
-		Transactions: pebble.NewTransactions(store),
-		Receipts:     pebble.NewReceipts(store),
-		Traces:       pebble.NewTraces(store),
+		Storage:       store,
+		Blocks:        blocks,
+		Registers:     registerStore,
+		Transactions:  pebble.NewTransactions(store),
+		Receipts:      pebble.NewReceipts(store),
+		Traces:        pebble.NewTraces(store),
+		FeeParameters: feeParameters,
 	}, nil
 }
 
@@ -772,4 +792,36 @@ func (m *metricsWrapper) Stop() {
 	// especially in testing scenarios.
 	m.stopFN()
 	<-m.Done()
+}
+
+// getNetworkFeeParams returns the network's current Flow fees parameters
+func getNetworkFeeParams(
+	ctx context.Context,
+	config config.Config,
+	client *requester.CrossSporkClient,
+	logger zerolog.Logger,
+) (*models.FeeParameters, error) {
+	val, err := client.ExecuteScriptAtLatestBlock(
+		ctx,
+		requester.ReplaceAddresses(getFeesSurgeFactor, config.FlowNetworkID),
+		nil,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// sanity check, should never occur
+	surgeFactor, ok := val.(cadence.UFix64)
+	if !ok {
+		return nil, fmt.Errorf("failed to convert surgeFactor %v to UFix64, got type: %T", val, val)
+	}
+
+	logger.Debug().
+		Uint64("surge-factor", uint64(surgeFactor)).
+		Msg("get current surge factor executed")
+
+	feeParameters := models.DefaultFeeParameters()
+	feeParameters.SurgeFactor = surgeFactor
+
+	return feeParameters, nil
 }
