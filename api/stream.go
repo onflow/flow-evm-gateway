@@ -14,6 +14,7 @@ import (
 	"github.com/onflow/flow-evm-gateway/config"
 	ethTypes "github.com/onflow/flow-evm-gateway/eth/types"
 	"github.com/onflow/flow-evm-gateway/models"
+	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/services/logs"
 	"github.com/onflow/flow-evm-gateway/storage"
 )
@@ -92,6 +93,15 @@ func (s *StreamAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) (*
 
 // Logs creates a subscription that fires for all new log that match the given filter criteria.
 func (s *StreamAPI) Logs(ctx context.Context, criteria filters.FilterCriteria) (*rpc.Subscription, error) {
+	if len(criteria.Addresses) > logs.LogQueryLimit {
+		return nil, errs.ErrExceedLogQueryLimit
+	}
+	for _, topics := range criteria.Topics {
+		if len(topics) > logs.LogQueryLimit {
+			return nil, errs.ErrExceedLogQueryLimit
+		}
+	}
+
 	return newSubscription(
 		ctx,
 		s.logger,

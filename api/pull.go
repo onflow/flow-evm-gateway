@@ -243,6 +243,15 @@ func (api *PullAPI) uninstallFilter(id rpc.ID) bool {
 //
 // In case "fromBlock" > "toBlock" an error is returned.
 func (api *PullAPI) NewFilter(ctx context.Context, criteria filters.FilterCriteria) (rpc.ID, error) {
+	if len(criteria.Addresses) > logs.LogQueryLimit {
+		return "", errs.ErrExceedLogQueryLimit
+	}
+	for _, topics := range criteria.Topics {
+		if len(topics) > logs.LogQueryLimit {
+			return "", errs.ErrExceedLogQueryLimit
+		}
+	}
+
 	if err := api.rateLimiter.Apply(ctx, EthNewFilter); err != nil {
 		return "", err
 	}
