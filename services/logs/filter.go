@@ -11,6 +11,8 @@ import (
 	"github.com/onflow/flow-evm-gateway/storage"
 )
 
+const LogQueryLimit = 1000
+
 // RangeFilter matches all the indexed logs within the range defined as
 // start and end block height. The start must be strictly smaller or equal than end value.
 type RangeFilter struct {
@@ -24,6 +26,15 @@ func NewRangeFilter(
 	criteria filters.FilterCriteria,
 	receipts storage.ReceiptIndexer,
 ) (*RangeFilter, error) {
+	if len(criteria.Addresses) > LogQueryLimit {
+		return nil, errs.ErrExceedLogQueryLimit
+	}
+	for _, topics := range criteria.Topics {
+		if len(topics) > LogQueryLimit {
+			return nil, errs.ErrExceedLogQueryLimit
+		}
+	}
+
 	// make sure that beginning number is not bigger than end
 	if start > end {
 		return nil, fmt.Errorf(
@@ -100,6 +111,15 @@ func NewIDFilter(
 	blocks storage.BlockIndexer,
 	receipts storage.ReceiptIndexer,
 ) (*IDFilter, error) {
+	if len(criteria.Addresses) > LogQueryLimit {
+		return nil, errs.ErrExceedLogQueryLimit
+	}
+	for _, topics := range criteria.Topics {
+		if len(topics) > LogQueryLimit {
+			return nil, errs.ErrExceedLogQueryLimit
+		}
+	}
+
 	if criteria.BlockHash == nil {
 		return nil, fmt.Errorf("filter criteria should have a non-nil block hash")
 	}
