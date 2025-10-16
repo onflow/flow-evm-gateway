@@ -104,7 +104,7 @@ func decodeCadenceEvents(events flow.BlockEvents) (*CadenceEvents, error) {
 				return nil, fmt.Errorf("EVM block was already set for Flow block: %d", events.Height)
 			}
 
-			block, blockEventPayload, err := decodeBlockEvent(val)
+			block, blockEventPayload, err := DecodeBlockEvent(val)
 			if err != nil {
 				return nil, err
 			}
