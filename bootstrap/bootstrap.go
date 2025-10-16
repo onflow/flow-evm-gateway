@@ -81,9 +81,15 @@ type Bootstrap struct {
 }
 
 func New(config config.Config) (*Bootstrap, error) {
-	logger := zerolog.New(config.LogWriter).
-		With().Timestamp().Str("version", api.Version).
-		Logger().Level(config.LogLevel)
+	var logger zerolog.Logger
+
+	if config.Logger != nil {
+		logger = *config.Logger
+	} else {
+		logger = zerolog.New(config.LogWriter).
+			With().Timestamp().Str("version", api.Version).
+			Logger().Level(config.LogLevel)
+	}
 
 	client, err := setupCrossSporkClient(config, logger)
 	if err != nil {
