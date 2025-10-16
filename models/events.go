@@ -115,7 +115,7 @@ func decodeCadenceEvents(events flow.BlockEvents) (*CadenceEvents, error) {
 		}
 
 		if isTransactionExecutedEvent(val) {
-			tx, receipt, txEventPayload, err := decodeTransactionEvent(val)
+			tx, receipt, txEventPayload, err := DecodeTransactionEvent(val)
 			if err != nil {
 				return nil, err
 			}
