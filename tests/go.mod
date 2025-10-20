@@ -7,9 +7,9 @@ require (
 	github.com/goccy/go-json v0.10.4
 	github.com/onflow/cadence v1.7.1
 	github.com/onflow/crypto v0.25.3
-	github.com/onflow/flow-emulator v1.8.0
+	github.com/onflow/flow-emulator v1.8.1-0.20251017090934-67e23d049041
 	github.com/onflow/flow-evm-gateway v0.0.0-20240201154855-4d4d3d3f19c7
-	github.com/onflow/flow-go v0.43.1-rc.5-pr8007.0.20251007165614-c6967df18fa9
+	github.com/onflow/flow-go v0.43.1-rc.10
 	github.com/onflow/flow-go-sdk v1.8.4
 	github.com/rs/zerolog v1.34.0
 	github.com/stretchr/testify v1.11.1
@@ -73,7 +73,6 @@ require (
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.8.1-0.20250402194037-6f932b086829 // indirect
 	github.com/fxamacker/circlehash v0.3.0 // indirect
-	github.com/fxamacker/golang-lru/v2 v2.0.0-20250716153046-22c8d17dc4ee // indirect
 	github.com/getsentry/sentry-go v0.27.0 // indirect
 	github.com/glebarez/go-sqlite v1.22.0 // indirect
 	github.com/go-kit/kit v0.12.0 // indirect
