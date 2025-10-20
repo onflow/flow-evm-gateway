@@ -22,6 +22,7 @@ import (
 )
 
 var ErrSystemTransactionFailed = errors.New("system transaction failed")
+var ErrSporkRootBlockHasNoEVMBlocks = errors.New("spork root block has no EVM blocks")
 
 var _ EventSubscriber = &RPCBlockTrackingSubscriber{}
 
@@ -188,6 +189,10 @@ func (r *RPCBlockTrackingSubscriber) subscribe(ctx context.Context, height uint6
 
 				blockEvents, err := r.evmEventsForBlock(ctx, blockHeader)
 				if err != nil {
+					if errors.Is(err, ErrSporkRootBlockHasNoEVMBlocks) {
+						continue // no EVM blocks are expected in the spork root block
+					}
+
 					eventsChan <- models.NewBlockEventsError(err)
 					return
 				}
@@ -369,6 +374,11 @@ func (r *RPCBlockTrackingSubscriber) getEventsByType(
 
 	// The `EVM.BlockExecuted` event should be present for every Flow block.
 	if strings.Contains(eventType, string(events.EventTypeBlockExecuted)) && len(event.Events) != 1 {
+		// The spork root block has no transactions, and therefore no EVM blocks.
+		if r.client.IsSporkRootBlockHeight(blockHeader.Height) {
+			return flow.BlockEvents{}, ErrSporkRootBlockHasNoEVMBlocks
+		}
+
 		missingEventsErr := fmt.Errorf(
 			"received unexpected number of EVM events in block: got: %d, expected: 1",
 			len(event.Events),
