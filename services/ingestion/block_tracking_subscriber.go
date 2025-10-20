@@ -188,11 +188,7 @@ func (r *RPCBlockTrackingSubscriber) subscribe(ctx context.Context, height uint6
 				}
 
 				blockEvents, err := r.evmEventsForBlock(ctx, blockHeader)
-				if err != nil {
-					if errors.Is(err, ErrSporkRootBlockHasNoEVMBlocks) {
-						continue // no EVM blocks are expected in the spork root block
-					}
-
+				if err != nil && !errors.Is(err, ErrSporkRootBlockHasNoEVMBlocks) {
 					eventsChan <- models.NewBlockEventsError(err)
 					return
 				}
@@ -205,8 +201,10 @@ func (r *RPCBlockTrackingSubscriber) subscribe(ctx context.Context, height uint6
 					}
 				}
 
-				// this means that the system transaction failed AND there were no EVM transactions
-				// executed in the block. In this case, we can skip the block
+				// this means that either:
+				//  - the system transaction failed AND there were no EVM transactions
+				//  - this was the spork root block which has no EVM blocks
+				// In either case, we can skip the block
 				// Note: put this after the verify step, so we can verify that there were no EVM
 				// blocks in the sealed data as well
 				if len(blockEvents.Events) == 0 {
