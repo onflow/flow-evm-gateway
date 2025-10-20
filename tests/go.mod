@@ -5,12 +5,12 @@ go 1.25.0
 require (
 	github.com/ethereum/go-ethereum v1.16.3
 	github.com/goccy/go-json v0.10.4
-	github.com/onflow/cadence v1.7.0
+	github.com/onflow/cadence v1.7.1
 	github.com/onflow/crypto v0.25.3
-	github.com/onflow/flow-emulator v1.7.2
+	github.com/onflow/flow-emulator v1.8.0
 	github.com/onflow/flow-evm-gateway v0.0.0-20240201154855-4d4d3d3f19c7
-	github.com/onflow/flow-go v0.43.1-rc.4.0.20250930135247-97f6643af6f8
-	github.com/onflow/flow-go-sdk v1.8.2
+	github.com/onflow/flow-go v0.43.1-rc.5-pr8007.0.20251007165614-c6967df18fa9
+	github.com/onflow/flow-go-sdk v1.8.4
 	github.com/rs/zerolog v1.34.0
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/sync v0.16.0
@@ -164,14 +164,14 @@ require (
 	github.com/onflow/flow-ft/lib/go/templates v1.0.1 // indirect
 	github.com/onflow/flow-nft/lib/go/contracts v1.3.0 // indirect
 	github.com/onflow/flow-nft/lib/go/templates v1.3.0 // indirect
-	github.com/onflow/flow/protobuf/go/flow v0.4.15 // indirect
+	github.com/onflow/flow/protobuf/go/flow v0.4.16 // indirect
 	github.com/onflow/go-ethereum v1.13.4 // indirect
 	github.com/onflow/nft-storefront/lib/go/contracts v1.0.0 // indirect
 	github.com/onflow/sdks v0.6.0-preview.1 // indirect
 	github.com/onflow/wal v1.0.2 // indirect
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.1 // indirect
-	github.com/pierrec/lz4 v2.6.1+incompatible // indirect
+	github.com/pierrec/lz4/v4 v4.1.22 // indirect
 	github.com/pion/dtls/v2 v2.2.12 // indirect
 	github.com/pion/logging v0.2.2 // indirect
 	github.com/pion/stun/v2 v2.0.0 // indirect

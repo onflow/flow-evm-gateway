@@ -211,9 +211,9 @@ func (k *KeyStore) processLockedKeys(ctx context.Context) {
 			if k.config.COATxLookupEnabled {
 				txResults, err = k.client.GetTransactionResultsByBlockID(ctx, blockHeader.ID)
 				if err != nil && status.Code(err) != codes.Canceled {
-					k.logger.Error().Err(err).Msgf(
-						"failed to get transaction results for block ID: %s",
-						blockHeader.ID.Hex(),
+					k.logger.Warn().Msgf(
+						"failed to get transaction results: %v",
+						err,
 					)
 					continue
 				}

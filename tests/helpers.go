@@ -93,7 +93,7 @@ func startEmulator(createTestAccounts bool) (*server.EmulatorServer, error) {
 		TransactionExpiry:      10,
 		TransactionMaxGasLimit: flow.DefaultMaxTransactionGasLimit,
 		SetupEVMEnabled:        true,
-		SetupVMBridgeEnabled:   false,
+		SetupVMBridgeEnabled:   true,
 	})
 
 	go func() {
@@ -243,19 +243,19 @@ func setupTestAccounts(emu emulator.Emulator) error {
 			self.fundVault <- vaultRef.withdraw(amount: 10.0) as! @FlowToken.Vault
 			self.auth = signer
 
-			if !signer.storage.check<@EVM.CadenceOwnedAccount>(from: /storage/evm) {
+			if !signer.storage.check<@EVM.CadenceOwnedAccount>(from: /storage/evm_coa) {
 				signer.storage.save<@EVM.CadenceOwnedAccount>(
 					<- EVM.createCadenceOwnedAccount(),
-					to: /storage/evm
+					to: /storage/evm_coa
 				)
 			}
 
 			if !signer.capabilities.exists(/public/evm) {
-				let cap = signer.capabilities.storage.issue<&EVM.CadenceOwnedAccount>(/storage/evm)
+				let cap = signer.capabilities.storage.issue<&EVM.CadenceOwnedAccount>(/storage/evm_coa)
 				signer.capabilities.publish(cap, at: /public/evm)
 			}
 
-			self.coa = signer.storage.borrow<auth(EVM.Call) &EVM.CadenceOwnedAccount>(from: /storage/evm)!
+			self.coa = signer.storage.borrow<auth(EVM.Call) &EVM.CadenceOwnedAccount>(from: /storage/evm_coa)!
 		}
 
 		execute {

@@ -144,8 +144,8 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 
 	chainID := b.config.FlowNetworkID
 
-	// the event subscriber takes the first block to sync from the Access node, which is the block
-	// after the latest cadence block
+	// the event subscriber takes the first block to sync from the Access node,
+	// which is the block after the latest cadence block
 	nextCadenceHeight := latestCadenceHeight + 1
 	// Special case when using a local Emulator as Access Node. The Emulator
 	// always starts at block height 0, so if we try to subscribe at block
