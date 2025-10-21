@@ -187,6 +187,11 @@ func (c *CrossSporkClient) IsSporkRootBlockHeight(height uint64) bool {
 	return height == c.currentSporkRootHeight
 }
 
+// CurrentSporkRootHeight returns the spork root block height of the current spork.
+func (c *CrossSporkClient) CurrentSporkRootHeight() uint64 {
+	return c.currentSporkRootHeight
+}
+
 // getClientForHeight returns the client for the given height that contains the height range.
 //
 // If the height is not contained in any of the past spork clients we return an error.

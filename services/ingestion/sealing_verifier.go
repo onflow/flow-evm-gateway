@@ -11,6 +11,7 @@ import (
 
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access"
+	"github.com/onflow/flow-go/engine/access/rpc/backend/events"
 	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/rs/zerolog"
 	"go.uber.org/atomic"
@@ -120,6 +121,14 @@ func (v *SealingVerifier) Run(ctx context.Context) error {
 		}
 	}
 	v.lastSealedHeight.Store(lastVerifiedHeight)
+	startHeight := v.lastSealedHeight.Load() + 1
+
+	if v.client.IsPastSpork(startHeight) {
+		if err := v.backfill(ctx, startHeight); err != nil {
+			return fmt.Errorf("failed to backfill: %w", err)
+		}
+		startHeight = v.lastSealedHeight.Load() + 1
+	}
 
 	var eventsChan <-chan flow.BlockEvents
 	var errChan <-chan error
@@ -127,7 +136,7 @@ func (v *SealingVerifier) Run(ctx context.Context) error {
 	subscriptionCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	reconnectHeight := lastVerifiedHeight + 1
+	reconnectHeight := startHeight
 	connect := func(height uint64) error {
 		var err error
 		for {
@@ -156,7 +165,7 @@ func (v *SealingVerifier) Run(ctx context.Context) error {
 	}
 
 	v.logger.Info().
-		Uint64("start_sealed_height", v.lastSealedHeight.Load()+1).
+		Uint64("start_sealed_height", startHeight).
 		Uint64("start_unsealed_height", v.lastUnsealedHeight.Load()+1).
 		Msg("starting verifier")
 
@@ -213,6 +222,75 @@ func (v *SealingVerifier) Run(ctx context.Context) error {
 			if err := connect(reconnectHeight); err != nil {
 				return fmt.Errorf("failed to resubscribe for finalized block headers on height: %d, with: %w", reconnectHeight, err)
 			}
+		}
+	}
+}
+
+// backfill fetches EVM events for blocks before the current spork's root block, and adds them to the
+// verifier's sealed events cache.
+func (v *SealingVerifier) backfill(ctx context.Context, height uint64) error {
+	eventTypes := blocksFilter(v.chain).EventTypes
+
+	sporkRootHeight := v.client.CurrentSporkRootHeight()
+
+	v.logger.Info().
+		Uint64("start_height", height).
+		Uint64("end_height", sporkRootHeight-1).
+		Msg("backfilling verifier")
+
+	startHeight := height
+	for {
+		endHeight := startHeight + events.DefaultMaxHeightRange
+		if endHeight >= sporkRootHeight {
+			endHeight = sporkRootHeight - 1
+		}
+
+		// this will fail if the start and end heights are now in the same spork. The only way that
+		// could happen is if we skipped a spork. That's unlikely to happen, so not handling the case
+		// for now.
+		blockEvents, err := v.client.GetEventsForHeightRange(ctx, eventTypes[0], startHeight, endHeight)
+		if err != nil {
+			return fmt.Errorf("failed to get events for height range %d-%d: %w", startHeight, endHeight, err)
+		}
+
+		txEvents, err := v.client.GetEventsForHeightRange(ctx, eventTypes[1], startHeight, endHeight)
+		if err != nil {
+			return fmt.Errorf("failed to get events for height range %d-%d: %w", startHeight, endHeight, err)
+		}
+
+		// it's technically possible that the end height is modified by the Access node to match the
+		// sealed height. Since this is backfill mode, the AN is a historic AN so it is not sealing
+		// any new blocks. Therefore, both requests must have the same number of events.
+		if len(blockEvents) != len(txEvents) {
+			return fmt.Errorf("received unexpected number of events for height range %d-%d: %d != %d", startHeight, endHeight, len(blockEvents), len(txEvents))
+		}
+
+		var currentBlockTxEvents []flow.Event
+		for i, blockEvent := range blockEvents {
+			currentBlockTxEvents = append(currentBlockTxEvents, txEvents[i].Events...)
+
+			// if the system transaction failed, there won't be an EVM block event, but there may
+			// be EVM transactions. Group all transactions into the next block.
+			if len(blockEvent.Events) != 1 {
+				v.logger.Warn().
+					Uint64("height", blockEvent.Height).
+					Str("block_id", blockEvent.BlockID.String()).
+					Msg("missing evm block event. will accumulate transactions into the next block")
+				continue
+			}
+
+			blockEvent.Events = append(blockEvent.Events, currentBlockTxEvents...)
+			if err := v.onSealedEvents(blockEvent); err != nil {
+				return fmt.Errorf("failed to verify block events for height %d: %w", blockEvent.Height, err)
+			}
+
+			// transactions sucessessfully grouped with a block. reset the list
+			currentBlockTxEvents = nil
+		}
+
+		startHeight = endHeight + 1
+		if startHeight >= sporkRootHeight {
+			return nil
 		}
 	}
 }
