@@ -93,6 +93,13 @@ func (r *RPCBlockTrackingSubscriber) Subscribe(ctx context.Context) <-chan model
 					return
 				}
 
+				if r.verifier != nil {
+					if err := r.verifier.AddFinalizedBlock(ev.Events.BlockEvents()); err != nil {
+						r.logger.Fatal().Err(err).Msg("failed to add finalized block to sealing verifier")
+						return
+					}
+				}
+
 				// keep updating height, so after we are done back-filling
 				// it will be at the first height in the current spork
 				r.height = ev.Events.CadenceHeight()

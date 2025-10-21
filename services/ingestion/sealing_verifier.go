@@ -11,7 +11,6 @@ import (
 
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access"
-	"github.com/onflow/flow-go/engine/access/rpc/backend/events"
 	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/rs/zerolog"
 	"go.uber.org/atomic"
@@ -240,7 +239,7 @@ func (v *SealingVerifier) backfill(ctx context.Context, height uint64) error {
 
 	startHeight := height
 	for {
-		endHeight := startHeight + events.DefaultMaxHeightRange
+		endHeight := startHeight + maxRangeForGetEvents
 		if endHeight >= sporkRootHeight {
 			endHeight = sporkRootHeight - 1
 		}
