@@ -43,6 +43,24 @@ func (e *EventsHash) GetByHeight(height uint64) (flow.Identifier, error) {
 	return flow.BytesToID(hash), nil
 }
 
+// RemoveAboveHeight removes all stored events hashes above the given height (exclusive).
+func (e *EventsHash) BatchRemoveAboveHeight(height uint64, batch *pebbleDB.Batch) error {
+	for {
+		height++ // skip the current height
+		if _, err := e.GetByHeight(height); err != nil {
+			if errors.Is(err, errs.ErrEntityNotFound) {
+				// event hashes are inserted in order with no gaps, so we can stop at the first
+				// missing hash
+				return nil
+			}
+			return err
+		}
+		if err := e.store.delete(eventsHashKey, uint64Bytes(height), batch); err != nil {
+			return err
+		}
+	}
+}
+
 func (e *EventsHash) ProcessedSealedHeight() (uint64, error) {
 	val, err := e.store.get(sealedEventsHeightKey)
 	if err != nil {
@@ -57,9 +75,13 @@ func (e *EventsHash) ProcessedSealedHeight() (uint64, error) {
 
 func (e *EventsHash) SetProcessedSealedHeight(height uint64) error {
 	return WithBatch(e.store, func(batch *pebbleDB.Batch) error {
-		if err := e.store.set(sealedEventsHeightKey, nil, uint64Bytes(height), batch); err != nil {
-			return fmt.Errorf("failed to store latest processed sealed height: %d, with: %w", height, err)
-		}
-		return nil
+		return e.BatchSetProcessedSealedHeight(height, batch)
 	})
+}
+
+func (e *EventsHash) BatchSetProcessedSealedHeight(height uint64, batch *pebbleDB.Batch) error {
+	if err := e.store.set(sealedEventsHeightKey, nil, uint64Bytes(height), batch); err != nil {
+		return fmt.Errorf("failed to store latest processed sealed height: %d, with: %w", height, err)
+	}
+	return nil
 }
