@@ -636,6 +636,12 @@ func setupStorage(
 		}
 	}
 
+	if config.ForceStartSealingVerifierHeight > 0 {
+		if err := eventsHash.BatchRemoveAboveHeight(config.ForceStartSealingVerifierHeight, batch); err != nil {
+			return nil, nil, fmt.Errorf("failed to reset events hash above height: %w", err)
+		}
+	}
+
 	// if database is not initialized require init height
 	if _, err := blocks.LatestCadenceHeight(); errors.Is(err, errs.ErrStorageNotInitialized) {
 		cadenceHeight := config.InitCadenceHeight

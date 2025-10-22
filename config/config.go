@@ -88,6 +88,8 @@ type Config struct {
 	FilterExpiry time.Duration
 	// ForceStartCadenceHeight will force set the starting Cadence height, this should be only used for testing or locally.
 	ForceStartCadenceHeight uint64
+	// ForceStartSealingVerifierHeight will prune all sealing verifier data for heights above the given height.
+	ForceStartSealingVerifierHeight uint64
 	// WalletEnabled sets whether wallet APIs are enabled
 	WalletEnabled bool
 	// WalletKey used for signing transactions

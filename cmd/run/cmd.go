@@ -210,6 +210,10 @@ func parseConfigFromFlags() error {
 		cfg.ForceStartCadenceHeight = forceStartHeight
 	}
 
+	if forceStartSealingVerifierHeight != 0 {
+		cfg.ForceStartSealingVerifierHeight = forceStartSealingVerifierHeight
+	}
+
 	switch txStateValidation {
 	case config.LocalIndexValidation:
 		cfg.TxStateValidation = config.LocalIndexValidation
@@ -253,6 +257,7 @@ var (
 	txStateValidation string
 	initHeight,
 	forceStartHeight uint64
+	forceStartSealingVerifierHeight uint64
 
 	experimentalSoftFinalityEnabled,
 	experimentalSealingVerificationEnabled bool
@@ -279,6 +284,7 @@ func init() {
 	Cmd.Flags().Uint64Var(&cfg.RateLimit, "rate-limit", 50, "Rate-limit requests per second made by the client over any protocol (ws/http)")
 	Cmd.Flags().StringVar(&cfg.AddressHeader, "address-header", "", "Address header that contains the client IP, this is useful when the server is behind a proxy that sets the source IP of the client. Leave empty if no proxy is used.")
 	Cmd.Flags().Uint64Var(&forceStartHeight, "force-start-height", 0, "Force set starting Cadence height. WARNING: This should only be used locally or for testing, never in production.")
+	Cmd.Flags().Uint64Var(&forceStartSealingVerifierHeight, "force-sealing-verifier-start-height", 0, "Force set starting sealing verifier height. WARNING: This should only be used locally or for testing, never in production.")
 	Cmd.Flags().StringVar(&filterExpiry, "filter-expiry", "5m", "Filter defines the time it takes for an idle filter to expire")
 	Cmd.Flags().StringVar(&cloudKMSProjectID, "coa-cloud-kms-project-id", "", "The project ID containing the KMS keys, e.g. 'flow-evm-gateway'")
 	Cmd.Flags().StringVar(&cloudKMSLocationID, "coa-cloud-kms-location-id", "", "The location ID where the key ring is grouped into, e.g. 'global'")
