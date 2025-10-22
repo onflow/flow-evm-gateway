@@ -22,6 +22,7 @@ import (
 )
 
 var ErrSystemTransactionFailed = errors.New("system transaction failed")
+var ErrSporkRootBlockHasNoEVMBlocks = errors.New("spork root block has no EVM blocks")
 
 var _ EventSubscriber = &RPCBlockTrackingSubscriber{}
 
@@ -90,6 +91,13 @@ func (r *RPCBlockTrackingSubscriber) Subscribe(ctx context.Context) <-chan model
 
 				if ev.Err != nil {
 					return
+				}
+
+				if r.verifier != nil {
+					if err := r.verifier.AddFinalizedBlock(ev.Events.BlockEvents()); err != nil {
+						r.logger.Fatal().Err(err).Msg("failed to add finalized block to sealing verifier")
+						return
+					}
 				}
 
 				// keep updating height, so after we are done back-filling
@@ -187,7 +195,7 @@ func (r *RPCBlockTrackingSubscriber) subscribe(ctx context.Context, height uint6
 				}
 
 				blockEvents, err := r.evmEventsForBlock(ctx, blockHeader)
-				if err != nil {
+				if err != nil && !errors.Is(err, ErrSporkRootBlockHasNoEVMBlocks) {
 					eventsChan <- models.NewBlockEventsError(err)
 					return
 				}
@@ -200,8 +208,10 @@ func (r *RPCBlockTrackingSubscriber) subscribe(ctx context.Context, height uint6
 					}
 				}
 
-				// this means that the system transaction failed AND there were no EVM transactions
-				// executed in the block. In this case, we can skip the block
+				// this means that either:
+				//  - the system transaction failed AND there were no EVM transactions
+				//  - this was the spork root block which has no EVM blocks
+				// In either case, we can skip the block
 				// Note: put this after the verify step, so we can verify that there were no EVM
 				// blocks in the sealed data as well
 				if len(blockEvents.Events) == 0 {
@@ -369,6 +379,11 @@ func (r *RPCBlockTrackingSubscriber) getEventsByType(
 
 	// The `EVM.BlockExecuted` event should be present for every Flow block.
 	if strings.Contains(eventType, string(events.EventTypeBlockExecuted)) && len(event.Events) != 1 {
+		// The spork root block has no transactions, and therefore no EVM blocks.
+		if r.client.IsSporkRootBlockHeight(blockHeader.Height) {
+			return flow.BlockEvents{}, ErrSporkRootBlockHasNoEVMBlocks
+		}
+
 		missingEventsErr := fmt.Errorf(
 			"received unexpected number of EVM events in block: got: %d, expected: 1",
 			len(event.Events),
