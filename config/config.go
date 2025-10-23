@@ -30,7 +30,7 @@ const (
 
 	// Mainnet height at which the `EVM` system contract was first deployed.
 	// This is the first height at which the EVM state starts.
-	MainnetInitCadenceHeight = uint64(85981134)
+	MainnetInitCadenceHeight = uint64(85981135)
 )
 
 type TxStateValidation string
