@@ -153,27 +153,23 @@ Signature Algorithm 	 ECDSA_P256
 Then visit https://faucet.flow.com/, and use the generated `Public Key`, to create and fund your Flow testnet account.
 Make sure to use the Flow address and the `Private Key` for the `--coa-address` & `--coa-key` flags.
 
-**Run local EVM Gateway connected to Testnet**
+**Run EVM Gateway connected to Testnet**
 
 Below is an example configuration for running against testnet, with a preconfigured testnet account.
 
 ```bash
 ./flow-evm-gateway run \
+--access-node-spork-hosts="access-001.devnet51.nodes.onflow.org:9000,access-001.devnet52.nodes.onflow.org:9000" \
 --access-node-grpc-host=access.devnet.nodes.onflow.org:9000 \
---access-node-spork-hosts=access-001.devnet51.nodes.onflow.org:9000 \
 --flow-network-id=flow-testnet \
---init-cadence-height=211176670 \
 --ws-enabled=true \
 --coinbase=FACF71692421039876a5BB4F10EF7A439D8ef61E \
---coa-address=62631c28c9fc5a91 \
---coa-key=2892fba444f1d5787739708874e3b01160671924610411ac787ac1379d420f49 \
+--coa-address=xxx \
+--coa-key=xxx \
 --gas-price=100
 ```
 
-The `--init-cadence-height` is the Flow block height to start indexing from. To index the full EVM state, from its beginning, the proper value for this flag for testnet is `211176670`. This is the height where the `EVM` contract was first deployed on testnet, and this is where the EVM state starts from.
-
 If you wish to test this out with your own Access Node, simply set `--access-node-grpc-host` to the DNS or IP where it is hosted.
-**Note:** You need to make sure that the testnet Access Node which the gateway is connected to has indexed at least up to Flow block height `211176670`.
 
 For the `--gas-price`, feel free to experiment with different values.
 
@@ -201,10 +197,9 @@ To use the `make` target to connect a container based gateway instance to testne
 
 * `ACCESS_NODE_GRPC_HOST`: access.devnet.nodes.onflow.org:9000 
 * `FLOW_NETWORK_ID`: flow-testnet
-* `INIT_CADENCE_HEIGHT`: 211176670
 * `COINBASE`: FACF71692421039876a5BB4F10EF7A439D8ef61E
-* `COA_ADDRESS`: 62631c28c9fc5a91
-* `COA_KEY`: 2892fba444f1d5787739708874e3b01160671924610411ac787ac1379d420f49 
+* `COA_ADDRESS`: xxx
+* `COA_KEY`: xxx
 * `VERSION`: [_repo commit hash or tag version used when building with docker_]
 
 Once set, this target starts the EVM Gateway for the specified image version and connects it to testnet
@@ -216,6 +211,20 @@ make docker-run
 
 Guidance for EVM Gateway node operations including considerations for mainnet, hardware specs, monitoring setup and troubleshooting 
 can be found in the EVM Gateway [node operations docs](https://developers.flow.com/networks/node-ops/evm-gateway/evm-gateway-setup).
+
+Below is an example configuration for running against mainnet, with a preconfigured mainnet account.
+
+```bash
+./flow-evm-gateway run \
+--access-node-spork-hosts="access-001.mainnet25.nodes.onflow.org:9000,access-001.mainnet26.nodes.onflow.org:9000" \
+--access-node-grpc-host=access.mainnet.nodes.onflow.org:9000 \
+--flow-network-id=flow-mainnet \
+--ws-enabled=true \
+--coinbase=FACF71692421039876a5BB4F10EF7A439D8ef61E \
+--coa-address=xxx \
+--coa-key=xxx \
+--gas-price=100000000
+```
 
 ## Configuration Flags
 
@@ -231,7 +240,6 @@ The application can be configured using the following flags at runtime:
 | `access-node-spork-hosts`      | `""`             | Previous spork AN hosts, defined as a comma-separated list (e.g. `"host-1.com,host2.com"`) |
 | `flow-network-id`              | `flow-emulator`  | Flow network ID (options: `flow-emulator`, `flow-testnet`, `flow-mainnet`)                 |
 | `coinbase`                     | `""`             | Coinbase address to use for fee collection                                                 |
-| `init-cadence-height`          | `0`              | Cadence block height to start indexing; avoid using on a new network                       |
 | `gas-price`                    | `1`              | Static gas price for EVM transactions                                                      |
 | `enforce-gas-price`            | `true`           | Enable enforcing minimum gas price for EVM transactions. When true (default), transactions must specify a gas price greater than or equal to the configured gas price. |
 | `coa-address`                  | `""`             | Flow address holding COA account for submitting transactions                               |
