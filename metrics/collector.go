@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/onflow/flow-go-sdk"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/rs/zerolog"
 )
@@ -113,7 +112,7 @@ type Collector interface {
 	EVMTransactionIndexed(count int)
 	EVMAccountInteraction(address string)
 	MeasureRequestDuration(start time.Time, method string)
-	OperatorBalance(account *flow.Account)
+	OperatorBalance(balance uint64)
 	AvailableSigningKeys(count int)
 	GasEstimationIterations(count int)
 	BlockIngestionTime(blockCreation time.Time)
@@ -208,8 +207,8 @@ func (c *DefaultCollector) EVMAccountInteraction(address string) {
 	c.evmAccountCallCounters.With(prometheus.Labels{"address": address}).Inc()
 }
 
-func (c *DefaultCollector) OperatorBalance(account *flow.Account) {
-	c.operatorBalance.Set(float64(account.Balance))
+func (c *DefaultCollector) OperatorBalance(balance uint64) {
+	c.operatorBalance.Set(float64(balance))
 }
 
 func (c *DefaultCollector) MeasureRequestDuration(start time.Time, method string) {
