@@ -247,6 +247,10 @@ func (api *PullAPI) NewFilter(ctx context.Context, criteria filters.FilterCriter
 		return "", err
 	}
 
+	if !logs.ValidCriteriaLimits(criteria) {
+		return "", errs.ErrExceedLogQueryLimit
+	}
+
 	latest, err := api.blocks.LatestEVMHeight()
 	if err != nil {
 		return "", err

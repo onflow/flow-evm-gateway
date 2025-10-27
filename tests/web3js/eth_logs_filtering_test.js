@@ -252,7 +252,7 @@ it('validates max number of allowed addresses', async () => {
     let response = await helpers.callRPCMethod('eth_getLogs', [blockRangeFilter])
     assert.equal(response.status, 200)
     assert.isDefined(response.body.error)
-    assert.equal(response.body.error.message, 'invalid argument 0: exceed max addresses')
+    assert.equal(response.body.error.message, 'exceed max addresses or topics per search position')
 
     let blockHashFilter = {
         blockHash: latestBlock.hash,
@@ -263,7 +263,7 @@ it('validates max number of allowed addresses', async () => {
     response = await helpers.callRPCMethod('eth_getLogs', [blockHashFilter])
     assert.equal(response.status, 200)
     assert.isDefined(response.body.error)
-    assert.equal(response.body.error.message, 'invalid argument 0: exceed max addresses')
+    assert.equal(response.body.error.message, 'exceed max addresses or topics per search position')
 })
 
 it('validates max number of allowed sub-topics', async () => {
