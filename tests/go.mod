@@ -5,12 +5,12 @@ go 1.25.0
 require (
 	github.com/ethereum/go-ethereum v1.16.5
 	github.com/goccy/go-json v0.10.4
-	github.com/onflow/cadence v1.8.3
+	github.com/onflow/cadence v1.8.2
 	github.com/onflow/crypto v0.25.3
-	github.com/onflow/flow-emulator v1.10.4
+	github.com/onflow/flow-emulator v1.10.2-0.20251029094759-d00b2fcee55a
 	github.com/onflow/flow-evm-gateway v0.0.0-20240201154855-4d4d3d3f19c7
-	github.com/onflow/flow-go v0.43.3-0.20251029192457-d4f875155987
-	github.com/onflow/flow-go-sdk v1.9.2
+	github.com/onflow/flow-go v0.43.3-0.20251028102210-e7602f786c3c
+	github.com/onflow/flow-go-sdk v1.9.1
 	github.com/rs/zerolog v1.34.0
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/sync v0.16.0
