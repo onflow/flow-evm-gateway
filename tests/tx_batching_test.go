@@ -514,6 +514,61 @@ func Test_MultipleTransactionSubmissionsWithinNonRecentInterval(t *testing.T) {
 	)
 }
 
+func Test_MultipleTransactionSubmissionsWithDuplicates(t *testing.T) {
+	_, cfg, stop := setupGatewayNode(t)
+	defer stop()
+
+	rpcTester := &rpcTest{
+		url: fmt.Sprintf("%s:%d", cfg.RPCHost, cfg.RPCPort),
+	}
+
+	eoaKey, err := crypto.HexToECDSA(eoaTestPrivateKey)
+	require.NoError(t, err)
+
+	testAddr := common.HexToAddress("55253ed90B70b96C73092D8680915aaF50081194")
+	nonce := uint64(0)
+	hashes := make([]common.Hash, 0)
+
+	signed, _, err := evmSign(big.NewInt(10), 21000, eoaKey, nonce, &testAddr, nil)
+	require.NoError(t, err)
+	nonce += 1
+
+	txHash, err := rpcTester.sendRawTx(signed)
+	require.NoError(t, err)
+	hashes = append(hashes, txHash)
+
+	for i := range 5 {
+		// All these transactions are duplicates, since we don't change any
+		// of the payload data. These will end up having the same tx hash
+		// as well.
+		signed, _, err := evmSign(big.NewInt(10), 15_000_000, eoaKey, nonce, &testAddr, nil)
+		require.NoError(t, err)
+
+		// only the first transaction is valid, the rest 4 are duplicates
+		// of the 1st one.
+		if i == 0 {
+			txHash, err := rpcTester.sendRawTx(signed)
+			require.NoError(t, err)
+			hashes = append(hashes, txHash)
+		} else {
+			_, err := rpcTester.sendRawTx(signed)
+			require.Error(t, err)
+			require.ErrorContains(t, err, "invalid: transaction already in pool")
+		}
+	}
+
+	assert.Eventually(t, func() bool {
+		for _, h := range hashes {
+			rcp, err := rpcTester.getReceipt(h.String())
+			if err != nil || rcp == nil || rcp.Status != 1 {
+				return false
+			}
+		}
+
+		return true
+	}, time.Second*15, time.Second*1, "all transactions were not executed")
+}
+
 func setupGatewayNode(t *testing.T) (emulator.Emulator, config.Config, func()) {
 	srv, err := startEmulator(true)
 	require.NoError(t, err)
