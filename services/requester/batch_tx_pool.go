@@ -24,6 +24,7 @@ const eoaActivityCacheSize = 10_000
 
 type pooledEvmTx struct {
 	txPayload cadence.String
+	txHash    gethCommon.Hash
 	nonce     uint64
 }
 
@@ -143,7 +144,7 @@ func (t *BatchTxPool) Add(
 		err = t.submitSingleTransaction(ctx, hexEncodedTx)
 	} else {
 		// Case 3. EOA activity found AND it was less than [X] seconds ago:
-		userTx := pooledEvmTx{txPayload: hexEncodedTx, nonce: tx.Nonce()}
+		userTx := pooledEvmTx{txPayload: hexEncodedTx, txHash: tx.Hash(), nonce: tx.Nonce()}
 		t.pooledTxs[from] = append(t.pooledTxs[from], userTx)
 	}
 
@@ -207,9 +208,19 @@ func (t *BatchTxPool) batchSubmitTransactionsForSameAddress(
 	sort.Slice(pooledTxs, func(i, j int) bool {
 		return pooledTxs[i].nonce < pooledTxs[j].nonce
 	})
+	// Filter out duplicate transactions, based on their tx hash
+	seen := make(map[gethCommon.Hash]struct{}, len(pooledTxs))
+	uniqueTxs := pooledTxs[:0]
+	for _, tx := range pooledTxs {
+		if _, ok := seen[tx.txHash]; ok {
+			continue
+		}
+		seen[tx.txHash] = struct{}{}
+		uniqueTxs = append(uniqueTxs, tx)
+	}
 
-	hexEncodedTxs := make([]cadence.Value, len(pooledTxs))
-	for i, txPayload := range pooledTxs {
+	hexEncodedTxs := make([]cadence.Value, len(uniqueTxs))
+	for i, txPayload := range uniqueTxs {
 		hexEncodedTxs[i] = txPayload.txPayload
 	}
 
