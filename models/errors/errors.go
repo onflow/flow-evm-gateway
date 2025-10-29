@@ -16,6 +16,7 @@ var (
 	ErrEndpointNotSupported = errors.New("endpoint is not supported")
 	ErrRateLimit            = errors.New("limit of requests per second reached")
 	ErrIndexOnlyMode        = errors.New("transaction submission not allowed in index-only mode")
+	ErrExceedLogQueryLimit  = errors.New("exceed max addresses or topics per search position")
 
 	// General errors
 
