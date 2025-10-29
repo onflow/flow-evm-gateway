@@ -30,6 +30,7 @@ const (
 
 	// Mainnet height at which the `EVM` system contract was first deployed.
 	// This is the first height at which the EVM state starts.
+	// reference: https://github.com/onflow/flow/blob/9203b57a04d422360de257bcd92c522a2f51d3b0/sporks.json#L91
 	MainnetInitCadenceHeight = uint64(85981135)
 )
 
