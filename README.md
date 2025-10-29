@@ -164,8 +164,8 @@ Below is an example configuration for running against testnet, with a preconfigu
 --flow-network-id=flow-testnet \
 --ws-enabled=true \
 --coinbase=FACF71692421039876a5BB4F10EF7A439D8ef61E \
---coa-address=xxx \
---coa-key=xxx \
+--coa-address=<16-character hexadecimal address> \
+--coa-key=<64-character hexadecimal private key> \
 --gas-price=100
 ```
 
@@ -198,8 +198,8 @@ To use the `make` target to connect a container based gateway instance to testne
 * `ACCESS_NODE_GRPC_HOST`: access.devnet.nodes.onflow.org:9000 
 * `FLOW_NETWORK_ID`: flow-testnet
 * `COINBASE`: FACF71692421039876a5BB4F10EF7A439D8ef61E
-* `COA_ADDRESS`: xxx
-* `COA_KEY`: xxx
+* `COA_ADDRESS`: <16-character hexadecimal address>
+* `COA_KEY`: <64-character hexadecimal private key
 * `VERSION`: [_repo commit hash or tag version used when building with docker_]
 
 Once set, this target starts the EVM Gateway for the specified image version and connects it to testnet
@@ -221,8 +221,8 @@ Below is an example configuration for running against mainnet, with a preconfigu
 --flow-network-id=flow-mainnet \
 --ws-enabled=true \
 --coinbase=FACF71692421039876a5BB4F10EF7A439D8ef61E \
---coa-address=xxx \
---coa-key=xxx \
+--coa-address=<16-character hexadecimal address> \
+--coa-key=<64-character hexadecimal private key \
 --gas-price=100000000
 ```
 
