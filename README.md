@@ -193,7 +193,7 @@ Should return a response similar to:
 
 ### Run local EVM GW docker container connected to Testnet
 
-To use the `make` target to connect a container based gateway instance to testnet requires the following environment variables to be set. 
+To use the `make` target to connect a container-based gateway instance to testnet requires the following environment variables to be set.
 
 * `ACCESS_NODE_GRPC_HOST`: access.devnet.nodes.onflow.org:9000 
 * `FLOW_NETWORK_ID`: flow-testnet
@@ -295,10 +295,11 @@ To connect using Websockets you can use the same DNS names as above but change `
 The EVM Gateway implements APIs according to the Ethereum specification: https://ethereum.org/en/developers/docs/apis/json-rpc/#json-rpc-methods.
 
 ## Additional APIs
-- Tracing APIs allows you to fetch execution traces
-    * `debug_traceTransaction`
-    * `debug_traceBlockByNumber`
-    * `debug_traceBlockByHash`
+- Tracing APIs allow fetching execution traces
+  * `debug_traceTransaction`
+  * `debug_traceBlockByNumber`
+  * `debug_traceBlockByHash`
+  * `debug_traceCall`
 - `debug_flowHeightByBlock` - returns the flow block height for the given EVM block (id or height)
 
 ## Unsupported APIs
