@@ -345,6 +345,36 @@ func (e *EVM) EstimateGas(
 		passingGasLimit = uint64(*txArgs.Gas)
 	}
 
+	// Cap the maximum gas allowance according to EIP-7825 if the estimation targets Osaka
+	if passingGasLimit > gethParams.MaxTxGas {
+		latestBlockHeight, err := e.blocks.LatestEVMHeight()
+		if err != nil {
+			return 0, err
+		}
+		latestBlock, err := e.blocks.GetByHeight(latestBlockHeight)
+		if err != nil {
+			return 0, err
+		}
+		blockNumber, blockTime := new(big.Int).SetUint64(latestBlock.Height), latestBlock.Timestamp
+		emulatorConfig := emulator.NewConfig(
+			emulator.WithChainID(e.config.EVMNetworkID),
+			emulator.WithBlockNumber(blockNumber),
+			emulator.WithBlockTime(blockTime),
+		)
+
+		if blockOverrides != nil {
+			if blockOverrides.Number != nil {
+				blockNumber = blockOverrides.Number.ToInt()
+			}
+			if blockOverrides.Time != nil {
+				blockTime = uint64(*blockOverrides.Time)
+			}
+		}
+		if emulatorConfig.ChainConfig.IsOsaka(blockNumber, blockTime) {
+			passingGasLimit = gethParams.MaxTxGas
+		}
+	}
+
 	// We first execute the transaction at the highest allowable gas limit,
 	// since if this fails we can return the error immediately.
 	result, err := dryRun(passingGasLimit)
