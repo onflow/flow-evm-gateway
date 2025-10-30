@@ -19,16 +19,18 @@ OS :=
 COMPILER_FLAGS := CGO_ENABLED=1
 
 EMULATOR_ARGS := --flow-network-id=flow-emulator \
+		--access-node-grpc-host=localhost:3569 \
 		--coinbase=$(EMULATOR_COINBASE) \
-		--coa-address=$(EMULATOR_COA_ADDRESS)  \
-		--coa-key=$(EMULATOR_COA_KEY)  \
+		--coa-address=$(EMULATOR_COA_ADDRESS) \
+		--coa-key=$(EMULATOR_COA_KEY) \
 		--wallet-api-key=2619878f0e2ff438d17835c2a4561cb87b4d24d72d12ec34569acd0dd4af7c21 \
 		--gas-price=0 \
 		--log-writer=console \
 		--tx-state-validation=local-index \
 		--profiler-enabled=true \
 		--profiler-port=6060 \
-		--ws-enabled=true
+		--ws-enabled=true \
+		--coa-tx-lookup-enabled=true
 
 # Set VERSION from command line, environment, or default to SHORT_COMMIT
 VERSION ?= $(SHORT_COMMIT)
@@ -168,7 +170,6 @@ docker-pull-version:
 # Requires the following ENV variables:
 #   - ACCESS_NODE_GRPC_HOST: [access.devnet.nodes.onflow.org:9000 | access.mainnet.nodes.onflow.org:9000]
 #   - FLOW_NETWORK_ID: [flow-testnet, flow-mainnet]
-#   - INIT_CADENCE_HEIGHT: [testnet: 211176670, mainnet: 85981135]
 #   - COINBASE: To be set by the operator. This is an EVM EOA or COA address which is set as the receiver of GW transaction fees (remove 0x prefix)
 #   - COA_ADDRESS: To be set by the operator. This is a Cadence address which funds gateway operations (remove 0x prefix)
 #   - COA_KEY: A full weight, private key belonging to operator COA_ADDRESS (remove 0x prefix). NB: For development use only. We recommend using cloud KMS configuration on mainnet
@@ -215,7 +216,6 @@ endif
 
 	$(call check_and_append,access-node-grpc-host,ACCESS_NODE_GRPC_HOST)
 	$(call check_and_append,flow-network-id,FLOW_NETWORK_ID)
-	$(call check_and_append,init-cadence-height,INIT_CADENCE_HEIGHT)
 	$(call check_and_append,coinbase,COINBASE)
 	$(call check_and_append,coa-address,COA_ADDRESS)
 	$(call check_and_append,coa-key,COA_KEY)
