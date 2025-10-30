@@ -225,10 +225,10 @@ func (tc TransactionCall) MarshalBinary() ([]byte, error) {
 	return append([]byte{tc.Type()}, encoded...), err
 }
 
-// decodeTransactionEvent takes a cadence event for transaction executed
+// DecodeTransactionEvent takes a cadence event for transaction executed
 // and decodes its payload into a Transaction interface and a Receipt.
 // The concrete type will be either a TransactionCall or a DirectCall.
-func decodeTransactionEvent(event cadence.Event) (
+func DecodeTransactionEvent(event cadence.Event) (
 	Transaction,
 	*Receipt,
 	*events.TransactionEventPayload,

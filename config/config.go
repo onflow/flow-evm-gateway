@@ -80,6 +80,8 @@ type Config struct {
 	LogLevel zerolog.Level
 	// LogWriter defines the writer used for logging
 	LogWriter io.Writer
+	// Logger if you bring your own
+	Logger *zerolog.Logger
 	// RateLimit requests made by the client identified by IP over any protocol (ws/http).
 	RateLimit uint64
 	// Address header used to identified clients, usually set by the proxy
