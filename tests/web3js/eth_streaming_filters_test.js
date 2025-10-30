@@ -254,7 +254,7 @@ it('should validate max number of addresses', async () => {
     } catch (err) {
         assert.equal(
             err.innerError.message,
-            'invalid argument 1: exceed max addresses'
+            'exceed max addresses or topics per search position'
         )
     }
 
@@ -270,7 +270,7 @@ it('should validate max number of addresses', async () => {
     } catch (err) {
         assert.equal(
             err.innerError.message,
-            'invalid argument 1: exceed max addresses'
+            'exceed max addresses or topics per search position'
         )
     }
 
