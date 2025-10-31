@@ -222,7 +222,7 @@ func (t *BatchTxPool) batchSubmitTransactionsForSameAddress(
 		return err
 	}
 
-	script := replaceAddresses(batchRunTxScript, t.config.FlowNetworkID)
+	script := replaceAddresses(runTxScript, t.config.FlowNetworkID)
 	flowTx, err := t.buildTransaction(
 		latestBlockHeader,
 		account,
@@ -263,7 +263,7 @@ func (t *BatchTxPool) submitSingleTransaction(
 		t.getLatestBlockHeader(),
 		account,
 		script,
-		hexEncodedTx,
+		cadence.NewArray([]cadence.Value{hexEncodedTx}),
 		coinbaseAddress,
 	)
 	if err != nil {

@@ -119,7 +119,7 @@ func (t *SingleTxPool) Add(
 		t.getLatestBlockHeader(),
 		account,
 		script,
-		hexEncodedTx,
+		cadence.NewArray([]cadence.Value{hexEncodedTx}),
 		coinbaseAddress,
 	)
 	if err != nil {

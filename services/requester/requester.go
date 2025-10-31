@@ -35,9 +35,6 @@ var (
 	//go:embed cadence/run.cdc
 	runTxScript []byte
 
-	//go:embed cadence/batch_run.cdc
-	batchRunTxScript []byte
-
 	//go:embed cadence/get_latest_evm_height.cdc
 	getLatestEVMHeight []byte
 )
