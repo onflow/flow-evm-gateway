@@ -345,17 +345,13 @@ func (e *EVM) EstimateGas(
 		passingGasLimit = uint64(*txArgs.Gas)
 	}
 
-	// Cap the maximum gas allowance according to EIP-7825 if the estimation targets Osaka
 	if passingGasLimit > gethParams.MaxTxGas {
-		latestBlockHeight, err := e.blocks.LatestEVMHeight()
+		// Cap the maximum gas allowance according to EIP-7825 if the estimation targets Osaka
+		targetBlock, err := e.blocks.GetByHeight(height)
 		if err != nil {
 			return 0, err
 		}
-		latestBlock, err := e.blocks.GetByHeight(latestBlockHeight)
-		if err != nil {
-			return 0, err
-		}
-		blockNumber, blockTime := new(big.Int).SetUint64(latestBlock.Height), latestBlock.Timestamp
+		blockNumber, blockTime := new(big.Int).SetUint64(targetBlock.Height), targetBlock.Timestamp
 		emulatorConfig := emulator.NewConfig(
 			emulator.WithChainID(e.config.EVMNetworkID),
 			emulator.WithBlockNumber(blockNumber),
