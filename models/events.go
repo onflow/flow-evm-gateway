@@ -104,7 +104,7 @@ func decodeCadenceEvents(events flow.BlockEvents) (*CadenceEvents, error) {
 				return nil, fmt.Errorf("EVM block was already set for Flow block: %d", events.Height)
 			}
 
-			block, blockEventPayload, err := decodeBlockEvent(val)
+			block, blockEventPayload, err := DecodeBlockEvent(val)
 			if err != nil {
 				return nil, err
 			}
@@ -115,7 +115,7 @@ func decodeCadenceEvents(events flow.BlockEvents) (*CadenceEvents, error) {
 		}
 
 		if isTransactionExecutedEvent(val) {
-			tx, receipt, txEventPayload, err := decodeTransactionEvent(val)
+			tx, receipt, txEventPayload, err := DecodeTransactionEvent(val)
 			if err != nil {
 				return nil, err
 			}
