@@ -10,7 +10,7 @@ import (
 func Test_DecodeReceipts(t *testing.T) {
 	cdcEv, rec := createTestEvent(t, evmTxBinary)
 
-	_, receipt, _, err := decodeTransactionEvent(cdcEv)
+	_, receipt, _, err := DecodeTransactionEvent(cdcEv)
 	require.NoError(t, err)
 
 	assert.Equal(t, BaseFeePerGas, receipt.EffectiveGasPrice)

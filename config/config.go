@@ -30,7 +30,8 @@ const (
 
 	// Mainnet height at which the `EVM` system contract was first deployed.
 	// This is the first height at which the EVM state starts.
-	MainnetInitCadenceHeight = uint64(85981134)
+	// reference: https://github.com/onflow/flow/blob/9203b57a04d422360de257bcd92c522a2f51d3b0/sporks.json#L91
+	MainnetInitCadenceHeight = uint64(85981135)
 )
 
 type TxStateValidation string
@@ -80,6 +81,8 @@ type Config struct {
 	LogLevel zerolog.Level
 	// LogWriter defines the writer used for logging
 	LogWriter io.Writer
+	// Logger if you bring your own
+	Logger *zerolog.Logger
 	// RateLimit requests made by the client identified by IP over any protocol (ws/http).
 	RateLimit uint64
 	// Address header used to identified clients, usually set by the proxy

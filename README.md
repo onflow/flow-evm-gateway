@@ -2,7 +2,7 @@
 
 # EVM Gateway
 
-**EVM Gateway enables seamless interaction with EVM on Flow, mirroring the experience of engaging with any other EVM blockchain.**
+## EVM Gateway enables seamless interaction with EVM on Flow, mirroring the experience of engaging with any other EVM blockchain
 
 EVM Gateway implements the Ethereum JSON-RPC API for [EVM on Flow](https://developers.flow.com/evm/about) which conforms to the Ethereum [JSON-RPC specification](https://ethereum.github.io/execution-apis/api-documentation/). The EVM Gateway is tailored for integration with the EVM environment on the Flow blockchain. Rather than implementing the full `geth` stack, the JSON-RPC API available in EVM Gateway is a lightweight implementation that uses Flow's underlying consensus and smart contract language, [Cadence](https://cadence-lang.org/docs/), to handle calls received by the EVM Gateway. For those interested in the underlying implementation details, please refer to the [FLIP #243](https://github.com/onflow/flips/issues/243) (EVM Gateway) and [FLIP #223](https://github.com/onflow/flips/issues/223) (EVM on Flow Core) improvement proposals.
 
@@ -23,7 +23,7 @@ The basic design of the EVM Gateway is as follows:
 
 # Building
 
-**Build from source**
+## Build from source
 
 ```bash
 # Make sure you pull the latest changes before running `make build`
@@ -76,7 +76,7 @@ It is acceptable to create a single Cadence account for the COA and use the EVM 
 
 For local development, first install [Flow CLI](https://developers.flow.com/tools/flow-cli/install). The examples below require no configuration and are intended for local development.
 
-**Run from CLI**
+### Run from CLI
 
 Before running the gateway locally you need to start the Flow Emulator:
 
@@ -96,7 +96,7 @@ make start-local
 Note that the gateway will be starting from the latest emulator block, so if the emulator is run before any transactions happen in the meantime, the gateway will not fetch those historical blocks & transactions.
 This will be improved soon.
 
-**Run with Docker**
+### Run with Docker
 
 Using Docker for local development is also supported. The following target builds the current source directory into a docker image
 
@@ -108,7 +108,7 @@ This target starts the flow emulator and then runs the EVM Gateway using the ima
 make docker-run-local
 ```
 
-**Verify**
+## Verify
 
 To verify the service is up and running:
 
@@ -131,7 +131,7 @@ it should return:
 Running against the testnet with a local build can be done by pointing the gateway to the testnet ANs and providing the correct configuration.
 Please refer to the configuration section and read through all the configuration flags before proceeding.
 
-**Create Flow account to use for COA**
+### Create Flow account to use for COA
 
 If you don't already have a Flow account you will need to create account keys using the following command. 
 
@@ -153,27 +153,23 @@ Signature Algorithm 	 ECDSA_P256
 Then visit https://faucet.flow.com/, and use the generated `Public Key`, to create and fund your Flow testnet account.
 Make sure to use the Flow address and the `Private Key` for the `--coa-address` & `--coa-key` flags.
 
-**Run local EVM Gateway connected to Testnet**
+### Run EVM Gateway connected to Testnet
 
 Below is an example configuration for running against testnet, with a preconfigured testnet account.
 
 ```bash
 ./flow-evm-gateway run \
+--access-node-spork-hosts="access-001.devnet51.nodes.onflow.org:9000,access-001.devnet52.nodes.onflow.org:9000" \
 --access-node-grpc-host=access.devnet.nodes.onflow.org:9000 \
---access-node-spork-hosts=access-001.devnet51.nodes.onflow.org:9000 \
 --flow-network-id=flow-testnet \
---init-cadence-height=211176670 \
 --ws-enabled=true \
 --coinbase=FACF71692421039876a5BB4F10EF7A439D8ef61E \
---coa-address=62631c28c9fc5a91 \
---coa-key=2892fba444f1d5787739708874e3b01160671924610411ac787ac1379d420f49 \
+--coa-address=<16-character hexadecimal address> \
+--coa-key=<64-character hexadecimal private key> \
 --gas-price=100
 ```
 
-The `--init-cadence-height` is the Flow block height to start indexing from. To index the full EVM state, from its beginning, the proper value for this flag for testnet is `211176670`. This is the height where the `EVM` contract was first deployed on testnet, and this is where the EVM state starts from.
-
 If you wish to test this out with your own Access Node, simply set `--access-node-grpc-host` to the DNS or IP where it is hosted.
-**Note:** You need to make sure that the testnet Access Node which the gateway is connected to has indexed at least up to Flow block height `211176670`.
 
 For the `--gas-price`, feel free to experiment with different values.
 
@@ -195,16 +191,15 @@ Should return a response similar to:
 }
 ```
 
-**Run local EVM GW docker container connected to Testnet**
+### Run local EVM GW docker container connected to Testnet
 
-To use the `make` target to connect a container based gateway instance to testnet requires the following environment variables to be set. 
+To use the `make` target to connect a container-based gateway instance to testnet requires the following environment variables to be set.
 
 * `ACCESS_NODE_GRPC_HOST`: access.devnet.nodes.onflow.org:9000 
 * `FLOW_NETWORK_ID`: flow-testnet
-* `INIT_CADENCE_HEIGHT`: 211176670
 * `COINBASE`: FACF71692421039876a5BB4F10EF7A439D8ef61E
-* `COA_ADDRESS`: 62631c28c9fc5a91
-* `COA_KEY`: 2892fba444f1d5787739708874e3b01160671924610411ac787ac1379d420f49 
+* `COA_ADDRESS`: <16-character hexadecimal address>
+* `COA_KEY`: <64-character hexadecimal private key>
 * `VERSION`: [_repo commit hash or tag version used when building with docker_]
 
 Once set, this target starts the EVM Gateway for the specified image version and connects it to testnet
@@ -216,6 +211,20 @@ make docker-run
 
 Guidance for EVM Gateway node operations including considerations for mainnet, hardware specs, monitoring setup and troubleshooting 
 can be found in the EVM Gateway [node operations docs](https://developers.flow.com/networks/node-ops/evm-gateway/evm-gateway-setup).
+
+Below is an example configuration for running against mainnet, with a preconfigured mainnet account.
+
+```bash
+./flow-evm-gateway run \
+--access-node-spork-hosts="access-001.mainnet25.nodes.onflow.org:9000,access-001.mainnet26.nodes.onflow.org:9000" \
+--access-node-grpc-host=access.mainnet.nodes.onflow.org:9000 \
+--flow-network-id=flow-mainnet \
+--ws-enabled=true \
+--coinbase=FACF71692421039876a5BB4F10EF7A439D8ef61E \
+--coa-address=<16-character hexadecimal address> \
+--coa-key=<64-character hexadecimal private key> \
+--gas-price=100000000
+```
 
 ## Configuration Flags
 
@@ -231,7 +240,6 @@ The application can be configured using the following flags at runtime:
 | `access-node-spork-hosts`      | `""`             | Previous spork AN hosts, defined as a comma-separated list (e.g. `"host-1.com,host2.com"`) |
 | `flow-network-id`              | `flow-emulator`  | Flow network ID (options: `flow-emulator`, `flow-testnet`, `flow-mainnet`)                 |
 | `coinbase`                     | `""`             | Coinbase address to use for fee collection                                                 |
-| `init-cadence-height`          | `0`              | Cadence block height to start indexing; avoid using on a new network                       |
 | `gas-price`                    | `1`              | Static gas price for EVM transactions                                                      |
 | `enforce-gas-price`            | `true`           | Enable enforcing minimum gas price for EVM transactions. When true (default), transactions must specify a gas price greater than or equal to the configured gas price. |
 | `coa-address`                  | `""`             | Flow address holding COA account for submitting transactions                               |
@@ -286,14 +294,15 @@ To connect using Websockets you can use the same DNS names as above but change `
 # JSON-RPC API
 The EVM Gateway implements APIs according to the Ethereum specification: https://ethereum.org/en/developers/docs/apis/json-rpc/#json-rpc-methods.
 
-**Additional APIs**
-- Tracing APIs allows you to fetch execution traces
-    * `debug_traceTransaction`
-    * `debug_traceBlockByNumber`
-    * `debug_traceBlockByHash`
+## Additional APIs
+- Tracing APIs allow fetching execution traces
+  * `debug_traceTransaction`
+  * `debug_traceBlockByNumber`
+  * `debug_traceBlockByHash`
+  * `debug_traceCall`
 - `debug_flowHeightByBlock` - returns the flow block height for the given EVM block (id or height)
 
-**Unsupported APIs**
+## Unsupported APIs
 - Wallet APIs: we don't officially support wallet APIs (`eth_accounts`, `eth_sign`, `eth_signTransaction`, `eth_sendTransaction`) due to security
   concerns that come with managing the keys on production environments, however, it is possible to configure the gateway to allow these
   methods for local development by using a special flag `--wallet-api-key`.
