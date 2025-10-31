@@ -358,6 +358,20 @@ func TestValidateTransaction(t *testing.T) {
 			valid:  false,
 			errMsg: "transaction will create a contract with value but empty code",
 		},
+		"tx limit above gas limit cap": {
+			tx: gethTypes.NewTx(
+				&gethTypes.LegacyTx{
+					Nonce:    1,
+					To:       &validToAddress,
+					Value:    big.NewInt(0),
+					Gas:      params.MaxTxGas + 100,
+					GasPrice: big.NewInt(0),
+					Data:     []byte{},
+				},
+			),
+			valid:  false,
+			errMsg: "transaction gas limit too high (cap: 16777216, tx: 16777316)",
+		},
 	}
 
 	head := &gethTypes.Header{
