@@ -40,20 +40,21 @@ var _ models.Engine = &Engine{}
 type Engine struct {
 	*models.EngineStatus
 
-	subscriber      EventSubscriber
-	blocksProvider  *replayer.BlocksProvider
-	store           *pebble.Storage
-	registerStore   *pebble.RegisterStorage
-	blocks          storage.BlockIndexer
-	receipts        storage.ReceiptIndexer
-	transactions    storage.TransactionIndexer
-	traces          storage.TraceIndexer
-	log             zerolog.Logger
-	evmLastHeight   *models.SequentialHeight
-	blocksPublisher *models.Publisher[*models.Block]
-	logsPublisher   *models.Publisher[[]*gethTypes.Log]
-	collector       metrics.Collector
-	replayerConfig  replayer.Config
+	subscriber        EventSubscriber
+	blocksProvider    *replayer.BlocksProvider
+	store             *pebble.Storage
+	registerStore     *pebble.RegisterStorage
+	blocks            storage.BlockIndexer
+	receipts          storage.ReceiptIndexer
+	transactions      storage.TransactionIndexer
+	traces            storage.TraceIndexer
+	log               zerolog.Logger
+	evmLastHeight     *models.SequentialHeight
+	blocksPublisher   *models.Publisher[*models.Block]
+	logsPublisher     *models.Publisher[[]*gethTypes.Log]
+	receiptsPublisher *models.Publisher[[]*models.Receipt]
+	collector         metrics.Collector
+	replayerConfig    replayer.Config
 }
 
 func NewEventIngestionEngine(
@@ -67,6 +68,7 @@ func NewEventIngestionEngine(
 	traces storage.TraceIndexer,
 	blocksPublisher *models.Publisher[*models.Block],
 	logsPublisher *models.Publisher[[]*gethTypes.Log],
+	receiptsPublisher *models.Publisher[[]*models.Receipt],
 	log zerolog.Logger,
 	collector metrics.Collector,
 	replayerConfig replayer.Config,
@@ -76,19 +78,20 @@ func NewEventIngestionEngine(
 	return &Engine{
 		EngineStatus: models.NewEngineStatus(),
 
-		subscriber:      subscriber,
-		blocksProvider:  blocksProvider,
-		store:           store,
-		registerStore:   registerStore,
-		blocks:          blocks,
-		receipts:        receipts,
-		transactions:    transactions,
-		traces:          traces,
-		log:             log,
-		blocksPublisher: blocksPublisher,
-		logsPublisher:   logsPublisher,
-		collector:       collector,
-		replayerConfig:  replayerConfig,
+		subscriber:        subscriber,
+		blocksProvider:    blocksProvider,
+		store:             store,
+		registerStore:     registerStore,
+		blocks:            blocks,
+		receipts:          receipts,
+		transactions:      transactions,
+		traces:            traces,
+		log:               log,
+		blocksPublisher:   blocksPublisher,
+		logsPublisher:     logsPublisher,
+		receiptsPublisher: receiptsPublisher,
+		collector:         collector,
+		replayerConfig:    replayerConfig,
 	}
 }
 
@@ -204,6 +207,7 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 
 	// emit block event and logs, only after we successfully commit the data
 	e.blocksPublisher.Publish(events.Block())
+	e.receiptsPublisher.Publish(events.Receipts())
 	for _, r := range events.Receipts() {
 		if len(r.Logs) > 0 {
 			e.logsPublisher.Publish(r.Logs)
