@@ -723,6 +723,7 @@ func (b *Bootstrap) trackOperatorBalance(ctx context.Context) {
 				b.logger.Warn().Err(err).Msg(
 					"failed to collect operator's balance metric",
 				)
+				continue
 			}
 			b.collector.OperatorBalance(accBalance)
 		}
