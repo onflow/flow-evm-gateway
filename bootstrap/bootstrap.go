@@ -694,6 +694,8 @@ func (b *Bootstrap) Run(
 	// mark ready
 	ready()
 
+	go b.trackOperatorBalance(ctx)
+
 	return nil
 }
 
@@ -705,6 +707,26 @@ func (b *Bootstrap) Stop() {
 	b.StopAPIServer()
 	b.StopClient()
 	b.StopDB()
+}
+
+func (b *Bootstrap) trackOperatorBalance(ctx context.Context) {
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			accBalance, err := b.client.GetAccountBalanceAtLatestBlock(ctx, b.config.COAAddress)
+			if err != nil {
+				b.logger.Warn().Err(err).Msg(
+					"failed to collect operator's balance metric",
+				)
+			}
+			b.collector.OperatorBalance(accBalance)
+		}
+	}
 }
 
 // Run will run complete bootstrap of the EVM gateway with all the engines.
