@@ -184,6 +184,7 @@ func (t *SingleTxPool) buildTransaction(
 	coaAddress := t.config.COAAddress
 	accountKey, err := t.client.GetAccountKeyAtLatestBlock(ctx, coaAddress, accKey.Index)
 	if err != nil {
+		accKey.Done()
 		return nil, err
 	}
 
