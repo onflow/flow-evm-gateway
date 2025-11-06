@@ -347,11 +347,6 @@ func (e *EVM) EstimateGas(
 			return 0, err
 		}
 		blockNumber, blockTime := new(big.Int).SetUint64(targetBlock.Height), targetBlock.Timestamp
-		emulatorConfig := emulator.NewConfig(
-			emulator.WithChainID(e.config.EVMNetworkID),
-			emulator.WithBlockNumber(blockNumber),
-			emulator.WithBlockTime(blockTime),
-		)
 
 		if blockOverrides != nil {
 			if blockOverrides.Number != nil {
@@ -361,7 +356,8 @@ func (e *EVM) EstimateGas(
 				blockTime = uint64(*blockOverrides.Time)
 			}
 		}
-		if emulatorConfig.ChainConfig.IsOsaka(blockNumber, blockTime) {
+		chainConfig := emulator.MakeChainConfig(e.config.EVMNetworkID)
+		if chainConfig.IsOsaka(blockNumber, blockTime) {
 			passingGasLimit = gethParams.MaxTxGas
 		}
 	}
