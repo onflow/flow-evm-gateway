@@ -41,7 +41,6 @@ var (
 
 const minFlowBalance = 2
 const blockGasLimit = 120_000_000
-const txMaxGasLimit = 50_000_000
 
 // estimateGasErrorRatio is the amount of overestimation eth_estimateGas
 // is allowed to produce in order to speed up calculations.
@@ -165,10 +164,6 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 	tx := &types.Transaction{}
 	if err := tx.UnmarshalBinary(data); err != nil {
 		return common.Hash{}, err
-	}
-
-	if tx.Gas() > txMaxGasLimit {
-		return common.Hash{}, errs.NewTxGasLimitTooHighError(txMaxGasLimit)
 	}
 
 	head := &types.Header{

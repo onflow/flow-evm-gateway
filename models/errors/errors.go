@@ -66,13 +66,6 @@ func NewTxGasPriceTooLowError(gasPrice *big.Int) error {
 	))
 }
 
-func NewTxGasLimitTooHighError(maxGasLimit uint64) error {
-	return NewInvalidTransactionError(fmt.Errorf(
-		"tx gas limit exceeds the max value of %d: ",
-		maxGasLimit,
-	))
-}
-
 func NewRecoverableError(err error) error {
 	return fmt.Errorf("%w: %w", ErrRecoverable, err)
 }
