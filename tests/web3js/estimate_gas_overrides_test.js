@@ -101,4 +101,23 @@ it('should apply block overrides on eth_estimateGas', async () => {
     assert.equal(response.status, 200)
     assert.isDefined(response.body)
     assert.equal(web3.utils.hexToNumber(response.body.result), 273693n)
+
+    // test that gas estimation still allows gas limits above the configured
+    // EIP-7825 value
+    txArgs = {
+        from: conf.eoa.address,
+        to: contractAddress,
+        gas: '0x10F4240', // this is equal to 17,777,216, which is greater than 16,777,216
+        gasPrice: web3.utils.toHex(conf.minGasPrice),
+        value: '0x0',
+        data: testFuncSelector,
+    }
+
+    response = await helpers.callRPCMethod(
+        'eth_estimateGas',
+        [txArgs, 'latest', null, null]
+    )
+    assert.equal(response.status, 200)
+    assert.isDefined(response.body)
+    assert.equal(web3.utils.hexToNumber(response.body.result), 21473n)
 })
