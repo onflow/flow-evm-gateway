@@ -161,10 +161,10 @@ func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			latestBlock, account, err := t.fetchFlowLatestBlockAndCOA(ctx)
+			latestBlock, err := t.client.GetLatestBlock(ctx, true)
 			if err != nil {
 				t.logger.Error().Err(err).Msg(
-					"failed to get COA / latest Flow block on batch tx submission",
+					"failed to get latest Flow block on batch tx submission",
 				)
 				continue
 			}
@@ -181,7 +181,6 @@ func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 				err := t.batchSubmitTransactionsForSameAddress(
 					ctx,
 					latestBlock,
-					account,
 					pooledTxs,
 				)
 				if err != nil {
@@ -199,7 +198,6 @@ func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 func (t *BatchTxPool) batchSubmitTransactionsForSameAddress(
 	ctx context.Context,
 	latestBlock *flow.Block,
-	account *flow.Account,
 	pooledTxs []pooledEvmTx,
 ) error {
 	// Sort the transactions based on their nonce, to make sure
@@ -220,8 +218,8 @@ func (t *BatchTxPool) batchSubmitTransactionsForSameAddress(
 
 	script := replaceAddresses(runTxScript, t.config.FlowNetworkID)
 	flowTx, err := t.buildTransaction(
+		ctx,
 		latestBlock,
-		account,
 		script,
 		cadence.NewArray(hexEncodedTxs),
 		coinbaseAddress,
@@ -244,7 +242,7 @@ func (t *BatchTxPool) submitSingleTransaction(
 	ctx context.Context,
 	hexEncodedTx cadence.String,
 ) error {
-	latestBlock, account, err := t.fetchFlowLatestBlockAndCOA(ctx)
+	latestBlock, err := t.client.GetLatestBlock(ctx, true)
 	if err != nil {
 		return err
 	}
@@ -256,8 +254,8 @@ func (t *BatchTxPool) submitSingleTransaction(
 
 	script := replaceAddresses(runTxScript, t.config.FlowNetworkID)
 	flowTx, err := t.buildTransaction(
+		ctx,
 		latestBlock,
-		account,
 		script,
 		cadence.NewArray([]cadence.Value{hexEncodedTx}),
 		coinbaseAddress,

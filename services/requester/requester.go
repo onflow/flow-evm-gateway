@@ -118,7 +118,7 @@ func NewEVM(
 
 	if !config.IndexOnly {
 		address := config.COAAddress
-		acc, err := client.GetAccount(context.Background(), address)
+		accBalance, err := client.GetAccountBalanceAtLatestBlock(context.Background(), address)
 		if err != nil {
 			return nil, fmt.Errorf(
 				"could not fetch the configured COA account: %s make sure it exists: %w",
@@ -127,13 +127,13 @@ func NewEVM(
 			)
 		}
 		// initialize the operator balance metric since it is only updated when sending a tx
-		collector.OperatorBalance(acc)
+		collector.OperatorBalance(accBalance)
 
-		if acc.Balance < minFlowBalance {
+		if accBalance < minFlowBalance {
 			return nil, fmt.Errorf(
 				"COA account must be funded with at least %d Flow, but has balance of: %d",
 				minFlowBalance,
-				acc.Balance,
+				accBalance,
 			)
 		}
 	}

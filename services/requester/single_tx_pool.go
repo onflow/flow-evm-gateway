@@ -13,7 +13,6 @@ import (
 	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/rs/zerolog"
 	"github.com/sethvargo/go-retry"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/metrics"
@@ -93,15 +92,15 @@ func (t *SingleTxPool) Add(
 		return err
 	}
 
-	latestBlock, account, err := t.fetchFlowLatestBlockAndCOA(ctx)
+	latestBlock, err := t.client.GetLatestBlock(ctx, true)
 	if err != nil {
 		return err
 	}
 
 	script := replaceAddresses(runTxScript, t.config.FlowNetworkID)
 	flowTx, err := t.buildTransaction(
+		ctx,
 		latestBlock,
-		account,
 		script,
 		cadence.NewArray([]cadence.Value{hexEncodedTx}),
 		coinbaseAddress,
@@ -157,8 +156,8 @@ func (t *SingleTxPool) Add(
 // buildTransaction creates a Cadence transaction from the provided script,
 // with the given arguments and signs it with the configured COA account.
 func (t *SingleTxPool) buildTransaction(
+	ctx context.Context,
 	latestBlock *flow.Block,
-	account *flow.Account,
 	script []byte,
 	args ...cadence.Value,
 ) (*flow.Transaction, error) {
@@ -177,17 +176,19 @@ func (t *SingleTxPool) buildTransaction(
 		}
 	}
 
-	// building and signing transactions should be blocking,
-	// so we don't have keys conflict
-	t.mux.Lock()
-	defer t.mux.Unlock()
-
-	accKey, err := t.keystore.Take()
+	accKey, err := t.fetchSigningAccountKey()
 	if err != nil {
 		return nil, err
 	}
 
-	if err := accKey.SetProposerPayerAndSign(flowTx, account); err != nil {
+	coaAddress := t.config.COAAddress
+	accountKey, err := t.client.GetAccountKeyAtLatestBlock(ctx, coaAddress, accKey.Index)
+	if err != nil {
+		accKey.Done()
+		return nil, err
+	}
+
+	if err := accKey.SetProposerPayerAndSign(flowTx, coaAddress, accountKey); err != nil {
 		accKey.Done()
 		return nil, err
 	}
@@ -195,35 +196,15 @@ func (t *SingleTxPool) buildTransaction(
 	// now that the transaction is prepared, store the transaction's metadata
 	accKey.SetLockMetadata(flowTx.ID(), latestBlock.Height)
 
-	t.collector.OperatorBalance(account)
-
 	return flowTx, nil
 }
 
-func (t *SingleTxPool) fetchFlowLatestBlockAndCOA(ctx context.Context) (
-	*flow.Block,
-	*flow.Account,
-	error,
-) {
-	var (
-		g           = errgroup.Group{}
-		err1, err2  error
-		latestBlock *flow.Block
-		account     *flow.Account
-	)
+func (t *SingleTxPool) fetchSigningAccountKey() (*keystore.AccountKey, error) {
+	// getting an account key from the `KeyStore` for signing transactions,
+	// should be lock-protected, so that we don't sign any two Flow
+	// transactions with the same account key
+	t.mux.Lock()
+	defer t.mux.Unlock()
 
-	// execute concurrently so we can speed up all the information we need for tx
-	g.Go(func() error {
-		latestBlock, err1 = t.client.GetLatestBlock(ctx, true)
-		return err1
-	})
-	g.Go(func() error {
-		account, err2 = t.client.GetAccount(ctx, t.config.COAAddress)
-		return err2
-	})
-	if err := g.Wait(); err != nil {
-		return nil, nil, err
-	}
-
-	return latestBlock, account, nil
+	return t.keystore.Take()
 }

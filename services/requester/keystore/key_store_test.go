@@ -200,7 +200,7 @@ func TestKeySigning(t *testing.T) {
 	}
 	tx := sdk.NewTransaction()
 
-	err = key.SetProposerPayerAndSign(tx, account)
+	err = key.SetProposerPayerAndSign(tx, address, accountKey)
 	require.NoError(t, err)
 
 	assert.Equal(t, account.Address, tx.ProposalKey.Address)
