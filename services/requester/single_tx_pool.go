@@ -200,8 +200,9 @@ func (t *SingleTxPool) buildTransaction(
 }
 
 func (t *SingleTxPool) fetchSigningAccountKey() (*keystore.AccountKey, error) {
-	// building and signing transactions should be
-	// blocking, so we don't have conflicts with keys.
+	// getting an account key from the `KeyStore` for signing transactions,
+	// should be lock-protected, so that we don't sign any two Flow
+	// transactions with the same account key
 	t.mux.Lock()
 	defer t.mux.Unlock()
 
