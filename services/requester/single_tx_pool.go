@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
@@ -20,6 +21,8 @@ import (
 	"github.com/onflow/flow-evm-gateway/services/requester/keystore"
 )
 
+const referenceBlockUpdateFrequency = time.Second * 15
+
 // SingleTxPool is a simple implementation of the `TxPool` interface that submits
 // transactions as soon as they arrive, without any delays or batching strategies.
 type SingleTxPool struct {
@@ -31,23 +34,32 @@ type SingleTxPool struct {
 	mux         sync.Mutex
 	keystore    *keystore.KeyStore
 	collector   metrics.Collector
+	// referenceBlockHeader is stored atomically to avoid races
+	// between request path and ticker updates.
+	referenceBlockHeader atomic.Value // stores *flow.BlockHeader
 	// todo add methods to inspect transaction pool state
 }
 
 var _ TxPool = &SingleTxPool{}
 
 func NewSingleTxPool(
+	ctx context.Context,
 	client *CrossSporkClient,
 	transactionsPublisher *models.Publisher[*gethTypes.Transaction],
 	logger zerolog.Logger,
 	config config.Config,
 	collector metrics.Collector,
 	keystore *keystore.KeyStore,
-) *SingleTxPool {
+) (*SingleTxPool, error) {
+	referenceBlockHeader, err := client.GetLatestBlockHeader(ctx, false)
+	if err != nil {
+		return nil, err
+	}
+
 	// initialize the available keys metric since it is only updated when sending a tx
 	collector.AvailableSigningKeys(keystore.AvailableKeys())
 
-	return &SingleTxPool{
+	singleTxPool := &SingleTxPool{
 		logger:      logger.With().Str("component", "tx-pool").Logger(),
 		client:      client,
 		txPublisher: transactionsPublisher,
@@ -56,6 +68,11 @@ func NewSingleTxPool(
 		collector:   collector,
 		keystore:    keystore,
 	}
+	singleTxPool.referenceBlockHeader.Store(referenceBlockHeader)
+
+	go singleTxPool.updateReferenceBlock(ctx)
+
+	return singleTxPool, nil
 }
 
 // Add creates a Cadence transaction that wraps the given EVM transaction in
@@ -92,15 +109,10 @@ func (t *SingleTxPool) Add(
 		return err
 	}
 
-	latestBlock, err := t.client.GetLatestBlock(ctx, true)
-	if err != nil {
-		return err
-	}
-
 	script := replaceAddresses(runTxScript, t.config.FlowNetworkID)
 	flowTx, err := t.buildTransaction(
 		ctx,
-		latestBlock,
+		t.getReferenceBlock(),
 		script,
 		cadence.NewArray([]cadence.Value{hexEncodedTx}),
 		coinbaseAddress,
@@ -157,7 +169,7 @@ func (t *SingleTxPool) Add(
 // with the given arguments and signs it with the configured COA account.
 func (t *SingleTxPool) buildTransaction(
 	ctx context.Context,
-	latestBlock *flow.Block,
+	referenceBlockHeader *flow.BlockHeader,
 	script []byte,
 	args ...cadence.Value,
 ) (*flow.Transaction, error) {
@@ -167,7 +179,7 @@ func (t *SingleTxPool) buildTransaction(
 
 	flowTx := flow.NewTransaction().
 		SetScript(script).
-		SetReferenceBlockID(latestBlock.ID).
+		SetReferenceBlockID(referenceBlockHeader.ID).
 		SetComputeLimit(flowGo.DefaultMaxTransactionGasLimit)
 
 	for _, arg := range args {
@@ -194,7 +206,7 @@ func (t *SingleTxPool) buildTransaction(
 	}
 
 	// now that the transaction is prepared, store the transaction's metadata
-	accKey.SetLockMetadata(flowTx.ID(), latestBlock.Height)
+	accKey.SetLockMetadata(flowTx.ID(), referenceBlockHeader.Height)
 
 	return flowTx, nil
 }
@@ -207,4 +219,32 @@ func (t *SingleTxPool) fetchSigningAccountKey() (*keystore.AccountKey, error) {
 	defer t.mux.Unlock()
 
 	return t.keystore.Take()
+}
+
+func (t *SingleTxPool) getReferenceBlock() *flow.BlockHeader {
+	if v := t.referenceBlockHeader.Load(); v != nil {
+		return v.(*flow.BlockHeader)
+	}
+	return nil
+}
+
+func (t *SingleTxPool) updateReferenceBlock(ctx context.Context) {
+	ticker := time.NewTicker(referenceBlockUpdateFrequency)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			blockHeader, err := t.client.GetLatestBlockHeader(ctx, false)
+			if err != nil {
+				t.logger.Error().Err(err).Msg(
+					"failed to update the reference block",
+				)
+				continue
+			}
+			t.referenceBlockHeader.Store(blockHeader)
+		}
+	}
 }
