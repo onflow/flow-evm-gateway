@@ -538,23 +538,18 @@ func Test_MultipleTransactionSubmissionsWithDuplicates(t *testing.T) {
 
 	// Increment nonce for the duplicate test transactions that follow
 	nonce += 1
-	// Submit 5 identical transactions to test duplicate detection:
-	// the first should succeed, the rest should be rejected as duplicates
-	for i := range 5 {
-		// All these transactions are duplicates, since we don't change any
-		// of the payload data. These will end up having the same tx hash
-		// as well.
-		signed, _, err := evmSign(big.NewInt(10), 15_000_000, eoaKey, nonce, &testAddr, nil)
-		require.NoError(t, err)
+	dupSigned, _, err := evmSign(big.NewInt(10), 15_000_000, eoaKey, nonce, &testAddr, nil)
+	require.NoError(t, err)
 
-		// only the first transaction is valid, the rest 4 are duplicates
-		// of the 1st one.
+	// Submit 5 identical transactions to test duplicate detection:
+	// the first should succeed, the rest should be rejected as duplicates.
+	for i := range 5 {
 		if i == 0 {
-			txHash, err := rpcTester.sendRawTx(signed)
+			txHash, err := rpcTester.sendRawTx(dupSigned)
 			require.NoError(t, err)
 			hashes = append(hashes, txHash)
 		} else {
-			_, err := rpcTester.sendRawTx(signed)
+			_, err := rpcTester.sendRawTx(dupSigned)
 			require.Error(t, err)
 			require.ErrorContains(t, err, "invalid: transaction already in pool")
 		}
