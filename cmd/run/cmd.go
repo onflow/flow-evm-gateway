@@ -202,7 +202,13 @@ func parseConfigFromFlags() error {
 	cfg.FilterExpiry = exp
 
 	if accessNodeBackupHosts != "" {
-		cfg.AccessNodeBackupHosts = strings.Split(accessNodeBackupHosts, ",")
+		rawHosts := strings.Split(accessNodeBackupHosts, ",")
+		cfg.AccessNodeBackupHosts = make([]string, 0, len(rawHosts))
+		for _, host := range rawHosts {
+			if trimmed := strings.TrimSpace(host); trimmed != "" {
+				cfg.AccessNodeBackupHosts = append(cfg.AccessNodeBackupHosts, trimmed)
+			}
+		}
 	}
 
 	if accessSporkHosts != "" {
