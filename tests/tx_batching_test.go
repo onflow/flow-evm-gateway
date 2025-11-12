@@ -514,6 +514,59 @@ func Test_MultipleTransactionSubmissionsWithinNonRecentInterval(t *testing.T) {
 	)
 }
 
+func Test_MultipleTransactionSubmissionsWithDuplicates(t *testing.T) {
+	_, cfg, stop := setupGatewayNode(t)
+	defer stop()
+
+	rpcTester := &rpcTest{
+		url: fmt.Sprintf("%s:%d", cfg.RPCHost, cfg.RPCPort),
+	}
+
+	eoaKey, err := crypto.HexToECDSA(eoaTestPrivateKey)
+	require.NoError(t, err)
+
+	testAddr := common.HexToAddress("55253ed90B70b96C73092D8680915aaF50081194")
+	nonce := uint64(0)
+	hashes := make([]common.Hash, 0)
+
+	signed, _, err := evmSign(big.NewInt(10), 21000, eoaKey, nonce, &testAddr, nil)
+	require.NoError(t, err)
+
+	txHash, err := rpcTester.sendRawTx(signed)
+	require.NoError(t, err)
+	hashes = append(hashes, txHash)
+
+	// Increment nonce for the duplicate test transactions that follow
+	nonce += 1
+	dupSigned, _, err := evmSign(big.NewInt(10), 15_000_000, eoaKey, nonce, &testAddr, nil)
+	require.NoError(t, err)
+
+	// Submit 5 identical transactions to test duplicate detection:
+	// the first should succeed, the rest should be rejected as duplicates.
+	for i := range 5 {
+		if i == 0 {
+			txHash, err := rpcTester.sendRawTx(dupSigned)
+			require.NoError(t, err)
+			hashes = append(hashes, txHash)
+		} else {
+			_, err := rpcTester.sendRawTx(dupSigned)
+			require.Error(t, err)
+			require.ErrorContains(t, err, "invalid: transaction already in pool")
+		}
+	}
+
+	assert.Eventually(t, func() bool {
+		for _, h := range hashes {
+			rcp, err := rpcTester.getReceipt(h.String())
+			if err != nil || rcp == nil || rcp.Status != 1 {
+				return false
+			}
+		}
+
+		return true
+	}, time.Second*15, time.Second*1, "all transactions were not executed")
+}
+
 func setupGatewayNode(t *testing.T) (emulator.Emulator, config.Config, func()) {
 	srv, err := startEmulator(true)
 	require.NoError(t, err)
