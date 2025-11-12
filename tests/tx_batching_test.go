@@ -531,12 +531,15 @@ func Test_MultipleTransactionSubmissionsWithDuplicates(t *testing.T) {
 
 	signed, _, err := evmSign(big.NewInt(10), 21000, eoaKey, nonce, &testAddr, nil)
 	require.NoError(t, err)
-	nonce += 1
 
 	txHash, err := rpcTester.sendRawTx(signed)
 	require.NoError(t, err)
 	hashes = append(hashes, txHash)
 
+	// Increment nonce for the duplicate test transactions that follow
+	nonce += 1
+	// Submit 5 identical transactions to test duplicate detection:
+	// the first should succeed, the rest should be rejected as duplicates
 	for i := range 5 {
 		// All these transactions are duplicates, since we don't change any
 		// of the payload data. These will end up having the same tx hash
