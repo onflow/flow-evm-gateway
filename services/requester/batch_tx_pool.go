@@ -57,11 +57,12 @@ func NewBatchTxPool(
 	config config.Config,
 	collector metrics.Collector,
 	keystore *keystore.KeyStore,
-) *BatchTxPool {
+) (*BatchTxPool, error) {
 	// initialize the available keys metric since it is only updated when sending a tx
 	collector.AvailableSigningKeys(keystore.AvailableKeys())
 
-	singleTxPool := NewSingleTxPool(
+	singleTxPool, err := NewSingleTxPool(
+		ctx,
 		client,
 		transactionsPublisher,
 		logger,
@@ -69,6 +70,9 @@ func NewBatchTxPool(
 		collector,
 		keystore,
 	)
+	if err != nil {
+		return nil, err
+	}
 
 	eoaActivity := expirable.NewLRU[gethCommon.Address, time.Time](
 		eoaActivityCacheSize,
@@ -84,7 +88,7 @@ func NewBatchTxPool(
 
 	go batchPool.processPooledTransactions(ctx)
 
-	return batchPool
+	return batchPool, nil
 }
 
 // Add adds the EVM transaction to the tx pool, grouped with the rest of the
@@ -161,14 +165,6 @@ func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			latestBlock, account, err := t.fetchFlowLatestBlockAndCOA(ctx)
-			if err != nil {
-				t.logger.Error().Err(err).Msg(
-					"failed to get COA / latest Flow block on batch tx submission",
-				)
-				continue
-			}
-
 			// Take a copy here to allow `Add()` to continue accept
 			// incoming EVM transactions, without blocking until the
 			// batch transactions are submitted.
@@ -180,8 +176,7 @@ func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 			for address, pooledTxs := range txsGroupedByAddress {
 				err := t.batchSubmitTransactionsForSameAddress(
 					ctx,
-					latestBlock,
-					account,
+					t.getReferenceBlock(),
 					pooledTxs,
 				)
 				if err != nil {
@@ -198,8 +193,7 @@ func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 
 func (t *BatchTxPool) batchSubmitTransactionsForSameAddress(
 	ctx context.Context,
-	latestBlock *flow.Block,
-	account *flow.Account,
+	referenceBlockHeader *flow.BlockHeader,
 	pooledTxs []pooledEvmTx,
 ) error {
 	// Sort the transactions based on their nonce, to make sure
@@ -220,8 +214,8 @@ func (t *BatchTxPool) batchSubmitTransactionsForSameAddress(
 
 	script := replaceAddresses(runTxScript, t.config.FlowNetworkID)
 	flowTx, err := t.buildTransaction(
-		latestBlock,
-		account,
+		ctx,
+		referenceBlockHeader,
 		script,
 		cadence.NewArray(hexEncodedTxs),
 		coinbaseAddress,
@@ -244,11 +238,6 @@ func (t *BatchTxPool) submitSingleTransaction(
 	ctx context.Context,
 	hexEncodedTx cadence.String,
 ) error {
-	latestBlock, account, err := t.fetchFlowLatestBlockAndCOA(ctx)
-	if err != nil {
-		return err
-	}
-
 	coinbaseAddress, err := cadence.NewString(t.config.Coinbase.Hex())
 	if err != nil {
 		return err
@@ -256,8 +245,8 @@ func (t *BatchTxPool) submitSingleTransaction(
 
 	script := replaceAddresses(runTxScript, t.config.FlowNetworkID)
 	flowTx, err := t.buildTransaction(
-		latestBlock,
-		account,
+		ctx,
+		t.getReferenceBlock(),
 		script,
 		cadence.NewArray([]cadence.Value{hexEncodedTx}),
 		coinbaseAddress,

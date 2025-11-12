@@ -90,7 +90,7 @@ func startEmulator(createTestAccounts bool) (*server.EmulatorServer, error) {
 		GenesisTokenSupply:     genesisToken,
 		WithContracts:          true,
 		Host:                   "localhost",
-		TransactionExpiry:      10,
+		TransactionExpiry:      flow.DefaultTransactionExpiry,
 		TransactionMaxGasLimit: flow.DefaultMaxTransactionGasLimit,
 		SetupEVMEnabled:        true,
 		SetupVMBridgeEnabled:   true,

@@ -54,26 +54,31 @@ func (k *AccountKey) SetLockMetadata(txID flowsdk.Identifier, referenceBlockHeig
 // SetProposerPayerAndSign sets the proposer, payer, and signs the transaction with the key.
 func (k *AccountKey) SetProposerPayerAndSign(
 	tx *flowsdk.Transaction,
-	account *flowsdk.Account,
+	address flowsdk.Address,
+	acckey *flowsdk.AccountKey,
 ) error {
-	if k.Address != account.Address {
+	if acckey == nil {
+		return fmt.Errorf("nil account key provided for address %s (index %d)", address, k.Index)
+	}
+
+	if k.Address != address {
 		return fmt.Errorf(
-			"expected address: %v, got address: %v",
+			"expected address: %s, got address: %s",
 			k.Address,
-			account.Address,
+			address,
 		)
 	}
-	if k.Index >= uint32(len(account.Keys)) {
+
+	if k.Index != acckey.Index {
 		return fmt.Errorf(
-			"key index: %d exceeds keys length: %d",
+			"expected account key with index: %d, got key with index: %d",
 			k.Index,
-			len(account.Keys),
+			acckey.Index,
 		)
 	}
-	seqNumber := account.Keys[k.Index].SequenceNumber
 
 	return tx.
-		SetProposalKey(k.Address, k.Index, seqNumber).
+		SetProposalKey(k.Address, k.Index, acckey.SequenceNumber).
 		SetPayer(k.Address).
 		SignEnvelope(k.Address, k.Index, k.Signer)
 }

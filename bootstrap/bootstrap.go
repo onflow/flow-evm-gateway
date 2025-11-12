@@ -277,8 +277,9 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 
 	// create transaction pool
 	var txPool requester.TxPool
+	var err error
 	if b.config.TxBatchMode {
-		txPool = requester.NewBatchTxPool(
+		txPool, err = requester.NewBatchTxPool(
 			ctx,
 			b.client,
 			b.publishers.Transaction,
@@ -288,7 +289,8 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 			b.keystore,
 		)
 	} else {
-		txPool = requester.NewSingleTxPool(
+		txPool, err = requester.NewSingleTxPool(
+			ctx,
 			b.client,
 			b.publishers.Transaction,
 			b.logger,
@@ -296,6 +298,9 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 			b.collector,
 			b.keystore,
 		)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to create transaction pool: %w", err)
 	}
 
 	evm, err := requester.NewEVM(
@@ -733,6 +738,8 @@ func (b *Bootstrap) Run(
 	// mark ready
 	ready()
 
+	go b.trackOperatorBalance(ctx)
+
 	return nil
 }
 
@@ -744,6 +751,27 @@ func (b *Bootstrap) Stop() {
 	b.StopAPIServer()
 	b.StopClient()
 	b.StopDB()
+}
+
+func (b *Bootstrap) trackOperatorBalance(ctx context.Context) {
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			accBalance, err := b.client.GetAccountBalanceAtLatestBlock(ctx, b.config.COAAddress)
+			if err != nil {
+				b.logger.Warn().Err(err).Msg(
+					"failed to collect operator's balance metric",
+				)
+				continue
+			}
+			b.collector.OperatorBalance(accBalance)
+		}
+	}
 }
 
 // Run will run complete bootstrap of the EVM gateway with all the engines.

@@ -41,7 +41,6 @@ var (
 
 const minFlowBalance = 2
 const blockGasLimit = 120_000_000
-const txMaxGasLimit = 50_000_000
 
 // estimateGasErrorRatio is the amount of overestimation eth_estimateGas
 // is allowed to produce in order to speed up calculations.
@@ -119,7 +118,7 @@ func NewEVM(
 
 	if !config.IndexOnly {
 		address := config.COAAddress
-		acc, err := client.GetAccount(context.Background(), address)
+		accBalance, err := client.GetAccountBalanceAtLatestBlock(context.Background(), address)
 		if err != nil {
 			return nil, fmt.Errorf(
 				"could not fetch the configured COA account: %s make sure it exists: %w",
@@ -128,13 +127,13 @@ func NewEVM(
 			)
 		}
 		// initialize the operator balance metric since it is only updated when sending a tx
-		collector.OperatorBalance(acc)
+		collector.OperatorBalance(accBalance)
 
-		if acc.Balance < minFlowBalance {
+		if accBalance < minFlowBalance {
 			return nil, fmt.Errorf(
 				"COA account must be funded with at least %d Flow, but has balance of: %d",
 				minFlowBalance,
-				acc.Balance,
+				accBalance,
 			)
 		}
 	}
@@ -165,10 +164,6 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 	tx := &types.Transaction{}
 	if err := tx.UnmarshalBinary(data); err != nil {
 		return common.Hash{}, err
-	}
-
-	if tx.Gas() > txMaxGasLimit {
-		return common.Hash{}, errs.NewTxGasLimitTooHighError(txMaxGasLimit)
 	}
 
 	head := &types.Header{
@@ -343,6 +338,28 @@ func (e *EVM) EstimateGas(
 	passingGasLimit = blockGasLimit
 	if txArgs.Gas != nil && (uint64(*txArgs.Gas) >= gethParams.TxGas) {
 		passingGasLimit = uint64(*txArgs.Gas)
+	}
+
+	if passingGasLimit > gethParams.MaxTxGas {
+		// Cap the maximum gas allowance according to EIP-7825 if the estimation targets Osaka
+		targetBlock, err := e.blocks.GetByHeight(height)
+		if err != nil {
+			return 0, err
+		}
+		blockNumber, blockTime := new(big.Int).SetUint64(targetBlock.Height), targetBlock.Timestamp
+
+		if blockOverrides != nil {
+			if blockOverrides.Number != nil {
+				blockNumber = blockOverrides.Number.ToInt()
+			}
+			if blockOverrides.Time != nil {
+				blockTime = uint64(*blockOverrides.Time)
+			}
+		}
+		chainConfig := emulator.MakeChainConfig(e.config.EVMNetworkID)
+		if chainConfig.IsOsaka(blockNumber, blockTime) {
+			passingGasLimit = gethParams.MaxTxGas
+		}
 	}
 
 	// We first execute the transaction at the highest allowable gas limit,

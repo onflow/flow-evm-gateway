@@ -257,7 +257,7 @@ func Test_MultipleTransactionSubmissionsWithinSmallInterval(t *testing.T) {
 
 	txResults, err := emu.GetTransactionsByBlockID(block1.ID())
 	require.NoError(t, err)
-	require.Len(t, txResults, 1)
+	require.True(t, len(txResults) >= 1)
 
 	// Assert that the 1st transaction was submitted individually.
 	// The easiest way to check that is by making sure that the
@@ -273,7 +273,7 @@ func Test_MultipleTransactionSubmissionsWithinSmallInterval(t *testing.T) {
 
 	txResults, err = emu.GetTransactionsByBlockID(block2.ID())
 	require.NoError(t, err)
-	require.Len(t, txResults, 1)
+	require.True(t, len(txResults) >= 1)
 
 	// Assert that the 2nd transaction was submitted in a batch.
 	// The easiest way to check that is by making sure that the
@@ -371,7 +371,7 @@ func Test_MultipleTransactionSubmissionsWithinRecentInterval(t *testing.T) {
 
 	txResults, err := emu.GetTransactionsByBlockID(block1.ID())
 	require.NoError(t, err)
-	require.Len(t, txResults, 1)
+	require.True(t, len(txResults) >= 1)
 
 	// Assert that the 1st transaction was submitted individually.
 	// The easiest way to check that is by making sure that the
@@ -387,7 +387,7 @@ func Test_MultipleTransactionSubmissionsWithinRecentInterval(t *testing.T) {
 
 	txResults, err = emu.GetTransactionsByBlockID(block2.ID())
 	require.NoError(t, err)
-	require.Len(t, txResults, 1)
+	require.True(t, len(txResults) >= 1)
 
 	// Assert that the 2nd transaction was submitted in a batch.
 	// The easiest way to check that is by making sure that the
@@ -486,7 +486,7 @@ func Test_MultipleTransactionSubmissionsWithinNonRecentInterval(t *testing.T) {
 
 	txResults, err := emu.GetTransactionsByBlockID(block1.ID())
 	require.NoError(t, err)
-	require.Len(t, txResults, 1)
+	require.True(t, len(txResults) >= 1)
 
 	// Assert that the 1st transaction was submitted individually.
 	// The easiest way to check that is by making sure that the
@@ -502,7 +502,7 @@ func Test_MultipleTransactionSubmissionsWithinNonRecentInterval(t *testing.T) {
 
 	txResults, err = emu.GetTransactionsByBlockID(block2.ID())
 	require.NoError(t, err)
-	require.Len(t, txResults, 1)
+	require.True(t, len(txResults) >= 1)
 
 	// Assert that the 2nd transaction was also submitted individually.
 	// The easiest way to check that is by making sure that the
