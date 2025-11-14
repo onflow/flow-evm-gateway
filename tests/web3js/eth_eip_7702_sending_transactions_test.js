@@ -3,6 +3,9 @@ const { encodeFunctionData } = require('viem')
 const { privateKeyToAccount } = require('viem/accounts')
 const { relay, walletClient, publicClient } = require('./viem/config')
 const { abi, bytecode } = require('./viem/contract')
+const conf = require('./config')
+const helpers = require('./helpers')
+const web3 = conf.web3
 
 // eoa is 0xfe847d8bebe46799FCE83eB52f38Ef4b907996A6
 const eoa = privateKeyToAccount('0x3a0901a19a40f2041727fe1a973137ad917fc925ce716983e1376e927658b12e')
@@ -46,6 +49,33 @@ it('should send transactions with relay account', async () => {
         contractAddress,
     })
 
+    let txArgs = {
+        from: relay.address,
+        to: eoa.address,
+        data: encodeFunctionData({
+            abi,
+            functionName: 'initialize',
+        }),
+        authorizationList: [
+            {
+                address: authorization.address,
+                chainId: web3.utils.numberToHex(authorization.chainId),
+                nonce: web3.utils.numberToHex(authorization.nonce),
+                r: authorization.r,
+                s: authorization.s,
+                yParity: web3.utils.numberToHex(authorization.yParity)
+            }
+        ]
+    }
+
+    let response = await helpers.callRPCMethod(
+        'eth_estimateGas',
+        [txArgs, 'latest']
+    )
+    assert.equal(response.status, 200)
+    assert.isDefined(response.body)
+    assert.equal(web3.utils.hexToNumber(response.body.result), 63779n)
+
     // 2. Designate the Contract on the EOA, and invoke the `initialize` function.
     let hash = await walletClient.sendTransaction({
         authorizationList: [authorization], // 3. Pass the Authorization as a parameter.
@@ -54,6 +84,7 @@ it('should send transactions with relay account', async () => {
             functionName: 'initialize',
         }),
         to: eoa.address,
+        gas: web3.utils.hexToNumber(response.body.result)
     })
 
     await new Promise((res) => setTimeout(() => res(), 1500))
@@ -108,6 +139,33 @@ it('should send self-executing transactions', async () => {
         executor: 'self',
     })
 
+    let txArgs = {
+        from: relay.address,
+        to: relay.address,
+        data: encodeFunctionData({
+            abi,
+            functionName: 'initialize',
+        }),
+        authorizationList: [
+            {
+                address: authorization.address,
+                chainId: web3.utils.numberToHex(authorization.chainId),
+                nonce: web3.utils.numberToHex(authorization.nonce),
+                r: authorization.r,
+                s: authorization.s,
+                yParity: web3.utils.numberToHex(authorization.yParity)
+            }
+        ]
+    }
+
+    let response = await helpers.callRPCMethod(
+        'eth_estimateGas',
+        [txArgs, 'latest']
+    )
+    assert.equal(response.status, 200)
+    assert.isDefined(response.body)
+    assert.equal(web3.utils.hexToNumber(response.body.result), 63779n)
+
     // 2. Designate the Contract on the EOA, and invoke the `initialize` function.
     let hash = await walletClient.sendTransaction({
         authorizationList: [authorization], // 3. Pass the Authorization as a parameter.
@@ -115,7 +173,8 @@ it('should send self-executing transactions', async () => {
             abi,
             functionName: 'initialize',
         }),
-        to: walletClient.account.address,
+        to: relay.address,
+        gas: web3.utils.hexToNumber(response.body.result),
     })
 
     await new Promise((res) => setTimeout(() => res(), 1500))
@@ -150,7 +209,7 @@ it('should send self-executing transactions', async () => {
             abi,
             functionName: 'ping',
         }),
-        to: walletClient.account.address,
+        to: relay.address,
     })
 
     await new Promise((res) => setTimeout(() => res(), 1500))

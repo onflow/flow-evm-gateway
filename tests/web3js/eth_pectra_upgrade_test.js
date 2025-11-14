@@ -57,6 +57,7 @@ it('should not perform contract writes with relay account before Pectra', async 
             address: eoa.address,
             authorizationList: [authorization], // 3. Pass the Authorization as a parameter.
             functionName: 'initialize',
+            gas: 63779n
         })
     } catch (e) {
         errMsg = e.details
