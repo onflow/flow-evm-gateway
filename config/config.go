@@ -124,4 +124,7 @@ type Config struct {
 	// frequently than this interval will be batched.
 	// Useful only when batch transaction submission is enabled.
 	EOAActivityCacheTTL time.Duration
+	// RpcRequestTimeout is the maximum duration at which JSON-RPC requests should generate
+	// a response, before they timeout.
+	RpcRequestTimeout time.Duration
 }
