@@ -28,8 +28,9 @@ var (
 
 	// Transaction errors
 
-	ErrFailedTransaction  = errors.New("failed transaction")
-	ErrInvalidTransaction = fmt.Errorf("%w: %w", ErrInvalid, ErrFailedTransaction)
+	ErrFailedTransaction    = errors.New("failed transaction")
+	ErrInvalidTransaction   = fmt.Errorf("%w: %w", ErrInvalid, ErrFailedTransaction)
+	ErrDuplicateTransaction = fmt.Errorf("%w: %s", ErrInvalid, "transaction already in pool")
 
 	// Storage errors
 

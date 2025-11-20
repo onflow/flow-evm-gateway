@@ -3,6 +3,7 @@ package requester
 import (
 	"context"
 	"encoding/hex"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/models"
+	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/services/requester/keystore"
 )
 
@@ -24,6 +26,7 @@ const eoaActivityCacheSize = 10_000
 
 type pooledEvmTx struct {
 	txPayload cadence.String
+	txHash    gethCommon.Hash
 	nonce     uint64
 }
 
@@ -147,7 +150,11 @@ func (t *BatchTxPool) Add(
 		err = t.submitSingleTransaction(ctx, hexEncodedTx)
 	} else {
 		// Case 3. EOA activity found AND it was less than [X] seconds ago:
-		userTx := pooledEvmTx{txPayload: hexEncodedTx, nonce: tx.Nonce()}
+		userTx := pooledEvmTx{txPayload: hexEncodedTx, txHash: tx.Hash(), nonce: tx.Nonce()}
+		// Prevent submission of duplicate transactions, based on their tx hash
+		if slices.Contains(t.pooledTxs[from], userTx) {
+			return errs.ErrDuplicateTransaction
+		}
 		t.pooledTxs[from] = append(t.pooledTxs[from], userTx)
 	}
 
