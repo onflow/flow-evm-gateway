@@ -189,7 +189,9 @@ func (h *Server) Start() error {
 		CheckTimeouts(h.logger, &h.timeouts)
 		h.server.ReadTimeout = h.timeouts.ReadTimeout
 		h.server.ReadHeaderTimeout = h.timeouts.ReadHeaderTimeout
-		h.server.WriteTimeout = h.timeouts.WriteTimeout
+		// WriteTimeout is the maximum duration before timing out
+		// writes of the response, a.k.a JSON-RPC request timeout.
+		h.server.WriteTimeout = h.config.RpcRequestTimeout
 		h.server.IdleTimeout = h.timeouts.IdleTimeout
 	}
 
