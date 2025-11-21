@@ -568,7 +568,7 @@ func Test_MultipleTransactionSubmissionsWithDuplicates(t *testing.T) {
 }
 
 func setupGatewayNode(t *testing.T) (emulator.Emulator, config.Config, func()) {
-	srv, err := startEmulator(true)
+	srv, err := startEmulator(true, defaultServerConfig())
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
