@@ -571,6 +571,7 @@ func (e *EVM) dryRunTx(
 		from,
 		to,
 		tx.Data(),
+		tx.SetCodeAuthorizations(),
 		tx.Value(),
 		tx.Gas(),
 		opts...,

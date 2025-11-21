@@ -7,9 +7,9 @@ require (
 	github.com/goccy/go-json v0.10.4
 	github.com/onflow/cadence v1.8.3
 	github.com/onflow/crypto v0.25.3
-	github.com/onflow/flow-emulator v1.12.1-0.20251112150210-ab3ddcde0cdc
+	github.com/onflow/flow-emulator v1.13.1-0.20251120165439-67cc8cd69668
 	github.com/onflow/flow-evm-gateway v0.0.0-20240201154855-4d4d3d3f19c7
-	github.com/onflow/flow-go v0.44.0-experimental-cadence-v1.8.3.0.20251111112227-097f521427a5
+	github.com/onflow/flow-go v0.44.0
 	github.com/onflow/flow-go-sdk v1.9.2
 	github.com/rs/zerolog v1.34.0
 	github.com/stretchr/testify v1.11.1
