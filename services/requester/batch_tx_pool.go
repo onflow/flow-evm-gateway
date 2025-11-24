@@ -3,6 +3,7 @@ package requester
 import (
 	"context"
 	"encoding/hex"
+	"fmt"
 	"slices"
 	"sort"
 	"sync"
@@ -22,35 +23,43 @@ import (
 	"github.com/onflow/flow-evm-gateway/services/requester/keystore"
 )
 
-const eoaActivityCacheSize = 10_000
+const (
+	eoaActivityCacheSize     = 10_000
+	eoaActivityCacheTTL      = time.Second * 10
+	maxTrackedTxHashesPerEOA = 15
+)
 
 type pooledEvmTx struct {
 	txPayload cadence.String
-	txHash    gethCommon.Hash
 	nonce     uint64
 }
 
-// BatchTxPool is a `TxPool` implementation that collects and groups
-// transactions based on their EOA signer, and submits them for execution
-// using a batch.
+type eoaActivityMetadata struct {
+	lastSubmission time.Time
+	txHashes       []gethCommon.Hash
+}
+
+// BatchTxPool is a `TxPool` implementation that groups incoming transactions
+// based on their EOA signer, and submits them for execution using a batch.
 //
 // The underlying Cadence EVM API used, is `EVM.batchRun`, instead of the
 // `EVM.run` used in `SingleTxPool`.
 //
 // The main advantage of this implementation over the `SingleTxPool`, is the
-// guarantee that transactions originated from the same EOA address, which
-// arrive in a short time interval (about the same as Flow's block production rate),
-// will be executed in the same order their arrived.
-// This helps to reduce the nonce mismatch errors which mainly occur from the
-// re-ordering of Cadence transactions that happens from Collection nodes.
+// guarantee that transactions originating from the same EOA address, which
+// arrive in a short time interval (configurable by the node operator),
+// will be executed in the same order they arrived.
+// This helps to reduce the execution errors which may occur from the
+// re-ordering of Cadence transactions that happens on Collection nodes.
 type BatchTxPool struct {
 	*SingleTxPool
-	pooledTxs   map[gethCommon.Address][]pooledEvmTx
-	txMux       sync.Mutex
-	eoaActivity *expirable.LRU[gethCommon.Address, time.Time]
+
+	pooledTxs        map[gethCommon.Address][]pooledEvmTx
+	txMux            sync.Mutex
+	eoaActivityCache *expirable.LRU[gethCommon.Address, eoaActivityMetadata]
 }
 
-var _ TxPool = &BatchTxPool{}
+var _ TxPool = (*BatchTxPool)(nil)
 
 func NewBatchTxPool(
 	ctx context.Context,
@@ -77,16 +86,16 @@ func NewBatchTxPool(
 		return nil, err
 	}
 
-	eoaActivity := expirable.NewLRU[gethCommon.Address, time.Time](
+	eoaActivityCache := expirable.NewLRU[gethCommon.Address, eoaActivityMetadata](
 		eoaActivityCacheSize,
 		nil,
-		config.EOAActivityCacheTTL,
+		eoaActivityCacheTTL,
 	)
 	batchPool := &BatchTxPool{
-		SingleTxPool: singleTxPool,
-		pooledTxs:    make(map[gethCommon.Address][]pooledEvmTx),
-		txMux:        sync.Mutex{},
-		eoaActivity:  eoaActivity,
+		SingleTxPool:     singleTxPool,
+		pooledTxs:        make(map[gethCommon.Address][]pooledEvmTx),
+		txMux:            sync.Mutex{},
+		eoaActivityCache: eoaActivityCache,
 	}
 
 	go batchPool.processPooledTransactions(ctx)
@@ -123,6 +132,21 @@ func (t *BatchTxPool) Add(
 		return err
 	}
 
+	eoaActivity, found := t.eoaActivityCache.Get(from)
+	txHash := tx.Hash()
+
+	// Reject transactions that have already been submitted,
+	// as they are *likely* to fail. Two transactions with
+	// identical hashes, are expected to have the exact same
+	// payload.
+	if found && slices.Contains(eoaActivity.txHashes, txHash) {
+		return fmt.Errorf(
+			"%w: a tx with hash %s has already been submitted",
+			errs.ErrInvalid,
+			txHash,
+		)
+	}
+
 	// Scenarios
 	// 1. EOA activity not found:
 	// => We send the transaction individually, without adding it
@@ -140,27 +164,42 @@ func (t *BatchTxPool) Add(
 	// For all 3 cases, we record the activity time for the next
 	// transactions that might come from the same EOA.
 	// [X] is equal to the configured `TxBatchInterval` duration.
-	lastActivityTime, found := t.eoaActivity.Get(from)
-
 	if !found {
 		// Case 1. EOA activity not found:
 		err = t.submitSingleTransaction(ctx, hexEncodedTx)
-	} else if time.Since(lastActivityTime) > t.config.TxBatchInterval {
-		// Case 2. EOA activity found AND it was more than [X] seconds ago:
-		err = t.submitSingleTransaction(ctx, hexEncodedTx)
+	} else if time.Since(eoaActivity.lastSubmission) > t.config.TxBatchInterval {
+		if len(t.pooledTxs[from]) > 0 {
+			// If the EOA has pooled transactions, which are not yet processed,
+			// due to congestion or anything, make sure to include the current
+			// tx on that batch.
+			userTx := pooledEvmTx{txPayload: hexEncodedTx, nonce: tx.Nonce()}
+			t.pooledTxs[from] = append(t.pooledTxs[from], userTx)
+		} else {
+			// Case 2. EOA activity found AND it was more than [X] seconds ago:
+			err = t.submitSingleTransaction(ctx, hexEncodedTx)
+		}
 	} else {
 		// Case 3. EOA activity found AND it was less than [X] seconds ago:
-		userTx := pooledEvmTx{txPayload: hexEncodedTx, txHash: tx.Hash(), nonce: tx.Nonce()}
-		// Prevent submission of duplicate transactions, based on their tx hash
-		if slices.Contains(t.pooledTxs[from], userTx) {
-			return errs.ErrDuplicateTransaction
-		}
+		userTx := pooledEvmTx{txPayload: hexEncodedTx, nonce: tx.Nonce()}
 		t.pooledTxs[from] = append(t.pooledTxs[from], userTx)
 	}
 
-	t.eoaActivity.Add(from, time.Now())
+	if err != nil {
+		return err
+	}
 
-	return err
+	// Update metadata for the last EOA activity only on successful add/submit.
+	eoaActivity.lastSubmission = time.Now()
+	eoaActivity.txHashes = append(eoaActivity.txHashes, txHash)
+	// To avoid the slice of hashes from growing indefinitely,
+	// maintain only a handful of the last tx hashes.
+	if len(eoaActivity.txHashes) > maxTrackedTxHashesPerEOA {
+		eoaActivity.txHashes = eoaActivity.txHashes[1:]
+	}
+
+	t.eoaActivityCache.Add(from, eoaActivity)
+
+	return nil
 }
 
 func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
