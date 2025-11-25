@@ -332,7 +332,7 @@ func Test_MultipleTransactionSubmissionsWithinRecentInterval(t *testing.T) {
 	// activity of the EOA was X seconds ago, where:
 	// X = `cfg.TxBatchInterval`.
 	// For the E2E tests the `cfg.TxBatchInterval` is equal
-	// to 2 seconds.
+	// to 2.5 seconds.
 	for i := range uint64(2) {
 		signed, _, err := evmSign(
 			big.NewInt(500_000),
@@ -446,7 +446,7 @@ func Test_MultipleTransactionSubmissionsWithinNonRecentInterval(t *testing.T) {
 	// activity of the EOA was X seconds ago, where:
 	// X = `cfg.TxBatchInterval`.
 	// For the E2E tests the `cfg.TxBatchInterval` is equal
-	// to 2 seconds.
+	// to 2.5 seconds.
 	for i := range uint64(2) {
 		signed, _, err := evmSign(
 			big.NewInt(500_000),
@@ -514,7 +514,7 @@ func Test_MultipleTransactionSubmissionsWithinNonRecentInterval(t *testing.T) {
 	)
 }
 
-func Test_MultipleTransactionSubmissionsWithDuplicates(t *testing.T) {
+func Test_TransactionSubmissionWithPreviouslySubmittedTransactions(t *testing.T) {
 	_, cfg, stop := setupGatewayNode(t)
 	defer stop()
 
@@ -525,35 +525,35 @@ func Test_MultipleTransactionSubmissionsWithDuplicates(t *testing.T) {
 	eoaKey, err := crypto.HexToECDSA(eoaTestPrivateKey)
 	require.NoError(t, err)
 
-	testAddr := common.HexToAddress("55253ed90B70b96C73092D8680915aaF50081194")
-	nonce := uint64(0)
-	hashes := make([]common.Hash, 0)
+	testAddr := common.HexToAddress("0x061B63D29332e4de81bD9F51A48609824CD113a8")
+	nonces := []uint64{0, 1, 2, 3, 2, 3, 4, 5}
 
-	signed, _, err := evmSign(big.NewInt(10), 21000, eoaKey, nonce, &testAddr, nil)
-	require.NoError(t, err)
+	var errors []error
+	hashes := []common.Hash{}
+	// transfer some funds to the test address
+	for _, nonce := range nonces {
+		signed, _, err := evmSign(big.NewInt(1_000_000_000), 23_500, eoaKey, nonce, &testAddr, nil)
+		require.NoError(t, err)
 
-	txHash, err := rpcTester.sendRawTx(signed)
-	require.NoError(t, err)
-	hashes = append(hashes, txHash)
-
-	// Increment nonce for the duplicate test transactions that follow
-	nonce += 1
-	dupSigned, _, err := evmSign(big.NewInt(10), 15_000_000, eoaKey, nonce, &testAddr, nil)
-	require.NoError(t, err)
-
-	// Submit 5 identical transactions to test duplicate detection:
-	// the first should succeed, the rest should be rejected as duplicates.
-	for i := range 5 {
-		if i == 0 {
-			txHash, err := rpcTester.sendRawTx(dupSigned)
-			require.NoError(t, err)
-			hashes = append(hashes, txHash)
+		txHash, err := rpcTester.sendRawTx(signed)
+		if err != nil {
+			errors = append(errors, err)
 		} else {
-			_, err := rpcTester.sendRawTx(dupSigned)
-			require.Error(t, err)
-			require.ErrorContains(t, err, "invalid: transaction already in pool")
+			hashes = append(hashes, txHash)
 		}
 	}
+
+	require.Len(t, errors, 2)
+	assert.ErrorContains(
+		t,
+		errors[0],
+		"a tx with hash 0x2bdf4aa4c3e273a624dddfdbde6614786b6a5329e246c531d3e0e9f92e79e04d has already been submitted",
+	)
+	assert.ErrorContains(
+		t,
+		errors[1],
+		"a tx with hash 0xb72e1f83861a63b5ad4b927295af07fa9546b01aac5dfce046a5fb20f9be9f2f has already been submitted",
+	)
 
 	assert.Eventually(t, func() bool {
 		for _, h := range hashes {
@@ -604,9 +604,9 @@ func setupGatewayNode(t *testing.T) (emulator.Emulator, config.Config, func()) {
 		EnforceGasPrice:   true,
 		LogLevel:          zerolog.DebugLevel,
 		LogWriter:         testLogWriter(),
-		TxStateValidation: config.TxSealValidation,
+		TxStateValidation: config.LocalIndexValidation,
 		TxBatchMode:       true,
-		TxBatchInterval:   time.Second * 2,
+		TxBatchInterval:   time.Millisecond * 2500, // 2.5 seconds, the same as mainnet
 	}
 
 	bootstrapDone := make(chan struct{})
@@ -616,6 +616,9 @@ func setupGatewayNode(t *testing.T) (emulator.Emulator, config.Config, func()) {
 		})
 		require.NoError(t, err)
 	}()
+
+	// Allow the Gateway to catch up on indexing
+	time.Sleep(time.Second * 2)
 
 	<-bootstrapDone
 
