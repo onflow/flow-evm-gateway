@@ -31,7 +31,6 @@ type SingleTxPool struct {
 	pool        *sync.Map
 	txPublisher *models.Publisher[*gethTypes.Transaction]
 	config      config.Config
-	mux         sync.Mutex
 	keystore    *keystore.KeyStore
 	collector   metrics.Collector
 	// referenceBlockHeader is stored atomically to avoid races
@@ -40,7 +39,7 @@ type SingleTxPool struct {
 	// todo add methods to inspect transaction pool state
 }
 
-var _ TxPool = &SingleTxPool{}
+var _ TxPool = (*SingleTxPool)(nil)
 
 func NewSingleTxPool(
 	ctx context.Context,
@@ -188,7 +187,11 @@ func (t *SingleTxPool) buildTransaction(
 		}
 	}
 
-	accKey, err := t.fetchSigningAccountKey()
+	// getting an account key from the `KeyStore` for signing transactions,
+	// *does not* need to be lock-protected, as the keys are read from a
+	// channel. No two go-routines will end up getting the same account
+	// key at the same time.
+	accKey, err := t.keystore.Take()
 	if err != nil {
 		return nil, err
 	}
@@ -209,16 +212,6 @@ func (t *SingleTxPool) buildTransaction(
 	accKey.SetLockMetadata(flowTx.ID(), referenceBlockHeader.Height)
 
 	return flowTx, nil
-}
-
-func (t *SingleTxPool) fetchSigningAccountKey() (*keystore.AccountKey, error) {
-	// getting an account key from the `KeyStore` for signing transactions,
-	// should be lock-protected, so that we don't sign any two Flow
-	// transactions with the same account key
-	t.mux.Lock()
-	defer t.mux.Unlock()
-
-	return t.keystore.Take()
 }
 
 func (t *SingleTxPool) getReferenceBlock() *flow.BlockHeader {
