@@ -25,7 +25,6 @@ import (
 
 const (
 	eoaActivityCacheSize     = 10_000
-	eoaActivityCacheTTL      = time.Second * 10
 	maxTrackedTxHashesPerEOA = 15
 )
 
@@ -89,7 +88,7 @@ func NewBatchTxPool(
 	eoaActivityCache := expirable.NewLRU[gethCommon.Address, eoaActivityMetadata](
 		eoaActivityCacheSize,
 		nil,
-		eoaActivityCacheTTL,
+		config.EOAActivityCacheTTL,
 	)
 	batchPool := &BatchTxPool{
 		SingleTxPool:     singleTxPool,
@@ -112,11 +111,6 @@ func (t *BatchTxPool) Add(
 	tx *gethTypes.Transaction,
 ) error {
 	t.txPublisher.Publish(tx) // publish pending transaction event
-
-	// tx adding should be blocking, so we don't have races when
-	// pooled transactions are being processed in the background.
-	t.txMux.Lock()
-	defer t.txMux.Unlock()
 
 	from, err := models.DeriveTxSender(tx)
 	if err != nil {
@@ -168,20 +162,28 @@ func (t *BatchTxPool) Add(
 		// Case 1. EOA activity not found:
 		err = t.submitSingleTransaction(ctx, hexEncodedTx)
 	} else if time.Since(eoaActivity.lastSubmission) > t.config.TxBatchInterval {
-		if len(t.pooledTxs[from]) > 0 {
-			// If the EOA has pooled transactions, which are not yet processed,
-			// due to congestion or anything, make sure to include the current
-			// tx on that batch.
+		// If the EOA has pooled transactions, which are not yet processed,
+		// due to congestion or anything, make sure to include the current
+		// tx on that batch.
+		t.txMux.Lock()
+		hasBatch := len(t.pooledTxs[from]) > 0
+		if hasBatch {
 			userTx := pooledEvmTx{txPayload: hexEncodedTx, nonce: tx.Nonce()}
 			t.pooledTxs[from] = append(t.pooledTxs[from], userTx)
-		} else {
+		}
+		t.txMux.Unlock()
+
+		// If it wasn't batched, submit individually
+		if !hasBatch {
 			// Case 2. EOA activity found AND it was more than [X] seconds ago:
 			err = t.submitSingleTransaction(ctx, hexEncodedTx)
 		}
 	} else {
 		// Case 3. EOA activity found AND it was less than [X] seconds ago:
+		t.txMux.Lock()
 		userTx := pooledEvmTx{txPayload: hexEncodedTx, nonce: tx.Nonce()}
 		t.pooledTxs[from] = append(t.pooledTxs[from], userTx)
+		t.txMux.Unlock()
 	}
 
 	if err != nil {
