@@ -25,7 +25,7 @@ import (
 
 const (
 	eoaActivityCacheSize     = 10_000
-	maxTrackedTxHashesPerEOA = 15
+	maxTrackedTxNoncesPerEOA = 15
 )
 
 type pooledEvmTx struct {
@@ -35,7 +35,7 @@ type pooledEvmTx struct {
 
 type eoaActivityMetadata struct {
 	lastSubmission time.Time
-	txHashes       []gethCommon.Hash
+	txNonces       []uint64
 }
 
 // BatchTxPool is a `TxPool` implementation that groups incoming transactions
@@ -127,17 +127,15 @@ func (t *BatchTxPool) Add(
 	}
 
 	eoaActivity, found := t.eoaActivityCache.Get(from)
-	txHash := tx.Hash()
+	nonce := tx.Nonce()
 
 	// Reject transactions that have already been submitted,
-	// as they are *likely* to fail. Two transactions with
-	// identical hashes, are expected to have the exact same
-	// payload.
-	if found && slices.Contains(eoaActivity.txHashes, txHash) {
+	// as they are *likely* to fail.
+	if found && slices.Contains(eoaActivity.txNonces, nonce) {
 		return fmt.Errorf(
-			"%w: a tx with hash %s has already been submitted",
+			"%w: a tx with nonce %d has already been submitted",
 			errs.ErrInvalid,
-			txHash,
+			nonce,
 		)
 	}
 
@@ -168,7 +166,7 @@ func (t *BatchTxPool) Add(
 		t.txMux.Lock()
 		hasBatch := len(t.pooledTxs[from]) > 0
 		if hasBatch {
-			userTx := pooledEvmTx{txPayload: hexEncodedTx, nonce: tx.Nonce()}
+			userTx := pooledEvmTx{txPayload: hexEncodedTx, nonce: nonce}
 			t.pooledTxs[from] = append(t.pooledTxs[from], userTx)
 		}
 		t.txMux.Unlock()
@@ -181,7 +179,7 @@ func (t *BatchTxPool) Add(
 	} else {
 		// Case 3. EOA activity found AND it was less than [X] seconds ago:
 		t.txMux.Lock()
-		userTx := pooledEvmTx{txPayload: hexEncodedTx, nonce: tx.Nonce()}
+		userTx := pooledEvmTx{txPayload: hexEncodedTx, nonce: nonce}
 		t.pooledTxs[from] = append(t.pooledTxs[from], userTx)
 		t.txMux.Unlock()
 	}
@@ -192,11 +190,11 @@ func (t *BatchTxPool) Add(
 
 	// Update metadata for the last EOA activity only on successful add/submit.
 	eoaActivity.lastSubmission = time.Now()
-	eoaActivity.txHashes = append(eoaActivity.txHashes, txHash)
-	// To avoid the slice of hashes from growing indefinitely,
-	// maintain only a handful of the last tx hashes.
-	if len(eoaActivity.txHashes) > maxTrackedTxHashesPerEOA {
-		eoaActivity.txHashes = eoaActivity.txHashes[1:]
+	eoaActivity.txNonces = append(eoaActivity.txNonces, nonce)
+	// To avoid the slice of nonces from growing indefinitely,
+	// maintain only a handful of the last tx nonces.
+	if len(eoaActivity.txNonces) > maxTrackedTxNoncesPerEOA {
+		eoaActivity.txNonces = eoaActivity.txNonces[1:]
 	}
 
 	t.eoaActivityCache.Add(from, eoaActivity)
