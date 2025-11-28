@@ -547,12 +547,12 @@ func Test_TransactionSubmissionWithPreviouslySubmittedTransactions(t *testing.T)
 	assert.ErrorContains(
 		t,
 		errors[0],
-		"a tx with hash 0x2bdf4aa4c3e273a624dddfdbde6614786b6a5329e246c531d3e0e9f92e79e04d has already been submitted",
+		"a tx with nonce 2 has already been submitted",
 	)
 	assert.ErrorContains(
 		t,
 		errors[1],
-		"a tx with hash 0xb72e1f83861a63b5ad4b927295af07fa9546b01aac5dfce046a5fb20f9be9f2f has already been submitted",
+		"a tx with nonce 3 has already been submitted",
 	)
 
 	assert.Eventually(t, func() bool {
