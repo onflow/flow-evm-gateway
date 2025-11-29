@@ -149,8 +149,8 @@ func (t *SingleTxPool) Add(
 				}
 
 				t.logger.Error().Err(res.Error).
-					Str("flow-id", flowTx.ID().String()).
-					Str("evm-id", tx.Hash().Hex()).
+					Str("flow_tx", flowTx.ID().String()).
+					Str("evm_tx", tx.Hash().Hex()).
 					Msg("flow transaction error")
 
 				// hide specific cause since it's an implementation issue
