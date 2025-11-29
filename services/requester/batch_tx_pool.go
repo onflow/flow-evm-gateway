@@ -192,9 +192,10 @@ func (t *BatchTxPool) Add(
 	eoaActivity.lastSubmission = time.Now()
 	eoaActivity.txNonces = append(eoaActivity.txNonces, nonce)
 	// To avoid the slice of nonces from growing indefinitely,
-	// maintain only a handful of the last tx nonces.
+	// keep only the last `maxTrackedTxNoncesPerEOA` nonces.
 	if len(eoaActivity.txNonces) > maxTrackedTxNoncesPerEOA {
-		eoaActivity.txNonces = eoaActivity.txNonces[1:]
+		firstKeep := len(eoaActivity.txNonces) - maxTrackedTxNoncesPerEOA
+		eoaActivity.txNonces = eoaActivity.txNonces[firstKeep:]
 	}
 
 	t.eoaActivityCache.Add(from, eoaActivity)
