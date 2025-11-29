@@ -528,42 +528,27 @@ func Test_TransactionSubmissionWithPreviouslySubmittedTransactions(t *testing.T)
 	testAddr := common.HexToAddress("0x061B63D29332e4de81bD9F51A48609824CD113a8")
 	nonces := []uint64{0, 1, 2, 3, 2, 3, 4, 5}
 
-	var errors []error
 	hashes := []common.Hash{}
 	// transfer some funds to the test address
+	transferAmount := int64(1_000_000_000)
 	for _, nonce := range nonces {
-		signed, _, err := evmSign(big.NewInt(1_000_000_000), 23_500, eoaKey, nonce, &testAddr, nil)
+		signed, _, err := evmSign(big.NewInt(transferAmount), 23_500, eoaKey, nonce, &testAddr, nil)
 		require.NoError(t, err)
 
 		txHash, err := rpcTester.sendRawTx(signed)
-		if err != nil {
-			errors = append(errors, err)
-		} else {
-			hashes = append(hashes, txHash)
-		}
+		require.NoError(t, err)
+		hashes = append(hashes, txHash)
 	}
 
-	require.Len(t, errors, 2)
-	assert.ErrorContains(
-		t,
-		errors[0],
-		"a tx with nonce 2 has already been submitted",
-	)
-	assert.ErrorContains(
-		t,
-		errors[1],
-		"a tx with nonce 3 has already been submitted",
-	)
+	expectedBalance := big.NewInt(6 * transferAmount)
 
 	assert.Eventually(t, func() bool {
-		for _, h := range hashes {
-			rcp, err := rpcTester.getReceipt(h.String())
-			if err != nil || rcp == nil || rcp.Status != 1 {
-				return false
-			}
+		balance, err := rpcTester.getBalance(testAddr)
+		if err != nil {
+			return false
 		}
 
-		return true
+		return balance.Cmp(expectedBalance) == 0
 	}, time.Second*15, time.Second*1, "all transactions were not executed")
 }
 
