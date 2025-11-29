@@ -25,7 +25,7 @@ import (
 
 const (
 	eoaActivityCacheSize     = 10_000
-	maxTrackedTxNoncesPerEOA = 15
+	maxTrackedTxNoncesPerEOA = 30
 )
 
 type pooledEvmTx struct {
