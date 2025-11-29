@@ -3,7 +3,6 @@ package requester
 import (
 	"context"
 	"encoding/hex"
-	"fmt"
 	"slices"
 	"sort"
 	"sync"
@@ -19,7 +18,6 @@ import (
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/models"
-	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/services/requester/keystore"
 )
 
@@ -129,14 +127,15 @@ func (t *BatchTxPool) Add(
 	eoaActivity, found := t.eoaActivityCache.Get(from)
 	nonce := tx.Nonce()
 
-	// Reject transactions that have already been submitted,
+	// Skip transactions that have been already submitted,
 	// as they are *likely* to fail.
 	if found && slices.Contains(eoaActivity.txNonces, nonce) {
-		return fmt.Errorf(
-			"%w: a tx with nonce %d has already been submitted",
-			errs.ErrInvalid,
-			nonce,
-		)
+		t.logger.Info().
+			Str("evm_tx", tx.Hash().Hex()).
+			Str("from", from.Hex()).
+			Uint64("nonce", nonce).
+			Msg("tx with same nonce has been already submitted")
+		return nil
 	}
 
 	// Scenarios
