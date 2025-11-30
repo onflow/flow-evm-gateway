@@ -3,7 +3,6 @@ package requester
 import (
 	"context"
 	"encoding/hex"
-	"fmt"
 	"slices"
 	"sort"
 	"sync"
@@ -19,13 +18,12 @@ import (
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/models"
-	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/services/requester/keystore"
 )
 
 const (
 	eoaActivityCacheSize     = 10_000
-	maxTrackedTxNoncesPerEOA = 15
+	maxTrackedTxNoncesPerEOA = 30
 )
 
 type pooledEvmTx struct {
@@ -129,14 +127,15 @@ func (t *BatchTxPool) Add(
 	eoaActivity, found := t.eoaActivityCache.Get(from)
 	nonce := tx.Nonce()
 
-	// Reject transactions that have already been submitted,
+	// Skip transactions that have been already submitted,
 	// as they are *likely* to fail.
 	if found && slices.Contains(eoaActivity.txNonces, nonce) {
-		return fmt.Errorf(
-			"%w: a tx with nonce %d has already been submitted",
-			errs.ErrInvalid,
-			nonce,
-		)
+		t.logger.Info().
+			Str("evm_tx", tx.Hash().Hex()).
+			Str("from", from.Hex()).
+			Uint64("nonce", nonce).
+			Msg("tx with same nonce has been already submitted")
+		return nil
 	}
 
 	// Scenarios
@@ -185,16 +184,25 @@ func (t *BatchTxPool) Add(
 	}
 
 	if err != nil {
+		t.logger.Error().Err(err).Msgf(
+			"failed to submit single Flow transaction for EOA: %s",
+			from.Hex(),
+		)
 		return err
 	}
 
+	t.txMux.Lock()
+	defer t.txMux.Unlock()
+
 	// Update metadata for the last EOA activity only on successful add/submit.
+	eoaActivity, _ = t.eoaActivityCache.Get(from)
 	eoaActivity.lastSubmission = time.Now()
 	eoaActivity.txNonces = append(eoaActivity.txNonces, nonce)
 	// To avoid the slice of nonces from growing indefinitely,
-	// maintain only a handful of the last tx nonces.
+	// keep only the last `maxTrackedTxNoncesPerEOA` nonces.
 	if len(eoaActivity.txNonces) > maxTrackedTxNoncesPerEOA {
-		eoaActivity.txNonces = eoaActivity.txNonces[1:]
+		firstKeep := len(eoaActivity.txNonces) - maxTrackedTxNoncesPerEOA
+		eoaActivity.txNonces = eoaActivity.txNonces[firstKeep:]
 	}
 
 	t.eoaActivityCache.Add(from, eoaActivity)
@@ -227,7 +235,7 @@ func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 				)
 				if err != nil {
 					t.logger.Error().Err(err).Msgf(
-						"failed to submit Flow transaction from BatchTxPool for EOA: %s",
+						"failed to submit batch Flow transaction for EOA: %s",
 						address.Hex(),
 					)
 					continue
@@ -274,6 +282,9 @@ func (t *BatchTxPool) batchSubmitTransactionsForSameAddress(
 	}
 
 	if err := t.client.SendTransaction(ctx, *flowTx); err != nil {
+		// If there was any error while sending the transaction,
+		// we record all transactions as dropped.
+		t.collector.TransactionsDropped(len(hexEncodedTxs))
 		return err
 	}
 
@@ -305,6 +316,9 @@ func (t *BatchTxPool) submitSingleTransaction(
 	}
 
 	if err := t.client.SendTransaction(ctx, *flowTx); err != nil {
+		// If there was any error while sending the transaction,
+		// we record it as a dropped transaction.
+		t.collector.TransactionsDropped(1)
 		return err
 	}
 
