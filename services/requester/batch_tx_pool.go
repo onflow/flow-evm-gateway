@@ -238,7 +238,11 @@ func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 						"failed to submit batch Flow transaction for EOA: %s",
 						address.Hex(),
 					)
-					continue
+					// In case of any error, add the transactions back to the pool,
+					// as a retry mechanism.
+					t.txMux.Lock()
+					t.pooledTxs[address] = append(t.pooledTxs[address], pooledTxs...)
+					t.txMux.Unlock()
 				}
 			}
 		}
