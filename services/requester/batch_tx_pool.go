@@ -191,21 +191,7 @@ func (t *BatchTxPool) Add(
 		return err
 	}
 
-	t.txMux.Lock()
-	defer t.txMux.Unlock()
-
-	// Update metadata for the last EOA activity only on successful add/submit.
-	eoaActivity, _ = t.eoaActivityCache.Get(from)
-	eoaActivity.lastSubmission = time.Now()
-	eoaActivity.txNonces = append(eoaActivity.txNonces, nonce)
-	// To avoid the slice of nonces from growing indefinitely,
-	// keep only the last `maxTrackedTxNoncesPerEOA` nonces.
-	if len(eoaActivity.txNonces) > maxTrackedTxNoncesPerEOA {
-		firstKeep := len(eoaActivity.txNonces) - maxTrackedTxNoncesPerEOA
-		eoaActivity.txNonces = eoaActivity.txNonces[firstKeep:]
-	}
-
-	t.eoaActivityCache.Add(from, eoaActivity)
+	t.updateEOAActivityMetadata(from, nonce)
 
 	return nil
 }
@@ -238,7 +224,11 @@ func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 						"failed to submit batch Flow transaction for EOA: %s",
 						address.Hex(),
 					)
-					continue
+					// In case of any error, add the transactions back to the pool,
+					// as a retry mechanism.
+					t.txMux.Lock()
+					t.pooledTxs[address] = append(t.pooledTxs[address], pooledTxs...)
+					t.txMux.Unlock()
 				}
 			}
 		}
@@ -323,4 +313,25 @@ func (t *BatchTxPool) submitSingleTransaction(
 	}
 
 	return nil
+}
+
+func (t *BatchTxPool) updateEOAActivityMetadata(
+	from gethCommon.Address,
+	nonce uint64,
+) {
+	t.txMux.Lock()
+	defer t.txMux.Unlock()
+
+	// Update metadata for the last EOA activity only on successful add/submit.
+	eoaActivity, _ := t.eoaActivityCache.Get(from)
+	eoaActivity.lastSubmission = time.Now()
+	eoaActivity.txNonces = append(eoaActivity.txNonces, nonce)
+	// To avoid the slice of nonces from growing indefinitely,
+	// keep only the last `maxTrackedTxNoncesPerEOA` nonces.
+	if len(eoaActivity.txNonces) > maxTrackedTxNoncesPerEOA {
+		firstKeep := len(eoaActivity.txNonces) - maxTrackedTxNoncesPerEOA
+		eoaActivity.txNonces = eoaActivity.txNonces[firstKeep:]
+	}
+
+	t.eoaActivityCache.Add(from, eoaActivity)
 }
