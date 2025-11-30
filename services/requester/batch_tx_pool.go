@@ -184,6 +184,10 @@ func (t *BatchTxPool) Add(
 	}
 
 	if err != nil {
+		t.logger.Error().Err(err).Msgf(
+			"failed to submit single Flow transaction for EOA: %s",
+			from.Hex(),
+		)
 		return err
 	}
 
@@ -227,7 +231,7 @@ func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 				)
 				if err != nil {
 					t.logger.Error().Err(err).Msgf(
-						"failed to submit Flow transaction from BatchTxPool for EOA: %s",
+						"failed to submit batch Flow transaction for EOA: %s",
 						address.Hex(),
 					)
 					continue
@@ -274,6 +278,9 @@ func (t *BatchTxPool) batchSubmitTransactionsForSameAddress(
 	}
 
 	if err := t.client.SendTransaction(ctx, *flowTx); err != nil {
+		// If there was any error while sending the transaction,
+		// we record all transactions as dropped.
+		t.collector.TransactionsDropped(len(hexEncodedTxs))
 		return err
 	}
 
@@ -305,6 +312,9 @@ func (t *BatchTxPool) submitSingleTransaction(
 	}
 
 	if err := t.client.SendTransaction(ctx, *flowTx); err != nil {
+		// If there was any error while sending the transaction,
+		// we record it as a dropped transaction.
+		t.collector.TransactionsDropped(1)
 		return err
 	}
 
