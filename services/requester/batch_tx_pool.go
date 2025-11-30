@@ -191,7 +191,11 @@ func (t *BatchTxPool) Add(
 		return err
 	}
 
+	t.txMux.Lock()
+	defer t.txMux.Unlock()
+
 	// Update metadata for the last EOA activity only on successful add/submit.
+	eoaActivity, _ = t.eoaActivityCache.Get(from)
 	eoaActivity.lastSubmission = time.Now()
 	eoaActivity.txNonces = append(eoaActivity.txNonces, nonce)
 	// To avoid the slice of nonces from growing indefinitely,
