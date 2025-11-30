@@ -95,6 +95,11 @@ func (t *SingleTxPool) Add(
 ) error {
 	t.txPublisher.Publish(tx) // publish pending transaction event
 
+	from, err := models.DeriveTxSender(tx)
+	if err != nil {
+		return err
+	}
+
 	txData, err := tx.MarshalBinary()
 	if err != nil {
 		return err
@@ -120,10 +125,21 @@ func (t *SingleTxPool) Add(
 		// If there was any error during the transaction build
 		// process, we record it as a dropped transaction.
 		t.collector.TransactionsDropped(1)
+		t.logger.Error().Err(err).Msgf(
+			"failed to build Flow transaction for EOA: %s",
+			from.Hex(),
+		)
 		return err
 	}
 
 	if err := t.client.SendTransaction(ctx, *flowTx); err != nil {
+		// If there was any error while sending the transaction,
+		// we record it as a dropped transaction.
+		t.collector.TransactionsDropped(1)
+		t.logger.Error().Err(err).Msgf(
+			"failed to submit Flow transaction for EOA: %s",
+			from.Hex(),
+		)
 		return err
 	}
 
