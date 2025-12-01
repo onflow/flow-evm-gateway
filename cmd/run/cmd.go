@@ -227,6 +227,44 @@ func parseConfigFromFlags() error {
 		return fmt.Errorf("tx-batch-mode should be enabled with tx-state-validation=local-index")
 	}
 
+	// Parse ERC-4337 configuration
+	if entryPointAddress != "" {
+		cfg.EntryPointAddress = gethCommon.HexToAddress(entryPointAddress)
+		if cfg.EntryPointAddress == (gethCommon.Address{}) {
+			return fmt.Errorf("invalid entry-point-address: %s", entryPointAddress)
+		}
+	}
+	if entryPointSimulationsAddress != "" {
+		cfg.EntryPointSimulationsAddress = gethCommon.HexToAddress(entryPointSimulationsAddress)
+		if cfg.EntryPointSimulationsAddress == (gethCommon.Address{}) {
+			return fmt.Errorf("invalid entry-point-simulations-address: %s", entryPointSimulationsAddress)
+		}
+		log.Info().
+			Str("entryPointSimulationsAddress", cfg.EntryPointSimulationsAddress.Hex()).
+			Str("rawValue", entryPointSimulationsAddress).
+			Msg("EntryPointSimulations address configured from flag")
+	}
+
+	if cfg.BundlerEnabled {
+		if cfg.EntryPointAddress == (gethCommon.Address{}) {
+			return fmt.Errorf("entry-point-address is required when bundler-enabled is true")
+		}
+		// EntryPointSimulationsAddress is REQUIRED for v0.7+ EntryPoints (which don't have simulateValidation)
+		// Fail fast if not configured rather than silently falling back to EntryPoint
+		if cfg.EntryPointSimulationsAddress == (gethCommon.Address{}) {
+			return fmt.Errorf("entry-point-simulations-address is REQUIRED when bundler-enabled is true. EntryPoint v0.7+ requires EntryPointSimulations contract for simulation. Configure --entry-point-simulations-address")
+		}
+		if cfg.MaxOpsPerBundle <= 0 {
+			return fmt.Errorf("max-ops-per-bundle must be > 0")
+		}
+		if bundlerBeneficiary != "" {
+			cfg.BundlerBeneficiary = gethCommon.HexToAddress(bundlerBeneficiary)
+			if cfg.BundlerBeneficiary == (gethCommon.Address{}) {
+				return fmt.Errorf("invalid bundler-beneficiary address: %s", bundlerBeneficiary)
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -247,7 +285,10 @@ var (
 	cloudKMSLocationID,
 	cloudKMSKeyRingID,
 	walletKey,
-	txStateValidation string
+	txStateValidation,
+	entryPointAddress,
+	entryPointSimulationsAddress,
+	bundlerBeneficiary string
 	initHeight,
 	forceStartHeight uint64
 )
@@ -292,6 +333,14 @@ func init() {
 	Cmd.Flags().DurationVar(&cfg.TxBatchInterval, "tx-batch-interval", time.Millisecond*1200, "Time interval upon which to submit the transaction batches to the Flow network.")
 	Cmd.Flags().DurationVar(&cfg.EOAActivityCacheTTL, "eoa-activity-cache-ttl", time.Second*10, "Time interval used to track EOA activity. Tx send more frequently than this interval will be batched. Useful only when batch transaction submission is enabled.")
 	Cmd.Flags().DurationVar(&cfg.RpcRequestTimeout, "rpc-request-timeout", time.Second*120, "Sets the maximum duration at which JSON-RPC requests should generate a response, before they timeout. The default is 120 seconds.")
+	// ERC-4337 Configuration Flags
+	Cmd.Flags().StringVar(&entryPointAddress, "entry-point-address", "", "Address of the ERC-4337 EntryPoint contract (e.g., 0xcf1e8398747a05a997e8c964e957e47209bdff08 for Flow Testnet)")
+	Cmd.Flags().StringVar(&entryPointSimulationsAddress, "entry-point-simulations-address", "", "Address of the EntryPointSimulations contract for v0.7+ EntryPoints (e.g., 0xfFDDAa4a9Ab363f02Ba26a5fc45Ec714562683D3 for Flow Testnet). If not set, gateway will attempt to use EntryPoint address (for backwards compatibility with v0.6)")
+	Cmd.Flags().BoolVar(&cfg.BundlerEnabled, "bundler-enabled", false, "Enable ERC-4337 bundler functionality")
+	Cmd.Flags().IntVar(&cfg.MaxOpsPerBundle, "max-ops-per-bundle", 10, "Maximum number of UserOperations per EntryPoint.handleOps() call")
+	Cmd.Flags().DurationVar(&cfg.UserOpTTL, "user-op-ttl", 5*time.Minute, "Time to live for pending UserOperations in the pool (e.g., 5m, 10m)")
+	Cmd.Flags().StringVar(&bundlerBeneficiary, "bundler-beneficiary", "", "EVM address that receives fees from EntryPoint execution (e.g., 0x...)")
+	Cmd.Flags().DurationVar(&cfg.BundlerInterval, "bundler-interval", 800*time.Millisecond, "Interval at which the bundler checks for and processes pending UserOperations (e.g., 800ms, 5s). Lower values reduce latency but increase RPC load on Access Node.")
 
 	err := Cmd.Flags().MarkDeprecated("init-cadence-height", "This flag is no longer necessary and will be removed in future version. The initial Cadence height is known for testnet/mainnet and this was only required for fresh deployments of EVM Gateway. Once the DB has been initialized, the latest index Cadence height will be used upon start-up.")
 	if err != nil {

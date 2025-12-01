@@ -449,9 +449,14 @@ BundlerBeneficiary: common.Address{}, // COA address or separate
 
 **EntryPoint Deployment**:
 
-- EntryPoint contract must be deployed on Flow EVM
-- Address should be standardized (CREATE2 or documented)
-- Version: ERC-4337 v0.6 (current standard)
+- **Standard Contract**: Use the official EntryPoint contract from **eth-infinitism**
+  - Repository: https://github.com/eth-infinitism/account-abstraction
+  - This is the **standard, audited, production-ready** implementation
+  - No custom implementation needed
+- **Version**: EntryPoint v0.6 (recommended for initial deployment)
+- **Canonical Address** (CREATE2): `0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789`
+- **Deployment**: Use CREATE2 for deterministic address across networks
+- **Full Guide**: See `docs/ENTRYPOINT_DEPLOYMENT.md` for complete deployment instructions
 
 ### 12.1. Wallet Discovery & Configuration
 
@@ -878,3 +883,220 @@ The existing architecture (transaction pools, Cadence wrapping, `EVM.batchRun()`
 5. **Integration with existing pool** - Add handleOps transactions to existing TxPool
 
 **The key insight**: Create multiple `EntryPoint.handleOps()` EVM transactions, add them to the existing transaction pool, and let `EVM.batchRun()` handle the rest. This leverages the gateway's unique architecture for maximum efficiency.
+
+## Paymaster Implementation Decision
+
+**Standard Paymaster**: We use **OpenZeppelin's PaymasterERC20** as the standard paymaster implementation.
+
+### Rationale
+
+1. **Well-Audited**: OpenZeppelin contracts are extensively audited and widely used
+2. **ERC-20 Token Support**: Allows users to pay gas with tokens instead of native currency
+3. **No Signature Complexity**: PaymasterERC20 doesn't require signature validation (simpler for bundler)
+4. **Production-Ready**: Used in production by many projects
+5. **Good Documentation**: Comprehensive documentation and examples
+
+### Implementation
+
+- **Code Support**: `services/requester/openzeppelin_paymaster.go` - Parsing and validation
+- **Format**: `paymasterAndData = paymasterAddress (20 bytes) + tokenAddress (20 bytes) + validationData`
+- **Validation**: Format validation + deposit check + on-chain token balance/price validation
+
+See `docs/OPENZEPPELIN_PAYMASTER.md` for deployment guide and details.
+
+## Implementation Status
+
+### ✅ Completed Components
+
+1. **UserOperation Data Structures** (`models/user_operation.go`)
+
+   - Complete UserOperation struct with all ERC-4337 fields
+   - Hash calculation and signature verification
+   - JSON-RPC serialization
+
+2. **UserOperation Pool** (`services/requester/userop_pool.go`)
+
+   - In-memory pool with TTL-based expiration
+   - Thread-safe operations
+
+3. **EntryPoint ABI Encoding** (`services/requester/entrypoint_abi.go`)
+
+   - ABI encoding for `handleOps()`, `simulateValidation()`, and `getDeposit()`
+   - Proper function call encoding using go-ethereum's ABI package
+
+4. **UserOperation Validator** (`services/requester/userop_validator.go`)
+
+   - Basic validation (required fields, gas limits)
+   - Signature verification
+   - EntryPoint simulation via `eth_call`
+   - **Paymaster validation with deposit checks** ✅
+
+5. **Bundler** (`services/requester/bundler.go`)
+
+   - Groups UserOperations by sender
+   - Creates multiple `EntryPoint.handleOps()` transactions
+   - Integrates with existing `TxPool` for automatic batching
+   - Leverages `EVM.batchRun()` for efficiency
+
+6. **JSON-RPC API** (`api/userop_api.go`)
+
+   - `eth_sendUserOperation` - Submit UserOps to the pool
+   - `eth_estimateUserOperationGas` - Estimate gas costs
+   - `eth_getUserOperationByHash` - Query UserOp by hash
+   - `eth_getUserOperationReceipt` - Get UserOp receipt
+
+7. **Storage** (`storage/pebble/userops.go`, `storage/index.go`)
+
+   - UserOperation receipt storage
+   - UserOp hash to transaction hash mapping
+   - Complete indexing interface
+
+8. **Event Indexing** (`services/ingestion/engine.go`, `services/ingestion/userop_events.go`)
+
+   - **Complete event parsing implementation** ✅
+   - Parses `UserOperationEvent` and `UserOperationRevertReason` events
+   - Stores UserOperation receipts and mappings
+   - Integrated with ingestion engine
+
+9. **Configuration** (`config/config.go`)
+
+   - EntryPoint address
+   - Bundler enabled flag
+   - Max operations per bundle
+   - UserOp TTL
+   - Bundler beneficiary address
+
+10. **Bootstrap Integration** (`bootstrap/bootstrap.go`)
+    - Initializes UserOp pool, validator, and bundler
+    - Registers UserOpAPI in RPC server
+    - Starts periodic bundling goroutine
+
+### ⚠️ Remaining Tasks
+
+1. **EntryPoint Contract Deployment** (Not in this repo)
+
+   - Deploy EntryPoint contract to Flow EVM
+   - Verify deployment address matches configuration
+   - See deployment guide below
+
+2. **OpenZeppelin Paymaster Deployment** (Not in this repo)
+
+   - Deploy OpenZeppelin PaymasterERC20 contract
+   - Deposit FLOW to EntryPoint for paymaster
+   - Configure token addresses and prices
+   - See `docs/OPENZEPPELIN_PAYMASTER.md` for detailed guide
+
+3. **Comprehensive Testing** (Recommended)
+
+   - Unit tests for UserOperation components
+   - Integration tests for bundling flow
+   - E2E tests with actual EntryPoint and Paymaster
+
+4. **Paymaster Signature Validation** (Not Needed for OpenZeppelin)
+   - OpenZeppelin PaymasterERC20 doesn't use signatures
+   - Token-based validation only
+   - Other paymaster types (VerifyingPaymaster) would need signature support if added later
+
+## Network Configuration
+
+### Mainnet (Example - Update with actual values)
+
+```yaml
+Chain ID: <TO_BE_DETERMINED>
+Network Name: Flow Mainnet EVM
+Native Currency: FLOW (18 decimals)
+
+EntryPoint:
+  Address: <TO_BE_DETERMINED>
+  Version: ERC-4337 v0.6
+
+Bundler:
+  RPC Endpoint: https://evm-gateway.flow.com
+  WebSocket: wss://evm-gateway.flow.com (if supported)
+  Methods: eth_sendUserOperation, eth_estimateUserOperationGas, etc.
+```
+
+### Testnet (Deployed)
+
+```yaml
+Chain ID: 545
+Network Name: Flow Testnet EVM
+Native Currency: FLOW (18 decimals)
+
+EntryPoint:
+  Address: 0xcf1e8398747a05a997e8c964e957e47209bdff08
+  Version: ERC-4337 v0.9.0
+
+SimpleAccountFactory:
+  Address: 0x2e9f1433C8bC371C391b0F59c1e15Da8AFfC9d12
+
+PaymasterERC20:
+  Address: 0x486a2c4BC557914ee83B8fCcc4bAae11FdA70B2a
+
+TestToken:
+  Address: 0x99C7A1c5eCf02d3Dd01D2B7F5936D6611E8473CD
+
+Bundler:
+  RPC Endpoint: https://testnet.evm.nodes.onflow.org
+  Block Explorer: https://evm-testnet.flowscan.io
+```
+
+**Note**: See `docs/FLOW_TESTNET_DEPLOYMENT.md` for complete deployment details and configuration.
+
+## Deployment Checklist
+
+### EntryPoint Deployment
+
+1. **Clone Repository**:
+
+   ```bash
+   git clone https://github.com/eth-infinitism/account-abstraction.git
+   cd account-abstraction
+   ```
+
+2. **Install Dependencies**:
+
+   ```bash
+   yarn install
+   ```
+
+3. **Configure Network**: Edit `hardhat.config.ts` to add Flow EVM network
+
+4. **Deploy EntryPoint**:
+
+   ```bash
+   yarn deploy --network flow-evm
+   ```
+
+5. **Verify Address**: EntryPoint should deploy to deterministic address (v0.6: `0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789`)
+
+6. **Update Gateway Config**: Set `EntryPointAddress` in gateway configuration
+
+### OpenZeppelin Paymaster Deployment
+
+1. **Install OpenZeppelin Contracts**:
+
+   ```bash
+   npm install @openzeppelin/contracts-account
+   ```
+
+2. **Create Paymaster Contract**: Extend `PaymasterERC20` (see `docs/OPENZEPPELIN_PAYMASTER.md`)
+
+3. **Deploy Paymaster**:
+
+   ```bash
+   # Using Hardhat or Foundry
+   # Deploy with EntryPoint address and token address
+   ```
+
+4. **Deposit to EntryPoint**:
+
+   ```javascript
+   await entryPoint.depositTo(paymasterAddress, { value: depositAmount });
+   ```
+
+5. **Configure Token Prices**: Set up token price oracles/exchange rates
+
+6. **Test**: Submit UserOperation with paymaster to gateway
+
+**Full deployment guide**: See `docs/OPENZEPPELIN_PAYMASTER.md`

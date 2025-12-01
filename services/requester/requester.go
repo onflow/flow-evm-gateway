@@ -299,6 +299,14 @@ func (e *EVM) Call(
 
 	resultSummary := result.ResultSummary()
 	if resultSummary.ErrorCode != 0 {
+		// Log full result summary for debugging revert data extraction
+		e.logger.Debug().
+			Uint16("errorCode", uint16(resultSummary.ErrorCode)).
+			Str("errorMessage", resultSummary.ErrorMessage).
+			Str("returnedDataHex", hexutil.Encode(resultSummary.ReturnedData)).
+			Int("returnedDataLen", len(resultSummary.ReturnedData)).
+			Msg("RPC call returned error - logging full result summary")
+		
 		if resultSummary.ErrorCode == evmTypes.ExecutionErrCodeExecutionReverted {
 			return nil, errs.NewRevertError(resultSummary.ReturnedData)
 		}

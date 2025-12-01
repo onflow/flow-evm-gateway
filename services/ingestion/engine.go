@@ -18,7 +18,9 @@ import (
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/onflow/flow-go/fvm/evm/offchain/sync"
+	"math/big"
 )
 
 var _ models.Engine = &Engine{}
@@ -48,6 +50,8 @@ type Engine struct {
 	receipts        storage.ReceiptIndexer
 	transactions    storage.TransactionIndexer
 	traces          storage.TraceIndexer
+	userOps         storage.UserOperationIndexer
+	entryPointAddr  common.Address
 	log             zerolog.Logger
 	evmLastHeight   *models.SequentialHeight
 	blocksPublisher *models.Publisher[*models.Block]
@@ -65,6 +69,8 @@ func NewEventIngestionEngine(
 	receipts storage.ReceiptIndexer,
 	transactions storage.TransactionIndexer,
 	traces storage.TraceIndexer,
+	userOps storage.UserOperationIndexer,
+	entryPointAddr common.Address,
 	blocksPublisher *models.Publisher[*models.Block],
 	logsPublisher *models.Publisher[[]*gethTypes.Log],
 	log zerolog.Logger,
@@ -84,6 +90,8 @@ func NewEventIngestionEngine(
 		receipts:        receipts,
 		transactions:    transactions,
 		traces:          traces,
+		userOps:         userOps,
+		entryPointAddr:  entryPointAddr,
 		log:             log,
 		blocksPublisher: blocksPublisher,
 		logsPublisher:   logsPublisher,
@@ -290,6 +298,18 @@ func (e *Engine) indexEvents(events *models.CadenceEvents, batch *pebbleDB.Batch
 	// to `Receipts` storage
 	err = e.indexReceipts(events.Receipts(), batch)
 	if err != nil {
+		return err
+	}
+
+	// Index UserOperation events if UserOps storage is available
+	if e.userOps != nil && e.entryPointAddr != (common.Address{}) {
+		block := events.Block()
+		if err := e.indexUserOperationEvents(block, events.Transactions(), events.Receipts(), batch); err != nil {
+			e.log.Warn().Err(err).Msg("failed to index user operation events")
+			// Don't fail the entire block indexing if UserOp indexing fails
+		}
+	}
+	if err != nil {
 		return fmt.Errorf("failed to index receipts for block %d event: %w", events.Block().Height, err)
 	}
 
@@ -379,6 +399,136 @@ func (e *Engine) indexReceipts(
 
 	if err := e.receipts.Store(receipts, batch); err != nil {
 		return fmt.Errorf("failed to store receipt: %w", err)
+	}
+
+	return nil
+}
+
+// indexUserOperationEvents indexes UserOperation events from EntryPoint logs
+func (e *Engine) indexUserOperationEvents(
+	block *models.Block,
+	transactions []models.Transaction,
+	receipts []*models.Receipt,
+	batch *pebbleDB.Batch,
+) error {
+	if e.userOps == nil || e.entryPointAddr == (common.Address{}) {
+		return nil
+	}
+
+	blockHash, err := block.Hash()
+	if err != nil {
+		return fmt.Errorf("failed to get block hash: %w", err)
+	}
+
+	// Create a map of transaction hash to transaction for quick lookup
+	txMap := make(map[common.Hash]models.Transaction)
+	for _, tx := range transactions {
+		txMap[tx.Hash()] = tx
+	}
+
+	// Iterate through all receipts and find EntryPoint transactions
+	for _, receipt := range receipts {
+		tx, ok := txMap[receipt.TxHash]
+		if !ok {
+			continue
+		}
+
+		// Check if transaction targets EntryPoint
+		to := tx.To()
+		if to == nil || *to != e.entryPointAddr {
+			continue
+		}
+
+		// Parse logs for UserOperation events
+		for _, log := range receipt.Logs {
+			// Check if log is from EntryPoint
+			if log.Address != e.entryPointAddr {
+				continue
+			}
+
+			// Check for UserOperationEvent
+			if len(log.Topics) > 0 && log.Topics[0] == UserOperationEventSig {
+				event, err := ParseUserOperationEvent(log)
+				if err != nil {
+					e.log.Warn().Err(err).Str("txHash", receipt.TxHash.Hex()).Msg("failed to parse UserOperationEvent")
+					continue
+				}
+
+				// Store UserOperation receipt
+				userOpReceipt := &storage.UserOperationReceipt{
+					UserOpHash:    event.UserOpHash,
+					EntryPoint:    e.entryPointAddr,
+					Sender:        event.Sender,
+					Nonce:         event.Nonce,
+					ActualGasCost: event.ActualGasCost,
+					ActualGasUsed: event.ActualGasUsed,
+					Success:       event.Success,
+					TxHash:        receipt.TxHash,
+					BlockNumber:   big.NewInt(int64(block.Height)),
+					BlockHash:     blockHash,
+				}
+
+				if event.Paymaster != (common.Address{}) {
+					userOpReceipt.Paymaster = &event.Paymaster
+				}
+
+				if err := e.userOps.StoreUserOpReceipt(event.UserOpHash, userOpReceipt, batch); err != nil {
+					e.log.Warn().Err(err).Str("userOpHash", event.UserOpHash.Hex()).Msg("failed to store UserOperation receipt")
+					continue
+				}
+
+				// Store mapping from userOpHash to transaction hash
+				if err := e.userOps.StoreUserOpTxMapping(event.UserOpHash, receipt.TxHash, batch); err != nil {
+					e.log.Warn().Err(err).Str("userOpHash", event.UserOpHash.Hex()).Msg("failed to store UserOperation tx mapping")
+					continue
+				}
+
+				e.log.Debug().
+					Str("userOpHash", event.UserOpHash.Hex()).
+					Str("txHash", receipt.TxHash.Hex()).
+					Str("sender", event.Sender.Hex()).
+					Bool("success", event.Success).
+					Msg("indexed UserOperation event")
+			}
+
+			// Check for UserOperationRevertReason
+			if len(log.Topics) > 0 && log.Topics[0] == UserOperationRevertReasonSig {
+				revertReason, err := ParseUserOperationRevertReason(log)
+				if err != nil {
+					e.log.Warn().Err(err).Str("txHash", receipt.TxHash.Hex()).Msg("failed to parse UserOperationRevertReason")
+					continue
+				}
+
+				// Store UserOperation receipt with failure
+				userOpReceipt := &storage.UserOperationReceipt{
+					UserOpHash:  revertReason.UserOpHash,
+					EntryPoint:  e.entryPointAddr,
+					Sender:      revertReason.Sender,
+					Nonce:       revertReason.Nonce,
+					Success:     false,
+					Reason:       revertReason.RevertReason,
+					TxHash:       receipt.TxHash,
+					BlockNumber:  big.NewInt(int64(block.Height)),
+					BlockHash:    blockHash,
+				}
+
+				if err := e.userOps.StoreUserOpReceipt(revertReason.UserOpHash, userOpReceipt, batch); err != nil {
+					e.log.Warn().Err(err).Str("userOpHash", revertReason.UserOpHash.Hex()).Msg("failed to store UserOperation receipt")
+					continue
+				}
+
+				if err := e.userOps.StoreUserOpTxMapping(revertReason.UserOpHash, receipt.TxHash, batch); err != nil {
+					e.log.Warn().Err(err).Str("userOpHash", revertReason.UserOpHash.Hex()).Msg("failed to store UserOperation tx mapping")
+					continue
+				}
+
+				e.log.Debug().
+					Str("userOpHash", revertReason.UserOpHash.Hex()).
+					Str("txHash", receipt.TxHash.Hex()).
+					Str("reason", revertReason.RevertReason).
+					Msg("indexed UserOperation revert reason")
+			}
+		}
 	}
 
 	return nil

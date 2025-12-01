@@ -57,6 +57,7 @@ type Storages struct {
 	Transactions storage.TransactionIndexer
 	Receipts     storage.ReceiptIndexer
 	Traces       storage.TraceIndexer
+	UserOps      storage.UserOperationIndexer
 }
 
 type Publishers struct {
@@ -197,6 +198,8 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 		b.storages.Receipts,
 		b.storages.Transactions,
 		b.storages.Traces,
+		b.storages.UserOps,
+		b.config.EntryPointAddress,
 		b.publishers.Block,
 		b.publishers.Logs,
 		b.logger,
@@ -223,6 +226,7 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 
 	accountKeys := make([]*keystore.AccountKey, 0)
 	if !b.config.IndexOnly {
+		l := b.logger.With().Str("component", "bootstrap-keystore").Logger()
 		account, err := b.client.GetAccount(ctx, b.config.COAAddress)
 		if err != nil {
 			return fmt.Errorf(
@@ -231,21 +235,46 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 				err,
 			)
 		}
+		l.Info().
+			Str("coaAddress", b.config.COAAddress.String()).
+			Int("totalKeysOnAccount", len(account.Keys)).
+			Msg("fetched COA account for key loading")
+
 		signer, err := createSigner(ctx, b.config, b.logger)
 		if err != nil {
 			return err
 		}
+		signerPubKey := signer.PublicKey()
+		l.Info().
+			Str("signerPublicKey", signerPubKey.String()).
+			Msg("created signer from COA key")
+
+		matchedKeys := 0
 		for _, key := range account.Keys {
 			// Skip account keys that do not use the same Publick Key as the
 			// configured crypto.Signer object.
-			if !key.PublicKey.Equals(signer.PublicKey()) {
+			if !key.PublicKey.Equals(signerPubKey) {
+				l.Debug().
+					Int("keyIndex", int(key.Index)).
+					Str("keyPublicKey", key.PublicKey.String()).
+					Msg("skipping key - public key doesn't match signer")
 				continue
 			}
+			matchedKeys++
 			accountKeys = append(accountKeys, keystore.NewAccountKey(
 				*key,
 				b.config.COAAddress,
 				signer,
 			))
+		}
+
+		l.Info().
+			Int("matchedKeys", matchedKeys).
+			Int("loadedKeys", len(accountKeys)).
+			Msg("finished loading keys into keystore")
+		if matchedKeys == 0 {
+			l.Error().
+				Msg("WARNING: No keys matched the signer's public key! Gateway will not be able to sign transactions.")
 		}
 	}
 
@@ -367,12 +396,70 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 		walletAPI = api.NewWalletAPI(b.config, blockchainAPI)
 	}
 
+	// ERC-4337 UserOperation API setup
+	var userOpAPI *api.UserOpAPI
+	if b.config.BundlerEnabled {
+		// Create UserOperation pool
+		userOpPool := requester.NewInMemoryUserOpPool(b.config, b.logger)
+
+		// Create validator
+		validator := requester.NewUserOpValidator(
+			b.client,
+			b.config,
+			evm,
+			b.storages.Blocks,
+			b.logger,
+		)
+
+		// Create bundler
+		bundler := requester.NewBundler(
+			userOpPool,
+			b.config,
+			b.logger,
+			txPool,
+			evm,
+		)
+
+		// Create UserOpAPI
+		userOpAPI = api.NewUserOpAPI(
+			b.logger,
+			b.config,
+			userOpPool,
+			bundler,
+			validator,
+			rateLimiter,
+			b.collector,
+		)
+
+		// Start periodic bundling
+		// Use configured interval or default to 800ms (0.8 seconds)
+		bundlerInterval := b.config.BundlerInterval
+		if bundlerInterval == 0 {
+			bundlerInterval = 800 * time.Millisecond
+		}
+		go func() {
+			ticker := time.NewTicker(bundlerInterval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					if err := bundler.SubmitBundledTransactions(ctx); err != nil {
+						b.logger.Error().Err(err).Msg("failed to submit bundled transactions")
+					}
+				}
+			}
+		}()
+	}
+
 	supportedAPIs := api.SupportedAPIs(
 		blockchainAPI,
 		streamAPI,
 		pullAPI,
 		debugAPI,
 		walletAPI,
+		userOpAPI,
 		b.config,
 	)
 
@@ -612,6 +699,10 @@ func setupStorage(
 	// if database is not initialized require init height
 	if _, err := blocks.LatestCadenceHeight(); errors.Is(err, errs.ErrStorageNotInitialized) {
 		cadenceHeight := config.InitCadenceHeight
+		// If force-start-height is set, use it for initialization instead of the default
+		if config.ForceStartCadenceHeight != 0 {
+			cadenceHeight = config.ForceStartCadenceHeight
+		}
 		evmBlokcHeight := uint64(0)
 		cadenceBlock, err := client.GetBlockHeaderByHeight(context.Background(), cadenceHeight)
 		if err != nil {
@@ -670,6 +761,7 @@ func setupStorage(
 		Transactions: pebble.NewTransactions(store),
 		Receipts:     pebble.NewReceipts(store),
 		Traces:       pebble.NewTraces(store),
+		UserOps:      pebble.NewUserOperations(store),
 	}, nil
 }
 

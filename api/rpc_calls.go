@@ -27,6 +27,11 @@ const (
 	EthGetFilterLogs                       = "GetFilterLogs"
 	EthGetFilterChanges                    = "GetFilterChanges"
 	EthFeeHistory                          = "FeeHistory"
+	// ERC-4337 Bundler methods
+	EthSendUserOperation           = "SendUserOperation"
+	EthEstimateUserOperationGas    = "EstimateUserOperationGas"
+	EthGetUserOperationByHash      = "GetUserOperationByHash"
+	EthGetUserOperationReceipt    = "GetUserOperationReceipt"
 
 	// JSON-RPC calls under the `debug_` namespace
 	DebugTraceTransaction   = "TraceTransaction"

@@ -39,6 +39,7 @@ func SupportedAPIs(
 	pullAPI *PullAPI,
 	debugAPI *DebugAPI,
 	walletAPI *WalletAPI,
+	userOpAPI *UserOpAPI,
 	config config.Config,
 ) []rpc.API {
 	apis := []rpc.API{{
@@ -73,6 +74,14 @@ func SupportedAPIs(
 		apis = append(apis, rpc.API{
 			Namespace: "eth",
 			Service:   walletAPI,
+		})
+	}
+
+	// ERC-4337 UserOperation API
+	if userOpAPI != nil && config.BundlerEnabled {
+		apis = append(apis, rpc.API{
+			Namespace: "eth",
+			Service:   userOpAPI,
 		})
 	}
 

@@ -64,6 +64,8 @@ func TestSerialBlockIngestion(t *testing.T) {
 				return eventsChan
 			})
 
+		userOps := &storageMock.UserOperationIndexer{}
+		entryPoint := gethCommon.HexToAddress("0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789")
 		engine := NewEventIngestionEngine(
 			subscriber,
 			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
@@ -73,6 +75,8 @@ func TestSerialBlockIngestion(t *testing.T) {
 			receipts,
 			transactions,
 			traces,
+			userOps,
+			entryPoint,
 			models.NewPublisher[*models.Block](),
 			models.NewPublisher[[]*gethTypes.Log](),
 			zerolog.Nop(),
@@ -143,6 +147,8 @@ func TestSerialBlockIngestion(t *testing.T) {
 				return eventsChan
 			})
 
+		userOps := &storageMock.UserOperationIndexer{}
+		entryPoint := gethCommon.HexToAddress("0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789")
 		engine := NewEventIngestionEngine(
 			subscriber,
 			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
@@ -152,6 +158,8 @@ func TestSerialBlockIngestion(t *testing.T) {
 			receipts,
 			transactions,
 			traces,
+			userOps,
+			entryPoint,
 			models.NewPublisher[*models.Block](),
 			models.NewPublisher[[]*gethTypes.Log](),
 			zerolog.Nop(),
@@ -264,6 +272,8 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 				return nil
 			})
 
+		userOps := &storageMock.UserOperationIndexer{}
+		entryPoint := gethCommon.HexToAddress("0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789")
 		engine := NewEventIngestionEngine(
 			subscriber,
 			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
@@ -273,6 +283,8 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			receipts,
 			transactions,
 			traces,
+			userOps,
+			entryPoint,
 			models.NewPublisher[*models.Block](),
 			models.NewPublisher[[]*gethTypes.Log](),
 			zerolog.Nop(),
@@ -372,6 +384,8 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 				return nil
 			})
 
+		userOps := &storageMock.UserOperationIndexer{}
+		entryPoint := gethCommon.HexToAddress("0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789")
 		engine := NewEventIngestionEngine(
 			subscriber,
 			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
@@ -381,6 +395,8 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			receipts,
 			transactions,
 			traces,
+			userOps,
+			entryPoint,
 			models.NewPublisher[*models.Block](),
 			models.NewPublisher[[]*gethTypes.Log](),
 			zerolog.Nop(),
@@ -466,6 +482,8 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			}).
 			Once()
 
+		userOps := &storageMock.UserOperationIndexer{}
+		entryPoint := gethCommon.HexToAddress("0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789")
 		engine := NewEventIngestionEngine(
 			subscriber,
 			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
@@ -475,6 +493,8 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			receipts,
 			transactions,
 			traces,
+			userOps,
+			entryPoint,
 			models.NewPublisher[*models.Block](),
 			models.NewPublisher[[]*gethTypes.Log](),
 			zerolog.Nop(),

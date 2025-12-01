@@ -26,7 +26,8 @@ const (
 
 	// Testnet height at which the `EVM` system contract was first deployed.
 	// This is the first height at which the EVM state starts.
-	TestnetInitCadenceHeight = uint64(211176670)
+	// Updated post-Forte hardfork for testnet52+ (previously 211176670 was outdated)
+	TestnetInitCadenceHeight = uint64(218215349)
 
 	// Mainnet height at which the `EVM` system contract was first deployed.
 	// This is the first height at which the EVM state starts.
@@ -127,4 +128,28 @@ type Config struct {
 	// RpcRequestTimeout is the maximum duration at which JSON-RPC requests should generate
 	// a response, before they timeout.
 	RpcRequestTimeout time.Duration
+	// ERC-4337 Configuration
+	// EntryPointAddress is the address of the ERC-4337 EntryPoint contract
+	// Use the official EntryPoint contract from eth-infinitism:
+	// https://github.com/eth-infinitism/account-abstraction
+	// Canonical v0.6 address (CREATE2): 0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789
+	// Flow Testnet v0.9.0 address: 0xcf1e8398747a05a997e8c964e957e47209bdff08
+	// See docs/FLOW_TESTNET_DEPLOYMENT.md for deployed contract addresses
+	EntryPointAddress common.Address
+	// EntryPointSimulationsAddress is the address of the EntryPointSimulations contract
+	// For EntryPoint v0.7+, simulation methods (simulateValidation) were moved to a separate contract
+	// Flow Testnet EntryPointSimulations: 0xfFDDAa4a9Ab363f02Ba26a5fc45Ec714562683D3
+	// If not set, gateway will attempt to use EntryPoint address (for backwards compatibility with v0.6)
+	EntryPointSimulationsAddress common.Address
+	// BundlerEnabled enables ERC-4337 bundler functionality
+	BundlerEnabled bool
+	// MaxOpsPerBundle is the maximum number of UserOperations per EntryPoint.handleOps() call
+	MaxOpsPerBundle int
+	// UserOpTTL is the time to live for pending UserOperations in the pool
+	UserOpTTL time.Duration
+	// BundlerBeneficiary is the address that receives fees from EntryPoint execution
+	BundlerBeneficiary common.Address
+	// BundlerInterval is the interval at which the bundler checks for and processes pending UserOperations
+	// Default: 800ms (0.8 seconds). Lower values reduce latency but increase RPC load on Access Node.
+	BundlerInterval time.Duration
 }

@@ -1,0 +1,178 @@
+I'm working on a project that integrates with the Flow EVM Gateway's ERC-4337 (Account Abstraction) implementation. I need to deploy the following contracts to Flow testnet for testing.
+
+**Contracts to Deploy (in this exact order):**
+
+1. **EntryPoint Contract (v0.6.0)**: The standard eth-infinitism EntryPoint contract
+   - Repository: https://github.com/eth-infinitism/account-abstraction
+   - Exact version: v0.6.0 (tag: v0.6.0)
+   - Contract file: `contracts/core/EntryPoint.sol`
+   - Deployment method: CREATE2
+   - This is the canonical EntryPoint contract that processes UserOperations
+   - The gateway expects this at a specific address (configurable via EntryPointAddress)
+   - **CREATE2 SAFETY**: CREATE2 will FAIL if code already exists at the target address - it cannot overwrite existing deployments. This is safe but means your deployment will fail if EntryPoint is already deployed.
+   - **CANONICAL ADDRESS**: If using standard salt `0x0000000000000000000000000000000000000000000000000000000000000000`, EntryPoint deploys to `0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789`
+   - **RECOMMENDED FOR EXPERIMENTS**: Use a custom CREATE2 salt to deploy to a unique address, avoiding any risk of deployment failure if EntryPoint already exists
+   - **QUESTION: Do you want to use canonical address (check first, may fail if exists) OR custom salt for unique address? (recommended: custom salt for experiments)**
+   - **If custom salt**: What salt should I use? (32-byte hex string, or "random" to generate one)
+
+2. **SimpleAccount Implementation**: The smart account implementation contract
+   - Repository: https://github.com/eth-infinitism/account-abstraction
+   - Exact version: v0.6.0 (tag: v0.6.0)
+   - Contract file: `contracts/samples/SimpleAccount.sol`
+   - This is the implementation contract (not a factory instance)
+   - Deploy this first, then use its address in SimpleAccountFactory
+
+3. **SimpleAccountFactory**: Factory contract to deploy new SimpleAccount instances
+   - Repository: https://github.com/eth-infinitism/account-abstraction
+   - Exact version: v0.6.0 (tag: v0.6.0)
+   - Contract file: `contracts/samples/SimpleAccountFactory.sol`
+   - Constructor parameters: EntryPoint address, SimpleAccount implementation address
+   - This factory is used to create new smart account instances
+   - **RESEARCH FINDING**: No pre-deployed SimpleAccountFactory found on Flow testnet or mainnet - this must be deployed
+   - **NOTE**: Unlike EntryPoint, factories are not singletons - multiple factories can exist, but you should deploy one for testing
+
+4. **OpenZeppelin PaymasterERC20 Contract**: Paymaster that allows users to pay gas fees with ERC-20 tokens
+   - Repository: https://github.com/OpenZeppelin/openzeppelin-contracts
+   - Version: Compatible with EntryPoint v0.6
+   - Contract: PaymasterERC20 or equivalent
+   - Constructor parameters: EntryPoint address, ERC-20 token address
+   - Needs to be initialized with EntryPoint address
+
+5. **Test ERC-20 Token** (if needed): A test token for PaymasterERC20
+   - Standard ERC-20 token for testing
+   - Will be used by PaymasterERC20 for gas payments
+   - **QUESTION: Do you want me to deploy a test ERC-20 token, or do you have one already?**
+
+**Deployment Requirements:**
+
+- Network: Flow testnet (not local emulator, not mainnet)
+- Deployment tool: Hardhat
+- Deployment command: `npx hardhat run scripts/deploy.js --network flow-testnet`
+- Address export: JSON file named `deployments.json` with this structure:
+  ```json
+  {
+    "entryPoint": "0x...",
+    "simpleAccountImplementation": "0x...",
+    "simpleAccountFactory": "0x...",
+    "paymasterERC20": "0x...",
+    "testToken": "0x..." // if deployed
+  }
+  ```
+
+**Flow Testnet Configuration:**
+
+Based on the Flow EVM Gateway documentation, Flow testnet has:
+- **RPC Endpoint**: `https://testnet.evm.nodes.onflow.org`
+- **Chain ID**: `545`
+- **Currency Symbol**: `FLOW`
+- **Block Explorer**: `https://evm-testnet.flowscan.io`
+
+**Configuration Questions I Need:**
+
+1. **Deployer Account**: How should I configure the deployer account?
+   - **QUESTION: Do you have a private key or mnemonic for the deployer account?**
+   - **QUESTION: Should I use environment variables (e.g., `DEPLOYER_PRIVATE_KEY`)?**
+   - **QUESTION: What environment variable name should I use? (e.g., `DEPLOYER_PRIVATE_KEY`, `FLOW_TESTNET_PRIVATE_KEY`)**
+
+2. **Gas Configuration**: What gas settings should I use?
+   - **QUESTION: What gas price should be used for Flow testnet? (in wei, e.g., 1000000000 for 1 gwei)**
+   - **QUESTION: What gas limit should be used for contract deployments? (e.g., 5000000)**
+
+**Deployment Script Requirements:**
+
+1. **Deploy EntryPoint** using CREATE2
+   - **If using canonical address**: Check if EntryPoint exists at `0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789` using `eth_getCode`
+     - If code exists: Use existing EntryPoint (skip deployment, save address to deployments.json)
+     - If no code exists: Deploy using CREATE2 with salt `0x0000000000000000000000000000000000000000000000000000000000000000`
+   - **If using custom salt**: Deploy using CREATE2 with the specified custom salt (no check needed, guaranteed unique address)
+   - Use the exact CREATE2 deployment method from eth-infinitism
+   - Verify the deployed address matches expected address
+   - **SAFETY NOTE**: CREATE2 will fail if code already exists - this prevents accidental overwrites, but means deployment fails if EntryPoint already deployed at canonical address
+   - Save address to deployments.json
+
+3. **Deploy SimpleAccount Implementation**
+   - Deploy the SimpleAccount.sol contract
+   - Constructor: EntryPoint address (use existing or newly deployed)
+   - Save address to deployments.json
+   - **NOTE**: This is the implementation contract, not a factory instance
+
+4. **Deploy SimpleAccountFactory**
+   - Constructor: EntryPoint address, SimpleAccount implementation address
+   - Save address to deployments.json
+   - **NOTE**: This factory must be deployed - no pre-deployed factory exists on Flow testnet
+
+5. **Deploy Test ERC-20 Token** (if needed)
+   - Standard ERC-20 with name, symbol, decimals
+   - **QUESTION: What should the test token be named? (e.g., "TestToken", "FlowToken")**
+   - **QUESTION: What symbol should it use? (e.g., "TEST", "FLOW")**
+   - **QUESTION: How many decimals? (typically 18)**
+   - **QUESTION: Initial supply?**
+   - Save address to deployments.json
+
+6. **Deploy PaymasterERC20**
+   - Constructor: EntryPoint address, ERC-20 token address
+   - Initialize with EntryPoint
+   - Save address to deployments.json
+
+7. **Deploy Test SimpleAccount Instance** (optional but recommended)
+   - Use SimpleAccountFactory to create a test account
+   - **QUESTION: What owner address should the test SimpleAccount use?**
+   - **QUESTION: How many test SimpleAccount instances should be deployed?**
+   - Save addresses to deployments.json
+
+**Verification Requirements:**
+
+After deployment, verify:
+1. EntryPoint is deployed and callable
+2. SimpleAccountFactory can create new accounts
+3. PaymasterERC20 is initialized with EntryPoint
+4. All contracts are on the correct network (Flow testnet)
+
+**Gateway Configuration:**
+
+After deployment, I will update the gateway configuration with:
+- EntryPointAddress: The deployed EntryPoint address
+- BundlerEnabled: true
+- MaxOpsPerBundle: 10
+- UserOpTTL: 5 minutes
+- BundlerBeneficiary: The address that will receive bundler fees
+
+**Research Findings:**
+
+- **EntryPoint**: May already be deployed at `0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789` on Flow testnet (CREATE2 deterministic address)
+  - **CREATE2 Safety**: CREATE2 cannot overwrite existing code - if EntryPoint exists, deployment will fail safely
+  - **For Experiments**: Using a custom CREATE2 salt ensures a unique address with no risk of conflicts
+- **SimpleAccountFactory**: No pre-deployed factory found on Flow testnet or mainnet - must be deployed
+- **SimpleAccount Implementation**: No pre-deployed implementation found - must be deployed
+- **PaymasterERC20**: No pre-deployed paymaster found - must be deployed
+
+**Questions I Need Answered:**
+
+1. **EntryPoint Deployment Strategy**:
+   - **Option A**: Use canonical address `0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789` (check first, deploy if missing, will fail safely if exists)
+   - **Option B**: Use custom CREATE2 salt for unique address (RECOMMENDED for experiments - no risk of conflicts or failures)
+   - **Which option? (A or B)**
+   - **If Option B**: What CREATE2 salt should I use? (32-byte hex string like `0x0000000000000000000000000000000000000000000000000000000000000001`, or "random" to generate one)
+
+2. **Deployer Account**: Private key or mnemonic? (or environment variable name like `DEPLOYER_PRIVATE_KEY`?)
+
+3. **Gas Price**: What gas price for Flow testnet? (in wei, e.g., 1000000000)
+
+4. **Gas Limit**: What gas limit for deployments? (e.g., 5000000)
+
+5. **Test ERC-20 Token**: Deploy a test ERC-20 token? (yes/no)
+
+6. **If yes to #5**: Token name, symbol, decimals, initial supply?
+
+7. **Test SimpleAccount**: Owner address for test SimpleAccount instance?
+
+8. **Test SimpleAccount Count**: How many test SimpleAccount instances to deploy? (default: 1)
+
+**What I Need You to Provide:**
+
+Please answer the questions above, and I will create:
+1. Complete Hardhat configuration for Flow testnet
+2. Deployment scripts for all contracts in the correct order
+3. Verification scripts
+4. deployments.json export with all addresses
+5. Instructions for updating gateway configuration
