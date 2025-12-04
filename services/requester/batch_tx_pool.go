@@ -284,34 +284,56 @@ func (t *BatchTxPool) submitSingleTransaction(
 	ctx context.Context,
 	hexEncodedTx cadence.String,
 ) error {
-	coinbaseAddress, err := cadence.NewString(t.config.Coinbase.Hex())
-	if err != nil {
-		return err
+	done := make(chan struct{})
+	var submitError error
+
+	// This method is called while holding the `t.txMux` lock,
+	// don't let it run for a long time, to avoid lock-contention
+	ctx, cancel := context.WithTimeout(ctx, time.Second*3)
+	defer cancel()
+
+	// build & submit transaction
+	go func() {
+		defer close(done)
+
+		coinbaseAddress, err := cadence.NewString(t.config.Coinbase.Hex())
+		if err != nil {
+			submitError = err
+			return
+		}
+
+		script := replaceAddresses(runTxScript, t.config.FlowNetworkID)
+		flowTx, err := t.buildTransaction(
+			ctx,
+			t.getReferenceBlock(),
+			script,
+			cadence.NewArray([]cadence.Value{hexEncodedTx}),
+			coinbaseAddress,
+		)
+		if err != nil {
+			// If there was any error during the transaction build
+			// process, we record it as a dropped transaction.
+			t.collector.TransactionsDropped(1)
+			submitError = err
+			return
+		}
+
+		if err := t.client.SendTransaction(ctx, *flowTx); err != nil {
+			// If there was any error while sending the transaction,
+			// we record it as a dropped transaction.
+			t.collector.TransactionsDropped(1)
+			submitError = err
+			return
+		}
+	}()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-done:
 	}
 
-	script := replaceAddresses(runTxScript, t.config.FlowNetworkID)
-	flowTx, err := t.buildTransaction(
-		ctx,
-		t.getReferenceBlock(),
-		script,
-		cadence.NewArray([]cadence.Value{hexEncodedTx}),
-		coinbaseAddress,
-	)
-	if err != nil {
-		// If there was any error during the transaction build
-		// process, we record it as a dropped transaction.
-		t.collector.TransactionsDropped(1)
-		return err
-	}
-
-	if err := t.client.SendTransaction(ctx, *flowTx); err != nil {
-		// If there was any error while sending the transaction,
-		// we record it as a dropped transaction.
-		t.collector.TransactionsDropped(1)
-		return err
-	}
-
-	return nil
+	return submitError
 }
 
 func (t *BatchTxPool) updateEOAActivityMetadata(
