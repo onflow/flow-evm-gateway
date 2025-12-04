@@ -124,6 +124,9 @@ func (t *BatchTxPool) Add(
 		return err
 	}
 
+	t.txMux.Lock()
+	defer t.txMux.Unlock()
+
 	eoaActivity, found := t.eoaActivityCache.Get(from)
 	nonce := tx.Nonce()
 
@@ -162,13 +165,11 @@ func (t *BatchTxPool) Add(
 		// If the EOA has pooled transactions, which are not yet processed,
 		// due to congestion or anything, make sure to include the current
 		// tx on that batch.
-		t.txMux.Lock()
 		hasBatch := len(t.pooledTxs[from]) > 0
 		if hasBatch {
 			userTx := pooledEvmTx{txPayload: hexEncodedTx, nonce: nonce}
 			t.pooledTxs[from] = append(t.pooledTxs[from], userTx)
 		}
-		t.txMux.Unlock()
 
 		// If it wasn't batched, submit individually
 		if !hasBatch {
@@ -177,10 +178,8 @@ func (t *BatchTxPool) Add(
 		}
 	} else {
 		// Case 3. EOA activity found AND it was less than [X] seconds ago:
-		t.txMux.Lock()
 		userTx := pooledEvmTx{txPayload: hexEncodedTx, nonce: nonce}
 		t.pooledTxs[from] = append(t.pooledTxs[from], userTx)
-		t.txMux.Unlock()
 	}
 
 	if err != nil {
@@ -285,43 +284,62 @@ func (t *BatchTxPool) submitSingleTransaction(
 	ctx context.Context,
 	hexEncodedTx cadence.String,
 ) error {
-	coinbaseAddress, err := cadence.NewString(t.config.Coinbase.Hex())
-	if err != nil {
-		return err
+	done := make(chan struct{})
+	var submitError error
+
+	// This method is called while holding the `t.txMux` lock,
+	// don't let it run for a long time, to avoid lock-contention
+	ctx, cancel := context.WithTimeout(ctx, time.Second*3)
+	defer cancel()
+
+	// build & submit transaction
+	go func() {
+		defer close(done)
+
+		coinbaseAddress, err := cadence.NewString(t.config.Coinbase.Hex())
+		if err != nil {
+			submitError = err
+			return
+		}
+
+		script := replaceAddresses(runTxScript, t.config.FlowNetworkID)
+		flowTx, err := t.buildTransaction(
+			ctx,
+			t.getReferenceBlock(),
+			script,
+			cadence.NewArray([]cadence.Value{hexEncodedTx}),
+			coinbaseAddress,
+		)
+		if err != nil {
+			// If there was any error during the transaction build
+			// process, we record it as a dropped transaction.
+			t.collector.TransactionsDropped(1)
+			submitError = err
+			return
+		}
+
+		if err := t.client.SendTransaction(ctx, *flowTx); err != nil {
+			// If there was any error while sending the transaction,
+			// we record it as a dropped transaction.
+			t.collector.TransactionsDropped(1)
+			submitError = err
+			return
+		}
+	}()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-done:
 	}
 
-	script := replaceAddresses(runTxScript, t.config.FlowNetworkID)
-	flowTx, err := t.buildTransaction(
-		ctx,
-		t.getReferenceBlock(),
-		script,
-		cadence.NewArray([]cadence.Value{hexEncodedTx}),
-		coinbaseAddress,
-	)
-	if err != nil {
-		// If there was any error during the transaction build
-		// process, we record it as a dropped transaction.
-		t.collector.TransactionsDropped(1)
-		return err
-	}
-
-	if err := t.client.SendTransaction(ctx, *flowTx); err != nil {
-		// If there was any error while sending the transaction,
-		// we record it as a dropped transaction.
-		t.collector.TransactionsDropped(1)
-		return err
-	}
-
-	return nil
+	return submitError
 }
 
 func (t *BatchTxPool) updateEOAActivityMetadata(
 	from gethCommon.Address,
 	nonce uint64,
 ) {
-	t.txMux.Lock()
-	defer t.txMux.Unlock()
-
 	// Update metadata for the last EOA activity only on successful add/submit.
 	eoaActivity, _ := t.eoaActivityCache.Get(from)
 	eoaActivity.lastSubmission = time.Now()

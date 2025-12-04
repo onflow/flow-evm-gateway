@@ -515,7 +515,7 @@ func Test_MultipleTransactionSubmissionsWithinNonRecentInterval(t *testing.T) {
 }
 
 func Test_TransactionSubmissionWithPreviouslySubmittedTransactions(t *testing.T) {
-	_, cfg, stop := setupGatewayNode(t)
+	emu, cfg, stop := setupGatewayNode(t)
 	defer stop()
 
 	rpcTester := &rpcTest{
@@ -528,16 +528,28 @@ func Test_TransactionSubmissionWithPreviouslySubmittedTransactions(t *testing.T)
 	testAddr := common.HexToAddress("0x061B63D29332e4de81bD9F51A48609824CD113a8")
 	nonces := []uint64{0, 1, 2, 3, 2, 3, 4, 5}
 
+	g := errgroup.Group{}
+
+	startBlock, err := emu.GetLatestBlock()
+	require.NoError(t, err)
+
 	hashes := []common.Hash{}
 	// transfer some funds to the test address
 	transferAmount := int64(1_000_000_000)
-	for _, nonce := range nonces {
-		signed, _, err := evmSign(big.NewInt(transferAmount), 23_500, eoaKey, nonce, &testAddr, nil)
-		require.NoError(t, err)
 
-		txHash, err := rpcTester.sendRawTx(signed)
-		require.NoError(t, err)
-		hashes = append(hashes, txHash)
+	for range 3 {
+		g.Go(func() error {
+			for _, nonce := range nonces {
+				signed, _, err := evmSign(big.NewInt(transferAmount), 23_500, eoaKey, nonce, &testAddr, nil)
+				require.NoError(t, err)
+
+				txHash, err := rpcTester.sendRawTx(signed)
+				require.NoError(t, err)
+				hashes = append(hashes, txHash)
+			}
+
+			return nil
+		})
 	}
 
 	expectedBalance := big.NewInt(6 * transferAmount)
@@ -550,6 +562,34 @@ func Test_TransactionSubmissionWithPreviouslySubmittedTransactions(t *testing.T)
 
 		return balance.Cmp(expectedBalance) == 0
 	}, time.Second*15, time.Second*1, "all transactions were not executed")
+
+	endBlock, err := emu.GetLatestBlock()
+	require.NoError(t, err)
+
+	blockEvents, err := emu.GetEventsForHeightRange(
+		"A.f8d6e0586b0a20c7.EVM.TransactionExecuted",
+		startBlock.Height+1,
+		endBlock.Height,
+	)
+
+	totalEVMEvents := 0
+	for _, blockEvent := range blockEvents {
+		totalEVMEvents += len(blockEvent.Events)
+	}
+	assert.Equal(t, 6, totalEVMEvents)
+
+	for i := startBlock.Height; i <= endBlock.Height; i++ {
+		block, err := emu.GetBlockByHeight(i)
+		require.NoError(t, err)
+
+		txResults, err := emu.GetTransactionResultsByBlockID(block.ID())
+		require.NoError(t, err)
+
+		for _, txResult := range txResults {
+			// Assert that we have no errors on the submitted transactions
+			require.Empty(t, txResult.ErrorMessage)
+		}
+	}
 }
 
 func setupGatewayNode(t *testing.T) (emulator.Emulator, config.Config, func()) {
