@@ -73,7 +73,10 @@ VERSION=no-keys-logging
 ENTRY_POINT_ADDRESS=0xcf1e8398747a05a997e8c964e957e47209bdff08
 ENTRY_POINT_SIMULATIONS_ADDRESS=0xfFDDAa4a9Ab363f02Ba26a5fc45Ec714562683D3
 BUNDLER_ENABLED=true
+WALLET_API_KEY=your-64-character-hex-private-key
 ```
+
+**⚠️ Important**: If `BUNDLER_ENABLED=true`, you **must** also set `WALLET_API_KEY` with the ECDSA private key that corresponds to your `COINBASE` address. The Coinbase address must be an EOA (not a smart contract) for the bundler to work. See [Deployment Guide](./DEPLOYMENT_AND_TESTING.md#-important-coinbase-and-walletkey-requirements-for-bundler) for details.
 
 **Save**: `Ctrl+O`, `Enter`, `Ctrl+X`
 
@@ -88,8 +91,11 @@ sudo cat /etc/systemd/system/flow-evm-gateway.service | grep -E "entry-point|bun
 ```
 --entry-point-address=${ENTRY_POINT_ADDRESS} \
 --entry-point-simulations-address=${ENTRY_POINT_SIMULATIONS_ADDRESS} \
---bundler-enabled=${BUNDLER_ENABLED}
+--bundler-enabled=${BUNDLER_ENABLED} \
+--wallet-api-key=${WALLET_API_KEY}
 ```
+
+**Note**: `--wallet-api-key` is required when bundler is enabled. It must be the ECDSA private key for your Coinbase address.
 
 **If missing**, add them after `--log-level=error`:
 
@@ -165,26 +171,34 @@ sudo journalctl -u flow-evm-gateway -f | grep -iE "userop|sendUserOperation|simu
 
 ## What Was Fixed
 
-1. **Critical Fix: handleOps ABI Encoding**:
+1. **Critical Bug Fix: Stale Nonce Issue in eth_getTransactionCount**:
+
+   - **Problem**: The gateway was returning stale nonces when `eth_getTransactionCount` was called with `"pending"` block tag. This caused transaction failures when multiple transactions were submitted in quick succession.
+   - **Root Cause**: The original gateway code treated `"pending"` the same as `"latest"` - both only returned the nonce from the latest block state, never checking the transaction pool for pending transactions.
+   - **Fix**: Extended `TxPool` interface to support querying pending nonces. Updated `GetTransactionCount` to account for pending transactions when `"pending"` block tag is requested. The gateway now returns the maximum of (block state nonce, highest pending nonce + 1).
+   - **Impact**: Frontends can now safely submit multiple transactions in quick succession without "nonce too low" errors. Gateway now complies with Ethereum JSON-RPC specification for `"pending"` block tag.
+   - **See**: `docs/STALE_NONCE_BUG_FIX.md` for detailed documentation.
+
+2. **Critical Fix: handleOps ABI Encoding**:
 
    - **Root Cause**: `EncodeHandleOps` was using `[]interface{}` with anonymous structs, which the ABI encoder cannot handle
    - **Fix**: Created named `UserOperationABI` struct type and use `[]UserOperationABI` instead
    - **Impact**: Bundler can now successfully create `handleOps` transactions and submit them to the network
    - **Symptom**: UserOps were accepted but never included because transactions couldn't be created
 
-2. **Enhanced Bundler Logging**:
+3. **Enhanced Bundler Logging**:
 
    - Bundler ticks now log at Info level with pending count
    - Logs transaction creation and submission with success/failure counts
    - Better error messages for bundler failures
 
-3. **EntryPointSimulations Support** (from previous version):
+4. **EntryPointSimulations Support** (from previous version):
 
    - Removed unreliable bytecode selector check
    - Handles RPC sync/visibility issues gracefully
    - EntryPointSimulationsAddress is required when bundler is enabled
 
-4. **Previous Fixes** (from earlier versions):
+5. **Previous Fixes** (from earlier versions):
    - Hash calculation fix: UserOp hash matches client calculation (EntryPoint v0.9.0 format)
    - Enhanced logging: Comprehensive logging for EntryPoint validation debugging
    - Signature recovery fix: Converts EIP-155 v values (27/28) to recovery IDs (0/1)

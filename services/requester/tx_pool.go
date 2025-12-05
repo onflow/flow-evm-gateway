@@ -4,6 +4,7 @@ import (
 	"context"
 	"regexp"
 
+	gethCommon "github.com/ethereum/go-ethereum/common"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
 
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
@@ -15,6 +16,10 @@ const evmErrorRegex = `evm_error=(.*);`
 // the various transaction pool strategies.
 type TxPool interface {
 	Add(ctx context.Context, tx *gethTypes.Transaction) error
+	// GetPendingNonce returns the highest nonce for pending transactions from the given address.
+	// Returns 0 if there are no pending transactions or if the pool doesn't track nonces.
+	// This is used to account for pending transactions when calculating transaction counts.
+	GetPendingNonce(address gethCommon.Address) uint64
 }
 
 // this will extract the evm specific error from the Flow transaction error message

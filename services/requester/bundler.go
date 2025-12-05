@@ -2,6 +2,7 @@ package requester
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 	"sort"
@@ -9,10 +10,13 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/rs/zerolog"
+	evmEmulator "github.com/onflow/flow-go/fvm/evm/emulator"
 
 	"github.com/onflow/flow-evm-gateway/config"
 	ethTypes "github.com/onflow/flow-evm-gateway/eth/types"
+	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/models"
 )
 
@@ -32,10 +36,26 @@ func NewBundler(
 	txPool TxPool,
 	requester Requester,
 ) *Bundler {
+	bundlerLogger := logger.With().Str("component", "bundler").Logger()
+	
+	// Validate EVMNetworkID is configured correctly
+	// This should never happen if parseConfigFromFlags() worked correctly
+	// EVMNetworkID must never be nil or zero - this indicates a bug in config parsing
+	if config.EVMNetworkID == nil {
+		panic("EVMNetworkID is nil - this is a bug. Config should have been validated in parseConfigFromFlags()")
+	}
+	if config.EVMNetworkID.Sign() == 0 {
+		panic(fmt.Sprintf("EVMNetworkID is zero - this is a bug. Config should have been validated in parseConfigFromFlags(). EVMNetworkID must never be zero"))
+	}
+	
+	bundlerLogger.Info().
+		Str("evmNetworkID", config.EVMNetworkID.String()).
+		Msg("bundler initialized with EVMNetworkID")
+	
 	return &Bundler{
 		userOpPool: userOpPool,
 		config:     config,
-		logger:     logger.With().Str("component", "bundler").Logger(),
+		logger:     bundlerLogger,
 		txPool:     txPool,
 		requester:  requester,
 	}
@@ -171,16 +191,46 @@ func (b *Bundler) SubmitBundledTransactions(ctx context.Context) error {
 	successCount := 0
 	for i, bundledTx := range bundledTxs {
 		tx := bundledTx.Transaction
+		
+		// Log transaction details before submission
+		chainID := tx.ChainId()
+		from, _ := types.Sender(types.LatestSignerForChainID(chainID), tx)
+		b.logger.Info().
+			Str("txHash", tx.Hash().Hex()).
+			Str("from", from.Hex()).
+			Str("to", tx.To().Hex()).
+			Uint64("nonce", tx.Nonce()).
+			Uint64("gas", tx.Gas()).
+			Str("gasPrice", tx.GasPrice().String()).
+			Str("chainID", chainID.String()).
+			Str("expectedChainID", b.config.EVMNetworkID.String()).
+			Bool("chainIDMatches", chainID.Cmp(b.config.EVMNetworkID) == 0).
+			Int("txIndex", i).
+			Int("totalTxs", len(bundledTxs)).
+			Msg("bundler: submitting transaction to pool")
+		
 		if err := b.txPool.Add(ctx, tx); err != nil {
+			// Extract detailed error information
+			errorStr := err.Error()
 			b.logger.Error().
 				Err(err).
+				Str("error", errorStr).
 				Str("txHash", tx.Hash().Hex()).
+				Str("from", from.Hex()).
+				Str("chainID", chainID.String()).
+				Str("expectedChainID", b.config.EVMNetworkID.String()).
 				Int("txIndex", i).
 				Int("totalTxs", len(bundledTxs)).
-				Msg("failed to add handleOps transaction to pool")
+				Msg("bundler: failed to add handleOps transaction to pool")
 			// Don't remove UserOps - they stay in pool for retry
 			continue
 		}
+		
+		b.logger.Info().
+			Str("txHash", tx.Hash().Hex()).
+			Int("txIndex", i).
+			Int("totalTxs", len(bundledTxs)).
+			Msg("bundler: successfully added transaction to pool")
 		successCount++
 
 		// Remove UserOps from pool only after successful submission
@@ -284,8 +334,54 @@ func (b *Bundler) createHandleOpsTransaction(ctx context.Context, userOps []*mod
 		}
 	}
 
+	// Get nonce for Coinbase, accounting for pending transactions
+	networkNonce, err := b.requester.GetNonce(b.config.Coinbase, height)
+	if err != nil {
+		// If the address doesn't exist yet (entity not found), default to nonce 0
+		if errors.Is(err, errs.ErrEntityNotFound) {
+			networkNonce = 0
+			b.logger.Debug().
+				Str("coinbase", b.config.Coinbase.Hex()).
+				Msg("Coinbase address not found in state, defaulting to nonce 0")
+		} else {
+			return nil, fmt.Errorf("failed to get nonce for Coinbase: %w", err)
+		}
+	}
+
+	// Account for pending transactions in the pool
+	// GetPendingNonce returns the highest nonce in the pool (or 0 if pool is empty)
+	// If pendingNonce > networkNonce, there are pending transactions with higher nonces,
+	// so we should use pendingNonce + 1.
+	// If pendingNonce == networkNonce, we can't distinguish between:
+	//   - Pool is empty (should use networkNonce)
+	//   - There's a pending tx with networkNonce (should use networkNonce + 1)
+	// To be safe, we use networkNonce first. If it fails, the bundler will retry with the correct nonce.
+	pendingNonce := b.txPool.GetPendingNonce(b.config.Coinbase)
+	nonce := networkNonce
+	if pendingNonce > networkNonce {
+		// Pending transactions exist with nonces > networkNonce
+		// Use the next nonce after the highest pending nonce
+		nonce = pendingNonce + 1
+		b.logger.Info().
+			Uint64("networkNonce", networkNonce).
+			Uint64("pendingNonce", pendingNonce).
+			Uint64("finalNonce", nonce).
+			Str("coinbase", b.config.Coinbase.Hex()).
+			Msg("accounted for pending transactions in bundler nonce calculation")
+	} else {
+		// pendingNonce <= networkNonce: use network nonce directly
+		// This handles both empty pool and pendingNonce == networkNonce cases
+		b.logger.Info().
+			Uint64("networkNonce", networkNonce).
+			Uint64("pendingNonce", pendingNonce).
+			Uint64("finalNonce", nonce).
+			Str("coinbase", b.config.Coinbase.Hex()).
+			Msg("using network nonce (no pending transactions with higher nonces)")
+	}
+
+	// Create unsigned transaction
 	tx := types.NewTx(&types.LegacyTx{
-		Nonce:    0, // Will be set by transaction pool
+		Nonce:    nonce,
 		To:       &b.config.EntryPointAddress,
 		Value:    big.NewInt(0),
 		Gas:      gasLimit,
@@ -293,7 +389,88 @@ func (b *Bundler) createHandleOpsTransaction(ctx context.Context, userOps []*mod
 		Data:     calldata,
 	})
 
-	return tx, nil
+	// Sign the transaction with Coinbase's private key
+	if b.config.WalletKey == nil {
+		return nil, fmt.Errorf("WalletKey not configured - cannot sign bundler transactions")
+	}
+
+	// Verify that WalletKey corresponds to Coinbase address
+	expectedAddress := crypto.PubkeyToAddress(b.config.WalletKey.PublicKey)
+	if expectedAddress != b.config.Coinbase {
+		return nil, fmt.Errorf("WalletKey address (%s) does not match Coinbase address (%s) - bundler cannot sign transactions", expectedAddress.Hex(), b.config.Coinbase.Hex())
+	}
+
+	// Validate EVMNetworkID is configured correctly (should never fail if config was validated)
+	// This is a defensive check in case the config was modified after initialization
+	// EVMNetworkID must never be nil or zero - this indicates a bug
+	if b.config.EVMNetworkID == nil {
+		panic("EVMNetworkID is nil - this is a bug. Config should have been validated in parseConfigFromFlags() and NewBundler()")
+	}
+	if b.config.EVMNetworkID.Sign() == 0 {
+		panic(fmt.Sprintf("EVMNetworkID is zero - this is a bug. EVMNetworkID must never be zero. Current value: %s", b.config.EVMNetworkID.String()))
+	}
+
+	// Log transaction details before signing with explicit chain ID value
+	chainIDValue := b.config.EVMNetworkID.String()
+	b.logger.Info().
+		Str("coinbase", b.config.Coinbase.Hex()).
+		Str("entryPoint", b.config.EntryPointAddress.Hex()).
+		Uint64("nonce", nonce).
+		Uint64("gasLimit", gasLimit).
+		Str("gasPrice", gasPrice.String()).
+		Int("calldataLen", len(calldata)).
+		Str("evmNetworkID", chainIDValue).
+		Bool("evmNetworkIDIsNil", b.config.EVMNetworkID == nil).
+		Msg("bundler: creating transaction before signing")
+
+	// Create signer with the correct chain ID from config
+	// EVMNetworkID is derived from FLOW_NETWORK_ID:
+	// - flow-testnet → 545
+	// - flow-mainnet → 747
+	// Log the actual value being passed to help debug
+	b.logger.Debug().
+		Str("chainIDValue", chainIDValue).
+		Str("chainIDPointer", fmt.Sprintf("%p", b.config.EVMNetworkID)).
+		Msg("bundler: creating emulator config with chain ID")
+	
+	emulatorConfig := evmEmulator.NewConfig(
+		evmEmulator.WithChainID(b.config.EVMNetworkID),
+	)
+	signer := evmEmulator.GetSigner(emulatorConfig)
+	
+	// Log signer details
+	b.logger.Info().
+		Str("evmNetworkID", b.config.EVMNetworkID.String()).
+		Str("signerType", fmt.Sprintf("%T", signer)).
+		Msg("bundler: created signer with chain ID")
+
+	signedTx, err := types.SignTx(tx, signer, b.config.WalletKey)
+	if err != nil {
+		b.logger.Error().
+			Err(err).
+			Str("evmNetworkID", b.config.EVMNetworkID.String()).
+			Str("coinbase", b.config.Coinbase.Hex()).
+			Uint64("nonce", nonce).
+			Msg("bundler: failed to sign transaction")
+		return nil, fmt.Errorf("failed to sign bundler transaction: %w", err)
+	}
+
+	// Log signed transaction details
+	chainID := signedTx.ChainId()
+	v, r, s := signedTx.RawSignatureValues()
+	b.logger.Info().
+		Uint64("nonce", nonce).
+		Str("coinbase", b.config.Coinbase.Hex()).
+		Str("txHash", signedTx.Hash().Hex()).
+		Str("signedChainID", chainID.String()).
+		Str("expectedChainID", b.config.EVMNetworkID.String()).
+		Bool("chainIDMatches", chainID.Cmp(b.config.EVMNetworkID) == 0).
+		Str("v", v.String()).
+		Str("r", r.String()).
+		Str("s", s.String()).
+		Msg("bundler: signed transaction successfully")
+
+	return signedTx, nil
 }
 
 // encodeHandleOpsCalldata encodes the calldata for EntryPoint.handleOps()

@@ -98,6 +98,7 @@ type BlockChainAPI struct {
 	indexingResumedHeight uint64
 	rateLimiter           RateLimiter
 	collector             metrics.Collector
+	txPool                requester.TxPool // Optional: used to account for pending transactions
 }
 
 func NewBlockChainAPI(
@@ -110,6 +111,7 @@ func NewBlockChainAPI(
 	rateLimiter RateLimiter,
 	collector metrics.Collector,
 	indexingResumedHeight uint64,
+	txPool requester.TxPool, // Optional: nil if not available
 ) *BlockChainAPI {
 	return &BlockChainAPI{
 		logger:                logger,
@@ -121,6 +123,7 @@ func NewBlockChainAPI(
 		indexingResumedHeight: indexingResumedHeight,
 		rateLimiter:           rateLimiter,
 		collector:             collector,
+		txPool:                txPool,
 	}
 }
 
@@ -697,6 +700,12 @@ func (b *BlockChainAPI) GetTransactionCount(
 		return nil, err
 	}
 
+	// Check if "pending" block tag was requested
+	isPending := false
+	if number, ok := blockNumberOrHash.Number(); ok {
+		isPending = (number == rpc.PendingBlockNumber)
+	}
+
 	height, err := resolveBlockTag(&blockNumberOrHash, b.blocks, b.logger)
 	if err != nil {
 		return handleError[*hexutil.Uint64](err, l, b.collector)
@@ -705,6 +714,24 @@ func (b *BlockChainAPI) GetTransactionCount(
 	networkNonce, err := b.evm.GetNonce(address, height)
 	if err != nil {
 		return handleError[*hexutil.Uint64](err, l, b.collector)
+	}
+
+	// If "pending" was requested and we have access to the transaction pool,
+	// account for pending transactions by using the maximum of:
+	// - networkNonce (from block state)
+	// - highestPendingNonce + 1 (from transaction pool)
+	if isPending && b.txPool != nil {
+		highestPendingNonce := b.txPool.GetPendingNonce(address)
+		if highestPendingNonce >= networkNonce {
+			// Pending transactions exist with nonces >= networkNonce
+			// Return highestPendingNonce + 1 to indicate the next available nonce
+			networkNonce = highestPendingNonce + 1
+			l.Debug().
+				Uint64("blockNonce", networkNonce-1).
+				Uint64("highestPendingNonce", highestPendingNonce).
+				Uint64("returnedNonce", networkNonce).
+				Msg("accounted for pending transactions in nonce calculation")
+		}
 	}
 
 	return (*hexutil.Uint64)(&networkNonce), nil

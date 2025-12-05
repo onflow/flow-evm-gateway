@@ -1,5 +1,5 @@
 [Unit]
-Description=EVM Gateway running with Docker
+Description=EVM Gateway running with Docker (Custom Build)
 Requires=docker.service
 After=network-online.target docker.service
 
@@ -10,33 +10,48 @@ WantedBy=default.target
 [Service]
 Type=simple
 TimeoutStopSec=1m
-
 RestartSec=5s
 Restart=always
-
 StandardOutput=journal
 
 EnvironmentFile=/etc/flow/runtime-conf.env
 EnvironmentFile=-/etc/flow/conf.d/*.env
 
-ExecStartPre=docker pull us-west1-docker.pkg.dev/dl-flow-devex-production/development/flow-evm-gateway:${VERSION}
-ExecStart=docker run --rm \
+# Ensure database directory exists with proper permissions
+ExecStartPre=/bin/bash -c 'mkdir -p /data/evm-gateway && chmod 755 /data/evm-gateway'
+# Clean up any existing container before starting
+ExecStartPre=/bin/bash -c 'docker rm -f flow-evm-gateway 2>/dev/null || true'
+# Authenticate with ECR before pulling (if using AWS ECR)
+# ExecStartPre=/usr/local/bin/ecr-login.sh
+# Pull custom Docker image from ECR
+ExecStartPre=/usr/bin/docker pull ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/flow-evm-gateway:${VERSION}
+ExecStart=/usr/bin/docker run \
 	--name flow-evm-gateway \
-	us-west1-docker.pkg.dev/dl-flow-devex-production/development/flow-evm-gateway:${VERSION} \
+	-p 8545:8545 \
+	-v /data/evm-gateway:/data \
+	${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/flow-evm-gateway:${VERSION} \
     --database-dir=/data \
     --access-node-grpc-host=${ACCESS_NODE_GRPC_HOST} \
     --flow-network-id=${FLOW_NETWORK_ID} \
-    --init-cadence-height=${INIT_CADENCE_HEIGHT} \
     --coinbase=${COINBASE} \
     --coa-address=${COA_ADDRESS} \
     --coa-key=${COA_KEY} \
     --coa-key-alg=${COA_KEY_ALG} \
     --access-node-spork-hosts=${ACCESS_NODE_SPORK_HOSTS} \
-    --ws-enabled=true \
-    --tx-state-validation=local-index \
-    --rate-limit=9999999 \
-    --rpc-host=0.0.0.0 \
-    --log-level=error \
     --entry-point-address=${ENTRY_POINT_ADDRESS} \
     --entry-point-simulations-address=${ENTRY_POINT_SIMULATIONS_ADDRESS} \
-    --bundler-enabled=${BUNDLER_ENABLED}
+    --bundler-enabled=${BUNDLER_ENABLED} \
+    --bundler-beneficiary=${BUNDLER_BENEFICIARY} \
+    --bundler-interval=${BUNDLER_INTERVAL} \
+    --max-ops-per-bundle=${MAX_OPS_PER_BUNDLE} \
+    --user-op-ttl=${USER_OP_TTL} \
+    --ws-enabled=true \
+    --tx-state-validation=tx-seal \
+    --rate-limit=9999999 \
+    --rpc-host=0.0.0.0 \
+    --rpc-port=8545 \
+    --metrics-port=9091 \
+    --log-level=info
+
+ExecStop=/bin/bash -c 'docker stop --time=30 flow-evm-gateway 2>/dev/null || true'
+ExecStopPost=/bin/bash -c 'docker rm -f flow-evm-gateway 2>/dev/null || true'

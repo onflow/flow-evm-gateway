@@ -125,10 +125,13 @@ func TestEncodeGetDeposit(t *testing.T) {
 }
 
 func TestGetHandleOpsSelector(t *testing.T) {
-	t.Run("returns 4-byte selector", func(t *testing.T) {
+	t.Run("returns 4-byte selector from ABI", func(t *testing.T) {
 		selector := GetHandleOpsSelector()
 		assert.Len(t, selector, 4)
-		assert.Equal(t, []byte{0xb6, 0x1d, 0x27, 0xf6}, selector)
+		// Verify it matches the ABI method selector
+		method, exists := entryPointABIParsed.Methods["handleOps"]
+		require.True(t, exists, "handleOps method should exist in EntryPoint ABI")
+		assert.Equal(t, method.ID[:4], selector, "selector should match ABI method ID")
 	})
 }
 

@@ -89,6 +89,60 @@ The gateway requires the following ERC-4337 configuration flags:
 - `--bundler-interval`: Interval at which bundler processes UserOperations (default: 800ms)
   - See [Bundler Interval Decision](./BUNDLER_INTERVAL_DECISION.md) for detailed impact analysis
 
+### ⚠️ Important: Coinbase and WalletKey Requirements for Bundler
+
+**When the bundler is enabled, the following requirements apply:**
+
+1. **Coinbase Must Be an EOA**: The `--coinbase` address **must be an EOA (Externally Owned Account)**, not a smart contract address. This is required because:
+   - The bundler needs to sign `handleOps` transactions
+   - Only EOAs have private keys that can sign transactions
+   - Smart contracts cannot initiate transactions
+
+2. **WalletKey Must Be Configured**: You **must** provide `--wallet-api-key` with the ECDSA private key (secp256k1) that corresponds to your Coinbase address:
+   ```bash
+   --wallet-api-key=<64-character-hex-private-key>
+   ```
+   - The bundler verifies that the WalletKey's public key address matches the Coinbase address
+   - If they don't match, the bundler will fail with: `"WalletKey address does not match Coinbase address"`
+
+3. **Why This Is Required**: 
+   - The bundler creates and signs `EntryPoint.handleOps()` transactions
+   - These transactions must be signed by an EOA with sufficient balance to pay for gas
+   - The Coinbase address is used as the transaction sender, so it must be an EOA with a corresponding private key
+
+**Note**: For general gateway operation (without bundler), Coinbase can be either an EOA or COA address since it only needs to receive fees. However, **when bundler is enabled, Coinbase must be an EOA**.
+
+### Future Enhancement: Separating Coinbase from Bundler Signer
+
+**Currently not implemented, but architecturally possible:**
+
+The bundler could be enhanced to support separating the Coinbase address from the bundler transaction signer address. This would allow:
+
+1. **Coinbase**: Could remain a COA (Contract Owned Account) for general gateway fee collection
+2. **Bundler Signer**: A separate EOA address used specifically for signing `handleOps` transactions
+3. **Bundler Beneficiary**: Already separate - the address that receives fees from EntryPoint execution (via `--bundler-beneficiary` flag)
+
+**Current Implementation:**
+- Transaction signer: `Coinbase` (must be EOA, uses `WalletKey`)
+- Fee recipient: `BundlerBeneficiary` (if set) or `Coinbase` (fallback)
+- Gas estimation: Uses `Coinbase` as `from` address
+- Nonce management: Uses `Coinbase` nonce
+
+**Potential Future Implementation:**
+- Transaction signer: `BundlerSignerAddress` (EOA, uses `BundlerSignerKey`)
+- Fee recipient: `BundlerBeneficiary` (if set) or `Coinbase` (fallback)
+- Gas estimation: Uses `BundlerSignerAddress` as `from` address
+- Nonce management: Uses `BundlerSignerAddress` nonce
+- Coinbase: Could be COA for general gateway operations
+
+**Benefits of Separation:**
+- Allows Coinbase to be a COA while bundler uses a dedicated EOA signer
+- Better security isolation (signing key separate from fee collection)
+- More flexible deployment options
+- Aligns with ERC-4337 design where beneficiary and signer can differ
+
+**This would require code changes** to add `BundlerSignerAddress` and `BundlerSignerKey` configuration options.
+
 ### Example Configuration for Flow Testnet
 
 ```bash
@@ -98,6 +152,7 @@ The gateway requires the following ERC-4337 configuration flags:
   --coinbase=<YOUR_EVM_COINBASE_ADDRESS> \
   --coa-address=<YOUR_FLOW_COA_ADDRESS> \
   --coa-key=<YOUR_FLOW_COA_PRIVATE_KEY> \
+  --wallet-api-key=<YOUR_COINBASE_ECDSA_PRIVATE_KEY> \
   --entry-point-address=0xcf1e8398747a05a997e8c964e957e47209bdff08 \
   --bundler-enabled=true \
   --max-ops-per-bundle=10 \
@@ -108,6 +163,8 @@ The gateway requires the following ERC-4337 configuration flags:
   --ws-enabled=true \
   --metrics-port=9091
 ```
+
+**Note**: `--wallet-api-key` is required when `--bundler-enabled=true`. It must be the ECDSA private key (secp256k1) that corresponds to your `--coinbase` address.
 
 ### Full Example with All Common Flags
 

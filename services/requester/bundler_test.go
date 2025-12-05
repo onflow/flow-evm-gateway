@@ -169,12 +169,68 @@ func TestBundler_Disabled(t *testing.T) {
 	})
 }
 
+func TestBundler_EVMNetworkID_Validation(t *testing.T) {
+	baseCfg := config.Config{
+		BundlerEnabled:    true,
+		MaxOpsPerBundle:   10,
+		EntryPointAddress: common.HexToAddress("0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789"),
+		Coinbase:          common.HexToAddress("0x1234567890123456789012345678901234567890"),
+		GasPrice:          big.NewInt(1000000000),
+	}
+
+	pool := NewInMemoryUserOpPool(baseCfg, zerolog.Nop())
+	txPool := &mockTxPool{}
+	requester := &mockRequester{}
+
+	t.Run("panics when EVMNetworkID is nil", func(t *testing.T) {
+		cfg := baseCfg
+		cfg.EVMNetworkID = nil
+
+		assert.Panics(t, func() {
+			NewBundler(pool, cfg, zerolog.Nop(), txPool, requester)
+		}, "NewBundler should panic when EVMNetworkID is nil")
+	})
+
+	t.Run("panics when EVMNetworkID is zero", func(t *testing.T) {
+		cfg := baseCfg
+		cfg.EVMNetworkID = big.NewInt(0)
+
+		assert.Panics(t, func() {
+			NewBundler(pool, cfg, zerolog.Nop(), txPool, requester)
+		}, "NewBundler should panic when EVMNetworkID is zero")
+	})
+
+	t.Run("succeeds when EVMNetworkID is valid (545)", func(t *testing.T) {
+		cfg := baseCfg
+		cfg.EVMNetworkID = big.NewInt(545)
+
+		assert.NotPanics(t, func() {
+			bundler := NewBundler(pool, cfg, zerolog.Nop(), txPool, requester)
+			assert.NotNil(t, bundler)
+		}, "NewBundler should not panic when EVMNetworkID is 545")
+	})
+
+	t.Run("succeeds when EVMNetworkID is valid (747)", func(t *testing.T) {
+		cfg := baseCfg
+		cfg.EVMNetworkID = big.NewInt(747)
+
+		assert.NotPanics(t, func() {
+			bundler := NewBundler(pool, cfg, zerolog.Nop(), txPool, requester)
+			assert.NotNil(t, bundler)
+		}, "NewBundler should not panic when EVMNetworkID is 747")
+	})
+}
+
 // Mock implementations for testing
 
 type mockTxPool struct{}
 
 func (m *mockTxPool) Add(ctx context.Context, tx *types.Transaction) error {
 	return nil
+}
+
+func (m *mockTxPool) GetPendingNonce(address common.Address) uint64 {
+	return 0
 }
 
 type mockRequester struct{}

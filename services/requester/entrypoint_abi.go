@@ -2,7 +2,6 @@ package requester
 
 import (
 	"bytes"
-	"encoding/hex"
 	"fmt"
 	"math/big"
 
@@ -12,8 +11,8 @@ import (
 	"github.com/onflow/flow-evm-gateway/models"
 )
 
-// EntryPointABI is the ABI for the ERC-4337 EntryPoint contract
-// This is a simplified version - in production, load from JSON
+// EntryPointABI is the ABI for the ERC-4337 EntryPoint contract (v0.7+)
+// Uses PackedUserOperation format
 const entryPointABI = `[
 	{
 		"inputs": [
@@ -23,15 +22,13 @@ const entryPointABI = `[
 					{"internalType": "uint256", "name": "nonce", "type": "uint256"},
 					{"internalType": "bytes", "name": "initCode", "type": "bytes"},
 					{"internalType": "bytes", "name": "callData", "type": "bytes"},
-					{"internalType": "uint256", "name": "callGasLimit", "type": "uint256"},
-					{"internalType": "uint256", "name": "verificationGasLimit", "type": "uint256"},
+					{"internalType": "bytes32", "name": "accountGasLimits", "type": "bytes32"},
 					{"internalType": "uint256", "name": "preVerificationGas", "type": "uint256"},
-					{"internalType": "uint256", "name": "maxFeePerGas", "type": "uint256"},
-					{"internalType": "uint256", "name": "maxPriorityFeePerGas", "type": "uint256"},
+					{"internalType": "bytes32", "name": "gasFees", "type": "bytes32"},
 					{"internalType": "bytes", "name": "paymasterAndData", "type": "bytes"},
 					{"internalType": "bytes", "name": "signature", "type": "bytes"}
 				],
-				"internalType": "struct UserOperation[]",
+				"internalType": "struct PackedUserOperation[]",
 				"name": "ops",
 				"type": "tuple[]"
 			},
@@ -42,32 +39,6 @@ const entryPointABI = `[
 			}
 		],
 		"name": "handleOps",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"components": [
-					{"internalType": "address", "name": "sender", "type": "address"},
-					{"internalType": "uint256", "name": "nonce", "type": "uint256"},
-					{"internalType": "bytes", "name": "initCode", "type": "bytes"},
-					{"internalType": "bytes", "name": "callData", "type": "bytes"},
-					{"internalType": "uint256", "name": "callGasLimit", "type": "uint256"},
-					{"internalType": "uint256", "name": "verificationGasLimit", "type": "uint256"},
-					{"internalType": "uint256", "name": "preVerificationGas", "type": "uint256"},
-					{"internalType": "uint256", "name": "maxFeePerGas", "type": "uint256"},
-					{"internalType": "uint256", "name": "maxPriorityFeePerGas", "type": "uint256"},
-					{"internalType": "bytes", "name": "paymasterAndData", "type": "bytes"},
-					{"internalType": "bytes", "name": "signature", "type": "bytes"}
-				],
-				"internalType": "struct UserOperation",
-				"name": "userOp",
-				"type": "tuple"
-			}
-		],
-		"name": "simulateValidation",
 		"outputs": [],
 		"stateMutability": "nonpayable",
 		"type": "function"
@@ -144,6 +115,211 @@ const entryPointABI = `[
 ]`
 
 var entryPointABIParsed abi.ABI
+var entryPointSimulationsABIParsed abi.ABI
+var simpleAccountFactoryABIParsed *abi.ABI
+
+// EntryPointSimulationsABI is the ABI for EntryPointSimulations contract (v0.7+)
+// Uses PackedUserOperation format instead of UserOperation
+const entryPointSimulationsABI = `[
+	{
+		"inputs": [
+			{
+				"components": [
+					{"internalType": "address", "name": "sender", "type": "address"},
+					{"internalType": "uint256", "name": "nonce", "type": "uint256"},
+					{"internalType": "bytes", "name": "initCode", "type": "bytes"},
+					{"internalType": "bytes", "name": "callData", "type": "bytes"},
+					{"internalType": "bytes32", "name": "accountGasLimits", "type": "bytes32"},
+					{"internalType": "uint256", "name": "preVerificationGas", "type": "uint256"},
+					{"internalType": "bytes32", "name": "gasFees", "type": "bytes32"},
+					{"internalType": "bytes", "name": "paymasterAndData", "type": "bytes"},
+					{"internalType": "bytes", "name": "signature", "type": "bytes"}
+				],
+				"internalType": "struct PackedUserOperation",
+				"name": "userOp",
+				"type": "tuple"
+			}
+		],
+		"name": "simulateValidation",
+		"outputs": [
+			{
+				"components": [
+					{
+						"components": [
+							{"internalType": "uint256", "name": "preOpGas", "type": "uint256"},
+							{"internalType": "uint256", "name": "prefund", "type": "uint256"},
+							{"internalType": "uint256", "name": "accountValidationData", "type": "uint256"},
+							{"internalType": "uint256", "name": "paymasterValidationData", "type": "uint256"},
+							{"internalType": "bytes", "name": "paymasterContext", "type": "bytes"}
+						],
+						"internalType": "struct IEntryPoint.ReturnInfo",
+						"name": "returnInfo",
+						"type": "tuple"
+					},
+					{
+						"components": [
+							{"internalType": "uint256", "name": "stake", "type": "uint256"},
+							{"internalType": "uint256", "name": "unstakeDelaySec", "type": "uint256"}
+						],
+						"internalType": "struct IStakeManager.StakeInfo",
+						"name": "senderInfo",
+						"type": "tuple"
+					},
+					{
+						"components": [
+							{"internalType": "uint256", "name": "stake", "type": "uint256"},
+							{"internalType": "uint256", "name": "unstakeDelaySec", "type": "uint256"}
+						],
+						"internalType": "struct IStakeManager.StakeInfo",
+						"name": "factoryInfo",
+						"type": "tuple"
+					},
+					{
+						"components": [
+							{"internalType": "uint256", "name": "stake", "type": "uint256"},
+							{"internalType": "uint256", "name": "unstakeDelaySec", "type": "uint256"}
+						],
+						"internalType": "struct IStakeManager.StakeInfo",
+						"name": "paymasterInfo",
+						"type": "tuple"
+					},
+					{
+						"components": [
+							{"internalType": "address", "name": "aggregator", "type": "address"},
+							{
+								"components": [
+									{"internalType": "uint256", "name": "stake", "type": "uint256"},
+									{"internalType": "uint256", "name": "unstakeDelaySec", "type": "uint256"}
+								],
+								"internalType": "struct IStakeManager.StakeInfo",
+								"name": "stakeInfo",
+								"type": "tuple"
+							}
+						],
+						"internalType": "struct IEntryPointSimulations.AggregatorStakeInfo",
+						"name": "aggregatorInfo",
+						"type": "tuple"
+					}
+				],
+				"internalType": "struct IEntryPointSimulations.ValidationResult",
+				"name": "",
+				"type": "tuple"
+			}
+		],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	}
+]`
+
+// SimpleAccountFactoryABI is the ABI for SimpleAccountFactory contract
+const simpleAccountFactoryABI = `[
+	{
+		"inputs": [
+			{
+				"internalType": "contract IEntryPoint",
+				"name": "_entryPoint",
+				"type": "address"
+			}
+		],
+		"stateMutability": "nonpayable",
+		"type": "constructor"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "msgSender",
+				"type": "address"
+			},
+			{
+				"internalType": "address",
+				"name": "entity",
+				"type": "address"
+			},
+			{
+				"internalType": "address",
+				"name": "senderCreator",
+				"type": "address"
+			}
+		],
+		"name": "NotSenderCreator",
+		"type": "error"
+	},
+	{
+		"inputs": [],
+		"name": "accountImplementation",
+		"outputs": [
+			{
+				"internalType": "contract SimpleAccount",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "owner",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "salt",
+				"type": "uint256"
+			}
+		],
+		"name": "createAccount",
+		"outputs": [
+			{
+				"internalType": "contract SimpleAccount",
+				"name": "ret",
+				"type": "address"
+			}
+		],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "owner",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "salt",
+				"type": "uint256"
+			}
+		],
+		"name": "getAddress",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "senderCreator",
+		"outputs": [
+			{
+				"internalType": "contract ISenderCreator",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	}
+]`
 
 func init() {
 	var err error
@@ -151,9 +327,19 @@ func init() {
 	if err != nil {
 		panic(fmt.Sprintf("failed to parse EntryPoint ABI: %v", err))
 	}
+	entryPointSimulationsABIParsed, err = abi.JSON(bytes.NewReader([]byte(entryPointSimulationsABI)))
+	if err != nil {
+		panic(fmt.Sprintf("failed to parse EntryPointSimulations ABI: %v", err))
+	}
+	parsed, err := abi.JSON(bytes.NewReader([]byte(simpleAccountFactoryABI)))
+	if err != nil {
+		panic(fmt.Sprintf("failed to parse SimpleAccountFactory ABI: %v", err))
+	}
+	simpleAccountFactoryABIParsed = &parsed
 }
 
-// UserOperationABI is the struct format expected by the ABI encoder
+// UserOperationABI is the struct format for old EntryPoint v0.6 (deprecated - kept for backwards compatibility)
+// Note: EntryPoint v0.7+ uses PackedUserOperation format
 type UserOperationABI struct {
 	Sender               common.Address
 	Nonce                *big.Int
@@ -169,22 +355,21 @@ type UserOperationABI struct {
 }
 
 // EncodeHandleOps encodes the calldata for EntryPoint.handleOps()
+// EntryPoint v0.7+ uses PackedUserOperation format
 func EncodeHandleOps(userOps []*models.UserOperation, beneficiary common.Address) ([]byte, error) {
-	// Convert UserOperations to ABI format using concrete struct type
-	ops := make([]UserOperationABI, len(userOps))
+	// Convert UserOperations to PackedUserOperation format
+	ops := make([]PackedUserOperationABI, len(userOps))
 	for i, userOp := range userOps {
-		ops[i] = UserOperationABI{
-			Sender:               userOp.Sender,
-			Nonce:                userOp.Nonce,
-			InitCode:             userOp.InitCode,
-			CallData:             userOp.CallData,
-			CallGasLimit:         userOp.CallGasLimit,
-			VerificationGasLimit:  userOp.VerificationGasLimit,
-			PreVerificationGas:    userOp.PreVerificationGas,
-			MaxFeePerGas:          userOp.MaxFeePerGas,
-			MaxPriorityFeePerGas:  userOp.MaxPriorityFeePerGas,
-			PaymasterAndData:      userOp.PaymasterAndData,
-			Signature:             userOp.Signature,
+		ops[i] = PackedUserOperationABI{
+			Sender:             userOp.Sender,
+			Nonce:              userOp.Nonce,
+			InitCode:           userOp.InitCode,
+			CallData:           userOp.CallData,
+			AccountGasLimits:   packAccountGasLimits(userOp.CallGasLimit, userOp.VerificationGasLimit),
+			PreVerificationGas: userOp.PreVerificationGas,
+			GasFees:            packGasFees(userOp.MaxFeePerGas, userOp.MaxPriorityFeePerGas),
+			PaymasterAndData:   userOp.PaymasterAndData,
+			Signature:          userOp.Signature,
 		}
 	}
 
@@ -197,7 +382,85 @@ func EncodeHandleOps(userOps []*models.UserOperation, beneficiary common.Address
 	return data, nil
 }
 
+// PackedUserOperationABI is the struct format for EntryPointSimulations (v0.7+)
+type PackedUserOperationABI struct {
+	Sender             common.Address
+	Nonce              *big.Int
+	InitCode           []byte
+	CallData           []byte
+	AccountGasLimits   [32]byte // bytes32: packed callGasLimit (uint128) + verificationGasLimit (uint128)
+	PreVerificationGas *big.Int
+	GasFees            [32]byte // bytes32: packed maxFeePerGas (uint128) + maxPriorityFeePerGas (uint128)
+	PaymasterAndData   []byte
+	Signature          []byte
+}
+
+// packAccountGasLimits packs callGasLimit and verificationGasLimit into a bytes32
+// Solidity format: bytes32(uint256(verificationGasLimit) << 128 | uint256(callGasLimit))
+// bytes 0-15 (high 128 bits): verificationGasLimit
+// bytes 16-31 (low 128 bits): callGasLimit
+func packAccountGasLimits(callGasLimit, verificationGasLimit *big.Int) [32]byte {
+	var result [32]byte
+
+	// Pack callGasLimit into lower 16 bytes (bytes 16-31, right-aligned)
+	if callGasLimit != nil {
+		callGasBytes := make([]byte, 16)
+		callGasLimit.FillBytes(callGasBytes)
+		copy(result[16:32], callGasBytes)
+	}
+
+	// Pack verificationGasLimit into upper 16 bytes (bytes 0-15, right-aligned)
+	if verificationGasLimit != nil {
+		verificationGasBytes := make([]byte, 16)
+		verificationGasLimit.FillBytes(verificationGasBytes)
+		copy(result[0:16], verificationGasBytes)
+	}
+
+	return result
+}
+
+// packGasFees packs maxFeePerGas and maxPriorityFeePerGas into a bytes32
+// Solidity format: bytes32(uint256(maxPriorityFeePerGas) << 128 | uint256(maxFeePerGas))
+// bytes 0-15 (high 128 bits): maxPriorityFeePerGas
+// bytes 16-31 (low 128 bits): maxFeePerGas
+func packGasFees(maxFeePerGas, maxPriorityFeePerGas *big.Int) [32]byte {
+	var result [32]byte
+
+	// Pack maxFeePerGas into lower 16 bytes (bytes 16-31, right-aligned)
+	if maxFeePerGas != nil {
+		maxFeeBytes := make([]byte, 16)
+		maxFeePerGas.FillBytes(maxFeeBytes)
+		copy(result[16:32], maxFeeBytes)
+	}
+
+	// Pack maxPriorityFeePerGas into upper 16 bytes (bytes 0-15, right-aligned)
+	if maxPriorityFeePerGas != nil {
+		maxPriorityFeeBytes := make([]byte, 16)
+		maxPriorityFeePerGas.FillBytes(maxPriorityFeeBytes)
+		copy(result[0:16], maxPriorityFeeBytes)
+	}
+
+	return result
+}
+
+// unpackAccountGasLimits unpacks callGasLimit and verificationGasLimit from a bytes32
+// Reverse of packAccountGasLimits: bytes 0-15 = verificationGasLimit (high 128 bits), bytes 16-31 = callGasLimit (low 128 bits)
+func unpackAccountGasLimits(packed [32]byte) (*big.Int, *big.Int) {
+	verificationGasLimit := new(big.Int).SetBytes(packed[0:16])
+	callGasLimit := new(big.Int).SetBytes(packed[16:32])
+	return callGasLimit, verificationGasLimit
+}
+
+// unpackGasFees unpacks maxFeePerGas and maxPriorityFeePerGas from a bytes32
+// Reverse of packGasFees: bytes 0-15 = maxPriorityFeePerGas (high 128 bits), bytes 16-31 = maxFeePerGas (low 128 bits)
+func unpackGasFees(packed [32]byte) (*big.Int, *big.Int) {
+	maxPriorityFeePerGas := new(big.Int).SetBytes(packed[0:16])
+	maxFeePerGas := new(big.Int).SetBytes(packed[16:32])
+	return maxFeePerGas, maxPriorityFeePerGas
+}
+
 // EncodeSimulateValidation encodes the calldata for EntryPoint.simulateValidation()
+// This function uses the standard UserOperation format (for EntryPoint v0.6)
 func EncodeSimulateValidation(userOp *models.UserOperation) ([]byte, error) {
 	op := struct {
 		Sender               common.Address
@@ -217,18 +480,42 @@ func EncodeSimulateValidation(userOp *models.UserOperation) ([]byte, error) {
 		InitCode:             userOp.InitCode,
 		CallData:             userOp.CallData,
 		CallGasLimit:         userOp.CallGasLimit,
-		VerificationGasLimit:  userOp.VerificationGasLimit,
-		PreVerificationGas:    userOp.PreVerificationGas,
-		MaxFeePerGas:          userOp.MaxFeePerGas,
-		MaxPriorityFeePerGas:  userOp.MaxPriorityFeePerGas,
-		PaymasterAndData:      userOp.PaymasterAndData,
-		Signature:             userOp.Signature,
+		VerificationGasLimit: userOp.VerificationGasLimit,
+		PreVerificationGas:   userOp.PreVerificationGas,
+		MaxFeePerGas:         userOp.MaxFeePerGas,
+		MaxPriorityFeePerGas: userOp.MaxPriorityFeePerGas,
+		PaymasterAndData:     userOp.PaymasterAndData,
+		Signature:            userOp.Signature,
 	}
 
 	// Encode the function call
 	data, err := entryPointABIParsed.Pack("simulateValidation", op)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode simulateValidation: %w", err)
+	}
+
+	return data, nil
+}
+
+// EncodeSimulateValidationPacked encodes the calldata for EntryPointSimulations.simulateValidation()
+// This function uses PackedUserOperation format (for EntryPointSimulations v0.7+)
+func EncodeSimulateValidationPacked(userOp *models.UserOperation) ([]byte, error) {
+	packedOp := PackedUserOperationABI{
+		Sender:             userOp.Sender,
+		Nonce:              userOp.Nonce,
+		InitCode:           userOp.InitCode,
+		CallData:           userOp.CallData,
+		AccountGasLimits:   packAccountGasLimits(userOp.CallGasLimit, userOp.VerificationGasLimit),
+		PreVerificationGas: userOp.PreVerificationGas,
+		GasFees:            packGasFees(userOp.MaxFeePerGas, userOp.MaxPriorityFeePerGas),
+		PaymasterAndData:   userOp.PaymasterAndData,
+		Signature:          userOp.Signature,
+	}
+
+	// Encode the function call using EntryPointSimulations ABI
+	data, err := entryPointSimulationsABIParsed.Pack("simulateValidation", packedOp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode simulateValidation (packed): %w", err)
 	}
 
 	return data, nil
@@ -252,11 +539,36 @@ func EncodeSenderCreator() ([]byte, error) {
 	return data, nil
 }
 
-// GetHandleOpsSelector returns the 4-byte function selector for handleOps
-func GetHandleOpsSelector() []byte {
-	// keccak256("handleOps((address,uint256,bytes,bytes,uint256,uint256,uint256,uint256,uint256,bytes,bytes),address)")[:4]
-	// This is the standard selector
-	selector, _ := hex.DecodeString("b61d27f6")
-	return selector
+// EncodeFactoryGetAddress encodes the calldata for SimpleAccountFactory.getAddress(owner, salt)
+func EncodeFactoryGetAddress(owner common.Address, salt *big.Int) ([]byte, error) {
+	if simpleAccountFactoryABIParsed == nil {
+		return nil, fmt.Errorf("SimpleAccountFactory ABI not initialized")
+	}
+	data, err := simpleAccountFactoryABIParsed.Pack("getAddress", owner, salt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode getAddress: %w", err)
+	}
+	return data, nil
 }
 
+// EncodeFactoryAccountImplementation encodes the calldata for SimpleAccountFactory.accountImplementation()
+func EncodeFactoryAccountImplementation() ([]byte, error) {
+	if simpleAccountFactoryABIParsed == nil {
+		return nil, fmt.Errorf("SimpleAccountFactory ABI not initialized")
+	}
+	data, err := simpleAccountFactoryABIParsed.Pack("accountImplementation")
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode accountImplementation: %w", err)
+	}
+	return data, nil
+}
+
+// GetHandleOpsSelector returns the 4-byte function selector for handleOps
+// Derived from the ABI to ensure correctness
+func GetHandleOpsSelector() []byte {
+	method, exists := entryPointABIParsed.Methods["handleOps"]
+	if !exists {
+		panic("handleOps method not found in EntryPoint ABI")
+	}
+	return method.ID
+}

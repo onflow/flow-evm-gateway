@@ -11,6 +11,7 @@ import (
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/onflow/flow-go-sdk/access"
 	"github.com/onflow/flow-go-sdk/access/grpc"
+	"github.com/onflow/flow-go-sdk/crypto"
 	"github.com/onflow/flow-go/fvm/environment"
 	"github.com/onflow/flow-go/fvm/evm"
 	flowGo "github.com/onflow/flow-go/model/flow"
@@ -240,13 +241,35 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 			Int("totalKeysOnAccount", len(account.Keys)).
 			Msg("fetched COA account for key loading")
 
-		signer, err := createSigner(ctx, b.config, b.logger)
+		// First, derive the public key from COA_KEY to find matching account key
+		var signerPubKey crypto.PublicKey
+		var detectedHashAlgo crypto.HashAlgorithm
+		if b.config.COAKey != nil {
+			// Derive public key from private key to find matching account key
+			signerPubKey = b.config.COAKey.PublicKey()
+
+			// Find matching account key and detect its hash algorithm
+			for _, key := range account.Keys {
+				if key.PublicKey.Equals(signerPubKey) {
+					detectedHashAlgo = key.HashAlgo
+					l.Info().
+						Int("keyIndex", int(key.Index)).
+						Str("hashAlgorithm", key.HashAlgo.String()).
+						Msg("detected hash algorithm from matching account key")
+					break
+				}
+			}
+		}
+
+		// Create signer with detected hash algorithm (or default if not detected)
+		signer, err := createSigner(ctx, b.config, b.logger, detectedHashAlgo)
 		if err != nil {
 			return err
 		}
-		signerPubKey := signer.PublicKey()
+		signerPubKey = signer.PublicKey()
 		l.Info().
 			Str("signerPublicKey", signerPubKey.String()).
+			Str("hashAlgorithm", detectedHashAlgo.String()).
 			Msg("created signer from COA key")
 
 		matchedKeys := 0
@@ -357,6 +380,7 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 		rateLimiter,
 		b.collector,
 		indexingResumedHeight,
+		txPool, // Pass txPool to account for pending transactions in nonce calculations
 	)
 
 	streamAPI := api.NewStreamAPI(

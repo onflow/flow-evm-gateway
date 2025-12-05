@@ -1,3 +1,6 @@
+//go:build ignore
+// +build ignore
+
 package main
 
 import (
@@ -76,4 +79,3 @@ func main() {
 	fmt.Println()
 	fmt.Println("And comparing key index 0's public key with the derived key above.")
 }
-

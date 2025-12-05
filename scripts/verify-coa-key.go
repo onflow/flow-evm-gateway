@@ -1,3 +1,6 @@
+//go:build ignore
+// +build ignore
+
 package main
 
 import (
@@ -34,21 +37,21 @@ func main() {
 	// Print the public key
 	derivedPubKey := publicKey.String()
 	expectedPubKey := "ce460cc97720488f2a6313962520e6455d4d0d3c29490a556ab6bfd39102ba39d9f483a9d4e9bc5f09129114a1ab2c079d63e3c090f135a29ec5414d1bcd3634"
-	
+
 	// Remove 0x prefix if present for comparison
 	derivedPubKeyNoPrefix := derivedPubKey
 	if len(derivedPubKey) > 2 && derivedPubKey[:2] == "0x" {
 		derivedPubKeyNoPrefix = derivedPubKey[2:]
 	}
-	
+
 	fmt.Printf("Public key derived from private key:\n")
 	fmt.Printf("%s\n", derivedPubKey)
 	fmt.Printf("\nExpected public key (from key index 0):\n")
 	fmt.Printf("%s\n", expectedPubKey)
-	
+
 	match := derivedPubKeyNoPrefix == expectedPubKey
 	fmt.Printf("\nMatch: %v\n", match)
-	
+
 	if match {
 		fmt.Printf("\n✅ SUCCESS: Keys match! The gateway should load all 101 keys.\n")
 		fmt.Printf("If you're still seeing 'no signing keys available', check:\n")
@@ -63,4 +66,3 @@ func main() {
 		fmt.Printf("2. Add new keys using the public key that matches your current COA_KEY\n")
 	}
 }
-

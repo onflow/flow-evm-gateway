@@ -1,3 +1,6 @@
+//go:build ignore
+// +build ignore
+
 package main
 
 import (
@@ -10,7 +13,7 @@ import (
 func main() {
 	// Your COA_KEY (private key)
 	privateKeyHex := "cce21bbab15306774c4cb71ce84fb0a6294dc5121acf70c36f51a3b26362ce38"
-	
+
 	// Expected public key from key index 0
 	expectedPublicKeyHex := "ce460cc97720488f2a6313962520e6455d4d0d3c29490a556ab6bfd39102ba39d9f483a9d4e9bc5f09129114a1ab2c079d63e3c090f135a29ec5414d1bcd3634"
 
@@ -41,12 +44,12 @@ func main() {
 	// Step 3: Get public key (exactly as gateway does - see bootstrap/bootstrap.go line 247)
 	signerPubKey := signer.PublicKey()
 	derivedPublicKeyHex := signerPubKey.String()
-	
+
 	// Remove 0x prefix if present
 	if len(derivedPublicKeyHex) > 2 && derivedPublicKeyHex[:2] == "0x" {
 		derivedPublicKeyHex = derivedPublicKeyHex[2:]
 	}
-	
+
 	fmt.Println("✅ Step 3: Got public key from signer")
 	fmt.Println()
 
@@ -79,4 +82,3 @@ func main() {
 		os.Exit(1)
 	}
 }
-

@@ -182,6 +182,25 @@ func parseConfigFromFlags() error {
 		)
 	}
 
+	// Validate that EVMNetworkID was set correctly
+	// For production (testnet/mainnet), it must be 545 or 747
+	// For development (emulator/previewnet), other values are allowed but should be validated
+	if cfg.EVMNetworkID == nil {
+		return fmt.Errorf("EVMNetworkID is nil after parsing flow-network-id=%s - this is a bug in config parsing or the flow-go library constant is nil", flowNetwork)
+	}
+	if cfg.EVMNetworkID.Sign() == 0 {
+		return fmt.Errorf("EVMNetworkID is zero after parsing flow-network-id=%s - this is a bug in config parsing or the flow-go library constant is zero", flowNetwork)
+	}
+	// For production networks, validate the expected values
+	expectedTestnet := big.NewInt(545)
+	expectedMainnet := big.NewInt(747)
+	if flowNetwork == "flow-testnet" && cfg.EVMNetworkID.Cmp(expectedTestnet) != 0 {
+		return fmt.Errorf("EVMNetworkID mismatch for flow-testnet: expected 545, got %s - this is a bug in the flow-go library constant", cfg.EVMNetworkID.String())
+	}
+	if flowNetwork == "flow-mainnet" && cfg.EVMNetworkID.Cmp(expectedMainnet) != 0 {
+		return fmt.Errorf("EVMNetworkID mismatch for flow-mainnet: expected 747, got %s - this is a bug in the flow-go library constant", cfg.EVMNetworkID.String())
+	}
+
 	// configure logging
 	level, err := zerolog.ParseLevel(logLevel)
 	if err != nil {
