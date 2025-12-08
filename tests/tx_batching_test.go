@@ -552,6 +552,9 @@ func Test_TransactionSubmissionWithPreviouslySubmittedTransactions(t *testing.T)
 		})
 	}
 
+	err = g.Wait()
+	require.NoError(t, err)
+
 	expectedBalance := big.NewInt(6 * transferAmount)
 
 	assert.Eventually(t, func() bool {
