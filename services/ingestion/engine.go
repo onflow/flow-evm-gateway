@@ -458,11 +458,18 @@ func (e *Engine) indexUserOperationEvents(
 		// This indicates EntryPoint.handleOps() reverted before emitting events
 		if receipt.Status == 0 && len(receipt.Logs) == 0 {
 			if decodeErr != nil {
-				e.log.Warn().
+				// Log comprehensive error with calldata hex for production debugging
+				e.log.Error().
 					Err(decodeErr).
 					Str("txHash", receipt.TxHash.Hex()).
+					Str("entryPoint", e.entryPointAddr.Hex()).
 					Int("calldataLen", len(calldata)).
-					Msg("failed to decode handleOps calldata from failed transaction - cannot index UserOps")
+					Str("calldataHex", hexutil.Encode(calldata)).
+					Str("revertReason", e.parseRevertReason(receipt.RevertReason)).
+					Str("revertReasonHex", hexutil.Encode(receipt.RevertReason)).
+					Int("receiptStatus", int(receipt.Status)).
+					Int("logCount", len(receipt.Logs)).
+					Msg("failed to decode handleOps calldata from failed transaction - cannot index UserOps. This prevents proper error diagnostics.")
 				continue
 			}
 
@@ -524,20 +531,29 @@ func (e *Engine) indexUserOperationEvents(
 				}
 
 				if err := e.userOps.StoreUserOpReceipt(userOpHash, userOpReceipt, batch); err != nil {
-					e.log.Warn().
+					e.log.Error().
 						Err(err).
 						Str("userOpHash", userOpHash.Hex()).
 						Str("txHash", receipt.TxHash.Hex()).
-						Msg("failed to store UserOperation receipt for failed transaction")
+						Str("sender", userOp.Sender.Hex()).
+						Str("nonce", userOp.Nonce.String()).
+						Str("aaErrorCode", aaErrorCode).
+						Str("reason", revertReasonStr).
+						Int("opIndex", i).
+						Int("blockHeight", int(block.Height)).
+						Msg("failed to store UserOperation receipt for failed transaction - receipt data will be lost")
 					continue
 				}
 
 				if err := e.userOps.StoreUserOpTxMapping(userOpHash, receipt.TxHash, batch); err != nil {
-					e.log.Warn().
+					e.log.Error().
 						Err(err).
 						Str("userOpHash", userOpHash.Hex()).
 						Str("txHash", receipt.TxHash.Hex()).
-						Msg("failed to store UserOperation tx mapping for failed transaction")
+						Str("sender", userOp.Sender.Hex()).
+						Int("opIndex", i).
+						Int("blockHeight", int(block.Height)).
+						Msg("failed to store UserOperation tx mapping for failed transaction - mapping data will be lost")
 					continue
 				}
 			}
@@ -592,13 +608,27 @@ func (e *Engine) indexUserOperationEvents(
 				}
 
 				if err := e.userOps.StoreUserOpReceipt(event.UserOpHash, userOpReceipt, batch); err != nil {
-					e.log.Warn().Err(err).Str("userOpHash", event.UserOpHash.Hex()).Msg("failed to store UserOperation receipt")
+					e.log.Error().
+						Err(err).
+						Str("userOpHash", event.UserOpHash.Hex()).
+						Str("txHash", receipt.TxHash.Hex()).
+						Str("sender", event.Sender.Hex()).
+						Str("nonce", event.Nonce.String()).
+						Bool("success", event.Success).
+						Int("blockHeight", int(block.Height)).
+						Msg("failed to store UserOperation receipt - receipt data will be lost")
 					continue
 				}
 
 				// Store mapping from userOpHash to transaction hash
 				if err := e.userOps.StoreUserOpTxMapping(event.UserOpHash, receipt.TxHash, batch); err != nil {
-					e.log.Warn().Err(err).Str("userOpHash", event.UserOpHash.Hex()).Msg("failed to store UserOperation tx mapping")
+					e.log.Error().
+						Err(err).
+						Str("userOpHash", event.UserOpHash.Hex()).
+						Str("txHash", receipt.TxHash.Hex()).
+						Str("sender", event.Sender.Hex()).
+						Int("blockHeight", int(block.Height)).
+						Msg("failed to store UserOperation tx mapping - mapping data will be lost")
 					continue
 				}
 
@@ -643,22 +673,70 @@ func (e *Engine) indexUserOperationEvents(
 				aaErrorCode := e.extractAAErrorCode(revertReason.RevertReason)
 				innerRevertReason := ""
 				innerErrorSelector := ""
-				// Note: UserOperationRevertReason events don't contain FailedOpWithRevert data,
-				// so we can't extract inner revert details from the event itself
+				// Extract inner revert details from transaction's RevertReason (which contains FailedOpWithRevert data)
+				// Note: For UserOperationRevertReason events, the transaction succeeded (status 1), so receipt.RevertReason
+				// is typically empty. However, we check it anyway in case the transaction actually failed (status 0).
+				if len(receipt.RevertReason) > 0 {
+					// Check if this is FailedOpWithRevert by looking at the selector (first 4 bytes)
+					if len(receipt.RevertReason) >= 4 {
+						selector := hexutil.Encode(receipt.RevertReason[:4])
+						// FailedOpWithRevert selector: keccak256("FailedOpWithRevert(uint256,string,bytes)")[:4] = 0x65c8fd4d
+						failedOpWithRevertSelector := hexutil.Encode(crypto.Keccak256([]byte("FailedOpWithRevert(uint256,string,bytes)"))[:4])
+						if selector == failedOpWithRevertSelector {
+							// Extract inner error selector first (most important for diagnostics)
+							innerSelector := e.extractErrorSelectorFromFailedOpWithRevert(receipt.RevertReason)
+							if innerSelector != "" {
+								innerErrorSelector = innerSelector
+								e.log.Info().
+									Str("txHash", receipt.TxHash.Hex()).
+									Str("innerErrorSelector", innerSelector).
+									Int("receiptStatus", int(receipt.Status)).
+									Msg("successfully extracted innerErrorSelector from FailedOpWithRevert")
+							} else {
+								// Info level so it shows up - log why extraction failed
+								e.log.Info().
+									Str("txHash", receipt.TxHash.Hex()).
+									Int("revertReasonLen", len(receipt.RevertReason)).
+									Str("revertReasonHex", hexutil.Encode(receipt.RevertReason)).
+									Int("receiptStatus", int(receipt.Status)).
+									Msg("failed to extract innerErrorSelector from FailedOpWithRevert - checking hex data")
+							}
+							
+							// Extract inner revert reason (may be empty if only selector is present)
+							innerReason := e.extractInnerRevertFromFailedOpWithRevert(receipt.RevertReason)
+							if innerReason != "" {
+								innerRevertReason = innerReason
+							}
+						}
+					}
+				} else {
+					// Info level so it shows up - receipt.RevertReason is empty (transaction succeeded but UserOp failed)
+					e.log.Info().
+						Str("txHash", receipt.TxHash.Hex()).
+						Int("receiptStatus", int(receipt.Status)).
+						Str("eventRevertReason", revertReason.RevertReason).
+						Msg("receipt.RevertReason is empty - transaction succeeded but UserOp failed via event. Cannot extract inner error selector from receipt.")
+				}
 
 				// Log comprehensive diagnostics if we have the full UserOp
 				if matchingUserOp != nil {
 					e.logAAErrorDiagnostics(matchingUserOp, revertReason.UserOpHash, receipt, revertReason.RevertReason, aaErrorCode, innerRevertReason, innerErrorSelector, opIndex, beneficiary)
 				} else {
 					// Fallback: log basic diagnostics without full UserOp details
-					e.log.Warn().
+					// Include calldata hex for debugging why decode failed
+					e.log.Error().
 						Str("userOpHash", revertReason.UserOpHash.Hex()).
 						Str("txHash", receipt.TxHash.Hex()).
 						Str("sender", revertReason.Sender.Hex()).
 						Str("nonce", revertReason.Nonce.String()).
 						Str("reason", revertReason.RevertReason).
 						Str("aaErrorCode", aaErrorCode).
-						Msg("UserOperation failed - could not decode UserOp from calldata for full diagnostics")
+						Str("entryPoint", e.entryPointAddr.Hex()).
+						Int("calldataLen", len(calldata)).
+						Str("calldataHex", hexutil.Encode(calldata)).
+						Int("receiptStatus", int(receipt.Status)).
+						Int("logCount", len(receipt.Logs)).
+						Msg("UserOperation failed - could not decode UserOp from calldata for full diagnostics. This prevents comprehensive error analysis.")
 				}
 
 				// Store UserOperation receipt with failure
@@ -675,12 +753,27 @@ func (e *Engine) indexUserOperationEvents(
 				}
 
 				if err := e.userOps.StoreUserOpReceipt(revertReason.UserOpHash, userOpReceipt, batch); err != nil {
-					e.log.Warn().Err(err).Str("userOpHash", revertReason.UserOpHash.Hex()).Msg("failed to store UserOperation receipt")
+					e.log.Error().
+						Err(err).
+						Str("userOpHash", revertReason.UserOpHash.Hex()).
+						Str("txHash", receipt.TxHash.Hex()).
+						Str("sender", revertReason.Sender.Hex()).
+						Str("nonce", revertReason.Nonce.String()).
+						Str("aaErrorCode", aaErrorCode).
+						Str("reason", revertReason.RevertReason).
+						Int("blockHeight", int(block.Height)).
+						Msg("failed to store UserOperation receipt - receipt data will be lost")
 					continue
 				}
 
 				if err := e.userOps.StoreUserOpTxMapping(revertReason.UserOpHash, receipt.TxHash, batch); err != nil {
-					e.log.Warn().Err(err).Str("userOpHash", revertReason.UserOpHash.Hex()).Msg("failed to store UserOperation tx mapping")
+					e.log.Error().
+						Err(err).
+						Str("userOpHash", revertReason.UserOpHash.Hex()).
+						Str("txHash", receipt.TxHash.Hex()).
+						Str("sender", revertReason.Sender.Hex()).
+						Int("blockHeight", int(block.Height)).
+						Msg("failed to store UserOperation tx mapping - mapping data will be lost")
 					continue
 				}
 
@@ -1007,7 +1100,7 @@ func (e *Engine) extractErrorSelectorFromFailedOpWithRevert(revertData []byte) s
 		return ""
 	}
 	
-	// Get offset to bytes field (should be 160)
+	// Get offset to bytes field (should be 160, but may vary based on reason string length)
 	bytesOffsetPtr := new(big.Int).SetBytes(revertData[68:100])
 	if bytesOffsetPtr.Cmp(big.NewInt(0)) == 0 {
 		return ""
@@ -1015,26 +1108,39 @@ func (e *Engine) extractErrorSelectorFromFailedOpWithRevert(revertData []byte) s
 	bytesOffsetInt := int(bytesOffsetPtr.Int64())
 	
 	// Validate bytes offset is reasonable and we have enough data
-	if bytesOffsetInt < 100 || bytesOffsetInt >= len(revertData) || len(revertData) < bytesOffsetInt+32 {
+	// The offset should be at least 100 (after opIndex and offsets) and less than data length
+	if bytesOffsetInt < 100 || bytesOffsetInt >= len(revertData) {
 		return ""
 	}
 	
-	// Read bytes length
+	// We need at least 32 bytes at the offset to read the bytes length
+	if len(revertData) < bytesOffsetInt+32 {
+		return ""
+	}
+	
+	// Read bytes length (32-byte word at bytesOffsetInt)
 	bytesLen := new(big.Int).SetBytes(revertData[bytesOffsetInt : bytesOffsetInt+32])
 	if bytesLen.Cmp(big.NewInt(0)) == 0 {
 		return ""
 	}
 	bytesLenInt := int(bytesLen.Int64())
 	
+	// Validate bytes length is reasonable (at least 4 bytes for selector, not too large)
+	if bytesLenInt < 4 || bytesLenInt > len(revertData) {
+		return ""
+	}
+	
 	// Validate we have enough data for the bytes field
-	if bytesLenInt < 4 || len(revertData) < bytesOffsetInt+32+bytesLenInt {
+	// Need: bytesOffsetInt (offset) + 32 (length word) + bytesLenInt (actual bytes)
+	if len(revertData) < bytesOffsetInt+32+bytesLenInt {
 		return ""
 	}
 	
 	// Extract inner revert data (first 4 bytes are the error selector)
 	innerRevertData := revertData[bytesOffsetInt+32 : bytesOffsetInt+32+bytesLenInt]
 	if len(innerRevertData) >= 4 {
-		return hexutil.Encode(innerRevertData[:4])
+		selector := hexutil.Encode(innerRevertData[:4])
+		return selector
 	}
 	
 	return ""
@@ -1055,6 +1161,8 @@ func (e *Engine) logAAErrorDiagnostics(userOp *models.UserOperation, userOpHash 
 	// Add common UserOp fields
 	logEntry = logEntry.
 		Str("userOpHash", userOpHash.Hex()).
+		// expectedUserOpHash is the same as userOpHash but logged explicitly to aid frontend/backend hash comparison
+		Str("expectedUserOpHash", userOpHash.Hex()).
 		Str("txHash", receipt.TxHash.Hex()).
 		Str("sender", userOp.Sender.Hex()).
 		Str("nonce", userOp.Nonce.String()).
@@ -1138,10 +1246,11 @@ func (e *Engine) logAAErrorDiagnostics(userOp *models.UserOperation, userOpHash 
 	
 	case "AA23":
 		// AA23 can be caused by signature validation failure or execution failure
-		// Check inner error selector first - if it's 0xf645eedf, it's a signature validation failure
+		// Prioritize checking for signature validation failure (0xf645eedf from SimpleAccount)
+		// even if callData is present, as signature validation happens before execution
 		isSignatureValidationFailure := innerErrorSelector == "0xf645eedf" || strings.Contains(strings.ToLower(revertReasonStr), "signature")
 		
-		if isSignatureValidationFailure {
+		if isSignatureValidationFailure || innerErrorSelector == "0xf645eedf" {
 			// Signature validation failed (even if callData is present, the failure is in validation)
 			logEntry.
 				Str("signatureV", signatureV).
@@ -1162,7 +1271,10 @@ func (e *Engine) logAAErrorDiagnostics(userOp *models.UserOperation, userOpHash 
 				Str("signatureS", signatureS).
 				Str("signatureHex", hexutil.Encode(userOp.Signature)).
 				Int("signatureLen", len(userOp.Signature)).
-				Msg("AA23: reverted (empty callData) - Signature validation likely failed. Check: 1) signature v value (should be 0 or 1 for SimpleAccount, not 27/28), 2) UserOp hash calculation matches frontend, 3) signature was signed over correct hash, 4) chainID matches")
+				Str("expectedUserOpHash", userOpHash.Hex()).
+				Str("innerErrorSelector", innerErrorSelector).
+				Str("innerRevertReason", innerRevertReason).
+				Msg("AA23: reverted (empty callData) - Signature validation likely failed. Check: 1) signature v value (should be 0 or 1 for SimpleAccount, not 27/28), 2) UserOp hash calculation matches frontend (expected hash logged above), 3) signature was signed over correct hash, 4) chainID matches")
 		} else {
 			// Try to decode callData to see what function was being called
 			functionSelector := ""
@@ -1172,6 +1284,7 @@ func (e *Engine) logAAErrorDiagnostics(userOp *models.UserOperation, userOpHash 
 			logEntry.
 				Str("callDataFunctionSelector", functionSelector).
 				Str("callDataHex", hexutil.Encode(userOp.CallData)).
+				Str("expectedUserOpHash", userOpHash.Hex()).
 				Str("innerErrorSelector", innerErrorSelector).
 				Str("innerRevertReason", innerRevertReason).
 				Msg("AA23: reverted (non-empty callData) - Account execution failed. Check: 1) account function exists and is callable, 2) function parameters are correct, 3) account has sufficient balance for transfers, 4) account contract logic doesn't revert")

@@ -3,6 +3,7 @@ package requester
 import (
 	"context"
 	_ "embed"
+	"errors"
 	"fmt"
 	"math/big"
 	"time"
@@ -222,9 +223,25 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 	}
 
 	if e.config.TxStateValidation == config.LocalIndexValidation {
+		e.logger.Debug().
+			Str("from", from.Hex()).
+			Uint64("txNonce", tx.Nonce()).
+			Str("txHash", tx.Hash().Hex()).
+			Msg("SendRawTransaction: calling validateTransactionWithState")
 		if err := e.validateTransactionWithState(tx, from); err != nil {
+			e.logger.Error().
+				Err(err).
+				Str("from", from.Hex()).
+				Uint64("txNonce", tx.Nonce()).
+				Str("txHash", tx.Hash().Hex()).
+				Msg("SendRawTransaction: validateTransactionWithState failed")
 			return common.Hash{}, err
 		}
+		e.logger.Debug().
+			Str("from", from.Hex()).
+			Uint64("txNonce", tx.Nonce()).
+			Str("txHash", tx.Hash().Hex()).
+			Msg("SendRawTransaction: validateTransactionWithState succeeded")
 	}
 
 	if err := e.txPool.Add(ctx, tx); err != nil {
@@ -263,12 +280,46 @@ func (e *EVM) GetNonce(
 	address common.Address,
 	height uint64,
 ) (uint64, error) {
+	// Log the request for diagnostics
+	e.logger.Debug().
+		Str("address", address.Hex()).
+		Uint64("height", height).
+		Msg("GetNonce: creating block view")
+
 	view, err := e.getBlockView(height, nil)
 	if err != nil {
+		e.logger.Error().
+			Err(err).
+			Str("address", address.Hex()).
+			Uint64("height", height).
+			Msg("GetNonce: failed to create block view")
 		return 0, err
 	}
 
-	return view.GetNonce(address)
+	e.logger.Debug().
+		Str("address", address.Hex()).
+		Uint64("height", height).
+		Msg("GetNonce: querying view.GetNonce")
+
+	nonce, err := view.GetNonce(address)
+	if err != nil {
+		// Production error logging - GetNonce failures indicate indexing issues
+		e.logger.Error().
+			Err(err).
+			Str("address", address.Hex()).
+			Uint64("height", height).
+			Bool("isErrEntityNotFound", errors.Is(err, errs.ErrEntityNotFound)).
+			Msg("GetNonce: view.GetNonce failed - this indicates an indexing issue or address doesn't exist in state")
+		return 0, err
+	}
+
+	e.logger.Debug().
+		Str("address", address.Hex()).
+		Uint64("height", height).
+		Uint64("nonce", nonce).
+		Msg("GetNonce: successfully retrieved nonce")
+
+	return nonce, nil
 }
 
 func (e *EVM) GetStorageAt(
@@ -597,19 +648,61 @@ func (e *EVM) validateTransactionWithState(
 	tx *types.Transaction,
 	from common.Address,
 ) error {
+	e.logger.Debug().
+		Str("address", from.Hex()).
+		Uint64("txNonce", tx.Nonce()).
+		Msg("validateTransactionWithState: getting latest EVM height")
+
 	height, err := e.blocks.LatestEVMHeight()
 	if err != nil {
-		return err
-	}
-	view, err := e.getBlockView(height, nil)
-	if err != nil {
+		e.logger.Error().
+			Err(err).
+			Str("address", from.Hex()).
+			Msg("validateTransactionWithState: failed to get latest EVM height")
 		return err
 	}
 
-	nonce, err := view.GetNonce(from)
+	e.logger.Debug().
+		Str("address", from.Hex()).
+		Uint64("height", height).
+		Uint64("txNonce", tx.Nonce()).
+		Msg("validateTransactionWithState: creating block view")
+
+	view, err := e.getBlockView(height, nil)
 	if err != nil {
+		e.logger.Error().
+			Err(err).
+			Str("address", from.Hex()).
+			Uint64("height", height).
+			Msg("validateTransactionWithState: failed to create block view")
 		return err
 	}
+
+	e.logger.Debug().
+		Str("address", from.Hex()).
+		Uint64("height", height).
+		Uint64("txNonce", tx.Nonce()).
+		Msg("validateTransactionWithState: querying view.GetNonce")
+
+	nonce, err := view.GetNonce(from)
+	if err != nil {
+		// Production error logging - GetNonce failures in validation are critical
+		e.logger.Error().
+			Err(err).
+			Str("address", from.Hex()).
+			Uint64("height", height).
+			Uint64("txNonce", tx.Nonce()).
+			Bool("isErrEntityNotFound", errors.Is(err, errs.ErrEntityNotFound)).
+			Msg("validateTransactionWithState: view.GetNonce failed - transaction validation will fail")
+		return err
+	}
+
+	e.logger.Debug().
+		Str("address", from.Hex()).
+		Uint64("height", height).
+		Uint64("txNonce", tx.Nonce()).
+		Uint64("stateNonce", nonce).
+		Msg("validateTransactionWithState: successfully retrieved nonce, validating")
 
 	// Ensure the transaction adheres to nonce ordering
 	if tx.Nonce() < nonce {
@@ -638,6 +731,13 @@ func (e *EVM) validateTransactionWithState(
 			new(big.Int).Sub(cost, balance),
 		)
 	}
+
+	e.logger.Debug().
+		Str("address", from.Hex()).
+		Uint64("height", height).
+		Uint64("txNonce", tx.Nonce()).
+		Uint64("stateNonce", nonce).
+		Msg("validateTransactionWithState: validation succeeded - nonce and balance checks passed")
 
 	return nil
 }

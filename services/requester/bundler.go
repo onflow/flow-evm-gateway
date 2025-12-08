@@ -117,8 +117,9 @@ func (b *Bundler) CreateBundledTransactions(ctx context.Context) ([]*BundledTran
 	}
 
 	// Create EntryPoint.handleOps() transactions
-	// Remove UserOps from pool immediately after transaction creation to prevent duplicates
-	// If submission fails, UserOps will need to be resubmitted by the user (standard ERC-4337 behavior)
+	// UserOps are NOT removed from pool here - they remain until after successful txPool.Add()
+	// This prevents UserOp loss if transaction creation succeeds but submission fails.
+	// The mutex in SubmitBundledTransactions prevents concurrent bundler ticks from creating duplicates.
 	var bundledTxs []*BundledTransaction
 
 	for batchIdx, batch := range allBatches {
@@ -129,11 +130,24 @@ func (b *Bundler) CreateBundledTransactions(ctx context.Context) ([]*BundledTran
 
 		tx, err := b.createHandleOpsTransaction(ctx, batch)
 		if err != nil {
-			b.logger.Error().
+			// Log comprehensive error details including UserOp information for production debugging
+			logEntry := b.logger.Error().
 				Err(err).
 				Int("batchIndex", batchIdx).
 				Int("batchSize", len(batch)).
-				Msg("failed to create handleOps transaction")
+				Str("entryPoint", b.config.EntryPointAddress.Hex()).
+				Str("coinbase", b.config.Coinbase.Hex())
+			
+			// Add UserOp details for debugging
+			for i, userOp := range batch {
+				userOpHash, _ := userOp.Hash(b.config.EntryPointAddress, b.config.EVMNetworkID)
+				logEntry = logEntry.
+					Str(fmt.Sprintf("userOp%d_hash", i), userOpHash.Hex()).
+					Str(fmt.Sprintf("userOp%d_sender", i), userOp.Sender.Hex()).
+					Str(fmt.Sprintf("userOp%d_nonce", i), userOp.Nonce.String())
+			}
+			
+			logEntry.Msg("failed to create handleOps transaction - UserOps remain in pool for retry")
 			// Don't remove UserOps - they stay in pool for retry
 			continue
 		}
@@ -144,20 +158,9 @@ func (b *Bundler) CreateBundledTransactions(ctx context.Context) ([]*BundledTran
 			Int("batchSize", len(batch)).
 			Msg("created handleOps transaction")
 
-		// Remove UserOps from pool immediately to prevent duplicate transactions
-		// This prevents the bundler from creating the same transaction multiple times
-		// if it runs again before the transaction is submitted
-		for _, userOp := range batch {
-			hash, _ := userOp.Hash(b.config.EntryPointAddress, b.config.EVMNetworkID)
-			b.userOpPool.Remove(hash)
-			b.logger.Info().
-				Str("userOpHash", hash.Hex()).
-				Str("sender", userOp.Sender.Hex()).
-				Str("txHash", tx.Hash().Hex()).
-				Msg("removed UserOp from pool after transaction creation")
-		}
-
 		// Store transaction with its UserOps
+		// UserOps will be removed from pool only after successful txPool.Add()
+		// This prevents UserOp loss if transaction submission fails
 		bundledTxs = append(bundledTxs, &BundledTransaction{
 			Transaction: tx,
 			UserOps:     batch,
@@ -242,8 +245,9 @@ func (b *Bundler) SubmitBundledTransactions(ctx context.Context) error {
 				Str("expectedChainID", b.config.EVMNetworkID.String()).
 				Int("txIndex", i).
 				Int("totalTxs", len(bundledTxs)).
-				Msg("bundler: failed to add handleOps transaction to pool")
-			// Don't remove UserOps - they stay in pool for retry
+				Int("userOpCount", len(bundledTx.UserOps)).
+				Msg("bundler: failed to add handleOps transaction to pool - UserOps remain in pool for retry")
+			// UserOps remain in pool for retry - they were never removed
 			continue
 		}
 		
@@ -252,10 +256,20 @@ func (b *Bundler) SubmitBundledTransactions(ctx context.Context) error {
 			Int("txIndex", i).
 			Int("totalTxs", len(bundledTxs)).
 			Msg("bundler: successfully added transaction to pool")
-		successCount++
 		
-		// Note: UserOps were already removed from pool when transaction was created
-		// This prevents duplicate transactions if bundler runs again before submission
+		// Remove UserOps from pool only after successful submission
+		// This prevents UserOp loss if transaction submission fails
+		for _, userOp := range bundledTx.UserOps {
+			hash, _ := userOp.Hash(b.config.EntryPointAddress, b.config.EVMNetworkID)
+			b.userOpPool.Remove(hash)
+			b.logger.Info().
+				Str("userOpHash", hash.Hex()).
+				Str("sender", userOp.Sender.Hex()).
+				Str("txHash", tx.Hash().Hex()).
+				Msg("removed UserOp from pool after successful transaction submission")
+		}
+		
+		successCount++
 
 		b.logger.Info().
 			Str("txHash", tx.Hash().Hex()).
@@ -310,22 +324,55 @@ func (b *Bundler) createHandleOpsTransaction(ctx context.Context, userOps []*mod
 		return nil, fmt.Errorf("failed to get latest height: %w", err)
 	}
 
+	b.logger.Debug().
+		Str("coinbase", b.config.Coinbase.Hex()).
+		Uint64("height", height).
+		Msg("bundler: got latest EVM height for transaction creation")
+
 	gasLimit, err := b.requester.EstimateGas(txArgs, b.config.Coinbase, height, nil, nil)
 	if err != nil {
 		// Fallback to sum of UserOp gas limits if estimation fails
+		// Log the failure with details for production debugging
+		b.logger.Warn().
+			Err(err).
+			Str("entryPoint", b.config.EntryPointAddress.Hex()).
+			Str("coinbase", b.config.Coinbase.Hex()).
+			Uint64("height", height).
+			Int("userOpCount", len(userOps)).
+			Int("calldataLen", len(calldata)).
+			Msg("gas estimation failed - falling back to sum of UserOp gas limits")
+		
 		gasLimit = uint64(0)
-		for _, userOp := range userOps {
+		for i, userOp := range userOps {
+			callGas := uint64(0)
+			verificationGas := uint64(0)
+			preVerificationGas := uint64(0)
 			if userOp.CallGasLimit != nil {
-				gasLimit += userOp.CallGasLimit.Uint64()
+				callGas = userOp.CallGasLimit.Uint64()
+				gasLimit += callGas
 			}
 			if userOp.VerificationGasLimit != nil {
-				gasLimit += userOp.VerificationGasLimit.Uint64()
+				verificationGas = userOp.VerificationGasLimit.Uint64()
+				gasLimit += verificationGas
 			}
 			if userOp.PreVerificationGas != nil {
-				gasLimit += userOp.PreVerificationGas.Uint64()
+				preVerificationGas = userOp.PreVerificationGas.Uint64()
+				gasLimit += preVerificationGas
 			}
+			b.logger.Debug().
+				Int("userOpIndex", i).
+				Str("sender", userOp.Sender.Hex()).
+				Uint64("callGasLimit", callGas).
+				Uint64("verificationGasLimit", verificationGas).
+				Uint64("preVerificationGas", preVerificationGas).
+				Msg("gas estimation fallback: adding UserOp gas limits")
 		}
 		gasLimit += 100000 // Add overhead
+		b.logger.Info().
+			Uint64("finalGasLimit", gasLimit).
+			Int("userOpCount", len(userOps)).
+			Uint64("overhead", 100000).
+			Msg("gas estimation fallback: calculated gas limit from UserOp gas limits")
 	}
 
 	// Use gas price from config or calculate from UserOp fees
@@ -348,31 +395,51 @@ func (b *Bundler) createHandleOpsTransaction(ctx context.Context, userOps []*mod
 	}
 
 	// Get nonce for Coinbase, accounting for pending transactions
+	// NOTE: This queries the BUNDLER's Coinbase address nonce, not the UserOp sender's nonce.
+	// For account creation UserOps, the sender doesn't exist yet (no nonce).
+	// The bundler creates a regular EVM transaction calling EntryPoint.handleOps(),
+	// which requires the bundler's own nonce.
+	//
+	// Best practice: Use the same mechanism as transaction pool validation (validateTransactionWithState),
+	// which successfully queries indexed state. If that fails, we have a real indexing issue.
+	//
+	// DIAGNOSTICS: Compare this call with validateTransactionWithState to understand why one succeeds
+	// and the other fails. Both use the same view.GetNonce() mechanism.
+	b.logger.Debug().
+		Str("coinbase", b.config.Coinbase.Hex()).
+		Uint64("height", height).
+		Msg("bundler: calling GetNonce for Coinbase address")
+
 	networkNonce, err := b.requester.GetNonce(b.config.Coinbase, height)
 	if err != nil {
-		// If the address doesn't exist yet (entity not found), default to nonce 0
-		if errors.Is(err, errs.ErrEntityNotFound) {
-			networkNonce = 0
-			b.logger.Debug().
-				Str("coinbase", b.config.Coinbase.Hex()).
-				Msg("Coinbase address not found in state, defaulting to nonce 0")
-		} else {
-			return nil, fmt.Errorf("failed to get nonce for Coinbase: %w", err)
-		}
+		// Production error logging - GetNonce failures are critical and indicate indexing issues
+		// Compare with validateTransactionWithState logs to diagnose why one succeeds and the other fails
+		b.logger.Error().
+			Err(err).
+			Str("coinbase", b.config.Coinbase.Hex()).
+			Uint64("height", height).
+			Bool("isErrEntityNotFound", errors.Is(err, errs.ErrEntityNotFound)).
+			Msg("bundler: GetNonce failed for Coinbase - this indicates an indexing issue. Compare with validateTransactionWithState logs. Bundler will retry on next tick.")
+		return nil, fmt.Errorf("failed to get nonce for Coinbase address %s at height %d: %w (indexing may be behind on-chain state). Compare with validateTransactionWithState logs to diagnose", b.config.Coinbase.Hex(), height, err)
 	}
+
+	b.logger.Debug().
+		Str("coinbase", b.config.Coinbase.Hex()).
+		Uint64("height", height).
+		Uint64("networkNonce", networkNonce).
+		Msg("bundler: successfully retrieved network nonce")
 
 	// Account for pending transactions in the pool
 	// GetPendingNonce returns the highest nonce in the pool (or 0 if pool is empty)
-	// If pendingNonce > networkNonce, there are pending transactions with higher nonces,
-	// so we should use pendingNonce + 1.
-	// If pendingNonce == networkNonce, we can't distinguish between:
-	//   - Pool is empty (should use networkNonce)
-	//   - There's a pending tx with networkNonce (should use networkNonce + 1)
-	// To be safe, we use networkNonce first. If it fails, the bundler will retry with the correct nonce.
+	// Standard practice: max(networkNonce, pendingNonce + 1)
 	pendingNonce := b.txPool.GetPendingNonce(b.config.Coinbase)
-	nonce := networkNonce
-	if pendingNonce > networkNonce {
-		// Pending transactions exist with nonces > networkNonce
+	
+	// Calculate final nonce using standard Ethereum nonce calculation:
+	// nextNonce = max(networkNonce, highestPendingNonce + 1)
+	// This is the same logic used in eth_getTransactionCount with "pending" block tag
+	var nonce uint64
+	if pendingNonce >= networkNonce {
+		// Pending transactions exist with nonces >= networkNonce
 		// Use the next nonce after the highest pending nonce
 		nonce = pendingNonce + 1
 		b.logger.Info().
@@ -382,8 +449,9 @@ func (b *Bundler) createHandleOpsTransaction(ctx context.Context, userOps []*mod
 			Str("coinbase", b.config.Coinbase.Hex()).
 			Msg("accounted for pending transactions in bundler nonce calculation")
 	} else {
-		// pendingNonce <= networkNonce: use network nonce directly
-		// This handles both empty pool and pendingNonce == networkNonce cases
+		// No pending transactions, or all pending transactions have lower nonces
+		// Use network nonce directly
+		nonce = networkNonce
 		b.logger.Info().
 			Uint64("networkNonce", networkNonce).
 			Uint64("pendingNonce", pendingNonce).
