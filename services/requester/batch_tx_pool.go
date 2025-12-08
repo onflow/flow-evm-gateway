@@ -302,11 +302,9 @@ func (t *BatchTxPool) submitSingleTransaction(
 	done := make(chan struct{})
 	var submitError error
 
-	// This method is called while holding the `t.txMux` lock.
-	// Do not let it run for a long time, to avoid lock-contention.
-	// The 4-second timeout provides a 1-second buffer on top of ANs
+	// The 5-second timeout provides a 2-second buffer on top of ANs
 	// 3-second timeout for LN requests.
-	ctx, cancel := context.WithTimeout(ctx, time.Second*4)
+	ctx, cancel := context.WithTimeout(ctx, time.Second*5)
 	defer cancel()
 
 	// Build & submit the transaction, in a separate goroutine. The AN calls
@@ -314,8 +312,7 @@ func (t *BatchTxPool) submitSingleTransaction(
 	// long as is necessary for their completion.
 	// `context.WithTimeout` arranges for Done to be closed when the specified
 	// timeout elapses, and at that point we return an error to abort the
-	// transaction submission, and release the `t.txMux` lock for the next
-	// requests.
+	// transaction submission.
 	go func() {
 		defer close(done)
 
