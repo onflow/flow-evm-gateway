@@ -289,6 +289,8 @@ func (t *BatchTxPool) submitSingleTransaction(
 
 	// This method is called while holding the `t.txMux` lock.
 	// Do not let it run for a long time, to avoid lock-contention.
+	// The 4-second timeout provides a 1-second buffer on top of ANs
+	// 3-second timeout for LN requests.
 	ctx, cancel := context.WithTimeout(ctx, time.Second*4)
 	defer cancel()
 
