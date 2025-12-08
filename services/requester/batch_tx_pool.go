@@ -292,7 +292,13 @@ func (t *BatchTxPool) submitSingleTransaction(
 	ctx, cancel := context.WithTimeout(ctx, time.Second*4)
 	defer cancel()
 
-	// build & submit transaction
+	// Build & submit the transaction, in a separate goroutine. The AN calls
+	// do not respect the `context.WithTimeout` deadline, and can run for as
+	// long as is necessary for their completion.
+	// `context.WithTimeout` arranges for Done to be closed when the specified
+	// timeout elapses, and at that point we return an error to abort the
+	// transaction submission, and release the `t.txMux` lock for the next
+	// requests.
 	go func() {
 		defer close(done)
 
