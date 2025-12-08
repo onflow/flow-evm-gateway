@@ -287,9 +287,9 @@ func (t *BatchTxPool) submitSingleTransaction(
 	done := make(chan struct{})
 	var submitError error
 
-	// This method is called while holding the `t.txMux` lock,
-	// don't let it run for a long time, to avoid lock-contention
-	ctx, cancel := context.WithTimeout(ctx, time.Second*3)
+	// This method is called while holding the `t.txMux` lock.
+	// Do not let it run for a long time, to avoid lock-contention.
+	ctx, cancel := context.WithTimeout(ctx, time.Second*4)
 	defer cancel()
 
 	// build & submit transaction
