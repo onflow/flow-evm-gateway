@@ -88,6 +88,16 @@ func (u *UserOpAPI) SendUserOperation(
 	if userOpArgs.CallData != nil {
 		logFields = logFields.Int("callDataLen", len(*userOpArgs.CallData))
 	}
+	if userOpArgs.Signature != nil {
+		logFields = logFields.
+			Int("signatureLen", len(*userOpArgs.Signature)).
+			Str("signatureHex", hexutil.Encode(*userOpArgs.Signature))
+		if len(*userOpArgs.Signature) >= 65 {
+			logFields = logFields.
+				Uint8("signatureV", (*userOpArgs.Signature)[64]).
+				Str("signatureLastByte", hexutil.Encode((*userOpArgs.Signature)[64:65]))
+		}
+	}
 	logFields.Msg("received eth_sendUserOperation request")
 
 	if err := u.rateLimiter.Apply(ctx, EthSendUserOperation); err != nil {
@@ -105,6 +115,17 @@ func (u *UserOpAPI) SendUserOperation(
 	userOp, err := userOpArgs.ToUserOperation()
 	if err != nil {
 		return handleError[common.Hash](err, l, u.collector)
+	}
+	
+	// Log signature immediately after conversion to track if it changes
+	if len(userOp.Signature) >= 65 {
+		l.Info().
+			Str("sender", userOp.Sender.Hex()).
+			Int("signatureLen", len(userOp.Signature)).
+			Uint8("signatureV", userOp.Signature[64]).
+			Str("signatureHex", hexutil.Encode(userOp.Signature)).
+			Str("signatureLastByte", hexutil.Encode(userOp.Signature[64:65])).
+			Msg("UserOp signature immediately after conversion from args")
 	}
 
 	// Validate UserOperation (includes signature verification and simulation)

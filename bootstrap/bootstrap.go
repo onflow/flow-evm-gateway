@@ -206,6 +206,7 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 		b.logger,
 		b.collector,
 		replayerConfig,
+		b.config.EVMNetworkID,
 	)
 
 	StartEngine(ctx, b.events, l)

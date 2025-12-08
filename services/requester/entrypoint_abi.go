@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"math/big"
+	"reflect"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -457,6 +458,176 @@ func unpackGasFees(packed [32]byte) (*big.Int, *big.Int) {
 	maxPriorityFeePerGas := new(big.Int).SetBytes(packed[0:16])
 	maxFeePerGas := new(big.Int).SetBytes(packed[16:32])
 	return maxFeePerGas, maxPriorityFeePerGas
+}
+
+// DecodeHandleOps decodes the calldata for EntryPoint.handleOps()
+// Returns the UserOperations and beneficiary address
+func DecodeHandleOps(calldata []byte) ([]*models.UserOperation, common.Address, error) {
+	// Check if calldata has at least 4 bytes (function selector)
+	if len(calldata) < 4 {
+		return nil, common.Address{}, fmt.Errorf("calldata too short: %d bytes", len(calldata))
+	}
+
+	// Verify it's handleOps call
+	selector := calldata[:4]
+	expectedSelector := GetHandleOpsSelector()
+	if !bytes.Equal(selector, expectedSelector[:4]) {
+		return nil, common.Address{}, fmt.Errorf("not a handleOps call: selector mismatch")
+	}
+
+	// Unpack the function arguments
+	method, exists := entryPointABIParsed.Methods["handleOps"]
+	if !exists {
+		return nil, common.Address{}, fmt.Errorf("handleOps method not found in ABI")
+	}
+
+	// Unpack returns []interface{} with the arguments
+	args, err := method.Inputs.Unpack(calldata[4:])
+	if err != nil {
+		return nil, common.Address{}, fmt.Errorf("failed to unpack handleOps arguments: %w", err)
+	}
+
+	if len(args) != 2 {
+		return nil, common.Address{}, fmt.Errorf("expected 2 arguments, got %d", len(args))
+	}
+
+	// First argument is []PackedUserOperationABI
+	// The ABI package returns anonymous structs, so we need to use reflection to convert
+	var opsInterface []PackedUserOperationABI
+	
+	// Use reflection to handle the anonymous struct slice returned by ABI unpacking
+	argValue := reflect.ValueOf(args[0])
+	if argValue.Kind() != reflect.Slice {
+		return nil, common.Address{}, fmt.Errorf("first argument is not a slice, got %T", args[0])
+	}
+	
+	opsInterface = make([]PackedUserOperationABI, 0, argValue.Len())
+	for i := 0; i < argValue.Len(); i++ {
+		elem := argValue.Index(i)
+		if elem.Kind() == reflect.Interface {
+			elem = elem.Elem()
+		}
+		
+		// Handle both struct and map[string]interface{} cases
+		var op PackedUserOperationABI
+		if elem.Kind() == reflect.Struct {
+			// Anonymous struct case - use reflection to extract fields
+			elemType := elem.Type()
+			opValue := reflect.ValueOf(&op).Elem()
+			
+			for j := 0; j < elemType.NumField(); j++ {
+				field := elemType.Field(j)
+				fieldValue := elem.Field(j)
+				opField := opValue.FieldByName(field.Name)
+				
+				if !opField.IsValid() || !opField.CanSet() {
+					continue
+				}
+				
+				// Convert the field value to the target type
+				if fieldValue.Kind() == reflect.Interface {
+					fieldValue = fieldValue.Elem()
+				}
+				
+				// Try direct assignment first
+				if fieldValue.Type().AssignableTo(opField.Type()) {
+					opField.Set(fieldValue)
+					continue
+				}
+				
+				// Handle specific type conversions
+				if opField.Type().Kind() == reflect.Array && fieldValue.Kind() == reflect.Array {
+					// For [32]byte arrays
+					if opField.Type().Elem().Kind() == reflect.Uint8 && fieldValue.Type().Elem().Kind() == reflect.Uint8 {
+						if opField.Type().Len() == fieldValue.Type().Len() {
+							reflect.Copy(opField, fieldValue)
+						}
+					}
+				} else if opField.Type().Kind() == reflect.Slice && fieldValue.Kind() == reflect.Slice {
+					// For []byte slices
+					if opField.Type().Elem().Kind() == reflect.Uint8 && fieldValue.Type().Elem().Kind() == reflect.Uint8 {
+						opField.Set(fieldValue)
+					}
+				} else if opField.Type() == reflect.TypeOf((*big.Int)(nil)).Elem() {
+					// For *big.Int - check if assignable
+					if fieldValue.Type().AssignableTo(opField.Type()) {
+						opField.Set(fieldValue)
+					}
+				} else if opField.Type() == reflect.TypeOf(common.Address{}) {
+					// For common.Address - check if assignable
+					if fieldValue.Type().AssignableTo(opField.Type()) {
+						opField.Set(fieldValue)
+					}
+				}
+			}
+		} else if elem.Kind() == reflect.Map {
+			// Map case - extract from map[string]interface{}
+			opMap := elem.Interface().(map[string]interface{})
+			if sender, ok := opMap["sender"].(common.Address); ok {
+				op.Sender = sender
+			}
+			if nonce, ok := opMap["nonce"].(*big.Int); ok {
+				op.Nonce = nonce
+			}
+			if initCode, ok := opMap["initCode"].([]byte); ok {
+				op.InitCode = initCode
+			}
+			if callData, ok := opMap["callData"].([]byte); ok {
+				op.CallData = callData
+			}
+			if accountGasLimits, ok := opMap["accountGasLimits"].([32]byte); ok {
+				op.AccountGasLimits = accountGasLimits
+			}
+			if preVerificationGas, ok := opMap["preVerificationGas"].(*big.Int); ok {
+				op.PreVerificationGas = preVerificationGas
+			}
+			if gasFees, ok := opMap["gasFees"].([32]byte); ok {
+				op.GasFees = gasFees
+			}
+			if paymasterAndData, ok := opMap["paymasterAndData"].([]byte); ok {
+				op.PaymasterAndData = paymasterAndData
+			}
+			if signature, ok := opMap["signature"].([]byte); ok {
+				op.Signature = signature
+			}
+		} else {
+			return nil, common.Address{}, fmt.Errorf("unexpected element type in ops array: %T (kind: %v)", elem.Interface(), elem.Kind())
+		}
+		
+		opsInterface = append(opsInterface, op)
+	}
+
+	// Second argument is beneficiary address
+	beneficiary, ok := args[1].(common.Address)
+	if !ok {
+		return nil, common.Address{}, fmt.Errorf("second argument is not an address, got %T", args[1])
+	}
+
+	// Convert PackedUserOperationABI to models.UserOperation
+	userOps := make([]*models.UserOperation, 0, len(opsInterface))
+	for _, op := range opsInterface {
+		// Unpack the packed fields
+		callGasLimit, verificationGasLimit := unpackAccountGasLimits(op.AccountGasLimits)
+		maxFeePerGas, maxPriorityFeePerGas := unpackGasFees(op.GasFees)
+
+		userOp := &models.UserOperation{
+			Sender:               op.Sender,
+			Nonce:                op.Nonce,
+			InitCode:             op.InitCode,
+			CallData:             op.CallData,
+			CallGasLimit:         callGasLimit,
+			VerificationGasLimit: verificationGasLimit,
+			PreVerificationGas:   op.PreVerificationGas,
+			MaxFeePerGas:         maxFeePerGas,
+			MaxPriorityFeePerGas: maxPriorityFeePerGas,
+			PaymasterAndData:     op.PaymasterAndData,
+			Signature:            op.Signature,
+		}
+
+		userOps = append(userOps, userOp)
+	}
+
+	return userOps, beneficiary, nil
 }
 
 // EncodeSimulateValidation encodes the calldata for EntryPoint.simulateValidation()

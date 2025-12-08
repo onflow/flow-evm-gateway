@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"math/big"
 	"sort"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/rs/zerolog"
-	evmEmulator "github.com/onflow/flow-go/fvm/evm/emulator"
 
 	"github.com/onflow/flow-evm-gateway/config"
 	ethTypes "github.com/onflow/flow-evm-gateway/eth/types"
@@ -27,6 +27,7 @@ type Bundler struct {
 	logger     zerolog.Logger
 	txPool     TxPool
 	requester  Requester
+	mu         sync.Mutex // Protects against concurrent bundler execution
 }
 
 func NewBundler(
@@ -116,8 +117,8 @@ func (b *Bundler) CreateBundledTransactions(ctx context.Context) ([]*BundledTran
 	}
 
 	// Create EntryPoint.handleOps() transactions
-	// Track which UserOps belong to which transaction so we can remove them
-	// only after the transaction is successfully submitted
+	// Remove UserOps from pool immediately after transaction creation to prevent duplicates
+	// If submission fails, UserOps will need to be resubmitted by the user (standard ERC-4337 behavior)
 	var bundledTxs []*BundledTransaction
 
 	for batchIdx, batch := range allBatches {
@@ -133,6 +134,7 @@ func (b *Bundler) CreateBundledTransactions(ctx context.Context) ([]*BundledTran
 				Int("batchIndex", batchIdx).
 				Int("batchSize", len(batch)).
 				Msg("failed to create handleOps transaction")
+			// Don't remove UserOps - they stay in pool for retry
 			continue
 		}
 
@@ -142,7 +144,20 @@ func (b *Bundler) CreateBundledTransactions(ctx context.Context) ([]*BundledTran
 			Int("batchSize", len(batch)).
 			Msg("created handleOps transaction")
 
-		// Store transaction with its UserOps (don't remove from pool yet)
+		// Remove UserOps from pool immediately to prevent duplicate transactions
+		// This prevents the bundler from creating the same transaction multiple times
+		// if it runs again before the transaction is submitted
+		for _, userOp := range batch {
+			hash, _ := userOp.Hash(b.config.EntryPointAddress, b.config.EVMNetworkID)
+			b.userOpPool.Remove(hash)
+			b.logger.Info().
+				Str("userOpHash", hash.Hex()).
+				Str("sender", userOp.Sender.Hex()).
+				Str("txHash", tx.Hash().Hex()).
+				Msg("removed UserOp from pool after transaction creation")
+		}
+
+		// Store transaction with its UserOps
 		bundledTxs = append(bundledTxs, &BundledTransaction{
 			Transaction: tx,
 			UserOps:     batch,
@@ -153,7 +168,13 @@ func (b *Bundler) CreateBundledTransactions(ctx context.Context) ([]*BundledTran
 }
 
 // SubmitBundledTransactions submits the bundled transactions to the transaction pool
+// This method is thread-safe and prevents concurrent execution
 func (b *Bundler) SubmitBundledTransactions(ctx context.Context) error {
+	// Acquire lock to prevent concurrent bundler execution
+	// This prevents race conditions where multiple bundler ticks see the same UserOps
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
 	// Get pending count first for logging
 	pending := b.userOpPool.GetPending()
 	pendingCount := len(pending)
@@ -232,17 +253,9 @@ func (b *Bundler) SubmitBundledTransactions(ctx context.Context) error {
 			Int("totalTxs", len(bundledTxs)).
 			Msg("bundler: successfully added transaction to pool")
 		successCount++
-
-		// Remove UserOps from pool only after successful submission
-		for _, userOp := range bundledTx.UserOps {
-			hash, _ := userOp.Hash(b.config.EntryPointAddress, b.config.EVMNetworkID)
-			b.userOpPool.Remove(hash)
-			b.logger.Debug().
-				Str("userOpHash", hash.Hex()).
-				Str("sender", userOp.Sender.Hex()).
-				Str("txHash", tx.Hash().Hex()).
-				Msg("removed UserOp from pool after successful transaction submission")
-		}
+		
+		// Note: UserOps were already removed from pool when transaction was created
+		// This prevents duplicate transactions if bundler runs again before submission
 
 		b.logger.Info().
 			Str("txHash", tx.Hash().Hex()).
@@ -380,6 +393,7 @@ func (b *Bundler) createHandleOpsTransaction(ctx context.Context, userOps []*mod
 	}
 
 	// Create unsigned transaction
+	// Use LegacyTx with EIP-155 signer to embed chain ID in signature
 	tx := types.NewTx(&types.LegacyTx{
 		Nonce:    nonce,
 		To:       &b.config.EntryPointAddress,
@@ -428,21 +442,33 @@ func (b *Bundler) createHandleOpsTransaction(ctx context.Context, userOps []*mod
 	// - flow-testnet → 545
 	// - flow-mainnet → 747
 	// Log the actual value being passed to help debug
-	b.logger.Debug().
+	b.logger.Info().
 		Str("chainIDValue", chainIDValue).
 		Str("chainIDPointer", fmt.Sprintf("%p", b.config.EVMNetworkID)).
+		Str("chainIDString", b.config.EVMNetworkID.String()).
+		Int64("chainIDInt64", b.config.EVMNetworkID.Int64()).
 		Msg("bundler: creating emulator config with chain ID")
 	
-	emulatorConfig := evmEmulator.NewConfig(
-		evmEmulator.WithChainID(b.config.EVMNetworkID),
-	)
-	signer := evmEmulator.GetSigner(emulatorConfig)
+	// Double-check the chain ID before passing to emulator
+	if b.config.EVMNetworkID == nil {
+		panic("EVMNetworkID is nil when creating emulator config - this should have been caught earlier")
+	}
+	if b.config.EVMNetworkID.Sign() == 0 {
+		panic(fmt.Sprintf("EVMNetworkID is zero when creating emulator config - this should have been caught earlier. Value: %s", b.config.EVMNetworkID.String()))
+	}
+	
+	// Use EIP-155 signer directly to ensure chain ID is embedded in signature.
+	// This is the standard practice for signing LegacyTx with chain ID (EIP-155).
+	// The emulator's GetSigner() returns FrontierSigner which doesn't support chain ID.
+	// Validation in models.DeriveTxSender() expects tx.ChainId() to return the chain ID,
+	// which requires using an EIP-155 signer (or newer transaction types).
+	signer := types.NewEIP155Signer(b.config.EVMNetworkID)
 	
 	// Log signer details
 	b.logger.Info().
 		Str("evmNetworkID", b.config.EVMNetworkID.String()).
 		Str("signerType", fmt.Sprintf("%T", signer)).
-		Msg("bundler: created signer with chain ID")
+		Msg("bundler: created EIP-155 signer with chain ID")
 
 	signedTx, err := types.SignTx(tx, signer, b.config.WalletKey)
 	if err != nil {

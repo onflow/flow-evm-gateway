@@ -124,6 +124,45 @@ func (v *UserOpValidator) Validate(
 		return err
 	}
 
+	// Log signature before normalization
+	if len(userOp.Signature) >= 65 {
+		v.logger.Info().
+			Str("sender", userOp.Sender.Hex()).
+			Uint8("signatureV_before_normalization", userOp.Signature[64]).
+			Str("signatureHex_before", hexutil.Encode(userOp.Signature)).
+			Str("signatureLastByte_before", hexutil.Encode(userOp.Signature[64:65])).
+			Msg("signature before normalization check")
+	}
+
+	// Normalize signature v value for SimpleAccount compatibility
+	// SimpleAccount expects v=0 or 1 (recovery ID, ERC-4337 format), but frontends may send v=27/28 (EIP-155 format)
+	if len(userOp.Signature) >= 65 {
+		vByte := userOp.Signature[64]
+		if vByte == 27 || vByte == 28 {
+			// Convert EIP-155 format (v=27/28) to ERC-4337 format (v=0/1) for SimpleAccount
+			// v=27 -> v=0, v=28 -> v=1
+			normalizedV := byte(vByte - 27)
+			userOp.Signature[64] = normalizedV
+			v.logger.Info().
+				Uint8("originalV", vByte).
+				Uint8("normalizedV", normalizedV).
+				Str("sender", userOp.Sender.Hex()).
+				Str("signatureHex_after", hexutil.Encode(userOp.Signature)).
+				Str("signatureLastByte_after", hexutil.Encode(userOp.Signature[64:65])).
+				Msg("normalized signature v value from EIP-155 format (27/28) to ERC-4337 format (0/1) for SimpleAccount compatibility")
+		} else if vByte == 0 || vByte == 1 {
+			v.logger.Info().
+				Uint8("signatureV", vByte).
+				Str("sender", userOp.Sender.Hex()).
+				Msg("signature v value is already in ERC-4337 format (0/1), no normalization needed")
+		} else {
+			v.logger.Warn().
+				Uint8("signatureV", vByte).
+				Str("sender", userOp.Sender.Hex()).
+				Msg("signature v value is neither EIP-155 (27/28) nor ERC-4337 (0/1) format - this may cause validation to fail")
+		}
+	}
+
 	// Verify signature
 	// For account creation (initCode present), skip off-chain signature validation
 	// because the sender doesn't exist yet. EntryPoint.simulateValidation will
@@ -386,7 +425,11 @@ func (v *UserOpValidator) simulateValidation(
 		} else if sigV == 28 {
 			recoveryID = 1
 		}
-		signature := append(userOp.Signature[:64], recoveryID)
+		// Create a copy of the signature with the recovery ID to avoid modifying the original
+		// CRITICAL: We must copy the slice to avoid modifying userOp.Signature's underlying array
+		signature := make([]byte, 65)
+		copy(signature[:64], userOp.Signature[:64])
+		signature[64] = recoveryID
 
 		// Log detailed signature parsing and recovery attempt
 		v.logger.Info().
@@ -425,7 +468,10 @@ func (v *UserOpValidator) simulateValidation(
 			// For traditional format: try recoveryID=1 if recoveryID=0 failed (v=27 -> recoveryID=0, v=28 -> recoveryID=1)
 			var triedAlt bool
 			if recoveryID == 0 {
-				signatureAlt := append(userOp.Signature[:64], byte(1))
+				// Create a copy to avoid modifying the original signature
+				signatureAlt := make([]byte, 65)
+				copy(signatureAlt[:64], userOp.Signature[:64])
+				signatureAlt[64] = byte(1)
 				pubKeyBytes, err := crypto.Ecrecover(hashForRecovery.Bytes(), signatureAlt)
 				if err == nil && len(pubKeyBytes) == 65 {
 					pubKeyHash := crypto.Keccak256(pubKeyBytes[1:])
@@ -440,7 +486,10 @@ func (v *UserOpValidator) simulateValidation(
 						Msg("signature recovery succeeded with alternative recovery ID")
 				}
 			} else if recoveryID == 1 {
-				signatureAlt := append(userOp.Signature[:64], byte(0))
+				// Create a copy to avoid modifying the original signature
+				signatureAlt := make([]byte, 65)
+				copy(signatureAlt[:64], userOp.Signature[:64])
+				signatureAlt[64] = byte(0)
 				pubKeyBytes, err := crypto.Ecrecover(hashForRecovery.Bytes(), signatureAlt)
 				if err == nil && len(pubKeyBytes) == 65 {
 					pubKeyHash := crypto.Keccak256(pubKeyBytes[1:])
@@ -511,12 +560,33 @@ func (v *UserOpValidator) simulateValidation(
 	}
 
 	// Add signature v value and full signature hex for debugging
+	// IMPORTANT: Log the signature BEFORE any potential modifications
+	// Capture the actual byte value to debug why it might show as 0
 	if len(userOp.Signature) >= 65 {
+		sigVAtLogTime := userOp.Signature[64]
+		sigHexAtLogTime := hexutil.Encode(userOp.Signature)
 		logFields = logFields.
-			Uint8("signatureV", userOp.Signature[64]).
-			Str("signatureHex", hexutil.Encode(userOp.Signature)).
+			Uint8("signatureV", sigVAtLogTime).
+			Str("signatureHex", sigHexAtLogTime).
 			Str("signatureR", hexutil.Encode(userOp.Signature[0:32])).
-			Str("signatureS", hexutil.Encode(userOp.Signature[32:64]))
+			Str("signatureS", hexutil.Encode(userOp.Signature[32:64])).
+			Str("signatureLastByteHex", hexutil.Encode(userOp.Signature[64:65])).
+			Int("signatureArrayLen", len(userOp.Signature)).
+			Int("signatureArrayCap", cap(userOp.Signature))
+		
+		// Debug: Check signature v value (should be 0 or 1 for SimpleAccount)
+		// Note: v=0/1 is correct for SimpleAccount, so this is just informational
+		if sigVAtLogTime == 0 || sigVAtLogTime == 1 {
+			v.logger.Debug().
+				Str("sender", userOp.Sender.Hex()).
+				Uint8("signatureV", sigVAtLogTime).
+				Msg("signature v value is in ERC-4337 format (0/1) - correct for SimpleAccount")
+		} else if sigVAtLogTime == 27 || sigVAtLogTime == 28 {
+			v.logger.Warn().
+				Str("sender", userOp.Sender.Hex()).
+				Uint8("signatureV", sigVAtLogTime).
+				Msg("WARNING: signature v value is in EIP-155 format (27/28) but should be normalized to 0/1 for SimpleAccount")
+		}
 	}
 
 
@@ -1825,3 +1895,4 @@ func (v *UserOpValidator) decodeFactoryRevert(revertData []byte, revertHex strin
 	result.Decoded = fmt.Sprintf("Unknown factory format (selector: %s, data length: %d bytes) - might be from SimpleAccount implementation or proxy", hexutil.Encode(selector), len(revertData))
 	return result
 }
+
