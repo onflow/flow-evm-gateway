@@ -125,7 +125,6 @@ func (t *BatchTxPool) Add(
 	}
 
 	t.txMux.Lock()
-	defer t.txMux.Unlock()
 
 	eoaActivity, found := t.eoaActivityCache.Get(from)
 	nonce := tx.Nonce()
@@ -133,13 +132,20 @@ func (t *BatchTxPool) Add(
 	// Skip transactions that have been already submitted,
 	// as they are *likely* to fail.
 	if found && slices.Contains(eoaActivity.txNonces, nonce) {
+		t.txMux.Unlock()
 		t.logger.Info().
 			Str("evm_tx", tx.Hash().Hex()).
 			Str("from", from.Hex()).
 			Uint64("nonce", nonce).
 			Msg("tx with same nonce has been already submitted")
+
 		return nil
 	}
+
+	t.updateEOAActivityMetadata(from, nonce)
+
+	// Determine action while holding lock
+	var shouldSubmitSingle bool
 
 	// Scenarios
 	// 1. EOA activity not found:
@@ -160,37 +166,46 @@ func (t *BatchTxPool) Add(
 	// [X] is equal to the configured `TxBatchInterval` duration.
 	if !found {
 		// Case 1. EOA activity not found:
-		err = t.submitSingleTransaction(ctx, hexEncodedTx)
+		shouldSubmitSingle = true
 	} else if time.Since(eoaActivity.lastSubmission) > t.config.TxBatchInterval {
+		// Case 2. EOA activity found AND it was more than [X] seconds ago:
+
 		// If the EOA has pooled transactions, which are not yet processed,
 		// due to congestion or anything, make sure to include the current
 		// tx on that batch.
-		hasBatch := len(t.pooledTxs[from]) > 0
-		if hasBatch {
-			userTx := pooledEvmTx{txPayload: hexEncodedTx, nonce: nonce}
-			t.pooledTxs[from] = append(t.pooledTxs[from], userTx)
-		}
-
-		// If it wasn't batched, submit individually
-		if !hasBatch {
-			// Case 2. EOA activity found AND it was more than [X] seconds ago:
-			err = t.submitSingleTransaction(ctx, hexEncodedTx)
-		}
+		shouldSubmitSingle = (len(t.pooledTxs[from]) == 0)
 	} else {
 		// Case 3. EOA activity found AND it was less than [X] seconds ago:
+		shouldSubmitSingle = false
+	}
+
+	// Pool transaction in the batch
+	if !shouldSubmitSingle {
 		userTx := pooledEvmTx{txPayload: hexEncodedTx, nonce: nonce}
 		t.pooledTxs[from] = append(t.pooledTxs[from], userTx)
 	}
 
+	// Release lock before network I/O operation
+	t.txMux.Unlock()
+
+	// Submit single transaction without holding lock
+	if shouldSubmitSingle {
+		err = t.submitSingleTransaction(ctx, hexEncodedTx)
+	}
+
 	if err != nil {
+		t.txMux.Lock()
+		// If there was an error during tx submission, remove the entry
+		// from the cache, to not block future requests with same nonce.
+		t.eoaActivityCache.Remove(from)
+		t.txMux.Unlock()
+
 		t.logger.Error().Err(err).Msgf(
 			"failed to submit single Flow transaction for EOA: %s",
 			from.Hex(),
 		)
 		return err
 	}
-
-	t.updateEOAActivityMetadata(from, nonce)
 
 	return nil
 }
