@@ -926,12 +926,24 @@ func (b *BlockChainAPI) GetStorageAt(
 
 func (b *BlockChainAPI) fetchBlockTransactions(
 	block *models.Block,
-) ([]*ethTypes.Transaction, error) {
-	transactions := make([]*ethTypes.Transaction, 0)
+) ([]*ethTypes.Transaction, map[common.Hash]*models.Receipt, error) {
+	transactions := make([]*ethTypes.Transaction, 0, len(block.TransactionHashes))
+	receiptMap := make(map[common.Hash]*models.Receipt, len(block.TransactionHashes))
+
 	for _, txHash := range block.TransactionHashes {
-		transaction, err := b.prepareTransactionResponse(txHash)
+		tx, err := b.transactions.Get(txHash)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
+		}
+
+		receipt, err := b.receipts.GetByTransactionID(txHash)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		transaction, err := ethTypes.NewTransactionResult(tx, *receipt, b.config.EVMNetworkID)
+		if err != nil {
+			return nil, nil, err
 		}
 		if transaction == nil {
 			b.logger.Error().
@@ -941,10 +953,12 @@ func (b *BlockChainAPI) fetchBlockTransactions(
 
 			continue
 		}
+
 		transactions = append(transactions, transaction)
+		receiptMap[txHash] = receipt
 	}
 
-	return transactions, nil
+	return transactions, receiptMap, nil
 }
 
 func (b *BlockChainAPI) prepareTransactionResponse(
@@ -996,7 +1010,7 @@ func (b *BlockChainAPI) prepareBlockResponse(
 	}
 	blockSize := rlp.ListSize(uint64(len(blockBytes)))
 
-	transactions, err := b.fetchBlockTransactions(block)
+	transactions, receiptbMap, err := b.fetchBlockTransactions(block)
 	if err != nil {
 		return nil, err
 	}
@@ -1005,9 +1019,10 @@ func (b *BlockChainAPI) prepareBlockResponse(
 		totalGasUsed := hexutil.Uint64(0)
 		receipts := types.Receipts{}
 		for _, tx := range transactions {
-			txReceipt, err := b.receipts.GetByTransactionID(tx.Hash)
-			if err != nil {
-				return nil, err
+			// Use receipt from map instead of fetching again
+			txReceipt, ok := receiptMap[tx.Hash]
+			if !ok {
+				return nil, fmt.Errorf("receipt not found for transaction %s", tx.Hash.String())
 			}
 			totalGasUsed += hexutil.Uint64(txReceipt.GasUsed)
 			receipts = append(receipts, txReceipt.ToGethReceipt())
