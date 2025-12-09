@@ -11,7 +11,7 @@ it('deploy contract and interact', async () => {
     assert.equal(deployed.receipt.status, conf.successStatus)
     assert.isString(deployed.receipt.transactionHash)
     assert.isString(contractAddress)
-    assert.equal(deployed.receipt.from, conf.eoa.address)
+    assert.equal(deployed.receipt.from, conf.eoa_address)
     assert.isUndefined(deployed.receipt.to)
 
     let rcp = await web3.eth.getTransactionReceipt(deployed.receipt.transactionHash)
