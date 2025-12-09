@@ -435,7 +435,10 @@ type responseHandler struct {
 	metrics     metrics.Collector
 }
 
-const errCodePanic = -32603
+const (
+	errCodePanic   = -32603
+	errCodeTimeout = -32002
+)
 
 type jsonError struct {
 	Code    int    `json:"code"`
@@ -468,6 +471,11 @@ func (w *responseHandler) Write(data []byte) (int, error) {
 	// handle possible panics inside endpoints
 	if message.Error != nil && message.Error.Code == errCodePanic {
 		w.metrics.ServerPanicked(message.Error.Message)
+	}
+
+	// handle possible request timeouts
+	if message.Error != nil && message.Error.Code == errCodeTimeout {
+		w.metrics.ApiErrorOccurred()
 	}
 
 	// It's an error response and requires special treatment.
