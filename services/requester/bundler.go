@@ -18,6 +18,7 @@ import (
 	ethTypes "github.com/onflow/flow-evm-gateway/eth/types"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/models"
+	"github.com/onflow/flow-evm-gateway/storage"
 )
 
 // Bundler creates EntryPoint.handleOps() transactions from UserOperations
@@ -27,6 +28,7 @@ type Bundler struct {
 	logger     zerolog.Logger
 	txPool     TxPool
 	requester  Requester
+	blocks     storage.BlockIndexer // For getting indexed height (not network latest)
 	mu         sync.Mutex // Protects against concurrent bundler execution
 }
 
@@ -36,6 +38,7 @@ func NewBundler(
 	logger zerolog.Logger,
 	txPool TxPool,
 	requester Requester,
+	blocks storage.BlockIndexer,
 ) *Bundler {
 	bundlerLogger := logger.With().Str("component", "bundler").Logger()
 	
@@ -59,6 +62,7 @@ func NewBundler(
 		logger:     bundlerLogger,
 		txPool:     txPool,
 		requester:  requester,
+		blocks:     blocks,
 	}
 }
 
@@ -139,8 +143,19 @@ func (b *Bundler) CreateBundledTransactions(ctx context.Context) ([]*BundledTran
 				Str("coinbase", b.config.Coinbase.Hex())
 			
 			// Add UserOp details for debugging
+			// Get indexed height (not network latest) - MUST use EntryPoint.getUserOpHash(), NO FALLBACKS
+			height, err := b.blocks.LatestEVMHeight()
+			if err != nil {
+				b.logger.Error().Err(err).Msg("failed to get indexed height for EntryPoint.getUserOpHash()")
+				return nil, fmt.Errorf("failed to get indexed height: %w", err)
+			}
 			for i, userOp := range batch {
-				userOpHash, _ := userOp.Hash(b.config.EntryPointAddress, b.config.EVMNetworkID)
+				// MUST use EntryPoint.getUserOpHash() for authoritative hash - NO FALLBACKS
+				userOpHash, err := b.requester.GetUserOpHash(ctx, userOp, b.config.EntryPointAddress, height)
+				if err != nil {
+					b.logger.Error().Err(err).Int("opIndex", i).Msg("failed to get UserOp hash from EntryPoint.getUserOpHash()")
+					return nil, fmt.Errorf("failed to get UserOp hash from EntryPoint.getUserOpHash() for op %d: %w", i, err)
+				}
 				logEntry = logEntry.
 					Str(fmt.Sprintf("userOp%d_hash", i), userOpHash.Hex()).
 					Str(fmt.Sprintf("userOp%d_sender", i), userOp.Sender.Hex()).
@@ -259,8 +274,22 @@ func (b *Bundler) SubmitBundledTransactions(ctx context.Context) error {
 		
 		// Remove UserOps from pool only after successful submission
 		// This prevents UserOp loss if transaction submission fails
+		// Get indexed height (not network latest) - MUST use EntryPoint.getUserOpHash(), NO FALLBACKS
+		height, err := b.blocks.LatestEVMHeight()
+		if err != nil {
+			b.logger.Error().Err(err).Msg("failed to get indexed height for EntryPoint.getUserOpHash()")
+			// Continue without removing from pool if we can't get hash - log error but don't fail
+			b.logger.Warn().Msg("skipping UserOp removal from pool - failed to get indexed height for getUserOpHash")
+			continue
+		}
 		for _, userOp := range bundledTx.UserOps {
-			hash, _ := userOp.Hash(b.config.EntryPointAddress, b.config.EVMNetworkID)
+			// MUST use EntryPoint.getUserOpHash() for authoritative hash - NO FALLBACKS
+			hash, err := b.requester.GetUserOpHash(ctx, userOp, b.config.EntryPointAddress, height)
+			if err != nil {
+				b.logger.Error().Err(err).Str("sender", userOp.Sender.Hex()).Msg("failed to get UserOp hash from EntryPoint.getUserOpHash() - UserOp will remain in pool")
+				// Continue without removing from pool if we can't get hash - log error but don't fail
+				continue
+			}
 			b.userOpPool.Remove(hash)
 			b.logger.Info().
 				Str("userOpHash", hash.Hex()).
@@ -319,15 +348,16 @@ func (b *Bundler) createHandleOpsTransaction(ctx context.Context, userOps []*mod
 		Data: (*hexutil.Bytes)(&calldata),
 	}
 
-	height, err := b.requester.GetLatestEVMHeight(ctx)
+	// Use indexed height (not network latest) - EntryPoint contract must exist at indexed height
+	height, err := b.blocks.LatestEVMHeight()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get latest height: %w", err)
+		return nil, fmt.Errorf("failed to get indexed height: %w", err)
 	}
 
 	b.logger.Debug().
 		Str("coinbase", b.config.Coinbase.Hex()).
 		Uint64("height", height).
-		Msg("bundler: got latest EVM height for transaction creation")
+		Msg("bundler: got indexed EVM height for transaction creation")
 
 	gasLimit, err := b.requester.EstimateGas(txArgs, b.config.Coinbase, height, nil, nil)
 	if err != nil {
@@ -410,6 +440,7 @@ func (b *Bundler) createHandleOpsTransaction(ctx context.Context, userOps []*mod
 		Uint64("height", height).
 		Msg("bundler: calling GetNonce for Coinbase address")
 
+	// Get nonce - use indexed height (same as height used for getUserOpHash)
 	networkNonce, err := b.requester.GetNonce(b.config.Coinbase, height)
 	if err != nil {
 		// Production error logging - GetNonce failures are critical and indicate indexing issues

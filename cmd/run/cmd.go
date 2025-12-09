@@ -268,11 +268,9 @@ func parseConfigFromFlags() error {
 		if cfg.EntryPointAddress == (gethCommon.Address{}) {
 			return fmt.Errorf("entry-point-address is required when bundler-enabled is true")
 		}
-		// EntryPointSimulationsAddress is REQUIRED for v0.7+ EntryPoints (which don't have simulateValidation)
-		// Fail fast if not configured rather than silently falling back to EntryPoint
-		if cfg.EntryPointSimulationsAddress == (gethCommon.Address{}) {
-			return fmt.Errorf("entry-point-simulations-address is REQUIRED when bundler-enabled is true. EntryPoint v0.7+ requires EntryPointSimulations contract for simulation. Configure --entry-point-simulations-address")
-		}
+		// EntryPointSimulationsAddress is OPTIONAL - EntryPoint v0.9.0 has simulateValidation directly
+		// If not configured, gateway will call EntryPoint.simulateValidation directly (recommended)
+		// EntryPointSimulations is only kept for backward compatibility
 		if cfg.MaxOpsPerBundle <= 0 {
 			return fmt.Errorf("max-ops-per-bundle must be > 0")
 		}

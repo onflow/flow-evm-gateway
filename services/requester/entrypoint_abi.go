@@ -79,6 +79,36 @@ const entryPointABI = `[
 	{
 		"inputs": [
 			{
+				"components": [
+					{"internalType": "address", "name": "sender", "type": "address"},
+					{"internalType": "uint256", "name": "nonce", "type": "uint256"},
+					{"internalType": "bytes", "name": "initCode", "type": "bytes"},
+					{"internalType": "bytes", "name": "callData", "type": "bytes"},
+					{"internalType": "bytes32", "name": "accountGasLimits", "type": "bytes32"},
+					{"internalType": "uint256", "name": "preVerificationGas", "type": "uint256"},
+					{"internalType": "bytes32", "name": "gasFees", "type": "bytes32"},
+					{"internalType": "bytes", "name": "paymasterAndData", "type": "bytes"},
+					{"internalType": "bytes", "name": "signature", "type": "bytes"}
+				],
+				"internalType": "struct PackedUserOperation",
+				"name": "userOp",
+				"type": "tuple"
+			}
+		],
+		"name": "getUserOpHash",
+		"outputs": [
+			{
+				"internalType": "bytes32",
+				"name": "",
+				"type": "bytes32"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
 				"internalType": "uint256",
 				"name": "opIndex",
 				"type": "uint256"
@@ -381,6 +411,14 @@ func EncodeHandleOps(userOps []*models.UserOperation, beneficiary common.Address
 	}
 
 	return data, nil
+}
+
+// GetUserOpHash is a placeholder function - the actual call is made by requester.GetUserOpHash()
+// This function exists only for documentation purposes and should not be called directly
+func GetUserOpHash(userOp *models.UserOperation, entryPoint common.Address) (common.Hash, error) {
+	// Note: This function is not used - the actual call is made by requester.GetUserOpHash()
+	// This function exists only for documentation purposes
+	return common.Hash{}, fmt.Errorf("getUserOpHash must be called via requester - use requester.GetUserOpHash()")
 }
 
 // PackedUserOperationABI is the struct format for EntryPointSimulations (v0.7+)

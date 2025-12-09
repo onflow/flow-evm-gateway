@@ -7,13 +7,81 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/onflow/flow-go-sdk"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/onflow/flow-evm-gateway/config"
+	"github.com/onflow/flow-evm-gateway/eth/types"
 	"github.com/onflow/flow-evm-gateway/models"
+	pebbleDB "github.com/cockroachdb/pebble"
 )
+
+// mockRequesterForPool is a minimal mock that implements Requester interface for tests
+type mockRequesterForPool struct{}
+
+func (m *mockRequesterForPool) SendRawTransaction(ctx context.Context, data []byte) (common.Hash, error) {
+	return common.Hash{}, nil
+}
+func (m *mockRequesterForPool) GetBalance(address common.Address, height uint64) (*big.Int, error) {
+	return big.NewInt(0), nil
+}
+func (m *mockRequesterForPool) Call(txArgs types.TransactionArgs, from common.Address, height uint64, stateOverrides *types.StateOverride, blockOverrides *types.BlockOverrides) ([]byte, error) {
+	return nil, nil
+}
+func (m *mockRequesterForPool) EstimateGas(txArgs types.TransactionArgs, from common.Address, height uint64, stateOverrides *types.StateOverride, blockOverrides *types.BlockOverrides) (uint64, error) {
+	return 0, nil
+}
+func (m *mockRequesterForPool) GetNonce(address common.Address, height uint64) (uint64, error) {
+	return 0, nil
+}
+func (m *mockRequesterForPool) GetCode(address common.Address, height uint64) ([]byte, error) {
+	return []byte{}, nil
+}
+func (m *mockRequesterForPool) GetStorageAt(address common.Address, hash common.Hash, height uint64) (common.Hash, error) {
+	return common.Hash{}, nil
+}
+func (m *mockRequesterForPool) GetLatestEVMHeight(ctx context.Context) (uint64, error) {
+	return 100, nil
+}
+func (m *mockRequesterForPool) GetUserOpHash(ctx context.Context, userOp *models.UserOperation, entryPoint common.Address, height uint64) (common.Hash, error) {
+	// For tests, use manual calculation to get a deterministic hash
+	// In production, this MUST call EntryPoint.getUserOpHash()
+	chainID := big.NewInt(747)
+	return userOp.Hash(entryPoint, chainID)
+}
+
+// mockBlocksForPool is a minimal mock that implements BlockIndexer interface for tests
+type mockBlocksForPool struct{}
+
+func (m *mockBlocksForPool) Store(cadenceHeight uint64, cadenceID flow.Identifier, block *models.Block, batch *pebbleDB.Batch) error {
+	return nil
+}
+func (m *mockBlocksForPool) GetByHeight(height uint64) (*models.Block, error) {
+	return nil, nil
+}
+func (m *mockBlocksForPool) GetByID(ID common.Hash) (*models.Block, error) {
+	return nil, nil
+}
+func (m *mockBlocksForPool) GetHeightByID(ID common.Hash) (uint64, error) {
+	return 0, nil
+}
+func (m *mockBlocksForPool) LatestEVMHeight() (uint64, error) {
+	return 100, nil
+}
+func (m *mockBlocksForPool) LatestCadenceHeight() (uint64, error) {
+	return 0, nil
+}
+func (m *mockBlocksForPool) SetLatestCadenceHeight(cadenceHeight uint64, batch *pebbleDB.Batch) error {
+	return nil
+}
+func (m *mockBlocksForPool) GetCadenceHeight(evmHeight uint64) (uint64, error) {
+	return 0, nil
+}
+func (m *mockBlocksForPool) GetCadenceID(evmHeight uint64) (flow.Identifier, error) {
+	return flow.Identifier{}, nil
+}
 
 func TestInMemoryUserOpPool_Add(t *testing.T) {
 	cfg := config.Config{
@@ -23,8 +91,10 @@ func TestInMemoryUserOpPool_Add(t *testing.T) {
 	entryPoint := common.HexToAddress("0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789")
 
 	t.Run("adds user operation successfully", func(t *testing.T) {
-		// Use a fresh pool for this test
-		freshPool := NewInMemoryUserOpPool(cfg, zerolog.Nop())
+		// Use a fresh pool for this test with mock requester
+		mockReq := &mockRequesterForPool{}
+		mockBlocks := &mockBlocksForPool{}
+		freshPool := NewInMemoryUserOpPool(cfg, zerolog.Nop(), mockReq, mockBlocks)
 		userOp := createTestUserOp(t, common.HexToAddress("0x1234567890123456789012345678901234567890"), big.NewInt(0))
 
 		hash, err := freshPool.Add(context.Background(), userOp, entryPoint)
@@ -33,8 +103,10 @@ func TestInMemoryUserOpPool_Add(t *testing.T) {
 	})
 
 	t.Run("rejects duplicate user operation", func(t *testing.T) {
-		// Use a fresh pool for this test
-		freshPool := NewInMemoryUserOpPool(cfg, zerolog.Nop())
+		// Use a fresh pool for this test with mock requester
+		mockReq := &mockRequesterForPool{}
+		mockBlocks := &mockBlocksForPool{}
+		freshPool := NewInMemoryUserOpPool(cfg, zerolog.Nop(), mockReq, mockBlocks)
 		userOp := createTestUserOp(t, common.HexToAddress("0x1234567890123456789012345678901234567890"), big.NewInt(1))
 
 		hash1, err := freshPool.Add(context.Background(), userOp, entryPoint)
@@ -48,8 +120,10 @@ func TestInMemoryUserOpPool_Add(t *testing.T) {
 	})
 
 	t.Run("rejects nonce conflict from same sender", func(t *testing.T) {
-		// Use a fresh pool for this test
-		freshPool := NewInMemoryUserOpPool(cfg, zerolog.Nop())
+		// Use a fresh pool for this test with mock requester
+		mockReq := &mockRequesterForPool{}
+		mockBlocks := &mockBlocksForPool{}
+		freshPool := NewInMemoryUserOpPool(cfg, zerolog.Nop(), mockReq, mockBlocks)
 		sender := common.HexToAddress("0x1234567890123456789012345678901234567890")
 
 		userOp1 := createTestUserOp(t, sender, big.NewInt(0))
@@ -78,8 +152,10 @@ func TestInMemoryUserOpPool_Add(t *testing.T) {
 	})
 
 	t.Run("allows different nonces from same sender", func(t *testing.T) {
-		// Use a fresh pool for this test
-		freshPool := NewInMemoryUserOpPool(cfg, zerolog.Nop())
+		// Use a fresh pool for this test with mock requester
+		mockReq := &mockRequesterForPool{}
+		mockBlocks := &mockBlocksForPool{}
+		freshPool := NewInMemoryUserOpPool(cfg, zerolog.Nop(), mockReq, mockBlocks)
 		sender := common.HexToAddress("0x1234567890123456789012345678901234567890")
 
 		userOp1 := createTestUserOp(t, sender, big.NewInt(0))
@@ -93,8 +169,10 @@ func TestInMemoryUserOpPool_Add(t *testing.T) {
 	})
 
 	t.Run("allows same nonce from different senders", func(t *testing.T) {
-		// Use a fresh pool for this test
-		freshPool := NewInMemoryUserOpPool(cfg, zerolog.Nop())
+		// Use a fresh pool for this test with mock requester
+		mockReq := &mockRequesterForPool{}
+		mockBlocks := &mockBlocksForPool{}
+		freshPool := NewInMemoryUserOpPool(cfg, zerolog.Nop(), mockReq, mockBlocks)
 
 		sender1 := common.HexToAddress("0x1234567890123456789012345678901234567890")
 		sender2 := common.HexToAddress("0x0987654321098765432109876543210987654321")
@@ -119,7 +197,9 @@ func TestInMemoryUserOpPool_GetByHash(t *testing.T) {
 
 	t.Run("retrieves existing user operation", func(t *testing.T) {
 		// Use a fresh pool for this test
-		freshPool := NewInMemoryUserOpPool(cfg, zerolog.Nop())
+		mockReq := &mockRequesterForPool{}
+		mockBlocks := &mockBlocksForPool{}
+		freshPool := NewInMemoryUserOpPool(cfg, zerolog.Nop(), mockReq, mockBlocks)
 		userOp := createTestUserOp(t, common.HexToAddress("0x1234567890123456789012345678901234567890"), big.NewInt(0))
 
 		hash, err := freshPool.Add(context.Background(), userOp, entryPoint)
@@ -133,7 +213,9 @@ func TestInMemoryUserOpPool_GetByHash(t *testing.T) {
 
 	t.Run("returns error for non-existent hash", func(t *testing.T) {
 		// Use a fresh pool for this test
-		freshPool := NewInMemoryUserOpPool(cfg, zerolog.Nop())
+		mockReq := &mockRequesterForPool{}
+		mockBlocks := &mockBlocksForPool{}
+		freshPool := NewInMemoryUserOpPool(cfg, zerolog.Nop(), mockReq, mockBlocks)
 		nonExistentHash := common.HexToHash("0x1234567890123456789012345678901234567890123456789012345678901234")
 
 		_, err := freshPool.GetByHash(nonExistentHash)
@@ -151,7 +233,9 @@ func TestInMemoryUserOpPool_GetPending(t *testing.T) {
 
 	t.Run("returns all pending user operations", func(t *testing.T) {
 		// Use a fresh pool for this test
-		freshPool := NewInMemoryUserOpPool(cfg, zerolog.Nop())
+		mockReq := &mockRequesterForPool{}
+		mockBlocks := &mockBlocksForPool{}
+		freshPool := NewInMemoryUserOpPool(cfg, zerolog.Nop(), mockReq, mockBlocks)
 		userOp1 := createTestUserOp(t, common.HexToAddress("0x1111111111111111111111111111111111111111"), big.NewInt(0))
 		userOp2 := createTestUserOp(t, common.HexToAddress("0x2222222222222222222222222222222222222222"), big.NewInt(0))
 		userOp3 := createTestUserOp(t, common.HexToAddress("0x3333333333333333333333333333333333333333"), big.NewInt(0))
@@ -168,7 +252,7 @@ func TestInMemoryUserOpPool_GetPending(t *testing.T) {
 	})
 
 	t.Run("returns empty for empty pool", func(t *testing.T) {
-		emptyPool := NewInMemoryUserOpPool(cfg, zerolog.Nop())
+		emptyPool := NewInMemoryUserOpPool(cfg, zerolog.Nop(), nil, nil)
 		pending := emptyPool.GetPending()
 		assert.Empty(t, pending)
 	})
@@ -183,7 +267,9 @@ func TestInMemoryUserOpPool_GetBySender(t *testing.T) {
 
 	t.Run("returns user operations for sender", func(t *testing.T) {
 		// Use a fresh pool for this test
-		freshPool := NewInMemoryUserOpPool(cfg, zerolog.Nop())
+		mockReq := &mockRequesterForPool{}
+		mockBlocks := &mockBlocksForPool{}
+		freshPool := NewInMemoryUserOpPool(cfg, zerolog.Nop(), mockReq, mockBlocks)
 		sender := common.HexToAddress("0x1234567890123456789012345678901234567890")
 
 		userOp1 := createTestUserOp(t, sender, big.NewInt(0))
@@ -203,7 +289,7 @@ func TestInMemoryUserOpPool_GetBySender(t *testing.T) {
 
 	t.Run("returns empty for unknown sender", func(t *testing.T) {
 		// Use a fresh pool for this test
-		pool := NewInMemoryUserOpPool(cfg, zerolog.Nop())
+		pool := NewInMemoryUserOpPool(cfg, zerolog.Nop(), nil, nil)
 		unknownSender := common.HexToAddress("0x9999999999999999999999999999999999999999")
 		ops := pool.GetBySender(unknownSender)
 		assert.Empty(t, ops)
@@ -219,7 +305,9 @@ func TestInMemoryUserOpPool_Remove(t *testing.T) {
 
 	t.Run("removes user operation", func(t *testing.T) {
 		// Use a fresh pool for this test
-		freshPool := NewInMemoryUserOpPool(cfg, zerolog.Nop())
+		mockReq := &mockRequesterForPool{}
+		mockBlocks := &mockBlocksForPool{}
+		freshPool := NewInMemoryUserOpPool(cfg, zerolog.Nop(), mockReq, mockBlocks)
 		userOp := createTestUserOp(t, common.HexToAddress("0x1234567890123456789012345678901234567890"), big.NewInt(0))
 
 		hash, err := freshPool.Add(context.Background(), userOp, entryPoint)
@@ -241,7 +329,9 @@ func TestInMemoryUserOpPool_Remove(t *testing.T) {
 
 	t.Run("removes from sender list", func(t *testing.T) {
 		// Use a fresh pool with long TTL
-		freshPool := NewInMemoryUserOpPool(cfg, zerolog.Nop())
+		mockReq := &mockRequesterForPool{}
+		mockBlocks := &mockBlocksForPool{}
+		freshPool := NewInMemoryUserOpPool(cfg, zerolog.Nop(), mockReq, mockBlocks)
 		
 		sender := common.HexToAddress("0x1234567890123456789012345678901234567890")
 
@@ -283,7 +373,9 @@ func TestInMemoryUserOpPool_TTL(t *testing.T) {
 
 	t.Run("expires user operations after TTL", func(t *testing.T) {
 		// Use a fresh pool with short TTL for this test
-		freshPool := NewInMemoryUserOpPool(cfg, zerolog.Nop())
+		mockReq := &mockRequesterForPool{}
+		mockBlocks := &mockBlocksForPool{}
+		freshPool := NewInMemoryUserOpPool(cfg, zerolog.Nop(), mockReq, mockBlocks)
 		userOp := createTestUserOp(t, common.HexToAddress("0x1234567890123456789012345678901234567890"), big.NewInt(0))
 
 		hash, err := freshPool.Add(context.Background(), userOp, entryPoint)

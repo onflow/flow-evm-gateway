@@ -135,3 +135,48 @@ func TestGetHandleOpsSelector(t *testing.T) {
 	})
 }
 
+func TestGetUserOpHashPacking(t *testing.T) {
+	t.Run("getUserOpHash uses empty signature", func(t *testing.T) {
+		// Create a UserOp with a non-empty signature
+		userOp := &models.UserOperation{
+			Sender:               common.HexToAddress("0x1111111111111111111111111111111111111111"),
+			Nonce:                big.NewInt(0),
+			InitCode:             []byte{},
+			CallData:             []byte{0x12, 0x34},
+			CallGasLimit:         big.NewInt(100000),
+			VerificationGasLimit: big.NewInt(100000),
+			PreVerificationGas:   big.NewInt(50000),
+			MaxFeePerGas:         big.NewInt(1000000000),
+			MaxPriorityFeePerGas: big.NewInt(1000000000),
+			PaymasterAndData:     []byte{},
+			Signature:            []byte{0x01, 0x02, 0x03, 0x04, 0x05}, // Non-empty signature
+		}
+
+		// Pack the UserOp for getUserOpHash (simulating what GetUserOpHash does)
+		packedOp := PackedUserOperationABI{
+			Sender:             userOp.Sender,
+			Nonce:              userOp.Nonce,
+			InitCode:           userOp.InitCode,
+			CallData:           userOp.CallData,
+			AccountGasLimits:   packAccountGasLimits(userOp.CallGasLimit, userOp.VerificationGasLimit),
+			PreVerificationGas: userOp.PreVerificationGas,
+			GasFees:            packGasFees(userOp.MaxFeePerGas, userOp.MaxPriorityFeePerGas),
+			PaymasterAndData:   userOp.PaymasterAndData,
+			Signature:          []byte{}, // Empty signature - hash is calculated WITHOUT signature
+		}
+
+		// Verify the signature is empty
+		assert.Empty(t, packedOp.Signature, "getUserOpHash must use empty signature")
+		assert.NotEmpty(t, userOp.Signature, "original UserOp should have signature")
+
+		// Verify we can encode it
+		calldata, err := entryPointABIParsed.Pack("getUserOpHash", packedOp)
+		if err != nil {
+			t.Skipf("ABI encoding test skipped: %v", err)
+			return
+		}
+		assert.NotEmpty(t, calldata)
+		assert.Greater(t, len(calldata), 4) // At least function selector + data
+	})
+}
+

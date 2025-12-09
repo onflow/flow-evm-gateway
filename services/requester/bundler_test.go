@@ -6,11 +6,13 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/onflow/flow-go-sdk"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/ethereum/go-ethereum/core/types"
+	pebbleDB "github.com/cockroachdb/pebble"
 	"github.com/onflow/flow-evm-gateway/config"
 	ethTypes "github.com/onflow/flow-evm-gateway/eth/types"
 	"github.com/onflow/flow-evm-gateway/models"
@@ -26,11 +28,13 @@ func TestBundler_CreateBundledTransactions(t *testing.T) {
 		GasPrice:          big.NewInt(1000000000),
 	}
 
-	pool := NewInMemoryUserOpPool(cfg, zerolog.Nop())
+	mockReq := &mockRequester{}
+	mockBlocks := &mockBlocksForBundler{}
+	pool := NewInMemoryUserOpPool(cfg, zerolog.Nop(), mockReq, mockBlocks)
 	txPool := &mockTxPool{}
 	requester := &mockRequester{}
 
-	bundler := NewBundler(pool, cfg, zerolog.Nop(), txPool, requester)
+	bundler := NewBundler(pool, cfg, zerolog.Nop(), txPool, requester, mockBlocks)
 	entryPoint := cfg.EntryPointAddress
 
 	t.Run("returns empty when pool is empty", func(t *testing.T) {
@@ -41,8 +45,10 @@ func TestBundler_CreateBundledTransactions(t *testing.T) {
 
 	t.Run("creates transaction for single user operation", func(t *testing.T) {
 		// Use a fresh pool for this test
-		freshPool := NewInMemoryUserOpPool(cfg, zerolog.Nop())
-		freshBundler := NewBundler(freshPool, cfg, zerolog.Nop(), txPool, requester)
+		mockReq := &mockRequester{}
+		mockBlocks := &mockBlocksForBundler{}
+		freshPool := NewInMemoryUserOpPool(cfg, zerolog.Nop(), mockReq, mockBlocks)
+		freshBundler := NewBundler(freshPool, cfg, zerolog.Nop(), txPool, mockReq, mockBlocks)
 
 		userOp := createTestUserOpForBundler(t, common.HexToAddress("0x1111111111111111111111111111111111111111"), big.NewInt(0))
 		_, err := freshPool.Add(context.Background(), userOp, entryPoint)
@@ -63,8 +69,10 @@ func TestBundler_CreateBundledTransactions(t *testing.T) {
 
 	t.Run("groups by sender and respects MaxOpsPerBundle", func(t *testing.T) {
 		// Use a fresh pool for this test
-		freshPool := NewInMemoryUserOpPool(cfg, zerolog.Nop())
-		freshBundler := NewBundler(freshPool, cfg, zerolog.Nop(), txPool, requester)
+		mockReq := &mockRequester{}
+		mockBlocks := &mockBlocksForBundler{}
+		freshPool := NewInMemoryUserOpPool(cfg, zerolog.Nop(), mockReq, mockBlocks)
+		freshBundler := NewBundler(freshPool, cfg, zerolog.Nop(), txPool, mockReq, mockBlocks)
 
 		// Add 15 UserOps from same sender
 		sender := common.HexToAddress("0x1111111111111111111111111111111111111111")
@@ -89,8 +97,10 @@ func TestBundler_CreateBundledTransactions(t *testing.T) {
 
 	t.Run("creates separate transactions for different senders", func(t *testing.T) {
 		// Use a fresh pool for this test
-		freshPool := NewInMemoryUserOpPool(cfg, zerolog.Nop())
-		freshBundler := NewBundler(freshPool, cfg, zerolog.Nop(), txPool, requester)
+		mockReq := &mockRequester{}
+		mockBlocks := &mockBlocksForBundler{}
+		freshPool := NewInMemoryUserOpPool(cfg, zerolog.Nop(), mockReq, mockBlocks)
+		freshBundler := NewBundler(freshPool, cfg, zerolog.Nop(), txPool, mockReq, mockBlocks)
 
 		sender1 := common.HexToAddress("0x1111111111111111111111111111111111111111")
 		sender2 := common.HexToAddress("0x2222222222222222222222222222222222222222")
@@ -116,8 +126,10 @@ func TestBundler_CreateBundledTransactions(t *testing.T) {
 
 	t.Run("sorts by nonce within sender group", func(t *testing.T) {
 		// Use a fresh pool for this test
-		freshPool := NewInMemoryUserOpPool(cfg, zerolog.Nop())
-		freshBundler := NewBundler(freshPool, cfg, zerolog.Nop(), txPool, requester)
+		mockReq := &mockRequester{}
+		mockBlocks := &mockBlocksForBundler{}
+		freshPool := NewInMemoryUserOpPool(cfg, zerolog.Nop(), mockReq, mockBlocks)
+		freshBundler := NewBundler(freshPool, cfg, zerolog.Nop(), txPool, mockReq, mockBlocks)
 
 		sender := common.HexToAddress("0x1111111111111111111111111111111111111111")
 
@@ -156,11 +168,13 @@ func TestBundler_Disabled(t *testing.T) {
 		EntryPointAddress: common.HexToAddress("0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789"),
 	}
 
-	pool := NewInMemoryUserOpPool(cfg, zerolog.Nop())
+	mockReq := &mockRequester{}
+	mockBlocks := &mockBlocksForBundler{}
+	pool := NewInMemoryUserOpPool(cfg, zerolog.Nop(), mockReq, mockBlocks)
 	txPool := &mockTxPool{}
 	requester := &mockRequester{}
 
-	bundler := NewBundler(pool, cfg, zerolog.Nop(), txPool, requester)
+	bundler := NewBundler(pool, cfg, zerolog.Nop(), txPool, requester, mockBlocks)
 
 	t.Run("returns error when bundler is disabled", func(t *testing.T) {
 		_, err := bundler.CreateBundledTransactions(context.Background())
@@ -178,16 +192,17 @@ func TestBundler_EVMNetworkID_Validation(t *testing.T) {
 		GasPrice:          big.NewInt(1000000000),
 	}
 
-	pool := NewInMemoryUserOpPool(baseCfg, zerolog.Nop())
+	mockReq := &mockRequester{}
+	mockBlocks := &mockBlocksForBundler{}
+	pool := NewInMemoryUserOpPool(baseCfg, zerolog.Nop(), mockReq, mockBlocks)
 	txPool := &mockTxPool{}
-	requester := &mockRequester{}
 
 	t.Run("panics when EVMNetworkID is nil", func(t *testing.T) {
 		cfg := baseCfg
 		cfg.EVMNetworkID = nil
 
 		assert.Panics(t, func() {
-			NewBundler(pool, cfg, zerolog.Nop(), txPool, requester)
+			NewBundler(pool, cfg, zerolog.Nop(), txPool, mockReq, mockBlocks)
 		}, "NewBundler should panic when EVMNetworkID is nil")
 	})
 
@@ -196,7 +211,7 @@ func TestBundler_EVMNetworkID_Validation(t *testing.T) {
 		cfg.EVMNetworkID = big.NewInt(0)
 
 		assert.Panics(t, func() {
-			NewBundler(pool, cfg, zerolog.Nop(), txPool, requester)
+			NewBundler(pool, cfg, zerolog.Nop(), txPool, mockReq, mockBlocks)
 		}, "NewBundler should panic when EVMNetworkID is zero")
 	})
 
@@ -205,7 +220,7 @@ func TestBundler_EVMNetworkID_Validation(t *testing.T) {
 		cfg.EVMNetworkID = big.NewInt(545)
 
 		assert.NotPanics(t, func() {
-			bundler := NewBundler(pool, cfg, zerolog.Nop(), txPool, requester)
+			bundler := NewBundler(pool, cfg, zerolog.Nop(), txPool, mockReq, mockBlocks)
 			assert.NotNil(t, bundler)
 		}, "NewBundler should not panic when EVMNetworkID is 545")
 	})
@@ -215,7 +230,7 @@ func TestBundler_EVMNetworkID_Validation(t *testing.T) {
 		cfg.EVMNetworkID = big.NewInt(747)
 
 		assert.NotPanics(t, func() {
-			bundler := NewBundler(pool, cfg, zerolog.Nop(), txPool, requester)
+			bundler := NewBundler(pool, cfg, zerolog.Nop(), txPool, mockReq, mockBlocks)
 			assert.NotNil(t, bundler)
 		}, "NewBundler should not panic when EVMNetworkID is 747")
 	})
@@ -265,6 +280,51 @@ func (m *mockRequester) GetStorageAt(address common.Address, hash common.Hash, h
 
 func (m *mockRequester) GetLatestEVMHeight(ctx context.Context) (uint64, error) {
 	return 100, nil
+}
+
+func (m *mockRequester) GetUserOpHash(ctx context.Context, userOp *models.UserOperation, entryPoint common.Address, height uint64) (common.Hash, error) {
+	// Return a unique hash based on sender and nonce for testing
+	// This ensures different UserOps get different hashes
+	hash := common.Hash{}
+	copy(hash[:], userOp.Sender.Bytes())
+	if userOp.Nonce != nil {
+		nonceBytes := userOp.Nonce.Bytes()
+		if len(nonceBytes) > 0 {
+			copy(hash[20:], nonceBytes)
+		}
+	}
+	return hash, nil
+}
+
+// mockBlocksForBundler is a minimal mock that implements BlockIndexer interface for bundler tests
+type mockBlocksForBundler struct{}
+
+func (m *mockBlocksForBundler) Store(cadenceHeight uint64, cadenceID flow.Identifier, block *models.Block, batch *pebbleDB.Batch) error {
+	return nil
+}
+func (m *mockBlocksForBundler) GetByHeight(height uint64) (*models.Block, error) {
+	return nil, nil
+}
+func (m *mockBlocksForBundler) GetByID(ID common.Hash) (*models.Block, error) {
+	return nil, nil
+}
+func (m *mockBlocksForBundler) GetHeightByID(ID common.Hash) (uint64, error) {
+	return 0, nil
+}
+func (m *mockBlocksForBundler) LatestEVMHeight() (uint64, error) {
+	return 100, nil
+}
+func (m *mockBlocksForBundler) LatestCadenceHeight() (uint64, error) {
+	return 0, nil
+}
+func (m *mockBlocksForBundler) SetLatestCadenceHeight(cadenceHeight uint64, batch *pebbleDB.Batch) error {
+	return nil
+}
+func (m *mockBlocksForBundler) GetCadenceHeight(evmHeight uint64) (uint64, error) {
+	return 0, nil
+}
+func (m *mockBlocksForBundler) GetCadenceID(evmHeight uint64) (flow.Identifier, error) {
+	return flow.Identifier{}, nil
 }
 
 // createTestUserOpForBundler is a helper function for bundler tests

@@ -7,8 +7,6 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/onflow/flow-evm-gateway/storage"
-
 	pebbleDB "github.com/cockroachdb/pebble"
 	"github.com/onflow/flow-go/fvm/environment"
 	"github.com/onflow/flow-go/fvm/evm"
@@ -18,7 +16,9 @@ import (
 	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/services/ingestion/mocks"
 	"github.com/onflow/flow-evm-gateway/services/replayer"
+	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
+	ethTypes "github.com/onflow/flow-evm-gateway/eth/types"
 
 	"github.com/onflow/cadence"
 
@@ -35,6 +35,38 @@ import (
 
 	storageMock "github.com/onflow/flow-evm-gateway/storage/mocks"
 )
+
+// mockRequesterForIngestion is a minimal mock that implements Requester interface for ingestion tests
+type mockRequesterForIngestion struct{}
+
+func (m *mockRequesterForIngestion) SendRawTransaction(ctx context.Context, data []byte) (gethCommon.Hash, error) {
+	return gethCommon.Hash{}, nil
+}
+func (m *mockRequesterForIngestion) GetBalance(address gethCommon.Address, height uint64) (*big.Int, error) {
+	return big.NewInt(0), nil
+}
+func (m *mockRequesterForIngestion) Call(txArgs ethTypes.TransactionArgs, from gethCommon.Address, height uint64, stateOverrides *ethTypes.StateOverride, blockOverrides *ethTypes.BlockOverrides) ([]byte, error) {
+	return []byte{}, nil
+}
+func (m *mockRequesterForIngestion) EstimateGas(txArgs ethTypes.TransactionArgs, from gethCommon.Address, height uint64, stateOverrides *ethTypes.StateOverride, blockOverrides *ethTypes.BlockOverrides) (uint64, error) {
+	return 0, nil
+}
+func (m *mockRequesterForIngestion) GetNonce(address gethCommon.Address, height uint64) (uint64, error) {
+	return 0, nil
+}
+func (m *mockRequesterForIngestion) GetCode(address gethCommon.Address, height uint64) ([]byte, error) {
+	return []byte{}, nil
+}
+func (m *mockRequesterForIngestion) GetStorageAt(address gethCommon.Address, hash gethCommon.Hash, height uint64) (gethCommon.Hash, error) {
+	return gethCommon.Hash{}, nil
+}
+func (m *mockRequesterForIngestion) GetLatestEVMHeight(ctx context.Context) (uint64, error) {
+	return 100, nil
+}
+func (m *mockRequesterForIngestion) GetUserOpHash(ctx context.Context, userOp *models.UserOperation, entryPoint gethCommon.Address, height uint64) (gethCommon.Hash, error) {
+	// For tests, return a deterministic hash
+	return gethCommon.Hash{0x01, 0x02, 0x03}, nil
+}
 
 func TestSerialBlockIngestion(t *testing.T) {
 
@@ -66,6 +98,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 
 		userOps := &storageMock.UserOperationIndexer{}
 		entryPoint := gethCommon.HexToAddress("0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789")
+		mockReq := &mockRequesterForIngestion{}
 		engine := NewEventIngestionEngine(
 			subscriber,
 			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
@@ -76,12 +109,14 @@ func TestSerialBlockIngestion(t *testing.T) {
 			transactions,
 			traces,
 			userOps,
+			mockReq,
 			entryPoint,
 			models.NewPublisher[*models.Block](),
 			models.NewPublisher[[]*gethTypes.Log](),
 			zerolog.Nop(),
 			metrics.NopCollector,
 			defaultReplayerConfig(),
+			big.NewInt(545), // evmChainID for testing
 		)
 
 		done := make(chan struct{})
@@ -149,6 +184,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 
 		userOps := &storageMock.UserOperationIndexer{}
 		entryPoint := gethCommon.HexToAddress("0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789")
+		mockReq := &mockRequesterForIngestion{}
 		engine := NewEventIngestionEngine(
 			subscriber,
 			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
@@ -159,12 +195,14 @@ func TestSerialBlockIngestion(t *testing.T) {
 			transactions,
 			traces,
 			userOps,
+			mockReq,
 			entryPoint,
 			models.NewPublisher[*models.Block](),
 			models.NewPublisher[[]*gethTypes.Log](),
 			zerolog.Nop(),
 			metrics.NopCollector,
 			defaultReplayerConfig(),
+			big.NewInt(545), // evmChainID for testing
 		)
 
 		waitErr := make(chan struct{})
@@ -274,6 +312,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 
 		userOps := &storageMock.UserOperationIndexer{}
 		entryPoint := gethCommon.HexToAddress("0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789")
+		mockReq := &mockRequesterForIngestion{}
 		engine := NewEventIngestionEngine(
 			subscriber,
 			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
@@ -284,12 +323,14 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			transactions,
 			traces,
 			userOps,
+			mockReq,
 			entryPoint,
 			models.NewPublisher[*models.Block](),
 			models.NewPublisher[[]*gethTypes.Log](),
 			zerolog.Nop(),
 			metrics.NopCollector,
 			defaultReplayerConfig(),
+			big.NewInt(545), // evmChainID for testing
 		)
 
 		done := make(chan struct{})
@@ -386,6 +427,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 
 		userOps := &storageMock.UserOperationIndexer{}
 		entryPoint := gethCommon.HexToAddress("0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789")
+		mockReq := &mockRequesterForIngestion{}
 		engine := NewEventIngestionEngine(
 			subscriber,
 			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
@@ -396,12 +438,14 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			transactions,
 			traces,
 			userOps,
+			mockReq,
 			entryPoint,
 			models.NewPublisher[*models.Block](),
 			models.NewPublisher[[]*gethTypes.Log](),
 			zerolog.Nop(),
 			metrics.NopCollector,
 			defaultReplayerConfig(),
+			big.NewInt(545), // evmChainID for testing
 		)
 
 		done := make(chan struct{})
@@ -484,6 +528,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 
 		userOps := &storageMock.UserOperationIndexer{}
 		entryPoint := gethCommon.HexToAddress("0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789")
+		mockReq := &mockRequesterForIngestion{}
 		engine := NewEventIngestionEngine(
 			subscriber,
 			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
@@ -494,12 +539,14 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			transactions,
 			traces,
 			userOps,
+			mockReq,
 			entryPoint,
 			models.NewPublisher[*models.Block](),
 			models.NewPublisher[[]*gethTypes.Log](),
 			zerolog.Nop(),
 			metrics.NopCollector,
 			defaultReplayerConfig(),
+			big.NewInt(545), // evmChainID for testing
 		)
 
 		done := make(chan struct{})

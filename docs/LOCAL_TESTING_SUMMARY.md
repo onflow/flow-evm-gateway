@@ -1,76 +1,97 @@
-# Local Testing Summary - RPC Response Logging
+# Local Testing Summary - Bundler Height Fix
 
-## Changes Tested
+## What Was Fixed
 
-### 1. Added RPC Response Logging in `requester.go`
+The bundler was using `requester.GetLatestEVMHeight()` (network's latest height) instead of `blocks.LatestEVMHeight()` (indexed height), causing "entity not found" errors when calling `EntryPoint.getUserOpHash()`.
 
-**File**: `services/requester/requester.go`
+## Changes Made
 
-**Change**: Added detailed logging when RPC calls return errors to capture:
-- `errorCode` - The error code from the RPC response
-- `errorMessage` - The error message from the RPC response  
-- `returnedDataHex` - Raw revert data from the RPC response (hex encoded)
-- `returnedDataLen` - Length of revert data from RPC
+1. **Added `blocks storage.BlockIndexer` to Bundler struct** - Allows bundler to access indexed height
+2. **Updated all height calls in bundler** - Changed from `GetLatestEVMHeight()` to `blocks.LatestEVMHeight()`
+3. **Updated bootstrap** - Passes `blocks` to `NewBundler()`
+4. **Updated all tests** - Pass `mockBlocks` to `NewBundler()`
 
-**Purpose**: This will help diagnose why `revertReasonHex` is showing as `"0x"` (empty). We'll be able to see if:
-1. The Flow EVM RPC is not returning revert data (empty `returnedDataHex`)
-2. The revert data is being lost somewhere in the chain
-3. There's a different error code that we're not handling
+## Local Testing Results
 
-### 2. Fixed Linter Error
+### ✅ All Tests Pass
 
-**File**: `services/requester/userop_validator.go`
-
-**Change**: Fixed non-constant format string error by using `fmt.Errorf("%s", errorMsg)` instead of `fmt.Errorf(errorMsg)`.
-
-## Testing Results
-
-✅ **Compilation**: All code compiles successfully
-- `go build ./services/requester/...` - PASSED
-- `go build ./cmd/main.go` - PASSED
-
-✅ **Unit Tests**: All existing tests pass
-- `go test ./services/requester/...` - PASSED
-- TestBundler_CreateBundledTransactions - PASSED
-- TestEncodeSimulateValidation - PASSED
-- All other requester tests - PASSED
-
-✅ **Linter**: No linter errors
-- `read_lints` - No errors found
-
-## What to Look For After Deployment
-
-After rebuilding and redeploying, when you send a UserOperation, you should see a new log entry:
-
-```json
-{
-  "level": "debug",
-  "component": "requester",
-  "errorCode": <number>,
-  "errorMessage": "<string>",
-  "returnedDataHex": "<hex string>",
-  "returnedDataLen": <number>,
-  "message": "RPC call returned error - logging full result summary"
-}
+```bash
+$ go test ./services/requester -v
+PASS
+ok      github.com/onflow/flow-evm-gateway/services/requester   0.869s
 ```
 
-This will show us:
-- **If `returnedDataHex` is empty**: The Flow EVM RPC is not returning revert data
-- **If `returnedDataHex` has data**: The revert data is being captured, and we can investigate why it's not being decoded properly
-- **If `errorCode` is not `ExecutionErrCodeExecutionReverted`**: There's a different type of error we need to handle
+### ✅ New Test: `TestBundler_UsesIndexedHeight`
+
+This test verifies that:
+- ✅ Bundler calls `blocks.LatestEVMHeight()` (indexed height)
+- ✅ Bundler does NOT call `requester.GetLatestEVMHeight()` (network latest)
+- ✅ Bundler successfully calls `GetUserOpHash()` with the indexed height
+
+**Test Result:**
+```
+=== RUN   TestBundler_UsesIndexedHeight
+--- PASS: TestBundler_UsesIndexedHeight (0.00s)
+PASS
+```
+
+### ✅ Build Verification
+
+```bash
+$ go build ./...
+# No errors - all packages compile successfully
+```
+
+## What This Fixes
+
+**Before:**
+- Bundler used network's latest height → EntryPoint contract not available → "entity not found" error
+- `GetUserOpHash()` failed → Bundler couldn't create transactions → UserOps stuck in pool
+
+**After:**
+- Bundler uses indexed height → EntryPoint contract available → `GetUserOpHash()` succeeds
+- Bundler can create transactions → UserOps get bundled and submitted
+
+## Verification After Deployment
+
+After redeploying, you should see:
+
+1. **No more "entity not found" errors:**
+   ```bash
+   sudo journalctl -u flow-evm-gateway --since "5 minutes ago" | \
+     grep -i "entity not found" | wc -l
+   # Should return 0
+   ```
+
+2. **Successful `getUserOpHash` calls:**
+   ```bash
+   sudo journalctl -u flow-evm-gateway --since "5 minutes ago" | \
+     grep -i "userOpHash_from_contract"
+   # Should show hash values from EntryPoint.getUserOpHash()
+   ```
+
+3. **Bundler successfully creating transactions:**
+   ```bash
+   sudo journalctl -u flow-evm-gateway --since "5 minutes ago" | \
+     grep -iE "created handleOps|submitted.*transaction"
+   # Should show successful transaction creation and submission
+   ```
+
+4. **No hash mismatch errors:**
+   - Frontend and gateway should now calculate the same hash
+   - Both use `EntryPoint.getUserOpHash()` with indexed height
+
+## Files Changed
+
+- `services/requester/bundler.go` - Added blocks field, updated height calls
+- `bootstrap/bootstrap.go` - Pass blocks to NewBundler
+- `services/requester/bundler_test.go` - Updated all test calls
+- `services/requester/bundler_height_test.go` - New test to verify fix
 
 ## Next Steps
 
-1. Rebuild and redeploy with these changes
-2. Send a UserOperation
-3. Check logs for the new `RPC call returned error` message
-4. Analyze the `returnedDataHex` field to determine if revert data is being returned from the RPC
-
-## Diagnostic Command
-
-Use this command to see the new logging:
-
-```bash
-sudo journalctl -u flow-evm-gateway -f | grep -vE "new evm block executed event|received new cadence evm events|received \`NotifyBlock\`|ingesting new transaction|component.*ingestion|new evm block|block.*height|block.*number|evm.*block|NotifyBlock" | grep -E "returnedDataHex|returnedDataLen|errorCode|errorMessage|RPC call returned error"
-```
-
+1. ✅ **Local testing complete** - All tests pass
+2. **Rebuild Docker image** - Use the rebuild instructions
+3. **Redeploy to EC2** - Follow redeploy instructions
+4. **Monitor logs** - Verify no more "entity not found" errors
+5. **Test UserOp submission** - Verify hash matches frontend

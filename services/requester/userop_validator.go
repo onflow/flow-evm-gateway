@@ -37,18 +37,17 @@ func NewUserOpValidator(
 	logger = logger.With().Str("component", "userop-validator").Logger()
 
 	// Log EntryPointSimulations configuration at startup
-	// EntryPointSimulationsAddress should be required (validated at startup), but log for visibility
+	// Best practice is to call EntryPoint.simulateValidation directly (EntryPointSimulationsAddress empty)
 	if config.EntryPointSimulationsAddress != (common.Address{}) {
-		logger.Info().
+		logger.Warn().
 			Str("entryPointAddress", config.EntryPointAddress.Hex()).
 			Str("entryPointSimulationsAddress", config.EntryPointSimulationsAddress.Hex()).
-			Msg("EntryPointSimulations configured - will use for simulateValidation calls")
+			Msg("EntryPointSimulations configured - legacy mode. Best practice is to unset this and call EntryPoint.simulateValidation directly.")
 		// Note: Function existence verification happens on first UserOp validation
 	} else {
-		// This should not happen if validation is working, but log as error if it does
-		logger.Error().
+		logger.Info().
 			Str("entryPointAddress", config.EntryPointAddress.Hex()).
-			Msg("EntryPointSimulations not configured - this should have been caught at startup. Gateway will fail simulation calls.")
+			Msg("EntryPointSimulations not configured - will call EntryPoint.simulateValidation directly (recommended)")
 	}
 
 	return &UserOpValidator{
@@ -134,92 +133,37 @@ func (v *UserOpValidator) Validate(
 			Msg("signature before normalization check")
 	}
 
-	// Normalize signature v value for SimpleAccount compatibility
-	// SimpleAccount expects v=0 or 1 (recovery ID, ERC-4337 format), but frontends may send v=27/28 (EIP-155 format)
+	// Do NOT normalize signature v value - pass it through as-is
+	// The trace shows that ecrecover with v=27 works and validateUserOp returns success
+	// OpenZeppelin's ECDSA.recover() accepts both v=0/1 and v=27/28 formats
+	// We let the contract handle the signature format directly
 	if len(userOp.Signature) >= 65 {
 		vByte := userOp.Signature[64]
-		if vByte == 27 || vByte == 28 {
-			// Convert EIP-155 format (v=27/28) to ERC-4337 format (v=0/1) for SimpleAccount
-			// v=27 -> v=0, v=28 -> v=1
-			normalizedV := byte(vByte - 27)
-			userOp.Signature[64] = normalizedV
-			v.logger.Info().
-				Uint8("originalV", vByte).
-				Uint8("normalizedV", normalizedV).
-				Str("sender", userOp.Sender.Hex()).
-				Str("signatureHex_after", hexutil.Encode(userOp.Signature)).
-				Str("signatureLastByte_after", hexutil.Encode(userOp.Signature[64:65])).
-				Msg("normalized signature v value from EIP-155 format (27/28) to ERC-4337 format (0/1) for SimpleAccount compatibility")
-		} else if vByte == 0 || vByte == 1 {
-			v.logger.Info().
-				Uint8("signatureV", vByte).
-				Str("sender", userOp.Sender.Hex()).
-				Msg("signature v value is already in ERC-4337 format (0/1), no normalization needed")
-		} else {
-			v.logger.Warn().
-				Uint8("signatureV", vByte).
-				Str("sender", userOp.Sender.Hex()).
-				Msg("signature v value is neither EIP-155 (27/28) nor ERC-4337 (0/1) format - this may cause validation to fail")
-		}
+		v.logger.Debug().
+			Uint8("signatureV", vByte).
+			Str("sender", userOp.Sender.Hex()).
+			Msg("signature v value passed through without normalization")
 	}
 
-	// Verify signature
-	// For account creation (initCode present), skip off-chain signature validation
-	// because the sender doesn't exist yet. EntryPoint.simulateValidation will
-	// correctly validate the signature against the owner address from initCode.
-	chainID := v.config.EVMNetworkID
-	isAccountCreation := len(userOp.InitCode) > 0
+	// NO MANUAL SIGNATURE VERIFICATION - EntryPoint.simulateValidation() handles signature validation
+	// For both account creation and existing accounts, EntryPoint will validate the signature
+	// We only do basic validation (signature length, etc.) and let the contract handle the rest
+	if len(userOp.Signature) < 65 {
+		return fmt.Errorf("signature too short: %d bytes", len(userOp.Signature))
+	}
 
+	isAccountCreation := len(userOp.InitCode) > 0
 	if isAccountCreation {
 		// For account creation, EntryPoint validates signature against owner from initCode
 		v.logger.Debug().
 			Str("sender", userOp.Sender.Hex()).
 			Int("initCodeLen", len(userOp.InitCode)).
-			Msg("skipping off-chain signature validation for account creation - EntryPoint will validate against owner")
+			Msg("skipping off-chain signature validation for account creation - EntryPoint.simulateValidation() will validate against owner")
 	} else {
-		// For existing accounts, validate signature against sender
-		hash, err := userOp.Hash(entryPoint, chainID)
-		if err != nil {
-			return fmt.Errorf("failed to compute userOp hash: %w", err)
-		}
-
-		valid, err := userOp.VerifySignature(entryPoint, chainID)
-		if err != nil {
-			v.logger.Error().
-				Err(err).
-				Str("userOpHash", hash.Hex()).
-				Str("sender", userOp.Sender.Hex()).
-				Uint("v", uint(userOp.Signature[64])).
-				Msg("signature verification failed")
-			return fmt.Errorf("signature verification failed: %w", err)
-		}
-		if !valid {
-			// Recover address for logging
-			sigHash := crypto.Keccak256Hash(
-				[]byte("\x19\x01"),
-				chainID.Bytes(),
-				hash.Bytes(),
-			)
-			sigV := uint(userOp.Signature[64])
-			pubKey, err := crypto.SigToPub(sigHash.Bytes(), append(userOp.Signature[:64], byte(sigV)))
-			var recoveredAddr common.Address
-			if err == nil {
-				recoveredAddr = crypto.PubkeyToAddress(*pubKey)
-			}
-
-			v.logger.Error().
-				Str("userOpHash", hash.Hex()).
-				Str("sender", userOp.Sender.Hex()).
-				Str("recoveredAddr", recoveredAddr.Hex()).
-				Uint("v", sigV).
-				Msg("invalid user operation signature - recovered address does not match sender")
-			return fmt.Errorf("invalid user operation signature: recovered address %s does not match sender %s", recoveredAddr.Hex(), userOp.Sender.Hex())
-		}
-
+		// For existing accounts, EntryPoint validates signature against sender
 		v.logger.Debug().
-			Str("userOpHash", hash.Hex()).
 			Str("sender", userOp.Sender.Hex()).
-			Msg("off-chain signature validation passed for existing account")
+			Msg("skipping off-chain signature validation for existing account - EntryPoint.simulateValidation() will validate signature")
 	}
 
 	// Simulate validation via EntryPoint
@@ -291,13 +235,13 @@ func (v *UserOpValidator) simulateValidation(
 	// NOT as a separately deployed contract. When deployed separately, it computes a different senderCreator
 	// address, causing factory calls to fail. Best practice is to call EntryPoint.simulateValidation directly.
 	var simulationAddress common.Address
-	usePackedFormat := false
+	isUsingEntryPointSimulations := false
 	
 	if v.config.EntryPointSimulationsAddress != (common.Address{}) {
 		// EntryPointSimulations is configured, but we should prefer EntryPoint directly
 		// Only use EntryPointSimulations if explicitly configured (for backwards compatibility)
 		simulationAddress = v.config.EntryPointSimulationsAddress
-		usePackedFormat = true
+		isUsingEntryPointSimulations = true
 		v.logger.Warn().
 			Str("entryPoint", entryPoint.Hex()).
 			Str("entryPointSimulationsAddress", v.config.EntryPointSimulationsAddress.Hex()).
@@ -306,34 +250,22 @@ func (v *UserOpValidator) simulateValidation(
 	} else {
 		// Call EntryPoint directly - this is the recommended approach
 		simulationAddress = entryPoint
-		usePackedFormat = false // EntryPoint v0.6 uses standard format, but we'll try packed format for v0.7+
+		isUsingEntryPointSimulations = false
 		v.logger.Info().
 			Str("entryPoint", entryPoint.Hex()).
 			Str("simulationAddress", simulationAddress.Hex()).
 			Msg("calling EntryPoint.simulateValidation directly (recommended) - EntryPointSimulations not configured")
 	}
 
-	// Encode simulateValidation calldata
-	// Use PackedUserOperation format for EntryPointSimulations (v0.7+), standard format for EntryPoint (v0.6)
+	// Try packed format first (EntryPoint v0.7+ supports it, EntryPointSimulations requires it)
+	// If the call fails with "function not found" (empty revert + selector not in bytecode),
+	// fall back to standard format (EntryPoint v0.6)
 	var calldata []byte
 	var err error
-	if usePackedFormat {
-		// EntryPointSimulations uses PackedUserOperation format
-		calldata, err = EncodeSimulateValidationPacked(userOp)
-		if err != nil {
-			return fmt.Errorf("failed to encode simulateValidation (packed): %w", err)
-		}
-	} else {
-		// Try packed format first (v0.7+ EntryPoint may support it)
-		// If that fails, fall back to standard format
-		calldata, err = EncodeSimulateValidationPacked(userOp)
-		if err != nil {
-			// Fall back to standard format
-			calldata, err = EncodeSimulateValidation(userOp)
-			if err != nil {
-				return fmt.Errorf("failed to encode simulateValidation: %w", err)
-			}
-		}
+	usePackedFormat := true // Start with packed format
+	calldata, err = EncodeSimulateValidationPacked(userOp)
+	if err != nil {
+		return fmt.Errorf("failed to encode simulateValidation (packed): %w", err)
 	}
 
 	// Get latest indexed block height (not network's latest, which may not be indexed yet)
@@ -369,14 +301,31 @@ func (v *UserOpValidator) simulateValidation(
 		}
 	}
 
-	// Calculate UserOp hash for logging (EntryPoint v0.9.0 format)
-	userOpHash, err := userOp.Hash(entryPoint, v.config.EVMNetworkID)
+	// Calculate UserOp hash - MUST use EntryPoint.getUserOpHash() for authoritative hash
+	// NO FALLBACKS - if this fails, validation fails
+	// height is already declared above, so we can reuse it
+	userOpHash, err := v.requester.GetUserOpHash(ctx, userOp, entryPoint, height)
 	if err != nil {
-		v.logger.Warn().Err(err).Msg("failed to calculate UserOp hash for logging")
-		userOpHash = common.Hash{} // Use zero hash if calculation fails
+		// CRITICAL: Log at ERROR level with full context
+		v.logger.Error().
+			Err(err).
+			Str("sender", userOp.Sender.Hex()).
+			Str("entryPoint", entryPoint.Hex()).
+			Uint64("height", height).
+			Str("nonce", userOp.Nonce.String()).
+			Msg("CRITICAL: GetUserOpHash() FAILED - validation cannot proceed without contract hash")
+		return fmt.Errorf("failed to get UserOp hash from EntryPoint.getUserOpHash() - this is required, no fallback: %w", err)
 	}
+	
+	// CRITICAL: Log the hash we got from the contract at INFO level so it's always visible
+	v.logger.Info().
+		Str("userOpHash_from_contract", userOpHash.Hex()).
+		Str("sender", userOp.Sender.Hex()).
+		Str("entryPoint", entryPoint.Hex()).
+		Uint64("height", height).
+		Msg("CRITICAL: Got hash from EntryPoint.getUserOpHash() - this is the authoritative hash")
 
-	// Extract owner from initCode if present (for account creation)
+	// Extract owner from initCode if present (for account creation) - for logging only
 	var ownerAddr common.Address
 	var ownerExtracted bool
 	if len(userOp.InitCode) > 0 {
@@ -401,129 +350,8 @@ func (v *UserOpValidator) simulateValidation(
 		}
 	}
 
-	// Recover signer from signature for logging
-	var recoveredSigner common.Address
-	var signatureRecovered bool
-	if len(userOp.Signature) >= 65 {
-		// IMPORTANT: The frontend signs the UserOp hash directly (not EIP-191 format)
-		// We must use the UserOp hash for recovery, not a separate sigHash
-		// The signature is over: userOpHash (not keccak256("\x19\x01" || chainId || userOpHash))
-		hashForRecovery := userOpHash
-
-		// Extract r, s, v from signature
-		// Signature format: r (32 bytes) || s (32 bytes) || v (1 byte) = 65 bytes total
-		r := userOp.Signature[0:32]
-		s := userOp.Signature[32:64]
-		sigV := userOp.Signature[64]
-
-		// Convert EIP-155 v value (27/28) to recovery ID (0/1) for Ecrecover
-		// Ecrecover expects recovery ID: v=27 -> recoveryID=0, v=28 -> recoveryID=1
-		// For ERC-4337 (v=0/1), use directly as recovery ID
-		recoveryID := sigV
-		if sigV == 27 {
-			recoveryID = 0
-		} else if sigV == 28 {
-			recoveryID = 1
-		}
-		// Create a copy of the signature with the recovery ID to avoid modifying the original
-		// CRITICAL: We must copy the slice to avoid modifying userOp.Signature's underlying array
-		signature := make([]byte, 65)
-		copy(signature[:64], userOp.Signature[:64])
-		signature[64] = recoveryID
-
-		// Log detailed signature parsing and recovery attempt
-		v.logger.Info().
-			Str("hashForRecovery", hashForRecovery.Hex()).
-			Str("userOpHash", userOpHash.Hex()).
-			Str("chainID", v.config.EVMNetworkID.String()).
-			Int("signatureLength", len(userOp.Signature)).
-			Str("r", hexutil.Encode(r)).
-			Str("s", hexutil.Encode(s)).
-			Uint8("signatureV", sigV).
-			Uint8("recoveryID", recoveryID).
-			Msg("attempting signature recovery using UserOp hash directly")
-
-		// Handle both ERC-4337 format (v=0/1) and traditional Ethereum format (v=27/28)
-		// Try with the converted recovery ID first
-		// Use UserOp hash directly for recovery (frontend signs UserOp hash, not EIP-191 hash)
-		var recoveryErr error
-		pubKeyBytes, err := crypto.Ecrecover(hashForRecovery.Bytes(), signature)
-		if err != nil {
-			recoveryErr = err
-		}
-
-		if err == nil && len(pubKeyBytes) == 65 {
-			// Extract address from public key: keccak256(pubKey[1:])[12:]
-			// Ecrecover returns uncompressed public key (0x04 || x || y)
-			pubKeyHash := crypto.Keccak256(pubKeyBytes[1:])
-			recoveredSigner = common.BytesToAddress(pubKeyHash[12:])
-			signatureRecovered = true
-			v.logger.Info().
-				Str("recoveredSigner", recoveredSigner.Hex()).
-				Uint8("signatureV", sigV).
-				Msg("signature recovery succeeded")
-		} else {
-			// If recovery failed, try alternative recovery IDs
-			// For ERC-4337: try recoveryID=1 if recoveryID=0 failed, or vice versa
-			// For traditional format: try recoveryID=1 if recoveryID=0 failed (v=27 -> recoveryID=0, v=28 -> recoveryID=1)
-			var triedAlt bool
-			if recoveryID == 0 {
-				// Create a copy to avoid modifying the original signature
-				signatureAlt := make([]byte, 65)
-				copy(signatureAlt[:64], userOp.Signature[:64])
-				signatureAlt[64] = byte(1)
-				pubKeyBytes, err := crypto.Ecrecover(hashForRecovery.Bytes(), signatureAlt)
-				if err == nil && len(pubKeyBytes) == 65 {
-					pubKeyHash := crypto.Keccak256(pubKeyBytes[1:])
-					recoveredSigner = common.BytesToAddress(pubKeyHash[12:])
-					signatureRecovered = true
-					triedAlt = true
-					v.logger.Info().
-						Str("recoveredSigner", recoveredSigner.Hex()).
-						Uint8("originalV", sigV).
-						Uint8("originalRecoveryID", recoveryID).
-						Uint8("usedRecoveryID", 1).
-						Msg("signature recovery succeeded with alternative recovery ID")
-				}
-			} else if recoveryID == 1 {
-				// Create a copy to avoid modifying the original signature
-				signatureAlt := make([]byte, 65)
-				copy(signatureAlt[:64], userOp.Signature[:64])
-				signatureAlt[64] = byte(0)
-				pubKeyBytes, err := crypto.Ecrecover(hashForRecovery.Bytes(), signatureAlt)
-				if err == nil && len(pubKeyBytes) == 65 {
-					pubKeyHash := crypto.Keccak256(pubKeyBytes[1:])
-					recoveredSigner = common.BytesToAddress(pubKeyHash[12:])
-					signatureRecovered = true
-					triedAlt = true
-					v.logger.Info().
-						Str("recoveredSigner", recoveredSigner.Hex()).
-						Uint8("originalV", sigV).
-						Uint8("originalRecoveryID", recoveryID).
-						Uint8("usedRecoveryID", 0).
-						Msg("signature recovery succeeded with alternative recovery ID")
-				}
-			}
-
-			if !signatureRecovered {
-				// Log detailed error information
-				v.logger.Warn().
-					Uint8("signatureV", sigV).
-					Int("signatureLength", len(userOp.Signature)).
-					Str("r", hexutil.Encode(r)).
-					Str("s", hexutil.Encode(s)).
-					Str("hashForRecovery", hashForRecovery.Hex()).
-					Str("userOpHash", userOpHash.Hex()).
-					Bool("triedAlternative", triedAlt).
-					Err(recoveryErr).
-					Msg("failed to recover signer from signature - ecrecover returned error or invalid public key")
-			}
-		}
-	} else {
-		v.logger.Warn().
-			Int("signatureLength", len(userOp.Signature)).
-			Msg("signature too short for recovery (expected 65 bytes)")
-	}
+	// NO MANUAL SIGNATURE RECOVERY - EntryPoint.simulateValidation() handles signature validation
+	// We only log the UserOp hash (from contract) and signature details for debugging
 
 	// Log EntryPoint address and UserOp details for debugging
 	// Using Info level so this always shows (Debug might be filtered)
@@ -544,19 +372,11 @@ func (v *UserOpValidator) simulateValidation(
 		Int("calldataLen", len(calldata)).
 		Str("chainID", v.config.EVMNetworkID.String())
 
-	// Add owner and signature recovery info if available
+	// Add owner info if available (for account creation UserOps)
 	if ownerExtracted {
 		logFields = logFields.
 			Str("ownerFromInitCode", ownerAddr.Hex()).
 			Bool("ownerExtracted", true)
-	}
-	if signatureRecovered {
-		logFields = logFields.
-			Str("recoveredSigner", recoveredSigner.Hex()).
-			Bool("signatureRecovered", true)
-		if ownerExtracted {
-			logFields = logFields.Bool("signerMatchesOwner", recoveredSigner == ownerAddr)
-		}
 	}
 
 	// Add signature v value and full signature hex for debugging
@@ -585,7 +405,7 @@ func (v *UserOpValidator) simulateValidation(
 			v.logger.Warn().
 				Str("sender", userOp.Sender.Hex()).
 				Uint8("signatureV", sigVAtLogTime).
-				Msg("WARNING: signature v value is in EIP-155 format (27/28) but should be normalized to 0/1 for SimpleAccount")
+				Msg("WARNING: signature v value is in EIP-155 format (27/28) but SimpleAccount expects 0/1, so this may cause validation failures")
 		}
 	}
 
@@ -598,7 +418,7 @@ func (v *UserOpValidator) simulateValidation(
 	// Decode and verify the packed UserOp values before calling EntryPoint
 	// This helps catch packing errors (e.g., swapped gas limits)
 	// We manually extract the packed values from the calldata since we know the structure
-	if usePackedFormat && len(calldata) >= 4 {
+	if usePackedFormat && isUsingEntryPointSimulations && len(calldata) >= 4 {
 		// PackedUserOperation structure (after selector):
 		// - sender (address, 32 bytes padded)
 		// - nonce (uint256, 32 bytes)
@@ -656,6 +476,54 @@ func (v *UserOpValidator) simulateValidation(
 	// Call simulateValidation (on EntryPointSimulations for v0.7+, or EntryPoint for v0.6)
 	// simulateValidation always reverts (either with ValidationResult for success or FailedOp for failure)
 	_, err = v.requester.Call(txArgs, v.config.Coinbase, height, nil, nil)
+	
+	// If packed format failed with "function not found", try standard format (EntryPoint v0.6)
+	if err != nil && !isUsingEntryPointSimulations && usePackedFormat {
+		if revertErr, ok := err.(*errs.RevertError); ok {
+			var revertData []byte
+			if revertErr.Reason != "" && revertErr.Reason != "0x" {
+				if data, decodeErr := hexutil.Decode(revertErr.Reason); decodeErr == nil {
+					revertData = data
+				}
+			}
+			
+			// Check if it's an empty revert (function not found)
+			if len(revertData) == 0 {
+				selector := calldata[:4]
+				simulationCode, codeErr := v.requester.GetCode(simulationAddress, height)
+				selectorExists := false
+				if codeErr == nil {
+					selectorExists = bytes.Contains(simulationCode, selector)
+				}
+				
+				if !selectorExists {
+					// Function doesn't exist - try fallback to standard format
+					v.logger.Info().
+						Str("functionSelector", hexutil.Encode(selector)).
+						Str("simulationAddress", simulationAddress.Hex()).
+						Msg("packed format simulateValidation not found - falling back to standard format")
+					
+					// Retry with standard format
+					calldata, err = EncodeSimulateValidation(userOp)
+					if err != nil {
+						return fmt.Errorf("failed to encode simulateValidation (standard): %w", err)
+					}
+					
+					usePackedFormat = false
+					txArgs = ethTypes.TransactionArgs{
+						To:   &simulationAddress,
+						Data: (*hexutil.Bytes)(&calldata),
+					}
+					
+					// Retry the call with standard format
+					// Note: This will still return an error (RevertError) because simulateValidation always reverts
+					// We'll handle it in the normal error handling below
+					_, err = v.requester.Call(txArgs, v.config.Coinbase, height, nil, nil)
+				}
+			}
+		}
+	}
+	
 	if err != nil {
 		// Log detailed error for debugging
 		v.logger.Error().
@@ -664,7 +532,8 @@ func (v *UserOpValidator) simulateValidation(
 			Str("simulationAddress", simulationAddress.Hex()).
 			Str("sender", userOp.Sender.Hex()).
 			Uint64("height", height).
-			Bool("usingSimulationsContract", usePackedFormat).
+			Bool("isUsingEntryPointSimulations", isUsingEntryPointSimulations).
+			Bool("usePackedFormat", usePackedFormat).
 			Msg("simulateValidation call failed")
 
 		// Check if it's a revert error (expected - simulateValidation always reverts with result)
@@ -694,15 +563,9 @@ func (v *UserOpValidator) simulateValidation(
 							Int("initCodeLen", len(userOp.InitCode)).
 							Uint64("height", height)
 
-			// Add owner and signature recovery info if available
+			// Add owner info if available (for account creation UserOps)
 			if ownerExtracted {
 				revertLog = revertLog.Str("ownerFromInitCode", ownerAddr.Hex())
-			}
-			if signatureRecovered {
-				revertLog = revertLog.Str("recoveredSigner", recoveredSigner.Hex())
-				if ownerExtracted {
-					revertLog = revertLog.Bool("signerMatchesOwner", recoveredSigner == ownerAddr)
-				}
 			}
 
 			// Add decoded result info
@@ -736,19 +599,22 @@ func (v *UserOpValidator) simulateValidation(
 				// When using EntryPointSimulations for account creation (initCode != 0, sender not deployed),
 				// simulateValidation will always revert with AA13 "initCode failed or OOG" due to simulation context.
 				// This is expected behavior and does not mean the actual handleOps transaction will fail.
+				// CRITICAL: Only accept AA13 as "expected" when actually using EntryPointSimulations.
+				// If calling EntryPoint directly, AA13 indicates a real validation failure.
 				isAccountCreation := len(userOp.InitCode) > 0
-				if isAccountCreation {
+				if isAccountCreation && isUsingEntryPointSimulations {
 					// Verify sender doesn't exist yet (account creation case)
 					accountCode, err := v.requester.GetCode(userOp.Sender, height)
 					senderNotDeployed := (err != nil || len(accountCode) == 0)
 					
 					if decodedResult.AAErrorCode == "AA13" && senderNotDeployed {
-						// AA13 for account creation is expected when using EntryPointSimulations
+						// AA13 for account creation is expected ONLY when using EntryPointSimulations
 						v.logger.Info().
 							Str("decodedResult", decodedResult.Decoded).
 							Str("aaErrorCode", decodedResult.AAErrorCode).
 							Str("sender", userOp.Sender.Hex()).
 							Int("initCodeLen", len(userOp.InitCode)).
+							Bool("isUsingEntryPointSimulations", true).
 							Msg("AA13 during simulation is expected for account-creation UserOps when using EntryPointSimulations; proceeding to enqueue. This does not indicate the actual handleOps transaction will fail.")
 						// Accept the UserOp - AA13 is expected for account creation in simulation
 						return nil
@@ -787,7 +653,7 @@ func (v *UserOpValidator) simulateValidation(
 				selectorHex := hexutil.Encode(calldata[:4])
 				selector := calldata[:4]
 
-				// Check if the function selector exists in EntryPointSimulations bytecode
+				// Check if the function selector exists in bytecode
 				// This helps diagnose if the function actually exists or not
 				simulationCode, err := v.requester.GetCode(simulationAddress, height)
 				selectorExists := false
@@ -808,8 +674,8 @@ func (v *UserOpValidator) simulateValidation(
 						Int("simulationCodeLength", codeLength).
 						Bool("selectorExistsInBytecode", false).
 						Str("sender", userOp.Sender.Hex()).
-						Msg("simulateValidation function does not exist on EntryPointSimulations (selector not found in bytecode). Empty revert indicates function call fell through to fallback. This EntryPointSimulations contract may not have the simulateValidation function or may use a different function signature.")
-					return fmt.Errorf("simulation failed: simulateValidation not implemented on EntryPointSimulations contract at %s (selector %s not found in bytecode). The contract may not have this function or may use a different signature", simulationAddress.Hex(), selectorHex)
+						Msg("simulateValidation function does not exist (selector not found in bytecode). Empty revert indicates function call fell through to fallback.")
+					return fmt.Errorf("simulation failed: simulateValidation not implemented at %s (selector %s not found in bytecode). The contract may not have this function or may use a different signature", simulationAddress.Hex(), selectorHex)
 				}
 
 				// Selector exists but still empty revert - unusual case
@@ -1401,16 +1267,20 @@ func (v *UserOpValidator) EstimateGas(
 	userOp *models.UserOperation,
 	entryPoint common.Address,
 ) (*UserOpGasEstimate, error) {
-	// Encode simulateValidation calldata
-	calldata, err := EncodeSimulateValidation(userOp)
-	if err != nil {
-		return nil, fmt.Errorf("failed to encode simulateValidation: %w", err)
-	}
-
 	// Get latest indexed block height (not network's latest, which may not be indexed yet)
 	height, err := v.blocks.LatestEVMHeight()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get latest indexed height: %w", err)
+	}
+
+	// Try packed format first (EntryPoint v0.7+ supports it), fall back to standard format if needed
+	// This matches the strategy used in simulateValidation
+	var calldata []byte
+	usePackedFormat := true
+	
+	calldata, err = EncodeSimulateValidationPacked(userOp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode simulateValidation (packed): %w", err)
 	}
 
 	// Create transaction args for eth_estimateGas
@@ -1419,8 +1289,42 @@ func (v *UserOpValidator) EstimateGas(
 		Data: (*hexutil.Bytes)(&calldata),
 	}
 
-	// Estimate gas
+	// Estimate gas with packed format
 	gasLimit, err := v.requester.EstimateGas(txArgs, v.config.Coinbase, height, nil, nil)
+	
+	// If packed format fails, try standard format (EntryPoint v0.6)
+	if err != nil && usePackedFormat {
+		// Check if it's a "function not found" error by trying to verify selector exists
+		selector := calldata[:4]
+		entryPointCode, codeErr := v.requester.GetCode(entryPoint, height)
+		selectorExists := false
+		if codeErr == nil {
+			selectorExists = bytes.Contains(entryPointCode, selector)
+		}
+		
+		if !selectorExists {
+			// Function doesn't exist - try fallback to standard format
+			v.logger.Info().
+				Str("functionSelector", hexutil.Encode(selector)).
+				Str("entryPoint", entryPoint.Hex()).
+				Msg("packed format simulateValidation not found in EstimateGas - falling back to standard format")
+			
+			// Retry with standard format
+			calldata, err = EncodeSimulateValidation(userOp)
+			if err != nil {
+				return nil, fmt.Errorf("failed to encode simulateValidation (standard): %w", err)
+			}
+			
+			txArgs = ethTypes.TransactionArgs{
+				To:   &entryPoint,
+				Data: (*hexutil.Bytes)(&calldata),
+			}
+			
+			// Retry the estimate with standard format
+			gasLimit, err = v.requester.EstimateGas(txArgs, v.config.Coinbase, height, nil, nil)
+		}
+	}
+	
 	if err != nil {
 		return nil, fmt.Errorf("failed to estimate gas: %w", err)
 	}

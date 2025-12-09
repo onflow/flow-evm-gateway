@@ -90,6 +90,10 @@ type Requester interface {
 
 	// GetLatestEVMHeight returns the latest EVM height of the network.
 	GetLatestEVMHeight(ctx context.Context) (uint64, error)
+
+	// GetUserOpHash calls EntryPoint.getUserOpHash() to get the authoritative hash
+	// This ensures the gateway uses the exact same hash calculation as EntryPoint
+	GetUserOpHash(ctx context.Context, userOp *models.UserOperation, entryPoint common.Address, height uint64) (common.Hash, error)
 }
 
 var _ Requester = &EVM{}
@@ -536,6 +540,76 @@ func (e *EVM) GetLatestEVMHeight(ctx context.Context) (uint64, error) {
 		Msg("get latest evm height executed")
 
 	return height, nil
+}
+
+func (e *EVM) GetUserOpHash(ctx context.Context, userOp *models.UserOperation, entryPoint common.Address, height uint64) (common.Hash, error) {
+	// EntryPoint v0.9.0 getUserOpHash uses PackedUserOperation format
+	// IMPORTANT: getUserOpHash must be called with an EMPTY signature (0x) because the hash
+	// is what gets signed - the signature signs the hash, so the hash cannot include the signature.
+	// This matches ERC-4337 spec: the hash is calculated from all UserOp fields EXCEPT signature.
+	packedOp := PackedUserOperationABI{
+		Sender:             userOp.Sender,
+		Nonce:              userOp.Nonce,
+		InitCode:           userOp.InitCode,
+		CallData:           userOp.CallData,
+		AccountGasLimits:   packAccountGasLimits(userOp.CallGasLimit, userOp.VerificationGasLimit),
+		PreVerificationGas: userOp.PreVerificationGas,
+		GasFees:            packGasFees(userOp.MaxFeePerGas, userOp.MaxPriorityFeePerGas),
+		PaymasterAndData:   userOp.PaymasterAndData,
+		Signature:          []byte{}, // Empty signature - hash is calculated WITHOUT signature
+	}
+
+	// Encode the function call using PackedUserOperation format (EntryPoint v0.9.0)
+	calldata, err := entryPointABIParsed.Pack("getUserOpHash", packedOp)
+	if err != nil {
+		return common.Hash{}, fmt.Errorf("failed to encode getUserOpHash: %w", err)
+	}
+
+	// Call EntryPoint.getUserOpHash
+	txArgs := ethTypes.TransactionArgs{
+		To:   &entryPoint,
+		Data: (*hexutil.Bytes)(&calldata),
+	}
+
+	result, err := e.Call(txArgs, common.Address{}, height, nil, nil)
+	if err != nil {
+		// CRITICAL: Log the error at ERROR level so it's always visible
+		e.logger.Error().
+			Err(err).
+			Str("sender", userOp.Sender.Hex()).
+			Str("entryPoint", entryPoint.Hex()).
+			Uint64("height", height).
+			Str("calldata", hexutil.Encode(calldata)).
+			Msg("CRITICAL: EntryPoint.getUserOpHash() call FAILED - this should NEVER happen")
+		return common.Hash{}, fmt.Errorf("failed to call getUserOpHash: %w", err)
+	}
+
+	// Decode the result (bytes32)
+	if len(result) < 32 {
+		e.logger.Error().
+			Int("resultLength", len(result)).
+			Str("sender", userOp.Sender.Hex()).
+			Str("entryPoint", entryPoint.Hex()).
+			Uint64("height", height).
+			Str("resultHex", hexutil.Encode(result)).
+			Msg("CRITICAL: EntryPoint.getUserOpHash() returned invalid result length")
+		return common.Hash{}, fmt.Errorf("getUserOpHash returned invalid result length: %d", len(result))
+	}
+
+	var hash common.Hash
+	copy(hash[:], result[:32])
+	
+	// CRITICAL: Log at INFO level so it's always visible - this is the hash from the contract
+	e.logger.Info().
+		Str("userOpHash_from_contract", hash.Hex()).
+		Str("sender", userOp.Sender.Hex()).
+		Str("entryPoint", entryPoint.Hex()).
+		Uint64("height", height).
+		Str("calldata", hexutil.Encode(calldata)).
+		Str("result", hexutil.Encode(result)).
+		Msg("EntryPoint.getUserOpHash() returned hash - THIS IS THE AUTHORITATIVE HASH")
+	
+	return hash, nil
 }
 
 func (e *EVM) getBlockView(

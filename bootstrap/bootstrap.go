@@ -68,18 +68,21 @@ type Publishers struct {
 }
 
 type Bootstrap struct {
-	logger     zerolog.Logger
-	config     config.Config
-	client     *requester.CrossSporkClient
-	storages   *Storages
-	publishers *Publishers
-	collector  metrics.Collector
-	server     *api.Server
-	metrics    *metricsWrapper
-	events     *ingestion.Engine
-	profiler   *api.ProfileServer
-	db         *pebbleDB.DB
-	keystore   *keystore.KeyStore
+	logger              zerolog.Logger
+	config              config.Config
+	client              *requester.CrossSporkClient
+	storages            *Storages
+	publishers          *Publishers
+	collector           metrics.Collector
+	server              *api.Server
+	metrics             *metricsWrapper
+	events              *ingestion.Engine
+	profiler            *api.ProfileServer
+	db                  *pebbleDB.DB
+	keystore            *keystore.KeyStore
+	eventSubscriber     ingestion.EventSubscriber
+	eventBlocksProvider *replayer.BlocksProvider
+	eventReplayerConfig replayer.Config
 }
 
 func New(config config.Config) (*Bootstrap, error) {
@@ -189,27 +192,13 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 		ValidateResults:     true,
 	}
 
-	// initialize event ingestion engine
-	b.events = ingestion.NewEventIngestionEngine(
-		subscriber,
-		blocksProvider,
-		b.storages.Storage,
-		b.storages.Registers,
-		b.storages.Blocks,
-		b.storages.Receipts,
-		b.storages.Transactions,
-		b.storages.Traces,
-		b.storages.UserOps,
-		b.config.EntryPointAddress,
-		b.publishers.Block,
-		b.publishers.Logs,
-		b.logger,
-		b.collector,
-		replayerConfig,
-		b.config.EVMNetworkID,
-	)
+	// Note: ingestion engine will be initialized in StartAPIServer after evm requester is created
+	// Store subscriber and blocksProvider for later initialization
+	b.eventSubscriber = subscriber
+	b.eventBlocksProvider = blocksProvider
+	b.eventReplayerConfig = replayerConfig
 
-	StartEngine(ctx, b.events, l)
+	// Don't start engine here - will be started in StartAPIServer after evm is created
 	return nil
 }
 
@@ -345,6 +334,32 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 		return fmt.Errorf("failed to create EVM requester: %w", err)
 	}
 
+	// Initialize event ingestion engine now that evm is available
+	if b.events == nil && b.eventSubscriber != nil {
+		b.events = ingestion.NewEventIngestionEngine(
+			b.eventSubscriber,
+			b.eventBlocksProvider,
+			b.storages.Storage,
+			b.storages.Registers,
+			b.storages.Blocks,
+			b.storages.Receipts,
+			b.storages.Transactions,
+			b.storages.Traces,
+			b.storages.UserOps,
+			evm, // Requester for EntryPoint.getUserOpHash()
+			b.config.EntryPointAddress,
+			b.publishers.Block,
+			b.publishers.Logs,
+			b.logger,
+			b.collector,
+			b.eventReplayerConfig,
+			b.config.EVMNetworkID,
+		)
+		// Start the engine now that it's initialized
+		l := b.logger.With().Str("component", "bootstrap").Logger()
+		StartEngine(ctx, b.events, l)
+	}
+
 	// create rate limiter for requests on the APIs. Tokens are number of requests allowed per 1 second interval
 	// if no limit is defined we specify max value, effectively disabling rate-limiting
 	rateLimit := b.config.RateLimit
@@ -424,8 +439,8 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 	// ERC-4337 UserOperation API setup
 	var userOpAPI *api.UserOpAPI
 	if b.config.BundlerEnabled {
-		// Create UserOperation pool
-		userOpPool := requester.NewInMemoryUserOpPool(b.config, b.logger)
+		// Create UserOperation pool (with requester and blocks for EntryPoint.getUserOpHash)
+		userOpPool := requester.NewInMemoryUserOpPool(b.config, b.logger, evm, b.storages.Blocks)
 
 		// Create validator
 		validator := requester.NewUserOpValidator(
@@ -443,6 +458,7 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 			b.logger,
 			txPool,
 			evm,
+			b.storages.Blocks,
 		)
 
 		// Create UserOpAPI

@@ -2,6 +2,7 @@ package ingestion
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"strings"
 	"time"
@@ -55,6 +56,7 @@ type Engine struct {
 	transactions    storage.TransactionIndexer
 	traces          storage.TraceIndexer
 	userOps         storage.UserOperationIndexer
+	requester       requester.Requester
 	entryPointAddr  common.Address
 	log             zerolog.Logger
 	evmLastHeight   *models.SequentialHeight
@@ -75,6 +77,7 @@ func NewEventIngestionEngine(
 	transactions storage.TransactionIndexer,
 	traces storage.TraceIndexer,
 	userOps storage.UserOperationIndexer,
+	requester requester.Requester,
 	entryPointAddr common.Address,
 	blocksPublisher *models.Publisher[*models.Block],
 	logsPublisher *models.Publisher[[]*gethTypes.Log],
@@ -97,6 +100,7 @@ func NewEventIngestionEngine(
 		transactions:    transactions,
 		traces:          traces,
 		userOps:         userOps,
+		requester:       requester,
 		entryPointAddr:  entryPointAddr,
 		log:             log,
 		blocksPublisher: blocksPublisher,
@@ -478,15 +482,25 @@ func (e *Engine) indexUserOperationEvents(
 
 			// Process each UserOp in the batch
 			for i, userOp := range expectedUserOps {
-				// Calculate UserOp hash
-				userOpHash, err := userOp.Hash(e.entryPointAddr, e.evmChainID)
+				// MUST use EntryPoint.getUserOpHash() for authoritative hash - NO FALLBACKS
+				height, err := e.blocks.LatestEVMHeight()
 				if err != nil {
 					e.log.Warn().
 						Err(err).
 						Str("txHash", receipt.TxHash.Hex()).
 						Int("opIndex", i).
 						Str("sender", userOp.Sender.Hex()).
-						Msg("failed to calculate UserOp hash")
+						Msg("failed to get latest height for EntryPoint.getUserOpHash()")
+					continue
+				}
+				userOpHash, err := e.requester.GetUserOpHash(context.Background(), userOp, e.entryPointAddr, height)
+				if err != nil {
+					e.log.Warn().
+						Err(err).
+						Str("txHash", receipt.TxHash.Hex()).
+						Int("opIndex", i).
+						Str("sender", userOp.Sender.Hex()).
+						Msg("failed to get UserOp hash from EntryPoint.getUserOpHash()")
 					continue
 				}
 
@@ -659,12 +673,16 @@ func (e *Engine) indexUserOperationEvents(
 				var matchingUserOp *models.UserOperation
 				var opIndex int = -1
 				if decodeErr == nil {
-					for i, userOp := range expectedUserOps {
-						userOpHash, err := userOp.Hash(e.entryPointAddr, e.evmChainID)
-						if err == nil && userOpHash == revertReason.UserOpHash {
-							matchingUserOp = userOp
-							opIndex = i
-							break
+					// MUST use EntryPoint.getUserOpHash() for authoritative hash - NO FALLBACKS
+					height, heightErr := e.blocks.LatestEVMHeight()
+					if heightErr == nil {
+						for i, userOp := range expectedUserOps {
+							userOpHash, err := e.requester.GetUserOpHash(context.Background(), userOp, e.entryPointAddr, height)
+							if err == nil && userOpHash == revertReason.UserOpHash {
+								matchingUserOp = userOp
+								opIndex = i
+								break
+							}
 						}
 					}
 				}
@@ -682,6 +700,17 @@ func (e *Engine) indexUserOperationEvents(
 						selector := hexutil.Encode(receipt.RevertReason[:4])
 						// FailedOpWithRevert selector: keccak256("FailedOpWithRevert(uint256,string,bytes)")[:4] = 0x65c8fd4d
 						failedOpWithRevertSelector := hexutil.Encode(crypto.Keccak256([]byte("FailedOpWithRevert(uint256,string,bytes)"))[:4])
+						
+						// Log selector comparison for debugging
+						e.log.Info().
+							Str("txHash", receipt.TxHash.Hex()).
+							Str("selector", selector).
+							Str("failedOpWithRevertSelector", failedOpWithRevertSelector).
+							Bool("selectorsMatch", selector == failedOpWithRevertSelector).
+							Int("revertReasonLen", len(receipt.RevertReason)).
+							Int("receiptStatus", int(receipt.Status)).
+							Msg("checking if revertReason is FailedOpWithRevert")
+						
 						if selector == failedOpWithRevertSelector {
 							// Extract inner error selector first (most important for diagnostics)
 							innerSelector := e.extractErrorSelectorFromFailedOpWithRevert(receipt.RevertReason)
@@ -814,15 +843,19 @@ func (e *Engine) indexUserOperationEvents(
 					
 					// Try to identify which UserOps are missing
 					if len(expectedUserOps) > 0 {
-						for i, userOp := range expectedUserOps {
-							userOpHash, err := userOp.Hash(e.entryPointAddr, e.evmChainID)
-							if err == nil && !processedUserOpHashes[userOpHash] {
-								e.log.Warn().
-									Str("txHash", receipt.TxHash.Hex()).
-									Str("userOpHash", userOpHash.Hex()).
-									Str("sender", userOp.Sender.Hex()).
-									Int("opIndex", i).
-									Msg("UserOp missing from events - may have failed or event not emitted")
+						// MUST use EntryPoint.getUserOpHash() for authoritative hash - NO FALLBACKS
+						height, heightErr := e.blocks.LatestEVMHeight()
+						if heightErr == nil {
+							for i, userOp := range expectedUserOps {
+								userOpHash, err := e.requester.GetUserOpHash(context.Background(), userOp, e.entryPointAddr, height)
+								if err == nil && !processedUserOpHashes[userOpHash] {
+									e.log.Warn().
+										Str("txHash", receipt.TxHash.Hex()).
+										Str("userOpHash", userOpHash.Hex()).
+										Str("sender", userOp.Sender.Hex()).
+										Int("opIndex", i).
+										Msg("UserOp missing from events - may have failed or event not emitted")
+								}
 							}
 						}
 					}
@@ -1080,7 +1113,16 @@ func (e *Engine) extractInnerRevertFromFailedOpWithRevert(revertData []byte) str
 
 // extractErrorSelectorFromFailedOpWithRevert extracts the error selector from the inner revert data in FailedOpWithRevert
 func (e *Engine) extractErrorSelectorFromFailedOpWithRevert(revertData []byte) string {
+	// Always log entry to confirm function is being called
+	e.log.Info().
+		Int("revertDataLen", len(revertData)).
+		Str("revertDataHex", hexutil.Encode(revertData)).
+		Msg("extractErrorSelectorFromFailedOpWithRevert: called - starting extraction")
+	
 	if len(revertData) < 100 {
+		e.log.Info().
+			Int("revertDataLen", len(revertData)).
+			Msg("extractErrorSelectorFromFailedOpWithRevert: revertData too short (< 100 bytes)")
 		return ""
 	}
 	
@@ -1090,59 +1132,228 @@ func (e *Engine) extractErrorSelectorFromFailedOpWithRevert(revertData []byte) s
 	// - offset to reason string (32 bytes, offset 36-68) = should be 96
 	// - offset to bytes field (32 bytes, offset 68-100) = should be 160
 	// - reason string length (32 bytes, offset 100-132)
+	
 	// - reason string data (variable, offset 132+)
 	// - bytes length (32 bytes, at offset specified by bytes offset)
 	// - bytes data (variable, after bytes length)
 	
 	// Check offset to reason string (should be 96)
 	reasonOffset := new(big.Int).SetBytes(revertData[36:68])
-	if reasonOffset.Cmp(big.NewInt(96)) != 0 || len(revertData) < 100 {
+	if reasonOffset.Cmp(big.NewInt(96)) != 0 {
+		e.log.Info().
+			Str("reasonOffset", reasonOffset.String()).
+			Str("expectedOffset", "96").
+			Int("revertDataLen", len(revertData)).
+			Msg("extractErrorSelectorFromFailedOpWithRevert: reasonOffset != 96")
+		return ""
+	}
+	if len(revertData) < 100 {
+		e.log.Info().
+			Int("revertDataLen", len(revertData)).
+			Msg("extractErrorSelectorFromFailedOpWithRevert: revertData too short after reasonOffset check")
 		return ""
 	}
 	
 	// Get offset to bytes field (should be 160, but may vary based on reason string length)
 	bytesOffsetPtr := new(big.Int).SetBytes(revertData[68:100])
 	if bytesOffsetPtr.Cmp(big.NewInt(0)) == 0 {
+		e.log.Info().
+			Str("bytesOffsetPtr", bytesOffsetPtr.String()).
+			Msg("extractErrorSelectorFromFailedOpWithRevert: bytesOffsetPtr is zero")
 		return ""
 	}
 	bytesOffsetInt := int(bytesOffsetPtr.Int64())
 	
+	// Log the reason string details to understand the structure
+	reasonLenBytes := revertData[100:132]
+	reasonLen := new(big.Int).SetBytes(reasonLenBytes)
+	reasonLenInt := int(reasonLen.Int64())
+	reasonStart := 132
+	reasonEnd := reasonStart + reasonLenInt
+	reasonPaddedEnd := reasonStart + ((reasonLenInt + 31) / 32) * 32 // Round up to 32-byte boundary
+	
+	e.log.Info().
+		Int("reasonLenInt", reasonLenInt).
+		Int("reasonStart", reasonStart).
+		Int("reasonEnd", reasonEnd).
+		Int("reasonPaddedEnd", reasonPaddedEnd).
+		Int("bytesOffsetInt", bytesOffsetInt).
+		Str("reasonString", string(revertData[reasonStart:reasonEnd])).
+		Msg("extractErrorSelectorFromFailedOpWithRevert: reason string details")
+	
 	// Validate bytes offset is reasonable and we have enough data
 	// The offset should be at least 100 (after opIndex and offsets) and less than data length
-	if bytesOffsetInt < 100 || bytesOffsetInt >= len(revertData) {
+	if bytesOffsetInt < 100 {
+		e.log.Info().
+			Int("bytesOffsetInt", bytesOffsetInt).
+			Int("revertDataLen", len(revertData)).
+			Msg("extractErrorSelectorFromFailedOpWithRevert: bytesOffsetInt < 100")
+		return ""
+	}
+	if bytesOffsetInt >= len(revertData) {
+		e.log.Info().
+			Int("bytesOffsetInt", bytesOffsetInt).
+			Int("revertDataLen", len(revertData)).
+			Msg("extractErrorSelectorFromFailedOpWithRevert: bytesOffsetInt >= revertDataLen")
 		return ""
 	}
 	
 	// We need at least 32 bytes at the offset to read the bytes length
 	if len(revertData) < bytesOffsetInt+32 {
+		e.log.Info().
+			Int("bytesOffsetInt", bytesOffsetInt).
+			Int("revertDataLen", len(revertData)).
+			Int("requiredLen", bytesOffsetInt+32).
+			Msg("extractErrorSelectorFromFailedOpWithRevert: not enough data for bytes length word")
 		return ""
 	}
 	
-	// Read bytes length (32-byte word at bytesOffsetInt)
-	bytesLen := new(big.Int).SetBytes(revertData[bytesOffsetInt : bytesOffsetInt+32])
-	if bytesLen.Cmp(big.NewInt(0)) == 0 {
+	// The bytes offset pointer might point to padding instead of the actual bytes field
+	// If the expected offset (from reason string padding) differs, use that instead
+	actualBytesOffset := bytesOffsetInt
+	if reasonPaddedEnd != bytesOffsetInt && reasonPaddedEnd > 0 && reasonPaddedEnd < len(revertData) {
+		// Check if the expected offset has non-zero data (the bytes length)
+		expectedBytesLenBytes := revertData[reasonPaddedEnd : reasonPaddedEnd+32]
+		expectedBytesLen := new(big.Int).SetBytes(expectedBytesLenBytes)
+		if expectedBytesLen.Cmp(big.NewInt(0)) > 0 {
+			e.log.Info().
+				Int("bytesOffsetInt", bytesOffsetInt).
+				Int("reasonPaddedEnd", reasonPaddedEnd).
+				Str("expectedBytesLen", expectedBytesLen.String()).
+				Msg("extractErrorSelectorFromFailedOpWithRevert: using expected offset (reasonPaddedEnd) instead of bytesOffsetInt")
+			actualBytesOffset = reasonPaddedEnd
+		}
+	}
+	
+	// Read bytes length (32-byte word at actualBytesOffset)
+	// But first, check if we have enough data
+	if actualBytesOffset+32 > len(revertData) {
+		e.log.Info().
+			Int("actualBytesOffset", actualBytesOffset).
+			Int("revertDataLen", len(revertData)).
+			Int("requiredLen", actualBytesOffset+32).
+			Msg("extractErrorSelectorFromFailedOpWithRevert: not enough data for bytes length field")
 		return ""
 	}
-	bytesLenInt := int(bytesLen.Int64())
+	
+	bytesLenBytes := revertData[actualBytesOffset : actualBytesOffset+32]
+	
+	// Log the exact bytes we're reading
+	e.log.Info().
+		Int("actualBytesOffset", actualBytesOffset).
+		Int("bytesOffsetInt", bytesOffsetInt).
+		Int("sliceStart", actualBytesOffset).
+		Int("sliceEnd", actualBytesOffset+32).
+		Int("revertDataLen", len(revertData)).
+		Str("bytesLenHex", hexutil.Encode(bytesLenBytes)).
+		Str("bytesLenHexRaw", fmt.Sprintf("%x", bytesLenBytes)).
+		Int("bytesLenBytesLen", len(bytesLenBytes)).
+		Msg("extractErrorSelectorFromFailedOpWithRevert: raw bytes at offset")
+	
+	bytesLen := new(big.Int).SetBytes(bytesLenBytes)
+	
+	// Also try reading it as a uint64 to see if there's an endianness issue
+	var bytesLenUint64 uint64
+	if len(bytesLenBytes) >= 8 {
+		bytesLenUint64 = binary.BigEndian.Uint64(bytesLenBytes[24:32]) // Last 8 bytes
+	}
+	e.log.Info().
+		Str("bytesLenBigInt", bytesLen.String()).
+		Uint64("bytesLenUint64", bytesLenUint64).
+		Str("lastByte", hexutil.Encode(bytesLenBytes[31:32])).
+		Msg("extractErrorSelectorFromFailedOpWithRevert: bytes length interpretation")
+	
+	
+	// Check if bytesLen is actually 0 or if we're misreading it
+	// Sometimes the last byte might be the actual length (for small values)
+	bytesLenInt := 0
+	if bytesLen.Cmp(big.NewInt(0)) == 0 {
+		// Check the last byte - for small values like 4, it might be in the last byte
+		lastByte := bytesLenBytes[31]
+		if lastByte > 0 && lastByte <= 32 {
+			e.log.Info().
+				Int("actualBytesOffset", actualBytesOffset).
+				Str("bytesLenBigInt", bytesLen.String()).
+				Uint8("lastByte", lastByte).
+				Msg("extractErrorSelectorFromFailedOpWithRevert: bytesLen is zero but last byte suggests length - using last byte as length")
+			bytesLen = big.NewInt(int64(lastByte))
+			bytesLenInt = int(lastByte)
+		} else {
+			// Check if there's data after the length field that might be the actual bytes
+			if len(revertData) > actualBytesOffset+32 {
+				nextBytes := revertData[actualBytesOffset+32:]
+				e.log.Info().
+					Int("actualBytesOffset", actualBytesOffset).
+					Str("bytesLen", bytesLen.String()).
+					Int("nextBytesLen", len(nextBytes)).
+					Str("nextBytesHex", hexutil.Encode(nextBytes)).
+					Msg("extractErrorSelectorFromFailedOpWithRevert: bytesLen is zero, but there's data after the length field - checking if it's the inner revert data")
+				
+				// If the length is 0 but there's data, it might be that the bytes field is just the selector (4 bytes)
+				// Try to extract it directly
+				if len(nextBytes) >= 4 {
+					selector := hexutil.Encode(nextBytes[:4])
+					e.log.Info().
+						Str("extractedSelector", selector).
+						Msg("extractErrorSelectorFromFailedOpWithRevert: extracted selector from data after zero length field")
+					return selector
+				}
+			}
+			e.log.Info().
+				Int("actualBytesOffset", actualBytesOffset).
+				Str("bytesLen", bytesLen.String()).
+				Msg("extractErrorSelectorFromFailedOpWithRevert: bytesLen is zero and no data found")
+			return ""
+		}
+	} else {
+		bytesLenInt = int(bytesLen.Int64())
+	}
 	
 	// Validate bytes length is reasonable (at least 4 bytes for selector, not too large)
-	if bytesLenInt < 4 || bytesLenInt > len(revertData) {
+	if bytesLenInt < 4 {
+		e.log.Info().
+			Int("bytesLenInt", bytesLenInt).
+			Msg("extractErrorSelectorFromFailedOpWithRevert: bytesLenInt < 4 (need at least selector)")
+		return ""
+	}
+	if bytesLenInt > len(revertData) {
+		e.log.Info().
+			Int("bytesLenInt", bytesLenInt).
+			Int("revertDataLen", len(revertData)).
+			Msg("extractErrorSelectorFromFailedOpWithRevert: bytesLenInt > revertDataLen")
 		return ""
 	}
 	
 	// Validate we have enough data for the bytes field
-	// Need: bytesOffsetInt (offset) + 32 (length word) + bytesLenInt (actual bytes)
-	if len(revertData) < bytesOffsetInt+32+bytesLenInt {
+	// Need: actualBytesOffset (offset) + 32 (length word) + bytesLenInt (actual bytes)
+	requiredLen := actualBytesOffset + 32 + bytesLenInt
+	if len(revertData) < requiredLen {
+		e.log.Info().
+			Int("actualBytesOffset", actualBytesOffset).
+			Int("bytesLenInt", bytesLenInt).
+			Int("revertDataLen", len(revertData)).
+			Int("requiredLen", requiredLen).
+			Msg("extractErrorSelectorFromFailedOpWithRevert: not enough data for bytes field")
 		return ""
 	}
 	
 	// Extract inner revert data (first 4 bytes are the error selector)
-	innerRevertData := revertData[bytesOffsetInt+32 : bytesOffsetInt+32+bytesLenInt]
+	innerRevertData := revertData[actualBytesOffset+32 : actualBytesOffset+32+bytesLenInt]
 	if len(innerRevertData) >= 4 {
 		selector := hexutil.Encode(innerRevertData[:4])
+		e.log.Info().
+			Str("innerErrorSelector", selector).
+			Int("actualBytesOffset", actualBytesOffset).
+			Int("bytesLenInt", bytesLenInt).
+			Int("innerRevertDataLen", len(innerRevertData)).
+			Str("innerRevertDataHex", hexutil.Encode(innerRevertData)).
+			Msg("extractErrorSelectorFromFailedOpWithRevert: successfully extracted inner error selector")
 		return selector
 	}
 	
+	e.log.Info().
+		Int("innerRevertDataLen", len(innerRevertData)).
+		Msg("extractErrorSelectorFromFailedOpWithRevert: innerRevertData < 4 bytes (no selector)")
 	return ""
 }
 
@@ -1224,11 +1435,43 @@ func (e *Engine) logAAErrorDiagnostics(userOp *models.UserOperation, userOpHash 
 			Msg("AA12: paymaster deposit too low - Paymaster doesn't have enough deposit to cover gas costs. Check: 1) paymaster address has sufficient deposit, 2) paymaster deposit is staked, 3) gas costs are within paymaster's deposit")
 	
 	case "AA13":
-		logEntry.
-			Int("initCodeLen", len(userOp.InitCode)).
-			Str("initCodeHex", hexutil.Encode(userOp.InitCode)).
-			Str("verificationGasLimit", userOp.VerificationGasLimit.String()).
-			Msg("AA13: initCode failed or OOG - Account creation failed or ran out of gas. Check: 1) factory address is correct, 2) factory.createAccount() function exists and is callable, 3) verificationGasLimit is sufficient for account creation, 4) factory contract has sufficient gas to deploy account")
+		// Check for specific inner error selectors that indicate common issues
+		isAlreadyInitialized := innerErrorSelector == "0xf92ee8a9" || strings.Contains(strings.ToLower(innerRevertReason), "initialized")
+		isAccountExists := strings.Contains(strings.ToLower(revertReasonStr), "account already exists") || strings.Contains(strings.ToLower(innerRevertReason), "account already exists")
+		
+		if isAlreadyInitialized {
+			// Extract factory and account address from initCode
+			factoryAddr := ""
+			expectedAccountAddr := userOp.Sender.Hex()
+			if len(userOp.InitCode) >= 20 {
+				factoryAddr = common.BytesToAddress(userOp.InitCode[0:20]).Hex()
+			}
+			logEntry.
+				Int("initCodeLen", len(userOp.InitCode)).
+				Str("initCodeHex", hexutil.Encode(userOp.InitCode)).
+				Str("factoryAddress", factoryAddr).
+				Str("expectedAccountAddress", expectedAccountAddr).
+				Str("sender", userOp.Sender.Hex()).
+				Str("innerErrorSelector", innerErrorSelector).
+				Str("innerRevertReason", innerRevertReason).
+				Str("verificationGasLimit", userOp.VerificationGasLimit.String()).
+				Msg("AA13: account already initialized (0xf92ee8a9) - The account at the expected address already exists and is initialized. This usually means: 1) Account was created in a previous transaction, 2) Salt is being reused, 3) Factory's getAddress() calculation doesn't match actual deployment. Solution: Use a different salt, or if account exists, remove initCode from UserOp and use existing account.")
+		} else if isAccountExists {
+			logEntry.
+				Int("initCodeLen", len(userOp.InitCode)).
+				Str("initCodeHex", hexutil.Encode(userOp.InitCode)).
+				Str("sender", userOp.Sender.Hex()).
+				Str("innerRevertReason", innerRevertReason).
+				Msg("AA13: account already exists - The account at the sender address already exists. Solution: Remove initCode from UserOp and use existing account, or use a different salt to create a new account.")
+		} else {
+			logEntry.
+				Int("initCodeLen", len(userOp.InitCode)).
+				Str("initCodeHex", hexutil.Encode(userOp.InitCode)).
+				Str("verificationGasLimit", userOp.VerificationGasLimit.String()).
+				Str("innerErrorSelector", innerErrorSelector).
+				Str("innerRevertReason", innerRevertReason).
+				Msg("AA13: initCode failed or OOG - Account creation failed or ran out of gas. Check: 1) factory address is correct, 2) factory.createAccount() function exists and is callable, 3) verificationGasLimit is sufficient for account creation, 4) factory contract has sufficient gas to deploy account, 5) account doesn't already exist at sender address")
+		}
 	
 	case "AA20":
 		logEntry.
@@ -1250,6 +1493,13 @@ func (e *Engine) logAAErrorDiagnostics(userOp *models.UserOperation, userOpHash 
 		// even if callData is present, as signature validation happens before execution
 		isSignatureValidationFailure := innerErrorSelector == "0xf645eedf" || strings.Contains(strings.ToLower(revertReasonStr), "signature")
 		
+		// Check for proxy-related msg.sender issues
+		isProxyIssue := strings.Contains(strings.ToLower(revertReasonStr), "notownerorentrypoint") ||
+			strings.Contains(strings.ToLower(revertReasonStr), "notfromentrypoint") ||
+			strings.Contains(strings.ToLower(revertReasonStr), "msg.sender") ||
+			strings.Contains(strings.ToLower(innerRevertReason), "notownerorentrypoint") ||
+			strings.Contains(strings.ToLower(innerRevertReason), "notfromentrypoint")
+		
 		if isSignatureValidationFailure || innerErrorSelector == "0xf645eedf" {
 			// Signature validation failed (even if callData is present, the failure is in validation)
 			logEntry.
@@ -1264,6 +1514,15 @@ func (e *Engine) logAAErrorDiagnostics(userOp *models.UserOperation, userOpHash 
 				Str("entryPoint", e.entryPointAddr.Hex()).
 				Str("chainID", e.evmChainID.String()).
 				Msg("AA23: signature validation failed (inner error 0xf645eedf) - Account was created but signature validation failed. Check: 1) signature v value (should be 0 or 1 for SimpleAccount, not 27/28), 2) UserOp hash calculation matches frontend (expected hash logged above), 3) signature was signed over correct hash, 4) chainID matches (545 for flow-testnet, 747 for flow-mainnet, 646 for flow-previewnet/emulator), 5) signature (r, s) values are correct")
+		} else if isProxyIssue {
+			// Proxy-related msg.sender issue
+			logEntry.
+				Str("sender", userOp.Sender.Hex()).
+				Str("entryPoint", e.entryPointAddr.Hex()).
+				Str("innerErrorSelector", innerErrorSelector).
+				Str("innerRevertReason", innerRevertReason).
+				Str("revertReason", revertReasonStr).
+				Msg("AA23: likely proxy msg.sender issue - Account uses proxy pattern but account implementation checks msg.sender == EntryPoint, which fails because msg.sender is the proxy address. This is NOT a gateway issue - the gateway works with any ERC-4337 account. Solution: 1) Use a production account factory (ZeroDev, Alchemy) that handles proxies correctly, 2) Deploy SimpleAccount directly without proxy, 3) Make account implementation proxy-aware. Gateway is account-agnostic and works with production accounts.")
 		} else if len(userOp.CallData) == 0 {
 			logEntry.
 				Str("signatureV", signatureV).

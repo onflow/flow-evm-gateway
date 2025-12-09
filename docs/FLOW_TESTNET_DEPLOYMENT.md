@@ -23,20 +23,23 @@ This document contains the deployed contract addresses for ERC-4337 (Account Abs
 **SenderCreator Address**: `0x1681B9f3a0F31F27B17eCb1b6cC1e3aC0C130dCb`
 
 ### SimpleAccountFactory
-**Address**: `0x2e9f1433C8bC371C391b0F59c1e15Da8AFfC9d12`
+**Address**: `0x472153734AEfB3FD24b8129b87F146A5939aC2AF` (Updated December 8, 2025)
 
 - **Contract**: SimpleAccountFactory.sol (v0.9.0)
 - **Purpose**: Factory contract to create new SimpleAccount instances
+- **Deployment Pattern**: Deploys SimpleAccount directly (no proxy) - fixes `msg.sender` issues
 - **Constructor Parameters**:
   - EntryPoint: `0xcf1e8398747a05a997e8c964e957e47209bdff08`
 - **Status**: ✅ Deployed and verified
-- **Explorer**: https://evm-testnet.flowscan.io/address/0x2e9f1433C8bC371C391b0F59c1e15Da8AFfC9d12
+- **Explorer**: https://evm-testnet.flowscan.io/address/0x472153734AEfB3FD24b8129b87F146A5939aC2AF
 
-**Factory's Internal Implementation Address**: `0xc67973C78FDe9126BfFBC795737941575632Cc3b`
+**Previous Factory Address** (deprecated): `0x2e9f1433C8bC371C391b0F59c1e15Da8AFfC9d12`
+- This factory used ERC1967Proxy pattern which caused `msg.sender` issues
+- Use the new factory address above for all new account creation
 
 **Usage**: 
 - To create a new SimpleAccount, use UserOperation with initCode containing:
-  - Factory address: `0x2e9f1433C8bC371C391b0F59c1e15Da8AFfC9d12`
+  - Factory address: `0x472153734AEfB3FD24b8129b87F146A5939aC2AF`
   - Function call: `createAccount(address owner, uint256 salt)`
 
 ### PaymasterERC20
@@ -125,7 +128,7 @@ testToken.transfer(paymasterERC20Address, amount)
 ### 2. Test UserOperations
 
 **Create a SimpleAccount**:
-- Use SimpleAccountFactory at `0x2e9f1433C8bC371C391b0F59c1e15Da8AFfC9d12`
+- Use SimpleAccountFactory at `0x472153734AEfB3FD24b8129b87F146A5939aC2AF`
 - Call `createAccount(owner, salt)` via UserOperation initCode
 
 **Send UserOperation with PaymasterERC20**:

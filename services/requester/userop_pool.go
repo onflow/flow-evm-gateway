@@ -13,6 +13,7 @@ import (
 
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/models"
+	"github.com/onflow/flow-evm-gateway/storage"
 )
 
 const userOpPoolSize = 10_000
@@ -39,6 +40,9 @@ type InMemoryUserOpPool struct {
 	config   config.Config
 	logger   zerolog.Logger
 	mux      sync.RWMutex
+	// requester is used to call EntryPoint.getUserOpHash() for authoritative hash
+	requester Requester
+	blocks    storage.BlockIndexer
 }
 
 type pooledUserOp struct {
@@ -52,7 +56,7 @@ type pooledUserOp struct {
 
 var _ UserOperationPool = &InMemoryUserOpPool{}
 
-func NewInMemoryUserOpPool(config config.Config, logger zerolog.Logger) *InMemoryUserOpPool {
+func NewInMemoryUserOpPool(config config.Config, logger zerolog.Logger, requester Requester, blocks storage.BlockIndexer) *InMemoryUserOpPool {
 	ttlCache := expirable.NewLRU[common.Hash, time.Time](
 		userOpPoolSize,
 		nil,
@@ -60,9 +64,11 @@ func NewInMemoryUserOpPool(config config.Config, logger zerolog.Logger) *InMemor
 	)
 
 	return &InMemoryUserOpPool{
-		ttlCache: ttlCache,
-		config:   config,
-		logger:   logger.With().Str("component", "userop-pool").Logger(),
+		ttlCache:  ttlCache,
+		config:    config,
+		logger:    logger.With().Str("component", "userop-pool").Logger(),
+		requester: requester,
+		blocks:    blocks,
 	}
 }
 
@@ -71,11 +77,26 @@ func (p *InMemoryUserOpPool) Add(
 	userOp *models.UserOperation,
 	entryPoint common.Address,
 ) (common.Hash, error) {
-	// Calculate UserOperation hash
-	chainID := p.config.EVMNetworkID
-	hash, err := userOp.Hash(entryPoint, chainID)
+	// Calculate UserOperation hash using EntryPoint.getUserOpHash() for authoritative hash
+	var hash common.Hash
+	var err error
+	
+	// MUST use EntryPoint.getUserOpHash() for authoritative hash - NO FALLBACKS
+	if p.requester == nil {
+		return common.Hash{}, fmt.Errorf("requester is nil - cannot call EntryPoint.getUserOpHash()")
+	}
+	if p.blocks == nil {
+		return common.Hash{}, fmt.Errorf("blocks indexer is nil - cannot get latest height for EntryPoint.getUserOpHash()")
+	}
+	
+	height, err := p.blocks.LatestEVMHeight()
 	if err != nil {
-		return common.Hash{}, fmt.Errorf("failed to hash user operation: %w", err)
+		return common.Hash{}, fmt.Errorf("failed to get latest height for EntryPoint.getUserOpHash(): %w", err)
+	}
+	
+	hash, err = p.requester.GetUserOpHash(ctx, userOp, entryPoint, height)
+	if err != nil {
+		return common.Hash{}, fmt.Errorf("failed to get UserOp hash from EntryPoint.getUserOpHash() - this is required, no fallback: %w", err)
 	}
 
 	p.mux.Lock()
