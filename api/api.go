@@ -445,25 +445,25 @@ func (b *BlockChainAPI) GetBlockReceipts(
 		return handleError[[]map[string]any](err, l, b.collector)
 	}
 
-	receipts := make([]map[string]any, len(block.TransactionHashes))
-	for i, hash := range block.TransactionHashes {
-		tx, err := b.transactions.Get(hash)
+	receipts, err := b.receipts.GetByBlockHeight(block.Height)
+	if err != nil {
+		return handleError[[]map[string]any](err, l, b.collector)
+	}
+
+	marshaledReceipts := make([]map[string]any, len(receipts))
+	for i, receipt := range receipts {
+		tx, err := b.transactions.Get(receipt.TxHash)
 		if err != nil {
 			return handleError[[]map[string]any](err, l, b.collector)
 		}
 
-		receipt, err := b.receipts.GetByTransactionID(hash)
-		if err != nil {
-			return handleError[[]map[string]any](err, l, b.collector)
-		}
-
-		receipts[i], err = ethTypes.MarshalReceipt(receipt, tx)
+		marshaledReceipts[i], err = ethTypes.MarshalReceipt(receipt, tx)
 		if err != nil {
 			return handleError[[]map[string]any](err, l, b.collector)
 		}
 	}
 
-	return receipts, nil
+	return marshaledReceipts, nil
 }
 
 // GetBlockTransactionCountByHash returns the number of transactions
