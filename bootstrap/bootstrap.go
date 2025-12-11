@@ -83,6 +83,7 @@ type Bootstrap struct {
 	eventSubscriber     ingestion.EventSubscriber
 	eventBlocksProvider *replayer.BlocksProvider
 	eventReplayerConfig replayer.Config
+	evmRequester        requester.Requester
 }
 
 func New(config config.Config) (*Bootstrap, error) {
@@ -192,13 +193,38 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 		ValidateResults:     true,
 	}
 
-	// Note: ingestion engine will be initialized in StartAPIServer after evm requester is created
 	// Store subscriber and blocksProvider for later initialization
 	b.eventSubscriber = subscriber
 	b.eventBlocksProvider = blocksProvider
 	b.eventReplayerConfig = replayerConfig
 
-	// Don't start engine here - will be started in StartAPIServer after evm is created
+	// Initialize event ingestion engine if evm requester is already available
+	// (This happens if StartAPIServer was called before StartEventIngestion)
+	if b.events == nil && b.evmRequester != nil {
+		b.events = ingestion.NewEventIngestionEngine(
+			b.eventSubscriber,
+			b.eventBlocksProvider,
+			b.storages.Storage,
+			b.storages.Registers,
+			b.storages.Blocks,
+			b.storages.Receipts,
+			b.storages.Transactions,
+			b.storages.Traces,
+			b.storages.UserOps,
+			b.evmRequester, // Requester for EntryPoint.getUserOpHash()
+			b.config.EntryPointAddress,
+			b.publishers.Block,
+			b.publishers.Logs,
+			b.logger,
+			b.collector,
+			b.eventReplayerConfig,
+			b.config.EVMNetworkID,
+		)
+		// Start the engine now that it's initialized
+		l := b.logger.With().Str("component", "bootstrap-ingestion").Logger()
+		StartEngine(ctx, b.events, l)
+	}
+
 	return nil
 }
 
@@ -334,7 +360,11 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 		return fmt.Errorf("failed to create EVM requester: %w", err)
 	}
 
-	// Initialize event ingestion engine now that evm is available
+	// Store evm requester for later use in StartEventIngestion
+	b.evmRequester = evm
+
+	// Initialize event ingestion engine if subscriber is already set up
+	// (This happens if StartEventIngestion was called before StartAPIServer)
 	if b.events == nil && b.eventSubscriber != nil {
 		b.events = ingestion.NewEventIngestionEngine(
 			b.eventSubscriber,

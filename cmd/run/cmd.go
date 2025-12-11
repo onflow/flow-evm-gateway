@@ -351,7 +351,7 @@ func init() {
 	Cmd.Flags().DurationVar(&cfg.EOAActivityCacheTTL, "eoa-activity-cache-ttl", time.Second*10, "Time interval used to track EOA activity. Tx send more frequently than this interval will be batched. Useful only when batch transaction submission is enabled.")
 	Cmd.Flags().DurationVar(&cfg.RpcRequestTimeout, "rpc-request-timeout", time.Second*120, "Sets the maximum duration at which JSON-RPC requests should generate a response, before they timeout. The default is 120 seconds.")
 	// ERC-4337 Configuration Flags
-	Cmd.Flags().StringVar(&entryPointAddress, "entry-point-address", "", "Address of the ERC-4337 EntryPoint contract (e.g., 0xcf1e8398747a05a997e8c964e957e47209bdff08 for Flow Testnet)")
+	Cmd.Flags().StringVar(&entryPointAddress, "entry-point-address", "", "Address of the ERC-4337 EntryPoint contract (e.g., 0x33860348ce61ea6cec276b1cf93c5465d1a92131 for Flow Testnet)")
 	Cmd.Flags().StringVar(&entryPointSimulationsAddress, "entry-point-simulations-address", "", "Address of the EntryPointSimulations contract for v0.7+ EntryPoints (e.g., 0xfFDDAa4a9Ab363f02Ba26a5fc45Ec714562683D3 for Flow Testnet). If not set, gateway will attempt to use EntryPoint address (for backwards compatibility with v0.6)")
 	Cmd.Flags().BoolVar(&cfg.BundlerEnabled, "bundler-enabled", false, "Enable ERC-4337 bundler functionality")
 	Cmd.Flags().IntVar(&cfg.MaxOpsPerBundle, "max-ops-per-bundle", 10, "Maximum number of UserOperations per EntryPoint.handleOps() call")

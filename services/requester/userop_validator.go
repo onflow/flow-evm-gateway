@@ -150,9 +150,8 @@ func (v *UserOpValidator) Validate(
 	}
 
 	// Do NOT normalize signature v value - pass it through as-is
-	// The trace shows that ecrecover with v=27 works and validateUserOp returns success
-	// OpenZeppelin's ECDSA.recover() accepts both v=0/1 and v=27/28 formats
-	// We let the contract handle the signature format directly
+	// The gateway does not perform signature validation - EntryPoint.simulateValidation() handles it on-chain.
+	// We pass the signature through exactly as received and let EntryPoint validate it.
 	if len(userOp.Signature) >= 65 {
 		vByte := userOp.Signature[64]
 		v.logger.Debug().
@@ -329,12 +328,31 @@ func (v *UserOpValidator) simulateValidation(
 	}
 	
 	// CRITICAL: Log the hash we got from the contract at INFO level so it's always visible
+	// This hash MUST match what the frontend signed - if it doesn't, signature validation will fail
+	// If the frontend logs show a different hash, that means either:
+	// 1. The UserOp received by the gateway is different from what the frontend sent
+	// 2. The gateway is calling getUserOpHash() with different parameters than the frontend
+	// 3. There's a network/RPC issue causing different results
 	v.logger.Info().
 		Str("userOpHash_from_contract", userOpHash.Hex()).
 		Str("sender", userOp.Sender.Hex()).
 		Str("entryPoint", entryPoint.Hex()).
 		Uint64("height", height).
-		Msg("CRITICAL: Got hash from EntryPoint.getUserOpHash() - this is the authoritative hash")
+		Str("nonce", userOp.Nonce.String()).
+		Str("callGasLimit", userOp.CallGasLimit.String()).
+		Str("verificationGasLimit", userOp.VerificationGasLimit.String()).
+		Str("preVerificationGas", userOp.PreVerificationGas.String()).
+		Str("maxFeePerGas", userOp.MaxFeePerGas.String()).
+		Str("maxPriorityFeePerGas", userOp.MaxPriorityFeePerGas.String()).
+		Int("initCodeLen", len(userOp.InitCode)).
+		Int("callDataLen", len(userOp.CallData)).
+		Int("paymasterAndDataLen", len(userOp.PaymasterAndData)).
+		Str("initCodeHex", hexutil.Encode(userOp.InitCode)).
+		Str("callDataHex", hexutil.Encode(userOp.CallData)).
+		Str("paymasterAndDataHex", hexutil.Encode(userOp.PaymasterAndData)).
+		Str("accountGasLimitsHex", hexutil.Encode(packAccountGasLimits(userOp.CallGasLimit, userOp.VerificationGasLimit)[:])).
+		Str("gasFeesHex", hexutil.Encode(packGasFees(userOp.MaxFeePerGas, userOp.MaxPriorityFeePerGas)[:])).
+		Msg("CRITICAL: Got hash from EntryPoint.getUserOpHash() - this is the authoritative hash. Frontend MUST sign this exact hash. If simulateValidation fails with AA24, EntryPoint calculated a different hash internally. Compare this hash with frontend's getUserOpHash() result.")
 
 	// Extract owner from initCode if present (for account creation) - for logging only
 	var ownerAddr common.Address
@@ -405,18 +423,21 @@ func (v *UserOpValidator) simulateValidation(
 			Int("signatureArrayLen", len(userOp.Signature)).
 			Int("signatureArrayCap", cap(userOp.Signature))
 		
-		// Debug: Check signature v value (should be 0 or 1 for SimpleAccount)
-		// Note: v=0/1 is correct for SimpleAccount, so this is just informational
+		// Debug: Check signature v value
+		// Note: The gateway passes signatures through as-is without modification.
+		// EntryPoint.simulateValidation() handles signature validation on-chain.
+		// Both v=0/1 and v=27/28 formats are observed in practice for ERC-4337 UserOperation signatures.
+		// The gateway does not perform signature validation - it relies on EntryPoint's on-chain validation.
 		if sigVAtLogTime == 0 || sigVAtLogTime == 1 {
 			v.logger.Debug().
 				Str("sender", userOp.Sender.Hex()).
 				Uint8("signatureV", sigVAtLogTime).
-				Msg("signature v value is in ERC-4337 format (0/1) - correct for SimpleAccount")
+				Msg("signature v value is 0/1 (recovery ID format) - passed through to EntryPoint for validation")
 		} else if sigVAtLogTime == 27 || sigVAtLogTime == 28 {
-			v.logger.Warn().
+			v.logger.Debug().
 				Str("sender", userOp.Sender.Hex()).
 				Uint8("signatureV", sigVAtLogTime).
-				Msg("WARNING: signature v value is in EIP-155 format (27/28) but SimpleAccount expects 0/1, so this may cause validation failures")
+				Msg("signature v value is 27/28 (EIP-155 format) - passed through to EntryPoint for validation")
 		}
 	}
 
@@ -605,6 +626,26 @@ func (v *UserOpValidator) simulateValidation(
 
 			// If it's a FailedOp or other error, this is a validation failure
 			if decodedResult.IsFailedOp || decodedResult.AAErrorCode != "" {
+				// Special handling for AA24 (signature error) - log hash mismatch details
+				if decodedResult.AAErrorCode == "AA24" {
+					// AA24 means EntryPoint calculated a different hash during simulateValidation than what was signed
+					// Log the hash we got from getUserOpHash() - this is what the frontend should have signed
+					v.logger.Error().
+						Str("userOpHash_from_getUserOpHash", userOpHash.Hex()).
+						Str("sender", userOp.Sender.Hex()).
+						Str("nonce", userOp.Nonce.String()).
+						Str("entryPoint", entryPoint.Hex()).
+						Str("chainID", v.config.EVMNetworkID.String()).
+						Str("initCodeHex", hexutil.Encode(userOp.InitCode)).
+						Str("callDataHex", hexutil.Encode(userOp.CallData)).
+						Str("accountGasLimitsHex", hexutil.Encode(packAccountGasLimits(userOp.CallGasLimit, userOp.VerificationGasLimit)[:])).
+						Str("preVerificationGas", userOp.PreVerificationGas.String()).
+						Str("gasFeesHex", hexutil.Encode(packGasFees(userOp.MaxFeePerGas, userOp.MaxPriorityFeePerGas)[:])).
+						Str("paymasterAndDataHex", hexutil.Encode(userOp.PaymasterAndData)).
+						Str("signatureHex", hexutil.Encode(userOp.Signature)).
+						Msg("CRITICAL: AA24 signature error - EntryPoint calculated a different hash during simulateValidation than getUserOpHash(). Frontend MUST sign the hash from getUserOpHash() (logged above). If frontend signed a different hash, signature validation will fail.")
+				}
+				
 				// Special handling for AA13 on account creation UserOps
 				// When using EntryPointSimulations for account creation (initCode != 0, sender not deployed),
 				// simulateValidation will always revert with AA13 "initCode failed or OOG" due to simulation context.
@@ -648,6 +689,7 @@ func (v *UserOpValidator) simulateValidation(
 					Str("aaErrorCode", decodedResult.AAErrorCode).
 					Str("revertReasonHex", revertErr.Reason).
 					Bool("isAccountCreation", isAccountCreation).
+					Str("userOpHash_from_getUserOpHash", userOpHash.Hex()).
 					Msg("simulateValidation failed - validation error detected")
 				return fmt.Errorf("%s", errorMsg)
 			}

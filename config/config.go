@@ -133,7 +133,7 @@ type Config struct {
 	// Use the official EntryPoint contract from eth-infinitism:
 	// https://github.com/eth-infinitism/account-abstraction
 	// Canonical v0.6 address (CREATE2): 0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789
-	// Flow Testnet v0.9.0 address: 0xcf1e8398747a05a997e8c964e957e47209bdff08
+	// Flow Testnet v0.9.0 address: 0x33860348ce61ea6cec276b1cf93c5465d1a92131
 	// See docs/FLOW_TESTNET_DEPLOYMENT.md for deployed contract addresses
 	EntryPointAddress common.Address
 	// EntryPointSimulationsAddress is the address of the EntryPointSimulations contract
