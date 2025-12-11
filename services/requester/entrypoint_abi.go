@@ -2,6 +2,7 @@ package requester
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"reflect"
@@ -10,11 +11,14 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/onflow/flow-evm-gateway/models"
+	"github.com/onflow/flow-evm-gateway/services/abis"
 )
 
+// Old hardcoded ABIs removed - now loading from services/abis/*.json files
 // EntryPointABI is the ABI for the ERC-4337 EntryPoint contract (v0.7+)
 // Uses PackedUserOperation format
-const entryPointABI = `[
+// NOTE: EntryPoint.json doesn't include simulateValidation - use EntryPointSimulations ABI for that
+const _deprecated_entryPointABI = `[
 	{
 		"inputs": [
 			{
@@ -104,6 +108,77 @@ const entryPointABI = `[
 			}
 		],
 		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"components": [
+					{"internalType": "address", "name": "sender", "type": "address"},
+					{"internalType": "uint256", "name": "nonce", "type": "uint256"},
+					{"internalType": "bytes", "name": "initCode", "type": "bytes"},
+					{"internalType": "bytes", "name": "callData", "type": "bytes"},
+					{"internalType": "bytes32", "name": "accountGasLimits", "type": "bytes32"},
+					{"internalType": "uint256", "name": "preVerificationGas", "type": "uint256"},
+					{"internalType": "bytes32", "name": "gasFees", "type": "bytes32"},
+					{"internalType": "bytes", "name": "paymasterAndData", "type": "bytes"},
+					{"internalType": "bytes", "name": "signature", "type": "bytes"}
+				],
+				"internalType": "struct PackedUserOperation",
+				"name": "userOp",
+				"type": "tuple"
+			}
+		],
+		"name": "simulateValidation",
+		"outputs": [
+			{
+				"components": [
+					{
+						"components": [
+							{"internalType": "uint256", "name": "preOpGas", "type": "uint256"},
+							{"internalType": "uint256", "name": "prefund", "type": "uint256"},
+							{"internalType": "uint256", "name": "accountValidationData", "type": "uint256"},
+							{"internalType": "uint256", "name": "paymasterValidationData", "type": "uint256"},
+							{"internalType": "bytes", "name": "paymasterContext", "type": "bytes"}
+						],
+						"internalType": "struct IEntryPoint.ReturnInfo",
+						"name": "returnInfo",
+						"type": "tuple"
+					},
+					{
+						"components": [
+							{"internalType": "uint256", "name": "stake", "type": "uint256"},
+							{"internalType": "uint256", "name": "unstakeDelaySec", "type": "uint256"}
+						],
+						"internalType": "struct IStakeManager.StakeInfo",
+						"name": "senderInfo",
+						"type": "tuple"
+					},
+					{
+						"components": [
+							{"internalType": "uint256", "name": "stake", "type": "uint256"},
+							{"internalType": "uint256", "name": "unstakeDelaySec", "type": "uint256"}
+						],
+						"internalType": "struct IStakeManager.StakeInfo",
+						"name": "factoryInfo",
+						"type": "tuple"
+					},
+					{
+						"components": [
+							{"internalType": "uint256", "name": "stake", "type": "uint256"},
+							{"internalType": "uint256", "name": "unstakeDelaySec", "type": "uint256"}
+						],
+						"internalType": "struct IStakeManager.StakeInfo",
+						"name": "paymasterInfo",
+						"type": "tuple"
+					}
+				],
+				"internalType": "struct IEntryPoint.ValidationResult",
+				"name": "",
+				"type": "tuple"
+			}
+		],
+		"stateMutability": "nonpayable",
 		"type": "function"
 	},
 	{
@@ -354,15 +429,39 @@ const simpleAccountFactoryABI = `[
 
 func init() {
 	var err error
-	entryPointABIParsed, err = abi.JSON(bytes.NewReader([]byte(entryPointABI)))
+	
+	// Load EntryPoint ABI from embedded JSON
+	var entryPointArtifact struct {
+		ABI json.RawMessage `json:"abi"`
+	}
+	if err := json.Unmarshal(abis.EntryPointJSON, &entryPointArtifact); err != nil {
+		panic(fmt.Sprintf("failed to unmarshal EntryPoint JSON: %v", err))
+	}
+	entryPointABIParsed, err = abi.JSON(bytes.NewReader(entryPointArtifact.ABI))
 	if err != nil {
 		panic(fmt.Sprintf("failed to parse EntryPoint ABI: %v", err))
 	}
-	entryPointSimulationsABIParsed, err = abi.JSON(bytes.NewReader([]byte(entryPointSimulationsABI)))
+	
+	// Load EntryPointSimulations ABI from embedded JSON
+	var entryPointSimulationsArtifact struct {
+		ABI json.RawMessage `json:"abi"`
+	}
+	if err := json.Unmarshal(abis.EntryPointSimulationsJSON, &entryPointSimulationsArtifact); err != nil {
+		panic(fmt.Sprintf("failed to unmarshal EntryPointSimulations JSON: %v", err))
+	}
+	entryPointSimulationsABIParsed, err = abi.JSON(bytes.NewReader(entryPointSimulationsArtifact.ABI))
 	if err != nil {
 		panic(fmt.Sprintf("failed to parse EntryPointSimulations ABI: %v", err))
 	}
-	parsed, err := abi.JSON(bytes.NewReader([]byte(simpleAccountFactoryABI)))
+	
+	// Load SimpleAccountFactory ABI from embedded JSON
+	var simpleAccountFactoryArtifact struct {
+		ABI json.RawMessage `json:"abi"`
+	}
+	if err := json.Unmarshal(abis.SimpleAccountFactoryJSON, &simpleAccountFactoryArtifact); err != nil {
+		panic(fmt.Sprintf("failed to unmarshal SimpleAccountFactory JSON: %v", err))
+	}
+	parsed, err := abi.JSON(bytes.NewReader(simpleAccountFactoryArtifact.ABI))
 	if err != nil {
 		panic(fmt.Sprintf("failed to parse SimpleAccountFactory ABI: %v", err))
 	}
@@ -706,8 +805,155 @@ func EncodeSimulateValidation(userOp *models.UserOperation) ([]byte, error) {
 	return data, nil
 }
 
-// EncodeSimulateValidationPacked encodes the calldata for EntryPointSimulations.simulateValidation()
-// This function uses PackedUserOperation format (for EntryPointSimulations v0.7+)
+// ValidationResult structs for EntryPoint v0.9.0 simulateValidation return value
+// These match the structs defined in IEntryPointSimulations.sol
+type ReturnInfo struct {
+	PreOpGas                *big.Int
+	Prefund                 *big.Int
+	AccountValidationData   *big.Int
+	PaymasterValidationData *big.Int
+	PaymasterContext        []byte
+}
+
+type StakeInfo struct {
+	Stake           *big.Int
+	UnstakeDelaySec *big.Int
+}
+
+type AggregatorStakeInfo struct {
+	Aggregator common.Address
+	StakeInfo  StakeInfo
+}
+
+type ValidationResult struct {
+	ReturnInfo      ReturnInfo
+	SenderInfo      StakeInfo
+	FactoryInfo     StakeInfo
+	PaymasterInfo   StakeInfo
+	AggregatorInfo  AggregatorStakeInfo
+}
+
+// DecodeValidationResult decodes the ValidationResult struct from eth_call return data
+// EntryPoint v0.9.0 simulateValidation returns ValidationResult normally (not via revert)
+func DecodeValidationResult(returnData []byte) (*ValidationResult, error) {
+	// Get the simulateValidation method from EntryPointSimulations ABI
+	method, exists := entryPointSimulationsABIParsed.Methods["simulateValidation"]
+	if !exists {
+		return nil, fmt.Errorf("simulateValidation method not found in EntryPointSimulations ABI")
+	}
+
+	// Unpack the return data using the method's output definition
+	// The return data is already ABI-encoded, so we can unpack it directly
+	unpacked, err := method.Outputs.Unpack(returnData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unpack ValidationResult: %w", err)
+	}
+
+	if len(unpacked) != 1 {
+		return nil, fmt.Errorf("expected 1 return value, got %d", len(unpacked))
+	}
+
+	// The unpacked value is a struct, we need to convert it to our ValidationResult type
+	// The ABI package returns anonymous structs, so we use reflection to extract fields
+	resultValue := reflect.ValueOf(unpacked[0])
+	if resultValue.Kind() != reflect.Struct {
+		return nil, fmt.Errorf("expected struct, got %T", unpacked[0])
+	}
+
+	// Extract fields from the anonymous struct
+	// ValidationResult has 5 fields: returnInfo, senderInfo, factoryInfo, paymasterInfo, aggregatorInfo
+	result := &ValidationResult{}
+
+	// Helper to extract field value, handling interface{} wrapping
+	extractField := func(v reflect.Value, fieldIdx int) reflect.Value {
+		field := v.Field(fieldIdx)
+		if field.Kind() == reflect.Interface {
+			field = field.Elem()
+		}
+		return field
+	}
+
+	// returnInfo (ReturnInfo struct)
+	returnInfoValue := extractField(resultValue, 0)
+	if returnInfoValue.Kind() != reflect.Struct {
+		return nil, fmt.Errorf("returnInfo is not a struct, got %v", returnInfoValue.Kind())
+	}
+	returnInfoField0 := extractField(returnInfoValue, 0)
+	returnInfoField1 := extractField(returnInfoValue, 1)
+	returnInfoField2 := extractField(returnInfoValue, 2)
+	returnInfoField3 := extractField(returnInfoValue, 3)
+	returnInfoField4 := extractField(returnInfoValue, 4)
+	result.ReturnInfo = ReturnInfo{
+		PreOpGas:                returnInfoField0.Interface().(*big.Int),
+		Prefund:                 returnInfoField1.Interface().(*big.Int),
+		AccountValidationData:   returnInfoField2.Interface().(*big.Int),
+		PaymasterValidationData: returnInfoField3.Interface().(*big.Int),
+		PaymasterContext:        returnInfoField4.Interface().([]byte),
+	}
+
+	// senderInfo (StakeInfo struct)
+	senderInfoValue := extractField(resultValue, 1)
+	if senderInfoValue.Kind() != reflect.Struct {
+		return nil, fmt.Errorf("senderInfo is not a struct, got %v", senderInfoValue.Kind())
+	}
+	senderInfoField0 := extractField(senderInfoValue, 0)
+	senderInfoField1 := extractField(senderInfoValue, 1)
+	result.SenderInfo = StakeInfo{
+		Stake:           senderInfoField0.Interface().(*big.Int),
+		UnstakeDelaySec: senderInfoField1.Interface().(*big.Int),
+	}
+
+	// factoryInfo (StakeInfo struct)
+	factoryInfoValue := extractField(resultValue, 2)
+	if factoryInfoValue.Kind() != reflect.Struct {
+		return nil, fmt.Errorf("factoryInfo is not a struct, got %v", factoryInfoValue.Kind())
+	}
+	factoryInfoField0 := extractField(factoryInfoValue, 0)
+	factoryInfoField1 := extractField(factoryInfoValue, 1)
+	result.FactoryInfo = StakeInfo{
+		Stake:           factoryInfoField0.Interface().(*big.Int),
+		UnstakeDelaySec: factoryInfoField1.Interface().(*big.Int),
+	}
+
+	// paymasterInfo (StakeInfo struct)
+	paymasterInfoValue := extractField(resultValue, 3)
+	if paymasterInfoValue.Kind() != reflect.Struct {
+		return nil, fmt.Errorf("paymasterInfo is not a struct, got %v", paymasterInfoValue.Kind())
+	}
+	paymasterInfoField0 := extractField(paymasterInfoValue, 0)
+	paymasterInfoField1 := extractField(paymasterInfoValue, 1)
+	result.PaymasterInfo = StakeInfo{
+		Stake:           paymasterInfoField0.Interface().(*big.Int),
+		UnstakeDelaySec: paymasterInfoField1.Interface().(*big.Int),
+	}
+
+	// aggregatorInfo (AggregatorStakeInfo struct)
+	aggregatorInfoValue := extractField(resultValue, 4)
+	if aggregatorInfoValue.Kind() != reflect.Struct {
+		return nil, fmt.Errorf("aggregatorInfo is not a struct, got %v", aggregatorInfoValue.Kind())
+	}
+	aggregatorField0 := extractField(aggregatorInfoValue, 0) // aggregator address
+	aggregatorStakeInfoValue := extractField(aggregatorInfoValue, 1) // stakeInfo field
+	if aggregatorStakeInfoValue.Kind() != reflect.Struct {
+		return nil, fmt.Errorf("aggregatorInfo.stakeInfo is not a struct, got %v", aggregatorStakeInfoValue.Kind())
+	}
+	aggregatorStakeField0 := extractField(aggregatorStakeInfoValue, 0)
+	aggregatorStakeField1 := extractField(aggregatorStakeInfoValue, 1)
+	result.AggregatorInfo = AggregatorStakeInfo{
+		Aggregator: aggregatorField0.Interface().(common.Address),
+		StakeInfo: StakeInfo{
+			Stake:           aggregatorStakeField0.Interface().(*big.Int),
+			UnstakeDelaySec: aggregatorStakeField1.Interface().(*big.Int),
+		},
+	}
+
+	return result, nil
+}
+
+// EncodeSimulateValidationPacked encodes the calldata for simulateValidation() using PackedUserOperation format
+// Uses EntryPointSimulations ABI since that's the ABI that includes simulateValidation
+// Note: Even when calling EntryPoint directly, we use EntryPointSimulations ABI for encoding
+// because the function signature is the same (both use PackedUserOperation format)
 func EncodeSimulateValidationPacked(userOp *models.UserOperation) ([]byte, error) {
 	packedOp := PackedUserOperationABI{
 		Sender:             userOp.Sender,
@@ -721,7 +967,8 @@ func EncodeSimulateValidationPacked(userOp *models.UserOperation) ([]byte, error
 		Signature:          userOp.Signature,
 	}
 
-	// Encode the function call using EntryPointSimulations ABI
+	// Use EntryPointSimulations ABI - it has simulateValidation method
+	// This works for both EntryPoint and EntryPointSimulations since they have the same signature
 	data, err := entryPointSimulationsABIParsed.Pack("simulateValidation", packedOp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode simulateValidation (packed): %w", err)
@@ -730,11 +977,13 @@ func EncodeSimulateValidationPacked(userOp *models.UserOperation) ([]byte, error
 	return data, nil
 }
 
-// EncodeGetDeposit encodes the calldata for EntryPoint.getDeposit()
+// EncodeGetDeposit encodes the calldata for EntryPoint.getDepositInfo()
+// Note: EntryPoint v0.9.0 uses getDepositInfo instead of getDeposit
+// getDepositInfo returns a struct with deposit, staked, stake, unstakeDelaySec, and withdrawTime
 func EncodeGetDeposit(account common.Address) ([]byte, error) {
-	data, err := entryPointABIParsed.Pack("getDeposit", account)
+	data, err := entryPointABIParsed.Pack("getDepositInfo", account)
 	if err != nil {
-		return nil, fmt.Errorf("failed to encode getDeposit: %w", err)
+		return nil, fmt.Errorf("failed to encode getDepositInfo: %w", err)
 	}
 	return data, nil
 }

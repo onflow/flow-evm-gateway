@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -12,6 +13,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/onflow/flow-evm-gateway/config"
+	"github.com/onflow/flow-evm-gateway/services/abis"
 	ethTypes "github.com/onflow/flow-evm-gateway/eth/types"
 	"github.com/onflow/flow-evm-gateway/models"
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
@@ -29,30 +31,44 @@ type UserOpValidator struct {
 
 func NewUserOpValidator(
 	client *CrossSporkClient,
-	config config.Config,
+	cfg config.Config,
 	requester Requester,
 	blocks storage.BlockIndexer,
 	logger zerolog.Logger,
 ) *UserOpValidator {
 	logger = logger.With().Str("component", "userop-validator").Logger()
 
+	// Set default stake requirements based on network type
+	// Note: cfg is passed by value, so we update it and use the updated version
+	cfg.SetDefaultStakeRequirements()
+
+	// Log stake requirements at startup
+	logger.Info().
+		Str("minSenderStake", cfg.MinSenderStake.String()).
+		Str("minFactoryStake", cfg.MinFactoryStake.String()).
+		Str("minPaymasterStake", cfg.MinPaymasterStake.String()).
+		Str("minAggregatorStake", cfg.MinAggregatorStake.String()).
+		Uint64("minUnstakeDelaySec", cfg.MinUnstakeDelaySec).
+		Str("flowNetworkID", string(cfg.FlowNetworkID)).
+		Msg("ERC-4337 stake requirements configured")
+
 	// Log EntryPointSimulations configuration at startup
 	// Best practice is to call EntryPoint.simulateValidation directly (EntryPointSimulationsAddress empty)
-	if config.EntryPointSimulationsAddress != (common.Address{}) {
+	if cfg.EntryPointSimulationsAddress != (common.Address{}) {
 		logger.Warn().
-			Str("entryPointAddress", config.EntryPointAddress.Hex()).
-			Str("entryPointSimulationsAddress", config.EntryPointSimulationsAddress.Hex()).
+			Str("entryPointAddress", cfg.EntryPointAddress.Hex()).
+			Str("entryPointSimulationsAddress", cfg.EntryPointSimulationsAddress.Hex()).
 			Msg("EntryPointSimulations configured - legacy mode. Best practice is to unset this and call EntryPoint.simulateValidation directly.")
 		// Note: Function existence verification happens on first UserOp validation
 	} else {
 		logger.Info().
-			Str("entryPointAddress", config.EntryPointAddress.Hex()).
+			Str("entryPointAddress", cfg.EntryPointAddress.Hex()).
 			Msg("EntryPointSimulations not configured - will call EntryPoint.simulateValidation directly (recommended)")
 	}
 
 	return &UserOpValidator{
 		client:    client,
-		config:    config,
+		config:    cfg, // Use updated cfg with default stake requirements
 		requester: requester,
 		blocks:    blocks,
 		logger:    logger,
@@ -257,13 +273,8 @@ func (v *UserOpValidator) simulateValidation(
 			Msg("calling EntryPoint.simulateValidation directly (recommended) - EntryPointSimulations not configured")
 	}
 
-	// Try packed format first (EntryPoint v0.7+ supports it, EntryPointSimulations requires it)
-	// If the call fails with "function not found" (empty revert + selector not in bytecode),
-	// fall back to standard format (EntryPoint v0.6)
-	var calldata []byte
-	var err error
-	usePackedFormat := true // Start with packed format
-	calldata, err = EncodeSimulateValidationPacked(userOp)
+	// Encode packed simulateValidation (EntryPoint v0.7+/v0.9); no standard fallback
+	calldata, err := EncodeSimulateValidationPacked(userOp)
 	if err != nil {
 		return fmt.Errorf("failed to encode simulateValidation (packed): %w", err)
 	}
@@ -418,7 +429,7 @@ func (v *UserOpValidator) simulateValidation(
 	// Decode and verify the packed UserOp values before calling EntryPoint
 	// This helps catch packing errors (e.g., swapped gas limits)
 	// We manually extract the packed values from the calldata since we know the structure
-	if usePackedFormat && isUsingEntryPointSimulations && len(calldata) >= 4 {
+	if isUsingEntryPointSimulations && len(calldata) >= 4 {
 		// PackedUserOperation structure (after selector):
 		// - sender (address, 32 bytes padded)
 		// - nonce (uint256, 32 bytes)
@@ -473,56 +484,56 @@ func (v *UserOpValidator) simulateValidation(
 		Data: (*hexutil.Bytes)(&calldata),
 	}
 
-	// Call simulateValidation (on EntryPointSimulations for v0.7+, or EntryPoint for v0.6)
-	// simulateValidation always reverts (either with ValidationResult for success or FailedOp for failure)
-	_, err = v.requester.Call(txArgs, v.config.Coinbase, height, nil, nil)
-	
-	// If packed format failed with "function not found", try standard format (EntryPoint v0.6)
-	if err != nil && !isUsingEntryPointSimulations && usePackedFormat {
-		if revertErr, ok := err.(*errs.RevertError); ok {
-			var revertData []byte
-			if revertErr.Reason != "" && revertErr.Reason != "0x" {
-				if data, decodeErr := hexutil.Decode(revertErr.Reason); decodeErr == nil {
-					revertData = data
-				}
-			}
-			
-			// Check if it's an empty revert (function not found)
-			if len(revertData) == 0 {
-				selector := calldata[:4]
-				simulationCode, codeErr := v.requester.GetCode(simulationAddress, height)
-				selectorExists := false
-				if codeErr == nil {
-					selectorExists = bytes.Contains(simulationCode, selector)
-				}
-				
-				if !selectorExists {
-					// Function doesn't exist - try fallback to standard format
-					v.logger.Info().
-						Str("functionSelector", hexutil.Encode(selector)).
-						Str("simulationAddress", simulationAddress.Hex()).
-						Msg("packed format simulateValidation not found - falling back to standard format")
-					
-					// Retry with standard format
-					calldata, err = EncodeSimulateValidation(userOp)
-					if err != nil {
-						return fmt.Errorf("failed to encode simulateValidation (standard): %w", err)
-					}
-					
-					usePackedFormat = false
-					txArgs = ethTypes.TransactionArgs{
-						To:   &simulationAddress,
-						Data: (*hexutil.Bytes)(&calldata),
-					}
-					
-					// Retry the call with standard format
-					// Note: This will still return an error (RevertError) because simulateValidation always reverts
-					// We'll handle it in the normal error handling below
-					_, err = v.requester.Call(txArgs, v.config.Coinbase, height, nil, nil)
-				}
-			}
+	// For EntryPoint v0.9.0: When calling EntryPoint directly (not using separately deployed EntryPointSimulations),
+	// we need to use a state override to temporarily replace EntryPoint's code with EntryPointSimulations bytecode.
+	// This allows simulateValidation to work correctly while maintaining the correct senderCreator address.
+	var stateOverride *ethTypes.StateOverride
+	var overrideCodeHash string
+	var overrideCodeLen int
+	var calldataPreviewFirst8 string
+	var calldataPreviewLast8 string
+	if !isUsingEntryPointSimulations {
+		// Decode the EntryPointSimulations deployed bytecode from hex
+		// The bytecode is stored as a hex string starting with "0x"
+		bytecodeHex := strings.TrimSpace(string(abis.EntryPointSimulationsDeployedBytecode))
+		bytecodeBytes, decodeErr := hexutil.Decode(bytecodeHex)
+		if decodeErr != nil {
+			return fmt.Errorf("failed to decode EntryPointSimulations bytecode: %w", decodeErr)
 		}
+
+		// Create state override: replace EntryPoint's code with EntryPointSimulations bytecode
+		stateOverride = &ethTypes.StateOverride{
+			entryPoint: {
+				Code: (*hexutil.Bytes)(&bytecodeBytes),
+			},
+		}
+
+		overrideCodeLen = len(bytecodeBytes)
+		overrideCodeHash = crypto.Keccak256Hash(bytecodeBytes).Hex()
+
+		// Calldata previews for debugging invalid jump issues
+		if len(calldata) >= 8 {
+			calldataPreviewFirst8 = hexutil.Encode(calldata[:8])
+			calldataPreviewLast8 = hexutil.Encode(calldata[len(calldata)-8:])
+		} else {
+			calldataPreviewFirst8 = hexutil.Encode(calldata)
+			calldataPreviewLast8 = hexutil.Encode(calldata)
+		}
+
+		v.logger.Debug().
+			Str("entryPoint", entryPoint.Hex()).
+			Int("bytecodeLength", overrideCodeLen).
+			Str("overrideCodeHash", overrideCodeHash).
+			Int("calldataLen", len(calldata)).
+			Str("calldataFirst8", calldataPreviewFirst8).
+			Str("calldataLast8", calldataPreviewLast8).
+			Msg("using state override to replace EntryPoint code with EntryPointSimulations bytecode")
 	}
+
+	// Call simulateValidation (packed only).
+	// EntryPoint v0.9.0: simulateValidation returns ValidationResult normally on success,
+	// and reverts with FailedOp/PaymasterNotDeployed/etc on failure.
+	result, err := v.requester.Call(txArgs, v.config.Coinbase, height, stateOverride, nil)
 	
 	if err != nil {
 		// Log detailed error for debugging
@@ -533,7 +544,6 @@ func (v *UserOpValidator) simulateValidation(
 			Str("sender", userOp.Sender.Hex()).
 			Uint64("height", height).
 			Bool("isUsingEntryPointSimulations", isUsingEntryPointSimulations).
-			Bool("usePackedFormat", usePackedFormat).
 			Msg("simulateValidation call failed")
 
 		// Check if it's a revert error (expected - simulateValidation always reverts with result)
@@ -703,13 +713,36 @@ func (v *UserOpValidator) simulateValidation(
 		return fmt.Errorf("simulation call failed: %w", err)
 	}
 
-	// If we get here, simulateValidation didn't revert
-	// This is unexpected - simulateValidation should always revert with ValidationResult or FailedOp
-	// Log warning but treat as success (might be a different EntryPoint version)
-	v.logger.Warn().
+	// If we get here, simulateValidation succeeded (no error) - EntryPoint v0.9.0 behavior
+	// Decode ValidationResult from return data
+	validationResult, err := DecodeValidationResult(result)
+	if err != nil {
+		v.logger.Error().
+			Err(err).
+			Str("entryPoint", entryPoint.Hex()).
+			Str("sender", userOp.Sender.Hex()).
+			Str("resultHex", hexutil.Encode(result)).
+			Int("resultLen", len(result)).
+			Msg("failed to decode ValidationResult from simulateValidation return data")
+		return fmt.Errorf("failed to decode ValidationResult: %w", err)
+	}
+
+	// Log successful validation
+	v.logger.Info().
 		Str("entryPoint", entryPoint.Hex()).
 		Str("sender", userOp.Sender.Hex()).
-		Msg("simulateValidation returned without revert - unexpected behavior, treating as success")
+		Str("userOpHash", userOpHash.Hex()).
+		Str("preOpGas", validationResult.ReturnInfo.PreOpGas.String()).
+		Str("prefund", validationResult.ReturnInfo.Prefund.String()).
+		Str("accountValidationData", validationResult.ReturnInfo.AccountValidationData.Text(16)).
+		Str("paymasterValidationData", validationResult.ReturnInfo.PaymasterValidationData.Text(16)).
+		Msg("simulateValidation succeeded - ValidationResult decoded")
+
+	// Validate the ValidationResult according to EntryPoint v0.9.0 requirements
+	// This implements the validation pipeline from the TDD plan (Section 6)
+	if err := v.validateValidationResult(ctx, validationResult, userOp, entryPoint, height); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -1246,18 +1279,20 @@ func (v *UserOpValidator) getPaymasterDeposit(
 		Data: (*hexutil.Bytes)(&calldata),
 	}
 
-	// Call EntryPoint.getDeposit
+	// Call EntryPoint.getDepositInfo
 	result, err := v.requester.Call(txArgs, v.config.Coinbase, height, nil, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to call getDeposit: %w", err)
+		return nil, fmt.Errorf("failed to call getDepositInfo: %w", err)
 	}
 
-	// Decode result (uint256)
+	// Decode result (struct DepositInfo with fields: deposit, staked, stake, unstakeDelaySec, withdrawTime)
+	// We need to extract just the deposit field (first field, uint256)
 	if len(result) < 32 {
-		return nil, fmt.Errorf("invalid getDeposit result: expected 32 bytes, got %d", len(result))
+		return nil, fmt.Errorf("invalid getDepositInfo result: expected at least 32 bytes, got %d", len(result))
 	}
 
-	deposit := new(big.Int).SetBytes(result)
+	// getDepositInfo returns a struct, first field is deposit (uint256) at offset 0
+	deposit := new(big.Int).SetBytes(result[:32])
 	return deposit, nil
 }
 
@@ -1273,12 +1308,8 @@ func (v *UserOpValidator) EstimateGas(
 		return nil, fmt.Errorf("failed to get latest indexed height: %w", err)
 	}
 
-	// Try packed format first (EntryPoint v0.7+ supports it), fall back to standard format if needed
-	// This matches the strategy used in simulateValidation
-	var calldata []byte
-	usePackedFormat := true
-	
-	calldata, err = EncodeSimulateValidationPacked(userOp)
+	// Encode packed simulateValidation only (EntryPoint v0.7+/v0.9); no standard fallback
+	calldata, err := EncodeSimulateValidationPacked(userOp)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode simulateValidation (packed): %w", err)
 	}
@@ -1289,49 +1320,37 @@ func (v *UserOpValidator) EstimateGas(
 		Data: (*hexutil.Bytes)(&calldata),
 	}
 
-	// Estimate gas with packed format
-	gasLimit, err := v.requester.EstimateGas(txArgs, v.config.Coinbase, height, nil, nil)
-	
-	// If packed format fails, try standard format (EntryPoint v0.6)
-	if err != nil && usePackedFormat {
-		// Check if it's a "function not found" error by trying to verify selector exists
-		selector := calldata[:4]
-		entryPointCode, codeErr := v.requester.GetCode(entryPoint, height)
-		selectorExists := false
-		if codeErr == nil {
-			selectorExists = bytes.Contains(entryPointCode, selector)
+	// For EntryPoint v0.9.0: When calling EntryPoint directly (not using separately deployed EntryPointSimulations),
+	// we need to use a state override to temporarily replace EntryPoint's code with EntryPointSimulations bytecode.
+	var stateOverride *ethTypes.StateOverride
+	if v.config.EntryPointSimulationsAddress == (common.Address{}) {
+		// Decode the EntryPointSimulations deployed bytecode from hex
+		bytecodeHex := strings.TrimSpace(string(abis.EntryPointSimulationsDeployedBytecode))
+		bytecodeBytes, decodeErr := hexutil.Decode(bytecodeHex)
+		if decodeErr != nil {
+			return nil, fmt.Errorf("failed to decode EntryPointSimulations bytecode: %w", decodeErr)
 		}
-		
-		if !selectorExists {
-			// Function doesn't exist - try fallback to standard format
-			v.logger.Info().
-				Str("functionSelector", hexutil.Encode(selector)).
-				Str("entryPoint", entryPoint.Hex()).
-				Msg("packed format simulateValidation not found in EstimateGas - falling back to standard format")
-			
-			// Retry with standard format
-			calldata, err = EncodeSimulateValidation(userOp)
-			if err != nil {
-				return nil, fmt.Errorf("failed to encode simulateValidation (standard): %w", err)
-			}
-			
-			txArgs = ethTypes.TransactionArgs{
-				To:   &entryPoint,
-				Data: (*hexutil.Bytes)(&calldata),
-			}
-			
-			// Retry the estimate with standard format
-			gasLimit, err = v.requester.EstimateGas(txArgs, v.config.Coinbase, height, nil, nil)
+
+		// Create state override: replace EntryPoint's code with EntryPointSimulations bytecode
+		stateOverride = &ethTypes.StateOverride{
+			entryPoint: {
+				Code: (*hexutil.Bytes)(&bytecodeBytes),
+			},
 		}
 	}
-	
+
+	// Estimate gas with packed format; no standard fallback
+	// Note: For EntryPoint v0.9.0, simulateValidation returns ValidationResult normally on success,
+	// but eth_estimateGas will still work correctly - it executes the call and returns gas consumed
+	gasLimit, err := v.requester.EstimateGas(txArgs, v.config.Coinbase, height, stateOverride, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to estimate gas: %w", err)
+		return nil, fmt.Errorf("failed to estimate gas (packed simulateValidation): %w", err)
 	}
 
 	// Parse gas estimates from simulation result
-	// simulateValidation returns gas estimates in revert data on success
-	// For now, use the estimated gas and split it
+	// TODO: For more accurate estimates, we could call simulateValidation via eth_call and extract
+	// preOpGas from ValidationResult.returnInfo.preOpGas. For now, use eth_estimateGas result.
+	// The current approach splits the estimated gas, which is a reasonable approximation.
 	verificationGas := big.NewInt(int64(gasLimit) * 2 / 3) // ~66% for verification
 	preVerificationGas := big.NewInt(21000)                // Base overhead
 	callGasLimit := userOp.CallGasLimit
@@ -1798,5 +1817,393 @@ func (v *UserOpValidator) decodeFactoryRevert(revertData []byte, revertHex strin
 	// Unknown format
 	result.Decoded = fmt.Sprintf("Unknown factory format (selector: %s, data length: %d bytes) - might be from SimpleAccount implementation or proxy", hexutil.Encode(selector), len(revertData))
 	return result
+}
+
+// ValidationData represents decoded validation data from EntryPoint v0.9.0
+// validationData is packed as: aggregatorOrSigFail (160 bits) | validUntil (48 bits) << 160 | validAfter (48 bits) << (160+48)
+// Sentinel values (from EntryPoint v0.9.0):
+//   - SIG_VALIDATION_SUCCESS = 0 (no aggregator, signature OK)
+//   - SIG_VALIDATION_FAILED = 1 (no aggregator, signature failed)
+//   - aggregatorOrSigFail > 1 = actual aggregator address
+type ValidationData struct {
+	AggregatorOrSigFail *big.Int // Low 160 bits: 0 = success, 1 = failed, >1 = aggregator address
+	ValidUntil          *big.Int // Next 48 bits: validity window end
+	ValidAfter          *big.Int // Top 48 bits: validity window start
+	HasAggregator       bool     // True if aggregatorOrSigFail > 1
+	SigFailed           bool     // True if aggregatorOrSigFail == 1
+}
+
+// EntryPoint v0.9.0 sentinel values for validationData
+var (
+	SIG_VALIDATION_SUCCESS = big.NewInt(0)
+	SIG_VALIDATION_FAILED  = big.NewInt(1)
+	// VALIDITY_BLOCK_RANGE_FLAG and MASK per EntryPoint v0.9.0
+	// If both validAfter and validUntil have this flag set, they are interpreted as block numbers (not timestamps)
+	// Flag uses the top bit of the 48-bit field
+	VALIDITY_BLOCK_RANGE_FLAG = new(big.Int).Lsh(big.NewInt(1), 47)                  // 1 << 47
+	VALIDITY_BLOCK_RANGE_MASK = new(big.Int).Sub(VALIDITY_BLOCK_RANGE_FLAG, big.NewInt(1)) // lower 47 bits set
+)
+
+// DecodeValidationData decodes a validationData uint256 according to EntryPoint v0.9.0 format
+// Format: aggregatorOrSigFail (low 160 bits) | validUntil (48 bits) << 160 | validAfter (48 bits) << (160+48)
+// Based on EntryPoint v0.9.0 _parseValidationData and _getValidationData logic
+func DecodeValidationData(validationData *big.Int) ValidationData {
+	// Extract aggregatorOrSigFail (low 160 bits)
+	aggregatorMask := new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 160), big.NewInt(1))
+	aggregatorOrSigFail := new(big.Int).And(validationData, aggregatorMask)
+
+	// Extract validUntil (48 bits, shifted left 160)
+	validUntilMask := new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 48), big.NewInt(1))
+	validUntilShifted := new(big.Int).Rsh(validationData, 160)
+	validUntil := new(big.Int).And(validUntilShifted, validUntilMask)
+
+	// Extract validAfter (48 bits, shifted left 160+48 = 208)
+	validAfterShifted := new(big.Int).Rsh(validationData, 208)
+	validAfter := new(big.Int).And(validAfterShifted, validUntilMask)
+
+	// Determine signature status and aggregator presence
+	// SIG_VALIDATION_SUCCESS = 0: no aggregator, signature OK
+	// SIG_VALIDATION_FAILED = 1: no aggregator, signature failed
+	// aggregatorOrSigFail > 1: actual aggregator address
+	sigFailed := aggregatorOrSigFail.Cmp(SIG_VALIDATION_FAILED) == 0
+	hasAggregator := aggregatorOrSigFail.Cmp(SIG_VALIDATION_FAILED) > 0
+
+	return ValidationData{
+		AggregatorOrSigFail: aggregatorOrSigFail,
+		ValidUntil:          validUntil,
+		ValidAfter:          validAfter,
+		HasAggregator:       hasAggregator,
+		SigFailed:           sigFailed,
+	}
+}
+
+// GetAggregatorAddress extracts the aggregator address from validationData if present
+// Returns zero address if no aggregator (signature success or failure)
+func (vd ValidationData) GetAggregatorAddress() common.Address {
+	if vd.HasAggregator {
+		return common.BigToAddress(vd.AggregatorOrSigFail)
+	}
+	return common.Address{}
+}
+
+// checkValidationWindow returns (outOfRange, isBlockRange)
+func checkValidationWindow(vd ValidationData, currentBlockNumber uint64, currentBlockTimestamp uint64) (bool, bool) {
+	validAfter := new(big.Int).Set(vd.ValidAfter)
+	validUntil := new(big.Int).Set(vd.ValidUntil)
+
+	// Block range mode if both fields have the flag set
+	hasBlockRangeFlag := validAfter.Cmp(VALIDITY_BLOCK_RANGE_FLAG) >= 0 && validUntil.Cmp(VALIDITY_BLOCK_RANGE_FLAG) >= 0
+
+	if hasBlockRangeFlag {
+		validAfterBlock := new(big.Int).And(validAfter, VALIDITY_BLOCK_RANGE_MASK)
+		validUntilBlock := new(big.Int).And(validUntil, VALIDITY_BLOCK_RANGE_MASK)
+
+		// outOfValidityRange = block.number > validUntilBlock || block.number <= validAfterBlock
+		if new(big.Int).SetUint64(currentBlockNumber).Cmp(validUntilBlock) > 0 ||
+			new(big.Int).SetUint64(currentBlockNumber).Cmp(validAfterBlock) <= 0 {
+			return true, true
+		}
+		return false, true
+	}
+
+	// Timestamp mode: outOfValidityRange = block.timestamp > validUntil || block.timestamp <= validAfter
+	if new(big.Int).SetUint64(currentBlockTimestamp).Cmp(validUntil) > 0 ||
+		new(big.Int).SetUint64(currentBlockTimestamp).Cmp(validAfter) <= 0 {
+		return true, false
+	}
+	return false, false
+}
+
+// validateValidationResult implements the validation pipeline from the TDD plan (Section 6)
+// It validates the ValidationResult according to EntryPoint v0.9.0 requirements:
+// 1. Interpret validationData (signature failure, time windows)
+// 2. Check stake values (sender, factory, paymaster, aggregator)
+// 3. Verify prefund calculation
+func (v *UserOpValidator) validateValidationResult(
+	ctx context.Context,
+	validationResult *ValidationResult,
+	userOp *models.UserOperation,
+	entryPoint common.Address,
+	height uint64,
+) error {
+	// 1. Interpret validationData (Section 3 of the plan)
+	accountValidationData := DecodeValidationData(validationResult.ReturnInfo.AccountValidationData)
+	paymasterValidationData := DecodeValidationData(validationResult.ReturnInfo.PaymasterValidationData)
+
+	// Log decoded validationData with exact sentinel values
+	accountAggregatorAddr := accountValidationData.GetAggregatorAddress()
+	paymasterAggregatorAddr := paymasterValidationData.GetAggregatorAddress()
+	v.logger.Debug().
+		Str("accountAggregatorOrSigFail", accountValidationData.AggregatorOrSigFail.String()).
+		Str("accountAggregator", accountAggregatorAddr.Hex()).
+		Bool("accountHasAggregator", accountValidationData.HasAggregator).
+		Str("accountValidAfter", accountValidationData.ValidAfter.String()).
+		Str("accountValidUntil", accountValidationData.ValidUntil.String()).
+		Bool("accountSigFailed", accountValidationData.SigFailed).
+		Str("paymasterAggregatorOrSigFail", paymasterValidationData.AggregatorOrSigFail.String()).
+		Str("paymasterAggregator", paymasterAggregatorAddr.Hex()).
+		Bool("paymasterHasAggregator", paymasterValidationData.HasAggregator).
+		Str("paymasterValidAfter", paymasterValidationData.ValidAfter.String()).
+		Str("paymasterValidUntil", paymasterValidationData.ValidUntil.String()).
+		Bool("paymasterSigFailed", paymasterValidationData.SigFailed).
+		Msg("decoded validationData with EntryPoint v0.9.0 sentinel values")
+
+	// Check signature failure (Test 3.1 from the plan)
+	// SIG_VALIDATION_FAILED = 1 means signature validation failed
+	if accountValidationData.SigFailed {
+		v.logger.Error().
+			Str("accountValidationData", validationResult.ReturnInfo.AccountValidationData.Text(16)).
+			Str("aggregatorOrSigFail", accountValidationData.AggregatorOrSigFail.String()).
+			Str("sender", userOp.Sender.Hex()).
+			Msg("account signature validation failed (SIG_VALIDATION_FAILED=1) - rejecting UserOp")
+		return fmt.Errorf("account signature validation failed (AA24 signature error)")
+	}
+
+	if paymasterValidationData.SigFailed {
+		v.logger.Error().
+			Str("paymasterValidationData", validationResult.ReturnInfo.PaymasterValidationData.Text(16)).
+			Str("aggregatorOrSigFail", paymasterValidationData.AggregatorOrSigFail.String()).
+			Str("sender", userOp.Sender.Hex()).
+			Msg("paymaster signature validation failed (SIG_VALIDATION_FAILED=1) - rejecting UserOp")
+		return fmt.Errorf("paymaster signature validation failed")
+	}
+
+	// Check validity windows (Test 3.2, 3.3)
+	// Get current block (height and timestamp) for validity checks
+	if v.blocks == nil {
+		v.logger.Debug().Msg("blocks indexer not set; skipping validity window time/block comparison")
+	} else {
+		currentHeight, err := v.blocks.LatestEVMHeight()
+		if err != nil {
+			v.logger.Warn().
+				Err(err).
+				Msg("could not get latest EVM height for validity window checks; skipping time/block comparison")
+		} else {
+			block, blkErr := v.blocks.GetByHeight(currentHeight)
+			if blkErr != nil {
+				v.logger.Warn().
+					Err(blkErr).
+					Uint64("height", currentHeight).
+					Msg("could not get block by height for validity window checks; skipping time/block comparison")
+			} else {
+				currentTimestamp := block.Timestamp
+				currentBlockNumber := block.Height
+
+				// Account validity
+				accountOutOfRange, accountIsBlockRange := checkValidationWindow(accountValidationData, currentBlockNumber, currentTimestamp)
+				if accountOutOfRange {
+					v.logger.Error().
+						Uint64("currentBlockNumber", currentBlockNumber).
+						Uint64("currentTimestamp", currentTimestamp).
+						Bool("isBlockRange", accountIsBlockRange).
+						Str("validAfter", accountValidationData.ValidAfter.String()).
+						Str("validUntil", accountValidationData.ValidUntil.String()).
+						Str("sender", userOp.Sender.Hex()).
+						Msg("account validation window out of range - rejecting UserOp")
+					return fmt.Errorf("account validation window out of range (blockRange=%t)", accountIsBlockRange)
+				}
+
+				// Paymaster validity
+				paymasterOutOfRange, paymasterIsBlockRange := checkValidationWindow(paymasterValidationData, currentBlockNumber, currentTimestamp)
+				if paymasterOutOfRange {
+					v.logger.Error().
+						Uint64("currentBlockNumber", currentBlockNumber).
+						Uint64("currentTimestamp", currentTimestamp).
+						Bool("isBlockRange", paymasterIsBlockRange).
+						Str("validAfter", paymasterValidationData.ValidAfter.String()).
+						Str("validUntil", paymasterValidationData.ValidUntil.String()).
+						Str("sender", userOp.Sender.Hex()).
+						Msg("paymaster validation window out of range - rejecting UserOp")
+					return fmt.Errorf("paymaster validation window out of range (blockRange=%t)", paymasterIsBlockRange)
+				}
+			}
+		}
+	}
+
+	// 2. Stake checks (Section 4 of the plan) - Test 4.1, 4.2, 4.3
+	// Config should already have default stake requirements set in NewUserOpValidator,
+	// but ensure they're set as a safety check
+	if v.config.MinSenderStake == nil || v.config.MinFactoryStake == nil ||
+		v.config.MinPaymasterStake == nil || v.config.MinAggregatorStake == nil {
+		v.config.SetDefaultStakeRequirements()
+	}
+
+	v.logger.Debug().
+		Str("senderStake", validationResult.SenderInfo.Stake.String()).
+		Str("senderUnstakeDelaySec", validationResult.SenderInfo.UnstakeDelaySec.String()).
+		Str("factoryStake", validationResult.FactoryInfo.Stake.String()).
+		Str("factoryUnstakeDelaySec", validationResult.FactoryInfo.UnstakeDelaySec.String()).
+		Str("paymasterStake", validationResult.PaymasterInfo.Stake.String()).
+		Str("paymasterUnstakeDelaySec", validationResult.PaymasterInfo.UnstakeDelaySec.String()).
+		Str("aggregator", validationResult.AggregatorInfo.Aggregator.Hex()).
+		Str("aggregatorStake", validationResult.AggregatorInfo.StakeInfo.Stake.String()).
+		Str("aggregatorUnstakeDelaySec", validationResult.AggregatorInfo.StakeInfo.UnstakeDelaySec.String()).
+		Str("minSenderStake", v.config.MinSenderStake.String()).
+		Str("minFactoryStake", v.config.MinFactoryStake.String()).
+		Str("minPaymasterStake", v.config.MinPaymasterStake.String()).
+		Str("minAggregatorStake", v.config.MinAggregatorStake.String()).
+		Uint64("minUnstakeDelaySec", v.config.MinUnstakeDelaySec).
+		Msg("stake information from ValidationResult with minimum requirements")
+
+	// Test 4.1: Sender stake threshold
+	if validationResult.SenderInfo.Stake.Cmp(v.config.MinSenderStake) < 0 {
+		v.logger.Error().
+			Str("senderStake", validationResult.SenderInfo.Stake.String()).
+			Str("minSenderStake", v.config.MinSenderStake.String()).
+			Str("sender", userOp.Sender.Hex()).
+			Msg("sender stake below minimum threshold - rejecting UserOp")
+		return fmt.Errorf("sender stake (%s) below minimum threshold (%s)", validationResult.SenderInfo.Stake.String(), v.config.MinSenderStake.String())
+	}
+	if validationResult.SenderInfo.UnstakeDelaySec.Cmp(big.NewInt(int64(v.config.MinUnstakeDelaySec))) < 0 {
+		v.logger.Error().
+			Str("senderUnstakeDelaySec", validationResult.SenderInfo.UnstakeDelaySec.String()).
+			Uint64("minUnstakeDelaySec", v.config.MinUnstakeDelaySec).
+			Str("sender", userOp.Sender.Hex()).
+			Msg("sender unstake delay below minimum - rejecting UserOp")
+		return fmt.Errorf("sender unstake delay (%s) below minimum (%d seconds)", validationResult.SenderInfo.UnstakeDelaySec.String(), v.config.MinUnstakeDelaySec)
+	}
+
+	// Factory stake check (if factory is used - initCode is present)
+	if len(userOp.InitCode) > 0 {
+		if validationResult.FactoryInfo.Stake.Cmp(v.config.MinFactoryStake) < 0 {
+			v.logger.Error().
+				Str("factoryStake", validationResult.FactoryInfo.Stake.String()).
+				Str("minFactoryStake", v.config.MinFactoryStake.String()).
+				Str("sender", userOp.Sender.Hex()).
+				Msg("factory stake below minimum threshold - rejecting UserOp")
+			return fmt.Errorf("factory stake (%s) below minimum threshold (%s)", validationResult.FactoryInfo.Stake.String(), v.config.MinFactoryStake.String())
+		}
+		if validationResult.FactoryInfo.UnstakeDelaySec.Cmp(big.NewInt(int64(v.config.MinUnstakeDelaySec))) < 0 {
+			v.logger.Error().
+				Str("factoryUnstakeDelaySec", validationResult.FactoryInfo.UnstakeDelaySec.String()).
+				Uint64("minUnstakeDelaySec", v.config.MinUnstakeDelaySec).
+				Str("sender", userOp.Sender.Hex()).
+				Msg("factory unstake delay below minimum - rejecting UserOp")
+			return fmt.Errorf("factory unstake delay (%s) below minimum (%d seconds)", validationResult.FactoryInfo.UnstakeDelaySec.String(), v.config.MinUnstakeDelaySec)
+		}
+	}
+
+	// Test 4.2: Paymaster stake check (if paymaster is used)
+	if len(userOp.PaymasterAndData) > 0 {
+		if validationResult.PaymasterInfo.Stake.Cmp(v.config.MinPaymasterStake) < 0 {
+			v.logger.Error().
+				Str("paymasterStake", validationResult.PaymasterInfo.Stake.String()).
+				Str("minPaymasterStake", v.config.MinPaymasterStake.String()).
+				Str("sender", userOp.Sender.Hex()).
+				Msg("paymaster stake below minimum threshold - rejecting UserOp")
+			return fmt.Errorf("paymaster stake (%s) below minimum threshold (%s)", validationResult.PaymasterInfo.Stake.String(), v.config.MinPaymasterStake.String())
+		}
+		if validationResult.PaymasterInfo.UnstakeDelaySec.Cmp(big.NewInt(int64(v.config.MinUnstakeDelaySec))) < 0 {
+			v.logger.Error().
+				Str("paymasterUnstakeDelaySec", validationResult.PaymasterInfo.UnstakeDelaySec.String()).
+				Uint64("minUnstakeDelaySec", v.config.MinUnstakeDelaySec).
+				Str("sender", userOp.Sender.Hex()).
+				Msg("paymaster unstake delay below minimum - rejecting UserOp")
+			return fmt.Errorf("paymaster unstake delay (%s) below minimum (%d seconds)", validationResult.PaymasterInfo.UnstakeDelaySec.String(), v.config.MinUnstakeDelaySec)
+		}
+	}
+
+	// Test 4.3: Aggregator stake check (if aggregator is used)
+	if accountValidationData.HasAggregator {
+		aggregatorAddr := accountValidationData.GetAggregatorAddress()
+		if validationResult.AggregatorInfo.Aggregator != aggregatorAddr {
+			v.logger.Error().
+				Str("expectedAggregator", aggregatorAddr.Hex()).
+				Str("actualAggregator", validationResult.AggregatorInfo.Aggregator.Hex()).
+				Str("sender", userOp.Sender.Hex()).
+				Msg("aggregator address mismatch - rejecting UserOp")
+			return fmt.Errorf("aggregator address mismatch: expected %s, got %s", aggregatorAddr.Hex(), validationResult.AggregatorInfo.Aggregator.Hex())
+		}
+		if validationResult.AggregatorInfo.StakeInfo.Stake.Cmp(v.config.MinAggregatorStake) < 0 {
+			v.logger.Error().
+				Str("aggregatorStake", validationResult.AggregatorInfo.StakeInfo.Stake.String()).
+				Str("minAggregatorStake", v.config.MinAggregatorStake.String()).
+				Str("aggregator", aggregatorAddr.Hex()).
+				Str("sender", userOp.Sender.Hex()).
+				Msg("aggregator stake below minimum threshold - rejecting UserOp")
+			return fmt.Errorf("aggregator stake (%s) below minimum threshold (%s)", validationResult.AggregatorInfo.StakeInfo.Stake.String(), v.config.MinAggregatorStake.String())
+		}
+		if validationResult.AggregatorInfo.StakeInfo.UnstakeDelaySec.Cmp(big.NewInt(int64(v.config.MinUnstakeDelaySec))) < 0 {
+			v.logger.Error().
+				Str("aggregatorUnstakeDelaySec", validationResult.AggregatorInfo.StakeInfo.UnstakeDelaySec.String()).
+				Uint64("minUnstakeDelaySec", v.config.MinUnstakeDelaySec).
+				Str("aggregator", aggregatorAddr.Hex()).
+				Str("sender", userOp.Sender.Hex()).
+				Msg("aggregator unstake delay below minimum - rejecting UserOp")
+			return fmt.Errorf("aggregator unstake delay (%s) below minimum (%d seconds)", validationResult.AggregatorInfo.StakeInfo.UnstakeDelaySec.String(), v.config.MinUnstakeDelaySec)
+		}
+	}
+
+	// 3. Prefund calculation verification (Test 2.2)
+	// Verify that returnInfo.prefund matches expected calculation according to EntryPoint v0.9.0 _getRequiredPrefund
+	// Formula: requiredGas = verificationGasLimit + callGasLimit + paymasterVerificationGasLimit + paymasterPostOpGasLimit + preVerificationGas
+	//          requiredPrefund = requiredGas * maxFeePerGas
+	// Note: paymasterVerificationGasLimit and paymasterPostOpGasLimit are computed by EntryPoint during paymaster validation
+	//       and are not part of the UserOperation struct. We can only verify the base calculation (account gas limits).
+	//       If a paymaster is present, the actual prefund will include additional paymaster gas that we cannot pre-compute.
+	
+	// Base calculation: account gas limits (what we can verify from UserOperation)
+	baseRequiredGas := new(big.Int).Set(userOp.PreVerificationGas)
+	baseRequiredGas.Add(baseRequiredGas, userOp.VerificationGasLimit)
+	baseRequiredGas.Add(baseRequiredGas, userOp.CallGasLimit)
+	
+	baseExpectedPrefund := new(big.Int).Mul(baseRequiredGas, userOp.MaxFeePerGas)
+	
+	// If paymaster is present, EntryPoint will add paymasterVerificationGasLimit + paymasterPostOpGasLimit
+	// We cannot verify the exact prefund in this case, but we can verify it's at least the base amount
+	hasPaymaster := len(userOp.PaymasterAndData) > 0
+	
+	if hasPaymaster {
+		// With paymaster: actual prefund should be >= base expected prefund
+		// EntryPoint adds: paymasterVerificationGasLimit + paymasterPostOpGasLimit
+		if validationResult.ReturnInfo.Prefund.Cmp(baseExpectedPrefund) < 0 {
+			v.logger.Error().
+				Str("baseExpectedPrefund", baseExpectedPrefund.String()).
+				Str("actualPrefund", validationResult.ReturnInfo.Prefund.String()).
+				Str("sender", userOp.Sender.Hex()).
+				Msg("prefund calculation error: actual prefund is less than base expected (account gas limits). This indicates a serious mismatch.")
+			return fmt.Errorf("prefund calculation error: actual prefund (%s) is less than base expected (%s) - this indicates a gateway bug or EntryPoint mismatch", validationResult.ReturnInfo.Prefund.String(), baseExpectedPrefund.String())
+		}
+		
+		// Log the difference (should be paymaster gas)
+		paymasterGasDiff := new(big.Int).Sub(validationResult.ReturnInfo.Prefund, baseExpectedPrefund)
+		v.logger.Debug().
+			Str("baseExpectedPrefund", baseExpectedPrefund.String()).
+			Str("actualPrefund", validationResult.ReturnInfo.Prefund.String()).
+			Str("paymasterGasDiff", paymasterGasDiff.String()).
+			Str("sender", userOp.Sender.Hex()).
+			Msg("prefund calculation verified (base) - paymaster gas included in actual prefund")
+	} else {
+		// Without paymaster: actual prefund should exactly match base expected prefund
+		// Formula: preVerificationGas + (callGasLimit + verificationGasLimit) * maxFeePerGas
+		prefundDiff := new(big.Int).Sub(validationResult.ReturnInfo.Prefund, baseExpectedPrefund)
+		prefundDiffAbs := new(big.Int).Abs(prefundDiff)
+		
+		// Should match exactly (no rounding needed - all values are integers)
+		if prefundDiffAbs.Cmp(big.NewInt(0)) != 0 {
+			v.logger.Error().
+				Str("expectedPrefund", baseExpectedPrefund.String()).
+				Str("actualPrefund", validationResult.ReturnInfo.Prefund.String()).
+				Str("prefundDiff", prefundDiff.String()).
+				Str("preVerificationGas", userOp.PreVerificationGas.String()).
+				Str("callGasLimit", userOp.CallGasLimit.String()).
+				Str("verificationGasLimit", userOp.VerificationGasLimit.String()).
+				Str("maxFeePerGas", userOp.MaxFeePerGas.String()).
+				Str("sender", userOp.Sender.Hex()).
+				Msg("CRITICAL: prefund calculation mismatch - this indicates a gateway bug or EntryPoint version mismatch. Rejecting UserOp.")
+			return fmt.Errorf("prefund calculation mismatch: expected %s, got %s (diff: %s). This indicates a gateway bug or EntryPoint version mismatch", baseExpectedPrefund.String(), validationResult.ReturnInfo.Prefund.String(), prefundDiff.String())
+		}
+		
+		v.logger.Debug().
+			Str("prefund", validationResult.ReturnInfo.Prefund.String()).
+			Str("expectedPrefund", baseExpectedPrefund.String()).
+			Str("preVerificationGas", userOp.PreVerificationGas.String()).
+			Str("callGasLimit", userOp.CallGasLimit.String()).
+			Str("verificationGasLimit", userOp.VerificationGasLimit.String()).
+			Str("maxFeePerGas", userOp.MaxFeePerGas.String()).
+			Msg("prefund calculation verified exactly (no paymaster)")
+	}
+
+	return nil
 }
 

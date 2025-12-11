@@ -152,4 +152,70 @@ type Config struct {
 	// BundlerInterval is the interval at which the bundler checks for and processes pending UserOperations
 	// Default: 800ms (0.8 seconds). Lower values reduce latency but increase RPC load on Access Node.
 	BundlerInterval time.Duration
+	// ERC-4337 Stake Requirements (EntryPoint v0.9.0)
+	// These values enforce minimum stake requirements for UserOperation validation
+	// Production values match Ethereum mainnet economics (~$3,300 for paymasters, ~$330 for senders)
+	// Testnet values are lower for easier testing
+	// MinSenderStake is the minimum stake required for sender accounts (in FLOW)
+	// Production: 3,300 FLOW (~$330, equivalent to 0.1 ETH)
+	// Testnet: 1,000 FLOW (~$100)
+	MinSenderStake *big.Int
+	// MinFactoryStake is the minimum stake required for factory contracts (in FLOW)
+	// Production: 3,300 FLOW (~$330, equivalent to 0.1 ETH)
+	// Testnet: 1,000 FLOW (~$100)
+	MinFactoryStake *big.Int
+	// MinPaymasterStake is the minimum stake required for paymaster contracts (in FLOW)
+	// Production: 33,000 FLOW (~$3,300, equivalent to 1 ETH)
+	// Testnet: 10,000 FLOW (~$1,000)
+	MinPaymasterStake *big.Int
+	// MinAggregatorStake is the minimum stake required for aggregator contracts (in FLOW)
+	// Production: 33,000 FLOW (~$3,300, equivalent to 1 ETH)
+	// Testnet: 10,000 FLOW (~$1,000)
+	MinAggregatorStake *big.Int
+	// MinUnstakeDelaySec is the minimum unstake delay required (in seconds)
+	// This is typically 7 days (604800 seconds) for EntryPoint v0.9.0
+	MinUnstakeDelaySec uint64
+}
+
+// SetDefaultStakeRequirements sets default stake requirements based on network type
+// Production values match Ethereum mainnet economics (~$3,300 for paymasters, ~$330 for senders)
+// Testnet values are lower for easier testing
+func (c *Config) SetDefaultStakeRequirements() {
+	// Default unstake delay: 7 days (604800 seconds)
+	if c.MinUnstakeDelaySec == 0 {
+		c.MinUnstakeDelaySec = 604800 // 7 days
+	}
+
+	// Determine if we're on testnet or production
+	isTestnet := c.FlowNetworkID == flowGo.Testnet || c.FlowNetworkID == flowGo.Emulator || c.FlowNetworkID == flowGo.Previewnet
+
+	if isTestnet {
+		// Testnet values (for easier testing)
+		if c.MinSenderStake == nil {
+			c.MinSenderStake = big.NewInt(1_000) // 1,000 FLOW (~$100)
+		}
+		if c.MinFactoryStake == nil {
+			c.MinFactoryStake = big.NewInt(1_000) // 1,000 FLOW (~$100)
+		}
+		if c.MinPaymasterStake == nil {
+			c.MinPaymasterStake = big.NewInt(10_000) // 10,000 FLOW (~$1,000)
+		}
+		if c.MinAggregatorStake == nil {
+			c.MinAggregatorStake = big.NewInt(10_000) // 10,000 FLOW (~$1,000)
+		}
+	} else {
+		// Production values (matching Ethereum mainnet economics)
+		if c.MinSenderStake == nil {
+			c.MinSenderStake = big.NewInt(3_300) // 3,300 FLOW (~$330, equivalent to 0.1 ETH)
+		}
+		if c.MinFactoryStake == nil {
+			c.MinFactoryStake = big.NewInt(3_300) // 3,300 FLOW (~$330, equivalent to 0.1 ETH)
+		}
+		if c.MinPaymasterStake == nil {
+			c.MinPaymasterStake = big.NewInt(33_000) // 33,000 FLOW (~$3,300, equivalent to 1 ETH)
+		}
+		if c.MinAggregatorStake == nil {
+			c.MinAggregatorStake = big.NewInt(33_000) // 33,000 FLOW (~$3,300, equivalent to 1 ETH)
+		}
+	}
 }
