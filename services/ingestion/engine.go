@@ -243,7 +243,7 @@ func (e *Engine) indexEvents(events *models.CadenceEvents, batch *pebbleDB.Batch
 		e.blocksProvider,
 		e.log,
 		e.replayerConfig.CallTracerCollector.TxTracer(),
-		e.replayerConfig.ValidateResults,
+		false,
 	)
 
 	// Step 1.2: Replay all block transactions
