@@ -926,22 +926,30 @@ func (b *BlockChainAPI) GetStorageAt(
 
 func (b *BlockChainAPI) fetchBlockTransactions(
 	block *models.Block,
+	receipts []*models.Receipt,
 ) ([]*ethTypes.Transaction, error) {
-	transactions := make([]*ethTypes.Transaction, 0)
-	for _, txHash := range block.TransactionHashes {
-		transaction, err := b.prepareTransactionResponse(txHash)
+	transactions := make([]*ethTypes.Transaction, len(receipts))
+	for i, receipt := range receipts {
+		tx, err := b.transactions.Get(receipt.TxHash)
 		if err != nil {
 			return nil, err
 		}
-		if transaction == nil {
+
+		if tx == nil {
 			b.logger.Error().
-				Str("tx-hash", txHash.String()).
+				Str("tx-hash", receipt.TxHash.String()).
 				Uint64("evm-height", block.Height).
 				Msg("not found a transaction the block references")
 
 			continue
 		}
-		transactions = append(transactions, transaction)
+
+		transaction, err := ethTypes.NewTransactionResult(tx, *receipt, b.config.EVMNetworkID)
+		if err != nil {
+			return nil, err
+		}
+
+		transactions[i] = transaction
 	}
 
 	return transactions, nil
@@ -996,26 +1004,28 @@ func (b *BlockChainAPI) prepareBlockResponse(
 	}
 	blockSize := rlp.ListSize(uint64(len(blockBytes)))
 
-	transactions, err := b.fetchBlockTransactions(block)
+	receipts, err := b.receipts.GetByBlockHeight(block.Height)
+	if err != nil {
+		return nil, err
+	}
+
+	transactions, err := b.fetchBlockTransactions(block, receipts)
 	if err != nil {
 		return nil, err
 	}
 
 	if len(transactions) > 0 {
 		totalGasUsed := hexutil.Uint64(0)
-		receipts := types.Receipts{}
-		for _, tx := range transactions {
-			txReceipt, err := b.receipts.GetByTransactionID(tx.Hash)
-			if err != nil {
-				return nil, err
-			}
+		gethReceipts := types.Receipts{}
+		for i, tx := range transactions {
+			txReceipt := receipts[i]
 			totalGasUsed += hexutil.Uint64(txReceipt.GasUsed)
-			receipts = append(receipts, txReceipt.ToGethReceipt())
+			gethReceipts = append(gethReceipts, txReceipt.ToGethReceipt())
 			blockSize += tx.Size()
 		}
 		blockResponse.GasUsed = totalGasUsed
 		// TODO(m-Peter): Consider if its worthwhile to move this in storage.
-		blockResponse.LogsBloom = types.MergeBloom(receipts).Bytes()
+		blockResponse.LogsBloom = types.MergeBloom(gethReceipts).Bytes()
 	}
 	blockResponse.Size = hexutil.Uint64(rlp.ListSize(blockSize))
 
