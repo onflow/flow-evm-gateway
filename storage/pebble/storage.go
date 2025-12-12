@@ -64,6 +64,10 @@ func (s *Storage) delete(keyCode byte, key []byte, batch *pebble.Batch) error {
 	return batch.Delete(prefixedKey, nil)
 }
 
+func (s *Storage) NewIndexedBatch() *pebble.Batch {
+	return s.db.NewIndexedBatch()
+}
+
 func (s *Storage) NewBatch() *pebble.Batch {
 	return s.db.NewBatch()
 }

@@ -149,7 +149,7 @@ func (e *Engine) Run(ctx context.Context) error {
 // withBatch will execute the provided function with a new batch, and commit the batch
 // afterwards if no error is returned.
 func (e *Engine) withBatch(f func(batch *pebbleDB.Batch) error) error {
-	batch := e.store.NewBatch()
+	batch := e.store.NewIndexedBatch()
 	defer func(batch *pebbleDB.Batch) {
 		err := batch.Close()
 		if err != nil {
