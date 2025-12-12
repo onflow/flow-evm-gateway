@@ -174,7 +174,8 @@ type Config struct {
 	MinAggregatorStake *big.Int
 	// MinUnstakeDelaySec is the minimum unstake delay required (in seconds)
 	// This is typically 7 days (604800 seconds) for EntryPoint v0.9.0
-	MinUnstakeDelaySec uint64
+	// Use a pointer so nil = not set (use default), 0 = explicitly set to 0 (disable check)
+	MinUnstakeDelaySec *uint64
 }
 
 // SetDefaultStakeRequirements sets default stake requirements based on network type
@@ -182,8 +183,10 @@ type Config struct {
 // Testnet values are lower for easier testing
 func (c *Config) SetDefaultStakeRequirements() {
 	// Default unstake delay: 7 days (604800 seconds)
-	if c.MinUnstakeDelaySec == 0 {
-		c.MinUnstakeDelaySec = 604800 // 7 days
+	// Only set if not explicitly configured (nil means not set, 0 means explicitly set to 0)
+	if c.MinUnstakeDelaySec == nil {
+		defaultDelay := uint64(604800) // 7 days
+		c.MinUnstakeDelaySec = &defaultDelay
 	}
 
 	// Determine if we're on testnet or production

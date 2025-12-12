@@ -70,11 +70,27 @@ VERSION=no-keys-logging
 **Also verify these are set** (add if missing):
 
 ```
-ENTRY_POINT_ADDRESS=0xcf1e8398747a05a997e8c964e957e47209bdff08
+ENTRY_POINT_ADDRESS=0x33860348ce61ea6cec276b1cf93c5465d1a92131
 ENTRY_POINT_SIMULATIONS_ADDRESS=0xfFDDAa4a9Ab363f02Ba26a5fc45Ec714562683D3
 BUNDLER_ENABLED=true
 WALLET_API_KEY=your-64-character-hex-private-key
+MIN_FACTORY_STAKE=0
+MIN_UNSTAKE_DELAY_SEC=0
 ```
+
+**Note on MIN_FACTORY_STAKE**:
+
+- Set to `0` to disable factory stake requirement for testing
+- Set to `1000` or higher to enforce factory stake (default: 1000 for testnet, 3300 for production)
+- This can also be set via `--min-factory-stake` command line flag
+- The environment variable is automatically read if `EnvironmentFile=/etc/flow/runtime-conf.env` is set in the service file
+
+**Note on MIN_UNSTAKE_DELAY_SEC**:
+
+- Set to `0` to disable unstake delay requirement for testing
+- Set to `604800` or higher to enforce unstake delay (default: 604800 seconds = 7 days)
+- This can also be set via `--min-unstake-delay-sec` command line flag
+- The environment variable is automatically read if `EnvironmentFile=/etc/flow/runtime-conf.env` is set in the service file
 
 **⚠️ Important**: If `BUNDLER_ENABLED=true`, you **must** also set `WALLET_API_KEY` with the ECDSA private key that corresponds to your `COINBASE` address. The Coinbase address must be an EOA (not a smart contract) for the bundler to work. See [Deployment Guide](./DEPLOYMENT_AND_TESTING.md#-important-coinbase-and-walletkey-requirements-for-bundler) for details.
 

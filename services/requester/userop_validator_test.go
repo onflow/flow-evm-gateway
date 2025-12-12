@@ -65,6 +65,10 @@ func TestPrefundVerification_NoPaymaster(t *testing.T) {
 	requiredGas.Add(requiredGas, userOp.VerificationGasLimit)
 	expectedPrefund := bi(0).Mul(requiredGas, userOp.MaxFeePerGas)
 
+	minUnstakeDelaySecValue := uint64(604800) // default
+	if cfg.MinUnstakeDelaySec != nil {
+		minUnstakeDelaySecValue = *cfg.MinUnstakeDelaySec
+	}
 	validationResult := &ValidationResult{
 		ReturnInfo: ReturnInfo{
 			AccountValidationData:   bi(0),
@@ -72,10 +76,10 @@ func TestPrefundVerification_NoPaymaster(t *testing.T) {
 			Prefund: expectedPrefund,
 		},
 		// minimal stake info to pass stake checks
-		SenderInfo:     StakeInfo{Stake: cfg.MinSenderStake, UnstakeDelaySec: bi(int64(cfg.MinUnstakeDelaySec))},
-		FactoryInfo:    StakeInfo{Stake: cfg.MinFactoryStake, UnstakeDelaySec: bi(int64(cfg.MinUnstakeDelaySec))},
-		PaymasterInfo:  StakeInfo{Stake: cfg.MinPaymasterStake, UnstakeDelaySec: bi(int64(cfg.MinUnstakeDelaySec))},
-		AggregatorInfo: AggregatorStakeInfo{StakeInfo: StakeInfo{Stake: cfg.MinAggregatorStake, UnstakeDelaySec: bi(int64(cfg.MinUnstakeDelaySec))}},
+		SenderInfo:     StakeInfo{Stake: cfg.MinSenderStake, UnstakeDelaySec: bi(int64(minUnstakeDelaySecValue))},
+		FactoryInfo:    StakeInfo{Stake: cfg.MinFactoryStake, UnstakeDelaySec: bi(int64(minUnstakeDelaySecValue))},
+		PaymasterInfo:  StakeInfo{Stake: cfg.MinPaymasterStake, UnstakeDelaySec: bi(int64(minUnstakeDelaySecValue))},
+		AggregatorInfo: AggregatorStakeInfo{StakeInfo: StakeInfo{Stake: cfg.MinAggregatorStake, UnstakeDelaySec: bi(int64(minUnstakeDelaySecValue))}},
 	}
 
 	if err := validator.validateValidationResult(nil, validationResult, userOp, common.Address{}, 0); err != nil {
@@ -104,16 +108,20 @@ func TestPrefundVerification_NoPaymaster_Mismatch(t *testing.T) {
 	// Expected prefund is larger than actual -> should fail
 	expectedPrefund := bi(1) // intentionally wrong
 
+	minUnstakeDelaySecValue := uint64(604800) // default
+	if cfg.MinUnstakeDelaySec != nil {
+		minUnstakeDelaySecValue = *cfg.MinUnstakeDelaySec
+	}
 	validationResult := &ValidationResult{
 		ReturnInfo: ReturnInfo{
 			AccountValidationData:   bi(0),
 			PaymasterValidationData: bi(0),
 			Prefund: expectedPrefund,
 		},
-		SenderInfo:     StakeInfo{Stake: cfg.MinSenderStake, UnstakeDelaySec: bi(int64(cfg.MinUnstakeDelaySec))},
-		FactoryInfo:    StakeInfo{Stake: cfg.MinFactoryStake, UnstakeDelaySec: bi(int64(cfg.MinUnstakeDelaySec))},
-		PaymasterInfo:  StakeInfo{Stake: cfg.MinPaymasterStake, UnstakeDelaySec: bi(int64(cfg.MinUnstakeDelaySec))},
-		AggregatorInfo: AggregatorStakeInfo{StakeInfo: StakeInfo{Stake: cfg.MinAggregatorStake, UnstakeDelaySec: bi(int64(cfg.MinUnstakeDelaySec))}},
+		SenderInfo:     StakeInfo{Stake: cfg.MinSenderStake, UnstakeDelaySec: bi(int64(minUnstakeDelaySecValue))},
+		FactoryInfo:    StakeInfo{Stake: cfg.MinFactoryStake, UnstakeDelaySec: bi(int64(minUnstakeDelaySecValue))},
+		PaymasterInfo:  StakeInfo{Stake: cfg.MinPaymasterStake, UnstakeDelaySec: bi(int64(minUnstakeDelaySecValue))},
+		AggregatorInfo: AggregatorStakeInfo{StakeInfo: StakeInfo{Stake: cfg.MinAggregatorStake, UnstakeDelaySec: bi(int64(minUnstakeDelaySecValue))}},
 	}
 
 	if err := validator.validateValidationResult(nil, validationResult, userOp, common.Address{}, 0); err == nil {
@@ -147,16 +155,20 @@ func TestPrefundVerification_WithPaymaster(t *testing.T) {
 	// Simulate paymaster gas added (e.g., +5000 gas * 10)
 	actualPrefund := bi(0).Add(baseExpectedPrefund, bi(5000*10))
 
+	minUnstakeDelaySecValue := uint64(604800) // default
+	if cfg.MinUnstakeDelaySec != nil {
+		minUnstakeDelaySecValue = *cfg.MinUnstakeDelaySec
+	}
 	validationResult := &ValidationResult{
 		ReturnInfo: ReturnInfo{
 			AccountValidationData:   bi(0),
 			PaymasterValidationData: bi(0),
 			Prefund: actualPrefund,
 		},
-		SenderInfo:     StakeInfo{Stake: cfg.MinSenderStake, UnstakeDelaySec: bi(int64(cfg.MinUnstakeDelaySec))},
-		FactoryInfo:    StakeInfo{Stake: cfg.MinFactoryStake, UnstakeDelaySec: bi(int64(cfg.MinUnstakeDelaySec))},
-		PaymasterInfo:  StakeInfo{Stake: cfg.MinPaymasterStake, UnstakeDelaySec: bi(int64(cfg.MinUnstakeDelaySec))},
-		AggregatorInfo: AggregatorStakeInfo{StakeInfo: StakeInfo{Stake: cfg.MinAggregatorStake, UnstakeDelaySec: bi(int64(cfg.MinUnstakeDelaySec))}},
+		SenderInfo:     StakeInfo{Stake: cfg.MinSenderStake, UnstakeDelaySec: bi(int64(minUnstakeDelaySecValue))},
+		FactoryInfo:    StakeInfo{Stake: cfg.MinFactoryStake, UnstakeDelaySec: bi(int64(minUnstakeDelaySecValue))},
+		PaymasterInfo:  StakeInfo{Stake: cfg.MinPaymasterStake, UnstakeDelaySec: bi(int64(minUnstakeDelaySecValue))},
+		AggregatorInfo: AggregatorStakeInfo{StakeInfo: StakeInfo{Stake: cfg.MinAggregatorStake, UnstakeDelaySec: bi(int64(minUnstakeDelaySecValue))}},
 	}
 
 	if err := validator.validateValidationResult(nil, validationResult, userOp, common.Address{}, 0); err != nil {

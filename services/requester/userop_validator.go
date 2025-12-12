@@ -43,12 +43,16 @@ func NewUserOpValidator(
 	cfg.SetDefaultStakeRequirements()
 
 	// Log stake requirements at startup
+	minUnstakeDelaySecValue := uint64(0)
+	if cfg.MinUnstakeDelaySec != nil {
+		minUnstakeDelaySecValue = *cfg.MinUnstakeDelaySec
+	}
 	logger.Info().
 		Str("minSenderStake", cfg.MinSenderStake.String()).
 		Str("minFactoryStake", cfg.MinFactoryStake.String()).
 		Str("minPaymasterStake", cfg.MinPaymasterStake.String()).
 		Str("minAggregatorStake", cfg.MinAggregatorStake.String()).
-		Uint64("minUnstakeDelaySec", cfg.MinUnstakeDelaySec).
+		Uint64("minUnstakeDelaySec", minUnstakeDelaySecValue).
 		Str("flowNetworkID", string(cfg.FlowNetworkID)).
 		Msg("ERC-4337 stake requirements configured")
 
@@ -333,6 +337,11 @@ func (v *UserOpValidator) simulateValidation(
 	// 1. The UserOp received by the gateway is different from what the frontend sent
 	// 2. The gateway is calling getUserOpHash() with different parameters than the frontend
 	// 3. There's a network/RPC issue causing different results
+	
+	// Pack gas limits and fees for logging (store in variables to allow slicing)
+	accountGasLimits := packAccountGasLimits(userOp.CallGasLimit, userOp.VerificationGasLimit)
+	gasFees := packGasFees(userOp.MaxFeePerGas, userOp.MaxPriorityFeePerGas)
+	
 	v.logger.Info().
 		Str("userOpHash_from_contract", userOpHash.Hex()).
 		Str("sender", userOp.Sender.Hex()).
@@ -350,8 +359,8 @@ func (v *UserOpValidator) simulateValidation(
 		Str("initCodeHex", hexutil.Encode(userOp.InitCode)).
 		Str("callDataHex", hexutil.Encode(userOp.CallData)).
 		Str("paymasterAndDataHex", hexutil.Encode(userOp.PaymasterAndData)).
-		Str("accountGasLimitsHex", hexutil.Encode(packAccountGasLimits(userOp.CallGasLimit, userOp.VerificationGasLimit)[:])).
-		Str("gasFeesHex", hexutil.Encode(packGasFees(userOp.MaxFeePerGas, userOp.MaxPriorityFeePerGas)[:])).
+		Str("accountGasLimitsHex", hexutil.Encode(accountGasLimits[:])).
+		Str("gasFeesHex", hexutil.Encode(gasFees[:])).
 		Msg("CRITICAL: Got hash from EntryPoint.getUserOpHash() - this is the authoritative hash. Frontend MUST sign this exact hash. If simulateValidation fails with AA24, EntryPoint calculated a different hash internally. Compare this hash with frontend's getUserOpHash() result.")
 
 	// Extract owner from initCode if present (for account creation) - for logging only
@@ -630,6 +639,10 @@ func (v *UserOpValidator) simulateValidation(
 				if decodedResult.AAErrorCode == "AA24" {
 					// AA24 means EntryPoint calculated a different hash during simulateValidation than what was signed
 					// Log the hash we got from getUserOpHash() - this is what the frontend should have signed
+					// Pack gas limits and fees for logging (store in variables to allow slicing)
+					accountGasLimitsForLog := packAccountGasLimits(userOp.CallGasLimit, userOp.VerificationGasLimit)
+					gasFeesForLog := packGasFees(userOp.MaxFeePerGas, userOp.MaxPriorityFeePerGas)
+					
 					v.logger.Error().
 						Str("userOpHash_from_getUserOpHash", userOpHash.Hex()).
 						Str("sender", userOp.Sender.Hex()).
@@ -638,9 +651,9 @@ func (v *UserOpValidator) simulateValidation(
 						Str("chainID", v.config.EVMNetworkID.String()).
 						Str("initCodeHex", hexutil.Encode(userOp.InitCode)).
 						Str("callDataHex", hexutil.Encode(userOp.CallData)).
-						Str("accountGasLimitsHex", hexutil.Encode(packAccountGasLimits(userOp.CallGasLimit, userOp.VerificationGasLimit)[:])).
+						Str("accountGasLimitsHex", hexutil.Encode(accountGasLimitsForLog[:])).
 						Str("preVerificationGas", userOp.PreVerificationGas.String()).
-						Str("gasFeesHex", hexutil.Encode(packGasFees(userOp.MaxFeePerGas, userOp.MaxPriorityFeePerGas)[:])).
+						Str("gasFeesHex", hexutil.Encode(gasFeesForLog[:])).
 						Str("paymasterAndDataHex", hexutil.Encode(userOp.PaymasterAndData)).
 						Str("signatureHex", hexutil.Encode(userOp.Signature)).
 						Msg("CRITICAL: AA24 signature error - EntryPoint calculated a different hash during simulateValidation than getUserOpHash(). Frontend MUST sign the hash from getUserOpHash() (logged above). If frontend signed a different hash, signature validation will fail.")
@@ -1928,8 +1941,9 @@ func (vd ValidationData) GetAggregatorAddress() common.Address {
 	return common.Address{}
 }
 
-// checkValidationWindow returns (outOfRange, isBlockRange)
-func checkValidationWindow(vd ValidationData, currentBlockNumber uint64, currentBlockTimestamp uint64) (bool, bool) {
+// checkValidationWindow returns (outOfRange, isBlockRange, reason)
+// reason explains why the window is out of range (for logging)
+func checkValidationWindow(vd ValidationData, currentBlockNumber uint64, currentBlockTimestamp uint64) (bool, bool, string) {
 	validAfter := new(big.Int).Set(vd.ValidAfter)
 	validUntil := new(big.Int).Set(vd.ValidUntil)
 
@@ -1941,19 +1955,31 @@ func checkValidationWindow(vd ValidationData, currentBlockNumber uint64, current
 		validUntilBlock := new(big.Int).And(validUntil, VALIDITY_BLOCK_RANGE_MASK)
 
 		// outOfValidityRange = block.number > validUntilBlock || block.number <= validAfterBlock
-		if new(big.Int).SetUint64(currentBlockNumber).Cmp(validUntilBlock) > 0 ||
-			new(big.Int).SetUint64(currentBlockNumber).Cmp(validAfterBlock) <= 0 {
-			return true, true
+		// If validUntilBlock = 0, treat as "never expires" (skip expiration check)
+		currentBlockBig := new(big.Int).SetUint64(currentBlockNumber)
+		if validUntilBlock.Cmp(big.NewInt(0)) > 0 && currentBlockBig.Cmp(validUntilBlock) > 0 {
+			return true, true, fmt.Sprintf("current block number (%d) > validUntil block (%s)", currentBlockNumber, validUntilBlock.String())
 		}
-		return false, true
+		if currentBlockBig.Cmp(validAfterBlock) <= 0 {
+			return true, true, fmt.Sprintf("current block number (%d) <= validAfter block (%s)", currentBlockNumber, validAfterBlock.String())
+		}
+		return false, true, ""
 	}
 
 	// Timestamp mode: outOfValidityRange = block.timestamp > validUntil || block.timestamp <= validAfter
-	if new(big.Int).SetUint64(currentBlockTimestamp).Cmp(validUntil) > 0 ||
-		new(big.Int).SetUint64(currentBlockTimestamp).Cmp(validAfter) <= 0 {
-		return true, false
+	// If validUntil = 0, treat as "never expires" (skip expiration check per EntryPoint v0.9.0)
+	currentTimestampBig := new(big.Int).SetUint64(currentBlockTimestamp)
+	validUntilUint := validUntil.Uint64()
+	validAfterUint := validAfter.Uint64()
+	
+	// Only check expiration if validUntil > 0 (0 means "never expires")
+	if validUntilUint > 0 && currentTimestampBig.Cmp(validUntil) > 0 {
+		return true, false, fmt.Sprintf("current timestamp (%d) > validUntil (%d), expired by %d seconds", currentBlockTimestamp, validUntilUint, currentBlockTimestamp-validUntilUint)
 	}
-	return false, false
+	if currentTimestampBig.Cmp(validAfter) <= 0 {
+		return true, false, fmt.Sprintf("current timestamp (%d) <= validAfter (%d), window starts in %d seconds", currentBlockTimestamp, validAfterUint, validAfterUint-currentBlockTimestamp)
+	}
+	return false, false, ""
 }
 
 // validateValidationResult implements the validation pipeline from the TDD plan (Section 6)
@@ -2011,53 +2037,95 @@ func (v *UserOpValidator) validateValidationResult(
 	}
 
 	// Check validity windows (Test 3.2, 3.3)
-	// Get current block (height and timestamp) for validity checks
+	// CRITICAL: Use the same height that was used for simulateValidation, not LatestEVMHeight()
+	// If the gateway is behind by several blocks, using LatestEVMHeight() would cause validation window errors
+	// because the timestamp would be from an older block than what EntryPoint used during simulateValidation
 	if v.blocks == nil {
 		v.logger.Debug().Msg("blocks indexer not set; skipping validity window time/block comparison")
 	} else {
-		currentHeight, err := v.blocks.LatestEVMHeight()
-		if err != nil {
+		// Use the height parameter (same as simulateValidation) instead of LatestEVMHeight()
+		block, blkErr := v.blocks.GetByHeight(height)
+		if blkErr != nil {
 			v.logger.Warn().
-				Err(err).
-				Msg("could not get latest EVM height for validity window checks; skipping time/block comparison")
+				Err(blkErr).
+				Uint64("height", height).
+				Msg("could not get block by height for validity window checks; skipping time/block comparison")
 		} else {
-			block, blkErr := v.blocks.GetByHeight(currentHeight)
-			if blkErr != nil {
-				v.logger.Warn().
-					Err(blkErr).
-					Uint64("height", currentHeight).
-					Msg("could not get block by height for validity window checks; skipping time/block comparison")
-			} else {
-				currentTimestamp := block.Timestamp
-				currentBlockNumber := block.Height
+			currentTimestamp := block.Timestamp
+			currentBlockNumber := block.Height
 
-				// Account validity
-				accountOutOfRange, accountIsBlockRange := checkValidationWindow(accountValidationData, currentBlockNumber, currentTimestamp)
-				if accountOutOfRange {
-					v.logger.Error().
-						Uint64("currentBlockNumber", currentBlockNumber).
-						Uint64("currentTimestamp", currentTimestamp).
-						Bool("isBlockRange", accountIsBlockRange).
-						Str("validAfter", accountValidationData.ValidAfter.String()).
-						Str("validUntil", accountValidationData.ValidUntil.String()).
-						Str("sender", userOp.Sender.Hex()).
-						Msg("account validation window out of range - rejecting UserOp")
-					return fmt.Errorf("account validation window out of range (blockRange=%t)", accountIsBlockRange)
+			// Account validity
+			accountOutOfRange, accountIsBlockRange, accountReason := checkValidationWindow(accountValidationData, currentBlockNumber, currentTimestamp)
+			if accountOutOfRange {
+				// Enhanced logging with exact comparison values
+				logFields := v.logger.Error().
+					Uint64("height", height).
+					Uint64("currentBlockNumber", currentBlockNumber).
+					Uint64("currentTimestamp", currentTimestamp).
+					Bool("isBlockRange", accountIsBlockRange).
+					Str("validAfter", accountValidationData.ValidAfter.String()).
+					Str("validUntil", accountValidationData.ValidUntil.String()).
+					Str("sender", userOp.Sender.Hex()).
+					Str("reason", accountReason)
+				
+				// Add specific comparison details
+				if accountIsBlockRange {
+					validAfterBlock := new(big.Int).And(accountValidationData.ValidAfter, VALIDITY_BLOCK_RANGE_MASK)
+					validUntilBlock := new(big.Int).And(accountValidationData.ValidUntil, VALIDITY_BLOCK_RANGE_MASK)
+					logFields = logFields.
+						Str("validAfterBlock", validAfterBlock.String()).
+						Str("validUntilBlock", validUntilBlock.String()).
+						Bool("currentBlockNumber_gt_validUntil", currentBlockNumber > validUntilBlock.Uint64()).
+						Bool("currentBlockNumber_le_validAfter", currentBlockNumber <= validAfterBlock.Uint64())
+				} else {
+					validAfterUint := accountValidationData.ValidAfter.Uint64()
+					validUntilUint := accountValidationData.ValidUntil.Uint64()
+					logFields = logFields.
+						Bool("currentTimestamp_gt_validUntil", currentTimestamp > validUntilUint).
+						Bool("currentTimestamp_le_validAfter", currentTimestamp <= validAfterUint).
+						Int64("timestampDiff_from_validAfter", int64(currentTimestamp)-int64(validAfterUint)).
+						Int64("timestampDiff_to_validUntil", int64(validUntilUint)-int64(currentTimestamp))
 				}
+				
+				logFields.Msg("account validation window out of range - rejecting UserOp")
+				return fmt.Errorf("account validation window out of range (blockRange=%t): %s", accountIsBlockRange, accountReason)
+			}
 
-				// Paymaster validity
-				paymasterOutOfRange, paymasterIsBlockRange := checkValidationWindow(paymasterValidationData, currentBlockNumber, currentTimestamp)
-				if paymasterOutOfRange {
-					v.logger.Error().
-						Uint64("currentBlockNumber", currentBlockNumber).
-						Uint64("currentTimestamp", currentTimestamp).
-						Bool("isBlockRange", paymasterIsBlockRange).
-						Str("validAfter", paymasterValidationData.ValidAfter.String()).
-						Str("validUntil", paymasterValidationData.ValidUntil.String()).
-						Str("sender", userOp.Sender.Hex()).
-						Msg("paymaster validation window out of range - rejecting UserOp")
-					return fmt.Errorf("paymaster validation window out of range (blockRange=%t)", paymasterIsBlockRange)
+			// Paymaster validity
+			paymasterOutOfRange, paymasterIsBlockRange, paymasterReason := checkValidationWindow(paymasterValidationData, currentBlockNumber, currentTimestamp)
+			if paymasterOutOfRange {
+				// Enhanced logging with exact comparison values
+				logFields := v.logger.Error().
+					Uint64("height", height).
+					Uint64("currentBlockNumber", currentBlockNumber).
+					Uint64("currentTimestamp", currentTimestamp).
+					Bool("isBlockRange", paymasterIsBlockRange).
+					Str("validAfter", paymasterValidationData.ValidAfter.String()).
+					Str("validUntil", paymasterValidationData.ValidUntil.String()).
+					Str("sender", userOp.Sender.Hex()).
+					Str("reason", paymasterReason)
+				
+				// Add specific comparison details
+				if paymasterIsBlockRange {
+					validAfterBlock := new(big.Int).And(paymasterValidationData.ValidAfter, VALIDITY_BLOCK_RANGE_MASK)
+					validUntilBlock := new(big.Int).And(paymasterValidationData.ValidUntil, VALIDITY_BLOCK_RANGE_MASK)
+					logFields = logFields.
+						Str("validAfterBlock", validAfterBlock.String()).
+						Str("validUntilBlock", validUntilBlock.String()).
+						Bool("currentBlockNumber_gt_validUntil", currentBlockNumber > validUntilBlock.Uint64()).
+						Bool("currentBlockNumber_le_validAfter", currentBlockNumber <= validAfterBlock.Uint64())
+				} else {
+					validAfterUint := paymasterValidationData.ValidAfter.Uint64()
+					validUntilUint := paymasterValidationData.ValidUntil.Uint64()
+					logFields = logFields.
+						Bool("currentTimestamp_gt_validUntil", currentTimestamp > validUntilUint).
+						Bool("currentTimestamp_le_validAfter", currentTimestamp <= validAfterUint).
+						Int64("timestampDiff_from_validAfter", int64(currentTimestamp)-int64(validAfterUint)).
+						Int64("timestampDiff_to_validUntil", int64(validUntilUint)-int64(currentTimestamp))
 				}
+				
+				logFields.Msg("paymaster validation window out of range - rejecting UserOp")
+				return fmt.Errorf("paymaster validation window out of range (blockRange=%t): %s", paymasterIsBlockRange, paymasterReason)
 			}
 		}
 	}
@@ -2070,6 +2138,10 @@ func (v *UserOpValidator) validateValidationResult(
 		v.config.SetDefaultStakeRequirements()
 	}
 
+	minUnstakeDelaySecValue := uint64(0)
+	if v.config.MinUnstakeDelaySec != nil {
+		minUnstakeDelaySecValue = *v.config.MinUnstakeDelaySec
+	}
 	v.logger.Debug().
 		Str("senderStake", validationResult.SenderInfo.Stake.String()).
 		Str("senderUnstakeDelaySec", validationResult.SenderInfo.UnstakeDelaySec.String()).
@@ -2084,26 +2156,17 @@ func (v *UserOpValidator) validateValidationResult(
 		Str("minFactoryStake", v.config.MinFactoryStake.String()).
 		Str("minPaymasterStake", v.config.MinPaymasterStake.String()).
 		Str("minAggregatorStake", v.config.MinAggregatorStake.String()).
-		Uint64("minUnstakeDelaySec", v.config.MinUnstakeDelaySec).
+		Uint64("minUnstakeDelaySec", minUnstakeDelaySecValue).
 		Msg("stake information from ValidationResult with minimum requirements")
 
 	// Test 4.1: Sender stake threshold
-	if validationResult.SenderInfo.Stake.Cmp(v.config.MinSenderStake) < 0 {
-		v.logger.Error().
-			Str("senderStake", validationResult.SenderInfo.Stake.String()).
-			Str("minSenderStake", v.config.MinSenderStake.String()).
-			Str("sender", userOp.Sender.Hex()).
-			Msg("sender stake below minimum threshold - rejecting UserOp")
-		return fmt.Errorf("sender stake (%s) below minimum threshold (%s)", validationResult.SenderInfo.Stake.String(), v.config.MinSenderStake.String())
-	}
-	if validationResult.SenderInfo.UnstakeDelaySec.Cmp(big.NewInt(int64(v.config.MinUnstakeDelaySec))) < 0 {
-		v.logger.Error().
-			Str("senderUnstakeDelaySec", validationResult.SenderInfo.UnstakeDelaySec.String()).
-			Uint64("minUnstakeDelaySec", v.config.MinUnstakeDelaySec).
-			Str("sender", userOp.Sender.Hex()).
-			Msg("sender unstake delay below minimum - rejecting UserOp")
-		return fmt.Errorf("sender unstake delay (%s) below minimum (%d seconds)", validationResult.SenderInfo.UnstakeDelaySec.String(), v.config.MinUnstakeDelaySec)
-	}
+	// NOTE: According to ERC-4337 specification, senders (user accounts) do NOT need to stake.
+	// Only Paymasters and Factories require staking. EntryPoint v0.9.0 does not enforce sender stake.
+	// The gateway skips sender stake validation to match EntryPoint behavior.
+	v.logger.Debug().
+		Str("sender", userOp.Sender.Hex()).
+		Str("senderStake", validationResult.SenderInfo.Stake.String()).
+		Msg("skipping sender stake check - ERC-4337 does not require senders to stake (only paymasters and factories)")
 
 	// Factory stake check (if factory is used - initCode is present)
 	if len(userOp.InitCode) > 0 {
@@ -2115,13 +2178,20 @@ func (v *UserOpValidator) validateValidationResult(
 				Msg("factory stake below minimum threshold - rejecting UserOp")
 			return fmt.Errorf("factory stake (%s) below minimum threshold (%s)", validationResult.FactoryInfo.Stake.String(), v.config.MinFactoryStake.String())
 		}
-		if validationResult.FactoryInfo.UnstakeDelaySec.Cmp(big.NewInt(int64(v.config.MinUnstakeDelaySec))) < 0 {
-			v.logger.Error().
-				Str("factoryUnstakeDelaySec", validationResult.FactoryInfo.UnstakeDelaySec.String()).
-				Uint64("minUnstakeDelaySec", v.config.MinUnstakeDelaySec).
+		// Check unstake delay only if configured and > 0 (nil means not set, 0 means disabled)
+		if v.config.MinUnstakeDelaySec != nil && *v.config.MinUnstakeDelaySec > 0 {
+			if validationResult.FactoryInfo.UnstakeDelaySec.Cmp(big.NewInt(int64(*v.config.MinUnstakeDelaySec))) < 0 {
+				v.logger.Error().
+					Str("factoryUnstakeDelaySec", validationResult.FactoryInfo.UnstakeDelaySec.String()).
+					Uint64("minUnstakeDelaySec", *v.config.MinUnstakeDelaySec).
+					Str("sender", userOp.Sender.Hex()).
+					Msg("factory unstake delay below minimum - rejecting UserOp")
+				return fmt.Errorf("factory unstake delay (%s) below minimum (%d seconds)", validationResult.FactoryInfo.UnstakeDelaySec.String(), *v.config.MinUnstakeDelaySec)
+			}
+		} else if v.config.MinUnstakeDelaySec != nil && *v.config.MinUnstakeDelaySec == 0 {
+			v.logger.Debug().
 				Str("sender", userOp.Sender.Hex()).
-				Msg("factory unstake delay below minimum - rejecting UserOp")
-			return fmt.Errorf("factory unstake delay (%s) below minimum (%d seconds)", validationResult.FactoryInfo.UnstakeDelaySec.String(), v.config.MinUnstakeDelaySec)
+				Msg("unstake delay check disabled (MIN_UNSTAKE_DELAY_SEC=0) - skipping factory unstake delay validation")
 		}
 	}
 
@@ -2135,13 +2205,20 @@ func (v *UserOpValidator) validateValidationResult(
 				Msg("paymaster stake below minimum threshold - rejecting UserOp")
 			return fmt.Errorf("paymaster stake (%s) below minimum threshold (%s)", validationResult.PaymasterInfo.Stake.String(), v.config.MinPaymasterStake.String())
 		}
-		if validationResult.PaymasterInfo.UnstakeDelaySec.Cmp(big.NewInt(int64(v.config.MinUnstakeDelaySec))) < 0 {
-			v.logger.Error().
-				Str("paymasterUnstakeDelaySec", validationResult.PaymasterInfo.UnstakeDelaySec.String()).
-				Uint64("minUnstakeDelaySec", v.config.MinUnstakeDelaySec).
+		// Check unstake delay only if configured and > 0 (nil means not set, 0 means disabled)
+		if v.config.MinUnstakeDelaySec != nil && *v.config.MinUnstakeDelaySec > 0 {
+			if validationResult.PaymasterInfo.UnstakeDelaySec.Cmp(big.NewInt(int64(*v.config.MinUnstakeDelaySec))) < 0 {
+				v.logger.Error().
+					Str("paymasterUnstakeDelaySec", validationResult.PaymasterInfo.UnstakeDelaySec.String()).
+					Uint64("minUnstakeDelaySec", *v.config.MinUnstakeDelaySec).
+					Str("sender", userOp.Sender.Hex()).
+					Msg("paymaster unstake delay below minimum - rejecting UserOp")
+				return fmt.Errorf("paymaster unstake delay (%s) below minimum (%d seconds)", validationResult.PaymasterInfo.UnstakeDelaySec.String(), *v.config.MinUnstakeDelaySec)
+			}
+		} else if v.config.MinUnstakeDelaySec != nil && *v.config.MinUnstakeDelaySec == 0 {
+			v.logger.Debug().
 				Str("sender", userOp.Sender.Hex()).
-				Msg("paymaster unstake delay below minimum - rejecting UserOp")
-			return fmt.Errorf("paymaster unstake delay (%s) below minimum (%d seconds)", validationResult.PaymasterInfo.UnstakeDelaySec.String(), v.config.MinUnstakeDelaySec)
+				Msg("unstake delay check disabled (MIN_UNSTAKE_DELAY_SEC=0) - skipping paymaster unstake delay validation")
 		}
 	}
 
@@ -2165,14 +2242,22 @@ func (v *UserOpValidator) validateValidationResult(
 				Msg("aggregator stake below minimum threshold - rejecting UserOp")
 			return fmt.Errorf("aggregator stake (%s) below minimum threshold (%s)", validationResult.AggregatorInfo.StakeInfo.Stake.String(), v.config.MinAggregatorStake.String())
 		}
-		if validationResult.AggregatorInfo.StakeInfo.UnstakeDelaySec.Cmp(big.NewInt(int64(v.config.MinUnstakeDelaySec))) < 0 {
-			v.logger.Error().
-				Str("aggregatorUnstakeDelaySec", validationResult.AggregatorInfo.StakeInfo.UnstakeDelaySec.String()).
-				Uint64("minUnstakeDelaySec", v.config.MinUnstakeDelaySec).
+		// Check unstake delay only if configured and > 0 (nil means not set, 0 means disabled)
+		if v.config.MinUnstakeDelaySec != nil && *v.config.MinUnstakeDelaySec > 0 {
+			if validationResult.AggregatorInfo.StakeInfo.UnstakeDelaySec.Cmp(big.NewInt(int64(*v.config.MinUnstakeDelaySec))) < 0 {
+				v.logger.Error().
+					Str("aggregatorUnstakeDelaySec", validationResult.AggregatorInfo.StakeInfo.UnstakeDelaySec.String()).
+					Uint64("minUnstakeDelaySec", *v.config.MinUnstakeDelaySec).
+					Str("aggregator", aggregatorAddr.Hex()).
+					Str("sender", userOp.Sender.Hex()).
+					Msg("aggregator unstake delay below minimum - rejecting UserOp")
+				return fmt.Errorf("aggregator unstake delay (%s) below minimum (%d seconds)", validationResult.AggregatorInfo.StakeInfo.UnstakeDelaySec.String(), *v.config.MinUnstakeDelaySec)
+			}
+		} else if v.config.MinUnstakeDelaySec != nil && *v.config.MinUnstakeDelaySec == 0 {
+			v.logger.Debug().
 				Str("aggregator", aggregatorAddr.Hex()).
 				Str("sender", userOp.Sender.Hex()).
-				Msg("aggregator unstake delay below minimum - rejecting UserOp")
-			return fmt.Errorf("aggregator unstake delay (%s) below minimum (%d seconds)", validationResult.AggregatorInfo.StakeInfo.UnstakeDelaySec.String(), v.config.MinUnstakeDelaySec)
+				Msg("unstake delay check disabled (MIN_UNSTAKE_DELAY_SEC=0) - skipping aggregator unstake delay validation")
 		}
 	}
 

@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -282,6 +283,40 @@ func parseConfigFromFlags() error {
 		}
 	}
 
+	// Parse factory stake requirement (from env var or flag)
+	// Check environment variable first, then flag
+	factoryStakeStr := os.Getenv("MIN_FACTORY_STAKE")
+	if factoryStakeStr == "" {
+		factoryStakeStr = minFactoryStake
+	}
+	if factoryStakeStr != "" {
+		factoryStake, ok := new(big.Int).SetString(factoryStakeStr, 10)
+		if !ok {
+			return fmt.Errorf("invalid min-factory-stake value: %s (must be a number)", factoryStakeStr)
+		}
+		cfg.MinFactoryStake = factoryStake
+		log.Info().
+			Str("minFactoryStake", cfg.MinFactoryStake.String()).
+			Msg("factory stake requirement configured from MIN_FACTORY_STAKE env var or --min-factory-stake flag")
+	}
+
+	// Parse unstake delay requirement (from env var or flag)
+	// Check environment variable first, then flag
+	unstakeDelayStr := os.Getenv("MIN_UNSTAKE_DELAY_SEC")
+	if unstakeDelayStr == "" {
+		unstakeDelayStr = minUnstakeDelaySec
+	}
+	if unstakeDelayStr != "" {
+		unstakeDelay, err := strconv.ParseUint(unstakeDelayStr, 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid min-unstake-delay-sec value: %s (must be a positive integer): %w", unstakeDelayStr, err)
+		}
+		cfg.MinUnstakeDelaySec = &unstakeDelay
+		log.Info().
+			Uint64("minUnstakeDelaySec", unstakeDelay).
+			Msg("unstake delay requirement configured from MIN_UNSTAKE_DELAY_SEC env var or --min-unstake-delay-sec flag")
+	}
+
 	return nil
 }
 
@@ -305,7 +340,9 @@ var (
 	txStateValidation,
 	entryPointAddress,
 	entryPointSimulationsAddress,
-	bundlerBeneficiary string
+	bundlerBeneficiary,
+	minFactoryStake,
+	minUnstakeDelaySec string
 	initHeight,
 	forceStartHeight uint64
 )
@@ -358,6 +395,9 @@ func init() {
 	Cmd.Flags().DurationVar(&cfg.UserOpTTL, "user-op-ttl", 5*time.Minute, "Time to live for pending UserOperations in the pool (e.g., 5m, 10m)")
 	Cmd.Flags().StringVar(&bundlerBeneficiary, "bundler-beneficiary", "", "EVM address that receives fees from EntryPoint execution (e.g., 0x...)")
 	Cmd.Flags().DurationVar(&cfg.BundlerInterval, "bundler-interval", 800*time.Millisecond, "Interval at which the bundler checks for and processes pending UserOperations (e.g., 800ms, 5s). Lower values reduce latency but increase RPC load on Access Node.")
+	// ERC-4337 Stake Requirements
+	Cmd.Flags().StringVar(&minFactoryStake, "min-factory-stake", "", "Minimum factory stake required (in FLOW). Can be set via MIN_FACTORY_STAKE env var. Defaults: testnet=1000, production=3300. Set to 0 to disable factory stake requirement for testing.")
+	Cmd.Flags().StringVar(&minUnstakeDelaySec, "min-unstake-delay-sec", "", "Minimum unstake delay required (in seconds). Can be set via MIN_UNSTAKE_DELAY_SEC env var. Default: 604800 (7 days). Set to 0 to disable unstake delay requirement for testing.")
 
 	err := Cmd.Flags().MarkDeprecated("init-cadence-height", "This flag is no longer necessary and will be removed in future version. The initial Cadence height is known for testnet/mainnet and this was only required for fresh deployments of EVM Gateway. Once the DB has been initialized, the latest index Cadence height will be used upon start-up.")
 	if err != nil {
