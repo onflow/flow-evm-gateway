@@ -47,7 +47,7 @@ func NewUserOpValidator(
 	if cfg.MinUnstakeDelaySec != nil {
 		minUnstakeDelaySecValue = *cfg.MinUnstakeDelaySec
 	}
-	logger.Info().
+		logger.Info().
 		Str("minSenderStake", cfg.MinSenderStake.String()).
 		Str("minFactoryStake", cfg.MinFactoryStake.String()).
 		Str("minPaymasterStake", cfg.MinPaymasterStake.String()).
@@ -278,8 +278,8 @@ func (v *UserOpValidator) simulateValidation(
 
 	// Encode packed simulateValidation (EntryPoint v0.7+/v0.9); no standard fallback
 	calldata, err := EncodeSimulateValidationPacked(userOp)
-	if err != nil {
-		return fmt.Errorf("failed to encode simulateValidation (packed): %w", err)
+		if err != nil {
+			return fmt.Errorf("failed to encode simulateValidation (packed): %w", err)
 	}
 
 	// Get latest indexed block height (not network's latest, which may not be indexed yet)
@@ -694,6 +694,10 @@ func (v *UserOpValidator) simulateValidation(
 					if decodedResult.AAErrorCode == "AA13" {
 						v.logAA13Diagnostics(ctx, userOp, entryPoint, simulationAddress, height)
 					}
+					// If this is AA23 (account reverted), add extra diagnostics for execute UserOps
+					if decodedResult.AAErrorCode == "AA23" {
+						v.logAA23Diagnostics(ctx, userOp, entryPoint, simulationAddress, height, userOpHash, revertData, revertErr.Reason)
+					}
 				} else {
 					errorMsg = fmt.Sprintf("validation failed: %s", decodedResult.Decoded)
 				}
@@ -774,8 +778,8 @@ func (v *UserOpValidator) simulateValidation(
 	if err != nil {
 		v.logger.Error().
 			Err(err).
-			Str("entryPoint", entryPoint.Hex()).
-			Str("sender", userOp.Sender.Hex()).
+		Str("entryPoint", entryPoint.Hex()).
+		Str("sender", userOp.Sender.Hex()).
 			Str("resultHex", hexutil.Encode(result)).
 			Int("resultLen", len(result)).
 			Msg("failed to decode ValidationResult from simulateValidation return data")
@@ -1233,6 +1237,338 @@ func (v *UserOpValidator) logAA13Diagnostics(
 		Msg("AA13 diagnostics: factory call succeeded with unlimited gas. AA13 indicates initCode is failing under EntryPoint's exact call pattern (senderCreator.createSender{gas: verificationGasLimit}(initCode)). Check: 1) initCode first 20 bytes = factory address, 2) initCode[20:] calldata matches expected owner/salt, 3) factory call succeeds when capped at verificationGasLimit, 4) returned address matches userOp.sender. Note: simulateValidation and handleOps use the same path - if AA13 occurs in simulation, execution will also fail.")
 }
 
+// logAA23Diagnostics adds extra logging when we hit AA23 "account reverted"
+// to help distinguish between common causes:
+// - Nonce mismatch (account expects different nonce)
+// - Signature validation failure (wrong hash, wrong signature format)
+// - CallData validation failure (account rejects the callData)
+// - Account authorization failure (account checks msg.sender or other conditions)
+func (v *UserOpValidator) logAA23Diagnostics(
+	ctx context.Context,
+	userOp *models.UserOperation,
+	entryPoint common.Address,
+	simulationAddress common.Address,
+	height uint64,
+	userOpHash common.Hash,
+	revertData []byte,
+	revertHex string,
+) {
+	// Defensive: never let diagnostics change behavior
+	defer func() {
+		if r := recover(); r != nil {
+			v.logger.Warn().
+				Interface("panic", r).
+				Msg("panic in AA23 diagnostics - ignoring and continuing")
+		}
+	}()
+
+	isAccountCreation := len(userOp.InitCode) > 0
+	isExecuteOp := len(userOp.CallData) > 0 && !isAccountCreation
+
+	v.logger.Info().
+		Str("sender", userOp.Sender.Hex()).
+		Str("nonce", userOp.Nonce.String()).
+		Str("userOpHash", userOpHash.Hex()).
+		Bool("isAccountCreation", isAccountCreation).
+		Bool("isExecuteOp", isExecuteOp).
+		Int("callDataLen", len(userOp.CallData)).
+		Int("initCodeLen", len(userOp.InitCode)).
+		Str("revertDataHex", revertHex).
+		Int("revertDataLen", len(revertData)).
+		Msg("AA23 diagnostics: account reverted during validateUserOp - checking common causes")
+
+	// Check 1: Nonce mismatch
+	// CRITICAL: Get nonce from EntryPoint.getNonce(sender, 0), NOT from account's state nonce
+	// EntryPoint maintains its own nonce mapping separate from account state
+	// For ERC-4337, EntryPoint.getNonce(sender, 0) returns the nonce that EntryPoint expects
+	entryPointNonce, err := v.getEntryPointNonce(ctx, userOp.Sender, entryPoint, height)
+	if err == nil {
+		userOpNonce := userOp.Nonce.Uint64()
+		if entryPointNonce != userOpNonce {
+			v.logger.Error().
+				Uint64("entryPointNonce", entryPointNonce).
+				Uint64("userOpNonce", userOpNonce).
+				Int64("nonceDiff", int64(userOpNonce)-int64(entryPointNonce)).
+				Str("sender", userOp.Sender.Hex()).
+				Msg("AA23 diagnostics: NONCE MISMATCH - EntryPoint expects different nonce. This is likely the root cause. EntryPoint's current nonce doesn't match UserOp nonce. Check: 1) EntryPoint's nonce was incremented by a previous UserOp, 2) frontend is using stale nonce, 3) multiple UserOps were submitted with same nonce")
+		} else {
+			v.logger.Info().
+				Uint64("entryPointNonce", entryPointNonce).
+				Uint64("userOpNonce", userOpNonce).
+				Str("sender", userOp.Sender.Hex()).
+				Msg("AA23 diagnostics: nonce matches EntryPoint.getNonce() - nonce is not the issue")
+		}
+	} else {
+		v.logger.Warn().
+			Err(err).
+			Str("sender", userOp.Sender.Hex()).
+			Msg("AA23 diagnostics: failed to get EntryPoint nonce - cannot check nonce mismatch")
+	}
+
+	// Check 2: Account code exists and is correct
+	accountCode, err := v.requester.GetCode(userOp.Sender, height)
+	if err != nil || len(accountCode) == 0 {
+		v.logger.Warn().
+			Str("sender", userOp.Sender.Hex()).
+			Err(err).
+			Int("codeLength", len(accountCode)).
+			Msg("AA23 diagnostics: account has no code or failed to fetch - this is unexpected for execute UserOps")
+	} else {
+		v.logger.Info().
+			Str("sender", userOp.Sender.Hex()).
+			Int("codeLength", len(accountCode)).
+			Msg("AA23 diagnostics: account code exists")
+	}
+
+	// Check 3: Decode revert data to see if it's a known error
+	// Try to decode as SimpleAccount errors (NotOwnerOrEntryPoint, etc.)
+	if len(revertData) >= 4 {
+		selector := hexutil.Encode(revertData[:4])
+		v.logger.Info().
+			Str("revertSelector", selector).
+			Str("revertDataHex", revertHex).
+			Msg("AA23 diagnostics: revert selector - check if this matches SimpleAccount error selectors (NotOwnerOrEntryPoint, etc.)")
+
+		// Check if this is FailedOpWithRevert and extract inner error
+		failedOpWithRevertError, exists := entryPointABIParsed.Errors["FailedOpWithRevert"]
+		var failedOpWithRevertSelector []byte
+		if exists {
+			failedOpWithRevertSelector = failedOpWithRevertError.ID[:4]
+		} else {
+			failedOpWithRevertSelector = crypto.Keccak256([]byte("FailedOpWithRevert(uint256,string,bytes)"))[:4]
+		}
+
+		if bytes.Equal(revertData[:4], failedOpWithRevertSelector) {
+			// FailedOpWithRevert(uint256 opIndex, string reason, bytes revertData)
+			// Format: selector (4) + opIndex (32) + string offset (32) + bytes offset (32) + string length (32) + string data + bytes length (32) + bytes data
+			if len(revertData) >= 132 {
+				opIndex := new(big.Int).SetBytes(revertData[4:36])
+				stringOffset := new(big.Int).SetBytes(revertData[36:68])
+				_ = new(big.Int).SetBytes(revertData[68:100]) // bytesOffset - not needed for calculation
+
+				// Extract reason string
+				reasonStr := ""
+				if stringOffset.Cmp(big.NewInt(96)) == 0 && len(revertData) >= 132 {
+					strLen := new(big.Int).SetBytes(revertData[100:132])
+					if strLen.Cmp(big.NewInt(0)) > 0 {
+						strLenInt := int(strLen.Int64())
+						if len(revertData) >= 132+strLenInt {
+							strBytes := revertData[132 : 132+strLenInt]
+							// Remove null padding
+							for len(strBytes) > 0 && strBytes[len(strBytes)-1] == 0 {
+								strBytes = strBytes[:len(strBytes)-1]
+							}
+							if len(strBytes) > 0 {
+								reasonStr = string(strBytes)
+							}
+						}
+					}
+				}
+
+				// Extract inner revert data (bytes field)
+				// Calculate where bytes data starts: after string data (padded to 32-byte boundary)
+				strLen := new(big.Int).SetBytes(revertData[100:132])
+				strLenInt := int(strLen.Int64())
+				strDataEnd := 132 + ((strLenInt+31)/32)*32 // String data padded to 32-byte boundary
+				
+				if len(revertData) >= strDataEnd+32 {
+					innerBytesLen := new(big.Int).SetBytes(revertData[strDataEnd : strDataEnd+32])
+					innerBytesLenInt := int(innerBytesLen.Int64())
+					innerBytesStart := strDataEnd + 32
+
+					if len(revertData) >= innerBytesStart+innerBytesLenInt && innerBytesLenInt >= 4 {
+						innerErrorSelector := hexutil.Encode(revertData[innerBytesStart : innerBytesStart+4])
+						
+						v.logger.Info().
+							Str("innerErrorSelector", innerErrorSelector).
+							Str("reason", reasonStr).
+							Str("opIndex", opIndex.String()).
+							Int("innerBytesLen", innerBytesLenInt).
+							Msg("AA23 diagnostics: extracted inner error from FailedOpWithRevert")
+
+						// Check for known SimpleAccount error selectors
+						// 0xf645eedf is a common signature validation error in SimpleAccount
+						if innerErrorSelector == "0xf645eedf" {
+							// Pack gas limits and fees for detailed logging
+							accountGasLimitsForLog := packAccountGasLimits(userOp.CallGasLimit, userOp.VerificationGasLimit)
+							gasFeesForLog := packGasFees(userOp.MaxFeePerGas, userOp.MaxPriorityFeePerGas)
+							
+							// Recover signer from signature to compare with account's owner
+							// Frontend signs over EIP-191 hash: keccak256("\x19\x01" || chainID || userOpHash)
+							// Gateway must use the same EIP-191 hash for recovery
+							recoveredAddrEIP191 := common.Address{}
+							recoveredAddrRaw := common.Address{}
+							if len(userOp.Signature) >= 65 {
+								// EIP-191 format: keccak256("\x19\x01" || chainID || userOpHash)
+								// chainID is encoded as variable-length bytes (standard EIP-191)
+								chainIDBytes := v.config.EVMNetworkID.Bytes()
+								sigHashEIP191 := crypto.Keccak256Hash(
+									[]byte("\x19\x01"),
+									chainIDBytes,
+									userOpHash.Bytes(),
+								)
+								sigV := uint(userOp.Signature[64])
+								pubKeyEIP191, errEIP191 := crypto.SigToPub(sigHashEIP191.Bytes(), append(userOp.Signature[:64], byte(sigV)))
+								if errEIP191 == nil {
+									recoveredAddrEIP191 = crypto.PubkeyToAddress(*pubKeyEIP191)
+								}
+								
+								// Also try raw hash for comparison (should NOT match if frontend uses EIP-191)
+								pubKeyRaw, errRaw := crypto.SigToPub(userOpHash.Bytes(), append(userOp.Signature[:64], byte(sigV)))
+								if errRaw == nil {
+									recoveredAddrRaw = crypto.PubkeyToAddress(*pubKeyRaw)
+								}
+								
+								// Log the EIP-191 hash for comparison with frontend
+								v.logger.Info().
+									Str("eip191Hash", sigHashEIP191.Hex()).
+									Str("rawHash", userOpHash.Hex()).
+									Str("chainID", v.config.EVMNetworkID.String()).
+									Str("chainIDBytesHex", hexutil.Encode(chainIDBytes)).
+									Int("chainIDBytesLen", len(chainIDBytes)).
+									Msg("AA23 diagnostics: EIP-191 hash calculation - frontend should compute the same hash. Compare eip191Hash with frontend's EIP-191 hash.")
+							}
+							
+							// Try to get account's owner address by calling SimpleAccount.owner()
+							accountOwner := common.Address{}
+							ownerCallData := []byte{0x8d, 0xa5, 0xcb, 0x57} // owner() function selector
+							txArgs := ethTypes.TransactionArgs{
+								To:   &userOp.Sender,
+								Data: (*hexutil.Bytes)(&ownerCallData),
+							}
+							ownerResult, ownerErr := v.requester.Call(txArgs, common.Address{}, height, nil, nil)
+							if ownerErr != nil {
+								v.logger.Warn().
+									Err(ownerErr).
+									Str("sender", userOp.Sender.Hex()).
+									Msg("AA23 diagnostics: failed to call SimpleAccount.owner() - cannot compare with recovered signer")
+							} else if len(ownerResult) >= 32 {
+								accountOwner = common.BytesToAddress(ownerResult[12:32]) // Skip padding, get last 20 bytes
+							} else {
+								v.logger.Warn().
+									Int("resultLen", len(ownerResult)).
+									Str("sender", userOp.Sender.Hex()).
+									Str("resultHex", hexutil.Encode(ownerResult)).
+									Msg("AA23 diagnostics: SimpleAccount.owner() returned invalid result length")
+							}
+							
+							logMsg := v.logger.Error().
+								Str("ROOT CAUSE", "SimpleAccount signature validation failed (inner error 0xf645eedf)").
+								Str("userOpHash", userOpHash.Hex()).
+								Str("sender", userOp.Sender.Hex()).
+								Str("nonce", userOp.Nonce.String()).
+								Str("entryPoint", entryPoint.Hex()).
+								Str("chainID", v.config.EVMNetworkID.String()).
+								Str("initCodeHex", hexutil.Encode(userOp.InitCode)).
+								Str("callDataHex", hexutil.Encode(userOp.CallData)).
+								Str("accountGasLimitsHex", hexutil.Encode(accountGasLimitsForLog[:])).
+								Str("preVerificationGas", userOp.PreVerificationGas.String()).
+								Str("gasFeesHex", hexutil.Encode(gasFeesForLog[:])).
+								Str("paymasterAndDataHex", hexutil.Encode(userOp.PaymasterAndData)).
+								Str("signatureHex", hexutil.Encode(userOp.Signature)).
+								Uint8("signatureV", userOp.Signature[64]).
+								Str("signatureR", hexutil.Encode(userOp.Signature[0:32])).
+								Str("signatureS", hexutil.Encode(userOp.Signature[32:64])).
+								Str("reason", reasonStr)
+							
+							// Add recovery results and owner comparison
+							// Expected owner from frontend: 0x3cC530e139Dd93641c3F30217B20163EF8b17159
+							expectedOwner := common.HexToAddress("0x3cC530e139Dd93641c3F30217B20163EF8b17159")
+							
+							if recoveredAddrEIP191 != (common.Address{}) {
+								logMsg = logMsg.Str("recoveredSignerEIP191", recoveredAddrEIP191.Hex())
+								logMsg = logMsg.Bool("eip191MatchesExpected", recoveredAddrEIP191 == expectedOwner)
+								if recoveredAddrEIP191 != expectedOwner {
+									logMsg = logMsg.Str("CRITICAL", "EIP-191 recovery does NOT match expected owner. Gateway's EIP-191 hash differs from frontend's. Compare eip191Hash (logged above) with frontend's EIP-191 hash: 0x5c8964c637fbf87f53d46f3118fda2db5896eaa0fa9189db29d170b86be0e640")
+								}
+							}
+							if recoveredAddrRaw != (common.Address{}) {
+								logMsg = logMsg.Str("recoveredSignerRaw", recoveredAddrRaw.Hex())
+								logMsg = logMsg.Bool("rawMatchesExpected", recoveredAddrRaw == expectedOwner)
+							}
+							if accountOwner != (common.Address{}) {
+								logMsg = logMsg.Str("accountOwner", accountOwner.Hex())
+								// Check which recovery method matches the account owner
+								if recoveredAddrEIP191 != (common.Address{}) {
+									logMsg = logMsg.Bool("ownerMatchesEIP191", recoveredAddrEIP191 == accountOwner)
+									if recoveredAddrEIP191 == accountOwner {
+										logMsg = logMsg.Str("recoveryMethod", "EIP-191 matches account owner")
+									}
+								}
+								if recoveredAddrRaw != (common.Address{}) {
+									logMsg = logMsg.Bool("ownerMatchesRaw", recoveredAddrRaw == accountOwner)
+									if recoveredAddrRaw == accountOwner {
+										logMsg = logMsg.Str("recoveryMethod", "raw hash matches account owner")
+									}
+								}
+								// If neither matches, that's the problem
+								if (recoveredAddrEIP191 != (common.Address{}) && recoveredAddrEIP191 != accountOwner) &&
+								   (recoveredAddrRaw != (common.Address{}) && recoveredAddrRaw != accountOwner) {
+									logMsg = logMsg.Str("CRITICAL", "OWNER MISMATCH - Neither recovery method matches account owner. This indicates the signature was signed over a different hash than what SimpleAccount expects.")
+								}
+							} else {
+								// Account owner not available, but we can still check against expected owner
+								logMsg = logMsg.Str("expectedOwner", expectedOwner.Hex())
+							}
+							
+							logMsg.Msg("AA23 diagnostics: ROOT CAUSE - SimpleAccount's _validateSignature failed. This means the signature is invalid for the UserOp hash or owner. Frontend MUST compare these exact UserOp fields with what it sent. Check: 1) UserOp hash calculation (logged above) matches frontend's getUserOpHash(), 2) signature was signed over this exact hash, 3) signature v value is correct (0/1 for SimpleAccount, not 27/28), 4) chainID matches (545 for testnet), 5) EntryPoint address matches, 6) owner address matches (compare recoveredSigner with accountOwner), 7) all UserOp fields match exactly (nonce, callData, gas limits, fees)")
+						}
+
+						// Check for NotOwnerOrEntryPoint in inner error
+						notOwnerSelector := crypto.Keccak256([]byte("NotOwnerOrEntryPoint(address)"))[:4]
+						if bytes.Equal(revertData[innerBytesStart:innerBytesStart+4], notOwnerSelector) {
+							if len(revertData) >= innerBytesStart+36 {
+								recoveredAddr := common.BytesToAddress(revertData[innerBytesStart+4 : innerBytesStart+36])
+								v.logger.Error().
+									Str("ROOT CAUSE", "NotOwnerOrEntryPoint error in inner revert").
+									Str("recoveredAddress", recoveredAddr.Hex()).
+									Str("sender", userOp.Sender.Hex()).
+									Str("userOpHash", userOpHash.Hex()).
+									Msg("AA23 diagnostics: ROOT CAUSE - NotOwnerOrEntryPoint error. Account's validateUserOp recovered a different address from signature than expected. Check: 1) signature was signed over correct UserOp hash (logged above), 2) signature v value is correct (0/1 for SimpleAccount), 3) chainID matches, 4) EntryPoint address matches")
+							}
+						}
+					}
+				}
+			}
+		}
+
+		// Also check if the outer selector is NotOwnerOrEntryPoint (direct error, not wrapped in FailedOpWithRevert)
+		notOwnerSelector := crypto.Keccak256([]byte("NotOwnerOrEntryPoint(address)"))[:4]
+		if bytes.Equal(revertData[:4], notOwnerSelector) {
+			if len(revertData) >= 36 {
+				recoveredAddr := common.BytesToAddress(revertData[4:36])
+				v.logger.Error().
+					Str("recoveredAddress", recoveredAddr.Hex()).
+					Str("sender", userOp.Sender.Hex()).
+					Str("userOpHash", userOpHash.Hex()).
+					Msg("AA23 diagnostics: ROOT CAUSE - NotOwnerOrEntryPoint error. Account's validateUserOp recovered a different address from signature than expected. Check: 1) signature was signed over correct UserOp hash (logged above), 2) signature v value is correct (0/1 for SimpleAccount), 3) chainID matches, 4) EntryPoint address matches")
+			}
+		}
+	}
+
+	// Check 4: For execute UserOps, log callData details
+	if isExecuteOp {
+		functionSelector := ""
+		if len(userOp.CallData) >= 4 {
+			functionSelector = hexutil.Encode(userOp.CallData[:4])
+		}
+		v.logger.Info().
+			Str("callDataFunctionSelector", functionSelector).
+			Str("callDataHex", hexutil.Encode(userOp.CallData)).
+			Int("callDataLen", len(userOp.CallData)).
+			Msg("AA23 diagnostics: execute UserOp callData details - account may be validating callData differently than expected")
+	}
+
+	// Check 5: Compare with account creation (if account creation worked, signature format is correct)
+	if isExecuteOp {
+		v.logger.Info().
+			Str("userOpHash", userOpHash.Hex()).
+			Str("signatureHex", hexutil.Encode(userOp.Signature)).
+			Uint8("signatureV", userOp.Signature[64]).
+			Msg("AA23 diagnostics: signature details for execute UserOp. Since account creation worked with same signature format, the issue is likely: 1) nonce mismatch, 2) UserOp hash differs between account creation and execute (check nonce, callData), 3) account's validateUserOp has different logic for execute vs create")
+	}
+}
+
 // validatePaymaster validates paymaster deposit and signature
 func (v *UserOpValidator) validatePaymaster(
 	ctx context.Context,
@@ -1308,6 +1644,47 @@ func (v *UserOpValidator) validatePaymaster(
 		Msg("paymaster validation passed")
 
 	return nil
+}
+
+// getEntryPointNonce retrieves the nonce from EntryPoint.getNonce(sender, 0)
+// EntryPoint maintains its own nonce mapping separate from account state
+// For ERC-4337, key=0 is the default nonce used by UserOperations
+func (v *UserOpValidator) getEntryPointNonce(
+	ctx context.Context,
+	sender common.Address,
+	entryPoint common.Address,
+	height uint64,
+) (uint64, error) {
+	// Encode EntryPoint.getNonce(sender, 0) - key=0 is the default nonce
+	calldata, err := EncodeGetNonce(sender, 0)
+	if err != nil {
+		return 0, fmt.Errorf("failed to encode getNonce: %w", err)
+	}
+
+	// Create transaction args for eth_call
+	txArgs := ethTypes.TransactionArgs{
+		To:   &entryPoint,
+		Data: (*hexutil.Bytes)(&calldata),
+	}
+
+	// Call EntryPoint.getNonce
+	result, err := v.requester.Call(txArgs, v.config.Coinbase, height, nil, nil)
+	if err != nil {
+		return 0, fmt.Errorf("failed to call getNonce: %w", err)
+	}
+
+	// Decode result (uint256)
+	if len(result) < 32 {
+		return 0, fmt.Errorf("invalid getNonce result: expected at least 32 bytes, got %d", len(result))
+	}
+
+	// getNonce returns uint256, extract as big.Int then convert to uint64
+	nonceBig := new(big.Int).SetBytes(result[:32])
+	if !nonceBig.IsUint64() {
+		return 0, fmt.Errorf("nonce value too large for uint64: %s", nonceBig.String())
+	}
+
+	return nonceBig.Uint64(), nil
 }
 
 // getPaymasterDeposit retrieves the paymaster's deposit from EntryPoint

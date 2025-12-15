@@ -997,6 +997,20 @@ func EncodeSenderCreator() ([]byte, error) {
 	return data, nil
 }
 
+// EncodeGetNonce encodes the calldata for EntryPoint.getNonce(sender, key)
+// EntryPoint v0.9.0 uses a key-based nonce system where key=0 is the default nonce
+// For ERC-4337 UserOperations, use key=0 (default nonce)
+func EncodeGetNonce(sender common.Address, key uint64) ([]byte, error) {
+	// EntryPoint.getNonce takes uint192 key, but we accept uint64 for convenience
+	// uint192 can hold values up to 2^192-1, but for ERC-4337 we only use key=0
+	keyBig := new(big.Int).SetUint64(key)
+	data, err := entryPointABIParsed.Pack("getNonce", sender, keyBig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode getNonce: %w", err)
+	}
+	return data, nil
+}
+
 // EncodeFactoryGetAddress encodes the calldata for SimpleAccountFactory.getAddress(owner, salt)
 func EncodeFactoryGetAddress(owner common.Address, salt *big.Int) ([]byte, error) {
 	if simpleAccountFactoryABIParsed == nil {
