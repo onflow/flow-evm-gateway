@@ -29,8 +29,8 @@ it('should handle a large number of EVM interactions', async () => {
         })
 
         assert.equal(transfer.receipt.status, conf.successStatus)
-        assert.equal(transfer.receipt.from, conf.eoa.address)
-        assert.equal(transfer.receipt.to, receiver.address)
+        assert.equal(transfer.receipt.from, conf.eoa_address)
+        assert.equal(transfer.receipt.to, receiver.address.toLowerCase())
 
         // check balance was moved
         let receiverWei = await web3.eth.getBalance(receiver.address)
@@ -85,8 +85,8 @@ it('should handle a large number of EVM interactions', async () => {
             })
 
             assert.equal(transfer.receipt.status, conf.successStatus)
-            assert.equal(transfer.receipt.from, sender.address)
-            assert.equal(transfer.receipt.to, receiver.address)
+            assert.equal(transfer.receipt.from, sender.address.toLowerCase())
+            assert.equal(transfer.receipt.to, receiver.address.toLowerCase())
         }
     }
     // Add 60 to the expected block height, as we did 60 transactions,
@@ -113,7 +113,7 @@ it('should handle a large number of EVM interactions', async () => {
 
         assert.equal(deployed.receipt.status, conf.successStatus)
         assert.isString(contractAddress)
-        assert.equal(deployed.receipt.from, sender.address)
+        assert.equal(deployed.receipt.from, sender.address.toLowerCase())
 
         let storeNumber = Math.floor(Math.random() * 10_000)
         // set the value on the contract, to its current value
