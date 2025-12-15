@@ -91,7 +91,7 @@ func newBlocksFilter(expiry time.Duration, latestHeight uint64) *blocksFilter {
 	}
 }
 
-// transactionFilter is used to get all new transactions since last request.
+// transactionsFilter is used to get all new transactions since last request.
 //
 // FullTx parameters determines if the result will include only
 // hashes or full transaction body.

@@ -90,7 +90,7 @@ it('should send transactions with relay account', async () => {
     await new Promise((res) => setTimeout(() => res(), 1500))
 
     let transaction = await publicClient.getTransaction({ hash: hash })
-    assert.equal(transaction.from, relay.address)
+    assert.equal(transaction.from, relay.address.toLowerCase())
     assert.equal(transaction.type, 'eip7702')
     assert.equal(transaction.input, '0x8129fc1c')
     assert.deepEqual(
@@ -110,7 +110,7 @@ it('should send transactions with relay account', async () => {
     let txReceipt = await publicClient.getTransactionReceipt({
         hash: hash
     })
-    assert.equal(txReceipt.from, relay.address)
+    assert.equal(txReceipt.from, relay.address.toLowerCase())
     assert.equal(txReceipt.status, 'success')
     assert.equal(txReceipt.type, 'eip7702')
 
@@ -127,7 +127,7 @@ it('should send transactions with relay account', async () => {
     txReceipt = await publicClient.getTransactionReceipt({
         hash: hash
     })
-    assert.equal(txReceipt.from, relay.address)
+    assert.equal(txReceipt.from, relay.address.toLowerCase())
     assert.equal(txReceipt.status, 'success')
     assert.equal(txReceipt.type, 'eip1559')
 })
@@ -180,7 +180,7 @@ it('should send self-executing transactions', async () => {
     await new Promise((res) => setTimeout(() => res(), 1500))
 
     let transaction = await publicClient.getTransaction({ hash: hash })
-    assert.equal(transaction.from, relay.address)
+    assert.equal(transaction.from, relay.address.toLowerCase())
     assert.equal(transaction.type, 'eip7702')
     assert.equal(transaction.input, '0x8129fc1c')
     assert.deepEqual(
@@ -200,7 +200,7 @@ it('should send self-executing transactions', async () => {
     let txReceipt = await publicClient.getTransactionReceipt({
         hash: hash
     })
-    assert.equal(txReceipt.from, relay.address)
+    assert.equal(txReceipt.from, relay.address.toLowerCase())
     assert.equal(txReceipt.status, 'success')
     assert.equal(txReceipt.type, 'eip7702')
 
@@ -217,7 +217,7 @@ it('should send self-executing transactions', async () => {
     txReceipt = await publicClient.getTransactionReceipt({
         hash: hash
     })
-    assert.equal(txReceipt.from, relay.address)
+    assert.equal(txReceipt.from, relay.address.toLowerCase())
     assert.equal(txReceipt.status, 'success')
     assert.equal(txReceipt.type, 'eip1559')
 })

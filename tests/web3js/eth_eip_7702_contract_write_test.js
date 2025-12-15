@@ -56,7 +56,7 @@ it('should perform contract writes with relay account', async () => {
     await new Promise((res) => setTimeout(() => res(), 1500))
 
     let transaction = await publicClient.getTransaction({ hash: hash })
-    assert.equal(transaction.from, relay.address)
+    assert.equal(transaction.from, relay.address.toLowerCase())
     assert.equal(transaction.type, 'eip7702')
     assert.equal(transaction.input, '0x8129fc1c')
     assert.deepEqual(
@@ -76,7 +76,7 @@ it('should perform contract writes with relay account', async () => {
     let txReceipt = await publicClient.getTransactionReceipt({
         hash: hash
     })
-    assert.equal(txReceipt.from, relay.address)
+    assert.equal(txReceipt.from, relay.address.toLowerCase())
     assert.equal(txReceipt.status, 'success')
     assert.equal(txReceipt.type, 'eip7702')
 
@@ -89,14 +89,14 @@ it('should perform contract writes with relay account', async () => {
     await new Promise((res) => setTimeout(() => res(), 1500))
 
     transaction = await publicClient.getTransaction({ hash: hash })
-    assert.equal(transaction.from, relay.address)
+    assert.equal(transaction.from, relay.address.toLowerCase())
     assert.equal(transaction.type, 'eip1559')
     assert.equal(transaction.input, '0x5c36b186')
 
     txReceipt = await publicClient.getTransactionReceipt({
         hash: hash
     })
-    assert.equal(txReceipt.from, relay.address)
+    assert.equal(txReceipt.from, relay.address.toLowerCase())
     assert.equal(txReceipt.status, 'success')
     assert.equal(txReceipt.type, 'eip1559')
 })
@@ -119,7 +119,7 @@ it('should perform contract writes with self-execution', async () => {
     await new Promise((res) => setTimeout(() => res(), 1500))
 
     let transaction = await publicClient.getTransaction({ hash: hash })
-    assert.equal(transaction.from, relay.address)
+    assert.equal(transaction.from, relay.address.toLowerCase())
     assert.equal(transaction.type, 'eip7702')
     assert.equal(transaction.input, '0x8129fc1c')
     assert.deepEqual(
@@ -139,7 +139,7 @@ it('should perform contract writes with self-execution', async () => {
     let txReceipt = await publicClient.getTransactionReceipt({
         hash: hash
     })
-    assert.equal(txReceipt.from, relay.address)
+    assert.equal(txReceipt.from, relay.address.toLowerCase())
     assert.equal(txReceipt.status, 'success')
     assert.equal(txReceipt.type, 'eip7702')
 
@@ -154,7 +154,7 @@ it('should perform contract writes with self-execution', async () => {
     txReceipt = await publicClient.getTransactionReceipt({
         hash: hash
     })
-    assert.equal(txReceipt.from, relay.address)
+    assert.equal(txReceipt.from, relay.address.toLowerCase())
     assert.equal(txReceipt.status, 'success')
     assert.equal(txReceipt.type, 'eip1559')
 })
