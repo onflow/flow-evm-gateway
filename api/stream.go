@@ -144,21 +144,21 @@ func (s *StreamAPI) prepareBlockHeader(
 		Timestamp:        hexutil.Uint64(block.Timestamp),
 	}
 
-	txHashes := block.TransactionHashes
-	if len(txHashes) > 0 {
+	receipts, err := s.receipts.GetByBlockHeight(block.Height)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(receipts) > 0 {
 		totalGasUsed := hexutil.Uint64(0)
-		receipts := gethTypes.Receipts{}
-		for _, txHash := range txHashes {
-			txReceipt, err := s.receipts.GetByTransactionID(txHash)
-			if err != nil {
-				return nil, err
-			}
-			totalGasUsed += hexutil.Uint64(txReceipt.GasUsed)
-			receipts = append(receipts, txReceipt.ToGethReceipt())
+		gethReceipts := gethTypes.Receipts{}
+		for _, receipt := range receipts {
+			totalGasUsed += hexutil.Uint64(receipt.GasUsed)
+			gethReceipts = append(gethReceipts, receipt.ToGethReceipt())
 		}
 		blockHeader.GasUsed = totalGasUsed
 		// TODO(m-Peter): Consider if its worthwhile to move this in storage.
-		blockHeader.LogsBloom = gethTypes.MergeBloom(receipts).Bytes()
+		blockHeader.LogsBloom = gethTypes.MergeBloom(gethReceipts).Bytes()
 	}
 
 	return blockHeader, nil

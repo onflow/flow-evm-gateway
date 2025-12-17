@@ -456,12 +456,13 @@ func (api *PullAPI) getTransactions(latestHeight uint64, filter *transactionsFil
 			return nil, err
 		}
 
-		for _, h := range b.TransactionHashes {
-			tx, err := api.transactions.Get(h)
-			if err != nil {
-				return nil, err
-			}
-			receipt, err := api.receipts.GetByTransactionID(h)
+		receipts, err := api.receipts.GetByBlockHeight(b.Height)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, receipt := range receipts {
+			tx, err := api.transactions.Get(receipt.TxHash)
 			if err != nil {
 				return nil, err
 			}
