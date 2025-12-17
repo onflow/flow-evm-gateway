@@ -54,15 +54,11 @@ func NewBlockExecutor(
 
 func (s *BlockExecutor) Run(
 	tx models.Transaction,
+	receipt *models.Receipt,
 	tracer *tracers.Tracer,
 ) error {
 	l := s.logger.With().Str("tx-hash", tx.Hash().String()).Logger()
 	l.Info().Msg("executing new transaction")
-
-	receipt, err := s.receipts.GetByTransactionID(tx.Hash())
-	if err != nil {
-		return err
-	}
 
 	ctx, err := s.blockContext(receipt, tracer)
 	if err != nil {

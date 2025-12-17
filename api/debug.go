@@ -344,7 +344,7 @@ func (d *DebugAPI) traceTransaction(
 			txExecuted = true
 		}
 
-		if err = blockExecutor.Run(tx, txTracer); err != nil {
+		if err = blockExecutor.Run(tx, receipt, txTracer); err != nil {
 			return nil, err
 		}
 	}
@@ -393,13 +393,14 @@ func (d *DebugAPI) traceBlockByNumber(
 		return nil, err
 	}
 
-	for i, h := range block.TransactionHashes {
-		tx, err := d.transactions.Get(h)
-		if err != nil {
-			return nil, err
-		}
+	receipts, err := d.receipts.GetByBlockHeight(block.Height)
+	if err != nil {
+		return nil, err
+	}
 
-		receipt, err := d.receipts.GetByTransactionID(tx.Hash())
+	for i, receipt := range receipts {
+		txHash := receipt.TxHash
+		tx, err := d.transactions.Get(txHash)
 		if err != nil {
 			return nil, err
 		}
@@ -409,12 +410,12 @@ func (d *DebugAPI) traceBlockByNumber(
 			return nil, err
 		}
 
-		if err = blockExecutor.Run(tx, tracer); err != nil {
-			results[i] = &txTraceResult{TxHash: h, Error: err.Error()}
+		if err = blockExecutor.Run(tx, receipt, tracer); err != nil {
+			results[i] = &txTraceResult{TxHash: txHash, Error: err.Error()}
 		} else if txTrace, err := tracer.GetResult(); err != nil {
-			results[i] = &txTraceResult{TxHash: h, Error: err.Error()}
+			results[i] = &txTraceResult{TxHash: txHash, Error: err.Error()}
 		} else {
-			results[i] = &txTraceResult{TxHash: h, Result: txTrace}
+			results[i] = &txTraceResult{TxHash: txHash, Result: txTrace}
 		}
 	}
 
