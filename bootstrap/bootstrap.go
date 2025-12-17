@@ -352,6 +352,7 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 		rateLimiter,
 		b.collector,
 		indexingResumedHeight,
+		b.config.BlockByNumberCacheSize,
 	)
 
 	streamAPI := api.NewStreamAPI(

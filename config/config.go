@@ -136,4 +136,6 @@ type Config struct {
 	// RpcRequestTimeout is the maximum duration at which JSON-RPC requests should generate
 	// a response, before they timeout.
 	RpcRequestTimeout time.Duration
+	// BlockByNumberCacheSize is the size of the block by number cache.
+	BlockByNumberCacheSize int
 }
