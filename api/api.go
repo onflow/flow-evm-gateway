@@ -445,25 +445,25 @@ func (b *BlockChainAPI) GetBlockReceipts(
 		return handleError[[]map[string]any](err, l, b.collector)
 	}
 
-	receipts := make([]map[string]any, len(block.TransactionHashes))
-	for i, hash := range block.TransactionHashes {
-		tx, err := b.transactions.Get(hash)
+	receipts, err := b.receipts.GetByBlockHeight(block.Height)
+	if err != nil {
+		return handleError[[]map[string]any](err, l, b.collector)
+	}
+
+	marshaledReceipts := make([]map[string]any, len(receipts))
+	for i, receipt := range receipts {
+		tx, err := b.transactions.Get(receipt.TxHash)
 		if err != nil {
 			return handleError[[]map[string]any](err, l, b.collector)
 		}
 
-		receipt, err := b.receipts.GetByTransactionID(hash)
-		if err != nil {
-			return handleError[[]map[string]any](err, l, b.collector)
-		}
-
-		receipts[i], err = ethTypes.MarshalReceipt(receipt, tx)
+		marshaledReceipts[i], err = ethTypes.MarshalReceipt(receipt, tx)
 		if err != nil {
 			return handleError[[]map[string]any](err, l, b.collector)
 		}
 	}
 
-	return receipts, nil
+	return marshaledReceipts, nil
 }
 
 // GetBlockTransactionCountByHash returns the number of transactions
@@ -926,22 +926,21 @@ func (b *BlockChainAPI) GetStorageAt(
 
 func (b *BlockChainAPI) fetchBlockTransactions(
 	block *models.Block,
+	receipts []*models.Receipt,
 ) ([]*ethTypes.Transaction, error) {
-	transactions := make([]*ethTypes.Transaction, 0)
-	for _, txHash := range block.TransactionHashes {
-		transaction, err := b.prepareTransactionResponse(txHash)
+	transactions := make([]*ethTypes.Transaction, len(receipts))
+	for i, receipt := range receipts {
+		tx, err := b.transactions.Get(receipt.TxHash)
 		if err != nil {
 			return nil, err
 		}
-		if transaction == nil {
-			b.logger.Error().
-				Str("tx-hash", txHash.String()).
-				Uint64("evm-height", block.Height).
-				Msg("not found a transaction the block references")
 
-			continue
+		transaction, err := ethTypes.NewTransactionResult(tx, *receipt, b.config.EVMNetworkID)
+		if err != nil {
+			return nil, err
 		}
-		transactions = append(transactions, transaction)
+
+		transactions[i] = transaction
 	}
 
 	return transactions, nil
@@ -996,26 +995,28 @@ func (b *BlockChainAPI) prepareBlockResponse(
 	}
 	blockSize := rlp.ListSize(uint64(len(blockBytes)))
 
-	transactions, err := b.fetchBlockTransactions(block)
+	receipts, err := b.receipts.GetByBlockHeight(block.Height)
+	if err != nil {
+		return nil, err
+	}
+
+	transactions, err := b.fetchBlockTransactions(block, receipts)
 	if err != nil {
 		return nil, err
 	}
 
 	if len(transactions) > 0 {
 		totalGasUsed := hexutil.Uint64(0)
-		receipts := types.Receipts{}
-		for _, tx := range transactions {
-			txReceipt, err := b.receipts.GetByTransactionID(tx.Hash)
-			if err != nil {
-				return nil, err
-			}
+		gethReceipts := types.Receipts{}
+		for i, tx := range transactions {
+			txReceipt := receipts[i]
 			totalGasUsed += hexutil.Uint64(txReceipt.GasUsed)
-			receipts = append(receipts, txReceipt.ToGethReceipt())
+			gethReceipts = append(gethReceipts, txReceipt.ToGethReceipt())
 			blockSize += tx.Size()
 		}
 		blockResponse.GasUsed = totalGasUsed
 		// TODO(m-Peter): Consider if its worthwhile to move this in storage.
-		blockResponse.LogsBloom = types.MergeBloom(receipts).Bytes()
+		blockResponse.LogsBloom = types.MergeBloom(gethReceipts).Bytes()
 	}
 	blockResponse.Size = hexutil.Uint64(rlp.ListSize(blockSize))
 
