@@ -168,23 +168,14 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 		nextCadenceHeight,
 	)
 
-	callTracerCollector, err := replayer.NewCallTracerCollector(
-		b.config.EVMNetworkID,
-		b.logger,
-	)
-	if err != nil {
-		return err
-	}
 	blocksProvider := replayer.NewBlocksProvider(
 		b.storages.Blocks,
 		chainID,
-		callTracerCollector.TxTracer(),
 	)
 	replayerConfig := replayer.Config{
-		ChainID:             chainID,
-		RootAddr:            evm.StorageAccountAddress(chainID),
-		CallTracerCollector: callTracerCollector,
-		ValidateResults:     true,
+		ChainID:         chainID,
+		RootAddr:        evm.StorageAccountAddress(chainID),
+		ValidateResults: true,
 	}
 
 	// initialize event ingestion engine
@@ -196,7 +187,6 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 		b.storages.Blocks,
 		b.storages.Receipts,
 		b.storages.Transactions,
-		b.storages.Traces,
 		b.publishers.Block,
 		b.publishers.Logs,
 		b.logger,

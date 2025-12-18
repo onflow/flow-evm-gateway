@@ -2,9 +2,7 @@ package api
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"strings"
 
 	gethCommon "github.com/ethereum/go-ethereum/common"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
@@ -21,9 +19,7 @@ import (
 	"github.com/onflow/flow-evm-gateway/config"
 	ethTypes "github.com/onflow/flow-evm-gateway/eth/types"
 	"github.com/onflow/flow-evm-gateway/models"
-	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/services/evm"
-	"github.com/onflow/flow-evm-gateway/services/replayer"
 	"github.com/onflow/flow-evm-gateway/services/requester"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
@@ -279,28 +275,6 @@ func (d *DebugAPI) traceTransaction(
 	hash gethCommon.Hash,
 	config *tracers.TraceConfig,
 ) (json.RawMessage, error) {
-	// If the given trace config is equal to the default call tracer used
-	// in block replay during ingestion, then we fetch the trace result
-	// from the Traces DB.
-	if isDefaultCallTracer(config) {
-		trace, err := d.tracer.GetTransaction(hash)
-		// If there is no error, we return the trace result from the DB.
-		if err == nil {
-			return trace, nil
-		}
-
-		// If we got an error of `ErrEntityNotFound`, for whatever reason,
-		// we simply re-compute the trace below. If we got any other error,
-		// we return it.
-		if !errors.Is(err, errs.ErrEntityNotFound) {
-			d.logger.Error().Err(err).Msgf(
-				"failed to retrieve default call trace for tx: %s",
-				hash,
-			)
-			return nil, err
-		}
-	}
-
 	receipt, err := d.receipts.GetByTransactionID(hash)
 	if err != nil {
 		return nil, err
@@ -370,23 +344,6 @@ func (d *DebugAPI) traceBlockByNumber(
 	}
 
 	results := make([]*txTraceResult, len(block.TransactionHashes))
-
-	// If the given trace config is equal to the default call tracer used
-	// in block replay during ingestion, then we fetch the trace result
-	// from the Traces DB.
-	if isDefaultCallTracer(config) {
-		for i, hash := range block.TransactionHashes {
-			trace, err := d.traceTransaction(hash, config)
-
-			if err != nil {
-				results[i] = &txTraceResult{TxHash: hash, Error: err.Error()}
-			} else {
-				results[i] = &txTraceResult{TxHash: hash, Result: trace}
-			}
-		}
-
-		return results, nil
-	}
 
 	blockExecutor, err := d.executorAtBlock(block)
 	if err != nil {
@@ -479,20 +436,4 @@ func (d *DebugAPI) tracerForReceipt(
 		config.TracerConfig,
 		d.evmChainConfig,
 	)
-}
-
-func isDefaultCallTracer(config *tracers.TraceConfig) bool {
-	if config == nil {
-		return false
-	}
-
-	if config.Tracer == nil || *config.Tracer != replayer.TracerName {
-		return false
-	}
-
-	// The default tracer config is `{"onlyTopCall":true}`, if the user adds
-	// any whitespace, e.g `{ "onlyTopCall": true }`, the comparison will fail.
-	// That's why we need to trim out all whitespace characters.
-	trimmedConfig := strings.ReplaceAll(string(config.TracerConfig), " ", "")
-	return trimmedConfig == replayer.TracerConfig
 }

@@ -5,8 +5,7 @@ import (
 )
 
 type Config struct {
-	ChainID             flow.ChainID
-	RootAddr            flow.Address
-	CallTracerCollector EVMTracer
-	ValidateResults     bool
+	ChainID         flow.ChainID
+	RootAddr        flow.Address
+	ValidateResults bool
 }
