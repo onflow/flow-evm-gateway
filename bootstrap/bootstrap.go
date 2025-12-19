@@ -514,7 +514,11 @@ func setupCrossSporkClient(config config.Config, logger zerolog.Logger) (*reques
 	// if we provided access node previous spork hosts add them to the client
 	pastSporkClients := make([]access.Client, len(config.AccessNodePreviousSporkHosts))
 	for i, host := range config.AccessNodePreviousSporkHosts {
-		grpcClient, err := grpc.NewClient(host)
+		grpcClient, err := grpc.NewClient(host,
+			grpc.WithGRPCDialOptions(
+				grpcOpts.WithDefaultCallOptions(grpcOpts.MaxCallRecvMsgSize(DefaultMaxMessageSize)),
+			),
+		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create client connection for host: %s, with error: %w", host, err)
 		}
