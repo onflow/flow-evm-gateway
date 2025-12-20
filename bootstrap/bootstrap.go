@@ -62,6 +62,7 @@ type Storages struct {
 type Publishers struct {
 	Block       *models.Publisher[*models.Block]
 	Transaction *models.Publisher[*gethTypes.Transaction]
+	Receipts    *models.Publisher[[]*models.Receipt]
 	Logs        *models.Publisher[[]*gethTypes.Log]
 }
 
@@ -105,6 +106,7 @@ func New(config config.Config) (*Bootstrap, error) {
 		publishers: &Publishers{
 			Block:       models.NewPublisher[*models.Block](),
 			Transaction: models.NewPublisher[*gethTypes.Transaction](),
+			Receipts:    models.NewPublisher[[]*models.Receipt](),
 			Logs:        models.NewPublisher[[]*gethTypes.Log](),
 		},
 		db:        db,
@@ -199,6 +201,7 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 		b.storages.Traces,
 		b.publishers.Block,
 		b.publishers.Logs,
+		b.publishers.Receipts,
 		b.logger,
 		b.collector,
 		replayerConfig,
@@ -338,6 +341,7 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 		b.storages.Receipts,
 		b.publishers.Block,
 		b.publishers.Transaction,
+		b.publishers.Receipts,
 		b.publishers.Logs,
 	)
 

@@ -3,7 +3,9 @@ package api
 import (
 	"context"
 	"fmt"
+	"slices"
 
+	gethCommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/filters"
@@ -19,6 +21,9 @@ import (
 	"github.com/onflow/flow-evm-gateway/storage"
 )
 
+// The maximum number of transaction hash criteria allowed in a single subscription
+const maxTxHashes = 200
+
 type StreamAPI struct {
 	logger                zerolog.Logger
 	config                config.Config
@@ -27,6 +32,7 @@ type StreamAPI struct {
 	receipts              storage.ReceiptIndexer
 	blocksPublisher       *models.Publisher[*models.Block]
 	transactionsPublisher *models.Publisher[*gethTypes.Transaction]
+	receiptsPublisher     *models.Publisher[[]*models.Receipt]
 	logsPublisher         *models.Publisher[[]*gethTypes.Log]
 }
 
@@ -38,6 +44,7 @@ func NewStreamAPI(
 	receipts storage.ReceiptIndexer,
 	blocksPublisher *models.Publisher[*models.Block],
 	transactionsPublisher *models.Publisher[*gethTypes.Transaction],
+	receiptsPublisher *models.Publisher[[]*models.Receipt],
 	logsPublisher *models.Publisher[[]*gethTypes.Log],
 ) *StreamAPI {
 	return &StreamAPI{
@@ -48,6 +55,7 @@ func NewStreamAPI(
 		receipts:              receipts,
 		blocksPublisher:       blocksPublisher,
 		transactionsPublisher: transactionsPublisher,
+		receiptsPublisher:     receiptsPublisher,
 		logsPublisher:         logsPublisher,
 	}
 }
@@ -116,6 +124,59 @@ func (s *StreamAPI) Logs(ctx context.Context, criteria filters.FilterCriteria) (
 				}
 
 				return nil
+			}
+		},
+	)
+}
+
+// TransactionReceipts creates a subscription that fires transaction
+// receipts when transactions are included in blocks.
+func (s *StreamAPI) TransactionReceipts(
+	ctx context.Context,
+	filter *filters.TransactionReceiptsQuery,
+) (*rpc.Subscription, error) {
+	// Validate transaction hashes limit
+	if filter != nil && len(filter.TransactionHashes) > maxTxHashes {
+		return nil, errs.ErrExceedMaxTxHashes
+	}
+
+	var txHashes []gethCommon.Hash
+
+	if filter != nil {
+		txHashes = filter.TransactionHashes
+	}
+
+	return newSubscription(
+		ctx,
+		s.logger,
+		s.receiptsPublisher,
+		func(notifier *rpc.Notifier, sub *rpc.Subscription) func([]*models.Receipt) error {
+			return func(receipts []*models.Receipt) error {
+				// Convert to the same format as `eth_getTransactionReceipt`
+				marshaledReceipts := make([]map[string]any, 0)
+
+				for _, receipt := range receipts {
+					// Check if the subscription is only interested for a given
+					// set of tx receipts.
+					if len(txHashes) > 0 && !slices.Contains(txHashes, receipt.TxHash) {
+						continue
+					}
+
+					tx, err := s.transactions.Get(receipt.TxHash)
+					if err != nil {
+						return err
+					}
+
+					txReceipt, err := ethTypes.MarshalReceipt(receipt, tx)
+					if err != nil {
+						return err
+					}
+
+					marshaledReceipts = append(marshaledReceipts, txReceipt)
+				}
+
+				// Send a batch of tx receipts in one notification
+				return notifier.Notify(sub.ID, marshaledReceipts)
 			}
 		},
 	)

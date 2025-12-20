@@ -17,6 +17,7 @@ var (
 	ErrRateLimit            = errors.New("limit of requests per second reached")
 	ErrIndexOnlyMode        = errors.New("transaction submission not allowed in index-only mode")
 	ErrExceedLogQueryLimit  = errors.New("exceed max addresses or topics per search position")
+	ErrExceedMaxTxHashes    = errors.New("exceed max number of transaction hashes allowed per transactionReceipts subscription")
 
 	// General errors
 
