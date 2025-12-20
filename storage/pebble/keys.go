@@ -24,6 +24,10 @@ const (
 	// traces keys
 	traceTxIDKey = byte(40)
 
+	// user operation keys
+	userOpReceiptKey   = byte(60)
+	userOpTxMappingKey = byte(61)
+
 	// registers
 	registerKeyMarker = byte(50)
 

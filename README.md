@@ -6,9 +6,9 @@
 
 EVM Gateway implements the Ethereum JSON-RPC API for [EVM on Flow](https://developers.flow.com/evm/about) which conforms to the Ethereum [JSON-RPC specification](https://ethereum.github.io/execution-apis/api-documentation/). The EVM Gateway is tailored for integration with the EVM environment on the Flow blockchain. Rather than implementing the full `geth` stack, the JSON-RPC API available in EVM Gateway is a lightweight implementation that uses Flow's underlying consensus and smart contract language, [Cadence](https://cadence-lang.org/docs/), to handle calls received by the EVM Gateway. For those interested in the underlying implementation details, please refer to the [FLIP #243](https://github.com/onflow/flips/issues/243) (EVM Gateway) and [FLIP #223](https://github.com/onflow/flips/issues/223) (EVM on Flow Core) improvement proposals.
 
-EVM Gateway is compatible with the majority of standard Ethereum JSON-RPC APIs allowing seamless integration with existing Ethereum-compatible web3 tools via HTTP. EVM Gateway honors Ethereum's JSON-RPC namespace system, grouping RPC methods into categories based on their specific purpose. Each method name is constructed using the namespace, an underscore, and the specific method name in that namespace. For example, the `eth_call` method is located within the `eth` namespace. More details on Ethereum JSON-RPC compatibility are available in our [Using EVM](https://developers.flow.com/evm/using#json-rpc-methods) docs.  
+EVM Gateway is compatible with the majority of standard Ethereum JSON-RPC APIs allowing seamless integration with existing Ethereum-compatible web3 tools via HTTP. EVM Gateway honors Ethereum's JSON-RPC namespace system, grouping RPC methods into categories based on their specific purpose. Each method name is constructed using the namespace, an underscore, and the specific method name in that namespace. For example, the `eth_call` method is located within the `eth` namespace. More details on Ethereum JSON-RPC compatibility are available in our [Using EVM](https://developers.flow.com/evm/using#json-rpc-methods) docs.
 
-No stake is required to run an EVM Gateway and since they do not participate in consensus they have a lightweight resource footprint. They are recommended as a scaling solution in place of centralized middleware JSON-RPC providers.  
+No stake is required to run an EVM Gateway and since they do not participate in consensus they have a lightweight resource footprint. They are recommended as a scaling solution in place of centralized middleware JSON-RPC providers.
 
 ### Design
 
@@ -19,7 +19,6 @@ The basic design of the EVM Gateway is as follows:
 - Event Ingestion Engine: consumes all Cadence events emitted by the EVM core, filtering for special event type IDs `evm.TransactionExecuted` and `evm.BlockExecuted`. These payloads are decoded and indexed locally. The local index serves all read-only requests to the JSON-RPC including `debug_traceXxxx()` requests.
 - Flow Requester: submits Cadence transactions to a Flow Access Node to change the EVM state. EVM transaction payloads received by the JSON-RPC are wrapped in a Cadence transaction. The Cadence transaction execution unwraps the EVM transaction payload and is provided to the EVM core to execute and change state.
 - JSON-RPC: the client API component that implements functions according to the Ethereum JSON-RPC specification.
-
 
 # Building
 
@@ -33,6 +32,7 @@ git fetch origin --tags
 
 make build
 ```
+
 To view the binary version:
 
 ```bash
@@ -58,12 +58,13 @@ make start-local-bin
 ```
 
 # Running
+
 Operating an EVM Gateway is straightforward. It can either be deployed locally alongside the Flow emulator or configured to connect with any active Flow networks supporting EVM. Given that the EVM Gateway depends solely on [Access Node APIs](https://developers.flow.com/networks/node-ops/access-onchain-data/access-nodes/accessing-data/access-api), it is compatible with any networks offering this API access.
 
-## Key concepts 
+## Key concepts
 
-The EVM Gateway's role in mediating EVM transactions over to Cadence is how it accrues fees from handling client transactions. Since 
-the gateway submits Cadence transactions wrapping EVM transaction payloads to the Flow Access Node the transaction fee for that must 
+The EVM Gateway's role in mediating EVM transactions over to Cadence is how it accrues fees from handling client transactions. Since
+the gateway submits Cadence transactions wrapping EVM transaction payloads to the Flow Access Node the transaction fee for that must
 be paid by the EVM Gateway.
 
 The account used for funding gateway Cadence transactions must be a COA, not an EOA. `--coa-address` is configured with the Cadence address
@@ -83,6 +84,7 @@ Before running the gateway locally you need to start the Flow Emulator:
 ```bash
 flow emulator
 ```
+
 _Make sure flow.json has the emulator account configured to address and private key we will use for starting gateway below. Use `flow init` in a new folder for example config._
 
 Please refer to the configuration section and read through all the configuration flags before proceeding.
@@ -103,7 +105,9 @@ Using Docker for local development is also supported. The following target build
 ```bash
 make docker-build-local
 ```
-This target starts the flow emulator and then runs the EVM Gateway using the image built by the above `make` target 
+
+This target starts the flow emulator and then runs the EVM Gateway using the image built by the above `make` target
+
 ```bash
 make docker-run-local
 ```
@@ -133,7 +137,7 @@ Please refer to the configuration section and read through all the configuration
 
 ### Create Flow account to use for COA
 
-If you don't already have a Flow account you will need to create account keys using the following command. 
+If you don't already have a Flow account you will need to create account keys using the following command.
 
 ```bash
 flow keys generate
@@ -195,21 +199,22 @@ Should return a response similar to:
 
 To use the `make` target to connect a container-based gateway instance to testnet requires the following environment variables to be set.
 
-* `ACCESS_NODE_GRPC_HOST`: access.devnet.nodes.onflow.org:9000 
-* `FLOW_NETWORK_ID`: flow-testnet
-* `COINBASE`: FACF71692421039876a5BB4F10EF7A439D8ef61E
-* `COA_ADDRESS`: <16-character hexadecimal address>
-* `COA_KEY`: <64-character hexadecimal private key>
-* `VERSION`: [_repo commit hash or tag version used when building with docker_]
+- `ACCESS_NODE_GRPC_HOST`: access.devnet.nodes.onflow.org:9000
+- `FLOW_NETWORK_ID`: flow-testnet
+- `COINBASE`: FACF71692421039876a5BB4F10EF7A439D8ef61E
+- `COA_ADDRESS`: <16-character hexadecimal address>
+- `COA_KEY`: <64-character hexadecimal private key>
+- `VERSION`: [_repo commit hash or tag version used when building with docker_]
 
 Once set, this target starts the EVM Gateway for the specified image version and connects it to testnet
+
 ```bash
 make docker-run
 ```
 
 ## Mainnet and Node Operations
 
-Guidance for EVM Gateway node operations including considerations for mainnet, hardware specs, monitoring setup and troubleshooting 
+Guidance for EVM Gateway node operations including considerations for mainnet, hardware specs, monitoring setup and troubleshooting
 can be found in the EVM Gateway [node operations docs](https://developers.flow.com/networks/node-ops/evm-gateway/evm-gateway-setup).
 
 Below is an example configuration for running against mainnet, with a preconfigured mainnet account.
@@ -230,79 +235,87 @@ Below is an example configuration for running against mainnet, with a preconfigu
 
 The application can be configured using the following flags at runtime:
 
-| Flag                           | Default Value    | Description                                                                                |
-|--------------------------------|------------------|--------------------------------------------------------------------------------------------|
-| `database-dir`                 | `./db`           | Path to the directory for the database                                                     |
-| `rpc-host`                     | `""`             | Host for the RPC API server                                                                |
-| `rpc-port`                     | `8545`           | Port for the RPC API server (also same for Websockets)                                     |
-| `ws-enabled`                   | `false`          | Enable websocket connections                                                               |
-| `access-node-grpc-host`        | `localhost:3569` | Host to the flow access node gRPC API                                                      |
-| `access-node-spork-hosts`      | `""`             | Previous spork AN hosts, defined as a comma-separated list (e.g. `"host-1.com,host2.com"`) |
-| `flow-network-id`              | `flow-emulator`  | Flow network ID (options: `flow-emulator`, `flow-testnet`, `flow-mainnet`)                 |
-| `coinbase`                     | `""`             | Coinbase address to use for fee collection                                                 |
-| `gas-price`                    | `1`              | Static gas price for EVM transactions                                                      |
+| Flag                           | Default Value    | Description                                                                                                                                                            |
+| ------------------------------ | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `database-dir`                 | `./db`           | Path to the directory for the database                                                                                                                                 |
+| `rpc-host`                     | `""`             | Host for the RPC API server                                                                                                                                            |
+| `rpc-port`                     | `8545`           | Port for the RPC API server (also same for Websockets)                                                                                                                 |
+| `ws-enabled`                   | `false`          | Enable websocket connections                                                                                                                                           |
+| `access-node-grpc-host`        | `localhost:3569` | Host to the flow access node gRPC API                                                                                                                                  |
+| `access-node-spork-hosts`      | `""`             | Previous spork AN hosts, defined as a comma-separated list (e.g. `"host-1.com,host2.com"`)                                                                             |
+| `flow-network-id`              | `flow-emulator`  | Flow network ID (options: `flow-emulator`, `flow-testnet`, `flow-mainnet`)                                                                                             |
+| `coinbase`                     | `""`             | Coinbase address to use for fee collection                                                                                                                             |
+| `gas-price`                    | `1`              | Static gas price for EVM transactions                                                                                                                                  |
 | `enforce-gas-price`            | `true`           | Enable enforcing minimum gas price for EVM transactions. When true (default), transactions must specify a gas price greater than or equal to the configured gas price. |
-| `coa-address`                  | `""`             | Flow address holding COA account for submitting transactions                               |
-| `coa-key`                      | `""`             | Private key for the COA address used for transactions                                      |
-| `coa-key-file`                 | `""`             | Path to a JSON file of COA keys for key-rotation (exclusive with `coa-key` flag)           |
-| `coa-cloud-kms-project-id`     | `""`             | Project ID for KMS keys (e.g. `flow-evm-gateway`)                                          |
-| `coa-cloud-kms-location-id`    | `""`             | Location ID for KMS key ring (e.g. 'global')                                               |
-| `coa-cloud-kms-key-ring-id`    | `""`             | Key ring ID for KMS keys (e.g. 'tx-signing')                                               |
-| `coa-cloud-kms-key`            | `""`             | KMS keys and versions, comma-separated (e.g. `"gw-key-6@1,gw-key-7@1"`)                    |
-| `log-level`                    | `debug`          | Log verbosity level (`debug`, `info`, `warn`, `error`, `fatal`, `panic`)                   |
-| `log-writer`                   | `stderr`         | Output method for logs (`stderr`, `console`)                                               |
-| `rate-limit`                   | `50`             | Requests per second limit for clients over any protocol (ws/http)                          |
-| `address-header`               | `""`             | Header for client IP when server is behind a proxy                                         |
-| `heartbeat-interval`           | `100`            | Interval for AN event subscription heartbeats                                              |
-| `force-start-height`           | `0`              | Force-set starting Cadence height (local/testing use only)                                 |
-| `wallet-api-key`               | `""`             | ECDSA private key for wallet APIs (local/testing use only)                                 |
-| `filter-expiry`                | `5m`             | Expiry time for idle filters                                                               |
-| `traces-backfill-start-height` | `0`              | Start height for backfilling transaction traces                                            |
-| `traces-backfill-end-height`   | `0`              | End height for backfilling transaction traces                                              |
-| `index-only`                   | `false`          | Run in index-only mode, allowing state queries and indexing but no transaction sending     |
-| `metrics-port`                 | `8080`           | Port for Prometheus metrics                                                                |
-| `profiler-enabled`             | `false`          | Enable the pprof profiler server                                                           |
-| `profiler-host`                | `localhost`      | Host for the pprof profiler                                                                |
-| `profiler-port`                | `6060`           | Port for the pprof profiler                                                                |
-| `tx-state-validation`          | `""`             | When set to `local-index` will validate EVM transaction state locally                      |
-
+| `coa-address`                  | `""`             | Flow address holding COA account for submitting transactions                                                                                                           |
+| `coa-key`                      | `""`             | Private key for the COA address used for transactions                                                                                                                  |
+| `coa-key-file`                 | `""`             | Path to a JSON file of COA keys for key-rotation (exclusive with `coa-key` flag)                                                                                       |
+| `coa-cloud-kms-project-id`     | `""`             | Project ID for KMS keys (e.g. `flow-evm-gateway`)                                                                                                                      |
+| `coa-cloud-kms-location-id`    | `""`             | Location ID for KMS key ring (e.g. 'global')                                                                                                                           |
+| `coa-cloud-kms-key-ring-id`    | `""`             | Key ring ID for KMS keys (e.g. 'tx-signing')                                                                                                                           |
+| `coa-cloud-kms-key`            | `""`             | KMS keys and versions, comma-separated (e.g. `"gw-key-6@1,gw-key-7@1"`)                                                                                                |
+| `log-level`                    | `debug`          | Log verbosity level (`debug`, `info`, `warn`, `error`, `fatal`, `panic`)                                                                                               |
+| `log-writer`                   | `stderr`         | Output method for logs (`stderr`, `console`)                                                                                                                           |
+| `rate-limit`                   | `50`             | Requests per second limit for clients over any protocol (ws/http)                                                                                                      |
+| `address-header`               | `""`             | Header for client IP when server is behind a proxy                                                                                                                     |
+| `heartbeat-interval`           | `100`            | Interval for AN event subscription heartbeats                                                                                                                          |
+| `force-start-height`           | `0`              | Force-set starting Cadence height (local/testing use only)                                                                                                             |
+| `wallet-api-key`               | `""`             | ECDSA private key for wallet APIs (local/testing use only)                                                                                                             |
+| `filter-expiry`                | `5m`             | Expiry time for idle filters                                                                                                                                           |
+| `entry-point-address`          | `""`             | Address of the ERC-4337 EntryPoint contract (required if bundler-enabled)                                                                                              |
+| `bundler-enabled`              | `false`          | Enable ERC-4337 bundler functionality                                                                                                                                  |
+| `max-ops-per-bundle`           | `10`             | Maximum number of UserOperations per EntryPoint.handleOps() call                                                                                                       |
+| `user-op-ttl`                  | `5m`             | Time to live for pending UserOperations in the pool                                                                                                                    |
+| `bundler-beneficiary`          | `""`             | EVM address that receives fees from EntryPoint execution                                                                                                               |
+| `bundler-interval`             | `800ms`          | Interval at which the bundler checks for and processes pending UserOperations. Lower values reduce latency but increase RPC load on Access Node.                       |
+| `traces-backfill-start-height` | `0`              | Start height for backfilling transaction traces                                                                                                                        |
+| `traces-backfill-end-height`   | `0`              | End height for backfilling transaction traces                                                                                                                          |
+| `index-only`                   | `false`          | Run in index-only mode, allowing state queries and indexing but no transaction sending                                                                                 |
+| `metrics-port`                 | `8080`           | Port for Prometheus metrics                                                                                                                                            |
+| `profiler-enabled`             | `false`          | Enable the pprof profiler server                                                                                                                                       |
+| `profiler-host`                | `localhost`      | Host for the pprof profiler                                                                                                                                            |
+| `profiler-port`                | `6060`           | Port for the pprof profiler                                                                                                                                            |
+| `tx-state-validation`          | `""`             | When set to `local-index` will validate EVM transaction state locally                                                                                                  |
 
 # EVM Gateway Endpoints
 
 EVM Gateway has public RPC endpoints available for the following environments:
 
-| Name            | Value                                  |
-|-----------------|----------------------------------------|
-| Network Name    | EVM on Flow Testnet                    |
-| Description     | The public RPC URL for Flow Testnet    |
-| RPC Endpoint    | https://testnet.evm.nodes.onflow.org   |
-| Chain ID        | 545                                    |
-| Currency Symbol | FLOW                                   |
-| Block Explorer  | https://evm-testnet.flowscan.io        |
+| Name            | Value                                |
+| --------------- | ------------------------------------ |
+| Network Name    | EVM on Flow Testnet                  |
+| Description     | The public RPC URL for Flow Testnet  |
+| RPC Endpoint    | https://testnet.evm.nodes.onflow.org |
+| Chain ID        | 545                                  |
+| Currency Symbol | FLOW                                 |
+| Block Explorer  | https://evm-testnet.flowscan.io      |
 
-| Name            | Value                                  |
-|-----------------|----------------------------------------|
-| Network Name    | EVM on Flow                            |
-| Description     | The public RPC URL for Flow Mainnet    |
-| RPC Endpoint    | https://mainnet.evm.nodes.onflow.org   |
-| Chain ID        | 747                                    |
-| Currency Symbol | FLOW                                   |
-| Block Explorer  | https://evm.flowscan.io                |
+| Name            | Value                                |
+| --------------- | ------------------------------------ |
+| Network Name    | EVM on Flow                          |
+| Description     | The public RPC URL for Flow Mainnet  |
+| RPC Endpoint    | https://mainnet.evm.nodes.onflow.org |
+| Chain ID        | 747                                  |
+| Currency Symbol | FLOW                                 |
+| Block Explorer  | https://evm.flowscan.io              |
 
 To connect using Websockets you can use the same DNS names as above but change `https://` with `wss://`, eg: `wss://testnet.evm.nodes.onflow.org`
 
 # JSON-RPC API
+
 The EVM Gateway implements APIs according to the Ethereum specification: https://ethereum.org/en/developers/docs/apis/json-rpc/#json-rpc-methods.
 
 ## Additional APIs
+
 - Tracing APIs allow fetching execution traces
-  * `debug_traceTransaction`
-  * `debug_traceBlockByNumber`
-  * `debug_traceBlockByHash`
-  * `debug_traceCall`
+  - `debug_traceTransaction`
+  - `debug_traceBlockByNumber`
+  - `debug_traceBlockByHash`
+  - `debug_traceCall`
 - `debug_flowHeightByBlock` - returns the flow block height for the given EVM block (id or height)
 
 ## Unsupported APIs
+
 - Wallet APIs: we don't officially support wallet APIs (`eth_accounts`, `eth_sign`, `eth_signTransaction`, `eth_sendTransaction`) due to security
   concerns that come with managing the keys on production environments, however, it is possible to configure the gateway to allow these
   methods for local development by using a special flag `--wallet-api-key`.
@@ -318,6 +331,7 @@ A full list of supported methods is available in the [Using EVM](https://develop
 ## Profiler
 
 The EVM Gateway supports profiling via the `pprof` package. To enable profiling, add the following flags to the command line:
+
 ```
 --profiler-enabled=true
 --profiler-host=localhost
@@ -325,16 +339,20 @@ The EVM Gateway supports profiling via the `pprof` package. To enable profiling,
 ```
 
 This will start a pprof server on the provided `host` and `port`. You can generate profiles using the following `go tool` commands
+
 ```
 go tool pprof -http :2000 http://localhost:6060/debug/pprof/profile
 ```
+
 ```
 curl --output trace.out http://localhost:6060/debug/pprof/trace
 go tool trace -http :2001 trace.out
 ```
 
 # Contributing
+
 We welcome contributions from the community! Please read our [Contributing Guide](./CONTRIBUTING.md) for information on how to get involved.
 
 # License
+
 EVM Gateway is released under the Apache License 2.0 license. See the LICENSE file for more details.

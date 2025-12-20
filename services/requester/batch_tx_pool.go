@@ -163,6 +163,28 @@ func (t *BatchTxPool) Add(
 	return err
 }
 
+// GetPendingNonce returns the highest nonce for pending transactions from the given address.
+// This checks the pooledTxs map for transactions that are waiting to be batched.
+func (t *BatchTxPool) GetPendingNonce(address gethCommon.Address) uint64 {
+	t.txMux.Lock()
+	defer t.txMux.Unlock()
+
+	pooledTxs, exists := t.pooledTxs[address]
+	if !exists || len(pooledTxs) == 0 {
+		return 0
+	}
+
+	// Find the highest nonce among pending transactions
+	maxNonce := uint64(0)
+	for _, tx := range pooledTxs {
+		if tx.nonce > maxNonce {
+			maxNonce = tx.nonce
+		}
+	}
+
+	return maxNonce
+}
+
 func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 	ticker := time.NewTicker(t.config.TxBatchInterval)
 	defer ticker.Stop()

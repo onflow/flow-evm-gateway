@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	gethCommon "github.com/ethereum/go-ethereum/common"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go-sdk"
@@ -41,6 +42,36 @@ type SingleTxPool struct {
 }
 
 var _ TxPool = &SingleTxPool{}
+
+// GetPendingNonce returns the highest nonce for pending transactions from the given address.
+// This checks the pool sync.Map for transactions that are waiting to be sealed (when TxSealValidation is enabled).
+func (t *SingleTxPool) GetPendingNonce(address gethCommon.Address) uint64 {
+	maxNonce := uint64(0)
+
+	// Iterate through the pool to find pending transactions from this address
+	t.pool.Range(func(key, value interface{}) bool {
+		tx, ok := value.(*gethTypes.Transaction)
+		if !ok {
+			return true // Continue iteration
+		}
+
+		// Check if this transaction is from the requested address
+		txSender, err := models.DeriveTxSender(tx)
+		if err != nil {
+			return true // Continue iteration
+		}
+
+		if txSender == address {
+			if tx.Nonce() > maxNonce {
+				maxNonce = tx.Nonce()
+			}
+		}
+
+		return true // Continue iteration
+	})
+
+	return maxNonce
+}
 
 func NewSingleTxPool(
 	ctx context.Context,
@@ -109,10 +140,21 @@ func (t *SingleTxPool) Add(
 		return err
 	}
 
+	referenceBlock := t.getReferenceBlock()
+	if referenceBlock == nil {
+		err := fmt.Errorf("reference block is nil - cannot build transaction")
+		t.logger.Error().
+			Err(err).
+			Str("evm-tx-hash", tx.Hash().Hex()).
+			Msg("failed to get reference block")
+		t.collector.TransactionsDropped(1)
+		return err
+	}
+
 	script := replaceAddresses(runTxScript, t.config.FlowNetworkID)
 	flowTx, err := t.buildTransaction(
 		ctx,
-		t.getReferenceBlock(),
+		referenceBlock,
 		script,
 		cadence.NewArray([]cadence.Value{hexEncodedTx}),
 		coinbaseAddress,
@@ -121,20 +163,44 @@ func (t *SingleTxPool) Add(
 		// If there was any error during the transaction build
 		// process, we record it as a dropped transaction.
 		t.collector.TransactionsDropped(1)
+		t.logger.Error().
+			Err(err).
+			Str("evm-tx-hash", tx.Hash().Hex()).
+			Msg("failed to build Flow transaction - transaction will not be submitted")
 		return err
 	}
+
+	t.logger.Info().
+		Str("evm-tx-hash", tx.Hash().Hex()).
+		Str("flow-tx-id", flowTx.ID().String()).
+		Msg("submitting Flow transaction to network")
+
+	// Store transaction in pool for pending nonce tracking (regardless of validation mode)
+	// This allows GetPendingNonce to account for transactions that are submitted but not yet indexed
+	t.pool.Store(tx.Hash(), tx)
 
 	if err := t.client.SendTransaction(ctx, *flowTx); err != nil {
+		// Remove from pool if submission failed
+		t.pool.Delete(tx.Hash())
+		t.logger.Error().
+			Err(err).
+			Str("evm-tx-hash", tx.Hash().Hex()).
+			Str("flow-tx-id", flowTx.ID().String()).
+			Msg("failed to send Flow transaction to network")
 		return err
 	}
 
+	t.logger.Info().
+		Str("evm-tx-hash", tx.Hash().Hex()).
+		Str("flow-tx-id", flowTx.ID().String()).
+		Msg("successfully sent Flow transaction to network")
+
 	if t.config.TxStateValidation == config.TxSealValidation {
-		// add to pool and delete after transaction is sealed or errored out
-		t.pool.Store(tx.Hash(), tx)
-		defer t.pool.Delete(tx.Hash())
+		// Transaction already stored in pool above
+		// Keep in pool until sealed, then for 30 more seconds to allow indexer to catch up
 
 		backoff := retry.WithMaxDuration(time.Minute*1, retry.NewConstant(time.Second*1))
-		return retry.Do(ctx, backoff, func(ctx context.Context) error {
+		err := retry.Do(ctx, backoff, func(ctx context.Context) error {
 			res, err := t.client.GetTransactionResult(ctx, flowTx.ID())
 			if err != nil {
 				return fmt.Errorf("failed to retrieve flow transaction result %s: %w", flowTx.ID(), err)
@@ -145,6 +211,8 @@ func (t *SingleTxPool) Add(
 			}
 
 			if res.Error != nil {
+				// Remove from pool immediately on error
+				t.pool.Delete(tx.Hash())
 				if err, ok := parseInvalidError(res.Error); ok {
 					return err
 				}
@@ -160,7 +228,26 @@ func (t *SingleTxPool) Add(
 
 			return nil
 		})
+
+		// Even if sealed successfully, keep in pool for 30 seconds to allow indexer to catch up
+		// This helps with pending nonce calculation
+		if err == nil {
+			go func() {
+				// Keep transaction in pool for 30 seconds after sealing to allow indexing
+				time.Sleep(30 * time.Second)
+				t.pool.Delete(tx.Hash())
+			}()
+		}
+
+		return err
 	}
+
+	// For LocalIndexValidation, keep transaction in pool for 30 seconds
+	// to allow indexer to catch up before removing it
+	go func() {
+		time.Sleep(30 * time.Second)
+		t.pool.Delete(tx.Hash())
+	}()
 
 	return nil
 }

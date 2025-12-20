@@ -3,6 +3,7 @@ package requester
 import (
 	"context"
 	_ "embed"
+	"errors"
 	"fmt"
 	"math/big"
 	"time"
@@ -89,6 +90,10 @@ type Requester interface {
 
 	// GetLatestEVMHeight returns the latest EVM height of the network.
 	GetLatestEVMHeight(ctx context.Context) (uint64, error)
+
+	// GetUserOpHash calls EntryPoint.getUserOpHash() to get the authoritative hash
+	// This ensures the gateway uses the exact same hash calculation as EntryPoint
+	GetUserOpHash(ctx context.Context, userOp *models.UserOperation, entryPoint common.Address, height uint64) (common.Hash, error)
 }
 
 var _ Requester = &EVM{}
@@ -222,9 +227,25 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 	}
 
 	if e.config.TxStateValidation == config.LocalIndexValidation {
+		e.logger.Debug().
+			Str("from", from.Hex()).
+			Uint64("txNonce", tx.Nonce()).
+			Str("txHash", tx.Hash().Hex()).
+			Msg("SendRawTransaction: calling validateTransactionWithState")
 		if err := e.validateTransactionWithState(tx, from); err != nil {
+			e.logger.Error().
+				Err(err).
+				Str("from", from.Hex()).
+				Uint64("txNonce", tx.Nonce()).
+				Str("txHash", tx.Hash().Hex()).
+				Msg("SendRawTransaction: validateTransactionWithState failed")
 			return common.Hash{}, err
 		}
+		e.logger.Debug().
+			Str("from", from.Hex()).
+			Uint64("txNonce", tx.Nonce()).
+			Str("txHash", tx.Hash().Hex()).
+			Msg("SendRawTransaction: validateTransactionWithState succeeded")
 	}
 
 	if err := e.txPool.Add(ctx, tx); err != nil {
@@ -263,12 +284,46 @@ func (e *EVM) GetNonce(
 	address common.Address,
 	height uint64,
 ) (uint64, error) {
+	// Log the request for diagnostics
+	e.logger.Debug().
+		Str("address", address.Hex()).
+		Uint64("height", height).
+		Msg("GetNonce: creating block view")
+
 	view, err := e.getBlockView(height, nil)
 	if err != nil {
+		e.logger.Error().
+			Err(err).
+			Str("address", address.Hex()).
+			Uint64("height", height).
+			Msg("GetNonce: failed to create block view")
 		return 0, err
 	}
 
-	return view.GetNonce(address)
+	e.logger.Debug().
+		Str("address", address.Hex()).
+		Uint64("height", height).
+		Msg("GetNonce: querying view.GetNonce")
+
+	nonce, err := view.GetNonce(address)
+	if err != nil {
+		// Production error logging - GetNonce failures indicate indexing issues
+		e.logger.Error().
+			Err(err).
+			Str("address", address.Hex()).
+			Uint64("height", height).
+			Bool("isErrEntityNotFound", errors.Is(err, errs.ErrEntityNotFound)).
+			Msg("GetNonce: view.GetNonce failed - this indicates an indexing issue or address doesn't exist in state")
+		return 0, err
+	}
+
+	e.logger.Debug().
+		Str("address", address.Hex()).
+		Uint64("height", height).
+		Uint64("nonce", nonce).
+		Msg("GetNonce: successfully retrieved nonce")
+
+	return nonce, nil
 }
 
 func (e *EVM) GetStorageAt(
@@ -299,6 +354,14 @@ func (e *EVM) Call(
 
 	resultSummary := result.ResultSummary()
 	if resultSummary.ErrorCode != 0 {
+		// Log full result summary for debugging revert data extraction
+		e.logger.Debug().
+			Uint16("errorCode", uint16(resultSummary.ErrorCode)).
+			Str("errorMessage", resultSummary.ErrorMessage).
+			Str("returnedDataHex", hexutil.Encode(resultSummary.ReturnedData)).
+			Int("returnedDataLen", len(resultSummary.ReturnedData)).
+			Msg("RPC call returned error - logging full result summary")
+		
 		if resultSummary.ErrorCode == evmTypes.ExecutionErrCodeExecutionReverted {
 			return nil, errs.NewRevertError(resultSummary.ReturnedData)
 		}
@@ -479,6 +542,76 @@ func (e *EVM) GetLatestEVMHeight(ctx context.Context) (uint64, error) {
 	return height, nil
 }
 
+func (e *EVM) GetUserOpHash(ctx context.Context, userOp *models.UserOperation, entryPoint common.Address, height uint64) (common.Hash, error) {
+	// EntryPoint v0.9.0 getUserOpHash uses PackedUserOperation format
+	// IMPORTANT: getUserOpHash must be called with an EMPTY signature (0x) because the hash
+	// is what gets signed - the signature signs the hash, so the hash cannot include the signature.
+	// This matches ERC-4337 spec: the hash is calculated from all UserOp fields EXCEPT signature.
+	packedOp := PackedUserOperationABI{
+		Sender:             userOp.Sender,
+		Nonce:              userOp.Nonce,
+		InitCode:           userOp.InitCode,
+		CallData:           userOp.CallData,
+		AccountGasLimits:   packAccountGasLimits(userOp.CallGasLimit, userOp.VerificationGasLimit),
+		PreVerificationGas: userOp.PreVerificationGas,
+		GasFees:            packGasFees(userOp.MaxFeePerGas, userOp.MaxPriorityFeePerGas),
+		PaymasterAndData:   userOp.PaymasterAndData,
+		Signature:          []byte{}, // Empty signature - hash is calculated WITHOUT signature
+	}
+
+	// Encode the function call using PackedUserOperation format (EntryPoint v0.9.0)
+	calldata, err := entryPointABIParsed.Pack("getUserOpHash", packedOp)
+	if err != nil {
+		return common.Hash{}, fmt.Errorf("failed to encode getUserOpHash: %w", err)
+	}
+
+	// Call EntryPoint.getUserOpHash
+	txArgs := ethTypes.TransactionArgs{
+		To:   &entryPoint,
+		Data: (*hexutil.Bytes)(&calldata),
+	}
+
+	result, err := e.Call(txArgs, common.Address{}, height, nil, nil)
+	if err != nil {
+		// CRITICAL: Log the error at ERROR level so it's always visible
+		e.logger.Error().
+			Err(err).
+			Str("sender", userOp.Sender.Hex()).
+			Str("entryPoint", entryPoint.Hex()).
+			Uint64("height", height).
+			Str("calldata", hexutil.Encode(calldata)).
+			Msg("CRITICAL: EntryPoint.getUserOpHash() call FAILED - this should NEVER happen")
+		return common.Hash{}, fmt.Errorf("failed to call getUserOpHash: %w", err)
+	}
+
+	// Decode the result (bytes32)
+	if len(result) < 32 {
+		e.logger.Error().
+			Int("resultLength", len(result)).
+			Str("sender", userOp.Sender.Hex()).
+			Str("entryPoint", entryPoint.Hex()).
+			Uint64("height", height).
+			Str("resultHex", hexutil.Encode(result)).
+			Msg("CRITICAL: EntryPoint.getUserOpHash() returned invalid result length")
+		return common.Hash{}, fmt.Errorf("getUserOpHash returned invalid result length: %d", len(result))
+	}
+
+	var hash common.Hash
+	copy(hash[:], result[:32])
+	
+	// CRITICAL: Log at INFO level so it's always visible - this is the hash from the contract
+	e.logger.Info().
+		Str("userOpHash_from_contract", hash.Hex()).
+		Str("sender", userOp.Sender.Hex()).
+		Str("entryPoint", entryPoint.Hex()).
+		Uint64("height", height).
+		Str("calldata", hexutil.Encode(calldata)).
+		Str("result", hexutil.Encode(result)).
+		Msg("EntryPoint.getUserOpHash() returned hash - THIS IS THE AUTHORITATIVE HASH")
+	
+	return hash, nil
+}
+
 func (e *EVM) getBlockView(
 	height uint64,
 	blockOverrides *ethTypes.BlockOverrides,
@@ -589,19 +722,61 @@ func (e *EVM) validateTransactionWithState(
 	tx *types.Transaction,
 	from common.Address,
 ) error {
+	e.logger.Debug().
+		Str("address", from.Hex()).
+		Uint64("txNonce", tx.Nonce()).
+		Msg("validateTransactionWithState: getting latest EVM height")
+
 	height, err := e.blocks.LatestEVMHeight()
 	if err != nil {
-		return err
-	}
-	view, err := e.getBlockView(height, nil)
-	if err != nil {
+		e.logger.Error().
+			Err(err).
+			Str("address", from.Hex()).
+			Msg("validateTransactionWithState: failed to get latest EVM height")
 		return err
 	}
 
-	nonce, err := view.GetNonce(from)
+	e.logger.Debug().
+		Str("address", from.Hex()).
+		Uint64("height", height).
+		Uint64("txNonce", tx.Nonce()).
+		Msg("validateTransactionWithState: creating block view")
+
+	view, err := e.getBlockView(height, nil)
 	if err != nil {
+		e.logger.Error().
+			Err(err).
+			Str("address", from.Hex()).
+			Uint64("height", height).
+			Msg("validateTransactionWithState: failed to create block view")
 		return err
 	}
+
+	e.logger.Debug().
+		Str("address", from.Hex()).
+		Uint64("height", height).
+		Uint64("txNonce", tx.Nonce()).
+		Msg("validateTransactionWithState: querying view.GetNonce")
+
+	nonce, err := view.GetNonce(from)
+	if err != nil {
+		// Production error logging - GetNonce failures in validation are critical
+		e.logger.Error().
+			Err(err).
+			Str("address", from.Hex()).
+			Uint64("height", height).
+			Uint64("txNonce", tx.Nonce()).
+			Bool("isErrEntityNotFound", errors.Is(err, errs.ErrEntityNotFound)).
+			Msg("validateTransactionWithState: view.GetNonce failed - transaction validation will fail")
+		return err
+	}
+
+	e.logger.Debug().
+		Str("address", from.Hex()).
+		Uint64("height", height).
+		Uint64("txNonce", tx.Nonce()).
+		Uint64("stateNonce", nonce).
+		Msg("validateTransactionWithState: successfully retrieved nonce, validating")
 
 	// Ensure the transaction adheres to nonce ordering
 	if tx.Nonce() < nonce {
@@ -630,6 +805,13 @@ func (e *EVM) validateTransactionWithState(
 			new(big.Int).Sub(cost, balance),
 		)
 	}
+
+	e.logger.Debug().
+		Str("address", from.Hex()).
+		Uint64("height", height).
+		Uint64("txNonce", tx.Nonce()).
+		Uint64("stateNonce", nonce).
+		Msg("validateTransactionWithState: validation succeeded - nonce and balance checks passed")
 
 	return nil
 }

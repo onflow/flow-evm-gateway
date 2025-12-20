@@ -6,4 +6,4 @@ tests/e2e-network/package-lock.json
 db
 flow.json
 .idea
-metrics/data/
+metrics/data/.env

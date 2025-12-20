@@ -1,6 +1,8 @@
 package storage
 
 import (
+	"math/big"
+
 	"github.com/cockroachdb/pebble"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/goccy/go-json"
@@ -101,4 +103,33 @@ type TraceIndexer interface {
 
 	// GetTransaction will retrieve transaction trace by the transaction ID.
 	GetTransaction(ID common.Hash) (json.RawMessage, error)
+}
+
+// UserOperationIndexer indexes UserOperation events and receipts
+type UserOperationIndexer interface {
+	// StoreUserOpReceipt stores a UserOperation receipt
+	StoreUserOpReceipt(userOpHash common.Hash, receipt *UserOperationReceipt, batch *pebble.Batch) error
+	// GetUserOpReceipt retrieves a UserOperation receipt by hash
+	GetUserOpReceipt(userOpHash common.Hash) (*UserOperationReceipt, error)
+	// StoreUserOpTxMapping stores the mapping from userOpHash to transaction hash
+	StoreUserOpTxMapping(userOpHash common.Hash, txHash common.Hash, batch *pebble.Batch) error
+	// GetTxHashByUserOpHash retrieves the transaction hash for a UserOperation
+	GetTxHashByUserOpHash(userOpHash common.Hash) (common.Hash, error)
+}
+
+// UserOperationReceipt represents a receipt for a UserOperation execution
+type UserOperationReceipt struct {
+	UserOpHash    common.Hash
+	EntryPoint    common.Address
+	Sender        common.Address
+	Nonce         *big.Int
+	Paymaster     *common.Address
+	ActualGasCost *big.Int
+	ActualGasUsed *big.Int
+	Success       bool
+	Reason        string
+	Logs          []interface{}
+	TxHash        common.Hash
+	BlockNumber   *big.Int
+	BlockHash     common.Hash
 }

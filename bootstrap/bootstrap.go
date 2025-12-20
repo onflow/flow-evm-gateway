@@ -11,6 +11,7 @@ import (
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/onflow/flow-go-sdk/access"
 	"github.com/onflow/flow-go-sdk/access/grpc"
+	"github.com/onflow/flow-go-sdk/crypto"
 	"github.com/onflow/flow-go/fvm/environment"
 	"github.com/onflow/flow-go/fvm/evm"
 	flowGo "github.com/onflow/flow-go/model/flow"
@@ -57,6 +58,7 @@ type Storages struct {
 	Transactions storage.TransactionIndexer
 	Receipts     storage.ReceiptIndexer
 	Traces       storage.TraceIndexer
+	UserOps      storage.UserOperationIndexer
 }
 
 type Publishers struct {
@@ -66,18 +68,22 @@ type Publishers struct {
 }
 
 type Bootstrap struct {
-	logger     zerolog.Logger
-	config     config.Config
-	client     *requester.CrossSporkClient
-	storages   *Storages
-	publishers *Publishers
-	collector  metrics.Collector
-	server     *api.Server
-	metrics    *metricsWrapper
-	events     *ingestion.Engine
-	profiler   *api.ProfileServer
-	db         *pebbleDB.DB
-	keystore   *keystore.KeyStore
+	logger              zerolog.Logger
+	config              config.Config
+	client              *requester.CrossSporkClient
+	storages            *Storages
+	publishers          *Publishers
+	collector           metrics.Collector
+	server              *api.Server
+	metrics             *metricsWrapper
+	events              *ingestion.Engine
+	profiler            *api.ProfileServer
+	db                  *pebbleDB.DB
+	keystore            *keystore.KeyStore
+	eventSubscriber     ingestion.EventSubscriber
+	eventBlocksProvider *replayer.BlocksProvider
+	eventReplayerConfig replayer.Config
+	evmRequester        requester.Requester
 }
 
 func New(config config.Config) (*Bootstrap, error) {
@@ -187,24 +193,38 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 		ValidateResults:     true,
 	}
 
-	// initialize event ingestion engine
-	b.events = ingestion.NewEventIngestionEngine(
-		subscriber,
-		blocksProvider,
-		b.storages.Storage,
-		b.storages.Registers,
-		b.storages.Blocks,
-		b.storages.Receipts,
-		b.storages.Transactions,
-		b.storages.Traces,
-		b.publishers.Block,
-		b.publishers.Logs,
-		b.logger,
-		b.collector,
-		replayerConfig,
-	)
+	// Store subscriber and blocksProvider for later initialization
+	b.eventSubscriber = subscriber
+	b.eventBlocksProvider = blocksProvider
+	b.eventReplayerConfig = replayerConfig
 
-	StartEngine(ctx, b.events, l)
+	// Initialize event ingestion engine if evm requester is already available
+	// (This happens if StartAPIServer was called before StartEventIngestion)
+	if b.events == nil && b.evmRequester != nil {
+		b.events = ingestion.NewEventIngestionEngine(
+			b.eventSubscriber,
+			b.eventBlocksProvider,
+			b.storages.Storage,
+			b.storages.Registers,
+			b.storages.Blocks,
+			b.storages.Receipts,
+			b.storages.Transactions,
+			b.storages.Traces,
+			b.storages.UserOps,
+			b.evmRequester, // Requester for EntryPoint.getUserOpHash()
+			b.config.EntryPointAddress,
+			b.publishers.Block,
+			b.publishers.Logs,
+			b.logger,
+			b.collector,
+			b.eventReplayerConfig,
+			b.config.EVMNetworkID,
+		)
+		// Start the engine now that it's initialized
+		l := b.logger.With().Str("component", "bootstrap-ingestion").Logger()
+		StartEngine(ctx, b.events, l)
+	}
+
 	return nil
 }
 
@@ -223,6 +243,7 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 
 	accountKeys := make([]*keystore.AccountKey, 0)
 	if !b.config.IndexOnly {
+		l := b.logger.With().Str("component", "bootstrap-keystore").Logger()
 		account, err := b.client.GetAccount(ctx, b.config.COAAddress)
 		if err != nil {
 			return fmt.Errorf(
@@ -231,21 +252,68 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 				err,
 			)
 		}
-		signer, err := createSigner(ctx, b.config, b.logger)
+		l.Info().
+			Str("coaAddress", b.config.COAAddress.String()).
+			Int("totalKeysOnAccount", len(account.Keys)).
+			Msg("fetched COA account for key loading")
+
+		// First, derive the public key from COA_KEY to find matching account key
+		var signerPubKey crypto.PublicKey
+		var detectedHashAlgo crypto.HashAlgorithm
+		if b.config.COAKey != nil {
+			// Derive public key from private key to find matching account key
+			signerPubKey = b.config.COAKey.PublicKey()
+
+			// Find matching account key and detect its hash algorithm
+			for _, key := range account.Keys {
+				if key.PublicKey.Equals(signerPubKey) {
+					detectedHashAlgo = key.HashAlgo
+					l.Info().
+						Int("keyIndex", int(key.Index)).
+						Str("hashAlgorithm", key.HashAlgo.String()).
+						Msg("detected hash algorithm from matching account key")
+					break
+				}
+			}
+		}
+
+		// Create signer with detected hash algorithm (or default if not detected)
+		signer, err := createSigner(ctx, b.config, b.logger, detectedHashAlgo)
 		if err != nil {
 			return err
 		}
+		signerPubKey = signer.PublicKey()
+		l.Info().
+			Str("signerPublicKey", signerPubKey.String()).
+			Str("hashAlgorithm", detectedHashAlgo.String()).
+			Msg("created signer from COA key")
+
+		matchedKeys := 0
 		for _, key := range account.Keys {
 			// Skip account keys that do not use the same Publick Key as the
 			// configured crypto.Signer object.
-			if !key.PublicKey.Equals(signer.PublicKey()) {
+			if !key.PublicKey.Equals(signerPubKey) {
+				l.Debug().
+					Int("keyIndex", int(key.Index)).
+					Str("keyPublicKey", key.PublicKey.String()).
+					Msg("skipping key - public key doesn't match signer")
 				continue
 			}
+			matchedKeys++
 			accountKeys = append(accountKeys, keystore.NewAccountKey(
 				*key,
 				b.config.COAAddress,
 				signer,
 			))
+		}
+
+		l.Info().
+			Int("matchedKeys", matchedKeys).
+			Int("loadedKeys", len(accountKeys)).
+			Msg("finished loading keys into keystore")
+		if matchedKeys == 0 {
+			l.Error().
+				Msg("WARNING: No keys matched the signer's public key! Gateway will not be able to sign transactions.")
 		}
 	}
 
@@ -292,6 +360,36 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 		return fmt.Errorf("failed to create EVM requester: %w", err)
 	}
 
+	// Store evm requester for later use in StartEventIngestion
+	b.evmRequester = evm
+
+	// Initialize event ingestion engine if subscriber is already set up
+	// (This happens if StartEventIngestion was called before StartAPIServer)
+	if b.events == nil && b.eventSubscriber != nil {
+		b.events = ingestion.NewEventIngestionEngine(
+			b.eventSubscriber,
+			b.eventBlocksProvider,
+			b.storages.Storage,
+			b.storages.Registers,
+			b.storages.Blocks,
+			b.storages.Receipts,
+			b.storages.Transactions,
+			b.storages.Traces,
+			b.storages.UserOps,
+			evm, // Requester for EntryPoint.getUserOpHash()
+			b.config.EntryPointAddress,
+			b.publishers.Block,
+			b.publishers.Logs,
+			b.logger,
+			b.collector,
+			b.eventReplayerConfig,
+			b.config.EVMNetworkID,
+		)
+		// Start the engine now that it's initialized
+		l := b.logger.With().Str("component", "bootstrap").Logger()
+		StartEngine(ctx, b.events, l)
+	}
+
 	// create rate limiter for requests on the APIs. Tokens are number of requests allowed per 1 second interval
 	// if no limit is defined we specify max value, effectively disabling rate-limiting
 	rateLimit := b.config.RateLimit
@@ -328,6 +426,7 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 		rateLimiter,
 		b.collector,
 		indexingResumedHeight,
+		txPool, // Pass txPool to account for pending transactions in nonce calculations
 	)
 
 	streamAPI := api.NewStreamAPI(
@@ -367,12 +466,71 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 		walletAPI = api.NewWalletAPI(b.config, blockchainAPI)
 	}
 
+	// ERC-4337 UserOperation API setup
+	var userOpAPI *api.UserOpAPI
+	if b.config.BundlerEnabled {
+		// Create UserOperation pool (with requester and blocks for EntryPoint.getUserOpHash)
+		userOpPool := requester.NewInMemoryUserOpPool(b.config, b.logger, evm, b.storages.Blocks)
+
+		// Create validator
+		validator := requester.NewUserOpValidator(
+			b.client,
+			b.config,
+			evm,
+			b.storages.Blocks,
+			b.logger,
+		)
+
+		// Create bundler
+		bundler := requester.NewBundler(
+			userOpPool,
+			b.config,
+			b.logger,
+			txPool,
+			evm,
+			b.storages.Blocks,
+		)
+
+		// Create UserOpAPI
+		userOpAPI = api.NewUserOpAPI(
+			b.logger,
+			b.config,
+			userOpPool,
+			bundler,
+			validator,
+			rateLimiter,
+			b.collector,
+		)
+
+		// Start periodic bundling
+		// Use configured interval or default to 800ms (0.8 seconds)
+		bundlerInterval := b.config.BundlerInterval
+		if bundlerInterval == 0 {
+			bundlerInterval = 800 * time.Millisecond
+		}
+		go func() {
+			ticker := time.NewTicker(bundlerInterval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					if err := bundler.SubmitBundledTransactions(ctx); err != nil {
+						b.logger.Error().Err(err).Msg("failed to submit bundled transactions")
+					}
+				}
+			}
+		}()
+	}
+
 	supportedAPIs := api.SupportedAPIs(
 		blockchainAPI,
 		streamAPI,
 		pullAPI,
 		debugAPI,
 		walletAPI,
+		userOpAPI,
 		b.config,
 	)
 
@@ -616,6 +774,10 @@ func setupStorage(
 	// if database is not initialized require init height
 	if _, err := blocks.LatestCadenceHeight(); errors.Is(err, errs.ErrStorageNotInitialized) {
 		cadenceHeight := config.InitCadenceHeight
+		// If force-start-height is set, use it for initialization instead of the default
+		if config.ForceStartCadenceHeight != 0 {
+			cadenceHeight = config.ForceStartCadenceHeight
+		}
 		evmBlokcHeight := uint64(0)
 		cadenceBlock, err := client.GetBlockHeaderByHeight(context.Background(), cadenceHeight)
 		if err != nil {
@@ -674,6 +836,7 @@ func setupStorage(
 		Transactions: pebble.NewTransactions(store),
 		Receipts:     pebble.NewReceipts(store),
 		Traces:       pebble.NewTraces(store),
+		UserOps:      pebble.NewUserOperations(store),
 	}, nil
 }
 
