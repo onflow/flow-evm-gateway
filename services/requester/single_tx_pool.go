@@ -31,7 +31,6 @@ type SingleTxPool struct {
 	pool        *sync.Map
 	txPublisher *models.Publisher[*gethTypes.Transaction]
 	config      config.Config
-	mux         sync.Mutex
 	keystore    *keystore.KeyStore
 	collector   metrics.Collector
 	// referenceBlockHeader is stored atomically to avoid races
@@ -40,7 +39,7 @@ type SingleTxPool struct {
 	// todo add methods to inspect transaction pool state
 }
 
-var _ TxPool = &SingleTxPool{}
+var _ TxPool = (*SingleTxPool)(nil)
 
 func NewSingleTxPool(
 	ctx context.Context,
@@ -96,6 +95,11 @@ func (t *SingleTxPool) Add(
 ) error {
 	t.txPublisher.Publish(tx) // publish pending transaction event
 
+	from, err := models.DeriveTxSender(tx)
+	if err != nil {
+		return err
+	}
+
 	txData, err := tx.MarshalBinary()
 	if err != nil {
 		return err
@@ -121,10 +125,21 @@ func (t *SingleTxPool) Add(
 		// If there was any error during the transaction build
 		// process, we record it as a dropped transaction.
 		t.collector.TransactionsDropped(1)
+		t.logger.Error().Err(err).Msgf(
+			"failed to build Flow transaction for EOA: %s",
+			from.Hex(),
+		)
 		return err
 	}
 
 	if err := t.client.SendTransaction(ctx, *flowTx); err != nil {
+		// If there was any error while sending the transaction,
+		// we record it as a dropped transaction.
+		t.collector.TransactionsDropped(1)
+		t.logger.Error().Err(err).Msgf(
+			"failed to submit Flow transaction for EOA: %s",
+			from.Hex(),
+		)
 		return err
 	}
 
@@ -150,8 +165,8 @@ func (t *SingleTxPool) Add(
 				}
 
 				t.logger.Error().Err(res.Error).
-					Str("flow-id", flowTx.ID().String()).
-					Str("evm-id", tx.Hash().Hex()).
+					Str("flow_tx", flowTx.ID().String()).
+					Str("evm_tx", tx.Hash().Hex()).
 					Msg("flow transaction error")
 
 				// hide specific cause since it's an implementation issue
@@ -188,7 +203,11 @@ func (t *SingleTxPool) buildTransaction(
 		}
 	}
 
-	accKey, err := t.fetchSigningAccountKey()
+	// getting an account key from the `KeyStore` for signing transactions,
+	// *does not* need to be lock-protected, as the keys are read from a
+	// channel. No two go-routines will end up getting the same account
+	// key at the same time.
+	accKey, err := t.keystore.Take()
 	if err != nil {
 		return nil, err
 	}
@@ -209,16 +228,6 @@ func (t *SingleTxPool) buildTransaction(
 	accKey.SetLockMetadata(flowTx.ID(), referenceBlockHeader.Height)
 
 	return flowTx, nil
-}
-
-func (t *SingleTxPool) fetchSigningAccountKey() (*keystore.AccountKey, error) {
-	// getting an account key from the `KeyStore` for signing transactions,
-	// should be lock-protected, so that we don't sign any two Flow
-	// transactions with the same account key
-	t.mux.Lock()
-	defer t.mux.Unlock()
-
-	return t.keystore.Take()
 }
 
 func (t *SingleTxPool) getReferenceBlock() *flow.BlockHeader {
