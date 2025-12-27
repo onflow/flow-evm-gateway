@@ -227,6 +227,12 @@ func (c *CrossSporkClient) GetLatestHeightForSpork(ctx context.Context, height u
 	if err != nil {
 		return 0, err
 	}
+
+	// if the current spork client is the mainnet 27 network and node reported a higher height, fix it to the hardcoded last height.
+	if c.currentSporkFirstHeight == HardcodedMainnet27SporkRootHeight && block.Height > HardcodedMainnet27LastHeight {
+		return HardcodedMainnet27LastHeight, nil
+	}
+
 	return block.Height, nil
 }
 
@@ -284,6 +290,14 @@ func (c *CrossSporkClient) GetEventsForHeightRange(
 	if endClient != client {
 		return nil, fmt.Errorf("invalid height range, end height %d is not in the same spork as start height %d", endHeight, startHeight)
 	}
+
+	// if the current spork client is the mainnet 27 network and the requested end height is after the hardcoded last height,
+	// fix it to the hardcoded last height. If the requested start height is after the hardcoded last height, the API
+	// will return an error since the range will be invalid.
+	if c.currentSporkFirstHeight == HardcodedMainnet27SporkRootHeight && endHeight > HardcodedMainnet27LastHeight {
+		endHeight = HardcodedMainnet27LastHeight
+	}
+
 	return client.GetEventsForHeightRange(ctx, eventType, startHeight, endHeight)
 }
 
