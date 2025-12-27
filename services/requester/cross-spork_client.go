@@ -229,6 +229,7 @@ func (c *CrossSporkClient) GetLatestHeightForSpork(ctx context.Context, height u
 	}
 
 	// if the current spork client is the mainnet 27 network and node reported a higher height, fix it to the hardcoded last height.
+	// allow the case where the AN is behind the last height in case it is catching up.
 	if c.currentSporkFirstHeight == HardcodedMainnet27SporkRootHeight && block.Height > HardcodedMainnet27LastHeight {
 		return HardcodedMainnet27LastHeight, nil
 	}
@@ -271,7 +272,6 @@ func (c *CrossSporkClient) SubscribeEventsByBlockHeight(
 		return nil, nil, err
 	}
 
-	// TODO: we need to make sure that the AN ends the subscription at the last block
 	return client.SubscribeEventsByBlockHeight(ctx, startHeight, filter, opts...)
 }
 
