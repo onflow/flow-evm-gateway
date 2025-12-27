@@ -223,7 +223,7 @@ func (c *CrossSporkClient) GetLatestHeightForSpork(ctx context.Context, height u
 	}
 
 	// otherwise, return the latest height from the current spork.
-	block, err := c.Client.GetLatestBlockHeader(ctx, true)
+	block, err := c.GetLatestBlockHeader(ctx, true)
 	if err != nil {
 		return 0, err
 	}
