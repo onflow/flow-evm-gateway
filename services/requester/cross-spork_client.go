@@ -185,6 +185,13 @@ func (c *CrossSporkClient) IsPastSpork(height uint64) bool {
 	return height < c.currentSporkFirstHeight
 }
 
+// IsMainnet27Client returns true if the current spork client is for the mainnet 27 network.
+func (c *CrossSporkClient) IsMainnet27Client() bool {
+	// currentSporkFirstHeight is the node's root block, which is not the same as the spork root block if the node was
+	// bootstrapped after the spork. This check works for nodes bootstrapped during or after the mainnet 27 spork.
+	return c.currentSporkFirstHeight >= HardcodedMainnet27SporkRootHeight && c.currentSporkFirstHeight <= HardcodedMainnet27LastHeight
+}
+
 // getClientForHeight returns the client for the given height that contains the height range.
 //
 // If the height is not contained in any of the past spork clients we return an error.
@@ -230,7 +237,7 @@ func (c *CrossSporkClient) GetLatestHeightForSpork(ctx context.Context, height u
 
 	// if the current spork client is the mainnet 27 network and node reported a higher height, fix it to the hardcoded last height.
 	// allow the case where the AN is behind the last height in case it is catching up.
-	if c.currentSporkFirstHeight == HardcodedMainnet27SporkRootHeight && block.Height > HardcodedMainnet27LastHeight {
+	if c.IsMainnet27Client() && block.Height > HardcodedMainnet27LastHeight {
 		return HardcodedMainnet27LastHeight, nil
 	}
 
@@ -294,7 +301,7 @@ func (c *CrossSporkClient) GetEventsForHeightRange(
 	// if the current spork client is the mainnet 27 network and the requested end height is after the hardcoded last height,
 	// fix it to the hardcoded last height. If the requested start height is after the hardcoded last height, the API
 	// will return an error since the range will be invalid.
-	if c.currentSporkFirstHeight == HardcodedMainnet27SporkRootHeight && endHeight > HardcodedMainnet27LastHeight {
+	if c.IsMainnet27Client() && endHeight > HardcodedMainnet27LastHeight {
 		endHeight = HardcodedMainnet27LastHeight
 	}
 
