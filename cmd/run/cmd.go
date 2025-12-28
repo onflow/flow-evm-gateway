@@ -297,8 +297,8 @@ func init() {
 	var experimentalSoftFinalityEnabled, experimentalSealingVerificationEnabled bool
 	Cmd.Flags().BoolVar(&experimentalSoftFinalityEnabled, "experimental-soft-finality-enabled", false, "feature disabled in this release")
 	Cmd.Flags().BoolVar(&experimentalSealingVerificationEnabled, "experimental-sealing-verification-enabled", false, "feature disabled in this release")
-	Cmd.Flags().MarkHidden("experimental-soft-finality-enabled")
-	Cmd.Flags().MarkHidden("experimental-sealing-verification-enabled")
+	_ = Cmd.Flags().MarkHidden("experimental-soft-finality-enabled")
+	_ = Cmd.Flags().MarkHidden("experimental-sealing-verification-enabled")
 
 	err := Cmd.Flags().MarkDeprecated("init-cadence-height", "This flag is no longer necessary and will be removed in future version. The initial Cadence height is known for testnet/mainnet and this was only required for fresh deployments of EVM Gateway. Once the DB has been initialized, the latest index Cadence height will be used upon start-up.")
 	if err != nil {
