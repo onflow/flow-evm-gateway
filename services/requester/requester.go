@@ -238,7 +238,7 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 	}
 
 	e.logger.Info().
-		Str("evm-id", tx.Hash().Hex()).
+		Str("evm_tx", tx.Hash().Hex()).
 		Str("to", to).
 		Str("from", from.Hex()).
 		Str("value", tx.Value().String()).
