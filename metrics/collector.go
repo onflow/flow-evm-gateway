@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"fmt"
+	"math/big"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -86,6 +87,11 @@ var rateLimitedTransactionsCounter = prometheus.NewCounter(prometheus.CounterOpt
 	Help: "Total number of rate-limited transactions",
 })
 
+var flowTotalSupply = prometheus.NewGauge(prometheus.GaugeOpts{
+	Name: prefixedName("flow_total_supply"),
+	Help: "Total supply of native EVM FLOW token at a given time",
+})
+
 var metrics = []prometheus.Collector{
 	apiErrors,
 	serverPanicsCounters,
@@ -102,6 +108,7 @@ var metrics = []prometheus.Collector{
 	requestRateLimitedCounters,
 	transactionsDroppedCounter,
 	rateLimitedTransactionsCounter,
+	flowTotalSupply,
 }
 
 type Collector interface {
@@ -119,6 +126,7 @@ type Collector interface {
 	RequestRateLimited(method string)
 	TransactionsDropped(count int)
 	TransactionRateLimited()
+	FlowTotalSupply(totalSupply *big.Int)
 }
 
 var _ Collector = &DefaultCollector{}
@@ -140,6 +148,7 @@ type DefaultCollector struct {
 	requestRateLimitedCounters     *prometheus.CounterVec
 	transactionsDroppedCounter     prometheus.Counter
 	rateLimitedTransactionsCounter prometheus.Counter
+	flowTotalSupply                prometheus.Gauge
 }
 
 func NewCollector(logger zerolog.Logger) Collector {
@@ -164,6 +173,7 @@ func NewCollector(logger zerolog.Logger) Collector {
 		requestRateLimitedCounters:     requestRateLimitedCounters,
 		transactionsDroppedCounter:     transactionsDroppedCounter,
 		rateLimitedTransactionsCounter: rateLimitedTransactionsCounter,
+		flowTotalSupply:                flowTotalSupply,
 	}
 }
 
@@ -244,6 +254,11 @@ func (c *DefaultCollector) TransactionsDropped(count int) {
 
 func (c *DefaultCollector) TransactionRateLimited() {
 	c.rateLimitedTransactionsCounter.Inc()
+}
+
+func (c *DefaultCollector) FlowTotalSupply(totalSupply *big.Int) {
+	floatTotalSupply, _ := totalSupply.Float64()
+	c.flowTotalSupply.Set(floatTotalSupply)
 }
 
 func prefixedName(name string) string {
