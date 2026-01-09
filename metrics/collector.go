@@ -89,7 +89,7 @@ var rateLimitedTransactionsCounter = prometheus.NewCounter(prometheus.CounterOpt
 
 var flowTotalSupply = prometheus.NewGauge(prometheus.GaugeOpts{
 	Name: prefixedName("flow_total_supply"),
-	Help: "Total supply of FLOW tokens in EVM at a given time",
+	Help: "Total supply of FLOW tokens in EVM at a given time (in smallest unit, wei)",
 })
 
 var metrics = []prometheus.Collector{
