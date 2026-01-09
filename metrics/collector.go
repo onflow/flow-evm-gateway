@@ -89,7 +89,7 @@ var rateLimitedTransactionsCounter = prometheus.NewCounter(prometheus.CounterOpt
 
 var flowTotalSupply = prometheus.NewGauge(prometheus.GaugeOpts{
 	Name: prefixedName("flow_total_supply"),
-	Help: "Total supply of native EVM FLOW token at a given time",
+	Help: "Total supply of FLOW tokens in EVM at a given time",
 })
 
 var metrics = []prometheus.Collector{
@@ -132,6 +132,8 @@ type Collector interface {
 var _ Collector = &DefaultCollector{}
 
 type DefaultCollector struct {
+	logger zerolog.Logger
+
 	// TODO: for now we cannot differentiate which api request failed number of times
 	apiErrorsCounter               prometheus.Counter
 	serverPanicsCounters           *prometheus.CounterVec
@@ -158,6 +160,7 @@ func NewCollector(logger zerolog.Logger) Collector {
 	}
 
 	return &DefaultCollector{
+		logger:                         logger,
 		apiErrorsCounter:               apiErrors,
 		serverPanicsCounters:           serverPanicsCounters,
 		cadenceBlockHeight:             cadenceBlockHeight,
@@ -257,7 +260,15 @@ func (c *DefaultCollector) TransactionRateLimited() {
 }
 
 func (c *DefaultCollector) FlowTotalSupply(totalSupply *big.Int) {
-	floatTotalSupply, _ := totalSupply.Float64()
+	if totalSupply == nil {
+		return
+	}
+
+	floatTotalSupply, accuracy := totalSupply.Float64()
+	if accuracy != big.Exact {
+		c.logger.Warn().Msg("precision loss when casting total supply to float")
+	}
+
 	c.flowTotalSupply.Set(floatTotalSupply)
 }
 
