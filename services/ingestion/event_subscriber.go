@@ -134,6 +134,18 @@ func (r *RPCEventSubscriber) subscribe(ctx context.Context, height uint64) <-cha
 		return eventsChan
 	}
 
+	latestHeight, err := r.client.GetLatestHeightForSpork(ctx, height)
+	if err != nil {
+		err = fmt.Errorf("failed to get latest height for spork: %w", err)
+		eventsChan <- models.NewBlockEventsError(err)
+		close(eventsChan)
+		return eventsChan
+	}
+
+	// if the resolved client for the height is the current spork client and the current spork client
+	// is for the mainnet 27 network, stop ingesting data from the stream at the hardcoded last height.
+	stopAtHardcodedLastHeight := latestHeight == requester.HardcodedMainnet27LastHeight
+
 	var blockEventsStream <-chan flow.BlockEvents
 	var errChan <-chan error
 
@@ -182,6 +194,10 @@ func (r *RPCEventSubscriber) subscribe(ctx context.Context, height uint64) <-cha
 					}
 					eventsChan <- models.NewBlockEventsError(err)
 					return
+				}
+
+				if stopAtHardcodedLastHeight && blockEvents.Height > requester.HardcodedMainnet27LastHeight {
+					continue // don't exit, otherwise the gateway will crash
 				}
 
 				evmEvents := models.NewSingleBlockEvents(blockEvents)
