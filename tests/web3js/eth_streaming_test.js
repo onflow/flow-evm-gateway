@@ -1,3 +1,4 @@
+const WebSocket = require('ws')
 const conf = require('./config')
 const helpers = require('./helpers')
 const { assert } = require('chai')
@@ -69,6 +70,33 @@ it('streaming of blocks, transactions, logs using filters', async () => {
         }
     })
 
+    let socket = new WebSocket('ws://127.0.0.1:8545')
+    // give some time for the connection to open
+    await new Promise((res) => setTimeout(() => res(), 1500))
+    let payload = `
+        {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "eth_subscribe",
+            "params": [
+                "transactionReceipts",
+                {
+                    "transactionHashes": []
+                }
+            ]
+        }
+    `
+    socket.send(payload)
+
+    // subscribe to all new receipts being produced by transaction submissions below
+    let receipts = []
+    socket.onmessage = (event) => {
+        let response = JSON.parse(event.data)
+        if (response.method == 'eth_subscription') {
+            receipts = receipts.concat(response.params.result)
+        }
+    }
+
     let sentHashes = []
     // produce events by submitting transactions
     for (const { A, B } of testValues) {
@@ -120,4 +148,74 @@ it('streaming of blocks, transactions, logs using filters', async () => {
         assert.lengthOf(matchingLogs, 1)
         assert.deepEqual(log, matchingLogs[0])
     }
+
+    assert.equal(10, receipts.length)
+    for (let txHash of sentHashes) {
+        let txReceipt = await helpers.callRPCMethod(
+            'eth_getTransactionReceipt',
+            [txHash]
+        )
+
+        for (let rcp of receipts) {
+            if (rcp.transactionHash == txHash) {
+                assert.deepEqual(rcp, txReceipt.body['result'])
+            }
+        }
+    }
+
+    let signedTx = await conf.eoa.signTransaction({
+        from: conf.eoa.address,
+        to: contractAddress,
+        data: deployed.contract.methods.sum(7, 7).encodeABI(),
+        gas: 1_000_000,
+        gasPrice: conf.minGasPrice
+    })
+
+    receipts = []
+    let subID = null
+    socket.onmessage = (event) => {
+        let response = JSON.parse(event.data)
+        if (response.id == 12) {
+            subID = response.result
+        }
+
+        if (response.method == 'eth_subscription' && response.params.subscription == subID) {
+            receipts = receipts.concat(response.params.result)
+        }
+    }
+    // Check that the subscription will notify the caller only for the given
+    // set of tx hashes.
+    payload = `
+        {
+            "jsonrpc": "2.0",
+            "id": 12,
+            "method": "eth_subscribe",
+            "params": [
+                "transactionReceipts",
+                {
+                    "transactionHashes": [
+                        "0x7b45084668258f29cfc525494d00ea5171766d1d43436e41cea930380d96bf67",
+                        "0xed970aa258b677d5e772125dd4342f38e5ccf4dec685d38fc5f04f18eff1a939",
+                        "${signedTx.transactionHash}"
+                    ]
+                }
+            ]
+        }
+    `
+    socket.send(payload)
+
+    // send transaction and make sure interaction was success
+    let txReceipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction)
+    assert.equal(txReceipt.status, conf.successStatus)
+    assert.equal(txReceipt.transactionHash, signedTx.transactionHash)
+
+    await new Promise((res, rej) => setTimeout(() => res(), 1500))
+    socket.close(1000, 'finished testing')
+
+    assert.equal(1, receipts.length)
+    let expectedReceipt = await helpers.callRPCMethod(
+        'eth_getTransactionReceipt',
+        [signedTx.transactionHash]
+    )
+    assert.deepEqual(receipts[0], expectedReceipt.body['result'])
 })
