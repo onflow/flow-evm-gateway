@@ -75,10 +75,9 @@ var blockIngestionTime = prometheus.NewHistogram(prometheus.HistogramOpts{
 
 // EVM block processing time during event ingestion, including transaction replay
 // and state validation
-var blockProcessTime = prometheus.NewHistogram(prometheus.HistogramOpts{
-	Name:    prefixedName("block_process_time_seconds"),
-	Help:    "Processing time to fully index an EVM block in the local state index",
-	Buckets: []float64{0.1, 0.2, 0.4, 0.6, 0.8, 1, 2, 5, 10, 20},
+var blockProcessTime = prometheus.NewSummary(prometheus.SummaryOpts{
+	Name: prefixedName("block_process_time_seconds"),
+	Help: "Processing time to fully index an EVM block in the local state index",
 })
 
 var requestRateLimitedCounters = prometheus.NewCounterVec(prometheus.CounterOpts{
