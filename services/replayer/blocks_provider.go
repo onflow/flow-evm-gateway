@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	gethCommon "github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/onflow/flow-evm-gateway/models"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-go/fvm/evm/offchain/blocks"
@@ -37,7 +36,7 @@ func (bs *blockSnapshot) BlockContext() (evmTypes.BlockContext, error) {
 			return blockHash
 		},
 		bs.block.PrevRandao,
-		bs.tracer,
+		nil,
 	)
 }
 
@@ -51,7 +50,6 @@ func (bs *blockSnapshot) BlockContext() (evmTypes.BlockContext, error) {
 type BlocksProvider struct {
 	blocks      storage.BlockIndexer
 	chainID     flowGo.ChainID
-	tracer      *tracers.Tracer
 	latestBlock *models.Block
 }
 
@@ -60,12 +58,10 @@ var _ evmTypes.BlockSnapshotProvider = (*BlocksProvider)(nil)
 func NewBlocksProvider(
 	blocks storage.BlockIndexer,
 	chainID flowGo.ChainID,
-	tracer *tracers.Tracer,
 ) *BlocksProvider {
 	return &BlocksProvider{
 		blocks:  blocks,
 		chainID: chainID,
-		tracer:  tracer,
 	}
 }
 

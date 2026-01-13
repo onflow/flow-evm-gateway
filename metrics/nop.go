@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"math/big"
 	"time"
 )
 
@@ -21,6 +22,8 @@ func (c *nopCollector) OperatorBalance(balance uint64)             {}
 func (c *nopCollector) AvailableSigningKeys(count int)             {}
 func (c *nopCollector) GasEstimationIterations(count int)          {}
 func (c *nopCollector) BlockIngestionTime(blockCreation time.Time) {}
+func (c *nopCollector) BlockProcessTime(start time.Time)           {}
 func (c *nopCollector) RequestRateLimited(method string)           {}
 func (c *nopCollector) TransactionsDropped(count int)              {}
 func (c *nopCollector) TransactionRateLimited()                    {}
+func (c *nopCollector) FlowTotalSupply(totalSupply *big.Int)       {}

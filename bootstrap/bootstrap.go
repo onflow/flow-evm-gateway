@@ -192,23 +192,14 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 		)
 	}
 
-	callTracerCollector, err := replayer.NewCallTracerCollector(
-		b.config.EVMNetworkID,
-		b.logger,
-	)
-	if err != nil {
-		return err
-	}
 	blocksProvider := replayer.NewBlocksProvider(
 		b.storages.Blocks,
 		chainID,
-		callTracerCollector.TxTracer(),
 	)
 	replayerConfig := replayer.Config{
-		ChainID:             chainID,
-		RootAddr:            evm.StorageAccountAddress(chainID),
-		CallTracerCollector: callTracerCollector,
-		ValidateResults:     true,
+		ChainID:         chainID,
+		RootAddr:        evm.StorageAccountAddress(chainID),
+		ValidateResults: true,
 	}
 
 	// initialize event ingestion engine
@@ -220,7 +211,6 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 		b.storages.Blocks,
 		b.storages.Receipts,
 		b.storages.Transactions,
-		b.storages.Traces,
 		b.publishers.Block,
 		b.publishers.Logs,
 		b.logger,
@@ -538,7 +528,11 @@ func setupCrossSporkClient(config config.Config, logger zerolog.Logger) (*reques
 	// if we provided access node previous spork hosts add them to the client
 	pastSporkClients := make([]access.Client, len(config.AccessNodePreviousSporkHosts))
 	for i, host := range config.AccessNodePreviousSporkHosts {
-		grpcClient, err := grpc.NewClient(host)
+		grpcClient, err := grpc.NewClient(host,
+			grpc.WithGRPCDialOptions(
+				grpcOpts.WithDefaultCallOptions(grpcOpts.MaxCallRecvMsgSize(DefaultMaxMessageSize)),
+			),
+		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create client connection for host: %s, with error: %w", host, err)
 		}

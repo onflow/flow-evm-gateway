@@ -47,7 +47,6 @@ type Engine struct {
 	blocks          storage.BlockIndexer
 	receipts        storage.ReceiptIndexer
 	transactions    storage.TransactionIndexer
-	traces          storage.TraceIndexer
 	log             zerolog.Logger
 	evmLastHeight   *models.SequentialHeight
 	blocksPublisher *models.Publisher[*models.Block]
@@ -64,7 +63,6 @@ func NewEventIngestionEngine(
 	blocks storage.BlockIndexer,
 	receipts storage.ReceiptIndexer,
 	transactions storage.TransactionIndexer,
-	traces storage.TraceIndexer,
 	blocksPublisher *models.Publisher[*models.Block],
 	logsPublisher *models.Publisher[[]*gethTypes.Log],
 	log zerolog.Logger,
@@ -83,7 +81,6 @@ func NewEventIngestionEngine(
 		blocks:          blocks,
 		receipts:        receipts,
 		transactions:    transactions,
-		traces:          traces,
 		log:             log,
 		blocksPublisher: blocksPublisher,
 		logsPublisher:   logsPublisher,
@@ -187,11 +184,14 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 		Int("cadence-event-length", events.Length()).
 		Msg("received new cadence evm events")
 
+	start := time.Now()
 	err := e.withBatch(
 		func(batch *pebbleDB.Batch) error {
 			return e.indexEvents(events, batch)
 		},
 	)
+	e.collector.BlockProcessTime(start)
+
 	if err != nil {
 		return fmt.Errorf("failed to index events for cadence block %d: %w", events.CadenceHeight(), err)
 	}
@@ -212,6 +212,7 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 
 	e.collector.EVMTransactionIndexed(len(events.Transactions()))
 	e.collector.EVMHeightIndexed(events.Block().Height)
+	e.collector.FlowTotalSupply(events.Block().TotalSupply)
 	return nil
 }
 
@@ -242,7 +243,7 @@ func (e *Engine) indexEvents(events *models.CadenceEvents, batch *pebbleDB.Batch
 		e.registerStore,
 		e.blocksProvider,
 		e.log,
-		e.replayerConfig.CallTracerCollector.TxTracer(),
+		nil,
 		e.replayerConfig.ValidateResults,
 	)
 
@@ -291,20 +292,6 @@ func (e *Engine) indexEvents(events *models.CadenceEvents, batch *pebbleDB.Batch
 	err = e.indexReceipts(events.Receipts(), batch)
 	if err != nil {
 		return fmt.Errorf("failed to index receipts for block %d event: %w", events.Block().Height, err)
-	}
-
-	traceCollector := e.replayerConfig.CallTracerCollector
-	for _, tx := range events.Transactions() {
-		txHash := tx.Hash()
-		traceResult, err := traceCollector.Collect(txHash)
-		if err != nil {
-			return fmt.Errorf("failed to collect trace for transaction %s: %w", txHash, err)
-		}
-
-		err = e.traces.StoreTransaction(txHash, traceResult, batch)
-		if err != nil {
-			return fmt.Errorf("failed to store trace for transaction %s: %w", txHash, err)
-		}
 	}
 
 	blockCreation := time.Unix(int64(events.Block().Timestamp), 0)
