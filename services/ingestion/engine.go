@@ -184,11 +184,14 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 		Int("cadence-event-length", events.Length()).
 		Msg("received new cadence evm events")
 
+	start := time.Now()
 	err := e.withBatch(
 		func(batch *pebbleDB.Batch) error {
 			return e.indexEvents(events, batch)
 		},
 	)
+	e.collector.BlockProcessTime(start)
+
 	if err != nil {
 		return fmt.Errorf("failed to index events for cadence block %d: %w", events.CadenceHeight(), err)
 	}

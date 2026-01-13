@@ -66,10 +66,18 @@ var gasEstimationIterations = prometheus.NewGauge(prometheus.GaugeOpts{
 	Help: "Number of iterations taken to estimate the gas of a EVM call/tx",
 })
 
+// Time difference between block proposal time and block indexing time
 var blockIngestionTime = prometheus.NewHistogram(prometheus.HistogramOpts{
 	Name:    prefixedName("block_ingestion_time_seconds"),
-	Help:    "Time taken to fully ingest an EVM block in the local state index",
+	Help:    "Latency from EVM block proposal time to indexing completion (wall-clock duration)",
 	Buckets: []float64{.5, 1, 2.5, 5, 10, 15, 20, 30, 45},
+})
+
+// EVM block processing time during event ingestion, including transaction replay
+// and state validation
+var blockProcessTime = prometheus.NewSummary(prometheus.SummaryOpts{
+	Name: prefixedName("block_process_time_seconds"),
+	Help: "Processing time to fully index an EVM block in the local state index",
 })
 
 var requestRateLimitedCounters = prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -105,6 +113,7 @@ var metrics = []prometheus.Collector{
 	availableSigningKeys,
 	gasEstimationIterations,
 	blockIngestionTime,
+	blockProcessTime,
 	requestRateLimitedCounters,
 	transactionsDroppedCounter,
 	rateLimitedTransactionsCounter,
@@ -123,6 +132,7 @@ type Collector interface {
 	AvailableSigningKeys(count int)
 	GasEstimationIterations(count int)
 	BlockIngestionTime(blockCreation time.Time)
+	BlockProcessTime(start time.Time)
 	RequestRateLimited(method string)
 	TransactionsDropped(count int)
 	TransactionRateLimited()
@@ -147,6 +157,7 @@ type DefaultCollector struct {
 	availableSigningkeys           prometheus.Gauge
 	gasEstimationIterations        prometheus.Gauge
 	blockIngestionTime             prometheus.Histogram
+	blockProcessTime               prometheus.Summary
 	requestRateLimitedCounters     *prometheus.CounterVec
 	transactionsDroppedCounter     prometheus.Counter
 	rateLimitedTransactionsCounter prometheus.Counter
@@ -173,6 +184,7 @@ func NewCollector(logger zerolog.Logger) Collector {
 		availableSigningkeys:           availableSigningKeys,
 		gasEstimationIterations:        gasEstimationIterations,
 		blockIngestionTime:             blockIngestionTime,
+		blockProcessTime:               blockProcessTime,
 		requestRateLimitedCounters:     requestRateLimitedCounters,
 		transactionsDroppedCounter:     transactionsDroppedCounter,
 		rateLimitedTransactionsCounter: rateLimitedTransactionsCounter,
@@ -241,6 +253,10 @@ func (c *DefaultCollector) GasEstimationIterations(count int) {
 func (c *DefaultCollector) BlockIngestionTime(blockCreation time.Time) {
 	c.blockIngestionTime.
 		Observe(time.Since(blockCreation).Seconds())
+}
+
+func (c *DefaultCollector) BlockProcessTime(start time.Time) {
+	c.blockProcessTime.Observe(time.Since(start).Seconds())
 }
 
 func (c *DefaultCollector) RequestRateLimited(method string) {
