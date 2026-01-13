@@ -157,7 +157,7 @@ type DefaultCollector struct {
 	availableSigningkeys           prometheus.Gauge
 	gasEstimationIterations        prometheus.Gauge
 	blockIngestionTime             prometheus.Histogram
-	blockProcessTime               prometheus.Histogram
+	blockProcessTime               prometheus.Summary
 	requestRateLimitedCounters     *prometheus.CounterVec
 	transactionsDroppedCounter     prometheus.Counter
 	rateLimitedTransactionsCounter prometheus.Counter
