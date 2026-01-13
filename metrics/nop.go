@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"math/big"
 	"time"
 )
 
@@ -24,3 +25,4 @@ func (c *nopCollector) BlockIngestionTime(blockCreation time.Time) {}
 func (c *nopCollector) RequestRateLimited(method string)           {}
 func (c *nopCollector) TransactionsDropped(count int)              {}
 func (c *nopCollector) TransactionRateLimited()                    {}
+func (c *nopCollector) FlowTotalSupply(totalSupply *big.Int)       {}

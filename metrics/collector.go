@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"fmt"
+	"math/big"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -86,6 +87,11 @@ var rateLimitedTransactionsCounter = prometheus.NewCounter(prometheus.CounterOpt
 	Help: "Total number of rate-limited transactions",
 })
 
+var flowTotalSupply = prometheus.NewGauge(prometheus.GaugeOpts{
+	Name: prefixedName("flow_total_supply"),
+	Help: "Total supply of FLOW tokens in EVM at a given time (in smallest unit, wei)",
+})
+
 var metrics = []prometheus.Collector{
 	apiErrors,
 	serverPanicsCounters,
@@ -102,6 +108,7 @@ var metrics = []prometheus.Collector{
 	requestRateLimitedCounters,
 	transactionsDroppedCounter,
 	rateLimitedTransactionsCounter,
+	flowTotalSupply,
 }
 
 type Collector interface {
@@ -119,11 +126,14 @@ type Collector interface {
 	RequestRateLimited(method string)
 	TransactionsDropped(count int)
 	TransactionRateLimited()
+	FlowTotalSupply(totalSupply *big.Int)
 }
 
 var _ Collector = &DefaultCollector{}
 
 type DefaultCollector struct {
+	logger zerolog.Logger
+
 	// TODO: for now we cannot differentiate which api request failed number of times
 	apiErrorsCounter               prometheus.Counter
 	serverPanicsCounters           *prometheus.CounterVec
@@ -140,6 +150,7 @@ type DefaultCollector struct {
 	requestRateLimitedCounters     *prometheus.CounterVec
 	transactionsDroppedCounter     prometheus.Counter
 	rateLimitedTransactionsCounter prometheus.Counter
+	flowTotalSupply                prometheus.Gauge
 }
 
 func NewCollector(logger zerolog.Logger) Collector {
@@ -149,6 +160,7 @@ func NewCollector(logger zerolog.Logger) Collector {
 	}
 
 	return &DefaultCollector{
+		logger:                         logger,
 		apiErrorsCounter:               apiErrors,
 		serverPanicsCounters:           serverPanicsCounters,
 		cadenceBlockHeight:             cadenceBlockHeight,
@@ -164,6 +176,7 @@ func NewCollector(logger zerolog.Logger) Collector {
 		requestRateLimitedCounters:     requestRateLimitedCounters,
 		transactionsDroppedCounter:     transactionsDroppedCounter,
 		rateLimitedTransactionsCounter: rateLimitedTransactionsCounter,
+		flowTotalSupply:                flowTotalSupply,
 	}
 }
 
@@ -244,6 +257,19 @@ func (c *DefaultCollector) TransactionsDropped(count int) {
 
 func (c *DefaultCollector) TransactionRateLimited() {
 	c.rateLimitedTransactionsCounter.Inc()
+}
+
+func (c *DefaultCollector) FlowTotalSupply(totalSupply *big.Int) {
+	if totalSupply == nil {
+		return
+	}
+
+	floatTotalSupply, accuracy := totalSupply.Float64()
+	if accuracy != big.Exact {
+		c.logger.Warn().Msg("precision loss when casting total supply to float")
+	}
+
+	c.flowTotalSupply.Set(floatTotalSupply)
 }
 
 func prefixedName(name string) string {

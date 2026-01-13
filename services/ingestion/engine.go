@@ -209,6 +209,7 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 
 	e.collector.EVMTransactionIndexed(len(events.Transactions()))
 	e.collector.EVMHeightIndexed(events.Block().Height)
+	e.collector.FlowTotalSupply(events.Block().TotalSupply)
 	return nil
 }
 
