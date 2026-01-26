@@ -194,11 +194,11 @@ func (t *BatchTxPool) Add(
 	}
 
 	if err != nil {
-		t.txMux.Lock()
 		// If there was an error during tx submission, remove the entry
 		// from the cache, to not block future requests with same nonce.
+		// Note: No need to acquire the `t.txMux` lock, `Remove` already
+		// has an internal lock.
 		t.eoaActivityCache.Remove(from)
-		t.txMux.Unlock()
 
 		t.logger.Error().Err(err).Msgf(
 			"failed to submit single Flow transaction for EOA: %s",
