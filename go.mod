@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/cockroachdb/pebble v1.1.5
-	github.com/ethereum/go-ethereum v1.16.7
+	github.com/ethereum/go-ethereum v1.16.8
 	github.com/goccy/go-json v0.10.4
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/hashicorp/golang-lru/v2 v2.0.7

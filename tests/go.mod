@@ -3,7 +3,7 @@ module github.com/onflow/flow-evm-gateway/integration
 go 1.25.0
 
 require (
-	github.com/ethereum/go-ethereum v1.16.7
+	github.com/ethereum/go-ethereum v1.16.8
 	github.com/goccy/go-json v0.10.4
 	github.com/onflow/cadence v1.9.4
 	github.com/onflow/crypto v0.25.3
