@@ -1,6 +1,6 @@
 module github.com/onflow/flow-evm-gateway
 
-go 1.25.0
+go 1.25.1
 
 require (
 	github.com/cockroachdb/pebble v1.1.5
@@ -10,9 +10,9 @@ require (
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/holiman/uint256 v1.3.2
 	github.com/onflow/atree v0.12.0
-	github.com/onflow/cadence v1.9.4
-	github.com/onflow/flow-go v0.45.0-experimental-cadence-v1.8.7.0.20260109014156-2abea7b5732a
-	github.com/onflow/flow-go-sdk v1.9.10
+	github.com/onflow/cadence v1.9.5
+	github.com/onflow/flow-go v0.45.0-experimental-cadence-v1.8.7.0.20260123170943-0e72ae4a9bbc
+	github.com/onflow/flow-go-sdk v1.9.11
 	github.com/prometheus/client_golang v1.20.5
 	github.com/rs/cors v1.8.0
 	github.com/rs/zerolog v1.33.0
@@ -145,7 +145,7 @@ require (
 	github.com/multiformats/go-varint v0.0.7 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
-	github.com/onflow/crypto v0.25.3 // indirect
+	github.com/onflow/crypto v0.25.4 // indirect
 	github.com/onflow/fixed-point v0.1.1 // indirect
 	github.com/onflow/flow-core-contracts/lib/go/contracts v1.9.2 // indirect
 	github.com/onflow/flow-core-contracts/lib/go/templates v1.9.2 // indirect
