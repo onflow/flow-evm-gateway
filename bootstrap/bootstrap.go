@@ -22,6 +22,8 @@ import (
 	"github.com/sethvargo/go-limiter/memorystore"
 	grpcOpts "google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/status"
 
 	"github.com/onflow/flow-evm-gateway/api"
@@ -41,13 +43,13 @@ const (
 	// DefaultMaxMessageSize is the default maximum message size for gRPC responses
 	DefaultMaxMessageSize = 1024 * 1024 * 1024
 
-	// DefaultResourceExhaustedRetryDelay is the default delay between retries when the server returns
-	// a ResourceExhausted error.
-	DefaultResourceExhaustedRetryDelay = 100 * time.Millisecond
+	// DefaultRetryDelay is the default delay between retries when a gRPC request
+	// to one of the Access Nodes has errored out.
+	DefaultRetryDelay = 100 * time.Millisecond
 
-	// DefaultResourceExhaustedMaxRetryDelay is the default max request duration when retrying server
-	// ResourceExhausted errors.
-	DefaultResourceExhaustedMaxRetryDelay = 30 * time.Second
+	// DefaultMaxRetryDelay is the default max request duration when retrying failed
+	// gRPC requests to one of the Access Nodes.
+	DefaultMaxRetryDelay = 30 * time.Second
 )
 
 type Storages struct {
@@ -483,16 +485,59 @@ func StartEngine(
 // setupCrossSporkClient sets up a cross-spork AN client.
 func setupCrossSporkClient(config config.Config, logger zerolog.Logger) (*requester.CrossSporkClient, error) {
 	// create access client with cross-spork capabilities
-	currentSporkClient, err := grpc.NewClient(
-		config.AccessNodeHost,
-		grpc.WithGRPCDialOptions(
-			grpcOpts.WithDefaultCallOptions(grpcOpts.MaxCallRecvMsgSize(DefaultMaxMessageSize)),
-			grpcOpts.WithUnaryInterceptor(retryInterceptor(
-				DefaultResourceExhaustedMaxRetryDelay,
-				DefaultResourceExhaustedRetryDelay,
-			)),
-		),
-	)
+	var currentSporkClient *grpc.Client
+	var err error
+
+	if len(config.AccessNodeBackupHosts) > 0 {
+		mr := manual.NewBuilderWithScheme("dns")
+		defer mr.Close()
+
+		// `pick_first` tries to connect to the first address, uses it for all RPCs
+		// if it connects, or try the next address if it fails
+		// (and keep doing that until one connection is successful).
+		// Because of this, all the RPCs will be sent to the same backend. See more on:
+		// https://github.com/grpc/grpc-go/tree/master/examples/features/load_balancing#pick_first
+		json := `{"loadBalancingConfig": [{"pick_first":{}}]}`
+		endpoints := []resolver.Endpoint{
+			{Addresses: []resolver.Address{{Addr: config.AccessNodeHost}}},
+		}
+
+		for _, accessNodeBackupAddr := range config.AccessNodeBackupHosts {
+			endpoints = append(endpoints, resolver.Endpoint{
+				Addresses: []resolver.Address{{Addr: accessNodeBackupAddr}},
+			})
+		}
+
+		mr.InitialState(resolver.State{
+			Endpoints: endpoints,
+		})
+
+		targetHost := fmt.Sprintf("%s:///%s", mr.Scheme(), "flow-access")
+		currentSporkClient, err = grpc.NewClient(
+			targetHost,
+			grpc.WithGRPCDialOptions(
+				grpcOpts.WithDefaultCallOptions(grpcOpts.MaxCallRecvMsgSize(DefaultMaxMessageSize)),
+				grpcOpts.WithResolvers(mr),
+				grpcOpts.WithDefaultServiceConfig(json),
+				grpcOpts.WithUnaryInterceptor(retryInterceptor(
+					DefaultMaxRetryDelay,
+					DefaultRetryDelay,
+				)),
+			),
+		)
+	} else {
+		currentSporkClient, err = grpc.NewClient(
+			config.AccessNodeHost,
+			grpc.WithGRPCDialOptions(
+				grpcOpts.WithDefaultCallOptions(grpcOpts.MaxCallRecvMsgSize(DefaultMaxMessageSize)),
+				grpcOpts.WithUnaryInterceptor(retryInterceptor(
+					DefaultMaxRetryDelay,
+					DefaultRetryDelay,
+				)),
+			),
+		)
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf(
 			"failed to create client connection for host: %s, with error: %w",
@@ -549,7 +594,16 @@ func retryInterceptor(maxDuration, pauseDuration time.Duration) grpcOpts.UnaryCl
 				return nil
 			}
 
-			if status.Code(err) != codes.ResourceExhausted {
+			switch status.Code(err) {
+			case codes.Canceled, codes.DeadlineExceeded:
+				// these kind of errors are guaranteed to fail all requests,
+				// if the source was a local context
+				return err
+			case codes.ResourceExhausted, codes.OutOfRange, codes.NotFound:
+				// when we receive these errors, we pause briefly, so that
+				// the next request on the same AN, has a higher chance
+				// of success.
+			default:
 				return err
 			}
 

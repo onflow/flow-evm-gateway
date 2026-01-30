@@ -46,6 +46,9 @@ type Config struct {
 	DatabaseDir string
 	// AccessNodeHost defines the current spork Flow network AN host.
 	AccessNodeHost string
+	// AccessNodeBackupHosts contains a list of ANs hosts to use as backup, in
+	// case of connectivity issues with `AccessNodeHost`.
+	AccessNodeBackupHosts []string
 	// AccessNodePreviousSporkHosts contains a list of the ANs hosts for each spork
 	AccessNodePreviousSporkHosts []string
 	// GRPCPort for the RPC API server
