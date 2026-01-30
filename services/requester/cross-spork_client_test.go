@@ -73,14 +73,15 @@ func Test_CrossSporkClients(t *testing.T) {
 }
 
 func Test_CrossSpork(t *testing.T) {
-	t.Run("client", func(t *testing.T) {
-		past1Last := uint64(300)
-		past2Last := uint64(500)
-		currentLast := uint64(1000)
-		current := testutils.SetupClientForRange(501, currentLast)
-		past1 := testutils.SetupClientForRange(100, past1Last)
-		past2 := testutils.SetupClientForRange(301, past2Last)
+	past1Last := uint64(300)
+	past2Last := uint64(500)
+	currentSporkRootHeight := uint64(501)
+	currentLast := uint64(1000)
+	past1 := testutils.SetupClientForRange(100, past1Last)
+	past2 := testutils.SetupClientForRange(301, past2Last)
+	current := testutils.SetupClientForRange(currentSporkRootHeight, currentLast)
 
+	t.Run("clients form continuous range of heights", func(t *testing.T) {
 		client, err := NewCrossSporkClient(
 			current,
 			[]access.Client{past2, past1},
@@ -135,5 +136,38 @@ func Test_CrossSpork(t *testing.T) {
 		require.ErrorIs(t, err, errs.ErrHeightOutOfRange)
 
 		require.ErrorContains(t, err, "invalid height not in available range: 10")
+	})
+
+	t.Run("gap between current's spork root and node root heights", func(t *testing.T) {
+		current.GetNodeVersionInfoFunc = func(ctx context.Context) (*flow.NodeVersionInfo, error) {
+			return &flow.NodeVersionInfo{
+				NodeRootBlockHeight:  currentSporkRootHeight + 10,
+				SporkRootBlockHeight: currentSporkRootHeight,
+			}, nil
+		}
+
+		client, err := NewCrossSporkClient(
+			current,
+			[]access.Client{past2, past1},
+			zerolog.Nop(),
+			flowGo.Previewnet,
+		)
+		require.Error(t, err)
+		require.ErrorContains(t, err, "provided past-spork clients don't end at the spork root block height")
+		require.Nil(t, client)
+	})
+
+	t.Run("gap between past spork end height, and current spork root height", func(t *testing.T) {
+		currentWithGap := testutils.SetupClientForRange(currentSporkRootHeight+1, currentLast)
+
+		client, err := NewCrossSporkClient(
+			currentWithGap,
+			[]access.Client{past2, past1},
+			zerolog.Nop(),
+			flowGo.Previewnet,
+		)
+		require.Error(t, err)
+		require.ErrorContains(t, err, "provided past-spork clients don't end at the spork root block height")
+		require.Nil(t, client)
 	})
 }
