@@ -15,6 +15,17 @@ import (
 	"go.uber.org/ratelimit"
 )
 
+const (
+	// The following are hardcoded heights used to ensure gateways ignore blocks after the hard fork
+	// height even if they are returned by the upstream access node.
+
+	// HardcodedMainnet27SporkRootHeight is the spork root block height (cadence) for the Mainnet 27 network.
+	HardcodedMainnet27SporkRootHeight = 130290659
+
+	// HardcodedMainnet27LastHeight is the hardcoded last block height (cadence) for the Mainnet 27 network.
+	HardcodedMainnet27LastHeight = 137363395 // TODO: confirm final height when ready
+)
+
 type sporkClient struct {
 	firstHeight                    uint64
 	lastHeight                     uint64
@@ -31,6 +42,11 @@ func (s *sporkClient) GetEventsForHeightRange(
 	ctx context.Context, eventType string, startHeight uint64, endHeight uint64,
 ) ([]flow.BlockEvents, error) {
 	s.getEventsForHeightRangeLimiter.Take()
+
+	// simplified check since the API will reject requests for startHeight > endHeight.
+	if endHeight > s.lastHeight {
+		return nil, errs.NewHeightOutOfRangeError(endHeight)
+	}
 
 	return s.client.GetEventsForHeightRange(ctx, eventType, startHeight, endHeight)
 }
@@ -53,14 +69,27 @@ func (s *sporkClients) add(logger zerolog.Logger, client access.Client) error {
 		return fmt.Errorf("could not get node info using the spork client: %w", err)
 	}
 
+	lastHeight := header.Height
+
+	// ensure that the last height is the expected block.
+	if info.SporkRootBlockHeight == HardcodedMainnet27SporkRootHeight && lastHeight != HardcodedMainnet27LastHeight {
+		logger.Warn().
+			Uint64("nodeRootHeight", info.NodeRootBlockHeight).
+			Uint64("sporkRootHeight", info.SporkRootBlockHeight).
+			Uint64("lastHeight", lastHeight).
+			Uint64("hardcodedLastHeight", HardcodedMainnet27LastHeight).
+			Msg("access node returned unexpected last height. using hardcoded value.")
+		lastHeight = HardcodedMainnet27LastHeight
+	}
+
 	logger.Info().
 		Uint64("firstHeight", info.NodeRootBlockHeight).
-		Uint64("lastHeight", header.Height).
+		Uint64("lastHeight", lastHeight).
 		Msg("adding spork client")
 
 	*s = append(*s, &sporkClient{
 		firstHeight: info.NodeRootBlockHeight,
-		lastHeight:  header.Height,
+		lastHeight:  lastHeight,
 		client:      client,
 		// TODO (JanezP): Make this configurable
 		getEventsForHeightRangeLimiter: ratelimit.New(100, ratelimit.WithoutSlack),
@@ -156,6 +185,13 @@ func (c *CrossSporkClient) IsPastSpork(height uint64) bool {
 	return height < c.currentSporkFirstHeight
 }
 
+// IsMainnet27Client returns true if the current spork client is for the mainnet 27 network.
+func (c *CrossSporkClient) IsMainnet27Client() bool {
+	// currentSporkFirstHeight is the node's root block, which is not the same as the spork root block if the node was
+	// bootstrapped after the spork. This check works for nodes bootstrapped during or after the mainnet 27 spork.
+	return c.currentSporkFirstHeight >= HardcodedMainnet27SporkRootHeight && c.currentSporkFirstHeight <= HardcodedMainnet27LastHeight
+}
+
 // getClientForHeight returns the client for the given height that contains the height range.
 //
 // If the height is not contained in any of the past spork clients we return an error.
@@ -182,15 +218,29 @@ func (c *CrossSporkClient) getClientForHeight(height uint64) (access.Client, err
 // GetLatestHeightForSpork will determine the spork client in which the provided height is contained
 // and then find the latest height in that spork.
 func (c *CrossSporkClient) GetLatestHeightForSpork(ctx context.Context, height uint64) (uint64, error) {
-	client, err := c.getClientForHeight(height)
+	if c.IsPastSpork(height) {
+		for _, spork := range c.sporkClients {
+			if spork.contains(height) {
+				// use the latest block height captured during bootstrapping.
+				return spork.lastHeight, nil
+			}
+		}
+		// otherwise, we don't have a spork client for the provided height.
+		return 0, errs.NewHeightOutOfRangeError(height)
+	}
+
+	// otherwise, return the latest height from the current spork.
+	block, err := c.GetLatestBlockHeader(ctx, true)
 	if err != nil {
 		return 0, err
 	}
 
-	block, err := client.GetLatestBlockHeader(ctx, true)
-	if err != nil {
-		return 0, err
+	// if the current spork client is the mainnet 27 network and node reported a higher height, fix it to the hardcoded last height.
+	// allow the case where the AN is behind the last height in case it is catching up.
+	if c.IsMainnet27Client() && block.Height > HardcodedMainnet27LastHeight {
+		return HardcodedMainnet27LastHeight, nil
 	}
+
 	return block.Height, nil
 }
 
@@ -228,6 +278,7 @@ func (c *CrossSporkClient) SubscribeEventsByBlockHeight(
 	if err != nil {
 		return nil, nil, err
 	}
+
 	return client.SubscribeEventsByBlockHeight(ctx, startHeight, filter, opts...)
 }
 
@@ -246,6 +297,14 @@ func (c *CrossSporkClient) GetEventsForHeightRange(
 	if endClient != client {
 		return nil, fmt.Errorf("invalid height range, end height %d is not in the same spork as start height %d", endHeight, startHeight)
 	}
+
+	// if the current spork client is the mainnet 27 network and the requested end height is after the hardcoded last height,
+	// fix it to the hardcoded last height. If the requested start height is after the hardcoded last height, the API
+	// will return an error since the range will be invalid.
+	if c.IsMainnet27Client() && endHeight > HardcodedMainnet27LastHeight {
+		endHeight = HardcodedMainnet27LastHeight
+	}
+
 	return client.GetEventsForHeightRange(ctx, eventType, startHeight, endHeight)
 }
 
