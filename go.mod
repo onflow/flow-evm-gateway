@@ -10,8 +10,8 @@ require (
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/holiman/uint256 v1.3.2
 	github.com/onflow/atree v0.12.1
-	github.com/onflow/cadence v1.9.7
-	github.com/onflow/flow-go v0.45.0-internal-rc.3.0.20260129222115-cc0505f2afd5
+	github.com/onflow/cadence v1.9.8
+	github.com/onflow/flow-go v0.46.0
 	github.com/onflow/flow-go-sdk v1.9.13
 	github.com/prometheus/client_golang v1.20.5
 	github.com/rs/cors v1.8.0
