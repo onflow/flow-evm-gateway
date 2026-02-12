@@ -53,7 +53,7 @@ func TestOnBlockReceived(t *testing.T) {
 		)
 	})
 
-	t.Run("with new block non-sequential to latest block", func(t *testing.T) {
+	t.Run("with sequential blocks and valid parent hash", func(t *testing.T) {
 		_, blocks := setupBlocksDB(t)
 		blocksProvider := NewBlocksProvider(blocks, flowGo.Emulator)
 
@@ -61,9 +61,44 @@ func TestOnBlockReceived(t *testing.T) {
 		err := blocksProvider.OnBlockReceived(block1)
 		require.NoError(t, err)
 
-		block2 := mocks.NewBlock(11)
+		block2 := mocks.NewBlockWithParent(11, block1)
 		err = blocksProvider.OnBlockReceived(block2)
 		require.NoError(t, err)
+	})
+
+	t.Run("with valid parent hash linkage", func(t *testing.T) {
+		_, blocks := setupBlocksDB(t)
+		blocksProvider := NewBlocksProvider(blocks, flowGo.Emulator)
+
+		block1 := mocks.NewBlock(10)
+		err := blocksProvider.OnBlockReceived(block1)
+		require.NoError(t, err)
+
+		// Create block2 with correct parent hash pointing to block1
+		block2 := mocks.NewBlockWithParent(11, block1)
+		err = blocksProvider.OnBlockReceived(block2)
+		require.NoError(t, err)
+
+		// Create block3 with correct parent hash pointing to block2
+		block3 := mocks.NewBlockWithParent(12, block2)
+		err = blocksProvider.OnBlockReceived(block3)
+		require.NoError(t, err)
+	})
+
+	t.Run("with invalid parent hash", func(t *testing.T) {
+		_, blocks := setupBlocksDB(t)
+		blocksProvider := NewBlocksProvider(blocks, flowGo.Emulator)
+
+		block1 := mocks.NewBlock(10)
+		err := blocksProvider.OnBlockReceived(block1)
+		require.NoError(t, err)
+
+		// Create block2 with wrong parent hash (using NewBlock which generates arbitrary parent hash)
+		block2 := mocks.NewBlock(11)
+		err = blocksProvider.OnBlockReceived(block2)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "invalid parent block hash")
+		assert.ErrorContains(t, err, "block 11 has parent hash")
 	})
 }
 

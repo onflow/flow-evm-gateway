@@ -85,9 +85,10 @@ func TestSerialBlockIngestion(t *testing.T) {
 
 		storedCounter := 0
 		runs := uint64(20)
+		var prevBlock *models.Block
 		for i := latestHeight + 1; i < latestHeight+runs; i++ {
 			cadenceHeight := i + 10
-			blockCdc, block, blockEvent, err := newBlock(i, nil)
+			blockCdc, block, blockEvent, err := newBlockWithParent(i, nil, prevBlock)
 			require.NoError(t, err)
 
 			blocks.
@@ -107,6 +108,8 @@ func TestSerialBlockIngestion(t *testing.T) {
 				}},
 				Height: cadenceHeight,
 			})
+
+			prevBlock = block
 		}
 
 		close(eventsChan)
@@ -535,8 +538,21 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 }
 
 func newBlock(height uint64, txHashes []gethCommon.Hash) (cadence.Event, *models.Block, *events.Event, error) {
+	return newBlockWithParent(height, txHashes, nil)
+}
+
+func newBlockWithParent(height uint64, txHashes []gethCommon.Hash, parent *models.Block) (cadence.Event, *models.Block, *events.Event, error) {
+	parentHash := gethCommon.HexToHash("0x1")
+	if parent != nil {
+		var err error
+		parentHash, err = parent.Hash()
+		if err != nil {
+			return cadence.Event{}, nil, nil, err
+		}
+	}
+
 	gethBlock := types.NewBlock(
-		gethCommon.HexToHash("0x1"),
+		parentHash,
 		height,
 		uint64(1337),
 		big.NewInt(100),
