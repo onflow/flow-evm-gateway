@@ -34,6 +34,29 @@ func NewBlock(height uint64) *models.Block {
 	}
 }
 
+// NewBlockWithParent creates a new block at the given height with the parent hash
+// correctly set to the hash of the provided parent block.
+func NewBlockWithParent(height uint64, parent *models.Block) *models.Block {
+	var parentHash common.Hash
+	if parent != nil {
+		parentHash, _ = parent.Hash()
+	}
+
+	return &models.Block{
+		Block: &types.Block{
+			ParentBlockHash:     parentHash,
+			Height:              height,
+			Timestamp:           uint64(time.Now().Second()),
+			TotalSupply:         big.NewInt(1000),
+			ReceiptRoot:         common.HexToHash(fmt.Sprintf("0x100%d", height)),
+			TransactionHashRoot: common.HexToHash(fmt.Sprintf("0x200%d", height)),
+			TotalGasUsed:        uint64(30_000),
+			PrevRandao:          common.HexToHash(fmt.Sprintf("0x300%d", height)),
+		},
+		TransactionHashes: make([]common.Hash, 0),
+	}
+}
+
 func NewReceipt(block *models.Block) *models.Receipt {
 	txHash := common.HexToHash(fmt.Sprintf("0xff%d", block.Height))
 	blockHash, _ := block.Hash()
