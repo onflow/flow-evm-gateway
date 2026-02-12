@@ -802,8 +802,8 @@ github.com/olekukonko/tablewriter v0.0.5 h1:P2Ga83D34wi1o9J6Wh1mRuqd4mF/x/lgBS7N
 github.com/olekukonko/tablewriter v0.0.5/go.mod h1:hPp6KlRPjbx+hW8ykQs1w3UBbZlj6HuIJcUGPhkA7kY=
 github.com/onflow/atree v0.12.1 h1:WfnhnhZJISiRa6trEz2lq49my326xjzS1JRaH8naXv0=
 github.com/onflow/atree v0.12.1/go.mod h1:qdZcfLQwPirHcNpLiK+2t3KAo+SAb9Si6TqurE6pykE=
-github.com/onflow/cadence v1.9.7 h1:FKSf8ZK0oRWU2pEws1jztyIEHUeyzGxixLB+LA/XfQU=
-github.com/onflow/cadence v1.9.7/go.mod h1:zvAa0UGFrj+lctflMzUtgmOsvEvtzWhyiXxAN73WSJY=
+github.com/onflow/cadence v1.9.8 h1:+15PSs/KQ0QTN32hWR11wOpCNEeYThnmrTfH72BkTvA=
+github.com/onflow/cadence v1.9.8/go.mod h1:zvAa0UGFrj+lctflMzUtgmOsvEvtzWhyiXxAN73WSJY=
 github.com/onflow/crypto v0.25.4 h1:R615PWPdSoA5RATNb/j3cYaloBIZlSXVNgS7BjwHiwM=
 github.com/onflow/crypto v0.25.4/go.mod h1:DlkW/1SPUvLHYvUcjWa9PkLIRgSBKR4EDc3i+ATQKW4=
 github.com/onflow/fixed-point v0.1.1 h1:j0jYZVO8VGyk1476alGudEg7XqCkeTVxb5ElRJRKS90=
@@ -820,8 +820,8 @@ github.com/onflow/flow-ft/lib/go/contracts v1.0.1 h1:Ts5ob+CoCY2EjEd0W6vdLJ7hLL3
 github.com/onflow/flow-ft/lib/go/contracts v1.0.1/go.mod h1:PwsL8fC81cjnUnTfmyL/HOIyHnyaw/JA474Wfj2tl6A=
 github.com/onflow/flow-ft/lib/go/templates v1.0.1 h1:FDYKAiGowABtoMNusLuRCILIZDtVqJ/5tYI4VkF5zfM=
 github.com/onflow/flow-ft/lib/go/templates v1.0.1/go.mod h1:uQ8XFqmMK2jxyBSVrmyuwdWjTEb+6zGjRYotfDJ5pAE=
-github.com/onflow/flow-go v0.45.0-internal-rc.3.0.20260129222115-cc0505f2afd5 h1:m91UU6vYDwGw+tj7L+J9lxF92UsHIPIyE9G/l3ZhCYM=
-github.com/onflow/flow-go v0.45.0-internal-rc.3.0.20260129222115-cc0505f2afd5/go.mod h1:dnH7EloXMyOLjVNcSQdSoSp1DNXsYjvO24pYKwGRzN4=
+github.com/onflow/flow-go v0.46.0 h1:WX6Pk1W3I1eLNzz4BmnqOAEWtLgNa3yXGbgpur1yOvo=
+github.com/onflow/flow-go v0.46.0/go.mod h1:QnnuYyFpPEZA+Edgjfn2szpR+ZLsIrw/luYnF9ZEjB4=
 github.com/onflow/flow-go-sdk v1.9.13 h1:HdWhsheDkaUokC6+7eefP+v6cMKfN3/yU4O8ddC1YGc=
 github.com/onflow/flow-go-sdk v1.9.13/go.mod h1:e5zVNLkpzYxVbusPUMvtrbsinwCyr1krPvxMD6dhW6M=
 github.com/onflow/flow-nft/lib/go/contracts v1.3.0 h1:DmNop+O0EMyicZvhgdWboFG57xz5t9Qp81FKlfKyqJc=
