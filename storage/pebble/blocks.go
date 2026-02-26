@@ -241,6 +241,48 @@ func (b *Blocks) GetCadenceID(evmHeight uint64) (flow.Identifier, error) {
 	return flow.BytesToID(val), nil
 }
 
+// GetEVMHeightForCadenceHeight returns the highest EVM block height that was
+// indexed at the given Cadence height or below. This is useful when truncating
+// to a specific Cadence height.
+//
+// Since multiple EVM blocks can be in the same Cadence block, this returns
+// the highest EVM height where the associated Cadence height <= targetCadenceHeight.
+func (b *Blocks) GetEVMHeightForCadenceHeight(targetCadenceHeight uint64) (uint64, error) {
+	latestEVM, err := b.LatestEVMHeight()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get latest EVM height: %w", err)
+	}
+
+	// Iterate backwards from latest EVM height to find the first block
+	// with Cadence height <= targetCadenceHeight
+	for evmHeight := latestEVM; evmHeight > 0; evmHeight-- {
+		cadenceHeight, err := b.GetCadenceHeight(evmHeight)
+		if err != nil {
+			// Skip if we can't find this EVM height
+			if errors.Is(err, errs.ErrEntityNotFound) {
+				continue
+			}
+			return 0, fmt.Errorf("failed to get Cadence height for EVM height %d: %w", evmHeight, err)
+		}
+
+		if cadenceHeight <= targetCadenceHeight {
+			return evmHeight, nil
+		}
+	}
+
+	// If we reach here, check the genesis block (height 0)
+	cadenceHeight, err := b.GetCadenceHeight(0)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get Cadence height for genesis: %w", err)
+	}
+
+	if cadenceHeight <= targetCadenceHeight {
+		return 0, nil
+	}
+
+	return 0, fmt.Errorf("no EVM block found at or below Cadence height %d", targetCadenceHeight)
+}
+
 func (b *Blocks) getBlock(keyCode byte, key []byte) (*models.Block, error) {
 	data, err := b.store.get(keyCode, key)
 	if err != nil {
