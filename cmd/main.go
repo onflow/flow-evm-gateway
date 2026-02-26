@@ -5,6 +5,7 @@ import (
 
 	"github.com/onflow/flow-evm-gateway/cmd/blocks"
 	"github.com/onflow/flow-evm-gateway/cmd/export"
+	"github.com/onflow/flow-evm-gateway/cmd/load_test"
 	"github.com/onflow/flow-evm-gateway/cmd/run"
 	"github.com/onflow/flow-evm-gateway/cmd/version"
 	"github.com/rs/zerolog/log"
@@ -28,6 +29,7 @@ func main() {
 	rootCmd.AddCommand(export.Cmd)
 	rootCmd.AddCommand(blocks.Cmd)
 	rootCmd.AddCommand(run.Cmd)
+	rootCmd.AddCommand(load_test.Cmd)
 
 	Execute()
 }
