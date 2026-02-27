@@ -3,16 +3,18 @@ package requester
 import (
 	"context"
 	"fmt"
-	"slices"
 
 	"github.com/hashicorp/go-multierror"
 	"github.com/onflow/cadence"
-	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go-sdk/access"
+	"github.com/onflow/flow-go-sdk/access/grpc"
 	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/rs/zerolog"
 	"go.uber.org/ratelimit"
+	"golang.org/x/exp/slices"
+
+	errs "github.com/onflow/flow-evm-gateway/models/errors"
 )
 
 type sporkClient struct {
@@ -59,6 +61,7 @@ func (s *sporkClients) add(logger zerolog.Logger, client access.Client) error {
 		Msg("adding spork client")
 
 	*s = append(*s, &sporkClient{
+		// must use NodeRootBlockHeight here, since this is the first height available on the node.
 		firstHeight: info.NodeRootBlockHeight,
 		lastHeight:  header.Height,
 		client:      client,
@@ -106,9 +109,9 @@ func (s *sporkClients) continuous() bool {
 // Any API that supports cross-spork access must have a defined function
 // that shadows the original access Client function.
 type CrossSporkClient struct {
-	logger                  zerolog.Logger
-	sporkClients            sporkClients
-	currentSporkFirstHeight uint64
+	logger                 zerolog.Logger
+	sporkClients           sporkClients
+	currentSporkRootHeight uint64
 	access.Client
 }
 
@@ -120,6 +123,7 @@ func NewCrossSporkClient(
 	logger zerolog.Logger,
 	chainID flowGo.ChainID,
 ) (*CrossSporkClient, error) {
+	sporkRootBlockHeight := uint64(0)
 	nodeRootBlockHeight := uint64(0)
 
 	// Temp fix due to the fact that Emulator does not support the
@@ -129,6 +133,19 @@ func NewCrossSporkClient(
 		if err != nil {
 			return nil, fmt.Errorf("failed to get node version info: %w", err)
 		}
+
+		if info.SporkRootBlockHeight != info.NodeRootBlockHeight {
+			logger.Warn().
+				Uint64("spork-root-block-height", info.SporkRootBlockHeight).
+				Uint64("node-root-block-height", info.NodeRootBlockHeight).
+				Msg("spork root block height is not equal to node root block height. syncing may fail due to missing blocks.")
+		}
+
+		// It's possible that the node's SporkRootBlockHeight != NodeRootBlockHeight if the node was
+		// bootstrapped with a block after the spork root block. In this case, using SporkRootBlockHeight
+		// for the checks in IsPastSpork and IsSporkRootBlockHeight is correct. However, there may be
+		// missing blocks in the gap between the roots.
+		sporkRootBlockHeight = info.SporkRootBlockHeight
 		nodeRootBlockHeight = info.NodeRootBlockHeight
 	}
 
@@ -143,17 +160,36 @@ func NewCrossSporkClient(
 		return nil, fmt.Errorf("provided past-spork clients don't create a continuous range of heights")
 	}
 
+	// at this point, we've verified that the past spork clients form a continue range of heights.
+	// next, make sure the the last spork client forms a continuous range with the current spork
+	// client's node root block height. Note: this must be the NodeRootBlockHeight, not the
+	// SporkRootBlockHeight, since this is the first height available on the node.
+	if len(clients) > 0 && clients[len(clients)-1].lastHeight+1 != nodeRootBlockHeight {
+		return nil, fmt.Errorf("provided past-spork clients don't end at the spork root block height (%d != %d-1)",
+			clients[len(clients)-1].lastHeight, nodeRootBlockHeight)
+	}
+
 	return &CrossSporkClient{
-		logger:                  logger,
-		currentSporkFirstHeight: nodeRootBlockHeight,
-		sporkClients:            clients,
-		Client:                  currentSpork,
+		logger:                 logger,
+		currentSporkRootHeight: sporkRootBlockHeight,
+		sporkClients:           clients,
+		Client:                 currentSpork,
 	}, nil
 }
 
 // IsPastSpork will check if the provided height is contained in the previous sporks.
 func (c *CrossSporkClient) IsPastSpork(height uint64) bool {
-	return height < c.currentSporkFirstHeight
+	return height < c.currentSporkRootHeight
+}
+
+// IsSporkRootBlockHeight will check if the provided height is the spork root block height.
+func (c *CrossSporkClient) IsSporkRootBlockHeight(height uint64) bool {
+	return height == c.currentSporkRootHeight
+}
+
+// CurrentSporkRootHeight returns the spork root block height of the current spork.
+func (c *CrossSporkClient) CurrentSporkRootHeight() uint64 {
+	return c.currentSporkRootHeight
 }
 
 // getClientForHeight returns the client for the given height that contains the height range.
@@ -247,6 +283,35 @@ func (c *CrossSporkClient) GetEventsForHeightRange(
 		return nil, fmt.Errorf("invalid height range, end height %d is not in the same spork as start height %d", endHeight, startHeight)
 	}
 	return client.GetEventsForHeightRange(ctx, eventType, startHeight, endHeight)
+}
+
+func (c *CrossSporkClient) GetEventsForBlockHeader(
+	ctx context.Context,
+	eventType string,
+	blockHeader *flow.BlockHeader,
+) ([]flow.BlockEvents, error) {
+	client, err := c.getClientForHeight(blockHeader.Height)
+	if err != nil {
+		return nil, err
+	}
+	return client.GetEventsForBlockIDs(ctx, eventType, []flow.Identifier{blockHeader.ID})
+}
+
+func (c *CrossSporkClient) SubscribeBlockHeadersFromStartHeight(
+	ctx context.Context,
+	startHeight uint64,
+	blockStatus flow.BlockStatus,
+) (<-chan *flow.BlockHeader, <-chan error, error) {
+	client, err := c.getClientForHeight(startHeight)
+	if err != nil {
+		return nil, nil, err
+	}
+	grpcClient, ok := (client).(*grpc.Client)
+	if !ok {
+		return nil, nil, fmt.Errorf("unable to convert to Flow grpc.Client")
+	}
+
+	return grpcClient.SubscribeBlockHeadersFromStartHeight(ctx, startHeight, blockStatus)
 }
 
 func (c *CrossSporkClient) Close() error {
