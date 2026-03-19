@@ -7,9 +7,9 @@ require (
 	github.com/goccy/go-json v0.10.4
 	github.com/onflow/cadence v1.9.10
 	github.com/onflow/crypto v0.25.4
-	github.com/onflow/flow-emulator v1.17.0
+	github.com/onflow/flow-emulator v1.18.0
 	github.com/onflow/flow-evm-gateway v0.0.0-20240201154855-4d4d3d3f19c7
-	github.com/onflow/flow-go v0.47.0-ledger-service.1.0.20260306194353-7770192048a9
+	github.com/onflow/flow-go v0.47.0-ledger-service.1.0.20260318224013-f6e2e8f41961
 	github.com/onflow/flow-go-sdk v1.9.16
 	github.com/rs/zerolog v1.34.0
 	github.com/stretchr/testify v1.11.1
@@ -165,7 +165,7 @@ require (
 	github.com/onflow/flow-ft/lib/go/templates v1.0.1 // indirect
 	github.com/onflow/flow-nft/lib/go/contracts v1.3.0 // indirect
 	github.com/onflow/flow-nft/lib/go/templates v1.3.0 // indirect
-	github.com/onflow/flow/protobuf/go/flow v0.4.19 // indirect
+	github.com/onflow/flow/protobuf/go/flow v0.4.20 // indirect
 	github.com/onflow/go-ethereum v1.13.4 // indirect
 	github.com/onflow/nft-storefront/lib/go/contracts v1.0.0 // indirect
 	github.com/onflow/sdks v0.6.0-preview.1 // indirect
