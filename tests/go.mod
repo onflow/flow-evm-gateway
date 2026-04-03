@@ -5,12 +5,12 @@ go 1.25.1
 require (
 	github.com/ethereum/go-ethereum v1.16.8
 	github.com/goccy/go-json v0.10.4
-	github.com/onflow/cadence v1.9.10
+	github.com/onflow/cadence v1.10.0
 	github.com/onflow/crypto v0.25.4
-	github.com/onflow/flow-emulator v1.18.0
+	github.com/onflow/flow-emulator v1.19.0
 	github.com/onflow/flow-evm-gateway v0.0.0-20240201154855-4d4d3d3f19c7
-	github.com/onflow/flow-go v0.47.0-ledger-service.1.0.20260318224013-f6e2e8f41961
-	github.com/onflow/flow-go-sdk v1.9.16
+	github.com/onflow/flow-go v0.47.0-ledger-service.1.0.20260320214141-968222a41c12
+	github.com/onflow/flow-go-sdk v1.10.0
 	github.com/rs/zerolog v1.34.0
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/sync v0.19.0
@@ -156,7 +156,7 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
-	github.com/onflow/atree v0.12.1 // indirect
+	github.com/onflow/atree v0.14.0 // indirect
 	github.com/onflow/fixed-point v0.1.1 // indirect
 	github.com/onflow/flow-core-contracts/lib/go/contracts v1.9.3 // indirect
 	github.com/onflow/flow-core-contracts/lib/go/templates v1.9.3 // indirect
