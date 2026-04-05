@@ -598,6 +598,41 @@ func setupStorage(
 	// hard set the start cadence height, this is used when force reindexing
 	if config.ForceStartCadenceHeight != 0 {
 		logger.Warn().Uint64("height", config.ForceStartCadenceHeight).Msg("force setting starting Cadence height!!!")
+
+		// Check if we need to truncate existing data
+		latestCadenceHeight, err := blocks.LatestCadenceHeight()
+		if err == nil && latestCadenceHeight > config.ForceStartCadenceHeight {
+			// Find the target EVM height for the given Cadence height
+			targetEVMHeight, err := blocks.GetEVMHeightForCadenceHeight(config.ForceStartCadenceHeight)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to find EVM height for Cadence height %d: %w", config.ForceStartCadenceHeight, err)
+			}
+
+			logger.Warn().
+				Uint64("target-cadence-height", config.ForceStartCadenceHeight).
+				Uint64("target-evm-height", targetEVMHeight).
+				Msg("truncating storage to target height")
+
+			// Create truncation storage and truncate all data above target
+			receipts := pebble.NewReceipts(store)
+			traces := pebble.NewTraces(store)
+			truncateStorage := pebble.NewTruncateStorage(store, blocks, receipts, traces, logger)
+
+			if err := truncateStorage.Truncate(targetEVMHeight); err != nil {
+				return nil, nil, fmt.Errorf("failed to truncate storage to EVM height %d: %w", targetEVMHeight, err)
+			}
+
+			// Truncate register storage
+			if err := registerStore.TruncateAtHeight(targetEVMHeight); err != nil {
+				return nil, nil, fmt.Errorf("failed to truncate register storage to height %d: %w", targetEVMHeight, err)
+			}
+
+			logger.Info().
+				Uint64("new-evm-height", targetEVMHeight).
+				Uint64("new-cadence-height", config.ForceStartCadenceHeight).
+				Msg("storage truncation completed")
+		}
+
 		if err := blocks.SetLatestCadenceHeight(config.ForceStartCadenceHeight, batch); err != nil {
 			return nil, nil, err
 		}
