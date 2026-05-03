@@ -565,7 +565,7 @@ func TestValidateConsensusRules(t *testing.T) {
 	})
 
 	t.Run("init code size exceeded", func(t *testing.T) {
-		dataLen := params.MaxInitCodeSize + 5_000
+		dataLen := params.MaxInitCodeSizeAmsterdam + 5_000
 		data := make([]byte, dataLen)
 		n, err := crand.Read(data)
 		require.Equal(t, n, dataLen)
@@ -593,7 +593,7 @@ func TestValidateConsensusRules(t *testing.T) {
 		assert.ErrorContains(
 			t,
 			err,
-			"max initcode size exceeded: code size 54152 limit 49152",
+			"max initcode size exceeded: code size 70536 limit 65536",
 		)
 	})
 

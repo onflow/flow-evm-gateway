@@ -79,6 +79,7 @@ func NewCadenceEvents(events flow.BlockEvents) (*CadenceEvents, error) {
 		for _, l := range rcp.Logs {
 			l.BlockNumber = rcp.BlockNumber.Uint64()
 			l.BlockHash = rcp.BlockHash
+			l.BlockTimestamp = e.block.Timestamp
 			l.TxHash = rcp.TxHash
 			l.TxIndex = rcp.TransactionIndex
 			l.Index = logIndex
