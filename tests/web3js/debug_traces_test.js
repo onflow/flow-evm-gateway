@@ -277,6 +277,7 @@ it('should retrieve transaction traces', async () => {
                         {
                             address: '0x99a64c993965f8d69f985b5171bc20065cc32fab',
                             data: '0x',
+                            index: '0x0',
                             position: '0x0',
                             topics: [
                                 '0x043cc306157a91d747b36aba0e235bbbc5771d75aba162f6e5540767d22673c6',
@@ -352,6 +353,7 @@ it('should retrieve transaction traces', async () => {
                         {
                             address: '0x99a64c993965f8d69f985b5171bc20065cc32fab',
                             data: '0x',
+                            index: '0x0',
                             position: '0x0',
                             topics: [
                                 '0x043cc306157a91d747b36aba0e235bbbc5771d75aba162f6e5540767d22673c6',
@@ -503,6 +505,7 @@ it('should retrieve call traces', async () => {
             {
                 address: '0x99a64c993965f8d69f985b5171bc20065cc32fab',
                 data: '0x',
+                index: '0x0',
                 position: '0x0',
                 topics: [
                     '0x043cc306157a91d747b36aba0e235bbbc5771d75aba162f6e5540767d22673c6',
@@ -847,6 +850,7 @@ it('should retrieve call traces', async () => {
             {
                 address: '0x99a64c993965f8d69f985b5171bc20065cc32fab',
                 data: '0x0000000000000000000000000000000000000000000000000000000000000258',
+                index: '0x0',
                 position: '0x0',
                 topics: [
                     '0x76efea95e5da1fa661f235b2921ae1d89b99e457ec73fb88e34a1d150f95c64b',

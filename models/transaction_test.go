@@ -593,7 +593,7 @@ func TestValidateConsensusRules(t *testing.T) {
 		assert.ErrorContains(
 			t,
 			err,
-			"max initcode size exceeded: code size 54152, limit 49152",
+			"max initcode size exceeded: code size 54152 limit 49152",
 		)
 	})
 
