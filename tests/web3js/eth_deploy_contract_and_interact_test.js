@@ -1,4 +1,5 @@
 const { assert } = require('chai')
+const web3Validator = require('web3-validator')
 const conf = require('./config')
 const helpers = require('./helpers')
 const web3 = conf.web3
@@ -100,10 +101,15 @@ it('deploy contract and interact', async () => {
     })
     assert.equal(res.receipt.status, conf.successStatus)
 
-    // assert that logsBloom from transaction receipt and block match
+    // assert that logsBloom from transaction receipt is included in block's logsBloom
     latestHeight = await web3.eth.getBlockNumber()
     let block = await web3.eth.getBlock(latestHeight)
-    assert.equal(block.logsBloom, res.receipt.logsBloom)
+    assert.isTrue(web3Validator.isBloom(block.logsBloom))
+    let txLog = res.receipt.logs[0]
+    assert.isTrue(web3Validator.isContractAddressInBloom(block.logsBloom, txLog.address))
+    for (const topic of txLog.topics) {
+        assert.isTrue(web3Validator.isTopicInBloom(block.logsBloom, topic))
+    }
 
     // check that revert reason for custom error is correctly returned for signed transaction
     try {

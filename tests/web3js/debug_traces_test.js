@@ -298,6 +298,20 @@ it('should retrieve transaction traces', async () => {
                     gasUsed: '0x5208',
                     to: '0x658bdf435d810c91414ec09147daa6db62406379',
                     input: '0x',
+                    input: '0x',
+                    logs: [
+                        {
+                            address: '0xfffffffffffffffffffffffffffffffffffffffe',
+                            data: '0x0000000000000000000000000000000000000000000000000000000000408c06',
+                            index: '0x0',
+                            position: '0x0',
+                            topics: [
+                                '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef',
+                                '0x0000000000000000000000000000000000000000000000030000000000000000',
+                                '0x000000000000000000000000658bdf435d810c91414ec09147daa6db62406379',
+                            ]
+                        }
+                    ],
                     value: '0x408c06',
                     type: 'CALL'
                 }
@@ -374,6 +388,19 @@ it('should retrieve transaction traces', async () => {
                     gasUsed: '0x5208',
                     to: '0x658bdf435d810c91414ec09147daa6db62406379',
                     input: '0x',
+                    logs: [
+                        {
+                            address: '0xfffffffffffffffffffffffffffffffffffffffe',
+                            data: '0x0000000000000000000000000000000000000000000000000000000000408c06',
+                            index: '0x0',
+                            position: '0x0',
+                            topics: [
+                                '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef',
+                                '0x0000000000000000000000000000000000000000000000030000000000000000',
+                                '0x000000000000000000000000658bdf435d810c91414ec09147daa6db62406379'
+                            ]
+                        }
+                    ],
                     value: '0x408c06',
                     type: 'CALL'
                 }

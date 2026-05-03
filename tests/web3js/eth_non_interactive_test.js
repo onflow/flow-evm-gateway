@@ -112,10 +112,9 @@ it('should get block receipts', async () => {
     assert.lengthOf(blockReceipts, 3)
 
     for (let blockReceipt of blockReceipts) {
-        let txReceipt = await web3.eth.getTransactionReceipt(
-            blockReceipt.transactionHash,
-            web3types.ETH_DATA_FORMAT
-        )
+        let txResponse = await helpers.callRPCMethod('eth_getTransactionReceipt', [blockReceipt.transactionHash])
+        assert.equal(txResponse.status, 200)
+        let txReceipt = txResponse.body.result
         // normalize missing fields from transaction receipt
         if (txReceipt.to === undefined) {
             txReceipt.to = null
@@ -123,7 +122,6 @@ it('should get block receipts', async () => {
         if (txReceipt.contractAddress === undefined) {
             txReceipt.contractAddress = null
         }
-
         assert.deepEqual(blockReceipt, txReceipt)
     }
 })

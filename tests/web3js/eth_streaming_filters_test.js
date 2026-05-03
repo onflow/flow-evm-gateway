@@ -120,9 +120,10 @@ it('streaming of logs using filters', async () => {
 
         // we also test the raw subscriptions since they allow for specifying raw values
 
-        // stream all events by any contract, we have two same contracts, so we duplicate expected values and in order
+        // stream all events by both contracts, we have two same contracts,
+        // so we duplicate expected values and in order
         assertFilterLogs(
-            await rawSubscribe({}),
+            await rawSubscribe({ address: [contractAddress, contractAddress2] }),
             testValues.concat(testValues)
         ),
 
