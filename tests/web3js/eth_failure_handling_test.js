@@ -3,23 +3,18 @@ const helpers = require('./helpers')
 const conf = require('./config')
 const web3 = conf.web3
 
-it('should fail when tx gas limit higher than the max value', async () => {
+it('should not fail when tx gas limit higher than the max value under Amsterdam', async () => {
     let receiver = web3.eth.accounts.create()
 
-    try {
-        await helpers.signAndSend({
-            from: conf.eoa.address,
-            to: receiver.address,
-            value: 10,
-            gasPrice: conf.minGasPrice,
-            gasLimit: 51_000_000, // max tx gas limit is 16_777_216 starting from Fusaka
-        })
-    } catch (e) {
-        assert.include(e.message, 'transaction gas limit too high (cap: 16777216, tx: 51000000)')
-        return
-    }
+    let res = await helpers.signAndSend({
+        from: conf.eoa.address,
+        to: receiver.address,
+        value: 10,
+        gasPrice: conf.minGasPrice,
+        gasLimit: 20_000_000, // max tx gas limit is 16_777_216 starting from Fusaka
+    })
 
-    assert.fail('should not reach')
+    assert.equal(res.receipt.status, conf.successStatus)
 })
 
 it('should fail when nonce too low', async () => {
@@ -46,7 +41,7 @@ it('should fail when nonce too low', async () => {
     } catch (e) {
         assert.include(
             e.message,
-            'nonce too low: address 0xFACF71692421039876a5BB4F10EF7A439D8ef61E, tx: 0, state: 1'
+            'nonce too low: address 0xFACF71692421039876a5BB4F10EF7A439D8ef61E, tx: 0, state: 2'
         )
         return
     }

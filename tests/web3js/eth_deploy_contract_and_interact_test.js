@@ -262,7 +262,7 @@ it('deploy contract and interact', async () => {
         },
         '0x1' // give a block height at which the contract did not exist
     )
-    assert.equal(gasEstimate, 22026n)
+    assert.equal(gasEstimate, 25693n)
 
     gasEstimate = await web3.eth.estimateGas(
         {
@@ -274,7 +274,7 @@ it('deploy contract and interact', async () => {
         },
         'latest' // give a block height at which the contract did exist
     )
-    assert.equal(gasEstimate, 25050n)
+    assert.equal(gasEstimate, 25693n)
 
     // check that `eth_call` can handle state overrides
     let stateOverrides = {

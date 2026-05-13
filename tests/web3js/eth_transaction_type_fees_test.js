@@ -124,12 +124,12 @@ it('calculates fees for access list tx type', async () => {
     }
 
     let coinbaseBalance = await web3.eth.getBalance(conf.coinbase)
-    assert.equal(coinbaseBalance, 189348515n)
+    assert.equal(coinbaseBalance, 189546915n)
 })
 
 it('calculates fees for dynamic fees tx type', async () => {
     let senderBalance = await web3.eth.getBalance(conf.eoa.address)
-    assert.equal(senderBalance, 4999999999810651485n)
+    assert.equal(senderBalance, 4999999999810453085n)
 
     // gasTipCap is less than gasFeeCap
     // price = Min(GasTipCap, GasFeeCap) when baseFee = 0
@@ -222,5 +222,5 @@ it('calculates fees for dynamic fees tx type', async () => {
     }
 
     let coinbaseBalance = await web3.eth.getBalance(conf.coinbase)
-    assert.equal(coinbaseBalance, 199365715n)
+    assert.equal(coinbaseBalance, 199564115n)
 })
