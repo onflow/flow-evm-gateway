@@ -6,11 +6,12 @@ import (
 	"github.com/onflow/atree"
 	"github.com/onflow/flow-go/fvm/environment"
 	"github.com/onflow/flow-go/fvm/errors"
+	"github.com/onflow/flow-go/fvm/evm/backends"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/onflow/flow-go/model/flow"
 )
 
-var _ types.BackendStorage = &RegisterDelta{}
+var _ backends.BackendStorage = &RegisterDelta{}
 var _ types.BackendStorageSnapshot = &RegisterDelta{}
 
 type RegisterDelta struct {
@@ -79,7 +80,7 @@ func (r *RegisterDelta) AllocateSlabIndex(owner []byte) (atree.SlabIndex, error)
 
 // allocateSlabIndex allocates a new slab index for the given owner and key.
 // this method only uses the storage get/set methods.
-func allocateSlabIndex(owner []byte, storage types.BackendStorage) (atree.SlabIndex, error) {
+func allocateSlabIndex(owner []byte, storage backends.BackendStorage) (atree.SlabIndex, error) {
 	// get status
 	address := flow.BytesToAddress(owner)
 	id := flow.AccountStatusRegisterID(address)
