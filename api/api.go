@@ -15,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/rs/zerolog"
 
+	"github.com/onflow/flow-go/fvm/evm/emulator"
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
 
 	"github.com/onflow/flow-evm-gateway/config"
@@ -987,6 +988,17 @@ func (b *BlockChainAPI) prepareBlockResponse(
 		LogsBloom:        types.CreateBloom(&types.Receipt{}).Bytes(),
 		Miner:            evmTypes.CoinbaseAddress.ToCommon(),
 		Sha3Uncles:       types.EmptyUncleHash,
+	}
+
+	emulatorConfig := emulator.NewConfig(
+		emulator.WithChainID(b.config.EVMNetworkID),
+		emulator.WithBlockNumber(new(big.Int).SetUint64(block.Height)),
+		emulator.WithBlockTime(block.Timestamp),
+	)
+
+	if emulatorConfig.ChainRules().IsAmsterdam {
+		slotNumber := hexutil.Uint64(block.SlotNumber(b.config.FlowNetworkID))
+		blockResponse.SlotNumber = &slotNumber
 	}
 
 	blockBytes, err := block.ToBytes()

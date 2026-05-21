@@ -11,7 +11,7 @@ require (
 	github.com/holiman/uint256 v1.3.2
 	github.com/onflow/atree v0.16.0
 	github.com/onflow/cadence v1.10.3
-	github.com/onflow/flow-go v0.48.1-evm-cache-block.0.20260521124940-ffbf976aa40b
+	github.com/onflow/flow-go v0.48.1-evm-cache-block.0.20260522070205-b5b78f5aff77
 	github.com/onflow/flow-go-sdk v1.10.3
 	github.com/prometheus/client_golang v1.20.5
 	github.com/rs/cors v1.8.0

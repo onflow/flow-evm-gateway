@@ -162,8 +162,7 @@ it('should retrieve transaction traces', async () => {
     assert.deepEqual(
         txTrace.post['0x0000000000000000000000030000000000000000'],
         {
-            balance: '0x408c06',
-            codeHash: "0x0000000000000000000000000000000000000000000000000000000000000000"
+            balance: '0x408c06'
         }
     )
     assert.deepEqual(
@@ -596,18 +595,11 @@ it('should retrieve call traces', async () => {
         txTrace,
         {
             post: {
-                '0x0000000000000000000000030000000000000000': {
-                    codeHash: "0x0000000000000000000000000000000000000000000000000000000000000000"
-                },
                 '0xfacf71692421039876a5bb4f10ef7a439d8ef61e': {
                     nonce: 4
                 }
             },
             pre: {
-                '0x0000000000000000000000030000000000000000': {
-                    balance: '0x0',
-                    nonce: 3
-                },
                 '0xfacf71692421039876a5bb4f10ef7a439d8ef61e': {
                     balance: '0x4563918239be8804',
                     nonce: 3

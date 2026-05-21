@@ -101,6 +101,13 @@ it('should get block', async () => {
     // not existing transaction
     let no = await web3.eth.getTransactionFromBlock(conf.startBlockHeight, 5)
     assert.isNull(no)
+
+    // assert that slot number is present on the block response
+    let response = await helpers.callRPCMethod('eth_getBlockByHash', [block.hash, false])
+    assert.equal(response.status, 200)
+
+    let blockResponse = response.body.result
+    assert.isTrue(web3Utils.hexToNumber(blockResponse.slotNumber) >= 75_100_200n)
 })
 
 it('should get block receipts', async () => {
