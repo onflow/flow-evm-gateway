@@ -201,6 +201,16 @@ func parseConfigFromFlags() error {
 	}
 	cfg.FilterExpiry = exp
 
+	if accessNodeBackupHosts != "" {
+		rawHosts := strings.Split(accessNodeBackupHosts, ",")
+		cfg.AccessNodeBackupHosts = make([]string, 0, len(rawHosts))
+		for _, host := range rawHosts {
+			if trimmed := strings.TrimSpace(host); trimmed != "" {
+				cfg.AccessNodeBackupHosts = append(cfg.AccessNodeBackupHosts, trimmed)
+			}
+		}
+	}
+
 	if accessSporkHosts != "" {
 		heightHosts := strings.Split(accessSporkHosts, ",")
 		cfg.AccessNodePreviousSporkHosts = append(cfg.AccessNodePreviousSporkHosts, heightHosts...)
@@ -242,6 +252,7 @@ var (
 	logWriter,
 	filterExpiry,
 	accessSporkHosts,
+	accessNodeBackupHosts,
 	cloudKMSKey,
 	cloudKMSProjectID,
 	cloudKMSLocationID,
@@ -259,6 +270,7 @@ func init() {
 	Cmd.Flags().IntVar(&cfg.RPCPort, "rpc-port", 8545, "Port for the RPC API server")
 	Cmd.Flags().BoolVar(&cfg.WSEnabled, "ws-enabled", false, "Enable websocket connections")
 	Cmd.Flags().StringVar(&cfg.AccessNodeHost, "access-node-grpc-host", "localhost:3569", "Host to the flow access node gRPC API")
+	Cmd.Flags().StringVar(&accessNodeBackupHosts, "access-node-backup-hosts", "", `Backup AN hosts to use in case of connectivity issues, defined following the schema: {host1},{host2} as a comma separated list (e.g. "host-1.com,host2.com")`)
 	Cmd.Flags().StringVar(&accessSporkHosts, "access-node-spork-hosts", "", `Previous spork AN hosts, defined following the schema: {host1},{host2} as a comma separated list (e.g. "host-1.com,host2.com")`)
 	Cmd.Flags().StringVar(&flowNetwork, "flow-network-id", "flow-emulator", "Flow network ID (flow-emulator, flow-previewnet, flow-testnet, flow-mainnet)")
 	Cmd.Flags().StringVar(&coinbase, "coinbase", "", "Coinbase address to use for fee collection")

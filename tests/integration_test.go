@@ -30,7 +30,7 @@ import (
 // This is using the TxSealValidation mechanism for validating submitted
 // transactions, which blocks until it receives the Flow transaction result.
 func Test_ConcurrentTransactionSubmissionWithTxSeal(t *testing.T) {
-	srv, err := startEmulator(true)
+	srv, err := startEmulator(true, defaultServerConfig())
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -141,7 +141,7 @@ func Test_ConcurrentTransactionSubmissionWithTxSeal(t *testing.T) {
 // This is using the LocalIndexValidation mechanism for validating submitted
 // transactions, which is non-blocking and validates based on the local state.
 func Test_ConcurrentTransactionSubmissionWithLocalIndex(t *testing.T) {
-	srv, err := startEmulator(true)
+	srv, err := startEmulator(true, defaultServerConfig())
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -246,7 +246,7 @@ func Test_ConcurrentTransactionSubmissionWithLocalIndex(t *testing.T) {
 }
 
 func Test_EthClientTest(t *testing.T) {
-	srv, err := startEmulator(true)
+	srv, err := startEmulator(true, defaultServerConfig())
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -325,7 +325,7 @@ func Test_CloudKMSConcurrentTransactionSubmission(t *testing.T) {
 		t.Skip()
 	}
 
-	srv, err := startEmulator(true)
+	srv, err := startEmulator(true, defaultServerConfig())
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -449,7 +449,7 @@ func Test_CloudKMSConcurrentTransactionSubmission(t *testing.T) {
 // 2. No transactions are lost
 // 3. The state remains consistent
 func Test_ForceStartHeightIdempotency(t *testing.T) {
-	srv, err := startEmulator(true)
+	srv, err := startEmulator(true, defaultServerConfig())
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -591,4 +591,121 @@ func Test_ForceStartHeightIdempotency(t *testing.T) {
 
 		return true
 	}, time.Second*15, time.Second*1, "all transactions were not executed")
+}
+
+// Test_AccessNodeBackupFunctionality verifies that the specified AccessNode
+// backup hosts, are used when the primary `AccessNodeHost` is unavailable
+// for whatever reason.
+func Test_AccessNodeBackupFunctionality(t *testing.T) {
+	srv, err := startEmulator(true, defaultServerConfig())
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer func() {
+		cancel()
+		srv.Stop()
+	}()
+
+	backupConfg := defaultServerConfig()
+	backupConfg.GRPCPort = 3599
+	backupConfg.RESTPort = 9999
+	backupConfg.AdminPort = 9090
+	backupConfg.DebuggerPort = 3456
+	backupSrv, err := startEmulator(true, backupConfg)
+	require.NoError(t, err)
+
+	backupCtx, backupCancel := context.WithCancel(context.Background())
+	defer func() {
+		backupCancel()
+		backupSrv.Stop()
+	}()
+
+	grpcHost := "localhost:3569"
+	emu := srv.Emulator()
+	service := emu.ServiceKey()
+
+	client, err := grpc.NewClient(grpcHost)
+	require.NoError(t, err)
+
+	time.Sleep(500 * time.Millisecond) // some time to startup
+
+	// create new account with keys used for key-rotation
+	keyCount := 5
+	createdAddr, privateKey, err := bootstrap.CreateMultiKeyAccount(
+		client,
+		keyCount,
+		service.Address,
+		sc.FungibleToken.Address.HexWithPrefix(),
+		sc.FlowToken.Address.HexWithPrefix(),
+		service.PrivateKey,
+	)
+	require.NoError(t, err)
+
+	backupAccessNodeHost := fmt.Sprintf("localhost:%d", backupConfg.GRPCPort)
+
+	cfg := config.Config{
+		DatabaseDir:           t.TempDir(),
+		AccessNodeHost:        grpcHost,
+		AccessNodeBackupHosts: []string{backupAccessNodeHost},
+		RPCPort:               8545,
+		RPCHost:               "127.0.0.1",
+		FlowNetworkID:         "flow-emulator",
+		EVMNetworkID:          types.FlowEVMPreviewNetChainID,
+		Coinbase:              eoaTestAccount,
+		COAAddress:            *createdAddr,
+		COAKey:                privateKey,
+		GasPrice:              new(big.Int).SetUint64(0),
+		EnforceGasPrice:       true,
+		LogLevel:              zerolog.DebugLevel,
+		LogWriter:             testLogWriter(),
+		TxStateValidation:     config.LocalIndexValidation,
+	}
+
+	boot, err := bootstrap.New(cfg)
+	require.NoError(t, err)
+	defer func() {
+		// Stop the EVM GW service
+		boot.Stop()
+	}()
+
+	ready := make(chan struct{})
+	go func() {
+		err = boot.Run(ctx, cfg, func() {
+			close(ready)
+		})
+		require.NoError(t, err)
+	}()
+
+	<-ready
+
+	time.Sleep(3 * time.Second) // some time to startup
+
+	ethClient, err := ethclient.Dial("http://127.0.0.1:8545")
+	require.NoError(t, err)
+
+	// This endpoint (`eth_syncing`), will make the following gRPC call,
+	// `ExecuteScriptAtLatestBlock`. This gRPC call is served by the
+	// first Emulator process, that is configured as the `AccessNodeHost`.
+	_, err = ethClient.SyncProgress(ctx)
+	require.NoError(t, err)
+
+	// Shutdown the first Emulator process, that is configured as the
+	// `AccessNodeHost`
+	cancel()
+	srv.Stop()
+
+	// This endpoint (`eth_syncing`), will make the following gRPC call,
+	// `ExecuteScriptAtLatestBlock`. This gRPC call is served by the
+	// first-available AccessNode specified in `AccessNodeBackupHosts`.
+	// In this E2E test, that would be the second Emulator process.
+	assert.Eventually(
+		t,
+		func() bool {
+			_, err := ethClient.SyncProgress(backupCtx)
+			return err == nil
+		},
+		time.Second*5,
+		time.Millisecond*500,
+		"backup AN should serve requests after primary shutdown",
+	)
 }
