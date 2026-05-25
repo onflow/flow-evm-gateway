@@ -433,9 +433,6 @@ func (e *EVM) EstimateGas(
 	}
 
 	if txArgs.AccessList != nil {
-		passingGasLimit += uint64(len(*txArgs.AccessList)) * gethParams.TxAccessListAddressGas
-		passingGasLimit += uint64(txArgs.AccessList.StorageKeys()) * gethParams.TxAccessListStorageKeyGas
-
 		addresses := uint64(len(*txArgs.AccessList))
 		storageKeys := uint64(txArgs.AccessList.StorageKeys())
 		if (math.MaxUint64-passingGasLimit)/gethParams.TxAccessListAddressGas < addresses {
