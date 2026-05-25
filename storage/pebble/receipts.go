@@ -146,7 +146,6 @@ func (r *Receipts) getByBlockHeight(height []byte) ([]*models.Receipt, error) {
 		// dynamically populate the values since they are not stored to save space
 		for _, l := range rcp.Logs {
 			l.BlockNumber = rcp.BlockNumber.Uint64()
-			l.BlockTimestamp = block.Timestamp
 			l.BlockHash = rcp.BlockHash
 			l.BlockTimestamp = block.Timestamp
 			l.TxHash = rcp.TxHash
