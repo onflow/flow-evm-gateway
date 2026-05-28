@@ -300,7 +300,6 @@ it('should retrieve transaction traces', async () => {
                     gasUsed: '0x5208',
                     to: '0x658bdf435d810c91414ec09147daa6db62406379',
                     input: '0x',
-                    input: '0x',
                     logs: [
                         {
                             address: '0xfffffffffffffffffffffffffffffffffffffffe',
