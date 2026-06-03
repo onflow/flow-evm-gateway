@@ -91,7 +91,7 @@ func newBlocksFilter(expiry time.Duration, latestHeight uint64) *blocksFilter {
 	}
 }
 
-// transactionFilter is used to get all new transactions since last request.
+// transactionsFilter is used to get all new transactions since last request.
 //
 // FullTx parameters determines if the result will include only
 // hashes or full transaction body.
@@ -178,10 +178,7 @@ func (api *PullAPI) NewPendingTransactionFilter(
 		return "", err
 	}
 
-	full := false
-	if fullTx != nil && *fullTx {
-		full = true
-	}
+	full := fullTx != nil && *fullTx
 
 	f := newTransactionsFilter(api.config.FilterExpiry, last, full)
 
@@ -248,6 +245,10 @@ func (api *PullAPI) uninstallFilter(id rpc.ID) bool {
 func (api *PullAPI) NewFilter(ctx context.Context, criteria filters.FilterCriteria) (rpc.ID, error) {
 	if err := api.rateLimiter.Apply(ctx, EthNewFilter); err != nil {
 		return "", err
+	}
+
+	if !logs.ValidCriteriaLimits(criteria) {
+		return "", errs.ErrExceedLogQueryLimit
 	}
 
 	latest, err := api.blocks.LatestEVMHeight()
@@ -455,12 +456,13 @@ func (api *PullAPI) getTransactions(latestHeight uint64, filter *transactionsFil
 			return nil, err
 		}
 
-		for _, h := range b.TransactionHashes {
-			tx, err := api.transactions.Get(h)
-			if err != nil {
-				return nil, err
-			}
-			receipt, err := api.receipts.GetByTransactionID(h)
+		receipts, err := api.receipts.GetByBlockHeight(b.Height)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, receipt := range receipts {
+			tx, err := api.transactions.Get(receipt.TxHash)
 			if err != nil {
 				return nil, err
 			}

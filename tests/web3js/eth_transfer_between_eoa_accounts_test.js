@@ -27,8 +27,8 @@ it('transfer flow between two EOA accounts', async () => {
     gasLimit: 55_000,
   })
   assert.equal(transfer.receipt.status, conf.successStatus)
-  assert.equal(transfer.receipt.from, conf.eoa.address)
-  assert.equal(transfer.receipt.to, receiver.address)
+  assert.equal(transfer.receipt.from, conf.eoa_address)
+  assert.equal(transfer.receipt.to, receiver.address.toLowerCase())
 
   // check that transaction count was increased
   txCount = await web3.eth.getTransactionCount(conf.eoa.address)

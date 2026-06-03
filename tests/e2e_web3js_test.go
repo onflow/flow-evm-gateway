@@ -46,6 +46,10 @@ func TestWeb3_E2E(t *testing.T) {
 		runWeb3Test(t, "contract_call_overrides_test")
 	})
 
+	t.Run("test gas estimation block overrides", func(t *testing.T) {
+		runWeb3Test(t, "estimate_gas_overrides_test")
+	})
+
 	t.Run("test setup sanity check", func(t *testing.T) {
 		runWeb3Test(t, "setup_test")
 	})
@@ -72,6 +76,10 @@ func TestWeb3_E2E(t *testing.T) {
 
 	t.Run("deploy contract and call methods", func(t *testing.T) {
 		runWeb3Test(t, "eth_deploy_contract_and_interact_test")
+	})
+
+	t.Run("apply state overrides", func(t *testing.T) {
+		runWeb3Test(t, "eth_state_overrides_test")
 	})
 
 	t.Run("test retrieval of contract storage slots", func(t *testing.T) {

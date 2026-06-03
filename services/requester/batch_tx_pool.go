@@ -3,6 +3,7 @@ package requester
 import (
 	"context"
 	"encoding/hex"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/models"
+	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/services/requester/keystore"
 )
 
@@ -24,6 +26,7 @@ const eoaActivityCacheSize = 10_000
 
 type pooledEvmTx struct {
 	txPayload cadence.String
+	txHash    gethCommon.Hash
 	nonce     uint64
 }
 
@@ -57,11 +60,12 @@ func NewBatchTxPool(
 	config config.Config,
 	collector metrics.Collector,
 	keystore *keystore.KeyStore,
-) *BatchTxPool {
+) (*BatchTxPool, error) {
 	// initialize the available keys metric since it is only updated when sending a tx
 	collector.AvailableSigningKeys(keystore.AvailableKeys())
 
-	singleTxPool := NewSingleTxPool(
+	singleTxPool, err := NewSingleTxPool(
+		ctx,
 		client,
 		transactionsPublisher,
 		logger,
@@ -69,6 +73,9 @@ func NewBatchTxPool(
 		collector,
 		keystore,
 	)
+	if err != nil {
+		return nil, err
+	}
 
 	eoaActivity := expirable.NewLRU[gethCommon.Address, time.Time](
 		eoaActivityCacheSize,
@@ -84,7 +91,7 @@ func NewBatchTxPool(
 
 	go batchPool.processPooledTransactions(ctx)
 
-	return batchPool
+	return batchPool, nil
 }
 
 // Add adds the EVM transaction to the tx pool, grouped with the rest of the
@@ -143,7 +150,11 @@ func (t *BatchTxPool) Add(
 		err = t.submitSingleTransaction(ctx, hexEncodedTx)
 	} else {
 		// Case 3. EOA activity found AND it was less than [X] seconds ago:
-		userTx := pooledEvmTx{txPayload: hexEncodedTx, nonce: tx.Nonce()}
+		userTx := pooledEvmTx{txPayload: hexEncodedTx, txHash: tx.Hash(), nonce: tx.Nonce()}
+		// Prevent submission of duplicate transactions, based on their tx hash
+		if slices.Contains(t.pooledTxs[from], userTx) {
+			return errs.ErrDuplicateTransaction
+		}
 		t.pooledTxs[from] = append(t.pooledTxs[from], userTx)
 	}
 
@@ -161,14 +172,6 @@ func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			latestBlock, account, err := t.fetchFlowLatestBlockAndCOA(ctx)
-			if err != nil {
-				t.logger.Error().Err(err).Msg(
-					"failed to get COA / latest Flow block on batch tx submission",
-				)
-				continue
-			}
-
 			// Take a copy here to allow `Add()` to continue accept
 			// incoming EVM transactions, without blocking until the
 			// batch transactions are submitted.
@@ -180,8 +183,7 @@ func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 			for address, pooledTxs := range txsGroupedByAddress {
 				err := t.batchSubmitTransactionsForSameAddress(
 					ctx,
-					latestBlock,
-					account,
+					t.getReferenceBlock(),
 					pooledTxs,
 				)
 				if err != nil {
@@ -198,8 +200,7 @@ func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 
 func (t *BatchTxPool) batchSubmitTransactionsForSameAddress(
 	ctx context.Context,
-	latestBlock *flow.Block,
-	account *flow.Account,
+	referenceBlockHeader *flow.BlockHeader,
 	pooledTxs []pooledEvmTx,
 ) error {
 	// Sort the transactions based on their nonce, to make sure
@@ -218,10 +219,10 @@ func (t *BatchTxPool) batchSubmitTransactionsForSameAddress(
 		return err
 	}
 
-	script := replaceAddresses(batchRunTxScript, t.config.FlowNetworkID)
+	script := replaceAddresses(runTxScript, t.config.FlowNetworkID)
 	flowTx, err := t.buildTransaction(
-		latestBlock,
-		account,
+		ctx,
+		referenceBlockHeader,
 		script,
 		cadence.NewArray(hexEncodedTxs),
 		coinbaseAddress,
@@ -244,11 +245,6 @@ func (t *BatchTxPool) submitSingleTransaction(
 	ctx context.Context,
 	hexEncodedTx cadence.String,
 ) error {
-	latestBlock, account, err := t.fetchFlowLatestBlockAndCOA(ctx)
-	if err != nil {
-		return err
-	}
-
 	coinbaseAddress, err := cadence.NewString(t.config.Coinbase.Hex())
 	if err != nil {
 		return err
@@ -256,10 +252,10 @@ func (t *BatchTxPool) submitSingleTransaction(
 
 	script := replaceAddresses(runTxScript, t.config.FlowNetworkID)
 	flowTx, err := t.buildTransaction(
-		latestBlock,
-		account,
+		ctx,
+		t.getReferenceBlock(),
 		script,
-		hexEncodedTx,
+		cadence.NewArray([]cadence.Value{hexEncodedTx}),
 		coinbaseAddress,
 	)
 	if err != nil {

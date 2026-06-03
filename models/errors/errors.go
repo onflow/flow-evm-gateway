@@ -16,6 +16,7 @@ var (
 	ErrEndpointNotSupported = errors.New("endpoint is not supported")
 	ErrRateLimit            = errors.New("limit of requests per second reached")
 	ErrIndexOnlyMode        = errors.New("transaction submission not allowed in index-only mode")
+	ErrExceedLogQueryLimit  = errors.New("exceed max addresses or topics per search position")
 
 	// General errors
 
@@ -24,11 +25,13 @@ var (
 	ErrDisconnected        = NewRecoverableError(errors.New("disconnected"))
 	ErrMissingBlock        = errors.New("missing block")
 	ErrMissingTransactions = errors.New("missing transactions")
+	ErrInvalidParentHash   = errors.New("invalid parent block hash")
 
 	// Transaction errors
 
-	ErrFailedTransaction  = errors.New("failed transaction")
-	ErrInvalidTransaction = fmt.Errorf("%w: %w", ErrInvalid, ErrFailedTransaction)
+	ErrFailedTransaction    = errors.New("failed transaction")
+	ErrInvalidTransaction   = fmt.Errorf("%w: %w", ErrInvalid, ErrFailedTransaction)
+	ErrDuplicateTransaction = fmt.Errorf("%w: %s", ErrInvalid, "transaction already in pool")
 
 	// Storage errors
 
@@ -62,13 +65,6 @@ func NewTxGasPriceTooLowError(gasPrice *big.Int) error {
 	return NewInvalidTransactionError(fmt.Errorf(
 		"the minimum accepted gas price for transactions is: %d",
 		gasPrice,
-	))
-}
-
-func NewTxGasLimitTooHighError(maxGasLimit uint64) error {
-	return NewInvalidTransactionError(fmt.Errorf(
-		"tx gas limit exceeds the max value of %d: ",
-		maxGasLimit,
 	))
 }
 

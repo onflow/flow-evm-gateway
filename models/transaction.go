@@ -79,7 +79,7 @@ func (dc DirectCall) To() *common.Address {
 	}
 
 	var to *common.Address
-	if !dc.DirectCall.EmptyToField() {
+	if !dc.EmptyToField() {
 		ct := dc.DirectCall.To.ToCommon()
 		to = &ct
 	}
@@ -103,7 +103,7 @@ func (dc DirectCall) Type() uint8 {
 }
 
 func (dc DirectCall) Gas() uint64 {
-	return dc.DirectCall.GasLimit
+	return dc.GasLimit
 }
 
 func (dc DirectCall) GasFeeCap() *big.Int {
@@ -151,7 +151,7 @@ func (dc DirectCall) SetCodeAuthorizations() []gethTypes.SetCodeAuthorization {
 }
 
 func (dc DirectCall) MarshalBinary() ([]byte, error) {
-	return dc.DirectCall.Encode()
+	return dc.Encode()
 }
 
 var _ Transaction = &TransactionCall{}
@@ -225,10 +225,10 @@ func (tc TransactionCall) MarshalBinary() ([]byte, error) {
 	return append([]byte{tc.Type()}, encoded...), err
 }
 
-// decodeTransactionEvent takes a cadence event for transaction executed
+// DecodeTransactionEvent takes a cadence event for transaction executed
 // and decodes its payload into a Transaction interface and a Receipt.
 // The concrete type will be either a TransactionCall or a DirectCall.
-func decodeTransactionEvent(event cadence.Event) (
+func DecodeTransactionEvent(event cadence.Event) (
 	Transaction,
 	*Receipt,
 	*events.TransactionEventPayload,

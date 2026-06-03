@@ -578,7 +578,7 @@ func newTransaction(nonce uint64, txIndex uint16) (Transaction, *types.Result, f
 		TxType:                  tx.Type(),
 		GasConsumed:             1,
 		CumulativeGasUsed:       1,
-		GasRefund:               0,
+		MaxGasConsumed:          1,
 		DeployedContractAddress: &types.Address{0x5, 0x6, 0x7},
 		ReturnedData:            []byte{0x55},
 		Logs: []*gethTypes.Log{{

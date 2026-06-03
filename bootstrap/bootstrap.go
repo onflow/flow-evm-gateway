@@ -82,9 +82,15 @@ type Bootstrap struct {
 }
 
 func New(config config.Config) (*Bootstrap, error) {
-	logger := zerolog.New(config.LogWriter).
-		With().Timestamp().Str("version", api.Version).
-		Logger().Level(config.LogLevel)
+	var logger zerolog.Logger
+
+	if config.Logger != nil {
+		logger = *config.Logger
+	} else {
+		logger = zerolog.New(config.LogWriter).
+			With().Timestamp().Str("version", api.Version).
+			Logger().Level(config.LogLevel)
+	}
 
 	client, err := setupCrossSporkClient(config, logger)
 	if err != nil {
@@ -144,8 +150,8 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 
 	chainID := b.config.FlowNetworkID
 
-	// the event subscriber takes the first block to sync from the Access node, which is the block
-	// after the latest cadence block
+	// the event subscriber takes the first block to sync from the Access node,
+	// which is the block after the latest cadence block
 	nextCadenceHeight := latestCadenceHeight + 1
 	// Special case when using a local Emulator as Access Node. The Emulator
 	// always starts at block height 0, so if we try to subscribe at block
@@ -186,23 +192,14 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 		)
 	}
 
-	callTracerCollector, err := replayer.NewCallTracerCollector(
-		b.config.EVMNetworkID,
-		b.logger,
-	)
-	if err != nil {
-		return err
-	}
 	blocksProvider := replayer.NewBlocksProvider(
 		b.storages.Blocks,
 		chainID,
-		callTracerCollector.TxTracer(),
 	)
 	replayerConfig := replayer.Config{
-		ChainID:             chainID,
-		RootAddr:            evm.StorageAccountAddress(chainID),
-		CallTracerCollector: callTracerCollector,
-		ValidateResults:     true,
+		ChainID:         chainID,
+		RootAddr:        evm.StorageAccountAddress(chainID),
+		ValidateResults: true,
 	}
 
 	// initialize event ingestion engine
@@ -214,7 +211,6 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 		b.storages.Blocks,
 		b.storages.Receipts,
 		b.storages.Transactions,
-		b.storages.Traces,
 		b.publishers.Block,
 		b.publishers.Logs,
 		b.logger,
@@ -271,8 +267,9 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 
 	// create transaction pool
 	var txPool requester.TxPool
+	var err error
 	if b.config.TxBatchMode {
-		txPool = requester.NewBatchTxPool(
+		txPool, err = requester.NewBatchTxPool(
 			ctx,
 			b.client,
 			b.publishers.Transaction,
@@ -282,7 +279,8 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 			b.keystore,
 		)
 	} else {
-		txPool = requester.NewSingleTxPool(
+		txPool, err = requester.NewSingleTxPool(
+			ctx,
 			b.client,
 			b.publishers.Transaction,
 			b.logger,
@@ -290,6 +288,9 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 			b.collector,
 			b.keystore,
 		)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to create transaction pool: %w", err)
 	}
 
 	evm, err := requester.NewEVM(
@@ -453,7 +454,7 @@ func (b *Bootstrap) StopProfilerServer() {
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
 			b.logger.Warn().Msg("Profiler server graceful shutdown timed out")
-			b.profiler.Close()
+			_ = b.profiler.Close()
 		} else {
 			b.logger.Err(err).Msg("Profiler server graceful shutdown failed")
 		}
@@ -527,7 +528,11 @@ func setupCrossSporkClient(config config.Config, logger zerolog.Logger) (*reques
 	// if we provided access node previous spork hosts add them to the client
 	pastSporkClients := make([]access.Client, len(config.AccessNodePreviousSporkHosts))
 	for i, host := range config.AccessNodePreviousSporkHosts {
-		grpcClient, err := grpc.NewClient(host)
+		grpcClient, err := grpc.NewClient(host,
+			grpc.WithGRPCDialOptions(
+				grpcOpts.WithDefaultCallOptions(grpcOpts.MaxCallRecvMsgSize(DefaultMaxMessageSize)),
+			),
+		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create client connection for host: %s, with error: %w", host, err)
 		}
@@ -724,6 +729,8 @@ func (b *Bootstrap) Run(
 	// mark ready
 	ready()
 
+	go b.trackOperatorBalance(ctx)
+
 	return nil
 }
 
@@ -735,6 +742,27 @@ func (b *Bootstrap) Stop() {
 	b.StopAPIServer()
 	b.StopClient()
 	b.StopDB()
+}
+
+func (b *Bootstrap) trackOperatorBalance(ctx context.Context) {
+	ticker := time.NewTicker(1 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			accBalance, err := b.client.GetAccountBalanceAtLatestBlock(ctx, b.config.COAAddress)
+			if err != nil {
+				b.logger.Warn().Err(err).Msg(
+					"failed to collect operator's balance metric",
+				)
+				continue
+			}
+			b.collector.OperatorBalance(accBalance)
+		}
+	}
 }
 
 // Run will run complete bootstrap of the EVM gateway with all the engines.

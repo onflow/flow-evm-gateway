@@ -11,14 +11,14 @@ it('deploy contract and interact', async () => {
     assert.equal(deployed.receipt.status, conf.successStatus)
     assert.isString(deployed.receipt.transactionHash)
     assert.isString(contractAddress)
-    assert.equal(deployed.receipt.from, conf.eoa.address)
+    assert.equal(deployed.receipt.from, conf.eoa_address)
     assert.isUndefined(deployed.receipt.to)
 
     let rcp = await web3.eth.getTransactionReceipt(deployed.receipt.transactionHash)
     assert.equal(rcp.contractAddress, contractAddress)
     assert.equal(rcp.status, conf.successStatus)
     assert.isUndefined(rcp.to)
-    assert.equal(rcp.gasUsed, 1130512n)
+    assert.equal(rcp.gasUsed, 1200498n)
     assert.equal(rcp.gasUsed, rcp.cumulativeGasUsed)
 
     // check if latest block contains the deploy results
@@ -211,6 +211,41 @@ it('deploy contract and interact', async () => {
         )
     }
 
+    // check that gas estimation reports proper error code and data for empty reverts
+    try {
+        let callStoreButRevert = deployed.contract.methods.storeButRevert(150n).encodeABI()
+        result = await web3.eth.estimateGas({
+            from: conf.eoa.address,
+            to: contractAddress,
+            data: callStoreButRevert,
+            gas: 1_000_000,
+            gasPrice: conf.minGasPrice
+        })
+        assert.fail('expected eth_estimateGas to revert with empty revert data')
+    } catch (error) {
+        assert.equal(error.innerError.code, 3)
+        assert.equal(error.innerError.data, '0x')
+        assert.equal(error.innerError.message, 'execution reverted')
+    }
+
+    // check that contract call reports proper error code and data for empty reverts
+    try {
+        let callStoreButRevert = deployed.contract.methods.storeButRevert(150n).encodeABI()
+        result = await web3.eth.call({
+            from: conf.eoa.address,
+            to: contractAddress,
+            data: callStoreButRevert,
+            gas: 1_000_000,
+            gasPrice: conf.minGasPrice
+        })
+        assert.fail('expected eth_call to revert with empty revert data')
+    } catch (error) {
+        assert.equal(error.innerError.code, 3)
+        assert.equal(error.innerError.data, '0x')
+        assert.equal(error.innerError.message, 'execution reverted')
+    }
+
+    // check that block height is properly handled by gas estimation endpoint
     let gasEstimate = await web3.eth.estimateGas(
         {
             from: conf.eoa.address,
@@ -219,7 +254,7 @@ it('deploy contract and interact', async () => {
             gas: 1_000_000,
             gasPrice: 0
         },
-        '0x1'
+        '0x1' // give a block height at which the contract did not exist
     )
     assert.equal(gasEstimate, 22026n)
 
@@ -231,9 +266,9 @@ it('deploy contract and interact', async () => {
             gas: 1_000_000,
             gasPrice: 0
         },
-        'latest'
+        'latest' // give a block height at which the contract did exist
     )
-    assert.equal(gasEstimate, 25052n)
+    assert.equal(gasEstimate, 25050n)
 
     // check that `eth_call` can handle state overrides
     let stateOverrides = {
@@ -274,7 +309,7 @@ it('deploy contract and interact', async () => {
     assert.isDefined(response.body)
 
     result = response.body.result
-    assert.equal(result, '0x697f')
+    assert.equal(result, '0x6969')
 
     stateOverrides = {
         [contractAddress]: {
@@ -295,5 +330,5 @@ it('deploy contract and interact', async () => {
     // setting a storage slot from a zero-value, to a non-zero value has an
     // increase of about 20,000 gas. Which is quite different to `0x72c3`.
     result = response.body.result
-    assert.equal(result, '0xac6d')
+    assert.equal(result, '0xac56')
 })

@@ -1,6 +1,6 @@
 # BUILD BIN
 
-FROM golang:1.23 as app-builder
+FROM golang:1.25 as app-builder
 
 # Build the app binary in /app
 WORKDIR /app

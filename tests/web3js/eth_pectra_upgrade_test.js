@@ -57,6 +57,7 @@ it('should not perform contract writes with relay account before Pectra', async 
             address: eoa.address,
             authorizationList: [authorization], // 3. Pass the Authorization as a parameter.
             functionName: 'initialize',
+            gas: 63779n
         })
     } catch (e) {
         errMsg = e.details
@@ -127,8 +128,8 @@ it('should verify gas estimation and debug tracing functionality before Pectra',
         txTrace,
         {
             from: conf.eoa.address.toLowerCase(),
-            gas: '0xb50d',
-            gasUsed: '0x6147',
+            gas: '0xb565',
+            gasUsed: '0x619f',
             to: contractAddress.toLowerCase(),
             input: '0xc550f90f',
             output: '0x0000000000000000000000000000000000000000000000000000000000000007',
@@ -179,14 +180,14 @@ it('should verify gas estimation and debug tracing functionality before Pectra',
         {
             from: conf.eoa.address.toLowerCase(),
             gas: '0xcdd4',
-            gasUsed: '0xb38f',
+            gasUsed: '0xb3e7',
             to: contractAddress.toLowerCase(),
             input: '0xc550f90f',
             output: '0x0000000000000000000000000000000000000000000000000000000000000007',
             calls: [
                 {
                     from: contractAddress.toLowerCase(),
-                    gas: '0x6d44',
+                    gas: '0x6cee',
                     gasUsed: '0x524a',
                     to: '0x0000000000000000000000010000000000000001',
                     input: '0x53e87d66',

@@ -9,9 +9,7 @@ import (
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
 )
 
-const (
-	evmErrorRegex = `evm_error=(.*)\n`
-)
+const evmErrorRegex = `evm_error=(.*);`
 
 // TxPool is the minimum interface that needs to be implemented by
 // the various transaction pool strategies.

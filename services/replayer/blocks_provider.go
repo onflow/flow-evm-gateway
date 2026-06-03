@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	gethCommon "github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/eth/tracers"
 	"github.com/onflow/flow-evm-gateway/models"
+	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-go/fvm/evm/offchain/blocks"
 	evmTypes "github.com/onflow/flow-go/fvm/evm/types"
@@ -37,7 +37,7 @@ func (bs *blockSnapshot) BlockContext() (evmTypes.BlockContext, error) {
 			return blockHash
 		},
 		bs.block.PrevRandao,
-		bs.tracer,
+		nil,
 	)
 }
 
@@ -51,7 +51,6 @@ func (bs *blockSnapshot) BlockContext() (evmTypes.BlockContext, error) {
 type BlocksProvider struct {
 	blocks      storage.BlockIndexer
 	chainID     flowGo.ChainID
-	tracer      *tracers.Tracer
 	latestBlock *models.Block
 }
 
@@ -60,12 +59,10 @@ var _ evmTypes.BlockSnapshotProvider = (*BlocksProvider)(nil)
 func NewBlocksProvider(
 	blocks storage.BlockIndexer,
 	chainID flowGo.ChainID,
-	tracer *tracers.Tracer,
 ) *BlocksProvider {
 	return &BlocksProvider{
 		blocks:  blocks,
 		chainID: chainID,
-		tracer:  tracer,
 	}
 }
 
@@ -77,6 +74,24 @@ func (bp *BlocksProvider) OnBlockReceived(block *models.Block) error {
 			block.Height,
 			bp.latestBlock.Height,
 		)
+	}
+
+	// Verify that the new block's parent hash matches the latest block's hash
+	if bp.latestBlock != nil {
+		latestHash, err := bp.latestBlock.Hash()
+		if err != nil {
+			return fmt.Errorf("failed to compute hash of latest block %d: %w", bp.latestBlock.Height, err)
+		}
+		if block.ParentBlockHash != latestHash {
+			return fmt.Errorf(
+				"%w: block %d has parent hash %s, but parent block %d has hash %s",
+				errs.ErrInvalidParentHash,
+				block.Height,
+				block.ParentBlockHash.Hex(),
+				bp.latestBlock.Height,
+				latestHash.Hex(),
+			)
+		}
 	}
 
 	bp.latestBlock = block

@@ -90,9 +90,9 @@ func (txArgs TransactionArgs) Validate() error {
 
 	// Not a contract creation, validate as a plain transaction
 	if txArgs.To != nil {
-		to := common.NewMixedcaseAddress(*txArgs.To)
+		to := *txArgs.To
 
-		if bytes.Equal(to.Address().Bytes(), common.Address{}.Bytes()) {
+		if bytes.Equal(to.Bytes(), common.Address{}.Bytes()) {
 			return errs.NewInvalidTransactionError(errors.New("transaction recipient is the zero address"))
 		}
 	}
@@ -276,7 +276,7 @@ type StorageResult struct {
 type Transaction struct {
 	BlockHash           *common.Hash                 `json:"blockHash"`
 	BlockNumber         *hexutil.Big                 `json:"blockNumber"`
-	From                common.MixedcaseAddress      `json:"from"`
+	From                common.Address               `json:"from"`
 	Gas                 hexutil.Uint64               `json:"gas"`
 	GasPrice            *hexutil.Big                 `json:"gasPrice"`
 	GasFeeCap           *hexutil.Big                 `json:"maxFeePerGas,omitempty"`
@@ -285,7 +285,7 @@ type Transaction struct {
 	Hash                common.Hash                  `json:"hash"`
 	Input               hexutil.Bytes                `json:"input"`
 	Nonce               hexutil.Uint64               `json:"nonce"`
-	To                  *common.MixedcaseAddress     `json:"to"`
+	To                  *common.Address              `json:"to"`
 	TransactionIndex    *hexutil.Uint64              `json:"transactionIndex"`
 	Value               *hexutil.Big                 `json:"value"`
 	Type                hexutil.Uint64               `json:"type"`
@@ -327,20 +327,13 @@ func NewTransaction(
 	tx models.Transaction,
 	networkID *big.Int,
 ) (*Transaction, error) {
-	f, err := tx.From()
+	from, err := tx.From()
 	if err != nil {
 		return nil, fmt.Errorf(
 			"failed to get from address for tx: %s, with: %w",
 			tx.Hash(),
 			err,
 		)
-	}
-	from := common.NewMixedcaseAddress(f)
-
-	var to *common.MixedcaseAddress
-	if t := tx.To(); t != nil {
-		mixedCaseAddress := common.NewMixedcaseAddress(*t)
-		to = &mixedCaseAddress
 	}
 
 	v, r, s := tx.RawSignatureValues()
@@ -354,7 +347,7 @@ func NewTransaction(
 		Hash:     tx.Hash(),
 		Input:    tx.Data(),
 		Nonce:    hexutil.Uint64(tx.Nonce()),
-		To:       to,
+		To:       tx.To(),
 		Value:    (*hexutil.Big)(tx.Value()),
 		V:        (*hexutil.Big)(v),
 		R:        (*hexutil.Big)(r),
@@ -433,14 +426,15 @@ type SignTransactionResult struct {
 // of a message call.
 // Note, state and stateDiff can't be specified at the same time. If state is
 // set, message execution will only use the data in the given state. Otherwise
-// if statDiff is set, all diff will be applied first and then execute the call
+// if stateDiff is set, all diff will be applied first and then execute the call
 // message.
 type OverrideAccount struct {
-	Nonce     *hexutil.Uint64              `json:"nonce"`
-	Code      *hexutil.Bytes               `json:"code"`
-	Balance   **hexutil.Big                `json:"balance"`
-	State     *map[common.Hash]common.Hash `json:"state"`
-	StateDiff *map[common.Hash]common.Hash `json:"stateDiff"`
+	Nonce            *hexutil.Uint64             `json:"nonce"`
+	Code             *hexutil.Bytes              `json:"code"`
+	Balance          *hexutil.Big                `json:"balance"`
+	State            map[common.Hash]common.Hash `json:"state"`
+	StateDiff        map[common.Hash]common.Hash `json:"stateDiff"`
+	MovePrecompileTo *common.Address             `json:"movePrecompileToAddress"`
 }
 
 // StateOverride is the collection of overridden accounts.
@@ -448,14 +442,16 @@ type StateOverride map[common.Address]OverrideAccount
 
 // BlockOverrides is a set of header fields to override.
 type BlockOverrides struct {
-	Number      *hexutil.Big
-	Difficulty  *hexutil.Big
-	Time        *hexutil.Uint64
-	GasLimit    *hexutil.Uint64
-	Coinbase    *common.Address
-	Random      *common.Hash
-	BaseFee     *hexutil.Big
-	BlobBaseFee *hexutil.Big
+	Number        *hexutil.Big
+	Difficulty    *hexutil.Big // No-op if we're simulating post-merge calls.
+	Time          *hexutil.Uint64
+	GasLimit      *hexutil.Uint64
+	FeeRecipient  *common.Address
+	PrevRandao    *common.Hash
+	BaseFeePerGas *hexutil.Big
+	BlobBaseFee   *hexutil.Big
+	BeaconRoot    *common.Hash
+	Withdrawals   *types.Withdrawals
 }
 
 type Block struct {
@@ -524,7 +520,7 @@ func MarshalReceipt(
 		"blockNumber":       hexutil.Uint64(receipt.BlockNumber.Uint64()),
 		"transactionHash":   txHash,
 		"transactionIndex":  hexutil.Uint64(receipt.TransactionIndex),
-		"from":              from.Hex(),
+		"from":              from,
 		"to":                nil,
 		"gasUsed":           hexutil.Uint64(receipt.GasUsed),
 		"cumulativeGasUsed": hexutil.Uint64(receipt.CumulativeGasUsed),
@@ -548,7 +544,7 @@ func MarshalReceipt(
 	}
 
 	if tx.To() != nil {
-		fields["to"] = tx.To().Hex()
+		fields["to"] = tx.To()
 	}
 
 	fields["status"] = hexutil.Uint(receipt.Status)
@@ -564,7 +560,7 @@ func MarshalReceipt(
 
 	// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
 	if receipt.ContractAddress != (common.Address{}) {
-		fields["contractAddress"] = receipt.ContractAddress.Hex()
+		fields["contractAddress"] = receipt.ContractAddress
 	}
 
 	if len(receipt.RevertReason) > 0 {

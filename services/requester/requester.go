@@ -35,16 +35,12 @@ var (
 	//go:embed cadence/run.cdc
 	runTxScript []byte
 
-	//go:embed cadence/batch_run.cdc
-	batchRunTxScript []byte
-
 	//go:embed cadence/get_latest_evm_height.cdc
 	getLatestEVMHeight []byte
 )
 
 const minFlowBalance = 2
 const blockGasLimit = 120_000_000
-const txMaxGasLimit = 50_000_000
 
 // estimateGasErrorRatio is the amount of overestimation eth_estimateGas
 // is allowed to produce in order to speed up calculations.
@@ -78,6 +74,7 @@ type Requester interface {
 		from common.Address,
 		height uint64,
 		stateOverrides *ethTypes.StateOverride,
+		blockOverrides *ethTypes.BlockOverrides,
 	) (uint64, error)
 
 	// GetNonce gets nonce from the network at the given EVM block height.
@@ -121,7 +118,7 @@ func NewEVM(
 
 	if !config.IndexOnly {
 		address := config.COAAddress
-		acc, err := client.GetAccount(context.Background(), address)
+		accBalance, err := client.GetAccountBalanceAtLatestBlock(context.Background(), address)
 		if err != nil {
 			return nil, fmt.Errorf(
 				"could not fetch the configured COA account: %s make sure it exists: %w",
@@ -130,13 +127,13 @@ func NewEVM(
 			)
 		}
 		// initialize the operator balance metric since it is only updated when sending a tx
-		collector.OperatorBalance(acc)
+		collector.OperatorBalance(accBalance)
 
-		if acc.Balance < minFlowBalance {
+		if accBalance < minFlowBalance {
 			return nil, fmt.Errorf(
 				"COA account must be funded with at least %d Flow, but has balance of: %d",
 				minFlowBalance,
-				acc.Balance,
+				accBalance,
 			)
 		}
 	}
@@ -167,10 +164,6 @@ func (e *EVM) SendRawTransaction(ctx context.Context, data []byte) (common.Hash,
 	tx := &types.Transaction{}
 	if err := tx.UnmarshalBinary(data); err != nil {
 		return common.Hash{}, err
-	}
-
-	if tx.Gas() > txMaxGasLimit {
-		return common.Hash{}, errs.NewTxGasLimitTooHighError(txMaxGasLimit)
 	}
 
 	head := &types.Header{
@@ -320,6 +313,7 @@ func (e *EVM) EstimateGas(
 	from common.Address,
 	height uint64,
 	stateOverrides *ethTypes.StateOverride,
+	blockOverrides *ethTypes.BlockOverrides,
 ) (uint64, error) {
 	iterations := 0
 
@@ -327,7 +321,7 @@ func (e *EVM) EstimateGas(
 		gas := hexutil.Uint64(gasLimit)
 		txArgs.Gas = &gas
 		tx := txArgs.ToTransaction(types.LegacyTxType, blockGasLimit)
-		result, err := e.dryRunTx(tx, from, height, stateOverrides, nil)
+		result, err := e.dryRunTx(tx, from, height, stateOverrides, blockOverrides)
 		iterations += 1
 		return result, err
 	}
@@ -344,6 +338,28 @@ func (e *EVM) EstimateGas(
 	passingGasLimit = blockGasLimit
 	if txArgs.Gas != nil && (uint64(*txArgs.Gas) >= gethParams.TxGas) {
 		passingGasLimit = uint64(*txArgs.Gas)
+	}
+
+	if passingGasLimit > gethParams.MaxTxGas {
+		// Cap the maximum gas allowance according to EIP-7825 if the estimation targets Osaka
+		targetBlock, err := e.blocks.GetByHeight(height)
+		if err != nil {
+			return 0, err
+		}
+		blockNumber, blockTime := new(big.Int).SetUint64(targetBlock.Height), targetBlock.Timestamp
+
+		if blockOverrides != nil {
+			if blockOverrides.Number != nil {
+				blockNumber = blockOverrides.Number.ToInt()
+			}
+			if blockOverrides.Time != nil {
+				blockTime = uint64(*blockOverrides.Time)
+			}
+		}
+		chainConfig := emulator.MakeChainConfig(e.config.EVMNetworkID)
+		if chainConfig.IsOsaka(blockNumber, blockTime) {
+			passingGasLimit = gethParams.MaxTxGas
+		}
 	}
 
 	// We first execute the transaction at the highest allowable gas limit,
@@ -374,9 +390,9 @@ func (e *EVM) EstimateGas(
 	failingGasLimit = result.GasConsumed - 1
 
 	// There's a fairly high chance for the transaction to execute successfully
-	// with gasLimit set to the first execution's GasConsumed + GasRefund.
+	// with gasLimit set to the first execution's MaxGasConsumed + CallStipend.
 	// Explicitly check that gas amount and use as a limit for the binary search.
-	optimisticGasLimit := (result.GasConsumed + result.GasRefund + gethParams.CallStipend) * 64 / 63
+	optimisticGasLimit := (result.MaxGasConsumed + gethParams.CallStipend) * 64 / 63
 	if optimisticGasLimit < passingGasLimit {
 		result, err := dryRun(optimisticGasLimit)
 		if err != nil {
@@ -536,18 +552,18 @@ func (e *EVM) dryRunTx(
 			}
 			// Override account balance.
 			if account.Balance != nil {
-				opts = append(opts, query.WithStateOverrideBalance(addr, (*big.Int)(*account.Balance)))
+				opts = append(opts, query.WithStateOverrideBalance(addr, (*big.Int)(account.Balance)))
 			}
 			if account.State != nil && account.StateDiff != nil {
 				return nil, fmt.Errorf("account %s has both 'state' and 'stateDiff'", addr.Hex())
 			}
 			// Replace entire state if caller requires.
 			if account.State != nil {
-				opts = append(opts, query.WithStateOverrideState(addr, *account.State))
+				opts = append(opts, query.WithStateOverrideState(addr, account.State))
 			}
 			// Apply state diff into specified accounts.
 			if account.StateDiff != nil {
-				opts = append(opts, query.WithStateOverrideStateDiff(addr, *account.StateDiff))
+				opts = append(opts, query.WithStateOverrideStateDiff(addr, account.StateDiff))
 			}
 		}
 	}
@@ -555,6 +571,7 @@ func (e *EVM) dryRunTx(
 		from,
 		to,
 		tx.Data(),
+		tx.SetCodeAuthorizations(),
 		tx.Value(),
 		tx.Gas(),
 		opts...,

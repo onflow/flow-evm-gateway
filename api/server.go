@@ -189,7 +189,9 @@ func (h *Server) Start() error {
 		CheckTimeouts(h.logger, &h.timeouts)
 		h.server.ReadTimeout = h.timeouts.ReadTimeout
 		h.server.ReadHeaderTimeout = h.timeouts.ReadHeaderTimeout
-		h.server.WriteTimeout = h.timeouts.WriteTimeout
+		// WriteTimeout is the maximum duration before timing out
+		// writes of the response, a.k.a JSON-RPC request timeout.
+		h.server.WriteTimeout = h.config.RpcRequestTimeout
 		h.server.IdleTimeout = h.timeouts.IdleTimeout
 	}
 
@@ -267,7 +269,7 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		r.Body = io.NopCloser(bytes.NewBuffer(b))
-		r.Body.Close()
+		_ = r.Body.Close()
 	}
 
 	// additional response handling
@@ -324,10 +326,10 @@ func (h *Server) Stop() {
 	err := h.server.Shutdown(ctx)
 	if err != nil && err == ctx.Err() {
 		h.logger.Warn().Msg("HTTP server graceful shutdown timed out")
-		h.server.Close()
+		_ = h.server.Close()
 	}
 
-	h.listener.Close()
+	_ = h.listener.Close()
 	h.logger.Info().Msgf(
 		"HTTP server stopped, endpoint: %s", h.listener.Addr(),
 	)
@@ -433,7 +435,10 @@ type responseHandler struct {
 	metrics     metrics.Collector
 }
 
-const errCodePanic = -32603
+const (
+	errCodePanic   = -32603
+	errCodeTimeout = -32002
+)
 
 type jsonError struct {
 	Code    int    `json:"code"`
@@ -466,6 +471,11 @@ func (w *responseHandler) Write(data []byte) (int, error) {
 	// handle possible panics inside endpoints
 	if message.Error != nil && message.Error.Code == errCodePanic {
 		w.metrics.ServerPanicked(message.Error.Message)
+	}
+
+	// handle possible request timeouts
+	if message.Error != nil && message.Error.Code == errCodeTimeout {
+		w.metrics.ApiErrorOccurred()
 	}
 
 	// It's an error response and requires special treatment.

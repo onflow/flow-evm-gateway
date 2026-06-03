@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/big"
 
@@ -444,25 +445,25 @@ func (b *BlockChainAPI) GetBlockReceipts(
 		return handleError[[]map[string]any](err, l, b.collector)
 	}
 
-	receipts := make([]map[string]any, len(block.TransactionHashes))
-	for i, hash := range block.TransactionHashes {
-		tx, err := b.transactions.Get(hash)
+	receipts, err := b.receipts.GetByBlockHeight(block.Height)
+	if err != nil {
+		return handleError[[]map[string]any](err, l, b.collector)
+	}
+
+	marshaledReceipts := make([]map[string]any, len(receipts))
+	for i, receipt := range receipts {
+		tx, err := b.transactions.Get(receipt.TxHash)
 		if err != nil {
 			return handleError[[]map[string]any](err, l, b.collector)
 		}
 
-		receipt, err := b.receipts.GetByTransactionID(hash)
-		if err != nil {
-			return handleError[[]map[string]any](err, l, b.collector)
-		}
-
-		receipts[i], err = ethTypes.MarshalReceipt(receipt, tx)
+		marshaledReceipts[i], err = ethTypes.MarshalReceipt(receipt, tx)
 		if err != nil {
 			return handleError[[]map[string]any](err, l, b.collector)
 		}
 	}
 
-	return receipts, nil
+	return marshaledReceipts, nil
 }
 
 // GetBlockTransactionCountByHash returns the number of transactions
@@ -529,23 +530,40 @@ func (b *BlockChainAPI) Call(
 	stateOverrides *ethTypes.StateOverride,
 	blockOverrides *ethTypes.BlockOverrides,
 ) (hexutil.Bytes, error) {
+	// Default to "latest" block tag
+	if blockNumberOrHash == nil {
+		blockNumberOrHash = &latestBlockNumberOrHash
+	}
+
+	stateOverridesArgs, err := json.Marshal(stateOverrides)
+	if err != nil {
+		return handleError[hexutil.Bytes](err, b.logger, b.collector)
+	}
+
+	blockOverridesArgs, err := json.Marshal(blockOverrides)
+	if err != nil {
+		return handleError[hexutil.Bytes](err, b.logger, b.collector)
+	}
+
+	txArgs, err := json.Marshal(args)
+	if err != nil {
+		return handleError[hexutil.Bytes](err, b.logger, b.collector)
+	}
+
 	l := b.logger.With().
 		Str("endpoint", EthCall).
-		Str("args", fmt.Sprintf("%v", args)).
+		RawJSON("args", txArgs).
+		Str("blockTag", fmt.Sprintf("%v", blockNumberOrHash)).
+		RawJSON("stateOverrides", stateOverridesArgs).
+		RawJSON("blockOverrides", blockOverridesArgs).
 		Logger()
 
 	if err := b.rateLimiter.Apply(ctx, EthCall); err != nil {
 		return nil, err
 	}
 
-	err := args.Validate()
-	if err != nil {
+	if err := args.Validate(); err != nil {
 		return handleError[hexutil.Bytes](err, l, b.collector)
-	}
-
-	// Default to "latest" block tag
-	if blockNumberOrHash == nil {
-		blockNumberOrHash = &latestBlockNumberOrHash
 	}
 
 	height, err := resolveBlockTag(blockNumberOrHash, b.blocks, b.logger)
@@ -693,18 +711,41 @@ func (b *BlockChainAPI) EstimateGas(
 	args ethTypes.TransactionArgs,
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 	stateOverrides *ethTypes.StateOverride,
+	blockOverrides *ethTypes.BlockOverrides,
 ) (hexutil.Uint64, error) {
+	// Default to "latest" block tag
+	if blockNumberOrHash == nil {
+		blockNumberOrHash = &latestBlockNumberOrHash
+	}
+
+	stateOverridesArgs, err := json.Marshal(stateOverrides)
+	if err != nil {
+		return handleError[hexutil.Uint64](err, b.logger, b.collector)
+	}
+
+	blockOverridesArgs, err := json.Marshal(blockOverrides)
+	if err != nil {
+		return handleError[hexutil.Uint64](err, b.logger, b.collector)
+	}
+
+	txArgs, err := json.Marshal(args)
+	if err != nil {
+		return handleError[hexutil.Uint64](err, b.logger, b.collector)
+	}
+
 	l := b.logger.With().
 		Str("endpoint", EthEstimateGas).
-		Str("args", fmt.Sprintf("%v", args)).
+		RawJSON("args", txArgs).
+		Str("blockTag", fmt.Sprintf("%v", blockNumberOrHash)).
+		RawJSON("stateOverrides", stateOverridesArgs).
+		RawJSON("blockOverrides", blockOverridesArgs).
 		Logger()
 
 	if err := b.rateLimiter.Apply(ctx, EthEstimateGas); err != nil {
 		return 0, err
 	}
 
-	err := args.Validate()
-	if err != nil {
+	if err := args.Validate(); err != nil {
 		return handleError[hexutil.Uint64](err, l, b.collector)
 	}
 
@@ -714,16 +755,18 @@ func (b *BlockChainAPI) EstimateGas(
 		from = *args.From
 	}
 
-	if blockNumberOrHash == nil {
-		blockNumberOrHash = &latestBlockNumberOrHash
-	}
-
 	height, err := resolveBlockTag(blockNumberOrHash, b.blocks, b.logger)
 	if err != nil {
 		return handleError[hexutil.Uint64](err, l, b.collector)
 	}
 
-	estimatedGas, err := b.evm.EstimateGas(args, from, height, stateOverrides)
+	estimatedGas, err := b.evm.EstimateGas(
+		args,
+		from,
+		height,
+		stateOverrides,
+		blockOverrides,
+	)
 	if err != nil {
 		return handleError[hexutil.Uint64](err, l, b.collector)
 	}
@@ -883,22 +926,21 @@ func (b *BlockChainAPI) GetStorageAt(
 
 func (b *BlockChainAPI) fetchBlockTransactions(
 	block *models.Block,
+	receipts []*models.Receipt,
 ) ([]*ethTypes.Transaction, error) {
-	transactions := make([]*ethTypes.Transaction, 0)
-	for _, txHash := range block.TransactionHashes {
-		transaction, err := b.prepareTransactionResponse(txHash)
+	transactions := make([]*ethTypes.Transaction, len(receipts))
+	for i, receipt := range receipts {
+		tx, err := b.transactions.Get(receipt.TxHash)
 		if err != nil {
 			return nil, err
 		}
-		if transaction == nil {
-			b.logger.Error().
-				Str("tx-hash", txHash.String()).
-				Uint64("evm-height", block.Height).
-				Msg("not found a transaction the block references")
 
-			continue
+		transaction, err := ethTypes.NewTransactionResult(tx, *receipt, b.config.EVMNetworkID)
+		if err != nil {
+			return nil, err
 		}
-		transactions = append(transactions, transaction)
+
+		transactions[i] = transaction
 	}
 
 	return transactions, nil
@@ -953,26 +995,28 @@ func (b *BlockChainAPI) prepareBlockResponse(
 	}
 	blockSize := rlp.ListSize(uint64(len(blockBytes)))
 
-	transactions, err := b.fetchBlockTransactions(block)
+	receipts, err := b.receipts.GetByBlockHeight(block.Height)
+	if err != nil {
+		return nil, err
+	}
+
+	transactions, err := b.fetchBlockTransactions(block, receipts)
 	if err != nil {
 		return nil, err
 	}
 
 	if len(transactions) > 0 {
 		totalGasUsed := hexutil.Uint64(0)
-		receipts := types.Receipts{}
-		for _, tx := range transactions {
-			txReceipt, err := b.receipts.GetByTransactionID(tx.Hash)
-			if err != nil {
-				return nil, err
-			}
+		gethReceipts := types.Receipts{}
+		for i, tx := range transactions {
+			txReceipt := receipts[i]
 			totalGasUsed += hexutil.Uint64(txReceipt.GasUsed)
-			receipts = append(receipts, txReceipt.ToGethReceipt())
+			gethReceipts = append(gethReceipts, txReceipt.ToGethReceipt())
 			blockSize += tx.Size()
 		}
 		blockResponse.GasUsed = totalGasUsed
 		// TODO(m-Peter): Consider if its worthwhile to move this in storage.
-		blockResponse.LogsBloom = types.MergeBloom(receipts).Bytes()
+		blockResponse.LogsBloom = types.MergeBloom(gethReceipts).Bytes()
 	}
 	blockResponse.Size = hexutil.Uint64(rlp.ListSize(blockSize))
 

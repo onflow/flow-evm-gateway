@@ -75,7 +75,7 @@ describe('eth_newFilter', async () => {
         let response = await helpers.callRPCMethod('eth_newFilter', [blockRangeFilter])
         assert.equal(response.status, 200)
         assert.isDefined(response.body.error)
-        assert.equal(response.body.error.message, 'invalid argument 0: exceed max addresses')
+        assert.equal(response.body.error.message, 'exceed max addresses or topics per search position')
 
         let blockHashFilter = {
             blockHash: latestBlock.hash,
@@ -86,7 +86,7 @@ describe('eth_newFilter', async () => {
         response = await helpers.callRPCMethod('eth_newFilter', [blockHashFilter])
         assert.equal(response.status, 200)
         assert.isDefined(response.body.error)
-        assert.equal(response.body.error.message, 'invalid argument 0: exceed max addresses')
+        assert.equal(response.body.error.message, 'exceed max addresses or topics per search position')
     })
 
     it('should validate max number of sub-topics', async () => {
@@ -473,7 +473,7 @@ describe('eth_getFilterChanges', async () => {
         assert.equal(txHashes[0], res.receipt.transactionHash)
         assert.equal(
             txHashes[1],
-            '0xb1b9deb629374d7c6df6becb7011282c8b733922b664a74ea9cd5bcb333d193e'
+            '0x336083e875f62e7c78ecdff3ffa3ab0eba1774eb08a75995b819ff7be9d61429'
         )
     })
 
@@ -503,13 +503,13 @@ describe('eth_getFilterChanges', async () => {
         let expectedTx = {
             blockHash: res.receipt.blockHash,
             blockNumber: '0xd',
-            from: '0xFACF71692421039876a5BB4F10EF7A439D8ef61E',
+            from: '0xfacf71692421039876a5bb4f10ef7a439d8ef61e',
             gas: '0xf4240',
             gasPrice: '0x96',
             hash: '0x0bb3c04a2bdca6c882b1d52fef8b4734d80f977aab4c023efa8f80d3115c3aae',
             input: '0x9967062d000000000000000000000000000000000000000000000000000000000000000f0000000000000000000000000000000000000000000000000000000000000014',
             nonce: '0x9',
-            to: '0x99A64c993965f8d69F985b5171bC20065Cc32fAB',
+            to: '0x99a64c993965f8d69f985b5171bc20065cc32fab',
             transactionIndex: '0x0',
             value: '0x0',
             type: '0x0',
@@ -526,12 +526,12 @@ describe('eth_getFilterChanges', async () => {
             from: '0x0000000000000000000000030000000000000000',
             gas: '0x5b04',
             gasPrice: '0x1',
-            hash: '0x71201dbf66271cedb6e87a5364b2cb84f6170e282f2b3f676196687bdf4babe0',
+            hash: '0xc5ee4679ca0cce3b964a60e8d789ca2c97236c8d86dc15a3f4fd5e402a6089da',
             input: '0x',
             nonce: '0x9',
-            to: '0x658Bdf435d810C91414eC09147DAA6DB62406379',
+            to: '0x658bdf435d810c91414ec09147daa6db62406379',
             transactionIndex: '0x1',
-            value: '0x388fb0',
+            value: '0x388e84',
             type: '0x0',
             v: '0xff',
             r: '0x30000000000000000',

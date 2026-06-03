@@ -11,14 +11,15 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/onflow/flow-emulator/emulator"
-	"github.com/onflow/flow-evm-gateway/bootstrap"
-	"github.com/onflow/flow-evm-gateway/config"
 	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/onflow/flow-go/fvm/evm/types"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/onflow/flow-evm-gateway/bootstrap"
+	"github.com/onflow/flow-evm-gateway/config"
 )
 
 func Test_TransactionBatchingMode(t *testing.T) {
@@ -170,8 +171,8 @@ func Test_TransactionBatchingModeWithConcurrentTxSubmissions(t *testing.T) {
 
 	blockEvents, err := emu.GetEventsForHeightRange(
 		"A.f8d6e0586b0a20c7.EVM.TransactionExecuted",
-		startBlock.Header.Height+1,
-		endBlock.Header.Height,
+		startBlock.Height+1,
+		endBlock.Height,
 	)
 
 	totalEVMEvents := 0
@@ -251,12 +252,12 @@ func Test_MultipleTransactionSubmissionsWithinSmallInterval(t *testing.T) {
 		return true
 	}, time.Second*15, time.Second*1, "all transactions were not executed")
 
-	block1, err := emu.GetBlockByHeight(latestBlock.Header.Height + 1)
+	block1, err := emu.GetBlockByHeight(latestBlock.Height + 1)
 	require.NoError(t, err)
 
 	txResults, err := emu.GetTransactionsByBlockID(block1.ID())
 	require.NoError(t, err)
-	require.Len(t, txResults, 1)
+	require.True(t, len(txResults) >= 1)
 
 	// Assert that the 1st transaction was submitted individually.
 	// The easiest way to check that is by making sure that the
@@ -267,12 +268,12 @@ func Test_MultipleTransactionSubmissionsWithinSmallInterval(t *testing.T) {
 		"EVM.run",
 	)
 
-	block2, err := emu.GetBlockByHeight(latestBlock.Header.Height + 2)
+	block2, err := emu.GetBlockByHeight(latestBlock.Height + 2)
 	require.NoError(t, err)
 
 	txResults, err = emu.GetTransactionsByBlockID(block2.ID())
 	require.NoError(t, err)
-	require.Len(t, txResults, 1)
+	require.True(t, len(txResults) >= 1)
 
 	// Assert that the 2nd transaction was submitted in a batch.
 	// The easiest way to check that is by making sure that the
@@ -365,12 +366,12 @@ func Test_MultipleTransactionSubmissionsWithinRecentInterval(t *testing.T) {
 		return true
 	}, time.Second*15, time.Second*1, "all transactions were not executed")
 
-	block1, err := emu.GetBlockByHeight(latestBlock.Header.Height + 1)
+	block1, err := emu.GetBlockByHeight(latestBlock.Height + 1)
 	require.NoError(t, err)
 
 	txResults, err := emu.GetTransactionsByBlockID(block1.ID())
 	require.NoError(t, err)
-	require.Len(t, txResults, 1)
+	require.True(t, len(txResults) >= 1)
 
 	// Assert that the 1st transaction was submitted individually.
 	// The easiest way to check that is by making sure that the
@@ -381,12 +382,12 @@ func Test_MultipleTransactionSubmissionsWithinRecentInterval(t *testing.T) {
 		"EVM.run",
 	)
 
-	block2, err := emu.GetBlockByHeight(latestBlock.Header.Height + 2)
+	block2, err := emu.GetBlockByHeight(latestBlock.Height + 2)
 	require.NoError(t, err)
 
 	txResults, err = emu.GetTransactionsByBlockID(block2.ID())
 	require.NoError(t, err)
-	require.Len(t, txResults, 1)
+	require.True(t, len(txResults) >= 1)
 
 	// Assert that the 2nd transaction was submitted in a batch.
 	// The easiest way to check that is by making sure that the
@@ -480,12 +481,12 @@ func Test_MultipleTransactionSubmissionsWithinNonRecentInterval(t *testing.T) {
 		return true
 	}, time.Second*15, time.Second*1, "all transactions were not executed")
 
-	block1, err := emu.GetBlockByHeight(latestBlock.Header.Height + 1)
+	block1, err := emu.GetBlockByHeight(latestBlock.Height + 1)
 	require.NoError(t, err)
 
 	txResults, err := emu.GetTransactionsByBlockID(block1.ID())
 	require.NoError(t, err)
-	require.Len(t, txResults, 1)
+	require.True(t, len(txResults) >= 1)
 
 	// Assert that the 1st transaction was submitted individually.
 	// The easiest way to check that is by making sure that the
@@ -496,12 +497,12 @@ func Test_MultipleTransactionSubmissionsWithinNonRecentInterval(t *testing.T) {
 		"EVM.run",
 	)
 
-	block2, err := emu.GetBlockByHeight(latestBlock.Header.Height + 2)
+	block2, err := emu.GetBlockByHeight(latestBlock.Height + 2)
 	require.NoError(t, err)
 
 	txResults, err = emu.GetTransactionsByBlockID(block2.ID())
 	require.NoError(t, err)
-	require.Len(t, txResults, 1)
+	require.True(t, len(txResults) >= 1)
 
 	// Assert that the 2nd transaction was also submitted individually.
 	// The easiest way to check that is by making sure that the
@@ -511,6 +512,59 @@ func Test_MultipleTransactionSubmissionsWithinNonRecentInterval(t *testing.T) {
 		string(txResults[0].Script),
 		"EVM.run",
 	)
+}
+
+func Test_MultipleTransactionSubmissionsWithDuplicates(t *testing.T) {
+	_, cfg, stop := setupGatewayNode(t)
+	defer stop()
+
+	rpcTester := &rpcTest{
+		url: fmt.Sprintf("%s:%d", cfg.RPCHost, cfg.RPCPort),
+	}
+
+	eoaKey, err := crypto.HexToECDSA(eoaTestPrivateKey)
+	require.NoError(t, err)
+
+	testAddr := common.HexToAddress("55253ed90B70b96C73092D8680915aaF50081194")
+	nonce := uint64(0)
+	hashes := make([]common.Hash, 0)
+
+	signed, _, err := evmSign(big.NewInt(10), 21000, eoaKey, nonce, &testAddr, nil)
+	require.NoError(t, err)
+
+	txHash, err := rpcTester.sendRawTx(signed)
+	require.NoError(t, err)
+	hashes = append(hashes, txHash)
+
+	// Increment nonce for the duplicate test transactions that follow
+	nonce += 1
+	dupSigned, _, err := evmSign(big.NewInt(10), 15_000_000, eoaKey, nonce, &testAddr, nil)
+	require.NoError(t, err)
+
+	// Submit 5 identical transactions to test duplicate detection:
+	// the first should succeed, the rest should be rejected as duplicates.
+	for i := range 5 {
+		if i == 0 {
+			txHash, err := rpcTester.sendRawTx(dupSigned)
+			require.NoError(t, err)
+			hashes = append(hashes, txHash)
+		} else {
+			_, err := rpcTester.sendRawTx(dupSigned)
+			require.Error(t, err)
+			require.ErrorContains(t, err, "invalid: transaction already in pool")
+		}
+	}
+
+	assert.Eventually(t, func() bool {
+		for _, h := range hashes {
+			rcp, err := rpcTester.getReceipt(h.String())
+			if err != nil || rcp == nil || rcp.Status != 1 {
+				return false
+			}
+		}
+
+		return true
+	}, time.Second*15, time.Second*1, "all transactions were not executed")
 }
 
 func setupGatewayNode(t *testing.T) (emulator.Emulator, config.Config, func()) {

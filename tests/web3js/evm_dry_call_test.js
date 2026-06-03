@@ -14,12 +14,12 @@ it('should not contain transactions from EVM.dryCall & COA.dryCall', async () =>
     // First transaction is the Storage contract deployment
     let tx = await web3.eth.getTransactionFromBlock(latestHeight, 0)
     let receipt = await web3.eth.getTransactionReceipt(tx.hash)
-    assert.equal(receipt.contractAddress, '0x99A64c993965f8d69F985b5171bC20065Cc32fAB')
+    assert.equal(receipt.contractAddress, '0x99a64c993965f8d69f985b5171bc20065cc32fab')
 
     // Second transaction is the Storage.storeWithLog(42) contract call
     tx = await web3.eth.getTransactionFromBlock(latestHeight, 1)
     receipt = await web3.eth.getTransactionReceipt(tx.hash)
-    assert.equal(receipt.to, '0x99A64c993965f8d69F985b5171bC20065Cc32fAB')
+    assert.equal(receipt.to, '0x99a64c993965f8d69f985b5171bc20065cc32fab')
     assert.equal(
         receipt.logs[0].topics[2],
         '0x000000000000000000000000000000000000000000000000000000000000002a'

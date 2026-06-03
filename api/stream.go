@@ -14,6 +14,7 @@ import (
 	"github.com/onflow/flow-evm-gateway/config"
 	ethTypes "github.com/onflow/flow-evm-gateway/eth/types"
 	"github.com/onflow/flow-evm-gateway/models"
+	errs "github.com/onflow/flow-evm-gateway/models/errors"
 	"github.com/onflow/flow-evm-gateway/services/logs"
 	"github.com/onflow/flow-evm-gateway/storage"
 )
@@ -92,6 +93,10 @@ func (s *StreamAPI) NewPendingTransactions(ctx context.Context, fullTx *bool) (*
 
 // Logs creates a subscription that fires for all new log that match the given filter criteria.
 func (s *StreamAPI) Logs(ctx context.Context, criteria filters.FilterCriteria) (*rpc.Subscription, error) {
+	if !logs.ValidCriteriaLimits(criteria) {
+		return nil, errs.ErrExceedLogQueryLimit
+	}
+
 	return newSubscription(
 		ctx,
 		s.logger,
@@ -139,21 +144,21 @@ func (s *StreamAPI) prepareBlockHeader(
 		Timestamp:        hexutil.Uint64(block.Timestamp),
 	}
 
-	txHashes := block.TransactionHashes
-	if len(txHashes) > 0 {
+	receipts, err := s.receipts.GetByBlockHeight(block.Height)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(receipts) > 0 {
 		totalGasUsed := hexutil.Uint64(0)
-		receipts := gethTypes.Receipts{}
-		for _, txHash := range txHashes {
-			txReceipt, err := s.receipts.GetByTransactionID(txHash)
-			if err != nil {
-				return nil, err
-			}
-			totalGasUsed += hexutil.Uint64(txReceipt.GasUsed)
-			receipts = append(receipts, txReceipt.ToGethReceipt())
+		gethReceipts := gethTypes.Receipts{}
+		for _, receipt := range receipts {
+			totalGasUsed += hexutil.Uint64(receipt.GasUsed)
+			gethReceipts = append(gethReceipts, receipt.ToGethReceipt())
 		}
 		blockHeader.GasUsed = totalGasUsed
 		// TODO(m-Peter): Consider if its worthwhile to move this in storage.
-		blockHeader.LogsBloom = gethTypes.MergeBloom(receipts).Bytes()
+		blockHeader.LogsBloom = gethTypes.MergeBloom(gethReceipts).Bytes()
 	}
 
 	return blockHeader, nil

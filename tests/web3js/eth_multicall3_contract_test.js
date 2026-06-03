@@ -48,16 +48,16 @@ it('deploys multicall3 contract and interacts', async () => {
 
     // make sure deploy results are correct
     assert.equal(receipt.status, conf.successStatus)
-    assert.equal(receipt.from, MULTICALL3_DEPLOYER)
+    assert.equal(receipt.from, MULTICALL3_DEPLOYER.toLowerCase())
     assert.isString(receipt.transactionHash)
     assert.isString(multicall3Address)
 
     let tx = await web3.eth.getTransaction(txHash)
-    assert.equal(tx.from, MULTICALL3_DEPLOYER)
+    assert.equal(tx.from, MULTICALL3_DEPLOYER.toLowerCase())
     assert.isUndefined(tx.chainId)
 
     let block = await web3.eth.getBlock(receipt.blockNumber, true)
-    assert.equal(block.transactions[0].from, MULTICALL3_DEPLOYER)
+    assert.equal(block.transactions[0].from, MULTICALL3_DEPLOYER.toLowerCase())
     assert.isUndefined(block.transactions[0].chainId)
 
     let multicall3ABI = require('../fixtures/multicall3ABI.json')

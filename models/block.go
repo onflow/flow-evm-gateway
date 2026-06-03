@@ -65,9 +65,9 @@ func (b *Block) Hash() (gethCommon.Hash, error) {
 	return b.Block.Hash()
 }
 
-// decodeBlockEvent takes a cadence event that contains executed block payload and
+// DecodeBlockEvent takes a cadence event that contains executed block payload and
 // decodes it into the Block type.
-func decodeBlockEvent(event cadence.Event) (*Block, *events.BlockEventPayload, error) {
+func DecodeBlockEvent(event cadence.Event) (*Block, *events.BlockEventPayload, error) {
 	payload, err := events.DecodeBlockEventPayload(event)
 	if err != nil {
 		return nil, nil, fmt.Errorf(

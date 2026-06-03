@@ -12,10 +12,10 @@ it('should fail when tx gas limit higher than the max value', async () => {
             to: receiver.address,
             value: 10,
             gasPrice: conf.minGasPrice,
-            gasLimit: 51_000_000, // max tx gas limit is 50_000_000
+            gasLimit: 51_000_000, // max tx gas limit is 16_777_216 starting from Fusaka
         })
     } catch (e) {
-        assert.include(e.message, 'tx gas limit exceeds the max value of 50000000')
+        assert.include(e.message, 'transaction gas limit too high (cap: 16777216, tx: 51000000)')
         return
     }
 

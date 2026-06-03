@@ -289,9 +289,14 @@ func (r *RPCEventSubscriber) backfill(ctx context.Context, fromCadenceHeight uin
 // maxRangeForGetEvents is the maximum range of blocks that can be fetched using the GetEventsForHeightRange method.
 const maxRangeForGetEvents = uint64(249)
 
-// / backfillSporkFromHeight will fill the eventsChan with block events from the provided fromHeight up to the first height in the spork that comes
-// after the spork of the provided fromHeight.
-func (r *RPCEventSubscriber) backfillSporkFromHeight(ctx context.Context, fromCadenceHeight uint64, eventsChan chan<- models.BlockEvents) (uint64, error) {
+// backfillSporkFromHeight will fill the given `eventsChan` with block events
+// from the provided `fromCadenceHeight` up to the first height in the spork
+// that comes after the spork of the provided `fromCadenceHeight`.
+func (r *RPCEventSubscriber) backfillSporkFromHeight(
+	ctx context.Context,
+	fromCadenceHeight uint64,
+	eventsChan chan<- models.BlockEvents,
+) (uint64, error) {
 	evmAddress := common.Address(systemcontracts.SystemContractsForChain(r.chain).EVMContract.Address)
 
 	blockExecutedEvent := common.NewAddressLocation(
@@ -317,7 +322,10 @@ func (r *RPCEventSubscriber) backfillSporkFromHeight(ctx context.Context, fromCa
 		Uint64("last-spork-height", lastHeight).
 		Msg("backfilling spork")
 
-	for fromCadenceHeight < lastHeight {
+	// even when `fromCadenceHeight == lastHeight`, we still need to advance
+	// the value of `fromCadenceHeight`, so that it crosses to the first
+	// height of the next spork.
+	for fromCadenceHeight <= lastHeight {
 		r.logger.Debug().Msg(fmt.Sprintf("backfilling [%d / %d] ...", fromCadenceHeight, lastHeight))
 
 		startHeight := fromCadenceHeight
@@ -376,6 +384,7 @@ func (r *RPCEventSubscriber) backfillSporkFromHeight(ctx context.Context, fromCa
 		}
 
 	}
+
 	return fromCadenceHeight, nil
 }
 

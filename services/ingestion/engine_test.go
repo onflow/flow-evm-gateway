@@ -3,7 +3,6 @@ package ingestion
 import (
 	"context"
 	"encoding/hex"
-	"encoding/json"
 	"math/big"
 	"testing"
 
@@ -53,8 +52,6 @@ func TestSerialBlockIngestion(t *testing.T) {
 			}).
 			Once() // make sure this isn't called multiple times
 
-		traces := &storageMock.TraceIndexer{}
-
 		eventsChan := make(chan models.BlockEvents)
 
 		subscriber := &mocks.EventSubscriber{}
@@ -66,13 +63,12 @@ func TestSerialBlockIngestion(t *testing.T) {
 
 		engine := NewEventIngestionEngine(
 			subscriber,
-			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
+			replayer.NewBlocksProvider(blocks, flowGo.Emulator),
 			store,
 			registerStore,
 			blocks,
 			receipts,
 			transactions,
-			traces,
 			models.NewPublisher[*models.Block](),
 			models.NewPublisher[[]*gethTypes.Log](),
 			zerolog.Nop(),
@@ -89,9 +85,10 @@ func TestSerialBlockIngestion(t *testing.T) {
 
 		storedCounter := 0
 		runs := uint64(20)
+		var prevBlock *models.Block
 		for i := latestHeight + 1; i < latestHeight+runs; i++ {
 			cadenceHeight := i + 10
-			blockCdc, block, blockEvent, err := newBlock(i, nil)
+			blockCdc, block, blockEvent, err := newBlockWithParent(i, nil, prevBlock)
 			require.NoError(t, err)
 
 			blocks.
@@ -111,6 +108,8 @@ func TestSerialBlockIngestion(t *testing.T) {
 				}},
 				Height: cadenceHeight,
 			})
+
+			prevBlock = block
 		}
 
 		close(eventsChan)
@@ -133,8 +132,6 @@ func TestSerialBlockIngestion(t *testing.T) {
 			}).
 			Once() // make sure this isn't called multiple times
 
-		traces := &storageMock.TraceIndexer{}
-
 		eventsChan := make(chan models.BlockEvents)
 		subscriber := &mocks.EventSubscriber{}
 		subscriber.
@@ -145,13 +142,12 @@ func TestSerialBlockIngestion(t *testing.T) {
 
 		engine := NewEventIngestionEngine(
 			subscriber,
-			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
+			replayer.NewBlocksProvider(blocks, flowGo.Emulator),
 			store,
 			registerStore,
 			blocks,
 			receipts,
 			transactions,
-			traces,
 			models.NewPublisher[*models.Block](),
 			models.NewPublisher[[]*gethTypes.Log](),
 			zerolog.Nop(),
@@ -256,23 +252,14 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		blockCdc, block, blockEvent, err := newBlock(nextHeight, []gethCommon.Hash{result.TxHash})
 		require.NoError(t, err)
 
-		traces := &storageMock.TraceIndexer{}
-		traces.
-			On("StoreTransaction", mock.AnythingOfType("common.Hash"), mock.AnythingOfType("json.RawMessage"), mock.Anything).
-			Return(func(txID gethCommon.Hash, trace json.RawMessage, batch *pebbleDB.Batch) error {
-				assert.Equal(t, transaction.Hash(), txID)
-				return nil
-			})
-
 		engine := NewEventIngestionEngine(
 			subscriber,
-			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
+			replayer.NewBlocksProvider(blocks, flowGo.Emulator),
 			store,
 			registerStore,
 			blocks,
 			receipts,
 			transactions,
-			traces,
 			models.NewPublisher[*models.Block](),
 			models.NewPublisher[[]*gethTypes.Log](),
 			zerolog.Nop(),
@@ -359,28 +346,19 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 				return eventsChan
 			})
 
-		txCdc, txEvent, transaction, res, err := newTransaction(nextHeight)
+		txCdc, txEvent, _, res, err := newTransaction(nextHeight)
 		require.NoError(t, err)
 		blockCdc, _, blockEvent, err := newBlock(nextHeight, []gethCommon.Hash{res.TxHash})
 		require.NoError(t, err)
 
-		traces := &storageMock.TraceIndexer{}
-		traces.
-			On("StoreTransaction", mock.AnythingOfType("common.Hash"), mock.AnythingOfType("json.RawMessage"), mock.Anything).
-			Return(func(txID gethCommon.Hash, trace json.RawMessage, batch *pebbleDB.Batch) error {
-				assert.Equal(t, transaction.Hash(), txID)
-				return nil
-			})
-
 		engine := NewEventIngestionEngine(
 			subscriber,
-			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
+			replayer.NewBlocksProvider(blocks, flowGo.Emulator),
 			store,
 			registerStore,
 			blocks,
 			receipts,
 			transactions,
-			traces,
 			models.NewPublisher[*models.Block](),
 			models.NewPublisher[[]*gethTypes.Log](),
 			zerolog.Nop(),
@@ -455,8 +433,6 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			}).
 			Once() // make sure this isn't called multiple times
 
-		traces := &storageMock.TraceIndexer{}
-
 		eventsChan := make(chan models.BlockEvents)
 		subscriber := &mocks.EventSubscriber{}
 		subscriber.
@@ -468,13 +444,12 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 
 		engine := NewEventIngestionEngine(
 			subscriber,
-			replayer.NewBlocksProvider(blocks, flowGo.Emulator, nil),
+			replayer.NewBlocksProvider(blocks, flowGo.Emulator),
 			store,
 			registerStore,
 			blocks,
 			receipts,
 			transactions,
-			traces,
 			models.NewPublisher[*models.Block](),
 			models.NewPublisher[[]*gethTypes.Log](),
 			zerolog.Nop(),
@@ -516,13 +491,6 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 				On("Store", mock.AnythingOfType("[]*models.Receipt"), mock.Anything).
 				Return(func(receipts []*models.Receipt, _ *pebbleDB.Batch) error { return nil }).
 				Once()
-
-			traces.
-				On("StoreTransaction", mock.AnythingOfType("common.Hash"), mock.AnythingOfType("json.RawMessage"), mock.Anything).
-				Return(func(txID gethCommon.Hash, trace json.RawMessage, batch *pebbleDB.Batch) error {
-					assert.Equal(t, transaction.Hash(), txID)
-					return nil
-				})
 
 			events = append(events, flow.Event{
 				Type:  string(txEvent.Etype),
@@ -570,8 +538,21 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 }
 
 func newBlock(height uint64, txHashes []gethCommon.Hash) (cadence.Event, *models.Block, *events.Event, error) {
+	return newBlockWithParent(height, txHashes, nil)
+}
+
+func newBlockWithParent(height uint64, txHashes []gethCommon.Hash, parent *models.Block) (cadence.Event, *models.Block, *events.Event, error) {
+	parentHash := gethCommon.HexToHash("0x1")
+	if parent != nil {
+		var err error
+		parentHash, err = parent.Hash()
+		if err != nil {
+			return cadence.Event{}, nil, nil, err
+		}
+	}
+
 	gethBlock := types.NewBlock(
-		gethCommon.HexToHash("0x1"),
+		parentHash,
 		height,
 		uint64(1337),
 		big.NewInt(100),
@@ -628,10 +609,9 @@ func newTransaction(height uint64) (cadence.Event, *events.Event, models.Transac
 
 func defaultReplayerConfig() replayer.Config {
 	return replayer.Config{
-		ChainID:             flowGo.Emulator,
-		RootAddr:            evm.StorageAccountAddress(flowGo.Emulator),
-		CallTracerCollector: replayer.NopTracer,
-		ValidateResults:     false,
+		ChainID:         flowGo.Emulator,
+		RootAddr:        evm.StorageAccountAddress(flowGo.Emulator),
+		ValidateResults: false,
 	}
 }
 
