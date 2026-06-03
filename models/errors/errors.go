@@ -25,6 +25,7 @@ var (
 	ErrDisconnected        = NewRecoverableError(errors.New("disconnected"))
 	ErrMissingBlock        = errors.New("missing block")
 	ErrMissingTransactions = errors.New("missing transactions")
+	ErrInvalidParentHash   = errors.New("invalid parent block hash")
 
 	// Transaction errors
 
