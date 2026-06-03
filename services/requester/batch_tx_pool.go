@@ -90,6 +90,7 @@ func NewBatchTxPool(
 	collector metrics.Collector,
 	keystore *keystore.KeyStore,
 ) (*BatchTxPool, error) {
+	// initialize the available keys metric since it is only updated when sending a tx
 	collector.AvailableSigningKeys(keystore.AvailableKeys())
 
 	singleTxPool, err := NewSingleTxPool(
