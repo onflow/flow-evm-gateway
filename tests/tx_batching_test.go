@@ -221,9 +221,9 @@ func Test_MultipleTransactionSubmissionsWithinSmallInterval(t *testing.T) {
 	hashes := []common.Hash{}
 
 	// We send 2 transactions without any delay between them.
-	// Since there's no previous activity from the EOA,
-	// the 1st transaction is submitted individually,
-	// the 2nd transaction is added in the batch pool.
+	// Both are now always enqueued in the pool regardless of prior EOA
+	// activity, so they accumulate and are submitted together on the next
+	// flush tick as a single EVM.batchRun Cadence transaction.
 	for i := range uint64(2) {
 		signed, _, err := evmSign(
 			big.NewInt(500_000),
@@ -252,6 +252,9 @@ func Test_MultipleTransactionSubmissionsWithinSmallInterval(t *testing.T) {
 		return true
 	}, time.Second*15, time.Second*1, "all transactions were not executed")
 
+	// Both transactions arrive before the first flush tick, so they are
+	// batched together into one Cadence transaction in the first EVM block
+	// after latestBlock.
 	block1, err := emu.GetBlockByHeight(latestBlock.Height + 1)
 	require.NoError(t, err)
 
@@ -259,25 +262,8 @@ func Test_MultipleTransactionSubmissionsWithinSmallInterval(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, len(txResults) >= 1)
 
-	// Assert that the 1st transaction was submitted individually.
-	// The easiest way to check that is by making sure that the
-	// Cadence tx used `EVM.run` instead of `EVM.batchRun`.
-	assert.Contains(
-		t,
-		string(txResults[0].Script),
-		"EVM.run",
-	)
-
-	block2, err := emu.GetBlockByHeight(latestBlock.Height + 2)
-	require.NoError(t, err)
-
-	txResults, err = emu.GetTransactionsByBlockID(block2.ID())
-	require.NoError(t, err)
-	require.True(t, len(txResults) >= 1)
-
-	// Assert that the 2nd transaction was submitted in a batch.
-	// The easiest way to check that is by making sure that the
-	// Cadence tx used `EVM.batchRun` instead of `EVM.run`.
+	// Both transactions must be submitted together in a single EVM.batchRun
+	// Cadence transaction — not split across two blocks.
 	assert.Contains(
 		t,
 		string(txResults[0].Script),
@@ -322,17 +308,9 @@ func Test_MultipleTransactionSubmissionsWithinRecentInterval(t *testing.T) {
 	testEoaReceiver := common.HexToAddress("0x6F416dcC9BEFe43b7dDF53f2662F76dD34A9fc11")
 	hashes := []common.Hash{}
 
-	// We send 2 transactions with a 1 second delay between them.
-	// Since there's no previous activity from the EOA,
-	// the 1st transaction is submitted individually,
-	// the 2nd transaction is added in the batch pool,
-	// because the previous EOA activity is considered
-	// recent (1 seconds ago).
-	// A transaction is considered recent, when the last
-	// activity of the EOA was X seconds ago, where:
-	// X = `cfg.TxBatchInterval`.
-	// For the E2E tests the `cfg.TxBatchInterval` is equal
-	// to 2 seconds.
+	// We send 2 transactions with a 1-second delay between them (less than
+	// TxBatchInterval of 2 s). Both arrive before the flush tick fires, so
+	// they accumulate in the pool and are submitted together as EVM.batchRun.
 	for i := range uint64(2) {
 		signed, _, err := evmSign(
 			big.NewInt(500_000),
@@ -344,7 +322,6 @@ func Test_MultipleTransactionSubmissionsWithinRecentInterval(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		// Add a 1 second delay before submitting the 2nd transaction
 		if i == 1 {
 			time.Sleep(time.Second)
 		}
@@ -366,6 +343,8 @@ func Test_MultipleTransactionSubmissionsWithinRecentInterval(t *testing.T) {
 		return true
 	}, time.Second*15, time.Second*1, "all transactions were not executed")
 
+	// Both transactions land in the same Cadence transaction (EVM.batchRun)
+	// because they were both in the pool when the flush tick fired.
 	block1, err := emu.GetBlockByHeight(latestBlock.Height + 1)
 	require.NoError(t, err)
 
@@ -373,25 +352,6 @@ func Test_MultipleTransactionSubmissionsWithinRecentInterval(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, len(txResults) >= 1)
 
-	// Assert that the 1st transaction was submitted individually.
-	// The easiest way to check that is by making sure that the
-	// Cadence tx used `EVM.run` instead of `EVM.batchRun`.
-	assert.Contains(
-		t,
-		string(txResults[0].Script),
-		"EVM.run",
-	)
-
-	block2, err := emu.GetBlockByHeight(latestBlock.Height + 2)
-	require.NoError(t, err)
-
-	txResults, err = emu.GetTransactionsByBlockID(block2.ID())
-	require.NoError(t, err)
-	require.True(t, len(txResults) >= 1)
-
-	// Assert that the 2nd transaction was submitted in a batch.
-	// The easiest way to check that is by making sure that the
-	// Cadence tx used `EVM.batchRun` instead of `EVM.run`.
 	assert.Contains(
 		t,
 		string(txResults[0].Script),
@@ -436,17 +396,11 @@ func Test_MultipleTransactionSubmissionsWithinNonRecentInterval(t *testing.T) {
 	testEoaReceiver := common.HexToAddress("0x6F416dcC9BEFe43b7dDF53f2662F76dD34A9fc11")
 	hashes := []common.Hash{}
 
-	// We send 2 transactions with a delay of 3 seconds between them.
-	// Since there's no previous activity from the EOA,
-	// the 1st transaction is submitted individually,
-	// the 2nd transaction is also submitted individually,
-	// because the previous EOA activity is considered
-	// non-recent (3 seconds ago).
-	// A transaction is considered recent, when the last
-	// activity of the EOA was X seconds ago, where:
-	// X = `cfg.TxBatchInterval`.
-	// For the E2E tests the `cfg.TxBatchInterval` is equal
-	// to 2 seconds.
+	// We send 2 transactions with a 3-second delay between them, which is
+	// greater than TxBatchInterval (2 s). The first transaction is pooled and
+	// flushed alone before the second arrives, so each transaction is
+	// submitted in its own Cadence transaction via EVM.run (single-element
+	// batch).
 	for i := range uint64(2) {
 		signed, _, err := evmSign(
 			big.NewInt(500_000),
@@ -565,6 +519,104 @@ func Test_MultipleTransactionSubmissionsWithDuplicates(t *testing.T) {
 
 		return true
 	}, time.Second*15, time.Second*1, "all transactions were not executed")
+}
+
+// Test_OutOfOrderNonceBurstTransactions is a regression test for the
+// "first tx escapes" bug that caused silent transaction drops for wallets
+// sending parallel bursts.
+//
+// # Background
+//
+// The original BatchTxPool submitted the first transaction from any burst
+// immediately (before the rest of the burst arrived), bypassing the pool.
+// If that first transaction happened to carry a future nonce — which is
+// common when multiple goroutines race to submit — it failed on-chain because
+// the preceding nonces hadn't been processed yet. EVM.batchRun then stopped
+// at the resulting nonce gap and dropped all transactions after it.
+//
+// # Confirmed on testnet (2026-06-03)
+//
+// Wallet: 0x75346056F36342c699e8aDf4e4D2692c20aDcc9e (Flow EVM testnet, chain 545)
+// Test:   10 transactions sent in parallel, shuffled nonce order [8 7 3 9 2 1 6 0 4 5]
+//
+//   eth_sendRawTransaction: 10/10 returned success   ← gateway accepted all
+//   landed on-chain:         6/10                    ← 4 silently dropped
+//
+// Nonce 6 arrived first at the gateway, had no prior EOA activity, and was
+// submitted immediately. It failed (on-chain nonce was 0). The batch received
+// the remaining 9 nonces sorted as [0 1 2 3 4 5 7 8 9]. EVM.batchRun
+// executed nonces 0–5 successfully, then hit nonce 7 (gap at 6) and stopped.
+//
+// # Fix
+//
+// BatchTxPool.Add now always enqueues every transaction — including the first
+// from a burst — into the pool. The flush timer is the sole submission path,
+// guaranteeing that the full burst accumulates before any of it is sent.
+func Test_OutOfOrderNonceBurstTransactions(t *testing.T) {
+	_, cfg, stop := setupGatewayNode(t)
+	defer stop()
+
+	rpcTester := &rpcTest{
+		url: fmt.Sprintf("%s:%d", cfg.RPCHost, cfg.RPCPort),
+	}
+
+	eoaKey, err := crypto.HexToECDSA(eoaTestPrivateKey)
+	require.NoError(t, err)
+
+	testAddr := common.HexToAddress("0x061B63D29332e4de81bD9F51A48609824CD113a8")
+	privatekey, err := crypto.HexToECDSA("ddcb1e965557474fd13de3a66a40e4bc9b759a306e5db1046bac5ca47aafd584")
+	require.NoError(t, err)
+
+	// Fund the test wallet
+	signed, _, err := evmSign(big.NewInt(1_000_000_000), 23_500, eoaKey, 0, &testAddr, nil)
+	require.NoError(t, err)
+
+	fundHash, err := rpcTester.sendRawTx(signed)
+	require.NoError(t, err)
+
+	assert.Eventually(t, func() bool {
+		rcp, err := rpcTester.getReceipt(fundHash.String())
+		return err == nil && rcp != nil && rcp.Status == 1
+	}, time.Second*15, time.Second*1, "funding transaction was not executed")
+
+	testEoaReceiver := common.HexToAddress("0x6F416dcC9BEFe43b7dDF53f2662F76dD34A9fc11")
+	const burstSize = 10
+
+	// Build all transactions upfront with sequential nonces 0..burstSize-1.
+	txs := make([][]byte, burstSize)
+	hashes := make([]string, burstSize)
+	for i := range burstSize {
+		s, hash, err := evmSign(big.NewInt(1_000), 23_500, privatekey, uint64(i), &testEoaReceiver, nil)
+		require.NoError(t, err)
+		txs[i] = s
+		hashes[i] = hash.Hex()
+	}
+
+	// Shuffle the submission order to simulate out-of-sequence parallel dispatch
+	// (the same pattern used by DFNS and similar high-volume wallet providers).
+	shuffled := rand.Perm(burstSize)
+	g := errgroup.Group{}
+	for _, idx := range shuffled {
+		i := idx
+		g.Go(func() error {
+			_, err := rpcTester.sendRawTx(txs[i])
+			return err
+		})
+	}
+	require.NoError(t, g.Wait(), "all eth_sendRawTransaction calls must succeed")
+
+	// All burstSize transactions must land on-chain. Prior to the fix, 4 of
+	// 10 were silently dropped when the first-to-arrive nonce was non-zero.
+	assert.Eventually(t, func() bool {
+		for _, h := range hashes {
+			rcp, err := rpcTester.getReceipt(h)
+			if err != nil || rcp == nil || rcp.Status != 1 {
+				return false
+			}
+		}
+		return true
+	}, time.Second*30, time.Second*1,
+		"all %d burst transactions must land on-chain; some were likely dropped due to nonce gaps", burstSize)
 }
 
 func setupGatewayNode(t *testing.T) (emulator.Emulator, config.Config, func()) {
