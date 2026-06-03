@@ -128,10 +128,10 @@ func (t *BatchTxPool) Add(
 	ctx context.Context,
 	tx *gethTypes.Transaction,
 ) error {
-	t.txPublisher.Publish(tx)
+	t.txPublisher.Publish(tx) // publish pending transaction event
 
-	// Hold the lock for the duration of the enqueue so that the flush
-	// goroutine cannot race with Add and process a partial burst.
+	// tx adding should be blocking, so we don't have races when
+	// pooled transactions are being processed in the background.
 	t.txMux.Lock()
 	defer t.txMux.Unlock()
 
@@ -150,6 +150,7 @@ func (t *BatchTxPool) Add(
 	}
 
 	userTx := pooledEvmTx{txPayload: hexEncodedTx, txHash: tx.Hash(), nonce: tx.Nonce()}
+	// Prevent submission of duplicate transactions, based on their tx hash
 	if slices.Contains(t.pooledTxs[from], userTx) {
 		return errs.ErrDuplicateTransaction
 	}
@@ -167,8 +168,9 @@ func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			// Swap out the pool under the lock so Add() is never blocked
-			// for longer than a map swap.
+			// Take a copy here to allow `Add()` to continue accept
+			// incoming EVM transactions, without blocking until the
+			// batch transactions are submitted.
 			t.txMux.Lock()
 			txsGroupedByAddress := t.pooledTxs
 			t.pooledTxs = make(map[gethCommon.Address][]pooledEvmTx)
@@ -222,6 +224,8 @@ func (t *BatchTxPool) batchSubmitTransactionsForSameAddress(
 		coinbaseAddress,
 	)
 	if err != nil {
+		// If there was any error during the transaction build
+		// process, we record all transactions as dropped.
 		t.collector.TransactionsDropped(len(hexEncodedTxs))
 		return err
 	}
