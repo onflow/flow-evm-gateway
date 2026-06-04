@@ -236,4 +236,3 @@ func (t *BatchTxPool) batchSubmitTransactionsForSameAddress(
 
 	return nil
 }
-
