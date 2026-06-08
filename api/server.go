@@ -19,6 +19,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types"
 	gethLog "github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/rs/cors"
@@ -258,13 +260,19 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if methodValue, ok := requestBody["method"]; ok {
 			if methodStr, ok := methodValue.(string); ok && eth.IsValidMethod(methodStr) {
 				requestMethod = methodStr
-				h.logger.Debug().
+				logEvent := h.logger.Debug().
 					Str("IP", r.RemoteAddr).
 					Str("url", r.URL.String()).
 					Fields(requestBody).
-					Bool("is-ws", isWebSocket(r)).
-					Msg("API request")
+					Bool("is-ws", isWebSocket(r))
 
+				if methodStr == "eth_sendRawTransaction" {
+					if txHash, err := extractSendRawTxHash(requestBody); err == nil {
+						logEvent = logEvent.Str("tx-hash", txHash)
+					}
+				}
+
+				logEvent.Msg("API request")
 			}
 		}
 
@@ -521,4 +529,24 @@ func (w *responseHandler) WriteHeader(statusCode int) {
 
 func (w *responseHandler) Header() http.Header {
 	return w.ResponseWriter.Header()
+}
+
+func extractSendRawTxHash(requestBody map[string]any) (string, error) {
+	params, ok := requestBody["params"].([]any)
+	if !ok || len(params) == 0 {
+		return "", fmt.Errorf("missing params")
+	}
+	hexStr, ok := params[0].(string)
+	if !ok {
+		return "", fmt.Errorf("params[0] not a string")
+	}
+	rawTx, err := hexutil.Decode(hexStr)
+	if err != nil {
+		return "", err
+	}
+	tx := new(types.Transaction)
+	if err := tx.UnmarshalBinary(rawTx); err != nil {
+		return "", err
+	}
+	return tx.Hash().Hex(), nil
 }
