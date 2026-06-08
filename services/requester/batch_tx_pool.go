@@ -161,6 +161,7 @@ func (t *BatchTxPool) Add(
 	t.eoaActivity.Add(from, time.Now())
 
 	if err != nil {
+		t.collector.TransactionsDropped(1)
 		t.logger.Error().Err(err).Str("tx-hash", tx.Hash().Hex()).Msg("failed to submit EVM transaction")
 	}
 	return err
