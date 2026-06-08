@@ -121,10 +121,13 @@ func (t *SingleTxPool) Add(
 		// If there was any error during the transaction build
 		// process, we record it as a dropped transaction.
 		t.collector.TransactionsDropped(1)
+		t.logger.Error().Err(err).Str("tx-hash", tx.Hash().Hex()).Msg("failed to build Flow transaction, EVM transaction dropped")
 		return err
 	}
 
 	if err := t.client.SendTransaction(ctx, *flowTx); err != nil {
+		t.collector.TransactionsDropped(1)
+		t.logger.Error().Err(err).Str("tx-hash", tx.Hash().Hex()).Msg("failed to send Flow transaction, EVM transaction dropped")
 		return err
 	}
 
