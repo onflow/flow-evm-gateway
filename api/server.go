@@ -266,8 +266,8 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					Fields(requestBody).
 					Bool("is-ws", isWebSocket(r))
 
-				// Enabled() guard avoids decode cost (hex + RLP + Keccak256) when debug logging is off.
-				if methodStr == "eth_sendRawTransaction" && logEvent.Enabled() {
+				// Enabled() check first: skips string compare and decode cost when debug logging is off.
+				if logEvent.Enabled() && methodStr == "eth_sendRawTransaction" {
 					if txHash, err := extractSendRawTxHash(requestBody); err == nil {
 						logEvent = logEvent.Str("tx-hash", txHash)
 					}
