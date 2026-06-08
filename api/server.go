@@ -266,7 +266,7 @@ func (h *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					Fields(requestBody).
 					Bool("is-ws", isWebSocket(r))
 
-				if methodStr == "eth_sendRawTransaction" {
+				if methodStr == "eth_sendRawTransaction" && logEvent.Enabled() {
 					if txHash, err := extractSendRawTxHash(requestBody); err == nil {
 						logEvent = logEvent.Str("tx-hash", txHash)
 					}
