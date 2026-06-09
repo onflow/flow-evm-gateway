@@ -7,7 +7,7 @@ require (
 	github.com/goccy/go-json v0.10.4
 	github.com/onflow/cadence v1.10.3
 	github.com/onflow/crypto v0.25.4
-	github.com/onflow/flow-emulator v1.21.0
+	github.com/onflow/flow-emulator v1.21.1
 	github.com/onflow/flow-evm-gateway v0.0.0-20240201154855-4d4d3d3f19c7
 	github.com/onflow/flow-go v0.48.1-evm-cache-block.0.20260522070205-b5b78f5aff77
 	github.com/onflow/flow-go-sdk v1.10.3
@@ -155,8 +155,8 @@ require (
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/onflow/atree v0.16.0 // indirect
 	github.com/onflow/fixed-point v0.1.1 // indirect
-	github.com/onflow/flow-core-contracts/lib/go/contracts v1.10.2 // indirect
-	github.com/onflow/flow-core-contracts/lib/go/templates v1.10.2 // indirect
+	github.com/onflow/flow-core-contracts/lib/go/contracts v1.10.3 // indirect
+	github.com/onflow/flow-core-contracts/lib/go/templates v1.10.3 // indirect
 	github.com/onflow/flow-evm-bridge v0.2.1 // indirect
 	github.com/onflow/flow-ft/lib/go/contracts v1.1.1 // indirect
 	github.com/onflow/flow-ft/lib/go/templates v1.1.1 // indirect

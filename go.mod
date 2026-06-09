@@ -143,8 +143,8 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/onflow/crypto v0.25.4 // indirect
 	github.com/onflow/fixed-point v0.1.1 // indirect
-	github.com/onflow/flow-core-contracts/lib/go/contracts v1.10.2 // indirect
-	github.com/onflow/flow-core-contracts/lib/go/templates v1.10.2 // indirect
+	github.com/onflow/flow-core-contracts/lib/go/contracts v1.10.3 // indirect
+	github.com/onflow/flow-core-contracts/lib/go/templates v1.10.3 // indirect
 	github.com/onflow/flow-evm-bridge v0.2.1 // indirect
 	github.com/onflow/flow-ft/lib/go/contracts v1.1.1 // indirect
 	github.com/onflow/flow-ft/lib/go/templates v1.1.1 // indirect
