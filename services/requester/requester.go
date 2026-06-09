@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"math"
 	"math/big"
 	"time"
 
@@ -340,14 +341,14 @@ func (e *EVM) EstimateGas(
 		passingGasLimit = uint64(*txArgs.Gas)
 	}
 
+	chainConfig := emulator.MakeChainConfig(e.config.EVMNetworkID)
+	// Cap the maximum gas allowance according to EIP-7825 if the estimation targets Osaka
+	targetBlock, err := e.blocks.GetByHeight(height)
+	if err != nil {
+		return 0, err
+	}
+	blockNumber, blockTime := new(big.Int).SetUint64(targetBlock.Height), targetBlock.Timestamp
 	if passingGasLimit > gethParams.MaxTxGas {
-		// Cap the maximum gas allowance according to EIP-7825 if the estimation targets Osaka
-		targetBlock, err := e.blocks.GetByHeight(height)
-		if err != nil {
-			return 0, err
-		}
-		blockNumber, blockTime := new(big.Int).SetUint64(targetBlock.Height), targetBlock.Timestamp
-
 		if blockOverrides != nil {
 			if blockOverrides.Number != nil {
 				blockNumber = blockOverrides.Number.ToInt()
@@ -356,7 +357,6 @@ func (e *EVM) EstimateGas(
 				blockTime = uint64(*blockOverrides.Time)
 			}
 		}
-		chainConfig := emulator.MakeChainConfig(e.config.EVMNetworkID)
 		if chainConfig.IsOsaka(blockNumber, blockTime) {
 			passingGasLimit = gethParams.MaxTxGas
 		}
@@ -433,8 +433,32 @@ func (e *EVM) EstimateGas(
 	}
 
 	if txArgs.AccessList != nil {
-		passingGasLimit += uint64(len(*txArgs.AccessList)) * gethParams.TxAccessListAddressGas
-		passingGasLimit += uint64(txArgs.AccessList.StorageKeys()) * gethParams.TxAccessListStorageKeyGas
+		addresses := uint64(len(*txArgs.AccessList))
+		storageKeys := uint64(txArgs.AccessList.StorageKeys())
+		if (math.MaxUint64-passingGasLimit)/gethParams.TxAccessListAddressGas < addresses {
+			return 0, gethCore.ErrGasUintOverflow
+		}
+		passingGasLimit += addresses * gethParams.TxAccessListAddressGas
+		if (math.MaxUint64-passingGasLimit)/gethParams.TxAccessListStorageKeyGas < storageKeys {
+			return 0, gethCore.ErrGasUintOverflow
+		}
+		passingGasLimit += storageKeys * gethParams.TxAccessListStorageKeyGas
+
+		// EIP-7981: access list data is charged in addition to the base charge.
+		if chainConfig.IsAmsterdam(blockNumber, blockTime) {
+			const (
+				addressCost    = common.AddressLength * gethParams.TxCostFloorPerToken7976 * gethParams.TxTokenPerNonZeroByte
+				storageKeyCost = common.HashLength * gethParams.TxCostFloorPerToken7976 * gethParams.TxTokenPerNonZeroByte
+			)
+			if (math.MaxUint64-passingGasLimit)/addressCost < addresses {
+				return 0, gethCore.ErrGasUintOverflow
+			}
+			passingGasLimit += addresses * addressCost
+			if (math.MaxUint64-passingGasLimit)/storageKeyCost < storageKeys {
+				return 0, gethCore.ErrGasUintOverflow
+			}
+			passingGasLimit += storageKeys * storageKeyCost
+		}
 	}
 	if txArgs.AuthorizationList != nil {
 		passingGasLimit += uint64(len(txArgs.AuthorizationList)) * gethParams.CallNewAccountGas

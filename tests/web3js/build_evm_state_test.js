@@ -156,7 +156,7 @@ it('should handle a large number of EVM interactions', async () => {
         gas: 55_000,
         gasPrice: conf.minGasPrice
     }, 82n)
-    assert.equal(estimatedGas, 21646n)
+    assert.equal(estimatedGas, 23641n)
 
     estimatedGas = await web3.eth.estimateGas({
         from: conf.eoa.address,
@@ -165,7 +165,7 @@ it('should handle a large number of EVM interactions', async () => {
         gas: 55_000,
         gasPrice: conf.minGasPrice
     }, latest)
-    assert.equal(estimatedGas, 26789n)
+    assert.equal(estimatedGas, 26725n)
 
     // Add calls to verify correctness of eth_getCode on historical heights
     let code = await web3.eth.getCode(contractAddress, 82n)

@@ -161,7 +161,9 @@ it('should retrieve transaction traces', async () => {
     )
     assert.deepEqual(
         txTrace.post['0x0000000000000000000000030000000000000000'],
-        { balance: '0x408c06' }
+        {
+            balance: '0x408c06'
+        }
     )
     assert.deepEqual(
         txTrace.post['0xfacf71692421039876a5bb4f10ef7a439d8ef61e'],
@@ -277,6 +279,7 @@ it('should retrieve transaction traces', async () => {
                         {
                             address: '0x99a64c993965f8d69f985b5171bc20065cc32fab',
                             data: '0x',
+                            index: '0x0',
                             position: '0x0',
                             topics: [
                                 '0x043cc306157a91d747b36aba0e235bbbc5771d75aba162f6e5540767d22673c6',
@@ -297,6 +300,19 @@ it('should retrieve transaction traces', async () => {
                     gasUsed: '0x5208',
                     to: '0x658bdf435d810c91414ec09147daa6db62406379',
                     input: '0x',
+                    logs: [
+                        {
+                            address: '0xfffffffffffffffffffffffffffffffffffffffe',
+                            data: '0x0000000000000000000000000000000000000000000000000000000000408c06',
+                            index: '0x0',
+                            position: '0x0',
+                            topics: [
+                                '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef',
+                                '0x0000000000000000000000000000000000000000000000030000000000000000',
+                                '0x000000000000000000000000658bdf435d810c91414ec09147daa6db62406379',
+                            ]
+                        }
+                    ],
                     value: '0x408c06',
                     type: 'CALL'
                 }
@@ -352,6 +368,7 @@ it('should retrieve transaction traces', async () => {
                         {
                             address: '0x99a64c993965f8d69f985b5171bc20065cc32fab',
                             data: '0x',
+                            index: '0x0',
                             position: '0x0',
                             topics: [
                                 '0x043cc306157a91d747b36aba0e235bbbc5771d75aba162f6e5540767d22673c6',
@@ -372,6 +389,19 @@ it('should retrieve transaction traces', async () => {
                     gasUsed: '0x5208',
                     to: '0x658bdf435d810c91414ec09147daa6db62406379',
                     input: '0x',
+                    logs: [
+                        {
+                            address: '0xfffffffffffffffffffffffffffffffffffffffe',
+                            data: '0x0000000000000000000000000000000000000000000000000000000000408c06',
+                            index: '0x0',
+                            position: '0x0',
+                            topics: [
+                                '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef',
+                                '0x0000000000000000000000000000000000000000000000030000000000000000',
+                                '0x000000000000000000000000658bdf435d810c91414ec09147daa6db62406379'
+                            ]
+                        }
+                    ],
                     value: '0x408c06',
                     type: 'CALL'
                 }
@@ -410,7 +440,7 @@ it('should retrieve transaction traces', async () => {
         txTrace,
         {
             from: conf.eoa.address.toLowerCase(),
-            gas: '0xb5c3',
+            gas: '0xb623',
             gasUsed: '0x619f',
             to: contractAddress.toLowerCase(),
             input: '0xc550f90f',
@@ -418,7 +448,7 @@ it('should retrieve transaction traces', async () => {
             calls: [
                 {
                     from: contractAddress.toLowerCase(),
-                    gas: '0x553d',
+                    gas: '0x559c',
                     gasUsed: '0x2',
                     to: '0x0000000000000000000000010000000000000001',
                     input: '0x53e87d66',
@@ -503,6 +533,7 @@ it('should retrieve call traces', async () => {
             {
                 address: '0x99a64c993965f8d69f985b5171bc20065cc32fab',
                 data: '0x',
+                index: '0x0',
                 position: '0x0',
                 topics: [
                     '0x043cc306157a91d747b36aba0e235bbbc5771d75aba162f6e5540767d22673c6',
@@ -788,7 +819,7 @@ it('should retrieve call traces', async () => {
         {
             from: conf.eoa.address.toLowerCase(),
             gas: '0xcdd4',
-            gasUsed: '0xb445',
+            gasUsed: '0xb4a5',
             to: contractAddress.toLowerCase(),
             input: '0xc550f90f',
             output: '0x0000000000000000000000000000000000000000000000000000000000000007',
@@ -796,7 +827,7 @@ it('should retrieve call traces', async () => {
                 {
                     from: contractAddress.toLowerCase(),
                     gas: '0x6cee',
-                    gasUsed: '0x52a8',
+                    gasUsed: '0x5308',
                     to: '0x0000000000000000000000010000000000000001',
                     input: '0x53e87d66',
                     output: '0x0000000000000000000000000000000000000000000000000000000000000007',
@@ -835,7 +866,7 @@ it('should retrieve call traces', async () => {
     updateTrace = response.body.result
     assert.equal(updateTrace.from, '0xfacf71692421039876a5bb4f10ef7a439d8ef61e')
     assert.equal(updateTrace.gas, '0x95ab')
-    assert.equal(updateTrace.gasUsed, '0x6092')
+    assert.equal(updateTrace.gasUsed, '0x6308')
     assert.equal(updateTrace.to, '0x99a64c993965f8d69f985b5171bc20065cc32fab')
     assert.equal(
         updateTrace.input,
@@ -847,6 +878,7 @@ it('should retrieve call traces', async () => {
             {
                 address: '0x99a64c993965f8d69f985b5171bc20065cc32fab',
                 data: '0x0000000000000000000000000000000000000000000000000000000000000258',
+                index: '0x0',
                 position: '0x0',
                 topics: [
                     '0x76efea95e5da1fa661f235b2921ae1d89b99e457ec73fb88e34a1d150f95c64b',

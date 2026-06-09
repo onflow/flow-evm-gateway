@@ -101,6 +101,13 @@ it('should get block', async () => {
     // not existing transaction
     let no = await web3.eth.getTransactionFromBlock(conf.startBlockHeight, 5)
     assert.isNull(no)
+
+    // assert that slot number is present on the block response
+    let response = await helpers.callRPCMethod('eth_getBlockByHash', [block.hash, false])
+    assert.equal(response.status, 200)
+
+    let blockResponse = response.body.result
+    assert.isTrue(web3Utils.hexToNumber(blockResponse.slotNumber) >= 75_100_200n)
 })
 
 it('should get block receipts', async () => {
@@ -112,10 +119,9 @@ it('should get block receipts', async () => {
     assert.lengthOf(blockReceipts, 3)
 
     for (let blockReceipt of blockReceipts) {
-        let txReceipt = await web3.eth.getTransactionReceipt(
-            blockReceipt.transactionHash,
-            web3types.ETH_DATA_FORMAT
-        )
+        let txResponse = await helpers.callRPCMethod('eth_getTransactionReceipt', [blockReceipt.transactionHash])
+        assert.equal(txResponse.status, 200)
+        let txReceipt = txResponse.body.result
         // normalize missing fields from transaction receipt
         if (txReceipt.to === undefined) {
             txReceipt.to = null
@@ -123,7 +129,6 @@ it('should get block receipts', async () => {
         if (txReceipt.contractAddress === undefined) {
             txReceipt.contractAddress = null
         }
-
         assert.deepEqual(blockReceipt, txReceipt)
     }
 })
@@ -389,7 +394,7 @@ it('should get fee history', async () => {
             oldestBlock: 1n,
             reward: [['0x96'], ['0x96'], ['0x96']], // gas price is 150 during testing
             baseFeePerGas: [1n, 1n, 1n],
-            gasUsedRatio: [0.07122295, 0.006205458333333334, 0.0]
+            gasUsedRatio: [0.0712679, 0.006205458333333334, 0.0]
         }
     )
 })
