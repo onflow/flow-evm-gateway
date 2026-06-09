@@ -120,9 +120,18 @@ type Config struct {
 	// TxBatchInterval is the time interval upon which to submit the transaction batches to the
 	// Flow network.
 	TxBatchInterval time.Duration
-	// EOAActivityCacheTTL is the time interval used to track EOA activity. Tx send more
-	// frequently than this interval will be batched.
-	// Useful only when batch transaction submission is enabled.
+	// ExperimentalSoftFinalityEnabled enables the experimental soft finality feature which syncs
+	// EVM block and transaction data from the upstream Access node before the block is sealed.
+	// CAUTION: This feature is experimental and may return incorrect data in certain circumstances.
+	ExperimentalSoftFinalityEnabled bool
+	// ExperimentalSealingVerificationEnabled enables the experimental sealing verification feature
+	// which verifies the hash of the EVM events ingested by the requester engine match the hash
+	// of the events from the sealed block in the Flow network.
+	// CAUTION: This feature is experimental and will cause the node to halt if the events don't match.
+	ExperimentalSealingVerificationEnabled bool
+	// EOAActivityCacheTTL is no longer used. Kept for backwards-compatible config
+	// parsing so existing deployments with --eoa-activity-cache-ttl set do not break.
+	// Deprecated: has no effect since BatchTxPool now always pools every transaction.
 	EOAActivityCacheTTL time.Duration
 	// RpcRequestTimeout is the maximum duration at which JSON-RPC requests should generate
 	// a response, before they timeout.

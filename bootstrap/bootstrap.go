@@ -57,6 +57,7 @@ type Storages struct {
 	Transactions storage.TransactionIndexer
 	Receipts     storage.ReceiptIndexer
 	Traces       storage.TraceIndexer
+	EventsHash   *pebble.EventsHash
 }
 
 type Publishers struct {
@@ -159,14 +160,37 @@ func (b *Bootstrap) StartEventIngestion(ctx context.Context) error {
 		nextCadenceHeight -= 1
 	}
 
-	// create EVM event subscriber
-	subscriber := ingestion.NewRPCEventSubscriber(
-		b.logger,
-		b.client,
-		chainID,
-		b.keystore,
-		nextCadenceHeight,
-	)
+	// create event subscriber
+	var subscriber ingestion.EventSubscriber
+	if b.config.ExperimentalSoftFinalityEnabled {
+		var verifier *ingestion.SealingVerifier
+		if b.config.ExperimentalSealingVerificationEnabled {
+			verifier = ingestion.NewSealingVerifier(
+				b.logger,
+				b.client,
+				chainID,
+				b.storages.EventsHash,
+				nextCadenceHeight,
+			)
+		}
+
+		subscriber = ingestion.NewRPCBlockTrackingSubscriber(
+			b.logger,
+			b.client,
+			chainID,
+			b.keystore,
+			nextCadenceHeight,
+			verifier,
+		)
+	} else {
+		subscriber = ingestion.NewRPCEventSubscriber(
+			b.logger,
+			b.client,
+			chainID,
+			b.keystore,
+			nextCadenceHeight,
+		)
+	}
 
 	blocksProvider := replayer.NewBlocksProvider(
 		b.storages.Blocks,
@@ -585,6 +609,7 @@ func setupStorage(
 	blocks := pebble.NewBlocks(store, config.FlowNetworkID)
 	storageAddress := evm.StorageAccountAddress(config.FlowNetworkID)
 	registerStore := pebble.NewRegisterStorage(store, storageAddress)
+	eventsHash := pebble.NewEventsHash(store)
 
 	batch := store.NewBatch()
 	defer func() {
@@ -599,7 +624,20 @@ func setupStorage(
 	if config.ForceStartCadenceHeight != 0 {
 		logger.Warn().Uint64("height", config.ForceStartCadenceHeight).Msg("force setting starting Cadence height!!!")
 		if err := blocks.SetLatestCadenceHeight(config.ForceStartCadenceHeight, batch); err != nil {
-			return nil, nil, err
+			return nil, nil, fmt.Errorf("failed to set latest cadence height: %w", err)
+		}
+
+		verifiedHeight, err := eventsHash.ProcessedSealedHeight()
+		if err != nil && !errors.Is(err, errs.ErrStorageNotInitialized) {
+			return nil, nil, fmt.Errorf("failed to get latest verified sealed height: %w", err)
+		}
+		if verifiedHeight > config.ForceStartCadenceHeight {
+			if err := eventsHash.BatchSetProcessedSealedHeight(config.ForceStartCadenceHeight, batch); err != nil {
+				return nil, nil, fmt.Errorf("failed to set latest verified sealed height: %w", err)
+			}
+		}
+		if err := eventsHash.BatchRemoveAboveHeight(config.ForceStartCadenceHeight, batch); err != nil {
+			return nil, nil, fmt.Errorf("failed to reset events hash above height: %w", err)
 		}
 	}
 
@@ -664,6 +702,7 @@ func setupStorage(
 		Transactions: pebble.NewTransactions(store),
 		Receipts:     pebble.NewReceipts(store),
 		Traces:       pebble.NewTraces(store),
+		EventsHash:   eventsHash,
 	}, nil
 }
 

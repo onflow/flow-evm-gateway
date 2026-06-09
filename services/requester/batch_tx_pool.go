@@ -10,7 +10,6 @@ import (
 
 	gethCommon "github.com/ethereum/go-ethereum/common"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/rs/zerolog"
@@ -22,32 +21,62 @@ import (
 	"github.com/onflow/flow-evm-gateway/services/requester/keystore"
 )
 
-const eoaActivityCacheSize = 10_000
+// BatchTxPool is a TxPool implementation that collects and groups transactions
+// by EOA signer, sorts them by nonce, and submits them as a batch via
+// EVM.batchRun on each flush interval.
+//
+// # Problem
+//
+// Flow does not have a traditional EVM mempool. On standard EVM chains, when a
+// wallet sends transactions out-of-nonce-sequence (e.g., nonces 5, 7, 6 in
+// parallel), the mempool holds future-nonce transactions until the gap is
+// filled. Flow EVM has no such holding mechanism — a transaction whose nonce
+// does not match the current account nonce is simply dropped.
+//
+// The original BatchTxPool implementation partially addressed this by batching
+// transactions that arrived from an EOA with "recent activity" (i.e., a prior
+// transaction within TxBatchInterval). However, it still submitted the FIRST
+// transaction from any burst immediately — before the rest of the burst had
+// a chance to arrive. If that first transaction happened to carry a future
+// nonce (due to parallel dispatch), it failed, and the gap it left caused all
+// subsequent nonces in the batch to fail as well.
+//
+// # Root cause (confirmed on testnet, 2026-06-03)
+//
+// A burst of 10 transactions was sent in parallel from a fresh wallet using
+// shuffled nonce order: [8 7 3 9 2 1 6 0 4 5].
+//
+//   - The gateway accepted all 10 (eth_sendRawTransaction returned success).
+//   - Nonce 6 arrived first → no prior EOA activity → submitted immediately
+//     as a standalone Cadence transaction → failed (on-chain nonce was 0).
+//   - The remaining 9 nonces [7 3 9 2 1 0 4 5 8] were pooled, sorted to
+//     [0 1 2 3 4 5 7 8 9], and submitted as EVM.batchRun.
+//   - EVM.batchRun executed 0→5 successfully, then encountered nonce 7.
+//     The expected nonce was 6 (which had already failed), so execution
+//     stopped. Nonces 7, 8, 9 were dropped.
+//   - Final result: 6/10 landed on-chain; 4 were silently dropped.
+//
+// # Fix
+//
+// All transactions are now always enqueued in the pool regardless of prior EOA
+// activity. The flush timer (TxBatchInterval) is the sole submission trigger.
+// This guarantees that parallel transactions from the same wallet accumulate
+// in the pool before being sorted by nonce and submitted atomically.
+//
+// Trade-off: every transaction now incurs up to TxBatchInterval of additional
+// latency before it is submitted to Flow. For the mainnet default of 2.5 s this
+// is acceptable; operators can lower the interval for latency-sensitive
+// deployments.
+type BatchTxPool struct {
+	*SingleTxPool
+	pooledTxs map[gethCommon.Address][]pooledEvmTx
+	txMux     sync.Mutex
+}
 
 type pooledEvmTx struct {
 	txPayload cadence.String
 	txHash    gethCommon.Hash
 	nonce     uint64
-}
-
-// BatchTxPool is a `TxPool` implementation that collects and groups
-// transactions based on their EOA signer, and submits them for execution
-// using a batch.
-//
-// The underlying Cadence EVM API used, is `EVM.batchRun`, instead of the
-// `EVM.run` used in `SingleTxPool`.
-//
-// The main advantage of this implementation over the `SingleTxPool`, is the
-// guarantee that transactions originated from the same EOA address, which
-// arrive in a short time interval (about the same as Flow's block production rate),
-// will be executed in the same order their arrived.
-// This helps to reduce the nonce mismatch errors which mainly occur from the
-// re-ordering of Cadence transactions that happens from Collection nodes.
-type BatchTxPool struct {
-	*SingleTxPool
-	pooledTxs   map[gethCommon.Address][]pooledEvmTx
-	txMux       sync.Mutex
-	eoaActivity *expirable.LRU[gethCommon.Address, time.Time]
 }
 
 var _ TxPool = &BatchTxPool{}
@@ -77,16 +106,10 @@ func NewBatchTxPool(
 		return nil, err
 	}
 
-	eoaActivity := expirable.NewLRU[gethCommon.Address, time.Time](
-		eoaActivityCacheSize,
-		nil,
-		config.EOAActivityCacheTTL,
-	)
 	batchPool := &BatchTxPool{
 		SingleTxPool: singleTxPool,
 		pooledTxs:    make(map[gethCommon.Address][]pooledEvmTx),
 		txMux:        sync.Mutex{},
-		eoaActivity:  eoaActivity,
 	}
 
 	go batchPool.processPooledTransactions(ctx)
@@ -94,10 +117,13 @@ func NewBatchTxPool(
 	return batchPool, nil
 }
 
-// Add adds the EVM transaction to the tx pool, grouped with the rest of the
-// transactions from the same EOA signer.
-// After the configured `TxBatchInterval`, the collected transations
-// are batched and sent to the Flow network using `EVM.batchRun`, for execution.
+// Add enqueues the transaction in the per-EOA pool. It is never submitted
+// immediately; the flush goroutine (processPooledTransactions) handles
+// submission on every TxBatchInterval tick.
+//
+// Enqueueing everything — including the first transaction from a burst — is
+// the key invariant that prevents the "first tx escapes" race described in the
+// type-level comment above.
 func (t *BatchTxPool) Add(
 	ctx context.Context,
 	tx *gethTypes.Transaction,
@@ -123,44 +149,14 @@ func (t *BatchTxPool) Add(
 		return err
 	}
 
-	// Scenarios
-	// 1. EOA activity not found:
-	// => We send the transaction individually, without adding it
-	// to the batch pool.
-	//
-	// 2. EOA activity found AND it was more than [X] seconds ago:
-	// => We send the transaction individually, without adding it
-	// to the batch pool.
-	//
-	// 3. EOA activity found AND it was less than [X] seconds ago:
-	// => We add the transaction to the batch pool, so that it gets
-	// processed and submitted according to the configured
-	// `TxBatchInterval`.
-	//
-	// For all 3 cases, we record the activity time for the next
-	// transactions that might come from the same EOA.
-	// [X] is equal to the configured `TxBatchInterval` duration.
-	lastActivityTime, found := t.eoaActivity.Get(from)
-
-	if !found {
-		// Case 1. EOA activity not found:
-		err = t.submitSingleTransaction(ctx, hexEncodedTx)
-	} else if time.Since(lastActivityTime) > t.config.TxBatchInterval {
-		// Case 2. EOA activity found AND it was more than [X] seconds ago:
-		err = t.submitSingleTransaction(ctx, hexEncodedTx)
-	} else {
-		// Case 3. EOA activity found AND it was less than [X] seconds ago:
-		userTx := pooledEvmTx{txPayload: hexEncodedTx, txHash: tx.Hash(), nonce: tx.Nonce()}
-		// Prevent submission of duplicate transactions, based on their tx hash
-		if slices.Contains(t.pooledTxs[from], userTx) {
-			return errs.ErrDuplicateTransaction
-		}
-		t.pooledTxs[from] = append(t.pooledTxs[from], userTx)
+	userTx := pooledEvmTx{txPayload: hexEncodedTx, txHash: tx.Hash(), nonce: tx.Nonce()}
+	// Prevent submission of duplicate transactions, based on their tx hash
+	if slices.Contains(t.pooledTxs[from], userTx) {
+		return errs.ErrDuplicateTransaction
 	}
+	t.pooledTxs[from] = append(t.pooledTxs[from], userTx)
 
-	t.eoaActivity.Add(from, time.Now())
-
-	return err
+	return nil
 }
 
 func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
@@ -203,8 +199,8 @@ func (t *BatchTxPool) batchSubmitTransactionsForSameAddress(
 	referenceBlockHeader *flow.BlockHeader,
 	pooledTxs []pooledEvmTx,
 ) error {
-	// Sort the transactions based on their nonce, to make sure
-	// that no re-ordering has happened due to races etc.
+	// Sort by nonce to guarantee correct execution order regardless of the
+	// order in which transactions arrived at the gateway.
 	sort.Slice(pooledTxs, func(i, j int) bool {
 		return pooledTxs[i].nonce < pooledTxs[j].nonce
 	})
@@ -231,37 +227,6 @@ func (t *BatchTxPool) batchSubmitTransactionsForSameAddress(
 		// If there was any error during the transaction build
 		// process, we record all transactions as dropped.
 		t.collector.TransactionsDropped(len(hexEncodedTxs))
-		return err
-	}
-
-	if err := t.client.SendTransaction(ctx, *flowTx); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (t *BatchTxPool) submitSingleTransaction(
-	ctx context.Context,
-	hexEncodedTx cadence.String,
-) error {
-	coinbaseAddress, err := cadence.NewString(t.config.Coinbase.Hex())
-	if err != nil {
-		return err
-	}
-
-	script := replaceAddresses(runTxScript, t.config.FlowNetworkID)
-	flowTx, err := t.buildTransaction(
-		ctx,
-		t.getReferenceBlock(),
-		script,
-		cadence.NewArray([]cadence.Value{hexEncodedTx}),
-		coinbaseAddress,
-	)
-	if err != nil {
-		// If there was any error during the transaction build
-		// process, we record it as a dropped transaction.
-		t.collector.TransactionsDropped(1)
 		return err
 	}
 

@@ -58,6 +58,12 @@ func (s *Storage) get(keyCode byte, key ...[]byte) ([]byte, error) {
 	return cp, nil
 }
 
+func (s *Storage) delete(keyCode byte, key []byte, batch *pebble.Batch) error {
+	prefixedKey := makePrefix(keyCode, key)
+
+	return batch.Delete(prefixedKey, nil)
+}
+
 func (s *Storage) NewBatch() *pebble.Batch {
 	return s.db.NewBatch()
 }

@@ -97,7 +97,8 @@ func SetupClient(startHeight uint64, endHeight uint64) (*MockClient, chan flow.B
 		},
 		GetNodeVersionInfoFunc: func(ctx context.Context) (*flow.NodeVersionInfo, error) {
 			return &flow.NodeVersionInfo{
-				NodeRootBlockHeight: startHeight,
+				NodeRootBlockHeight:  startHeight,
+				SporkRootBlockHeight: startHeight,
 			}, nil
 		},
 		SubscribeEventsByBlockHeightFunc: func(
