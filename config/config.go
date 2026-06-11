@@ -124,6 +124,29 @@ type Config struct {
 	// frequently than this interval will be batched.
 	// Useful only when batch transaction submission is enabled.
 	EOAActivityCacheTTL time.Duration
+	// TxNonceAwareMode configures the gateway to use the nonce-aware transaction
+	// pool: transactions carrying the expected next nonce (with nothing in flight)
+	// are submitted immediately, out-of-order transactions are held until their
+	// nonce gap fills, and consecutive Cadence submissions for the same EOA are
+	// spaced apart to avoid Collection Node re-ordering.
+	TxNonceAwareMode bool
+	// TxCollectionWindow is the per-EOA sliding collection window used by the
+	// nonce-aware tx pool. The window resets on each new transaction arrival
+	// from the same EOA; when it elapses the collected transactions are flushed.
+	TxCollectionWindow time.Duration
+	// TxSubmissionSpacing is the minimum gap between two consecutive Cadence
+	// transaction submissions for the same EOA (recommended ~1.5x the block
+	// production rate). It also serves as the flush deadline for a
+	// continuously-fed collection window, anchored at first enqueue.
+	TxSubmissionSpacing time.Duration
+	// TxPoolTTL is how long the nonce-aware tx pool holds an out-of-order
+	// transaction waiting for its nonce gap to fill. On expiry the transaction
+	// is submitted anyway, so the failure is observable instead of a silent drop.
+	TxPoolTTL time.Duration
+	// TxMaxBatchSize is the maximum number of EVM transactions submitted in a
+	// single EVM.batchRun Cadence transaction by the nonce-aware tx pool,
+	// bounded by the Cadence transaction computation limit.
+	TxMaxBatchSize int
 	// RpcRequestTimeout is the maximum duration at which JSON-RPC requests should generate
 	// a response, before they timeout.
 	RpcRequestTimeout time.Duration
