@@ -127,11 +127,19 @@ type eoaQueue struct {
 // A nonce already submitted and still in flight is rejected with
 // `ErrInFlightNonce`, since a duplicate would burn Flow fees on a guaranteed
 // nonce-mismatch failure.
+//
+// Note on locking: fast-path submissions hold the pool-wide queue lock for
+// the duration of one Flow submission, trading cross-EOA throughput for the
+// simplicity of atomic state updates; a per-EOA lock is the known upgrade
+// path if contention shows up.
 type NonceAwareTxPool struct {
 	*SingleTxPool
 	nonceProvider NonceProvider
 	queues        map[gethCommon.Address]*eoaQueue
 	queueMux      sync.Mutex
+	// submitBatch performs the actual Flow submission. It defaults to
+	// submitTxBatch and exists as a field so tests can inject a fake.
+	submitBatch func(ctx context.Context, txs []heldTx) error
 }
 
 var _ TxPool = &NonceAwareTxPool{}
@@ -158,6 +166,7 @@ func NewNonceAwareTxPool(
 		nonceProvider: nonceProvider,
 		queues:        make(map[gethCommon.Address]*eoaQueue),
 	}
+	pool.submitBatch = pool.submitTxBatch
 
 	go pool.processQueues(ctx)
 
@@ -197,7 +206,6 @@ func (t *NonceAwareTxPool) Add(
 	}
 
 	now := time.Now()
-	t.refreshInFlight(q, from)
 
 	userTx := heldTx{
 		txPayload:  hexEncodedTx,
@@ -206,18 +214,27 @@ func (t *NonceAwareTxPool) Add(
 		enqueuedAt: now,
 	}
 
-	// Fast path: expected nonce, empty queue, nothing in flight, spacing
-	// satisfied. Submit right away — zero added latency for the common case.
-	if len(q.txs) == 0 && !q.hasInFlight && t.spacingElapsed(q, now) {
-		expected, nonceErr := t.nonceProvider.GetNonce(from)
-		if nonceErr == nil && tx.Nonce() == expected {
-			q.lastSubmittedAt = now
-			if submitErr := t.submitTxBatch(ctx, []heldTx{userTx}); submitErr != nil {
-				return submitErr
+	// Read the index nonce at most once per Add — each read builds a full
+	// block view — and only when it is actually needed: to refresh a stale
+	// in-flight marker, or to evaluate the fast path.
+	if q.hasInFlight || (len(q.txs) == 0 && t.spacingElapsed(q, now)) {
+		indexNonce, nonceErr := t.nonceProvider.GetNonce(from)
+		if nonceErr == nil {
+			q.refreshInFlight(indexNonce)
+
+			// Fast path: expected nonce, empty queue, nothing in flight,
+			// spacing satisfied. Submit right away — zero added latency for
+			// the common case.
+			if len(q.txs) == 0 && !q.hasInFlight &&
+				t.spacingElapsed(q, now) && tx.Nonce() == indexNonce {
+				q.lastSubmittedAt = now
+				if submitErr := t.submitBatch(ctx, []heldTx{userTx}); submitErr != nil {
+					return submitErr
+				}
+				q.lastSentNonce = tx.Nonce()
+				q.hasInFlight = true
+				return nil
 			}
-			q.lastSentNonce = tx.Nonce()
-			q.hasInFlight = true
-			return nil
 		}
 		// On a nonce lookup error or an unexpected nonce, fall through to
 		// the queue path.
@@ -246,16 +263,10 @@ func (t *NonceAwareTxPool) Add(
 }
 
 // refreshInFlight clears the in-flight marker once the local index has
-// advanced past the last submitted nonce. Callers must hold queueMux.
-func (t *NonceAwareTxPool) refreshInFlight(q *eoaQueue, from gethCommon.Address) {
-	if !q.hasInFlight {
-		return
-	}
-	indexNonce, err := t.nonceProvider.GetNonce(from)
-	if err != nil {
-		return
-	}
-	if indexNonce > q.lastSentNonce {
+// advanced past the last submitted nonce. Callers must hold the pool's
+// queueMux.
+func (q *eoaQueue) refreshInFlight(indexNonce uint64) {
+	if q.hasInFlight && indexNonce > q.lastSentNonce {
 		q.hasInFlight = false
 	}
 }
@@ -272,6 +283,10 @@ func (t *NonceAwareTxPool) spacingElapsed(q *eoaQueue, now time.Time) bool {
 type flushWork struct {
 	from gethCommon.Address
 	txs  []heldTx
+	// inFlight reports whether the batch was marked in flight on its queue
+	// (the consecutive-prefix path). TTL-expiry batches are not marked in
+	// flight and must never trigger a rollback.
+	inFlight bool
 }
 
 func (t *NonceAwareTxPool) processQueues(ctx context.Context) {
@@ -284,7 +299,7 @@ func (t *NonceAwareTxPool) processQueues(ctx context.Context) {
 			return
 		case <-ticker.C:
 			for _, w := range t.collectDueBatches() {
-				if err := t.submitTxBatch(ctx, w.txs); err != nil {
+				if err := t.submitWork(ctx, w); err != nil {
 					t.logger.Error().Err(err).Msgf(
 						"failed to submit Flow transaction from NonceAwareTxPool for EOA: %s",
 						w.from.Hex(),
@@ -292,6 +307,35 @@ func (t *NonceAwareTxPool) processQueues(ctx context.Context) {
 				}
 			}
 		}
+	}
+}
+
+// submitWork submits one detached batch and reconciles queue state on
+// failure: a failed in-flight submission must not leave the EOA wedged
+// behind a nonce that never landed (resubmissions would be rejected with
+// ErrInFlightNonce forever). The dropped transactions stay dropped (already
+// counted and logged by submitBatch); the rollback only re-opens the EOA.
+func (t *NonceAwareTxPool) submitWork(ctx context.Context, w flushWork) error {
+	err := t.submitBatch(ctx, w.txs)
+	if err != nil && w.inFlight {
+		t.rollbackInFlight(w.from, w.txs[len(w.txs)-1].nonce)
+	}
+	return err
+}
+
+// rollbackInFlight clears the in-flight marker after a failed submission,
+// but only when it still belongs to the failed batch — a newer submission
+// may have replaced it while the failed one was on the wire.
+func (t *NonceAwareTxPool) rollbackInFlight(from gethCommon.Address, failedLastNonce uint64) {
+	t.queueMux.Lock()
+	defer t.queueMux.Unlock()
+
+	q, ok := t.queues[from]
+	if !ok {
+		return
+	}
+	if q.hasInFlight && q.lastSentNonce == failedLastNonce {
+		q.hasInFlight = false
 	}
 }
 
@@ -326,14 +370,14 @@ func (t *NonceAwareTxPool) collectDueBatches() []flushWork {
 			continue
 		}
 
-		t.refreshInFlight(q, from)
-
 		indexNonce, err := t.nonceProvider.GetNonce(from)
 		if err != nil {
 			t.logger.Warn().Err(err).Str("eoa", from.Hex()).
 				Msg("failed to read nonce from local index, deferring flush")
 			continue
 		}
+
+		q.refreshInFlight(indexNonce)
 
 		// Prune transactions that can never execute: their nonce is already
 		// used on-chain (e.g. filled via another gateway). They would only
@@ -358,7 +402,7 @@ func (t *NonceAwareTxPool) collectDueBatches() []flushWork {
 				q.windowDeadline = now.Add(t.config.TxCollectionWindow)
 				q.flushDeadline = now.Add(t.config.TxSubmissionSpacing)
 			}
-			work = append(work, flushWork{from: from, txs: prefix})
+			work = append(work, flushWork{from: from, txs: prefix, inFlight: true})
 			continue
 		}
 
@@ -370,6 +414,9 @@ func (t *NonceAwareTxPool) collectDueBatches() []flushWork {
 			for _, htx := range expired {
 				delete(q.txs, htx.nonce)
 			}
+			// Deliberately do NOT set hasInFlight/lastSentNonce here: these
+			// nonces are out of order, and marking them in flight would
+			// corrupt the expected-nonce computation for future flushes.
 			q.lastSubmittedAt = now
 			txHashes := make([]string, len(expired))
 			for i, htx := range expired {
