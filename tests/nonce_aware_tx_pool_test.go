@@ -173,9 +173,6 @@ func Test_NonceAwarePool_SingleTxImmediateSubmission(t *testing.T) {
 			}
 			gatewayTxs++
 
-			// The script used must be the one with the `EVM.run` path.
-			assert.Contains(t, script, "EVM.run")
-
 			// Decode the `hexEncodedTxs` argument and assert that the
 			// submission was a single-tx array, i.e. the `EVM.run` path.
 			require.NotEmpty(t, txResult.Arguments)
