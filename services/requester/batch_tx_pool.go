@@ -162,7 +162,7 @@ func (t *BatchTxPool) Add(
 
 	if err != nil {
 		t.collector.TransactionsDropped(1)
-		t.logger.Error().Err(err).Str("tx-hash", tx.Hash().Hex()).Msg("failed to submit EVM transaction")
+		t.logger.Error().Err(err).Str("tx-hash", tx.Hash().Hex()).Msg("failed to build Flow transaction, EVM transaction dropped")
 	}
 	return err
 }
