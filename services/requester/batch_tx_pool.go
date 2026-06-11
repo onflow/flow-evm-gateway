@@ -227,10 +227,21 @@ func (t *BatchTxPool) batchSubmitTransactionsForSameAddress(
 		// If there was any error during the transaction build
 		// process, we record all transactions as dropped.
 		t.collector.TransactionsDropped(len(hexEncodedTxs))
+		txHashes := make([]string, len(pooledTxs))
+		for i, tx := range pooledTxs {
+			txHashes[i] = tx.txHash.Hex()
+		}
+		t.logger.Error().Err(err).Strs("tx-hashes", txHashes).Msg("failed to build Flow transaction, EVM transactions dropped")
 		return err
 	}
 
 	if err := t.client.SendTransaction(ctx, *flowTx); err != nil {
+		t.collector.TransactionsDropped(len(pooledTxs))
+		txHashes := make([]string, len(pooledTxs))
+		for i, tx := range pooledTxs {
+			txHashes[i] = tx.txHash.Hex()
+		}
+		t.logger.Error().Err(err).Strs("tx-hashes", txHashes).Msg("failed to send Flow transaction, EVM transactions dropped")
 		return err
 	}
 
