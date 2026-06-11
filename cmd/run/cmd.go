@@ -235,10 +235,10 @@ func parseConfigFromFlags() error {
 			return fmt.Errorf("tx-nonce-aware-mode requires tx-state-validation=local-index")
 		}
 		if cfg.TxCollectionWindow <= 0 {
-			return fmt.Errorf("tx-collection-window must be > 0")
+			return fmt.Errorf("tx-collection-window must be > 0 when tx-nonce-aware-mode is enabled")
 		}
 		if cfg.TxSubmissionSpacing <= 0 {
-			return fmt.Errorf("tx-submission-spacing must be > 0")
+			return fmt.Errorf("tx-submission-spacing must be > 0 when tx-nonce-aware-mode is enabled")
 		}
 		if cfg.TxCollectionWindow > cfg.TxSubmissionSpacing {
 			return fmt.Errorf(
@@ -247,10 +247,10 @@ func parseConfigFromFlags() error {
 			)
 		}
 		if cfg.TxPoolTTL <= 0 {
-			return fmt.Errorf("tx-pool-ttl must be > 0")
+			return fmt.Errorf("tx-pool-ttl must be > 0 when tx-nonce-aware-mode is enabled")
 		}
 		if cfg.TxMaxBatchSize < 1 {
-			return fmt.Errorf("tx-max-batch-size must be >= 1")
+			return fmt.Errorf("tx-max-batch-size must be >= 1 when tx-nonce-aware-mode is enabled")
 		}
 	}
 
