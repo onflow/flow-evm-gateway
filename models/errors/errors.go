@@ -32,6 +32,10 @@ var (
 	ErrFailedTransaction    = errors.New("failed transaction")
 	ErrInvalidTransaction   = fmt.Errorf("%w: %w", ErrInvalid, ErrFailedTransaction)
 	ErrDuplicateTransaction = fmt.Errorf("%w: %s", ErrInvalid, "transaction already in pool")
+	// ErrInFlightNonce is returned when a transaction carries a nonce that has
+	// already been submitted to the network and is awaiting execution. Letting
+	// it through would burn Flow fees on a guaranteed nonce-mismatch failure.
+	ErrInFlightNonce = fmt.Errorf("%w: %s", ErrInvalid, "transaction with the same nonce already submitted")
 
 	// Storage errors
 
