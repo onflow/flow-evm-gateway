@@ -11,7 +11,7 @@ require (
 	github.com/holiman/uint256 v1.3.2
 	github.com/onflow/atree v0.16.0
 	github.com/onflow/cadence v1.10.3
-	github.com/onflow/flow-go v0.48.1-evm-cache-block.0.20260518173711-5b9fa9c8352e
+	github.com/onflow/flow-go v0.48.1-evm-cache-block.0.20260602223212-19c6bdbbe069
 	github.com/onflow/flow-go-sdk v1.10.3
 	github.com/prometheus/client_golang v1.20.5
 	github.com/rs/cors v1.8.0
@@ -147,8 +147,8 @@ require (
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
 	github.com/onflow/crypto v0.25.4 // indirect
 	github.com/onflow/fixed-point v0.1.1 // indirect
-	github.com/onflow/flow-core-contracts/lib/go/contracts v1.10.2 // indirect
-	github.com/onflow/flow-core-contracts/lib/go/templates v1.10.2 // indirect
+	github.com/onflow/flow-core-contracts/lib/go/contracts v1.10.3 // indirect
+	github.com/onflow/flow-core-contracts/lib/go/templates v1.10.3 // indirect
 	github.com/onflow/flow-evm-bridge v0.2.1 // indirect
 	github.com/onflow/flow-ft/lib/go/contracts v1.1.1 // indirect
 	github.com/onflow/flow-ft/lib/go/templates v1.1.1 // indirect
