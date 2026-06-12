@@ -285,29 +285,172 @@ func Test_NonceAwarePool_FailedFlushDoesNotWedgeEOA(t *testing.T) {
 	assert.NotErrorIs(t, err, errs.ErrInFlightNonce)
 }
 
-func Test_RollbackInFlight_OnlyClearsMatchingBatch(t *testing.T) {
+func Test_ReconcileSubmission_OnlyClearsMatchingBatch(t *testing.T) {
 	pool := newTestPool(
 		&fakeNonceProvider{nonce: 0},
 		func(_ context.Context, _ []heldTx) error { return nil },
 		testPoolConfig(),
 	)
 	from := gethCommon.HexToAddress("0xabc")
+	submittedAt := time.Now()
 	pool.queues[from] = &eoaQueue{
-		txs:           map[uint64]heldTx{},
-		hasInFlight:   true,
-		lastSentNonce: 7,
+		txs:             map[uint64]heldTx{},
+		hasInFlight:     true,
+		lastSentNonce:   7,
+		lastSubmittedAt: submittedAt,
 	}
+	prev := time.Now().Add(-5 * time.Second)
+	submitErr := errors.New("network down")
 
-	// A different (newer) batch owns the marker: no rollback.
-	pool.rollbackInFlight(from, 5)
+	// A different (newer) batch owns the marker: in-flight not cleared, but
+	// lastSubmittedAt is still restored for the failed batch.
+	pool.reconcileSubmission(
+		flushWork{from: from, txs: []heldTx{makeHeldTx(5, prev)}, inFlight: true, prevLastSubmittedAt: prev},
+		submitErr,
+	)
 	assert.True(t, pool.queues[from].hasInFlight)
+	assert.Equal(t, prev, pool.queues[from].lastSubmittedAt)
 
-	// The failed batch still owns the marker: rollback.
-	pool.rollbackInFlight(from, 7)
+	// The failed batch still owns the marker: rollback clears it.
+	pool.queues[from].lastSubmittedAt = submittedAt
+	pool.reconcileSubmission(
+		flushWork{from: from, txs: []heldTx{makeHeldTx(7, prev)}, inFlight: true, prevLastSubmittedAt: prev},
+		submitErr,
+	)
 	assert.False(t, pool.queues[from].hasInFlight)
 
 	// Unknown EOA: no panic.
-	pool.rollbackInFlight(gethCommon.HexToAddress("0xdef"), 7)
+	pool.reconcileSubmission(
+		flushWork{from: gethCommon.HexToAddress("0xdef"), txs: []heldTx{makeHeldTx(7, prev)}, inFlight: true},
+		submitErr,
+	)
+}
+
+func Test_ReconcileSubmission_SuccessStampsCompletionTime(t *testing.T) {
+	pool := newTestPool(
+		&fakeNonceProvider{nonce: 0},
+		func(_ context.Context, _ []heldTx) error { return nil },
+		testPoolConfig(),
+	)
+	from := gethCommon.HexToAddress("0xabc")
+	collectedAt := time.Now().Add(-time.Second)
+	pool.queues[from] = &eoaQueue{txs: map[uint64]heldTx{}, lastSubmittedAt: collectedAt}
+
+	pool.reconcileSubmission(
+		flushWork{from: from, txs: []heldTx{makeHeldTx(0, collectedAt)}, prevLastSubmittedAt: time.Time{}},
+		nil,
+	)
+
+	// On success lastSubmittedAt is advanced to (approximately) now, not left
+	// at the optimistic collection time.
+	assert.True(t, pool.queues[from].lastSubmittedAt.After(collectedAt))
+}
+
+// Fix 1: a failed fast-path submission must not rate-limit the EOA via
+// lastSubmittedAt, and must leave nothing in flight.
+func Test_NonceAwarePool_FailedFastPathLeavesNoState(t *testing.T) {
+	key, err := crypto.GenerateKey()
+	require.NoError(t, err)
+	from := crypto.PubkeyToAddress(key.PublicKey)
+
+	submitErr := errors.New("network down")
+	pool := newTestPool(
+		&fakeNonceProvider{nonce: 0},
+		func(_ context.Context, _ []heldTx) error { return submitErr },
+		testPoolConfig(),
+	)
+
+	err = pool.Add(context.Background(), signedTestTx(t, key, 0, 1))
+	require.ErrorIs(t, err, submitErr)
+
+	q := pool.queues[from]
+	require.NotNil(t, q)
+	assert.False(t, q.hasInFlight)
+	assert.True(t, q.lastSubmittedAt.IsZero(), "failed submission must not stamp lastSubmittedAt")
+}
+
+// Fix 2: resubmitting a single held tx with the same nonce must not re-arm the
+// flush deadline anchored at first enqueue.
+func Test_NonceAwarePool_SameNonceReplacementKeepsFlushDeadline(t *testing.T) {
+	key, err := crypto.GenerateKey()
+	require.NoError(t, err)
+	from := crypto.PubkeyToAddress(key.PublicKey)
+
+	pool := newTestPool(
+		// Index reports 0 so a nonce-5 tx is out of order and gets queued.
+		&fakeNonceProvider{nonce: 0},
+		func(_ context.Context, _ []heldTx) error { return nil },
+		testPoolConfig(),
+	)
+
+	require.NoError(t, pool.Add(context.Background(), signedTestTx(t, key, 5, 1)))
+	firstDeadline := pool.queues[from].flushDeadline
+
+	// Replace the same nonce with a different payload; the deadline must hold.
+	require.NoError(t, pool.Add(context.Background(), signedTestTx(t, key, 5, 2)))
+	assert.Equal(t, firstDeadline, pool.queues[from].flushDeadline)
+}
+
+// Fix 3: TTL-expiry flushes are capped at TxMaxBatchSize.
+func Test_NonceAwarePool_TTLFlushCappedAtMaxBatch(t *testing.T) {
+	key, err := crypto.GenerateKey()
+	require.NoError(t, err)
+	from := crypto.PubkeyToAddress(key.PublicKey)
+
+	cfg := testPoolConfig()
+	cfg.TxMaxBatchSize = 3
+	cfg.TxPoolTTL = time.Millisecond
+
+	pool := newTestPool(
+		// Index nonce 0, but the held txs start at nonce 10 — a permanent gap
+		// at the head, so the only flush path is TTL expiry.
+		&fakeNonceProvider{nonce: 0},
+		func(_ context.Context, _ []heldTx) error { return nil },
+		cfg,
+	)
+
+	past := time.Now().Add(-time.Second)
+	txs := map[uint64]heldTx{}
+	for n := uint64(10); n < 17; n++ { // 7 expired txs
+		txs[n] = makeHeldTx(n, past)
+	}
+	pool.queues[from] = &eoaQueue{txs: txs, windowDeadline: past, flushDeadline: past}
+
+	work := pool.collectDueBatches()
+	require.Len(t, work, 1)
+	assert.Len(t, work[0].txs, 3, "TTL flush must be capped at TxMaxBatchSize")
+	assert.False(t, work[0].inFlight)
+	// Lowest nonces drained first; remainder stays queued.
+	assert.Equal(t, uint64(10), work[0].txs[0].nonce)
+	assert.Len(t, pool.queues[from].txs, 4)
+}
+
+// Fix 4: a queue emptied without ever submitting (e.g. all txs pruned) must
+// still age out via lastActivity rather than leaking forever.
+func Test_NonceAwarePool_EmptyQueueAgesOut(t *testing.T) {
+	pool := newTestPool(
+		&fakeNonceProvider{nonce: 0},
+		func(_ context.Context, _ []heldTx) error { return nil },
+		testPoolConfig(),
+	)
+	from := gethCommon.HexToAddress("0xabc")
+
+	// Empty queue, never submitted (lastSubmittedAt zero), but in flight and
+	// last active beyond the retention window: must be removed.
+	pool.queues[from] = &eoaQueue{
+		txs:          map[uint64]heldTx{},
+		hasInFlight:  true,
+		lastActivity: time.Now().Add(-2 * idleQueueRetention),
+	}
+	pool.collectDueBatches()
+	_, ok := pool.queues[from]
+	assert.False(t, ok, "idle empty queue must be removed regardless of in-flight/never-submitted state")
+
+	// A recently-active empty queue is retained.
+	pool.queues[from] = &eoaQueue{txs: map[uint64]heldTx{}, lastActivity: time.Now()}
+	pool.collectDueBatches()
+	_, ok = pool.queues[from]
+	assert.True(t, ok, "recently active queue must be retained")
 }
 
 func Test_RefreshInFlight(t *testing.T) {

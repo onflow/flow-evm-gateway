@@ -71,8 +71,8 @@ func selectExpired(
 // much slack, which is acceptable relative to the 300ms collection window.
 const nonceAwarePoolTickInterval = 50 * time.Millisecond
 
-// idleQueueRetention is how long an empty queue with no in-flight
-// submission is kept before being removed, to bound memory usage.
+// idleQueueRetention is how long a queue with no held transactions and no
+// recent activity is kept before being removed, to bound memory usage.
 const idleQueueRetention = time.Minute
 
 // eoaQueue tracks the held transactions and submission state for one EOA.
@@ -90,6 +90,10 @@ type eoaQueue struct {
 	flushDeadline time.Time
 	// lastSubmittedAt is when the last Cadence tx for this EOA was sent.
 	lastSubmittedAt time.Time
+	// lastActivity is when this EOA was last touched — a transaction received
+	// (Add) or a batch flushed (collectDueBatches). It bounds memory: a queue
+	// with no held txs and no activity past idleQueueRetention is removed.
+	lastActivity time.Time
 	// lastSentNonce is the highest nonce included in the last submission.
 	// Only meaningful while hasInFlight is true.
 	lastSentNonce uint64
@@ -206,6 +210,7 @@ func (t *NonceAwareTxPool) Add(
 	}
 
 	now := time.Now()
+	q.lastActivity = now
 
 	userTx := heldTx{
 		txPayload:  hexEncodedTx,
@@ -227,10 +232,13 @@ func (t *NonceAwareTxPool) Add(
 			// the common case.
 			if len(q.txs) == 0 && !q.hasInFlight &&
 				t.spacingElapsed(q, now) && tx.Nonce() == indexNonce {
-				q.lastSubmittedAt = now
 				if submitErr := t.submitBatch(ctx, []heldTx{userTx}); submitErr != nil {
+					// Submission failed: leave queue state untouched so the EOA
+					// is neither marked in flight nor rate-limited behind a tx
+					// that never landed.
 					return submitErr
 				}
+				q.lastSubmittedAt = time.Now()
 				q.lastSentNonce = tx.Nonce()
 				q.hasInFlight = true
 				return nil
@@ -253,9 +261,13 @@ func (t *NonceAwareTxPool) Add(
 
 	// Enqueue. A same-nonce, different-payload resubmission replaces the
 	// queued transaction (last write wins), matching mempool semantics.
+	wasEmpty := len(q.txs) == 0
 	q.txs[tx.Nonce()] = userTx
 	q.windowDeadline = now.Add(t.config.TxCollectionWindow)
-	if len(q.txs) == 1 {
+	// Anchor the flush deadline at the FIRST enqueue only. Re-arming it on a
+	// same-nonce replacement would let a client defer the flush indefinitely
+	// by resubmitting one held transaction before each deadline.
+	if wasEmpty {
 		q.flushDeadline = now.Add(t.config.TxSubmissionSpacing)
 	}
 
@@ -285,8 +297,12 @@ type flushWork struct {
 	txs  []heldTx
 	// inFlight reports whether the batch was marked in flight on its queue
 	// (the consecutive-prefix path). TTL-expiry batches are not marked in
-	// flight and must never trigger a rollback.
+	// flight and must never clear the in-flight marker on rollback.
 	inFlight bool
+	// prevLastSubmittedAt is the queue's lastSubmittedAt before this batch was
+	// optimistically collected, restored on a failed submission so the EOA is
+	// not rate-limited by a submission that never happened.
+	prevLastSubmittedAt time.Time
 }
 
 func (t *NonceAwareTxPool) processQueues(ctx context.Context) {
@@ -310,33 +326,46 @@ func (t *NonceAwareTxPool) processQueues(ctx context.Context) {
 	}
 }
 
-// submitWork submits one detached batch and reconciles queue state on
-// failure: a failed in-flight submission must not leave the EOA wedged
-// behind a nonce that never landed (resubmissions would be rejected with
-// ErrInFlightNonce forever). The dropped transactions stay dropped (already
-// counted and logged by submitBatch); the rollback only re-opens the EOA.
+// submitWork submits one detached batch and reconciles queue state once the
+// network call returns.
 func (t *NonceAwareTxPool) submitWork(ctx context.Context, w flushWork) error {
 	err := t.submitBatch(ctx, w.txs)
-	if err != nil && w.inFlight {
-		t.rollbackInFlight(w.from, w.txs[len(w.txs)-1].nonce)
-	}
+	t.reconcileSubmission(w, err)
 	return err
 }
 
-// rollbackInFlight clears the in-flight marker after a failed submission,
-// but only when it still belongs to the failed batch — a newer submission
-// may have replaced it while the failed one was on the wire.
-func (t *NonceAwareTxPool) rollbackInFlight(from gethCommon.Address, failedLastNonce uint64) {
+// reconcileSubmission updates queue state after a detached submission returns.
+//
+// On failure it rolls back the state committed optimistically at collection
+// time: it restores lastSubmittedAt (so the EOA is not rate-limited behind a
+// submission that never happened) and clears the in-flight marker, but only
+// when it still belongs to the failed batch — a newer submission may have
+// replaced it while the failed one was on the wire. The dropped transactions
+// stay dropped (already counted and logged by submitBatch); the rollback only
+// re-opens the EOA so resubmissions are not rejected with ErrInFlightNonce
+// forever.
+//
+// On success it stamps lastSubmittedAt with the actual completion time, so
+// submission spacing is measured from when the Flow transaction was really
+// sent (its build/send latency is variable).
+func (t *NonceAwareTxPool) reconcileSubmission(w flushWork, submitErr error) {
 	t.queueMux.Lock()
 	defer t.queueMux.Unlock()
 
-	q, ok := t.queues[from]
+	q, ok := t.queues[w.from]
 	if !ok {
 		return
 	}
-	if q.hasInFlight && q.lastSentNonce == failedLastNonce {
-		q.hasInFlight = false
+
+	if submitErr != nil {
+		q.lastSubmittedAt = w.prevLastSubmittedAt
+		if w.inFlight && q.hasInFlight && q.lastSentNonce == w.txs[len(w.txs)-1].nonce {
+			q.hasInFlight = false
+		}
+		return
 	}
+
+	q.lastSubmittedAt = time.Now()
 }
 
 // collectDueBatches selects, under the queue lock, every batch that is due
@@ -351,9 +380,12 @@ func (t *NonceAwareTxPool) collectDueBatches() []flushWork {
 
 	for from, q := range t.queues {
 		if len(q.txs) == 0 {
-			// Bound memory: drop queues idle past the retention period.
-			if !q.hasInFlight && !q.lastSubmittedAt.IsZero() &&
-				now.Sub(q.lastSubmittedAt) > idleQueueRetention {
+			// Bound memory: drop queues with no held txs and no activity past
+			// the retention period. Any in-flight submission has long since
+			// resolved on-chain after this window, so discarding a lingering
+			// in-flight marker here is safe — a later transaction for the EOA
+			// creates a fresh queue and re-reads the index nonce.
+			if now.Sub(q.lastActivity) > idleQueueRetention {
 				delete(t.queues, from)
 			}
 			continue
@@ -394,22 +426,35 @@ func (t *NonceAwareTxPool) collectDueBatches() []flushWork {
 			for _, htx := range prefix {
 				delete(q.txs, htx.nonce)
 			}
+			prevSubmittedAt := q.lastSubmittedAt
 			q.lastSentNonce = prefix[len(prefix)-1].nonce
 			q.lastSubmittedAt = now
+			q.lastActivity = now
 			q.hasInFlight = true
 			if len(q.txs) > 0 {
 				// Re-arm for the remaining (post-gap or over-cap) txs.
 				q.windowDeadline = now.Add(t.config.TxCollectionWindow)
 				q.flushDeadline = now.Add(t.config.TxSubmissionSpacing)
 			}
-			work = append(work, flushWork{from: from, txs: prefix, inFlight: true})
+			work = append(work, flushWork{
+				from:                from,
+				txs:                 prefix,
+				inFlight:            true,
+				prevLastSubmittedAt: prevSubmittedAt,
+			})
 			continue
 		}
 
 		// No eligible prefix (gap at the head). Submit transactions held
 		// past their TTL anyway: they will fail on-chain with a real error,
-		// which is observable, instead of being silently dropped.
+		// which is observable, instead of being silently dropped. Cap the
+		// batch at TxMaxBatchSize so a long-lived gap cannot produce an
+		// unbounded Flow transaction; the remainder drains on later ticks,
+		// gated by submission spacing.
 		expired := selectExpired(q.txs, now, t.config.TxPoolTTL)
+		if len(expired) > t.config.TxMaxBatchSize {
+			expired = expired[:t.config.TxMaxBatchSize]
+		}
 		if len(expired) > 0 {
 			for _, htx := range expired {
 				delete(q.txs, htx.nonce)
@@ -417,14 +462,20 @@ func (t *NonceAwareTxPool) collectDueBatches() []flushWork {
 			// Deliberately do NOT set hasInFlight/lastSentNonce here: these
 			// nonces are out of order, and marking them in flight would
 			// corrupt the expected-nonce computation for future flushes.
+			prevSubmittedAt := q.lastSubmittedAt
 			q.lastSubmittedAt = now
+			q.lastActivity = now
 			txHashes := make([]string, len(expired))
 			for i, htx := range expired {
 				txHashes[i] = htx.txHash.Hex()
 			}
 			t.logger.Warn().Strs("tx-hashes", txHashes).Str("eoa", from.Hex()).
 				Msg("nonce gap never filled within TTL, submitting held transactions anyway")
-			work = append(work, flushWork{from: from, txs: expired})
+			work = append(work, flushWork{
+				from:                from,
+				txs:                 expired,
+				prevLastSubmittedAt: prevSubmittedAt,
+			})
 		}
 	}
 
