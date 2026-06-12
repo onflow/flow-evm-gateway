@@ -132,7 +132,7 @@ type Config struct {
 	TxNonceAwareMode bool
 	// TxCollectionWindow is the per-EOA sliding collection window used by the
 	// nonce-aware tx pool. The window resets on each new transaction arrival
-	// from the same EOA; when it elapses the collected transactions are flushed.
+	// from the same EOA; when it elapses, the collected transactions are flushed.
 	TxCollectionWindow time.Duration
 	// TxSubmissionSpacing is the minimum gap between two consecutive Cadence
 	// transaction submissions for the same EOA (recommended ~1.5x the block
