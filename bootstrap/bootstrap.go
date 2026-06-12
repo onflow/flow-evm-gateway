@@ -244,7 +244,23 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 	// create transaction pool
 	var txPool requester.TxPool
 	var err error
-	if b.config.TxBatchMode {
+	if b.config.TxNonceAwareMode {
+		nonceProvider := requester.NewLocalNonceProvider(
+			b.config.FlowNetworkID,
+			b.storages.Registers,
+			b.storages.Blocks,
+		)
+		txPool, err = requester.NewNonceAwareTxPool(
+			ctx,
+			b.client,
+			b.publishers.Transaction,
+			b.logger,
+			b.config,
+			b.collector,
+			b.keystore,
+			nonceProvider,
+		)
+	} else if b.config.TxBatchMode {
 		txPool, err = requester.NewBatchTxPool(
 			ctx,
 			b.client,
