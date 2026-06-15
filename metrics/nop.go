@@ -27,3 +27,4 @@ func (c *nopCollector) RequestRateLimited(method string)           {}
 func (c *nopCollector) TransactionsDropped(count int)              {}
 func (c *nopCollector) TransactionRateLimited()                    {}
 func (c *nopCollector) FlowTotalSupply(totalSupply *big.Int)       {}
+func (c *nopCollector) TxPoolSize(queues int, queued int)          {}

@@ -482,6 +482,88 @@ func Test_NonceAwarePool_EmptyQueueAgesOut(t *testing.T) {
 	assert.True(t, ok, "recently active queue must be retained")
 }
 
+// countingCollector embeds NopCollector and counts the metric calls relevant
+// to the pruning behavior under test.
+type countingCollector struct {
+	metrics.Collector
+	droppedCount  int
+	txPoolQueues  int
+	txPoolQueued  int
+	txPoolSizeSet bool
+}
+
+func (c *countingCollector) TransactionsDropped(count int) {
+	c.droppedCount += count
+}
+
+func (c *countingCollector) TxPoolSize(queues int, queued int) {
+	c.txPoolQueues = queues
+	c.txPoolQueued = queued
+	c.txPoolSizeSet = true
+}
+
+// Stale txs (nonce below the indexed nonce) must be pruned from the queue, but
+// pruning must NOT increment the TransactionsDropped metric — that metric is
+// reserved for build/submission errors of the Cadence transaction to Flow.
+func Test_NonceAwarePool_PruneStaleDoesNotIncrementDropped(t *testing.T) {
+	collector := &countingCollector{Collector: metrics.NopCollector}
+	pool := newTestPool(
+		// Index reports nonce 5; held txs below 5 are stale.
+		&fakeNonceProvider{nonce: 5},
+		func(_ context.Context, _ []heldTx) error { return nil },
+		testPoolConfig(),
+	)
+	pool.collector = collector
+
+	from := gethCommon.HexToAddress("0xabc")
+	q := &eoaQueue{txs: map[uint64]heldTx{
+		2: makeHeldTx(2, time.Now()),
+		3: makeHeldTx(3, time.Now()),
+		5: makeHeldTx(5, time.Now()),
+	}}
+
+	pool.queueMux.Lock()
+	pool.pruneStaleTxs(q, from, 5)
+	pool.queueMux.Unlock()
+
+	// Stale nonces 2 and 3 pruned; nonce 5 retained.
+	assert.Len(t, q.txs, 1)
+	_, ok := q.txs[5]
+	assert.True(t, ok)
+	assert.Zero(t, collector.droppedCount, "pruning stale txs must not increment TransactionsDropped")
+}
+
+// collectDueBatches must report the pool's memory footprint via TxPoolSize each
+// time it runs.
+func Test_NonceAwarePool_CollectDueBatchesReportsSize(t *testing.T) {
+	collector := &countingCollector{Collector: metrics.NopCollector}
+	pool := newTestPool(
+		&fakeNonceProvider{nonce: 0},
+		func(_ context.Context, _ []heldTx) error { return nil },
+		testPoolConfig(),
+	)
+	pool.collector = collector
+
+	// Two EOAs, neither due (deadlines in the future), holding 3 txs total.
+	future := time.Now().Add(time.Hour)
+	pool.queues[gethCommon.HexToAddress("0xaaa")] = &eoaQueue{
+		txs:            map[uint64]heldTx{1: makeHeldTx(1, time.Now())},
+		windowDeadline: future,
+		flushDeadline:  future,
+	}
+	pool.queues[gethCommon.HexToAddress("0xbbb")] = &eoaQueue{
+		txs:            map[uint64]heldTx{2: makeHeldTx(2, time.Now()), 3: makeHeldTx(3, time.Now())},
+		windowDeadline: future,
+		flushDeadline:  future,
+	}
+
+	pool.collectDueBatches()
+
+	assert.True(t, collector.txPoolSizeSet)
+	assert.Equal(t, 2, collector.txPoolQueues)
+	assert.Equal(t, 3, collector.txPoolQueued)
+}
+
 func Test_RefreshInFlight(t *testing.T) {
 	q := &eoaQueue{hasInFlight: true, lastSentNonce: 3}
 

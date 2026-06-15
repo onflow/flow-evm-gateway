@@ -100,6 +100,16 @@ var flowTotalSupply = prometheus.NewGauge(prometheus.GaugeOpts{
 	Help: "Total supply of FLOW tokens in EVM at a given time (in smallest unit, wei)",
 })
 
+var txPoolQueues = prometheus.NewGauge(prometheus.GaugeOpts{
+	Name: prefixedName("txpool_queues"),
+	Help: "Number of per-EOA queues currently held by the nonce-aware transaction pool",
+})
+
+var txPoolQueuedTransactions = prometheus.NewGauge(prometheus.GaugeOpts{
+	Name: prefixedName("txpool_queued_transactions"),
+	Help: "Total number of transactions currently held across all queues in the nonce-aware transaction pool",
+})
+
 var metrics = []prometheus.Collector{
 	apiErrors,
 	serverPanicsCounters,
@@ -118,6 +128,8 @@ var metrics = []prometheus.Collector{
 	transactionsDroppedCounter,
 	rateLimitedTransactionsCounter,
 	flowTotalSupply,
+	txPoolQueues,
+	txPoolQueuedTransactions,
 }
 
 type Collector interface {
@@ -137,6 +149,7 @@ type Collector interface {
 	TransactionsDropped(count int)
 	TransactionRateLimited()
 	FlowTotalSupply(totalSupply *big.Int)
+	TxPoolSize(queues int, queuedTransactions int)
 }
 
 var _ Collector = &DefaultCollector{}
@@ -162,6 +175,8 @@ type DefaultCollector struct {
 	transactionsDroppedCounter     prometheus.Counter
 	rateLimitedTransactionsCounter prometheus.Counter
 	flowTotalSupply                prometheus.Gauge
+	txPoolQueues                   prometheus.Gauge
+	txPoolQueuedTransactions       prometheus.Gauge
 }
 
 func NewCollector(logger zerolog.Logger) Collector {
@@ -189,6 +204,8 @@ func NewCollector(logger zerolog.Logger) Collector {
 		transactionsDroppedCounter:     transactionsDroppedCounter,
 		rateLimitedTransactionsCounter: rateLimitedTransactionsCounter,
 		flowTotalSupply:                flowTotalSupply,
+		txPoolQueues:                   txPoolQueues,
+		txPoolQueuedTransactions:       txPoolQueuedTransactions,
 	}
 }
 
@@ -286,6 +303,11 @@ func (c *DefaultCollector) FlowTotalSupply(totalSupply *big.Int) {
 	}
 
 	c.flowTotalSupply.Set(floatTotalSupply)
+}
+
+func (c *DefaultCollector) TxPoolSize(queues int, queuedTransactions int) {
+	c.txPoolQueues.Set(float64(queues))
+	c.txPoolQueuedTransactions.Set(float64(queuedTransactions))
 }
 
 func prefixedName(name string) string {

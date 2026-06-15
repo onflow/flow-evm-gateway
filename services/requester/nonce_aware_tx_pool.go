@@ -490,6 +490,16 @@ func (t *NonceAwareTxPool) collectDueBatches() []flushWork {
 		}
 	}
 
+	// Report the pool's memory footprint while still holding queueMux: the
+	// number of per-EOA queues and the total number of held transactions.
+	// Counting must happen under the lock since t.queues is mutated
+	// concurrently (and idle queues are pruned above).
+	queuedTxs := 0
+	for _, q := range t.queues {
+		queuedTxs += len(q.txs)
+	}
+	t.collector.TxPoolSize(len(t.queues), queuedTxs)
+
 	return work
 }
 
@@ -509,7 +519,6 @@ func (t *NonceAwareTxPool) pruneStaleTxs(
 		}
 	}
 	if len(stale) > 0 {
-		t.collector.TransactionsDropped(len(stale))
 		t.logger.Warn().Strs("tx-hashes", stale).Str("eoa", from.Hex()).
 			Msg("dropping stale transactions with nonce below indexed state")
 	}
