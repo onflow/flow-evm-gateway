@@ -222,6 +222,35 @@ func Test_NonceAwarePool_UnexpectedNonceEnqueues(t *testing.T) {
 	assert.False(t, q.hasInFlight)
 }
 
+func Test_NonceAwarePool_NonceReadErrorRejectsTx(t *testing.T) {
+	key, err := crypto.GenerateKey()
+	require.NoError(t, err)
+	from := crypto.PubkeyToAddress(key.PublicKey)
+
+	// A local state-index nonce read should never fail; when it does it is
+	// an exception, and Add must reject the tx rather than enqueue it.
+	nonceErr := errors.New("index read failed")
+	submitCalls := 0
+	pool := newTestPool(
+		&fakeNonceProvider{err: nonceErr},
+		func(_ context.Context, _ []heldTx) error {
+			submitCalls++
+			return nil
+		},
+		testPoolConfig(),
+	)
+
+	// A fresh EOA Add (empty queue, spacing elapsed) triggers the nonce read.
+	err = pool.Add(context.Background(), signedTestTx(t, key, 0, 1))
+	require.ErrorIs(t, err, nonceErr)
+
+	assert.Zero(t, submitCalls)
+	q := pool.queues[from]
+	require.NotNil(t, q)
+	assert.Empty(t, q.txs)
+	assert.False(t, q.hasInFlight)
+}
+
 func Test_NonceAwarePool_InFlightDuplicateRejected(t *testing.T) {
 	key, err := crypto.GenerateKey()
 	require.NoError(t, err)

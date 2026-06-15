@@ -13,6 +13,13 @@ import (
 // NonceProvider returns the current nonce of the given EOA address.
 // The nonce-aware tx pool uses it to determine the expected next nonce.
 type NonceProvider interface {
+	// GetNonce returns the current nonce of the given EOA address.
+	//
+	// A non-nil error represents an EXCEPTION, not an expected condition:
+	// the underlying read is a local state-index lookup that should not
+	// fail under normal operation. Callers must therefore treat an error
+	// as a hard failure (reject the transaction / abort the operation)
+	// rather than a routine, recoverable condition to swallow.
 	GetNonce(address gethCommon.Address) (uint64, error)
 }
 

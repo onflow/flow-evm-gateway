@@ -224,28 +224,34 @@ func (t *NonceAwareTxPool) Add(
 	// in-flight marker, or to evaluate the fast path.
 	if q.hasInFlight || (len(q.txs) == 0 && t.spacingElapsed(q, now)) {
 		indexNonce, nonceErr := t.nonceProvider.GetNonce(from)
-		if nonceErr == nil {
-			q.refreshInFlight(indexNonce)
-
-			// Fast path: expected nonce, empty queue, nothing in flight,
-			// spacing satisfied. Submit right away — zero added latency for
-			// the common case.
-			if len(q.txs) == 0 && !q.hasInFlight &&
-				t.spacingElapsed(q, now) && tx.Nonce() == indexNonce {
-				if submitErr := t.submitBatch(ctx, []heldTx{userTx}); submitErr != nil {
-					// Submission failed: leave queue state untouched so the EOA
-					// is neither marked in flight nor rate-limited behind a tx
-					// that never landed.
-					return submitErr
-				}
-				q.lastSubmittedAt = time.Now()
-				q.lastSentNonce = tx.Nonce()
-				q.hasInFlight = true
-				return nil
-			}
+		if nonceErr != nil {
+			// A nonce lookup failure is an exception, not an expected
+			// condition: this is a local state-index read that should not
+			// fail under normal operation. The gateway is in an unknown
+			// state, so reject the transaction rather than silently routing
+			// it through the queue path.
+			return nonceErr
 		}
-		// On a nonce lookup error or an unexpected nonce, fall through to
-		// the queue path.
+
+		q.refreshInFlight(indexNonce)
+
+		// Fast path: expected nonce, empty queue, nothing in flight,
+		// spacing satisfied. Submit right away — zero added latency for
+		// the common case.
+		if len(q.txs) == 0 && !q.hasInFlight &&
+			t.spacingElapsed(q, now) && tx.Nonce() == indexNonce {
+			if submitErr := t.submitBatch(ctx, []heldTx{userTx}); submitErr != nil {
+				// Submission failed: leave queue state untouched so the EOA
+				// is neither marked in flight nor rate-limited behind a tx
+				// that never landed.
+				return submitErr
+			}
+			q.lastSubmittedAt = time.Now()
+			q.lastSentNonce = tx.Nonce()
+			q.hasInFlight = true
+			return nil
+		}
+		// On an unexpected nonce, fall through to the queue path.
 	}
 
 	// Reject an exact duplicate of a transaction already in the queue.
@@ -404,8 +410,13 @@ func (t *NonceAwareTxPool) collectDueBatches() []flushWork {
 
 		indexNonce, err := t.nonceProvider.GetNonce(from)
 		if err != nil {
-			t.logger.Warn().Err(err).Str("eoa", from.Hex()).
-				Msg("failed to read nonce from local index, deferring flush")
+			// Exception: a local state-index nonce read should not fail
+			// under normal operation. This is a background loop with no
+			// caller to reject the tx to, so skip this EOA for the current
+			// tick (its batch is deferred until the read succeeds) without
+			// aborting the whole flush for other EOAs.
+			t.logger.Error().Err(err).Str("eoa", from.Hex()).
+				Msg("unexpected failure reading nonce from local index, skipping EOA this tick")
 			continue
 		}
 
