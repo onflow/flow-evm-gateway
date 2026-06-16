@@ -28,7 +28,7 @@ import (
 // a burst of transactions from a single EOA, arriving out of nonce order,
 // must all be executed exactly once - no drops, no duplicates.
 func Test_TxMemPool_OutOfOrderBurst(t *testing.T) {
-	emu, cfg, stop := setupTxMemPoolGatewayNode(t)
+	emu, cfg, stop := setupTxMemPoolGatewayNode(t, 10)
 	defer stop()
 
 	rpcTester := &rpcTest{
@@ -112,7 +112,7 @@ func Test_TxMemPool_OutOfOrderBurst(t *testing.T) {
 // in flight is submitted immediately as a single-tx batch, which takes
 // the `EVM.run` path of the run.cdc script.
 func Test_TxMemPool_SingleTxImmediateSubmission(t *testing.T) {
-	emu, cfg, stop := setupTxMemPoolGatewayNode(t)
+	emu, cfg, stop := setupTxMemPoolGatewayNode(t, 10)
 	defer stop()
 
 	rpcTester := &rpcTest{
@@ -193,7 +193,7 @@ func Test_TxMemPool_SingleTxImmediateSubmission(t *testing.T) {
 // nonce gap are held until the gap is filled, and that filling the gap
 // releases the whole consecutive run.
 func Test_TxMemPool_GapHoldAndFill(t *testing.T) {
-	_, cfg, stop := setupTxMemPoolGatewayNode(t)
+	_, cfg, stop := setupTxMemPoolGatewayNode(t, 10)
 	defer stop()
 
 	rpcTester := &rpcTest{
@@ -274,7 +274,7 @@ func Test_TxMemPool_GapHoldAndFill(t *testing.T) {
 // expires (it is submitted on-chain anyway, where it fails, instead of
 // being silently dropped).
 func Test_TxMemPool_TTLExpiry(t *testing.T) {
-	_, cfg, stop := setupTxMemPoolGatewayNode(t)
+	_, cfg, stop := setupTxMemPoolGatewayNode(t, 10)
 	defer stop()
 
 	rpcTester := &rpcTest{
@@ -336,7 +336,7 @@ func Test_TxMemPool_TTLExpiry(t *testing.T) {
 // carrying the same nonce as an in-flight submission is rejected, since
 // it would burn Flow fees on a guaranteed nonce-mismatch failure.
 func Test_TxMemPool_InFlightNonceRejection(t *testing.T) {
-	_, cfg, stop := setupTxMemPoolGatewayNode(t)
+	_, cfg, stop := setupTxMemPoolGatewayNode(t, 10)
 	defer stop()
 
 	rpcTester := &rpcTest{
@@ -396,6 +396,156 @@ func Test_TxMemPool_InFlightNonceRejection(t *testing.T) {
 	}, time.Second*15, time.Second*1, "first transaction was not executed")
 }
 
+// Test_TxMemPool_BatchSizeCap asserts that the gateway never submits a
+// Cadence transaction wrapping more EVM transactions than TxMaxBatchSize,
+// while still executing every submitted transaction exactly once.
+func Test_TxMemPool_BatchSizeCap(t *testing.T) {
+	const maxBatchSize = 5
+	emu, cfg, stop := setupTxMemPoolGatewayNode(t, maxBatchSize)
+	defer stop()
+
+	rpcTester := &rpcTest{
+		url: fmt.Sprintf("%s:%d", cfg.RPCHost, cfg.RPCPort),
+	}
+
+	testAddr := common.HexToAddress("0x061B63D29332e4de81bD9F51A48609824CD113a8")
+	privateKey, err := crypto.HexToECDSA("ddcb1e965557474fd13de3a66a40e4bc9b759a306e5db1046bac5ca47aafd584")
+	require.NoError(t, err)
+
+	fundEOA(t, rpcTester, testAddr)
+
+	testEoaReceiver := common.HexToAddress("0x6F416dcC9BEFe43b7dDF53f2662F76dD34A9fc11")
+
+	totalTxs := 10
+	transferAmount := int64(50_000)
+
+	// Sign 10 transfers with consecutive nonces 0..9.
+	signedTxs := make([][]byte, totalTxs)
+	for nonce := range totalTxs {
+		signed, _, err := evmSign(
+			big.NewInt(transferAmount),
+			23_500,
+			privateKey,
+			uint64(nonce),
+			&testEoaReceiver,
+			nil,
+		)
+		require.NoError(t, err)
+		signedTxs[nonce] = signed
+	}
+
+	startBlock, err := emu.GetLatestBlock()
+	require.NoError(t, err)
+
+	// Send all 10 in nonce order. The fast path may submit the first alone;
+	// the rest batch behind the collection window, capped at maxBatchSize.
+	for _, signed := range signedTxs {
+		_, err := rpcTester.sendRawTx(signed)
+		require.NoError(t, err)
+	}
+
+	expectedBalance := int64(totalTxs) * transferAmount
+	assert.Eventually(t, func() bool {
+		balance, err := rpcTester.getBalance(testEoaReceiver)
+		require.NoError(t, err)
+
+		return balance.Cmp(big.NewInt(expectedBalance)) == 0
+	}, time.Second*30, time.Second*1, "all transactions were not executed")
+
+	endBlock, err := emu.GetLatestBlock()
+	require.NoError(t, err)
+
+	// Inspect every gateway-submitted Cadence tx and count the EVM txs it
+	// wraps (the `hexEncodedTxs` array length). Assertions are intentionally
+	// robust rather than asserting an exact batch count: the fast path can
+	// submit the first tx alone and timing affects how the rest group, so the
+	// number of batches is not deterministic. What MUST hold is: every batch
+	// honors the cap, the total across batches is exactly 10 (no drops/dupes),
+	// and at least one batch carried more than one tx (proving batching via
+	// EVM.batchRun actually happened rather than 10 single submissions).
+	totalEVMTxs := 0
+	maxObservedBatch := 0
+	for height := startBlock.Height + 1; height <= endBlock.Height; height++ {
+		block, err := emu.GetBlockByHeight(height)
+		require.NoError(t, err)
+
+		txResults, err := emu.GetTransactionsByBlockID(block.ID())
+		require.NoError(t, err)
+
+		for _, txResult := range txResults {
+			if !strings.Contains(string(txResult.Script), "hexEncodedTxs") {
+				continue
+			}
+
+			require.NotEmpty(t, txResult.Arguments)
+			arg, err := jsonCdc.Decode(nil, txResult.Arguments[0])
+			require.NoError(t, err)
+
+			txsArray, ok := arg.(cadence.Array)
+			require.True(t, ok)
+
+			batchLen := len(txsArray.Values)
+			assert.LessOrEqual(t, batchLen, maxBatchSize,
+				"batch size cap of %d must be honored, got %d", maxBatchSize, batchLen)
+			totalEVMTxs += batchLen
+			if batchLen > maxObservedBatch {
+				maxObservedBatch = batchLen
+			}
+		}
+	}
+
+	assert.Equal(t, totalTxs, totalEVMTxs, "every submitted EVM tx must appear exactly once")
+	assert.Greater(t, maxObservedBatch, 1, "at least one batch must wrap more than one tx (EVM.batchRun)")
+}
+
+// Test_TxMemPool_DuplicateTransactionRejection asserts that resending the
+// exact same raw transaction while it is still QUEUED (held behind a nonce
+// gap, not yet submitted) is rejected with ErrDuplicateTransaction.
+//
+// A fast-path-submitted tx instead becomes IN-FLIGHT, so resending it would
+// surface as ErrInFlightNonce (see Test_TxMemPool_InFlightNonceRejection).
+// To reach the duplicate path we must keep the tx queued: send an
+// out-of-order nonce so it parks behind a gap, then resend the identical
+// bytes before the gap fills.
+func Test_TxMemPool_DuplicateTransactionRejection(t *testing.T) {
+	_, cfg, stop := setupTxMemPoolGatewayNode(t, 10)
+	defer stop()
+
+	rpcTester := &rpcTest{
+		url: fmt.Sprintf("%s:%d", cfg.RPCHost, cfg.RPCPort),
+	}
+
+	testAddr := common.HexToAddress("0x061B63D29332e4de81bD9F51A48609824CD113a8")
+	privateKey, err := crypto.HexToECDSA("ddcb1e965557474fd13de3a66a40e4bc9b759a306e5db1046bac5ca47aafd584")
+	require.NoError(t, err)
+
+	fundEOA(t, rpcTester, testAddr)
+
+	testEoaReceiver := common.HexToAddress("0x6F416dcC9BEFe43b7dDF53f2662F76dD34A9fc11")
+
+	// Nonce 5 while the expected nonce is 0: the tx parks behind the gap and
+	// stays queued (never fast-pathed, never in flight).
+	signed, _, err := evmSign(
+		big.NewInt(50_000),
+		23_500,
+		privateKey,
+		5,
+		&testEoaReceiver,
+		nil,
+	)
+	require.NoError(t, err)
+
+	// First send queues the transaction.
+	_, err = rpcTester.sendRawTx(signed)
+	require.NoError(t, err)
+
+	// Resending the identical raw tx while it is still queued is rejected as
+	// a duplicate (ErrDuplicateTransaction -> "transaction already in pool").
+	_, err = rpcTester.sendRawTx(signed)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "transaction already in pool")
+}
+
 // fundEOA adds a sufficient amount of funds to the given test EOA, from
 // the test EOA created on emulator setup, and waits until the funding
 // transaction is executed.
@@ -422,9 +572,10 @@ func fundEOA(t *testing.T, rpcTester *rpcTest, testAddr common.Address) {
 // API-level state validation doesn't race the local index; the pool itself
 // reads the local index for expected nonces, which the ingestion engine
 // populates in the emulator.
-// TxPoolTTL is 5s so the TTL test runs quickly; TxMaxBatchSize is 10 so a
-// 10-tx burst fits in one batch.
-func setupTxMemPoolGatewayNode(t *testing.T) (emulator.Emulator, config.Config, func()) {
+// TxPoolTTL is 5s so the TTL test runs quickly; maxBatchSize is supplied by
+// the caller (10 lets a 10-tx burst fit in one batch; smaller values exercise
+// the batch-size cap).
+func setupTxMemPoolGatewayNode(t *testing.T, maxBatchSize int) (emulator.Emulator, config.Config, func()) {
 	srv, err := startEmulator(true)
 	require.NoError(t, err)
 
@@ -466,7 +617,7 @@ func setupTxMemPoolGatewayNode(t *testing.T) (emulator.Emulator, config.Config, 
 		TxCollectionWindow:  300 * time.Millisecond,
 		TxSubmissionSpacing: 1200 * time.Millisecond,
 		TxPoolTTL:           5 * time.Second,
-		TxMaxBatchSize:      10,
+		TxMaxBatchSize:      maxBatchSize,
 	}
 
 	bootstrapDone := make(chan struct{})

@@ -233,6 +233,29 @@ func (t *TxMemPool) Add(
 		enqueuedAt: now,
 	}
 
+	// Reject obvious cases before reading the index nonce — each read builds a
+	// full block view, so when we already know we will reject the transaction
+	// we must not pay that cost.
+
+	// Reject an exact duplicate of a transaction already in the queue.
+	if existing, ok := q.txs[tx.Nonce()]; ok && existing.txHash == tx.Hash() {
+		return errs.ErrDuplicateTransaction
+	}
+
+	// Reject a nonce that has been submitted and is still in flight: it
+	// would burn Flow fees on a guaranteed nonce-mismatch failure. A nonce at
+	// or below lastSentNonce while hasInFlight is inherently in flight, so
+	// rejecting it here is correct.
+	//
+	// Note (zhangchiqing): ErrInFlightNonce covers a nonce at/below the last
+	// in-flight nonce. A nonce strictly below the indexed (already-used) nonce
+	// is NOT separately distinguished here — doing so would require an extra
+	// index read on every Add. Such a transaction is instead pruned by
+	// pruneStaleTxs on the background loop, or fails observably on-chain.
+	if q.hasInFlight && tx.Nonce() <= q.lastSentNonce {
+		return errs.ErrInFlightNonce
+	}
+
 	// Read the index nonce at most once per Add — each read builds a full
 	// block view — and only when it is actually needed: to refresh a stale
 	// in-flight marker, or to evaluate the fast path.
@@ -266,17 +289,6 @@ func (t *TxMemPool) Add(
 			return nil
 		}
 		// On an unexpected nonce, fall through to the queue path.
-	}
-
-	// Reject an exact duplicate of a transaction already in the queue.
-	if existing, ok := q.txs[tx.Nonce()]; ok && existing.txHash == tx.Hash() {
-		return errs.ErrDuplicateTransaction
-	}
-
-	// Reject a nonce that has been submitted and is still in flight: it
-	// would burn Flow fees on a guaranteed nonce-mismatch failure.
-	if q.hasInFlight && tx.Nonce() <= q.lastSentNonce {
-		return errs.ErrInFlightNonce
 	}
 
 	// Enqueue. A same-nonce, different-payload resubmission replaces the
@@ -471,9 +483,23 @@ func (t *TxMemPool) collectDueBatches() []flushWork {
 		}
 
 		// No eligible prefix (gap at the head). Submit transactions held
-		// past their TTL anyway: they will fail on-chain with a real error,
-		// which is observable, instead of being silently dropped. Cap the
-		// batch at TxMaxBatchSize so a long-lived gap cannot produce an
+		// past their TTL anyway instead of dropping them.
+		//
+		// Rationale (no silent drops): submitting an unexecutable transaction
+		// produces a real, observable on-chain failure (operators can see the
+		// failed Flow transaction and its nonce-mismatch), whereas silently
+		// dropping it leaves no trace. The no-silent-drop requirement is the
+		// whole reason this pool exists (see PR #965 / DFNS), so an observable
+		// failure is strictly preferable to an invisible drop.
+		//
+		// Known tradeoff (zhangchiqing): a transaction whose nonce is far
+		// ahead of the index will still be submitted at TTL and burn fees on a
+		// guaranteed failure. Rejecting far-ahead nonces in Add is deliberately
+		// NOT done — it remains an open design question (how far ahead is "too
+		// far", and whether to add a knob for it), and is intentionally left
+		// out of this change rather than guessed at.
+		//
+		// Cap the batch at TxMaxBatchSize so a long-lived gap cannot produce an
 		// unbounded Flow transaction; the remainder drains on later ticks,
 		// gated by submission spacing.
 		expired := selectExpired(q.txs, now, t.config.TxPoolTTL)
