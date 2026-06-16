@@ -24,11 +24,11 @@ import (
 	"github.com/onflow/flow-evm-gateway/config"
 )
 
-// Test_NonceAwarePool_OutOfOrderBurst is the DFNS regression scenario:
+// Test_TxMemPool_OutOfOrderBurst is the DFNS regression scenario:
 // a burst of transactions from a single EOA, arriving out of nonce order,
 // must all be executed exactly once - no drops, no duplicates.
-func Test_NonceAwarePool_OutOfOrderBurst(t *testing.T) {
-	emu, cfg, stop := setupNonceAwareGatewayNode(t)
+func Test_TxMemPool_OutOfOrderBurst(t *testing.T) {
+	emu, cfg, stop := setupTxMemPoolGatewayNode(t)
 	defer stop()
 
 	rpcTester := &rpcTest{
@@ -107,12 +107,12 @@ func Test_NonceAwarePool_OutOfOrderBurst(t *testing.T) {
 	assert.Equal(t, totalTxs, totalEVMEvents)
 }
 
-// Test_NonceAwarePool_SingleTxImmediateSubmission asserts the fast path:
+// Test_TxMemPool_SingleTxImmediateSubmission asserts the fast path:
 // a transaction with the expected next nonce, an empty queue and nothing
 // in flight is submitted immediately as a single-tx batch, which takes
 // the `EVM.run` path of the run.cdc script.
-func Test_NonceAwarePool_SingleTxImmediateSubmission(t *testing.T) {
-	emu, cfg, stop := setupNonceAwareGatewayNode(t)
+func Test_TxMemPool_SingleTxImmediateSubmission(t *testing.T) {
+	emu, cfg, stop := setupTxMemPoolGatewayNode(t)
 	defer stop()
 
 	rpcTester := &rpcTest{
@@ -155,7 +155,7 @@ func Test_NonceAwarePool_SingleTxImmediateSubmission(t *testing.T) {
 	require.NoError(t, err)
 
 	// Inspect the Cadence transactions submitted by the gateway between
-	// the recorded heights. The nonce-aware pool always uses the run.cdc
+	// the recorded heights. The transaction mempool always uses the run.cdc
 	// script (recognizable by its `hexEncodedTxs` parameter), which uses
 	// `EVM.run` for a single-tx array and `EVM.batchRun` for more.
 	gatewayTxs := 0
@@ -189,11 +189,11 @@ func Test_NonceAwarePool_SingleTxImmediateSubmission(t *testing.T) {
 	assert.Equal(t, 1, gatewayTxs)
 }
 
-// Test_NonceAwarePool_GapHoldAndFill asserts that transactions behind a
+// Test_TxMemPool_GapHoldAndFill asserts that transactions behind a
 // nonce gap are held until the gap is filled, and that filling the gap
 // releases the whole consecutive run.
-func Test_NonceAwarePool_GapHoldAndFill(t *testing.T) {
-	_, cfg, stop := setupNonceAwareGatewayNode(t)
+func Test_TxMemPool_GapHoldAndFill(t *testing.T) {
+	_, cfg, stop := setupTxMemPoolGatewayNode(t)
 	defer stop()
 
 	rpcTester := &rpcTest{
@@ -269,12 +269,12 @@ func Test_NonceAwarePool_GapHoldAndFill(t *testing.T) {
 	}, time.Second*30, time.Second*1, "all transactions were not executed")
 }
 
-// Test_NonceAwarePool_TTLExpiry asserts that a transaction held behind a
+// Test_TxMemPool_TTLExpiry asserts that a transaction held behind a
 // nonce gap that never fills is evicted from the pool once `TxPoolTTL`
 // expires (it is submitted on-chain anyway, where it fails, instead of
 // being silently dropped).
-func Test_NonceAwarePool_TTLExpiry(t *testing.T) {
-	_, cfg, stop := setupNonceAwareGatewayNode(t)
+func Test_TxMemPool_TTLExpiry(t *testing.T) {
+	_, cfg, stop := setupTxMemPoolGatewayNode(t)
 	defer stop()
 
 	rpcTester := &rpcTest{
@@ -332,11 +332,11 @@ func Test_NonceAwarePool_TTLExpiry(t *testing.T) {
 	require.Zero(t, balance.Sign(), "transaction with nonce gap must never execute")
 }
 
-// Test_NonceAwarePool_InFlightNonceRejection asserts that a transaction
+// Test_TxMemPool_InFlightNonceRejection asserts that a transaction
 // carrying the same nonce as an in-flight submission is rejected, since
 // it would burn Flow fees on a guaranteed nonce-mismatch failure.
-func Test_NonceAwarePool_InFlightNonceRejection(t *testing.T) {
-	_, cfg, stop := setupNonceAwareGatewayNode(t)
+func Test_TxMemPool_InFlightNonceRejection(t *testing.T) {
+	_, cfg, stop := setupTxMemPoolGatewayNode(t)
 	defer stop()
 
 	rpcTester := &rpcTest{
@@ -415,8 +415,8 @@ func fundEOA(t *testing.T, rpcTester *rpcTest, testAddr common.Address) {
 	}, time.Second*15, time.Second*1, "funding transaction was not executed")
 }
 
-// setupNonceAwareGatewayNode starts an emulator and a gateway node
-// configured with the nonce-aware transaction pool.
+// setupTxMemPoolGatewayNode starts an emulator and a gateway node
+// configured with the transaction mempool.
 //
 // The tests use TxSealValidation like the existing batching tests, so
 // API-level state validation doesn't race the local index; the pool itself
@@ -424,7 +424,7 @@ func fundEOA(t *testing.T, rpcTester *rpcTest, testAddr common.Address) {
 // populates in the emulator.
 // TxPoolTTL is 5s so the TTL test runs quickly; TxMaxBatchSize is 10 so a
 // 10-tx burst fits in one batch.
-func setupNonceAwareGatewayNode(t *testing.T) (emulator.Emulator, config.Config, func()) {
+func setupTxMemPoolGatewayNode(t *testing.T) (emulator.Emulator, config.Config, func()) {
 	srv, err := startEmulator(true)
 	require.NoError(t, err)
 
@@ -462,7 +462,7 @@ func setupNonceAwareGatewayNode(t *testing.T) (emulator.Emulator, config.Config,
 		LogLevel:            zerolog.DebugLevel,
 		LogWriter:           testLogWriter(),
 		TxStateValidation:   config.TxSealValidation,
-		TxNonceAwareMode:    true,
+		TxMemPoolMode:       true,
 		TxCollectionWindow:  300 * time.Millisecond,
 		TxSubmissionSpacing: 1200 * time.Millisecond,
 		TxPoolTTL:           5 * time.Second,

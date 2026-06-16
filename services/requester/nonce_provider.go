@@ -11,7 +11,7 @@ import (
 )
 
 // NonceProvider returns the current nonce of the given EOA address.
-// The nonce-aware tx pool uses it to determine the expected next nonce.
+// The transaction mempool uses it to determine the expected next nonce.
 type NonceProvider interface {
 	// GetNonce returns the current nonce of the given EOA address.
 	//

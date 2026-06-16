@@ -102,12 +102,12 @@ var flowTotalSupply = prometheus.NewGauge(prometheus.GaugeOpts{
 
 var txPoolQueues = prometheus.NewGauge(prometheus.GaugeOpts{
 	Name: prefixedName("txpool_queues"),
-	Help: "Number of per-EOA queues currently held by the nonce-aware transaction pool",
+	Help: "Number of per-EOA queues currently held by the transaction mempool",
 })
 
 var txPoolQueuedTransactions = prometheus.NewGauge(prometheus.GaugeOpts{
 	Name: prefixedName("txpool_queued_transactions"),
-	Help: "Total number of transactions currently held across all queues in the nonce-aware transaction pool",
+	Help: "Total number of transactions currently held across all queues in the transaction mempool",
 })
 
 var metrics = []prometheus.Collector{

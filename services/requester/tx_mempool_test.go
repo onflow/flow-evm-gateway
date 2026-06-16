@@ -115,8 +115,8 @@ func newTestPool(
 	np NonceProvider,
 	submit func(context.Context, []heldTx) error,
 	cfg config.Config,
-) *NonceAwareTxPool {
-	pool := &NonceAwareTxPool{
+) *TxMemPool {
+	pool := &TxMemPool{
 		SingleTxPool: &SingleTxPool{
 			logger:      zerolog.Nop(),
 			txPublisher: models.NewPublisher[*gethTypes.Transaction](),
@@ -166,7 +166,7 @@ func signedTestTx(
 	return tx
 }
 
-func Test_NonceAwarePool_FastPathSubmitsImmediately(t *testing.T) {
+func Test_TxMemPool_FastPathSubmitsImmediately(t *testing.T) {
 	key, err := crypto.GenerateKey()
 	require.NoError(t, err)
 	from := crypto.PubkeyToAddress(key.PublicKey)
@@ -195,7 +195,7 @@ func Test_NonceAwarePool_FastPathSubmitsImmediately(t *testing.T) {
 	assert.Equal(t, uint64(0), q.lastSentNonce)
 }
 
-func Test_NonceAwarePool_UnexpectedNonceEnqueues(t *testing.T) {
+func Test_TxMemPool_UnexpectedNonceEnqueues(t *testing.T) {
 	key, err := crypto.GenerateKey()
 	require.NoError(t, err)
 	from := crypto.PubkeyToAddress(key.PublicKey)
@@ -222,7 +222,7 @@ func Test_NonceAwarePool_UnexpectedNonceEnqueues(t *testing.T) {
 	assert.False(t, q.hasInFlight)
 }
 
-func Test_NonceAwarePool_NonceReadErrorRejectsTx(t *testing.T) {
+func Test_TxMemPool_NonceReadErrorRejectsTx(t *testing.T) {
 	key, err := crypto.GenerateKey()
 	require.NoError(t, err)
 	from := crypto.PubkeyToAddress(key.PublicKey)
@@ -251,7 +251,7 @@ func Test_NonceAwarePool_NonceReadErrorRejectsTx(t *testing.T) {
 	assert.False(t, q.hasInFlight)
 }
 
-func Test_NonceAwarePool_InFlightDuplicateRejected(t *testing.T) {
+func Test_TxMemPool_InFlightDuplicateRejected(t *testing.T) {
 	key, err := crypto.GenerateKey()
 	require.NoError(t, err)
 
@@ -270,7 +270,7 @@ func Test_NonceAwarePool_InFlightDuplicateRejected(t *testing.T) {
 	assert.ErrorIs(t, err, errs.ErrInFlightNonce)
 }
 
-func Test_NonceAwarePool_FailedFlushDoesNotWedgeEOA(t *testing.T) {
+func Test_TxMemPool_FailedFlushDoesNotWedgeEOA(t *testing.T) {
 	key, err := crypto.GenerateKey()
 	require.NoError(t, err)
 	from := crypto.PubkeyToAddress(key.PublicKey)
@@ -290,8 +290,8 @@ func Test_NonceAwarePool_FailedFlushDoesNotWedgeEOA(t *testing.T) {
 			0: {txHash: signedTestTx(t, key, 0, 1).Hash(), nonce: 0, enqueuedAt: past},
 			1: {txHash: signedTestTx(t, key, 1, 1).Hash(), nonce: 1, enqueuedAt: past},
 		},
-		windowDeadline: past,
-		flushDeadline:  past,
+		collectionWindowEndsAt: past,
+		flushDeadline:          past,
 	}
 
 	work := pool.collectDueBatches()
@@ -377,7 +377,7 @@ func Test_ReconcileSubmission_SuccessStampsCompletionTime(t *testing.T) {
 
 // Fix 1: a failed fast-path submission must not rate-limit the EOA via
 // lastSubmittedAt, and must leave nothing in flight.
-func Test_NonceAwarePool_FailedFastPathLeavesNoState(t *testing.T) {
+func Test_TxMemPool_FailedFastPathLeavesNoState(t *testing.T) {
 	key, err := crypto.GenerateKey()
 	require.NoError(t, err)
 	from := crypto.PubkeyToAddress(key.PublicKey)
@@ -400,7 +400,7 @@ func Test_NonceAwarePool_FailedFastPathLeavesNoState(t *testing.T) {
 
 // Fix 2: resubmitting a single held tx with the same nonce must not re-arm the
 // flush deadline anchored at first enqueue.
-func Test_NonceAwarePool_SameNonceReplacementKeepsFlushDeadline(t *testing.T) {
+func Test_TxMemPool_SameNonceReplacementKeepsFlushDeadline(t *testing.T) {
 	key, err := crypto.GenerateKey()
 	require.NoError(t, err)
 	from := crypto.PubkeyToAddress(key.PublicKey)
@@ -421,7 +421,7 @@ func Test_NonceAwarePool_SameNonceReplacementKeepsFlushDeadline(t *testing.T) {
 }
 
 // Fix 3: TTL-expiry flushes are capped at TxMaxBatchSize.
-func Test_NonceAwarePool_TTLFlushCappedAtMaxBatch(t *testing.T) {
+func Test_TxMemPool_TTLFlushCappedAtMaxBatch(t *testing.T) {
 	key, err := crypto.GenerateKey()
 	require.NoError(t, err)
 	from := crypto.PubkeyToAddress(key.PublicKey)
@@ -443,7 +443,7 @@ func Test_NonceAwarePool_TTLFlushCappedAtMaxBatch(t *testing.T) {
 	for n := uint64(10); n < 17; n++ { // 7 expired txs
 		txs[n] = makeHeldTx(n, past)
 	}
-	pool.queues[from] = &eoaQueue{txs: txs, windowDeadline: past, flushDeadline: past}
+	pool.queues[from] = &eoaQueue{txs: txs, collectionWindowEndsAt: past, flushDeadline: past}
 
 	work := pool.collectDueBatches()
 	require.Len(t, work, 1)
@@ -456,7 +456,7 @@ func Test_NonceAwarePool_TTLFlushCappedAtMaxBatch(t *testing.T) {
 
 // Fix 4: a queue emptied without ever submitting (e.g. all txs pruned) must
 // still age out via lastActivity rather than leaking forever.
-func Test_NonceAwarePool_EmptyQueueAgesOut(t *testing.T) {
+func Test_TxMemPool_EmptyQueueAgesOut(t *testing.T) {
 	pool := newTestPool(
 		&fakeNonceProvider{nonce: 0},
 		func(_ context.Context, _ []heldTx) error { return nil },
@@ -505,7 +505,7 @@ func (c *countingCollector) TxPoolSize(queues int, queued int) {
 // Stale txs (nonce below the indexed nonce) must be pruned from the queue, but
 // pruning must NOT increment the TransactionsDropped metric — that metric is
 // reserved for build/submission errors of the Cadence transaction to Flow.
-func Test_NonceAwarePool_PruneStaleDoesNotIncrementDropped(t *testing.T) {
+func Test_TxMemPool_PruneStaleDoesNotIncrementDropped(t *testing.T) {
 	collector := &countingCollector{Collector: metrics.NopCollector}
 	pool := newTestPool(
 		// Index reports nonce 5; held txs below 5 are stale.
@@ -535,7 +535,7 @@ func Test_NonceAwarePool_PruneStaleDoesNotIncrementDropped(t *testing.T) {
 
 // collectDueBatches must report the pool's memory footprint via TxPoolSize each
 // time it runs.
-func Test_NonceAwarePool_CollectDueBatchesReportsSize(t *testing.T) {
+func Test_TxMemPool_CollectDueBatchesReportsSize(t *testing.T) {
 	collector := &countingCollector{Collector: metrics.NopCollector}
 	pool := newTestPool(
 		&fakeNonceProvider{nonce: 0},
@@ -547,14 +547,14 @@ func Test_NonceAwarePool_CollectDueBatchesReportsSize(t *testing.T) {
 	// Two EOAs, neither due (deadlines in the future), holding 3 txs total.
 	future := time.Now().Add(time.Hour)
 	pool.queues[gethCommon.HexToAddress("0xaaa")] = &eoaQueue{
-		txs:            map[uint64]heldTx{1: makeHeldTx(1, time.Now())},
-		windowDeadline: future,
-		flushDeadline:  future,
+		txs:                    map[uint64]heldTx{1: makeHeldTx(1, time.Now())},
+		collectionWindowEndsAt: future,
+		flushDeadline:          future,
 	}
 	pool.queues[gethCommon.HexToAddress("0xbbb")] = &eoaQueue{
-		txs:            map[uint64]heldTx{2: makeHeldTx(2, time.Now()), 3: makeHeldTx(3, time.Now())},
-		windowDeadline: future,
-		flushDeadline:  future,
+		txs:                    map[uint64]heldTx{2: makeHeldTx(2, time.Now()), 3: makeHeldTx(3, time.Now())},
+		collectionWindowEndsAt: future,
+		flushDeadline:          future,
 	}
 
 	pool.collectDueBatches()

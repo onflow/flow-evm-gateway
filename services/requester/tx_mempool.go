@@ -19,7 +19,7 @@ import (
 	"github.com/onflow/flow-evm-gateway/services/requester/keystore"
 )
 
-// heldTx is a transaction held in the nonce-aware pool, waiting for its
+// heldTx is a transaction held in the mempool, waiting for its
 // collection window to elapse or its nonce gap to be filled.
 type heldTx struct {
 	txPayload  cadence.String
@@ -66,10 +66,10 @@ func selectExpired(
 	return expired
 }
 
-// nonceAwarePoolTickInterval is the resolution at which due queues are
+// txMemPoolTickInterval is the resolution at which due queues are
 // scanned and flushed. Deadlines are therefore honored with up to this
 // much slack, which is acceptable relative to the 300ms collection window.
-const nonceAwarePoolTickInterval = 50 * time.Millisecond
+const txMemPoolTickInterval = 50 * time.Millisecond
 
 // idleQueueRetention is how long a queue with no held transactions and no
 // recent activity is kept before being removed, to bound memory usage.
@@ -81,8 +81,10 @@ type eoaQueue struct {
 	// last-write-wins semantics when a client resubmits a not-yet-sent
 	// transaction with the same nonce (e.g. to change its payload).
 	txs map[uint64]heldTx
-	// windowDeadline is lastArrival + TxCollectionWindow.
-	windowDeadline time.Time
+	// collectionWindowEndsAt is lastArrival + TxCollectionWindow. The queue is
+	// not flushed until the current time has passed this instant: it marks the
+	// end of the sliding collection window, NOT a deadline to act before.
+	collectionWindowEndsAt time.Time
 	// flushDeadline is firstEnqueue + TxSubmissionSpacing. It caps how long
 	// a continuously-resetting collection window can defer a flush. There is
 	// deliberately no separate "hard cap" knob: TxSubmissionSpacing serves
@@ -102,7 +104,19 @@ type eoaQueue struct {
 	hasInFlight bool
 }
 
-// NonceAwareTxPool is a `TxPool` implementation that uses the EOA nonce from
+// isEmpty reports whether the queue holds no transactions. Callers must hold
+// the pool's queueMux.
+func (q *eoaQueue) isEmpty() bool {
+	return len(q.txs) == 0
+}
+
+// size returns the number of transactions held in the queue. Callers must hold
+// the pool's queueMux.
+func (q *eoaQueue) size() int {
+	return len(q.txs)
+}
+
+// TxMemPool is a `TxPool` implementation that uses the EOA nonce from
 // the local state index to decide when and how to submit transactions to the
 // Flow network.
 //
@@ -136,7 +150,7 @@ type eoaQueue struct {
 // the duration of one Flow submission, trading cross-EOA throughput for the
 // simplicity of atomic state updates; a per-EOA lock is the known upgrade
 // path if contention shows up.
-type NonceAwareTxPool struct {
+type TxMemPool struct {
 	*SingleTxPool
 	nonceProvider NonceProvider
 	queues        map[gethCommon.Address]*eoaQueue
@@ -146,9 +160,9 @@ type NonceAwareTxPool struct {
 	submitBatch func(ctx context.Context, txs []heldTx) error
 }
 
-var _ TxPool = &NonceAwareTxPool{}
+var _ TxPool = &TxMemPool{}
 
-func NewNonceAwareTxPool(
+func NewTxMemPool(
 	ctx context.Context,
 	client *CrossSporkClient,
 	transactionsPublisher *models.Publisher[*gethTypes.Transaction],
@@ -157,7 +171,7 @@ func NewNonceAwareTxPool(
 	collector metrics.Collector,
 	keystore *keystore.KeyStore,
 	nonceProvider NonceProvider,
-) (*NonceAwareTxPool, error) {
+) (*TxMemPool, error) {
 	singleTxPool, err := NewSingleTxPool(
 		ctx, client, transactionsPublisher, logger, config, collector, keystore,
 	)
@@ -165,7 +179,7 @@ func NewNonceAwareTxPool(
 		return nil, err
 	}
 
-	pool := &NonceAwareTxPool{
+	pool := &TxMemPool{
 		SingleTxPool:  singleTxPool,
 		nonceProvider: nonceProvider,
 		queues:        make(map[gethCommon.Address]*eoaQueue),
@@ -180,7 +194,7 @@ func NewNonceAwareTxPool(
 // Add submits the transaction immediately when it carries the expected next
 // nonce and nothing is queued or in flight for the EOA; otherwise it
 // enqueues the transaction for the background flush loop.
-func (t *NonceAwareTxPool) Add(
+func (t *TxMemPool) Add(
 	ctx context.Context,
 	tx *gethTypes.Transaction,
 ) error {
@@ -222,7 +236,7 @@ func (t *NonceAwareTxPool) Add(
 	// Read the index nonce at most once per Add — each read builds a full
 	// block view — and only when it is actually needed: to refresh a stale
 	// in-flight marker, or to evaluate the fast path.
-	if q.hasInFlight || (len(q.txs) == 0 && t.spacingElapsed(q, now)) {
+	if q.hasInFlight || (q.isEmpty() && t.spacingElapsed(q, now)) {
 		indexNonce, nonceErr := t.nonceProvider.GetNonce(from)
 		if nonceErr != nil {
 			// A nonce lookup failure is an exception, not an expected
@@ -238,7 +252,7 @@ func (t *NonceAwareTxPool) Add(
 		// Fast path: expected nonce, empty queue, nothing in flight,
 		// spacing satisfied. Submit right away — zero added latency for
 		// the common case.
-		if len(q.txs) == 0 && !q.hasInFlight &&
+		if q.isEmpty() && !q.hasInFlight &&
 			t.spacingElapsed(q, now) && tx.Nonce() == indexNonce {
 			if submitErr := t.submitBatch(ctx, []heldTx{userTx}); submitErr != nil {
 				// Submission failed: leave queue state untouched so the EOA
@@ -267,9 +281,9 @@ func (t *NonceAwareTxPool) Add(
 
 	// Enqueue. A same-nonce, different-payload resubmission replaces the
 	// queued transaction (last write wins), matching mempool semantics.
-	wasEmpty := len(q.txs) == 0
+	wasEmpty := q.isEmpty()
 	q.txs[tx.Nonce()] = userTx
-	q.windowDeadline = now.Add(t.config.TxCollectionWindow)
+	q.collectionWindowEndsAt = now.Add(t.config.TxCollectionWindow)
 	// Anchor the flush deadline at the FIRST enqueue only. Re-arming it on a
 	// same-nonce replacement would let a client defer the flush indefinitely
 	// by resubmitting one held transaction before each deadline.
@@ -291,7 +305,7 @@ func (q *eoaQueue) refreshInFlight(indexNonce uint64) {
 
 // spacingElapsed reports whether enough time has passed since the last
 // Cadence submission for this EOA. Callers must hold queueMux.
-func (t *NonceAwareTxPool) spacingElapsed(q *eoaQueue, now time.Time) bool {
+func (t *TxMemPool) spacingElapsed(q *eoaQueue, now time.Time) bool {
 	return q.lastSubmittedAt.IsZero() ||
 		now.Sub(q.lastSubmittedAt) >= t.config.TxSubmissionSpacing
 }
@@ -311,8 +325,8 @@ type flushWork struct {
 	prevLastSubmittedAt time.Time
 }
 
-func (t *NonceAwareTxPool) processQueues(ctx context.Context) {
-	ticker := time.NewTicker(nonceAwarePoolTickInterval)
+func (t *TxMemPool) processQueues(ctx context.Context) {
+	ticker := time.NewTicker(txMemPoolTickInterval)
 	defer ticker.Stop()
 
 	for {
@@ -323,7 +337,7 @@ func (t *NonceAwareTxPool) processQueues(ctx context.Context) {
 			for _, w := range t.collectDueBatches() {
 				if err := t.submitWork(ctx, w); err != nil {
 					t.logger.Error().Err(err).Msgf(
-						"failed to submit Flow transaction from NonceAwareTxPool for EOA: %s",
+						"failed to submit Flow transaction from TxMemPool for EOA: %s",
 						w.from.Hex(),
 					)
 				}
@@ -334,7 +348,7 @@ func (t *NonceAwareTxPool) processQueues(ctx context.Context) {
 
 // submitWork submits one detached batch and reconciles queue state once the
 // network call returns.
-func (t *NonceAwareTxPool) submitWork(ctx context.Context, w flushWork) error {
+func (t *TxMemPool) submitWork(ctx context.Context, w flushWork) error {
 	err := t.submitBatch(ctx, w.txs)
 	t.reconcileSubmission(w, err)
 	return err
@@ -354,7 +368,7 @@ func (t *NonceAwareTxPool) submitWork(ctx context.Context, w flushWork) error {
 // On success it stamps lastSubmittedAt with the actual completion time, so
 // submission spacing is measured from when the Flow transaction was really
 // sent (its build/send latency is variable).
-func (t *NonceAwareTxPool) reconcileSubmission(w flushWork, submitErr error) {
+func (t *TxMemPool) reconcileSubmission(w flushWork, submitErr error) {
 	t.queueMux.Lock()
 	defer t.queueMux.Unlock()
 
@@ -377,7 +391,7 @@ func (t *NonceAwareTxPool) reconcileSubmission(w flushWork, submitErr error) {
 // collectDueBatches selects, under the queue lock, every batch that is due
 // for submission, updates the queue state optimistically, and returns the
 // detached work items.
-func (t *NonceAwareTxPool) collectDueBatches() []flushWork {
+func (t *TxMemPool) collectDueBatches() []flushWork {
 	t.queueMux.Lock()
 	defer t.queueMux.Unlock()
 
@@ -385,7 +399,7 @@ func (t *NonceAwareTxPool) collectDueBatches() []flushWork {
 	work := make([]flushWork, 0)
 
 	for from, q := range t.queues {
-		if len(q.txs) == 0 {
+		if q.isEmpty() {
 			// Bound memory: drop queues with no held txs and no activity past
 			// the retention period. Any in-flight submission has long since
 			// resolved on-chain after this window, so discarding a lingering
@@ -399,7 +413,7 @@ func (t *NonceAwareTxPool) collectDueBatches() []flushWork {
 
 		// Not due yet: both the sliding window and the flush deadline are
 		// still in the future.
-		if now.Before(q.windowDeadline) && now.Before(q.flushDeadline) {
+		if now.Before(q.collectionWindowEndsAt) && now.Before(q.flushDeadline) {
 			continue
 		}
 
@@ -442,9 +456,9 @@ func (t *NonceAwareTxPool) collectDueBatches() []flushWork {
 			q.lastSubmittedAt = now
 			q.lastActivity = now
 			q.hasInFlight = true
-			if len(q.txs) > 0 {
+			if !q.isEmpty() {
 				// Re-arm for the remaining (post-gap or over-cap) txs.
-				q.windowDeadline = now.Add(t.config.TxCollectionWindow)
+				q.collectionWindowEndsAt = now.Add(t.config.TxCollectionWindow)
 				q.flushDeadline = now.Add(t.config.TxSubmissionSpacing)
 			}
 			work = append(work, flushWork{
@@ -496,7 +510,7 @@ func (t *NonceAwareTxPool) collectDueBatches() []flushWork {
 	// concurrently (and idle queues are pruned above).
 	queuedTxs := 0
 	for _, q := range t.queues {
-		queuedTxs += len(q.txs)
+		queuedTxs += q.size()
 	}
 	t.collector.TxPoolSize(len(t.queues), queuedTxs)
 
@@ -506,7 +520,7 @@ func (t *NonceAwareTxPool) collectDueBatches() []flushWork {
 // pruneStaleTxs removes queued transactions whose nonce is below the current
 // index nonce. They are guaranteed to fail with nonce-too-low and would only
 // burn fees. Callers must hold queueMux.
-func (t *NonceAwareTxPool) pruneStaleTxs(
+func (t *TxMemPool) pruneStaleTxs(
 	q *eoaQueue,
 	from gethCommon.Address,
 	indexNonce uint64,
@@ -527,7 +541,7 @@ func (t *NonceAwareTxPool) pruneStaleTxs(
 // submitTxBatch wraps the given (nonce-ascending) transactions in a single
 // Cadence transaction and sends it to the Flow network. The run.cdc script
 // uses EVM.run for a single tx and EVM.batchRun for multiple.
-func (t *NonceAwareTxPool) submitTxBatch(ctx context.Context, txs []heldTx) error {
+func (t *TxMemPool) submitTxBatch(ctx context.Context, txs []heldTx) error {
 	hexEncodedTxs := make([]cadence.Value, len(txs))
 	for i, htx := range txs {
 		hexEncodedTxs[i] = htx.txPayload
@@ -561,7 +575,7 @@ func (t *NonceAwareTxPool) submitTxBatch(ctx context.Context, txs []heldTx) erro
 	return nil
 }
 
-func (t *NonceAwareTxPool) logTxsDropped(txs []heldTx, err error, msg string) {
+func (t *TxMemPool) logTxsDropped(txs []heldTx, err error, msg string) {
 	txHashes := make([]string, len(txs))
 	for i, htx := range txs {
 		txHashes[i] = htx.txHash.Hex()

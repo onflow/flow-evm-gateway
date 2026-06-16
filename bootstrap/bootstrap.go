@@ -244,13 +244,13 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 	// create transaction pool
 	var txPool requester.TxPool
 	var err error
-	if b.config.TxNonceAwareMode {
+	if b.config.TxMemPoolMode {
 		nonceProvider := requester.NewLocalNonceProvider(
 			b.config.FlowNetworkID,
 			b.storages.Registers,
 			b.storages.Blocks,
 		)
-		txPool, err = requester.NewNonceAwareTxPool(
+		txPool, err = requester.NewTxMemPool(
 			ctx,
 			b.client,
 			b.publishers.Transaction,
