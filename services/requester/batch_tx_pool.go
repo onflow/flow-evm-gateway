@@ -247,7 +247,15 @@ func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 				// deduplicate pooled transactions based on nonce, to save on-chain
 				// computation checks.
 				txs = slices.CompactFunc(txs, func(i, j pooledEvmTx) bool {
-					return i.nonce == j.nonce
+					if i.nonce == j.nonce {
+						t.logger.Warn().Msgf(
+							"dropped tx with duplicate nonce: %d for EOA: %s",
+							i.nonce,
+							address,
+						)
+						return true
+					}
+					return false
 				})
 				txSequence, remaining := selectSequentialNonces(txs, nonce, maxTxBatch)
 				t.txMux.Lock()
