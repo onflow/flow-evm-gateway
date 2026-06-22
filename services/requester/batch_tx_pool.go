@@ -213,7 +213,7 @@ func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 				txs := slices.DeleteFunc(pooledTxs, func(ptx pooledEvmTx) bool {
 					// keep up to `maxEOAPoolSize` txs per EOA in the pool,
 					// to avoid unconstrained memory growth
-					if (ptx.nonce - nonce) > maxEOAPoolSize {
+					if ptx.nonce > maxEOAPoolSize + nonce {
 						return true
 					}
 					return ptx.nonce < nonce
