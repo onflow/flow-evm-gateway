@@ -244,6 +244,11 @@ func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 				sort.Slice(txs, func(i, j int) bool {
 					return txs[i].nonce < txs[j].nonce
 				})
+				// deduplicate pooled transactions based on nonce, to save on-chain
+				// computation checks.
+				txs = slices.CompactFunc(txs, func(i, j pooledEvmTx) bool {
+					return i.nonce == j.nonce
+				})
 				txSequence, remaining := selectSequentialNonces(txs, nonce, maxTxBatch)
 				t.txMux.Lock()
 				t.pooledTxs[address] = append(t.pooledTxs[address], remaining...)
