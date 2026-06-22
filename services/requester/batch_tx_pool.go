@@ -213,10 +213,24 @@ func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 				txs := slices.DeleteFunc(pooledTxs, func(ptx pooledEvmTx) bool {
 					// keep up to `maxEOAPoolSize` txs per EOA in the pool,
 					// to avoid unconstrained memory growth
-					if ptx.nonce > maxEOAPoolSize + nonce {
+					if ptx.nonce > maxEOAPoolSize+nonce {
+						t.logger.Warn().Msgf(
+							"dropped tx with nonce: %d for EOA: %s, due to max pool size limit",
+							ptx.nonce,
+							address,
+						)
 						return true
 					}
-					return ptx.nonce < nonce
+					if ptx.nonce < nonce {
+						t.logger.Warn().Msgf(
+							"dropped tx with nonce: %d for EOA: %s, expected state nonce: %d",
+							ptx.nonce,
+							address,
+							nonce,
+						)
+						return true
+					}
+					return false
 				})
 
 				// pick the txs with the valid nonce sequence, and add the remaining
