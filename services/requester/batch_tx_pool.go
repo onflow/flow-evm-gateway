@@ -22,7 +22,12 @@ import (
 )
 
 const (
-	// Max number of transactions per EOA batch submission
+	// Max number of transactions per EOA batch submission. The Cadence
+	// transaction that wraps and executes EVM transactions with
+	// `EVM.batchRun`, is submitted with a computation limit of `9,999`.
+	// Adding more EVM transactions per batch, increases the risk of
+	// running out of computation limit, which will revert all wrapped
+	// EVM transactions.
 	maxTxBatch = 5
 	// Max number of pooled transactions per EOA, to avoid
 	// unconstrained memory growth
