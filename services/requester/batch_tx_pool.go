@@ -192,7 +192,7 @@ func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 			// EOA below, without recreating the block view each time.
 			blockView, err := t.nonceProvider.GetBlockView()
 			if err != nil {
-				t.logger.Error().Err(err).Msgf(
+				t.logger.Fatal().Err(err).Msgf(
 					"failed to construct BlockView for nonce reading",
 				)
 				return
