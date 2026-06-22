@@ -261,8 +261,11 @@ func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 				)
 				if err != nil {
 					t.logger.Error().Err(err).Msgf(
-						"failed to submit batch Flow transaction for EOA: %s",
+						"failed to submit batch Flow transaction for EOA: %s, batch count: %d, nonce: %d, tx hash: %s",
 						address.Hex(),
+						len(txSequence),
+						txSequence[0].nonce,
+						txSequence[0].txHash.Hex(),
 					)
 					// In case of any submission errors, add the transactions back
 					// to the pool as a retry mechanism.
