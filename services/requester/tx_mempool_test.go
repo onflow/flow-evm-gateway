@@ -192,7 +192,7 @@ func Test_TxMemPool_FastPathSubmitsImmediately(t *testing.T) {
 	require.NotNil(t, q)
 	assert.Empty(t, q.txs)
 	assert.True(t, q.hasInFlight)
-	assert.Equal(t, uint64(0), q.lastSentNonce)
+	assert.Equal(t, uint64(0), q.lastSubmittedNonce)
 }
 
 func Test_TxMemPool_UnexpectedNonceEnqueues(t *testing.T) {
@@ -302,7 +302,7 @@ func Test_TxMemPool_FailedFlushDoesNotWedgeEOA(t *testing.T) {
 	// State was committed optimistically under the lock.
 	q := pool.queues[from]
 	require.True(t, q.hasInFlight)
-	assert.Equal(t, uint64(1), q.lastSentNonce)
+	assert.Equal(t, uint64(1), q.lastSubmittedNonce)
 
 	// The submission fails; submitWork must reconcile the in-flight marker.
 	err = pool.submitWork(context.Background(), work[0])
@@ -325,7 +325,7 @@ func Test_ReconcileSubmission_OnlyClearsMatchingBatch(t *testing.T) {
 	pool.queues[from] = &eoaQueue{
 		txs:             map[uint64]heldTx{},
 		hasInFlight:     true,
-		lastSentNonce:   7,
+		lastSubmittedNonce:   7,
 		lastSubmittedAt: submittedAt,
 	}
 	prev := time.Now().Add(-5 * time.Second)
@@ -565,7 +565,7 @@ func Test_TxMemPool_CollectDueBatchesReportsSize(t *testing.T) {
 }
 
 func Test_RefreshInFlight(t *testing.T) {
-	q := &eoaQueue{hasInFlight: true, lastSentNonce: 3}
+	q := &eoaQueue{hasInFlight: true, lastSubmittedNonce: 3}
 
 	// Index has not advanced past the sent nonce: stays in flight.
 	q.refreshInFlight(3)

@@ -90,17 +90,18 @@ type eoaQueue struct {
 	// deliberately no separate "hard cap" knob: TxSubmissionSpacing serves
 	// both purposes (see PR #965 discussion).
 	flushDeadline time.Time
-	// lastSubmittedAt is when the last Cadence tx for this EOA was sent.
+	// lastSubmittedAt is when the last Cadence tx for this EOA was submitted.
 	lastSubmittedAt time.Time
+	// lastSubmittedNonce is the highest nonce included in the last submission.
+	// Only meaningful while hasInFlight is true. (Kept next to lastSubmittedAt:
+	// "submitted" and "sent" mean the same action here.)
+	lastSubmittedNonce uint64
 	// lastActivity is when this EOA was last touched — a transaction received
 	// (Add) or a batch flushed (collectDueBatches). It bounds memory: a queue
 	// with no held txs and no activity past idleQueueRetention is removed.
 	lastActivity time.Time
-	// lastSentNonce is the highest nonce included in the last submission.
-	// Only meaningful while hasInFlight is true.
-	lastSentNonce uint64
 	// hasInFlight reports whether a submission exists that the local index
-	// has not yet confirmed (index nonce <= lastSentNonce).
+	// has not yet confirmed (index nonce <= lastSubmittedNonce).
 	hasInFlight bool
 }
 
@@ -244,7 +245,7 @@ func (t *TxMemPool) Add(
 
 	// Reject a nonce that has been submitted and is still in flight: it
 	// would burn Flow fees on a guaranteed nonce-mismatch failure. A nonce at
-	// or below lastSentNonce while hasInFlight is inherently in flight, so
+	// or below lastSubmittedNonce while hasInFlight is inherently in flight, so
 	// rejecting it here is correct.
 	//
 	// Note (zhangchiqing): ErrInFlightNonce covers a nonce at/below the last
@@ -252,7 +253,7 @@ func (t *TxMemPool) Add(
 	// is NOT separately distinguished here — doing so would require an extra
 	// index read on every Add. Such a transaction is instead pruned by
 	// pruneStaleTxs on the background loop, or fails observably on-chain.
-	if q.hasInFlight && tx.Nonce() <= q.lastSentNonce {
+	if q.hasInFlight && tx.Nonce() <= q.lastSubmittedNonce {
 		return errs.ErrInFlightNonce
 	}
 
@@ -284,7 +285,7 @@ func (t *TxMemPool) Add(
 				return submitErr
 			}
 			q.lastSubmittedAt = time.Now()
-			q.lastSentNonce = tx.Nonce()
+			q.lastSubmittedNonce = tx.Nonce()
 			q.hasInFlight = true
 			return nil
 		}
@@ -310,7 +311,7 @@ func (t *TxMemPool) Add(
 // advanced past the last submitted nonce. Callers must hold the pool's
 // queueMux.
 func (q *eoaQueue) refreshInFlight(indexNonce uint64) {
-	if q.hasInFlight && indexNonce > q.lastSentNonce {
+	if q.hasInFlight && indexNonce > q.lastSubmittedNonce {
 		q.hasInFlight = false
 	}
 }
@@ -391,7 +392,7 @@ func (t *TxMemPool) reconcileSubmission(w flushWork, submitErr error) {
 
 	if submitErr != nil {
 		q.lastSubmittedAt = w.prevLastSubmittedAt
-		if w.inFlight && q.hasInFlight && q.lastSentNonce == w.txs[len(w.txs)-1].nonce {
+		if w.inFlight && q.hasInFlight && q.lastSubmittedNonce == w.txs[len(w.txs)-1].nonce {
 			q.hasInFlight = false
 		}
 		return
@@ -454,8 +455,8 @@ func (t *TxMemPool) collectDueBatches() []flushWork {
 		t.pruneStaleTxs(q, from, indexNonce)
 
 		expected := indexNonce
-		if q.hasInFlight && q.lastSentNonce+1 > expected {
-			expected = q.lastSentNonce + 1
+		if q.hasInFlight && q.lastSubmittedNonce+1 > expected {
+			expected = q.lastSubmittedNonce + 1
 		}
 
 		prefix := selectConsecutivePrefix(q.txs, expected, t.config.TxMaxBatchSize)
@@ -464,7 +465,7 @@ func (t *TxMemPool) collectDueBatches() []flushWork {
 				delete(q.txs, htx.nonce)
 			}
 			prevSubmittedAt := q.lastSubmittedAt
-			q.lastSentNonce = prefix[len(prefix)-1].nonce
+			q.lastSubmittedNonce = prefix[len(prefix)-1].nonce
 			q.lastSubmittedAt = now
 			q.lastActivity = now
 			q.hasInFlight = true
@@ -510,7 +511,7 @@ func (t *TxMemPool) collectDueBatches() []flushWork {
 			for _, htx := range expired {
 				delete(q.txs, htx.nonce)
 			}
-			// Deliberately do NOT set hasInFlight/lastSentNonce here: these
+			// Deliberately do NOT set hasInFlight/lastSubmittedNonce here: these
 			// nonces are out of order, and marking them in flight would
 			// corrupt the expected-nonce computation for future flushes.
 			prevSubmittedAt := q.lastSubmittedAt
