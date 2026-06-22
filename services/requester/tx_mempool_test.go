@@ -314,65 +314,75 @@ func Test_TxMemPool_FailedFlushDoesNotWedgeEOA(t *testing.T) {
 	assert.NotErrorIs(t, err, errs.ErrInFlightNonce)
 }
 
-func Test_ReconcileSubmission_OnlyClearsMatchingBatch(t *testing.T) {
+func Test_RollbackFailedSubmission_OnlyClearsMatchingBatch(t *testing.T) {
 	pool := newTestPool(
 		&fakeNonceProvider{nonce: 0},
 		func(_ context.Context, _ []heldTx) error { return nil },
 		testPoolConfig(),
 	)
 	from := gethCommon.HexToAddress("0xabc")
-	submittedAt := time.Now()
 	pool.queues[from] = &eoaQueue{
-		txs:             map[uint64]heldTx{},
-		hasInFlight:     true,
-		lastSubmittedNonce:   7,
-		lastSubmittedAt: submittedAt,
+		txs:                map[uint64]heldTx{},
+		hasInFlight:        true,
+		lastSubmittedNonce: 7,
 	}
-	prev := time.Now().Add(-5 * time.Second)
-	submitErr := errors.New("network down")
 
-	// A different (newer) batch owns the marker: in-flight not cleared, but
-	// lastSubmittedAt is still restored for the failed batch.
-	pool.reconcileSubmission(
-		flushWork{from: from, txs: []heldTx{makeHeldTx(5, prev)}, inFlight: true, prevLastSubmittedAt: prev},
-		submitErr,
+	// A different (newer) batch owns the marker: not cleared.
+	pool.rollbackFailedSubmission(
+		flushWork{from: from, txs: []heldTx{makeHeldTx(5, time.Time{})}, inFlight: true},
 	)
 	assert.True(t, pool.queues[from].hasInFlight)
-	assert.Equal(t, prev, pool.queues[from].lastSubmittedAt)
 
-	// The failed batch still owns the marker: rollback clears it.
-	pool.queues[from].lastSubmittedAt = submittedAt
-	pool.reconcileSubmission(
-		flushWork{from: from, txs: []heldTx{makeHeldTx(7, prev)}, inFlight: true, prevLastSubmittedAt: prev},
-		submitErr,
+	// A TTL-expiry batch (inFlight false) never clears the marker, even if its
+	// last nonce coincides with lastSubmittedNonce.
+	pool.rollbackFailedSubmission(
+		flushWork{from: from, txs: []heldTx{makeHeldTx(7, time.Time{})}, inFlight: false},
+	)
+	assert.True(t, pool.queues[from].hasInFlight)
+
+	// The failed in-flight batch still owns the marker: cleared.
+	pool.rollbackFailedSubmission(
+		flushWork{from: from, txs: []heldTx{makeHeldTx(7, time.Time{})}, inFlight: true},
 	)
 	assert.False(t, pool.queues[from].hasInFlight)
 
 	// Unknown EOA: no panic.
-	pool.reconcileSubmission(
-		flushWork{from: gethCommon.HexToAddress("0xdef"), txs: []heldTx{makeHeldTx(7, prev)}, inFlight: true},
-		submitErr,
+	pool.rollbackFailedSubmission(
+		flushWork{from: gethCommon.HexToAddress("0xdef"), txs: []heldTx{makeHeldTx(7, time.Time{})}, inFlight: true},
 	)
 }
 
-func Test_ReconcileSubmission_SuccessStampsCompletionTime(t *testing.T) {
+// A successful submission leaves the optimistically-committed in-flight state
+// intact — there is no success-path reconciliation to undo it.
+func Test_TxMemPool_SuccessfulFlushKeepsInFlight(t *testing.T) {
+	key, err := crypto.GenerateKey()
+	require.NoError(t, err)
+	from := crypto.PubkeyToAddress(key.PublicKey)
+
 	pool := newTestPool(
 		&fakeNonceProvider{nonce: 0},
 		func(_ context.Context, _ []heldTx) error { return nil },
 		testPoolConfig(),
 	)
-	from := gethCommon.HexToAddress("0xabc")
-	collectedAt := time.Now().Add(-time.Second)
-	pool.queues[from] = &eoaQueue{txs: map[uint64]heldTx{}, lastSubmittedAt: collectedAt}
 
-	pool.reconcileSubmission(
-		flushWork{from: from, txs: []heldTx{makeHeldTx(0, collectedAt)}, prevLastSubmittedAt: time.Time{}},
-		nil,
-	)
+	past := time.Now().Add(-time.Second)
+	pool.queues[from] = &eoaQueue{
+		txs: map[uint64]heldTx{
+			0: {txHash: signedTestTx(t, key, 0, 1).Hash(), nonce: 0, enqueuedAt: past},
+			1: {txHash: signedTestTx(t, key, 1, 1).Hash(), nonce: 1, enqueuedAt: past},
+		},
+		collectionWindowEndsAt: past,
+		flushDeadline:          past,
+	}
 
-	// On success lastSubmittedAt is advanced to (approximately) now, not left
-	// at the optimistic collection time.
-	assert.True(t, pool.queues[from].lastSubmittedAt.After(collectedAt))
+	work := pool.collectDueBatches()
+	require.Len(t, work, 1)
+
+	require.NoError(t, pool.submitWork(context.Background(), work[0]))
+
+	q := pool.queues[from]
+	assert.True(t, q.hasInFlight)
+	assert.Equal(t, uint64(1), q.lastSubmittedNonce)
 }
 
 // Fix 1: a failed fast-path submission must not rate-limit the EOA via
