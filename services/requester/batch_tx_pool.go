@@ -21,6 +21,19 @@ import (
 	"github.com/onflow/flow-evm-gateway/services/requester/keystore"
 )
 
+const (
+	// Max number of transactions per EOA batch submission. The Cadence
+	// transaction that wraps and executes EVM transactions with
+	// `EVM.batchRun`, is submitted with a computation limit of `9,999`.
+	// Adding more EVM transactions per batch, increases the risk of
+	// running out of computation limit, which will revert all wrapped
+	// EVM transactions.
+	maxTxBatch = 5
+	// Max number of pooled transactions per EOA, to avoid
+	// unconstrained memory growth
+	maxEOAPoolSize = 50
+)
+
 // BatchTxPool is a TxPool implementation that collects and groups transactions
 // by EOA signer, sorts them by nonce, and submits them as a batch via
 // EVM.batchRun on each flush interval.
@@ -69,8 +82,10 @@ import (
 // deployments.
 type BatchTxPool struct {
 	*SingleTxPool
-	pooledTxs map[gethCommon.Address][]pooledEvmTx
-	txMux     sync.Mutex
+
+	pooledTxs     map[gethCommon.Address][]pooledEvmTx
+	nonceProvider NonceProvider
+	txMux         sync.Mutex
 }
 
 type pooledEvmTx struct {
@@ -79,7 +94,7 @@ type pooledEvmTx struct {
 	nonce     uint64
 }
 
-var _ TxPool = &BatchTxPool{}
+var _ TxPool = (*BatchTxPool)(nil)
 
 func NewBatchTxPool(
 	ctx context.Context,
@@ -89,6 +104,7 @@ func NewBatchTxPool(
 	config config.Config,
 	collector metrics.Collector,
 	keystore *keystore.KeyStore,
+	nonceProvider NonceProvider,
 ) (*BatchTxPool, error) {
 	// initialize the available keys metric since it is only updated when sending a tx
 	collector.AvailableSigningKeys(keystore.AvailableKeys())
@@ -107,9 +123,10 @@ func NewBatchTxPool(
 	}
 
 	batchPool := &BatchTxPool{
-		SingleTxPool: singleTxPool,
-		pooledTxs:    make(map[gethCommon.Address][]pooledEvmTx),
-		txMux:        sync.Mutex{},
+		SingleTxPool:  singleTxPool,
+		pooledTxs:     make(map[gethCommon.Address][]pooledEvmTx),
+		nonceProvider: nonceProvider,
+		txMux:         sync.Mutex{},
 	}
 
 	go batchPool.processPooledTransactions(ctx)
@@ -176,18 +193,98 @@ func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 			t.pooledTxs = make(map[gethCommon.Address][]pooledEvmTx)
 			t.txMux.Unlock()
 
+			// construct a block view here, to read the nonce for each
+			// EOA below, without recreating the block view each time.
+			blockView, err := t.nonceProvider.GetBlockView()
+			if err != nil {
+				t.logger.Fatal().Err(err).Msgf(
+					"failed to construct BlockView for nonce reading",
+				)
+				return
+			}
+
 			for address, pooledTxs := range txsGroupedByAddress {
-				err := t.batchSubmitTransactionsForSameAddress(
+				// get the latest nonce from the local state index.
+				nonce, err := blockView.GetNonce(address)
+				if err != nil {
+					t.logger.Error().Err(err).Msgf(
+						"failed to get nonce for EOA: %s", address,
+					)
+					continue
+				}
+
+				// drop any pooled transactions with nonce lower than
+				// the local state index nonce.
+				txs := slices.DeleteFunc(pooledTxs, func(ptx pooledEvmTx) bool {
+					// keep up to `maxEOAPoolSize` txs per EOA in the pool,
+					// to avoid unconstrained memory growth
+					if ptx.nonce > maxEOAPoolSize+nonce {
+						t.logger.Warn().Msgf(
+							"dropped tx with nonce: %d for EOA: %s, due to max pool size limit",
+							ptx.nonce,
+							address,
+						)
+						return true
+					}
+					if ptx.nonce < nonce {
+						t.logger.Warn().Msgf(
+							"dropped tx with nonce: %d for EOA: %s, expected state nonce: %d",
+							ptx.nonce,
+							address,
+							nonce,
+						)
+						return true
+					}
+					return false
+				})
+
+				// pick the txs with the valid nonce sequence, and add the remaining
+				// back to the pool, for later processing, when the gaps fill.
+				// txs should be first sorted by nonce, in ascending order.
+				sort.Slice(txs, func(i, j int) bool {
+					return txs[i].nonce < txs[j].nonce
+				})
+				// deduplicate pooled transactions based on nonce, to save on-chain
+				// computation checks.
+				txs = slices.CompactFunc(txs, func(i, j pooledEvmTx) bool {
+					if i.nonce == j.nonce {
+						t.logger.Warn().Msgf(
+							"dropped tx with duplicate nonce: %d for EOA: %s",
+							i.nonce,
+							address,
+						)
+						return true
+					}
+					return false
+				})
+				txSequence, remaining := selectSequentialNonces(txs, nonce, maxTxBatch)
+				t.txMux.Lock()
+				t.pooledTxs[address] = append(t.pooledTxs[address], remaining...)
+				t.txMux.Unlock()
+				// if there is no valid nonce sequence, according to the local state
+				// index, continue with the next EOA.
+				if len(txSequence) == 0 {
+					continue
+				}
+
+				err = t.batchSubmitTransactionsForSameAddress(
 					ctx,
 					t.getReferenceBlock(),
-					pooledTxs,
+					txSequence,
 				)
 				if err != nil {
 					t.logger.Error().Err(err).Msgf(
-						"failed to submit Flow transaction from BatchTxPool for EOA: %s",
+						"failed to submit batch Flow transaction for EOA: %s, batch count: %d, nonce: %d, tx hash: %s",
 						address.Hex(),
+						len(txSequence),
+						txSequence[0].nonce,
+						txSequence[0].txHash.Hex(),
 					)
-					continue
+					// In case of any submission errors, add the transactions back
+					// to the pool as a retry mechanism.
+					t.txMux.Lock()
+					t.pooledTxs[address] = append(t.pooledTxs[address], txSequence...)
+					t.txMux.Unlock()
 				}
 			}
 		}
@@ -199,12 +296,8 @@ func (t *BatchTxPool) batchSubmitTransactionsForSameAddress(
 	referenceBlockHeader *flow.BlockHeader,
 	pooledTxs []pooledEvmTx,
 ) error {
-	// Sort by nonce to guarantee correct execution order regardless of the
-	// order in which transactions arrived at the gateway.
-	sort.Slice(pooledTxs, func(i, j int) bool {
-		return pooledTxs[i].nonce < pooledTxs[j].nonce
-	})
-
+	// the `pooledTxs` slice is already sorted by nonce, in ascending order
+	// inside the `processPooledTransactions()` function.
 	hexEncodedTxs := make([]cadence.Value, len(pooledTxs))
 	for i, txPayload := range pooledTxs {
 		hexEncodedTxs[i] = txPayload.txPayload
@@ -231,8 +324,35 @@ func (t *BatchTxPool) batchSubmitTransactionsForSameAddress(
 	}
 
 	if err := t.client.SendTransaction(ctx, *flowTx); err != nil {
+		// If there was any error while sending the transaction,
+		// we record all transactions as dropped.
+		t.collector.TransactionsDropped(len(hexEncodedTxs))
 		return err
 	}
 
 	return nil
+}
+
+// selectSequentialNonces returns up to maxBatch pooled transactions forming a
+// sequential nonce run starting exactly at expectedNonce, sorted ascending.
+// Returns an empty slice when the transaction with expectedNonce is absent.
+func selectSequentialNonces(
+	txs []pooledEvmTx,
+	expectedNonce uint64,
+	maxBatch int,
+) ([]pooledEvmTx, []pooledEvmTx) {
+	txSequence := make([]pooledEvmTx, 0)
+
+	for _, tx := range txs {
+		if len(txSequence) >= maxBatch {
+			break
+		}
+
+		if tx.nonce == expectedNonce {
+			txSequence = append(txSequence, tx)
+			expectedNonce += 1
+		}
+	}
+
+	return txSequence, txs[len(txSequence):]
 }
