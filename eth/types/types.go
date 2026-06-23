@@ -478,6 +478,9 @@ type Block struct {
 
 	// SlotNumber was added by EIP-7843 and is ignored in legacy headers.
 	SlotNumber *hexutil.Uint64 `json:"slotNumber,omitempty"`
+
+	// BlockAccessListHash was added by EIP-7928 and is ignored in legacy headers.
+	BlockAccessListHash *common.Hash `json:"blockAccessListHash,omitempty"`
 }
 
 type BlockHeader struct {

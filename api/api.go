@@ -999,6 +999,7 @@ func (b *BlockChainAPI) prepareBlockResponse(
 	if emulatorConfig.ChainRules().IsAmsterdam {
 		slotNumber := hexutil.Uint64(block.SlotNumber(b.config.FlowNetworkID))
 		blockResponse.SlotNumber = &slotNumber
+		blockResponse.BlockAccessListHash = block.AccessListHash
 	}
 
 	blockBytes, err := block.ToBytes()

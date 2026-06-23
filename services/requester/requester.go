@@ -348,6 +348,8 @@ func (e *EVM) EstimateGas(
 		return 0, err
 	}
 	blockNumber, blockTime := new(big.Int).SetUint64(targetBlock.Height), targetBlock.Timestamp
+	isOsaka := chainConfig.IsOsaka(blockNumber, blockTime)
+	isAmsterdam := chainConfig.IsAmsterdam(blockNumber, blockTime)
 	if passingGasLimit > gethParams.MaxTxGas {
 		if blockOverrides != nil {
 			if blockOverrides.Number != nil {
@@ -357,7 +359,7 @@ func (e *EVM) EstimateGas(
 				blockTime = uint64(*blockOverrides.Time)
 			}
 		}
-		if chainConfig.IsOsaka(blockNumber, blockTime) {
+		if isOsaka && !isAmsterdam {
 			passingGasLimit = gethParams.MaxTxGas
 		}
 	}
@@ -445,7 +447,7 @@ func (e *EVM) EstimateGas(
 		passingGasLimit += storageKeys * gethParams.TxAccessListStorageKeyGas
 
 		// EIP-7981: access list data is charged in addition to the base charge.
-		if chainConfig.IsAmsterdam(blockNumber, blockTime) {
+		if isAmsterdam {
 			const (
 				addressCost    = common.AddressLength * gethParams.TxCostFloorPerToken7976 * gethParams.TxTokenPerNonZeroByte
 				storageKeyCost = common.HashLength * gethParams.TxCostFloorPerToken7976 * gethParams.TxTokenPerNonZeroByte
@@ -461,7 +463,12 @@ func (e *EVM) EstimateGas(
 		}
 	}
 	if txArgs.AuthorizationList != nil {
-		passingGasLimit += uint64(len(txArgs.AuthorizationList)) * gethParams.CallNewAccountGas
+		if chainConfig.IsAmsterdam(blockNumber, blockTime) {
+			passingGasLimit += uint64(len(txArgs.AuthorizationList)) * gethParams.TxAuthTupleRegularGas
+			passingGasLimit += uint64(len(txArgs.AuthorizationList)) * (gethParams.AuthorizationCreationSize + gethParams.AccountCreationSize) * gethParams.CostPerStateByte
+		} else {
+			passingGasLimit += uint64(len(txArgs.AuthorizationList)) * gethParams.CallNewAccountGas
+		}
 	}
 
 	return passingGasLimit, nil

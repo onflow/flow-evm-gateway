@@ -28,7 +28,7 @@ it('should retrieve transaction traces', async () => {
 
     // Assert proper response for `structLog`
     let txTrace = response.body.result
-    assert.equal(txTrace.gas, 1200498)
+    assert.equal(txTrace.gas, 8329308)
     assert.equal(txTrace.failed, false)
     assert.lengthOf(txTrace.returnValue, 10236)
     assert.deepEqual(
@@ -36,7 +36,7 @@ it('should retrieve transaction traces', async () => {
         {
             pc: 0,
             op: 'PUSH1',
-            gas: 1079409,
+            gas: 8104197,
             gasCost: 3,
             depth: 1,
             stack: []
@@ -60,8 +60,8 @@ it('should retrieve transaction traces', async () => {
     // Assert proper response for `callTracer`
     txTrace = response.body.result
     assert.equal(txTrace.from, '0xfacf71692421039876a5bb4f10ef7a439d8ef61e')
-    assert.equal(txTrace.gas, '0x127b39')
-    assert.equal(txTrace.gasUsed, '0x125172')
+    assert.equal(txTrace.gas, '0x801f25')
+    assert.equal(txTrace.gasUsed, '0x7f185c')
     assert.equal(txTrace.to, '0x99a64c993965f8d69f985b5171bc20065cc32fab')
     assert.lengthOf(txTrace.input, 10454)
     assert.lengthOf(txTrace.output, 10236)
@@ -157,7 +157,7 @@ it('should retrieve transaction traces', async () => {
     )
     assert.deepEqual(
         txTrace.pre['0xfacf71692421039876a5bb4f10ef7a439d8ef61e'],
-        { balance: '0x456391823a384734', nonce: 1 }
+        { balance: '0x45639181fa7bba18', nonce: 1 }
     )
     assert.deepEqual(
         txTrace.post['0x0000000000000000000000030000000000000000'],
@@ -167,7 +167,7 @@ it('should retrieve transaction traces', async () => {
     )
     assert.deepEqual(
         txTrace.post['0xfacf71692421039876a5bb4f10ef7a439d8ef61e'],
-        { balance: '0x4563918239f7bb2e', nonce: 2 }
+        { balance: '0x45639181fa3b2e12', nonce: 2 }
     )
 
     response = await helpers.callRPCMethod(
@@ -249,7 +249,7 @@ it('should retrieve transaction traces', async () => {
         { pc: 0, op: 'PUSH1', gas: 7344, gasCost: 3, depth: 1, stack: [] }
     )
 
-    assert.equal(txTraces[1].txHash, '0x34f823d6fcef9cafccf7b15ec97f7e0734b1b97e0b32992d4243d2d580a8d2b4')
+    assert.equal(txTraces[1].txHash, '0x66620365e0f153e54f9be590611279ea08aad948de5a58d27b0c49268c48b927')
     assert.equal(txTraces[1].result.gas, 21000)
     assert.equal(txTraces[1].result.failed, false)
     assert.equal(txTraces[1].result.returnValue, '0x')
@@ -293,10 +293,10 @@ it('should retrieve transaction traces', async () => {
                 }
             },
             {
-                txHash: '0x34f823d6fcef9cafccf7b15ec97f7e0734b1b97e0b32992d4243d2d580a8d2b4',
+                txHash: '0x66620365e0f153e54f9be590611279ea08aad948de5a58d27b0c49268c48b927',
                 result: {
                     from: '0x0000000000000000000000030000000000000000',
-                    gas: '0x5b04',
+                    gas: '0x32834',
                     gasUsed: '0x5208',
                     to: '0x658bdf435d810c91414ec09147daa6db62406379',
                     input: '0x',
@@ -338,7 +338,7 @@ it('should retrieve transaction traces', async () => {
         { pc: 0, op: 'PUSH1', gas: 7344, gasCost: 3, depth: 1, stack: [] }
     )
 
-    assert.equal(txTraces[1].txHash, '0x34f823d6fcef9cafccf7b15ec97f7e0734b1b97e0b32992d4243d2d580a8d2b4')
+    assert.equal(txTraces[1].txHash, '0x66620365e0f153e54f9be590611279ea08aad948de5a58d27b0c49268c48b927')
     assert.equal(txTraces[1].result.gas, 21000)
     assert.equal(txTraces[1].result.failed, false)
     assert.equal(txTraces[1].result.returnValue, '0x')
@@ -382,10 +382,10 @@ it('should retrieve transaction traces', async () => {
                 }
             },
             {
-                txHash: '0x34f823d6fcef9cafccf7b15ec97f7e0734b1b97e0b32992d4243d2d580a8d2b4',
+                txHash: '0x66620365e0f153e54f9be590611279ea08aad948de5a58d27b0c49268c48b927',
                 result: {
                     from: '0x0000000000000000000000030000000000000000',
-                    gas: '0x5b04',
+                    gas: '0x32834',
                     gasUsed: '0x5208',
                     to: '0x658bdf435d810c91414ec09147daa6db62406379',
                     input: '0x',
@@ -600,7 +600,7 @@ it('should retrieve call traces', async () => {
             },
             pre: {
                 '0xfacf71692421039876a5bb4f10ef7a439d8ef61e': {
-                    balance: '0x4563918239be8804',
+                    balance: '0x45639181fa01fae8',
                     nonce: 3
                 }
             }

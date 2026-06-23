@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 
+	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go/fvm/evm/events"
@@ -110,6 +111,7 @@ func decodeCadenceEvents(events flow.BlockEvents) (*CadenceEvents, error) {
 				return nil, err
 			}
 
+			block.AccessListHash = &gethTypes.EmptyBlockAccessListHash
 			e.block = block
 			e.blockEventPayload = blockEventPayload
 			continue

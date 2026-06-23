@@ -19,8 +19,17 @@ it('deploy contract and interact', async () => {
     assert.equal(rcp.contractAddress, contractAddress)
     assert.equal(rcp.status, conf.successStatus)
     assert.isUndefined(rcp.to)
-    assert.equal(rcp.gasUsed, 1200498n)
+    assert.equal(rcp.gasUsed, 8329308n)
     assert.equal(rcp.gasUsed, rcp.cumulativeGasUsed)
+
+    let blockResponse = await helpers.callRPCMethod('eth_getBlockByHash', [rcp.blockHash, false])
+    assert.equal(blockResponse.status, 200)
+
+    let blockResult = blockResponse.body.result
+    assert.equal(
+        blockResult.blockAccessListHash,
+        '0x61ea4e7a61ece84df5403c55b8cd08d6e53fd683f32ecfd51589d190a9499e37'
+    )
 
     // check if latest block contains the deploy results
     let latestHeight = await web3.eth.getBlockNumber()
@@ -336,5 +345,5 @@ it('deploy contract and interact', async () => {
     // setting a storage slot from a zero-value, to a non-zero value has an
     // increase of about 20,000 gas. Which is quite different to `0x72c3`.
     result = response.body.result
-    assert.equal(result, '0xac56')
+    assert.equal(result, '0x1eac6')
 })

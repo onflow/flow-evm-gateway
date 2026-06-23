@@ -21,13 +21,13 @@ before(async () => {
     assert.equal(rcp.contractAddress, contractAddress)
     assert.equal(rcp.status, conf.successStatus)
     assert.isUndefined(rcp.to)
-    assert.equal(rcp.gasUsed, 1200498n)
+    assert.equal(rcp.gasUsed, 8329308n)
     assert.equal(rcp.gasUsed, rcp.cumulativeGasUsed)
 })
 
 it('calculates fees for legacy tx type', async () => {
     let senderBalance = await web3.eth.getBalance(conf.eoa.address)
-    assert.equal(senderBalance, 4999999999819925300n)
+    assert.equal(senderBalance, 4999999998750603800n)
 
     let storeCallData = deployed.contract.methods.store(1337).encodeABI()
     let gasPrice = conf.minGasPrice + 50n
@@ -67,12 +67,12 @@ it('calculates fees for legacy tx type', async () => {
     }
 
     let coinbaseBalance = await web3.eth.getBalance(conf.coinbase)
-    assert.equal(coinbaseBalance, 184845300n)
+    assert.equal(coinbaseBalance, 1254166800n)
 })
 
 it('calculates fees for access list tx type', async () => {
     let senderBalance = await web3.eth.getBalance(conf.eoa.address)
-    assert.equal(senderBalance, 4999999999815154700n)
+    assert.equal(senderBalance, 4999999998745833200n)
 
     let storeCallData = deployed.contract.methods.store(8250).encodeABI()
     let gasPrice = conf.minGasPrice + 5n
@@ -124,12 +124,12 @@ it('calculates fees for access list tx type', async () => {
     }
 
     let coinbaseBalance = await web3.eth.getBalance(conf.coinbase)
-    assert.equal(coinbaseBalance, 189546915n)
+    assert.equal(coinbaseBalance, 1258868415n)
 })
 
 it('calculates fees for dynamic fees tx type', async () => {
     let senderBalance = await web3.eth.getBalance(conf.eoa.address)
-    assert.equal(senderBalance, 4999999999810453085n)
+    assert.equal(senderBalance, 4999999998741131585n)
 
     // gasTipCap is less than gasFeeCap
     // price = Min(GasTipCap, GasFeeCap) when baseFee = 0
@@ -222,5 +222,5 @@ it('calculates fees for dynamic fees tx type', async () => {
     }
 
     let coinbaseBalance = await web3.eth.getBalance(conf.coinbase)
-    assert.equal(coinbaseBalance, 199564115n)
+    assert.equal(coinbaseBalance, 1268885615n)
 })

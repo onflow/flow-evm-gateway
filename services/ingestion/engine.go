@@ -9,6 +9,7 @@ import (
 
 	pebbleDB "github.com/cockroachdb/pebble"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
+	gethBAL "github.com/ethereum/go-ethereum/core/types/bal"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/rs/zerolog"
 
@@ -250,15 +251,27 @@ func (e *Engine) indexEvents(events *models.CadenceEvents, batch *pebbleDB.Batch
 	// Step 1.2: Replay all block transactions
 	// If `ReplayBlock` returns any error, we abort the EVM events processing
 	blockEvents := events.BlockEventPayload()
-	res, err := replayer.ReplayBlock(events.TxEventPayloads(), blockEvents)
+	replayResult, txResults, err := replayer.ReplayBlockEvents(events.TxEventPayloads(), blockEvents)
 	if err != nil {
 		return fmt.Errorf("failed to replay block on height: %d, with: %w", events.Block().Height, err)
 	}
+	stateAccessList := gethBAL.NewConstructionBlockAccessList()
+	for _, txRes := range txResults {
+		if txRes.StateAccessList != nil {
+			stateAccessList.Merge(txRes.StateAccessList)
+		}
+	}
+	accessListHash := stateAccessList.ToEncodingObj().Hash()
+	events.Block().AccessListHash = &accessListHash
 
 	// Step 2: Write all the necessary changes to each storage
 
 	// Step 2.1: Write all the EVM state changes to `StorageProvider`
-	err = e.registerStore.Store(registerEntriesFromKeyValue(res.StorageRegisterUpdates()), blockEvents.Height, batch)
+	err = e.registerStore.Store(
+		registerEntriesFromKeyValue(replayResult.StorageRegisterUpdates()),
+		blockEvents.Height,
+		batch,
+	)
 	if err != nil {
 		return fmt.Errorf("failed to store state changes on block: %d", events.Block().Height)
 	}

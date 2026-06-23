@@ -562,6 +562,7 @@ func newBlockWithParent(height uint64, txHashes []gethCommon.Hash, parent *model
 	block := &models.Block{
 		Block:             gethBlock,
 		TransactionHashes: txHashes,
+		AccessListHash:    &gethTypes.EmptyBlockAccessListHash,
 	}
 
 	blockEvent := events.NewBlockEvent(gethBlock)

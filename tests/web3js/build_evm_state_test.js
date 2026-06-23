@@ -25,7 +25,7 @@ it('should handle a large number of EVM interactions', async () => {
             to: receiver.address,
             value: transferValue,
             gasPrice: conf.minGasPrice,
-            gasLimit: 21_000,
+            gasLimit: 205_000,
         })
 
         assert.equal(transfer.receipt.status, conf.successStatus)
@@ -43,7 +43,7 @@ it('should handle a large number of EVM interactions', async () => {
     expectedBlockHeight += 20n
 
     let senderBalance = await web3.eth.getBalance(conf.eoa.address)
-    assert.equal(senderBalance, 1999999999937000000n)
+    assert.equal(senderBalance, 1999999999386200000n)
 
     latest = await web3.eth.getBlockNumber()
     assert.equal(latest, expectedBlockHeight)
@@ -81,7 +81,7 @@ it('should handle a large number of EVM interactions', async () => {
                 to: receiver.address,
                 value: transferValue,
                 gasPrice: conf.minGasPrice,
-                gasLimit: 21_000,
+                gasLimit: 205_000,
             })
 
             assert.equal(transfer.receipt.status, conf.successStatus)
@@ -135,7 +135,7 @@ it('should handle a large number of EVM interactions', async () => {
             from: sender.address,
             to: contractAddress,
             data: deployed.contract.methods.sum(sumA, sumB).encodeABI(),
-            gas: 55_000,
+            gas: 155_000,
             gasPrice: conf.minGasPrice
         })
         assert.equal(res.receipt.status, conf.successStatus)
@@ -153,7 +153,7 @@ it('should handle a large number of EVM interactions', async () => {
         from: conf.eoa.address,
         to: contractAddress,
         data: storeData,
-        gas: 55_000,
+        gas: 155_000,
         gasPrice: conf.minGasPrice
     }, 82n)
     assert.equal(estimatedGas, 23641n)
@@ -162,7 +162,7 @@ it('should handle a large number of EVM interactions', async () => {
         from: conf.eoa.address,
         to: contractAddress,
         data: storeData,
-        gas: 55_000,
+        gas: 155_000,
         gasPrice: conf.minGasPrice
     }, latest)
     assert.equal(estimatedGas, 26725n)
