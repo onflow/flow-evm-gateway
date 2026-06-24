@@ -1,15 +1,15 @@
 module github.com/onflow/flow-evm-gateway/integration
 
-go 1.25.1
+go 1.26.0
 
 require (
 	github.com/ethereum/go-ethereum v1.17.4
 	github.com/goccy/go-json v0.10.4
 	github.com/onflow/cadence v1.10.3
-	github.com/onflow/crypto v0.25.4
+	github.com/onflow/crypto v0.26.0
 	github.com/onflow/flow-emulator v1.21.1
 	github.com/onflow/flow-evm-gateway v0.0.0-20240201154855-4d4d3d3f19c7
-	github.com/onflow/flow-go v0.48.1-evm-cache-block.0.20260623125945-42bc18509131
+	github.com/onflow/flow-go v0.48.1-evm-cache-block.0.20260624075610-65d6f283d095
 	github.com/onflow/flow-go-sdk v1.10.3
 	github.com/rs/zerolog v1.34.0
 	github.com/stretchr/testify v1.11.1
@@ -47,7 +47,7 @@ require (
 	github.com/cockroachdb/pebble v1.1.5 // indirect
 	github.com/cockroachdb/pebble/v2 v2.0.6 // indirect
 	github.com/cockroachdb/redact v1.1.5 // indirect
-	github.com/cockroachdb/swiss v0.0.0-20250624142022-d6e517c1d961 // indirect
+	github.com/cockroachdb/swiss v0.0.0-20251224182025-b0f6560f979b // indirect
 	github.com/cockroachdb/tokenbucket v0.0.0-20230807174530-cc333fc44b06 // indirect
 	github.com/consensys/gnark-crypto v0.18.1 // indirect
 	github.com/coreos/go-semver v0.3.0 // indirect

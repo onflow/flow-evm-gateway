@@ -1,6 +1,6 @@
 module github.com/onflow/flow-evm-gateway
 
-go 1.25.1
+go 1.26.0
 
 require (
 	github.com/cockroachdb/pebble v1.1.5
@@ -11,7 +11,7 @@ require (
 	github.com/holiman/uint256 v1.3.2
 	github.com/onflow/atree v0.16.0
 	github.com/onflow/cadence v1.10.3
-	github.com/onflow/flow-go v0.48.1-evm-cache-block.0.20260623125945-42bc18509131
+	github.com/onflow/flow-go v0.48.1-evm-cache-block.0.20260624075610-65d6f283d095
 	github.com/onflow/flow-go-sdk v1.10.3
 	github.com/prometheus/client_golang v1.20.5
 	github.com/rs/cors v1.8.0
@@ -55,7 +55,7 @@ require (
 	github.com/cockroachdb/logtags v0.0.0-20230118201751-21c54148d20b // indirect
 	github.com/cockroachdb/pebble/v2 v2.0.6 // indirect
 	github.com/cockroachdb/redact v1.1.5 // indirect
-	github.com/cockroachdb/swiss v0.0.0-20250624142022-d6e517c1d961 // indirect
+	github.com/cockroachdb/swiss v0.0.0-20251224182025-b0f6560f979b // indirect
 	github.com/cockroachdb/tokenbucket v0.0.0-20230807174530-cc333fc44b06 // indirect
 	github.com/consensys/gnark-crypto v0.18.1 // indirect
 	github.com/coreos/go-semver v0.3.0 // indirect
@@ -142,7 +142,7 @@ require (
 	github.com/multiformats/go-multistream v0.6.0 // indirect
 	github.com/multiformats/go-varint v0.0.7 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/onflow/crypto v0.25.4 // indirect
+	github.com/onflow/crypto v0.26.0 // indirect
 	github.com/onflow/fixed-point v0.1.1 // indirect
 	github.com/onflow/flow-core-contracts/lib/go/contracts v1.10.3 // indirect
 	github.com/onflow/flow-core-contracts/lib/go/templates v1.10.3 // indirect
