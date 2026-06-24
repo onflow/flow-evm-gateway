@@ -74,6 +74,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 			zerolog.Nop(),
 			metrics.NopCollector,
 			defaultReplayerConfig(),
+			types.FlowEVMPreviewNetChainID,
 		)
 
 		done := make(chan struct{})
@@ -153,6 +154,7 @@ func TestSerialBlockIngestion(t *testing.T) {
 			zerolog.Nop(),
 			metrics.NopCollector,
 			defaultReplayerConfig(),
+			types.FlowEVMPreviewNetChainID,
 		)
 
 		waitErr := make(chan struct{})
@@ -265,6 +267,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			zerolog.Nop(),
 			metrics.NopCollector,
 			defaultReplayerConfig(),
+			types.FlowEVMPreviewNetChainID,
 		)
 
 		done := make(chan struct{})
@@ -364,6 +367,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			zerolog.Nop(),
 			metrics.NopCollector,
 			defaultReplayerConfig(),
+			types.FlowEVMPreviewNetChainID,
 		)
 
 		done := make(chan struct{})
@@ -455,6 +459,7 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 			zerolog.Nop(),
 			metrics.NopCollector,
 			defaultReplayerConfig(),
+			types.FlowEVMPreviewNetChainID,
 		)
 
 		done := make(chan struct{})
