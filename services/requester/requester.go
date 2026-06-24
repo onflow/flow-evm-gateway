@@ -434,41 +434,41 @@ func (e *EVM) EstimateGas(
 		}
 	}
 
-	if txArgs.AccessList != nil {
-		addresses := uint64(len(*txArgs.AccessList))
-		storageKeys := uint64(txArgs.AccessList.StorageKeys())
-		if (math.MaxUint64-passingGasLimit)/gethParams.TxAccessListAddressGas < addresses {
+	// The dry-run binary search above executes a Flow `DirectCall`, which does
+	// not carry the transaction's access list and is therefore not charged its
+	// intrinsic gas. Add the intrinsic gas attributable to the access list and
+	// the authorization list here. We delegate the per-fork arithmetic to
+	// go-ethereum's `IntrinsicGas` (EIP-2930 access list, EIP-7981 surcharge,
+	// EIP-7702 authorization tuples) so it stays in sync across hard forks
+	// automatically when the dependency is bumped. Only the delta over a
+	// list-less call is added, since the binary search already accounts for the
+	// base + calldata intrinsic gas.
+	if txArgs.AccessList != nil || txArgs.AuthorizationList != nil {
+		var accessList types.AccessList
+		if txArgs.AccessList != nil {
+			accessList = *txArgs.AccessList
+		}
+		rules := chainConfig.Rules(blockNumber, true, blockTime)
+		// Data and the contract-creation flag are held constant across both
+		// calls, so the base + calldata gas cancels out and only the
+		// access/authorization-list cost remains.
+		withLists, err := gethCore.IntrinsicGas(
+			nil, accessList, txArgs.AuthorizationList, false, rules, gethParams.CostPerStateByte,
+		)
+		if err != nil {
+			return 0, err
+		}
+		baseline, err := gethCore.IntrinsicGas(
+			nil, nil, nil, false, rules, gethParams.CostPerStateByte,
+		)
+		if err != nil {
+			return 0, err
+		}
+		listGas := withLists.Sum() - baseline.Sum()
+		if math.MaxUint64-passingGasLimit < listGas {
 			return 0, gethCore.ErrGasUintOverflow
 		}
-		passingGasLimit += addresses * gethParams.TxAccessListAddressGas
-		if (math.MaxUint64-passingGasLimit)/gethParams.TxAccessListStorageKeyGas < storageKeys {
-			return 0, gethCore.ErrGasUintOverflow
-		}
-		passingGasLimit += storageKeys * gethParams.TxAccessListStorageKeyGas
-
-		// EIP-7981: access list data is charged in addition to the base charge.
-		if isAmsterdam {
-			const (
-				addressCost    = common.AddressLength * gethParams.TxCostFloorPerToken7976 * gethParams.TxTokenPerNonZeroByte
-				storageKeyCost = common.HashLength * gethParams.TxCostFloorPerToken7976 * gethParams.TxTokenPerNonZeroByte
-			)
-			if (math.MaxUint64-passingGasLimit)/addressCost < addresses {
-				return 0, gethCore.ErrGasUintOverflow
-			}
-			passingGasLimit += addresses * addressCost
-			if (math.MaxUint64-passingGasLimit)/storageKeyCost < storageKeys {
-				return 0, gethCore.ErrGasUintOverflow
-			}
-			passingGasLimit += storageKeys * storageKeyCost
-		}
-	}
-	if txArgs.AuthorizationList != nil {
-		if chainConfig.IsAmsterdam(blockNumber, blockTime) {
-			passingGasLimit += uint64(len(txArgs.AuthorizationList)) * gethParams.TxAuthTupleRegularGas
-			passingGasLimit += uint64(len(txArgs.AuthorizationList)) * (gethParams.AuthorizationCreationSize + gethParams.AccountCreationSize) * gethParams.CostPerStateByte
-		} else {
-			passingGasLimit += uint64(len(txArgs.AuthorizationList)) * gethParams.CallNewAccountGas
-		}
+		passingGasLimit += listGas
 	}
 
 	return passingGasLimit, nil
