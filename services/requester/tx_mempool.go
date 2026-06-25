@@ -22,7 +22,6 @@ import (
 // TODO: Document what the TX Mempool does with clear examples of the difference use cases it handles. e.g. transactions coming in out of sequence with a gap in between, transactions expiring in the queue as local index nonce moves beyond the nonce of the the tx.
 // TODO: Overall, refactor the code such that its easier to understand and more importantly easier to maintain
 // TODO: Log when transactions are being discarded from the queue to help debug issues if lets say a client compains about transactions being lost or erroring out.
-// TODO: Add max gap in nonce similar to whats here:https://github.com/onflow/flow-evm-gateway/pull/925/changes#diff-f17ac7d49cb8f2272b61813e130583e6fadbfde51b795bfdb255b936ee6e0c46R221. The range should be min(local index, last nonce submitted) for nonce too high error and max(local index, last nonce submitted) for nonce too low error
 
 // heldTx is a transaction held in the mempool, waiting for its
 // collection window to elapse or its nonce gap to be filled.
@@ -122,7 +121,14 @@ const (
 	// flight or already ack'd). Re-accepting it would burn Flow fees on a
 	// guaranteed nonce-mismatch, so it is rejected.
 	nonceInFlight
-	// nonceQueue: a future nonce beyond the expected one (a gap ahead); hold it.
+	// nonceTooLow: nonce is below the on-chain frontier — already used, can
+	// never execute. Rejected up front.
+	nonceTooLow
+	// nonceTooHigh: nonce is more than maxNonceGap beyond the on-chain frontier;
+	// it cannot execute until the gap fills, so it is rejected up front.
+	nonceTooHigh
+	// nonceQueue: a future nonce beyond the expected one (a gap ahead) but within
+	// the accepted window; hold it.
 	nonceQueue
 )
 
@@ -149,6 +155,11 @@ type nonceTracker struct {
 	// submissions advance it; TTL-expiry (gapped) batches do NOT, so it never
 	// includes a nonce past a gap.
 	lastConsecutivelySubmitted optionalNonce
+	// maxNonceGap is how far above localIndexedNonce a nonce may be before it is
+	// rejected as too-high. 0 means no upper bound. It does NOT affect the
+	// too-low check (a nonce below localIndexedNonce is always rejected). Set
+	// once from config when the queue is created.
+	maxNonceGap uint64
 }
 
 // inFlight reports whether a submission is outstanding (sent, not yet ack'd).
@@ -170,18 +181,53 @@ func (n *nonceTracker) expectedNonce() uint64 {
 	return n.localIndexedNonce
 }
 
-// classify decides what to do with an incoming nonce against the currently
-// cached frontier. Refresh via refreshIndexed first where freshness matters.
-func (n *nonceTracker) classify(nonce uint64) nonceVerdict {
-	// At or below the highest nonce we've already sent: already in flight or
-	// submitted, so reject.
+// classify returns the verdict for an incoming nonce, refreshing the cached
+// on-chain frontier as part of the decision.
+//
+// A nonce at or below our highest already-sent nonce is an in-flight/duplicate
+// retry, rejected from local state alone — no index read. We check this first
+// precisely because reading the frontier builds a block view (the expensive
+// step) that the retry case must avoid.
+//
+// Any other nonce is beyond what we've sent, so the remaining verdicts
+// (too-low/too-high/next-expected) need the on-chain frontier: we read and
+// refresh it. A read error is an exception (a local state-index read should not
+// fail) and is returned so the caller can reject the transaction. Pruning of any
+// now-stale queued txs is deferred to collectDueBatches.
+//
+// Callers must hold queueMux.
+func (n *nonceTracker) classify(
+	nonce uint64,
+	np NonceProvider,
+	from gethCommon.Address,
+) (nonceVerdict, error) {
+	// At or below the highest nonce we've already sent: in flight or submitted.
 	if n.highestSent().atLeast(nonce) {
-		return nonceInFlight
+		return nonceInFlight, nil
+	}
+
+	// Beyond what we've sent: refresh the frontier for the remaining verdicts.
+	indexNonce, err := np.GetNonce(from)
+	if err != nil {
+		return 0, err
+	}
+	n.refreshIndexed(indexNonce)
+
+	// Below the on-chain frontier: already used, can never execute. Always
+	// rejected — unrelated to maxNonceGap (it bounds only the upper end).
+	if nonce < n.localIndexedNonce {
+		return nonceTooLow, nil
+	}
+	// More than maxNonceGap beyond the frontier (only when a gap is configured):
+	// cannot execute until the gap fills. A behind (stale) index can only make
+	// this over-strict, which is acceptable — the gateway is catching up.
+	if n.maxNonceGap > 0 && nonce > n.localIndexedNonce+n.maxNonceGap {
+		return nonceTooHigh, nil
 	}
 	if nonce == n.expectedNonce() {
-		return nonceNextExpected
+		return nonceNextExpected, nil
 	}
-	return nonceQueue
+	return nonceQueue, nil
 }
 
 // markSubmitting records that nonces up to highNonce have been sent but not yet
@@ -367,8 +413,12 @@ func (t *TxMemPool) Add(
 		// values: the nonceTracker's optionalNonce fields read as "unset" (nonce 0
 		// is not mistaken for a real submission), and the timing fields
 		// (collectionWindowEndsAt/flushDeadline/lastSubmittedAt) are only ever
-		// read after being set on the first enqueue or submission below.
-		q = &eoaQueue{txs: make(map[uint64]heldTx)}
+		// read after being set on the first enqueue or submission below. Only
+		// maxNonceGap needs seeding from config.
+		q = &eoaQueue{
+			txs:    make(map[uint64]heldTx),
+			nonces: nonceTracker{maxNonceGap: t.config.TxMaxNonceGap},
+		}
 		t.queues[from] = q
 	}
 
@@ -384,49 +434,36 @@ func (t *TxMemPool) Add(
 		enqueuedAt: now,
 	}
 
-	// Reject obvious cases before reading the index nonce — each read builds a
-	// full block view, so when we already know we will reject we must not pay
-	// that cost.
-
-	// Reject an exact duplicate of a transaction already in the queue.
+	// Reject an exact duplicate of a transaction already in the queue (cheapest
+	// check; needs no index read).
 	if existing, ok := q.txs[tx.Nonce()]; ok && existing.txHash == tx.Hash() {
 		return errs.ErrDuplicateTransaction
 	}
 
-	// Reject a nonce we have already sent (in flight or ack'd): resubmitting it
-	// would burn Flow fees on a guaranteed nonce-mismatch. classify answers this
-	// from the cached frontier, with no index read.
-	if q.nonces.classify(tx.Nonce()) == nonceInFlight {
-		return errs.ErrInFlightNonce
+	// Classify the nonce, reading the on-chain frontier only when needed (see
+	// classify). A read error is an exception — reject rather than routing
+	// through the queue path.
+	verdict, err := q.nonces.classify(tx.Nonce(), t.nonceProvider, from)
+	if err != nil {
+		return err
 	}
 
-	// Read the index nonce — an expensive full-block-view build — only when it
-	// can change the decision: while a submission is outstanding, or to evaluate
-	// the fast path for an empty, spacing-satisfied queue.
-	if q.nonces.inFlight() || (q.isEmpty() && t.spacingElapsed(q, now)) {
-		indexNonce, nonceErr := t.nonceProvider.GetNonce(from)
-		if nonceErr != nil {
-			// A nonce lookup failure is an exception, not an expected
-			// condition: this is a local state-index read that should not
-			// fail under normal operation. The gateway is in an unknown
-			// state, so reject the transaction rather than silently routing
-			// it through the queue path.
-			return nonceErr
-		}
-		q.nonces.refreshIndexed(indexNonce)
-
-		// We deliberately do NOT prune stale txs (nonce < indexNonce) here,
-		// even though the index may have just advanced: pruning is deferred to
-		// collectDueBatches, which walks every queued tx anyway, so repeating
-		// it per-Add would be redundant work.
-
-		// Fast path: empty queue, nothing in flight, spacing satisfied, and this
-		// tx is exactly the next expected nonce — submit immediately, zero added
-		// latency for the common case. The lock is held across the whole submit,
-		// so there is no concurrency window: no need to mark "submitting" first;
-		// on success we record the ack, on failure we leave the EOA untouched.
-		if q.isEmpty() && !q.nonces.inFlight() && t.spacingElapsed(q, now) &&
-			q.nonces.classify(tx.Nonce()) == nonceNextExpected {
+	switch verdict {
+	case nonceInFlight:
+		return errs.ErrInFlightNonce
+	case nonceTooLow:
+		return errs.ErrNonceTooLow
+	case nonceTooHigh:
+		return errs.ErrNonceTooHigh
+	case nonceNextExpected:
+		// Fast path: an empty queue with nothing in flight and spacing satisfied
+		// can submit the expected nonce immediately — zero added latency. The
+		// lock is held across the whole submit, so there is no concurrency
+		// window: no need to mark "submitting" first; on success we record the
+		// ack, on failure we leave the EOA untouched. If we cannot fast-path yet
+		// (queue non-empty, in flight, or spacing not elapsed), fall through to
+		// enqueue and let the background loop flush it.
+		if q.isEmpty() && !q.nonces.inFlight() && t.spacingElapsed(q, now) {
 			if submitErr := t.submitBatch(ctx, []heldTx{userTx}); submitErr != nil {
 				return submitErr
 			}
@@ -434,7 +471,8 @@ func (t *TxMemPool) Add(
 			q.lastSubmittedAt = time.Now()
 			return nil
 		}
-		// On an unexpected nonce, fall through to the queue path.
+	case nonceQueue:
+		// A gap ahead within the accepted window — fall through to enqueue.
 	}
 
 	// Enqueue. A same-nonce, different-payload resubmission replaces the

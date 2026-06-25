@@ -587,29 +587,75 @@ func Test_TxMemPool_CollectDueBatchesReportsSize(t *testing.T) {
 }
 
 func Test_NonceTracker_Classify(t *testing.T) {
+	// classify reads the on-chain frontier from the provider, so the frontier
+	// is supplied via `frontier` (not set directly on the tracker). In-flight
+	// cases return before the read, so their frontier value is irrelevant.
 	tests := []struct {
-		name    string
-		tracker nonceTracker
-		nonce   uint64
-		want    nonceVerdict
+		name     string
+		tracker  nonceTracker
+		frontier uint64
+		nonce    uint64
+		want     nonceVerdict
 	}{
-		{"fresh: indexed nonce is next-expected", nonceTracker{localIndexedNonce: 5}, 5, nonceNextExpected},
-		{"fresh: gap ahead queues", nonceTracker{localIndexedNonce: 5}, 7, nonceQueue},
-		{"fresh: below index queues (pruned later)", nonceTracker{localIndexedNonce: 5}, 3, nonceQueue},
-		{"nonce 0 is next-expected on a zero tracker", nonceTracker{}, 0, nonceNextExpected},
-		{"submitted: at submitted is in-flight", nonceTracker{localIndexedNonce: 5, lastConsecutivelySubmitted: knownNonce(6)}, 6, nonceInFlight},
-		{"submitted: below submitted is in-flight", nonceTracker{localIndexedNonce: 5, lastConsecutivelySubmitted: knownNonce(6)}, 4, nonceInFlight},
-		{"submitted: next after submitted is expected", nonceTracker{localIndexedNonce: 5, lastConsecutivelySubmitted: knownNonce(6)}, 7, nonceNextExpected},
-		{"submitting: at submitting is in-flight", nonceTracker{localIndexedNonce: 5, submitting: knownNonce(8)}, 8, nonceInFlight},
-		{"submitting: next after submitting is expected", nonceTracker{localIndexedNonce: 5, submitting: knownNonce(8)}, 9, nonceNextExpected},
-		{"index ahead of submitted: expected follows index", nonceTracker{localIndexedNonce: 10, lastConsecutivelySubmitted: knownNonce(6)}, 10, nonceNextExpected},
-		{"index ahead of submitted: between submitted and index queues", nonceTracker{localIndexedNonce: 10, lastConsecutivelySubmitted: knownNonce(6)}, 8, nonceQueue},
+		{"indexed nonce is next-expected", nonceTracker{}, 5, 5, nonceNextExpected},
+		{"gap ahead queues", nonceTracker{}, 5, 7, nonceQueue},
+		{"below index is too low (no gap configured)", nonceTracker{}, 5, 3, nonceTooLow},
+		{"nonce 0 is next-expected on a zero tracker", nonceTracker{}, 0, 0, nonceNextExpected},
+		{"at submitted is in-flight", nonceTracker{lastConsecutivelySubmitted: knownNonce(6)}, 5, 6, nonceInFlight},
+		{"below submitted is in-flight", nonceTracker{lastConsecutivelySubmitted: knownNonce(6)}, 5, 4, nonceInFlight},
+		{"next after submitted is expected", nonceTracker{lastConsecutivelySubmitted: knownNonce(6)}, 5, 7, nonceNextExpected},
+		{"at submitting is in-flight", nonceTracker{submitting: knownNonce(8)}, 5, 8, nonceInFlight},
+		{"next after submitting is expected", nonceTracker{submitting: knownNonce(8)}, 5, 9, nonceNextExpected},
+		{"index ahead of submitted: expected follows index", nonceTracker{lastConsecutivelySubmitted: knownNonce(6)}, 10, 10, nonceNextExpected},
+		{"index ahead of submitted: below index is too low", nonceTracker{lastConsecutivelySubmitted: knownNonce(6)}, 10, 8, nonceTooLow},
+		// Range checks (maxNonceGap > 0).
+		{"gap: index nonce is next-expected", nonceTracker{maxNonceGap: 50}, 5, 5, nonceNextExpected},
+		{"gap: below index is too low", nonceTracker{maxNonceGap: 50}, 5, 4, nonceTooLow},
+		{"gap: at the upper bound is accepted (queued)", nonceTracker{maxNonceGap: 50}, 5, 55, nonceQueue},
+		{"gap: beyond the upper bound is too high", nonceTracker{maxNonceGap: 50}, 5, 56, nonceTooHigh},
+		{"gap: in-flight takes precedence over too-low", nonceTracker{maxNonceGap: 50, lastConsecutivelySubmitted: knownNonce(6)}, 5, 3, nonceInFlight},
+		{"no gap: far-ahead nonce queues (no upper bound)", nonceTracker{}, 5, 100_000, nonceQueue},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.want, tc.tracker.classify(tc.nonce))
+			tracker := tc.tracker
+			got, err := tracker.classify(
+				tc.nonce,
+				&fakeNonceProvider{nonce: tc.frontier},
+				gethCommon.HexToAddress("0xabc"),
+			)
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, got)
 		})
 	}
+}
+
+// With a configured max gap, Add rejects out-of-range nonces up front.
+func Test_TxMemPool_RejectsNonceOutOfRange(t *testing.T) {
+	key, err := crypto.GenerateKey()
+	require.NoError(t, err)
+
+	cfg := testPoolConfig()
+	cfg.TxMaxNonceGap = 50
+
+	submitCalls := 0
+	pool := newTestPool(
+		&fakeNonceProvider{nonce: 100}, // on-chain frontier at nonce 100
+		func(_ context.Context, _ []heldTx) error { submitCalls++; return nil },
+		cfg,
+	)
+	ctx := context.Background()
+
+	// Below the frontier: already used.
+	require.ErrorIs(t, pool.Add(ctx, signedTestTx(t, key, 99, 1)), errs.ErrNonceTooLow)
+
+	// More than maxNonceGap (50) ahead of the frontier.
+	require.ErrorIs(t, pool.Add(ctx, signedTestTx(t, key, 200, 1)), errs.ErrNonceTooHigh)
+
+	// Within the accepted window (ahead of expected, but <= frontier+gap): held.
+	require.NoError(t, pool.Add(ctx, signedTestTx(t, key, 120, 1)))
+
+	assert.Zero(t, submitCalls, "out-of-order/rejected txs are never fast-path submitted")
 }
 
 func Test_NonceTracker_ExpectedNonce(t *testing.T) {

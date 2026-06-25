@@ -36,6 +36,13 @@ var (
 	// already been submitted to the network and is awaiting execution. Letting
 	// it through would burn Flow fees on a guaranteed nonce-mismatch failure.
 	ErrInFlightNonce = fmt.Errorf("%w: %s", ErrInvalid, "transaction with the same nonce already submitted")
+	// ErrNonceTooLow is returned when a transaction's nonce is below the EOA's
+	// current on-chain nonce: it has already been used and can never execute.
+	ErrNonceTooLow = fmt.Errorf("%w: %s", ErrInvalid, "nonce too low")
+	// ErrNonceTooHigh is returned when a transaction's nonce is more than the
+	// configured maximum gap ahead of the EOA's on-chain nonce. Such a tx cannot
+	// execute until the gap fills, so it is rejected up front for fast feedback.
+	ErrNonceTooHigh = fmt.Errorf("%w: %s", ErrInvalid, "nonce too high")
 
 	// Storage errors
 

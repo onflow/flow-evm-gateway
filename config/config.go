@@ -147,6 +147,14 @@ type Config struct {
 	// single EVM.batchRun Cadence transaction by the transaction mempool,
 	// bounded by the Cadence transaction computation limit.
 	TxMaxBatchSize int
+	// TxMaxNonceGap is how far ahead of an EOA's on-chain nonce the transaction
+	// mempool will accept a nonce. A transaction whose nonce exceeds
+	// indexedNonce + TxMaxNonceGap is rejected up front with ErrNonceTooHigh,
+	// giving the client immediate feedback instead of holding an unexecutable tx
+	// until TTL. 0 means no upper bound (any future nonce is accepted). This
+	// bounds only the upper end: a nonce below the indexed nonce is always
+	// rejected with ErrNonceTooLow regardless of this setting.
+	TxMaxNonceGap uint64
 	// RpcRequestTimeout is the maximum duration at which JSON-RPC requests should generate
 	// a response, before they timeout.
 	RpcRequestTimeout time.Duration
