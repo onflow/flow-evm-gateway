@@ -111,6 +111,13 @@ func (f *fakeNonceProvider) GetNonce(_ gethCommon.Address) (uint64, error) {
 	return f.nonce, f.err
 }
 
+// GetBlockView returns the fake itself as the NonceView: a single fake reads
+// every EOA's nonce as f.nonce/f.err, mirroring the production single-view
+// read path.
+func (f *fakeNonceProvider) GetBlockView() (NonceView, error) {
+	return f, nil
+}
+
 func newTestPool(
 	np NonceProvider,
 	submit func(context.Context, []heldTx) error,
