@@ -340,14 +340,14 @@ func (e *EVM) EstimateGas(
 		passingGasLimit = uint64(*txArgs.Gas)
 	}
 
-	chainConfig := emulator.MakeChainConfig(e.config.EVMNetworkID)
-	// Cap the maximum gas allowance according to EIP-7825 if the estimation targets Osaka
-	targetBlock, err := e.blocks.GetByHeight(height)
-	if err != nil {
-		return 0, err
-	}
-	blockNumber, blockTime := new(big.Int).SetUint64(targetBlock.Height), targetBlock.Timestamp
 	if passingGasLimit > gethParams.MaxTxGas {
+		// Cap the maximum gas allowance according to EIP-7825 if the estimation targets Osaka
+		targetBlock, err := e.blocks.GetByHeight(height)
+		if err != nil {
+			return 0, err
+		}
+		blockNumber, blockTime := new(big.Int).SetUint64(targetBlock.Height), targetBlock.Timestamp
+
 		if blockOverrides != nil {
 			if blockOverrides.Number != nil {
 				blockNumber = blockOverrides.Number.ToInt()
@@ -356,6 +356,7 @@ func (e *EVM) EstimateGas(
 				blockTime = uint64(*blockOverrides.Time)
 			}
 		}
+		chainConfig := emulator.MakeChainConfig(e.config.EVMNetworkID)
 		isOsaka := chainConfig.IsOsaka(blockNumber, blockTime)
 		isAmsterdam := chainConfig.IsAmsterdam(blockNumber, blockTime)
 		if isOsaka && !isAmsterdam {
