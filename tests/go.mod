@@ -1,15 +1,15 @@
 module github.com/onflow/flow-evm-gateway/integration
 
-go 1.26.0
+go 1.25.1
 
 require (
 	github.com/ethereum/go-ethereum v1.17.4
 	github.com/goccy/go-json v0.10.4
 	github.com/onflow/cadence v1.10.3
-	github.com/onflow/crypto v0.26.0
+	github.com/onflow/crypto v0.25.4
 	github.com/onflow/flow-emulator v1.21.1
 	github.com/onflow/flow-evm-gateway v0.0.0-20240201154855-4d4d3d3f19c7
-	github.com/onflow/flow-go v0.48.1-evm-cache-block.0.20260624075610-65d6f283d095
+	github.com/onflow/flow-go v0.48.1-evm-cache-block.0.20260625075712-10f911e681fa
 	github.com/onflow/flow-go-sdk v1.10.3
 	github.com/rs/zerolog v1.34.0
 	github.com/stretchr/testify v1.11.1

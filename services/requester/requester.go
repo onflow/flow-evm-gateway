@@ -341,16 +341,14 @@ func (e *EVM) EstimateGas(
 		passingGasLimit = uint64(*txArgs.Gas)
 	}
 
-	chainConfig := emulator.MakeChainConfig(e.config.EVMNetworkID)
-	// Cap the maximum gas allowance according to EIP-7825 if the estimation targets Osaka
-	targetBlock, err := e.blocks.GetByHeight(height)
-	if err != nil {
-		return 0, err
-	}
-	blockNumber, blockTime := new(big.Int).SetUint64(targetBlock.Height), targetBlock.Timestamp
-	isOsaka := chainConfig.IsOsaka(blockNumber, blockTime)
-	isAmsterdam := chainConfig.IsAmsterdam(blockNumber, blockTime)
 	if passingGasLimit > gethParams.MaxTxGas {
+		// Cap the maximum gas allowance according to EIP-7825 if the estimation targets Osaka
+		targetBlock, err := e.blocks.GetByHeight(height)
+		if err != nil {
+			return 0, err
+		}
+		blockNumber, blockTime := new(big.Int).SetUint64(targetBlock.Height), targetBlock.Timestamp
+
 		if blockOverrides != nil {
 			if blockOverrides.Number != nil {
 				blockNumber = blockOverrides.Number.ToInt()
@@ -359,6 +357,9 @@ func (e *EVM) EstimateGas(
 				blockTime = uint64(*blockOverrides.Time)
 			}
 		}
+		chainConfig := emulator.MakeChainConfig(e.config.EVMNetworkID)
+		isOsaka := chainConfig.IsOsaka(blockNumber, blockTime)
+		isAmsterdam := chainConfig.IsAmsterdam(blockNumber, blockTime)
 		if isOsaka && !isAmsterdam {
 			passingGasLimit = gethParams.MaxTxGas
 		}
@@ -402,10 +403,10 @@ func (e *EVM) EstimateGas(
 			// transaction had run without error at least once before.
 			return 0, err
 		}
-		if result.Failed() {
-			failingGasLimit = optimisticGasLimit
-		} else {
+		if result.Successful() {
 			passingGasLimit = optimisticGasLimit
+		} else {
+			failingGasLimit = optimisticGasLimit
 		}
 	}
 
@@ -418,19 +419,21 @@ func (e *EVM) EstimateGas(
 		if float64(passingGasLimit-failingGasLimit)/float64(passingGasLimit) < estimateGasErrorRatio {
 			break
 		}
-		mid := min((passingGasLimit+failingGasLimit)/2,
-			// Most txs don't need much higher gas limit than their gas used, and most txs don't
-			// require near the full block limit of gas, so the selection of where to bisect the
-			// range here is skewed to favor the low side.
-			failingGasLimit*2)
+		// Most txs don't need much higher gas limit than their gas used, and most txs don't
+		// require near the full block limit of gas, so the selection of where to bisect the
+		// range here is skewed to favor the low side.
+		mid := min(
+			(passingGasLimit+failingGasLimit)/2,
+			failingGasLimit*2,
+		)
 		result, err := dryRun(mid)
 		if err != nil {
 			return 0, err
 		}
-		if result.Failed() {
-			failingGasLimit = mid
-		} else {
+		if result.Successful() {
 			passingGasLimit = mid
+		} else {
+			failingGasLimit = mid
 		}
 	}
 
