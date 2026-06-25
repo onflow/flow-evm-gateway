@@ -4,7 +4,6 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
-	"math"
 	"math/big"
 	"time"
 
@@ -348,8 +347,6 @@ func (e *EVM) EstimateGas(
 		return 0, err
 	}
 	blockNumber, blockTime := new(big.Int).SetUint64(targetBlock.Height), targetBlock.Timestamp
-	isOsaka := chainConfig.IsOsaka(blockNumber, blockTime)
-	isAmsterdam := chainConfig.IsAmsterdam(blockNumber, blockTime)
 	if passingGasLimit > gethParams.MaxTxGas {
 		if blockOverrides != nil {
 			if blockOverrides.Number != nil {
@@ -359,6 +356,8 @@ func (e *EVM) EstimateGas(
 				blockTime = uint64(*blockOverrides.Time)
 			}
 		}
+		isOsaka := chainConfig.IsOsaka(blockNumber, blockTime)
+		isAmsterdam := chainConfig.IsAmsterdam(blockNumber, blockTime)
 		if isOsaka && !isAmsterdam {
 			passingGasLimit = gethParams.MaxTxGas
 		}
@@ -402,10 +401,10 @@ func (e *EVM) EstimateGas(
 			// transaction had run without error at least once before.
 			return 0, err
 		}
-		if result.Failed() {
-			failingGasLimit = optimisticGasLimit
-		} else {
+		if result.Successful() {
 			passingGasLimit = optimisticGasLimit
+		} else {
+			failingGasLimit = optimisticGasLimit
 		}
 	}
 
@@ -418,56 +417,21 @@ func (e *EVM) EstimateGas(
 		if float64(passingGasLimit-failingGasLimit)/float64(passingGasLimit) < estimateGasErrorRatio {
 			break
 		}
-		mid := min((passingGasLimit+failingGasLimit)/2,
-			// Most txs don't need much higher gas limit than their gas used, and most txs don't
-			// require near the full block limit of gas, so the selection of where to bisect the
-			// range here is skewed to favor the low side.
-			failingGasLimit*2)
+		// Most txs don't need much higher gas limit than their gas used, and most txs don't
+		// require near the full block limit of gas, so the selection of where to bisect the
+		// range here is skewed to favor the low side.
+		mid := min(
+			(passingGasLimit+failingGasLimit)/2,
+			failingGasLimit*2,
+		)
 		result, err := dryRun(mid)
 		if err != nil {
 			return 0, err
 		}
-		if result.Failed() {
-			failingGasLimit = mid
-		} else {
+		if result.Successful() {
 			passingGasLimit = mid
-		}
-	}
-
-	if txArgs.AccessList != nil {
-		addresses := uint64(len(*txArgs.AccessList))
-		storageKeys := uint64(txArgs.AccessList.StorageKeys())
-		if (math.MaxUint64-passingGasLimit)/gethParams.TxAccessListAddressGas < addresses {
-			return 0, gethCore.ErrGasUintOverflow
-		}
-		passingGasLimit += addresses * gethParams.TxAccessListAddressGas
-		if (math.MaxUint64-passingGasLimit)/gethParams.TxAccessListStorageKeyGas < storageKeys {
-			return 0, gethCore.ErrGasUintOverflow
-		}
-		passingGasLimit += storageKeys * gethParams.TxAccessListStorageKeyGas
-
-		// EIP-7981: access list data is charged in addition to the base charge.
-		if isAmsterdam {
-			const (
-				addressCost    = common.AddressLength * gethParams.TxCostFloorPerToken7976 * gethParams.TxTokenPerNonZeroByte
-				storageKeyCost = common.HashLength * gethParams.TxCostFloorPerToken7976 * gethParams.TxTokenPerNonZeroByte
-			)
-			if (math.MaxUint64-passingGasLimit)/addressCost < addresses {
-				return 0, gethCore.ErrGasUintOverflow
-			}
-			passingGasLimit += addresses * addressCost
-			if (math.MaxUint64-passingGasLimit)/storageKeyCost < storageKeys {
-				return 0, gethCore.ErrGasUintOverflow
-			}
-			passingGasLimit += storageKeys * storageKeyCost
-		}
-	}
-	if txArgs.AuthorizationList != nil {
-		if chainConfig.IsAmsterdam(blockNumber, blockTime) {
-			passingGasLimit += uint64(len(txArgs.AuthorizationList)) * gethParams.TxAuthTupleRegularGas
-			passingGasLimit += uint64(len(txArgs.AuthorizationList)) * (gethParams.AuthorizationCreationSize + gethParams.AccountCreationSize) * gethParams.CostPerStateByte
 		} else {
-			passingGasLimit += uint64(len(txArgs.AuthorizationList)) * gethParams.CallNewAccountGas
+			failingGasLimit = mid
 		}
 	}
 
