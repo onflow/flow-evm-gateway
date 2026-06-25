@@ -198,8 +198,9 @@ func Test_TxMemPool_FastPathSubmitsImmediately(t *testing.T) {
 	q := pool.queues[from]
 	require.NotNil(t, q)
 	assert.Empty(t, q.txs)
-	assert.True(t, q.hasInFlight)
-	assert.Equal(t, uint64(0), q.lastSubmittedNonce)
+	// Explicit success update: submitting cleared, submitted advanced to 0.
+	assert.False(t, q.nonces.inFlight())
+	assert.Equal(t, knownNonce(0), q.nonces.lastConsecutivelySubmitted)
 }
 
 func Test_TxMemPool_UnexpectedNonceEnqueues(t *testing.T) {
@@ -226,7 +227,7 @@ func Test_TxMemPool_UnexpectedNonceEnqueues(t *testing.T) {
 	held, ok := q.txs[5]
 	require.True(t, ok)
 	assert.Equal(t, tx.Hash(), held.txHash)
-	assert.False(t, q.hasInFlight)
+	assert.False(t, q.nonces.inFlight())
 }
 
 func Test_TxMemPool_NonceReadErrorRejectsTx(t *testing.T) {
@@ -255,7 +256,7 @@ func Test_TxMemPool_NonceReadErrorRejectsTx(t *testing.T) {
 	q := pool.queues[from]
 	require.NotNil(t, q)
 	assert.Empty(t, q.txs)
-	assert.False(t, q.hasInFlight)
+	assert.False(t, q.nonces.inFlight())
 }
 
 func Test_TxMemPool_InFlightDuplicateRejected(t *testing.T) {
@@ -308,20 +309,20 @@ func Test_TxMemPool_FailedFlushDoesNotWedgeEOA(t *testing.T) {
 
 	// State was committed optimistically under the lock.
 	q := pool.queues[from]
-	require.True(t, q.hasInFlight)
-	assert.Equal(t, uint64(1), q.lastSubmittedNonce)
+	require.True(t, q.nonces.inFlight())
+	assert.Equal(t, knownNonce(1), q.nonces.submitting)
 
-	// The submission fails; submitWork must reconcile the in-flight marker.
+	// The submission fails; submitWork must clear the in-flight marker.
 	err = pool.submitWork(context.Background(), work[0])
 	require.ErrorIs(t, err, submitErr)
-	assert.False(t, q.hasInFlight)
+	assert.False(t, q.nonces.inFlight())
 
 	// A resubmission of the failed nonce must NOT be rejected as in flight.
 	err = pool.Add(context.Background(), signedTestTx(t, key, 0, 2))
 	assert.NotErrorIs(t, err, errs.ErrInFlightNonce)
 }
 
-func Test_RollbackFailedSubmission_OnlyClearsMatchingBatch(t *testing.T) {
+func Test_ReconcileSubmission_OnlyReconcilesMatchingInFlightBatch(t *testing.T) {
 	pool := newTestPool(
 		&fakeNonceProvider{nonce: 0},
 		func(_ context.Context, _ []heldTx) error { return nil },
@@ -329,39 +330,42 @@ func Test_RollbackFailedSubmission_OnlyClearsMatchingBatch(t *testing.T) {
 	)
 	from := gethCommon.HexToAddress("0xabc")
 	pool.queues[from] = &eoaQueue{
-		txs:                map[uint64]heldTx{},
-		hasInFlight:        true,
-		lastSubmittedNonce: 7,
+		txs:    map[uint64]heldTx{},
+		nonces: nonceTracker{submitting: knownNonce(7)},
 	}
+	submitErr := errors.New("network down")
 
-	// A different (newer) batch owns the marker: not cleared.
-	pool.rollbackFailedSubmission(
+	// A different (newer) in-flight nonce owns the marker: not cleared.
+	pool.reconcileSubmission(
 		flushWork{from: from, txs: []heldTx{makeHeldTx(5, time.Time{})}, inFlight: true},
+		submitErr,
 	)
-	assert.True(t, pool.queues[from].hasInFlight)
+	assert.True(t, pool.queues[from].nonces.inFlight())
 
-	// A TTL-expiry batch (inFlight false) never clears the marker, even if its
-	// last nonce coincides with lastSubmittedNonce.
-	pool.rollbackFailedSubmission(
+	// A TTL-expiry batch (inFlight false) never touches the tracker.
+	pool.reconcileSubmission(
 		flushWork{from: from, txs: []heldTx{makeHeldTx(7, time.Time{})}, inFlight: false},
+		submitErr,
 	)
-	assert.True(t, pool.queues[from].hasInFlight)
+	assert.True(t, pool.queues[from].nonces.inFlight())
 
 	// The failed in-flight batch still owns the marker: cleared.
-	pool.rollbackFailedSubmission(
+	pool.reconcileSubmission(
 		flushWork{from: from, txs: []heldTx{makeHeldTx(7, time.Time{})}, inFlight: true},
+		submitErr,
 	)
-	assert.False(t, pool.queues[from].hasInFlight)
+	assert.False(t, pool.queues[from].nonces.inFlight())
 
 	// Unknown EOA: no panic.
-	pool.rollbackFailedSubmission(
+	pool.reconcileSubmission(
 		flushWork{from: gethCommon.HexToAddress("0xdef"), txs: []heldTx{makeHeldTx(7, time.Time{})}, inFlight: true},
+		submitErr,
 	)
 }
 
-// A successful submission leaves the optimistically-committed in-flight state
-// intact — there is no success-path reconciliation to undo it.
-func Test_TxMemPool_SuccessfulFlushKeepsInFlight(t *testing.T) {
+// A successful submission advances the consecutively-submitted nonce and clears
+// the in-flight marker (the explicit success update).
+func Test_TxMemPool_SuccessfulFlushMarksSubmitted(t *testing.T) {
 	key, err := crypto.GenerateKey()
 	require.NoError(t, err)
 	from := crypto.PubkeyToAddress(key.PublicKey)
@@ -388,8 +392,8 @@ func Test_TxMemPool_SuccessfulFlushKeepsInFlight(t *testing.T) {
 	require.NoError(t, pool.submitWork(context.Background(), work[0]))
 
 	q := pool.queues[from]
-	assert.True(t, q.hasInFlight)
-	assert.Equal(t, uint64(1), q.lastSubmittedNonce)
+	assert.False(t, q.nonces.inFlight())
+	assert.Equal(t, knownNonce(1), q.nonces.lastConsecutivelySubmitted)
 }
 
 // Fix 1: a failed fast-path submission must not rate-limit the EOA via
@@ -411,7 +415,8 @@ func Test_TxMemPool_FailedFastPathLeavesNoState(t *testing.T) {
 
 	q := pool.queues[from]
 	require.NotNil(t, q)
-	assert.False(t, q.hasInFlight)
+	assert.False(t, q.nonces.inFlight())
+	assert.False(t, q.nonces.lastConsecutivelySubmitted.set, "failed submission must not advance submitted")
 	assert.True(t, q.lastSubmittedAt.IsZero(), "failed submission must not stamp lastSubmittedAt")
 }
 
@@ -481,11 +486,11 @@ func Test_TxMemPool_EmptyQueueAgesOut(t *testing.T) {
 	)
 	from := gethCommon.HexToAddress("0xabc")
 
-	// Empty queue, never submitted (lastSubmittedAt zero), but in flight and
+	// Empty queue, never submitted, but with a lingering in-flight marker and
 	// last active beyond the retention window: must be removed.
 	pool.queues[from] = &eoaQueue{
 		txs:          map[uint64]heldTx{},
-		hasInFlight:  true,
+		nonces:       nonceTracker{submitting: knownNonce(5)},
 		lastActivity: time.Now().Add(-2 * idleQueueRetention),
 	}
 	pool.collectDueBatches()
@@ -581,18 +586,66 @@ func Test_TxMemPool_CollectDueBatchesReportsSize(t *testing.T) {
 	assert.Equal(t, 3, collector.txPoolQueued)
 }
 
-func Test_RefreshInFlight(t *testing.T) {
-	q := &eoaQueue{hasInFlight: true, lastSubmittedNonce: 3}
+func Test_NonceTracker_Classify(t *testing.T) {
+	tests := []struct {
+		name    string
+		tracker nonceTracker
+		nonce   uint64
+		want    nonceVerdict
+	}{
+		{"fresh: indexed nonce is next-expected", nonceTracker{localIndexedNonce: 5}, 5, nonceNextExpected},
+		{"fresh: gap ahead queues", nonceTracker{localIndexedNonce: 5}, 7, nonceQueue},
+		{"fresh: below index queues (pruned later)", nonceTracker{localIndexedNonce: 5}, 3, nonceQueue},
+		{"nonce 0 is next-expected on a zero tracker", nonceTracker{}, 0, nonceNextExpected},
+		{"submitted: at submitted is in-flight", nonceTracker{localIndexedNonce: 5, lastConsecutivelySubmitted: knownNonce(6)}, 6, nonceInFlight},
+		{"submitted: below submitted is in-flight", nonceTracker{localIndexedNonce: 5, lastConsecutivelySubmitted: knownNonce(6)}, 4, nonceInFlight},
+		{"submitted: next after submitted is expected", nonceTracker{localIndexedNonce: 5, lastConsecutivelySubmitted: knownNonce(6)}, 7, nonceNextExpected},
+		{"submitting: at submitting is in-flight", nonceTracker{localIndexedNonce: 5, submitting: knownNonce(8)}, 8, nonceInFlight},
+		{"submitting: next after submitting is expected", nonceTracker{localIndexedNonce: 5, submitting: knownNonce(8)}, 9, nonceNextExpected},
+		{"index ahead of submitted: expected follows index", nonceTracker{localIndexedNonce: 10, lastConsecutivelySubmitted: knownNonce(6)}, 10, nonceNextExpected},
+		{"index ahead of submitted: between submitted and index queues", nonceTracker{localIndexedNonce: 10, lastConsecutivelySubmitted: knownNonce(6)}, 8, nonceQueue},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, tc.tracker.classify(tc.nonce))
+		})
+	}
+}
 
-	// Index has not advanced past the sent nonce: stays in flight.
-	q.refreshInFlight(3)
-	assert.True(t, q.hasInFlight)
+func Test_NonceTracker_ExpectedNonce(t *testing.T) {
+	assert.Equal(t, uint64(5), (&nonceTracker{localIndexedNonce: 5}).expectedNonce())
+	assert.Equal(t, uint64(7),
+		(&nonceTracker{localIndexedNonce: 5, lastConsecutivelySubmitted: knownNonce(6)}).expectedNonce())
+	assert.Equal(t, uint64(9),
+		(&nonceTracker{localIndexedNonce: 5, submitting: knownNonce(8)}).expectedNonce())
+	// The indexed frontier wins when it is ahead of our own sends.
+	assert.Equal(t, uint64(10),
+		(&nonceTracker{localIndexedNonce: 10, lastConsecutivelySubmitted: knownNonce(6)}).expectedNonce())
+}
 
-	// Index advanced past the sent nonce: cleared.
-	q.refreshInFlight(4)
-	assert.False(t, q.hasInFlight)
+func Test_NonceTracker_Transitions(t *testing.T) {
+	n := &nonceTracker{localIndexedNonce: 5}
 
-	// No-op when nothing is in flight.
-	q.refreshInFlight(100)
-	assert.False(t, q.hasInFlight)
+	// markSubmitting sets the in-flight marker.
+	n.markSubmitting(7)
+	assert.True(t, n.inFlight())
+	assert.Equal(t, knownNonce(7), n.submitting)
+
+	// markSubmitted advances submitted and clears submitting.
+	n.markSubmitted(7)
+	assert.False(t, n.inFlight())
+	assert.Equal(t, knownNonce(7), n.lastConsecutivelySubmitted)
+
+	// rollbackSubmitting only clears a matching in-flight nonce.
+	n.markSubmitting(9)
+	n.rollbackSubmitting(8) // non-matching: no-op
+	assert.True(t, n.inFlight())
+	n.rollbackSubmitting(9) // matching: cleared
+	assert.False(t, n.inFlight())
+	// A rollback never disturbs the consecutively-submitted nonce.
+	assert.Equal(t, knownNonce(7), n.lastConsecutivelySubmitted)
+
+	// refreshIndexed updates the cached frontier.
+	n.refreshIndexed(12)
+	assert.Equal(t, uint64(12), n.localIndexedNonce)
 }

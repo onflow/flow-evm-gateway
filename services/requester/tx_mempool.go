@@ -19,6 +19,11 @@ import (
 	"github.com/onflow/flow-evm-gateway/services/requester/keystore"
 )
 
+// TODO: Document what the TX Mempool does with clear examples of the difference use cases it handles. e.g. transactions coming in out of sequence with a gap in between, transactions expiring in the queue as local index nonce moves beyond the nonce of the the tx.
+// TODO: Overall, refactor the code such that its easier to understand and more importantly easier to maintain
+// TODO: Log when transactions are being discarded from the queue to help debug issues if lets say a client compains about transactions being lost or erroring out.
+// TODO: Add max gap in nonce similar to whats here:https://github.com/onflow/flow-evm-gateway/pull/925/changes#diff-f17ac7d49cb8f2272b61813e130583e6fadbfde51b795bfdb255b936ee6e0c46R221. The range should be min(local index, last nonce submitted) for nonce too high error and max(local index, last nonce submitted) for nonce too low error
+
 // heldTx is a transaction held in the mempool, waiting for its
 // collection window to elapse or its nonce gap to be filled.
 type heldTx struct {
@@ -75,6 +80,148 @@ const txMemPoolTickInterval = 50 * time.Millisecond
 // recent activity is kept before being removed, to bound memory usage.
 const idleQueueRetention = time.Minute
 
+// optionalNonce represents a nonce that may not be set: when set is true, v is a
+// valid nonce; when set is false, the nonce has not been initialized yet. It
+// lets us compare nonces uniformly even when one may be absent — including the
+// ambiguous case where the value is 0 (a valid nonce) but set is false. An unset
+// optionalNonce behaves as -∞ in the comparisons below (atLeast/is/max): it is
+// below every real nonce and never "at or above" one, so callers carry no set
+// checks.
+type optionalNonce struct {
+	v   uint64
+	set bool
+}
+
+func knownNonce(v uint64) optionalNonce { return optionalNonce{v: v, set: true} }
+
+// atLeast reports whether this nonce is set and >= n. An unset nonce (-∞) is
+// never >= a real nonce, so it returns false.
+func (o optionalNonce) atLeast(n uint64) bool { return o.set && o.v >= n }
+
+// is reports whether this nonce is set and exactly equals n.
+func (o optionalNonce) is(n uint64) bool { return o.set && o.v == n }
+
+// max returns the greater of two optional nonces, treating unset as -∞.
+func (o optionalNonce) max(other optionalNonce) optionalNonce {
+	if !o.set {
+		return other
+	}
+	if other.set && other.v > o.v {
+		return other
+	}
+	return o
+}
+
+// nonceVerdict is what classify decides should happen to an incoming nonce.
+type nonceVerdict int
+
+const (
+	// nonceNextExpected: nonce == expectedNonce; eligible for immediate submit.
+	nonceNextExpected nonceVerdict = iota
+	// nonceInFlight: nonce is at or below one we have already sent (still in
+	// flight or already ack'd). Re-accepting it would burn Flow fees on a
+	// guaranteed nonce-mismatch, so it is rejected.
+	nonceInFlight
+	// nonceQueue: a future nonce beyond the expected one (a gap ahead); hold it.
+	nonceQueue
+)
+
+// nonceTracker is the per-EOA submission-state machine. It records the nonce
+// facts the mempool reasons about and answers "what should happen to an
+// incoming nonce?" (classify) and "what is the next nonce to submit?"
+// (expectedNonce), so callers never compare raw fields or write compound
+// conditions. All methods assume the pool's queueMux is held: the tracker has
+// no lock of its own, and the single submit goroutine plus Add-under-lock model
+// guarantees serialized access (see TxMemPool docstring).
+type nonceTracker struct {
+	// localIndexedNonce is the EOA's next expected nonce per the local state
+	// index (the on-chain frontier). A CACHE refreshed from a fresh read via
+	// refreshIndexed — a fact about the chain, not about our sends.
+	localIndexedNonce uint64
+	// submitting is the highest nonce SENT to Flow but not yet ack'd: the window
+	// between collecting a batch and its submit result. Unset when no submission
+	// is outstanding. It means strictly "a network call is in flight" and is
+	// cleared the moment that call returns — by markSubmitted on success or
+	// rollbackSubmitting on failure.
+	submitting optionalNonce
+	// lastConsecutivelySubmitted is the highest nonce CONSECUTIVELY, SUCCESSFULLY
+	// submitted (ack'd). Unset before the EOA's first success. Only consecutive
+	// submissions advance it; TTL-expiry (gapped) batches do NOT, so it never
+	// includes a nonce past a gap.
+	lastConsecutivelySubmitted optionalNonce
+}
+
+// inFlight reports whether a submission is outstanding (sent, not yet ack'd).
+func (n *nonceTracker) inFlight() bool { return n.submitting.set }
+
+// highestSent returns the highest nonce we have already sent — whether still in
+// flight or already ack'd (unset if neither). Re-accepting a nonce at or below
+// it would burn Flow fees on a guaranteed nonce-mismatch.
+func (n *nonceTracker) highestSent() optionalNonce {
+	return n.lastConsecutivelySubmitted.max(n.submitting)
+}
+
+// expectedNonce is the next nonce eligible for submission: one past the highest
+// nonce already sent, or the indexed frontier, whichever is higher.
+func (n *nonceTracker) expectedNonce() uint64 {
+	if hi := n.highestSent(); hi.atLeast(n.localIndexedNonce) {
+		return hi.v + 1
+	}
+	return n.localIndexedNonce
+}
+
+// classify decides what to do with an incoming nonce against the currently
+// cached frontier. Refresh via refreshIndexed first where freshness matters.
+func (n *nonceTracker) classify(nonce uint64) nonceVerdict {
+	// At or below the highest nonce we've already sent: already in flight or
+	// submitted, so reject.
+	if n.highestSent().atLeast(nonce) {
+		return nonceInFlight
+	}
+	if nonce == n.expectedNonce() {
+		return nonceNextExpected
+	}
+	return nonceQueue
+}
+
+// markSubmitting records that nonces up to highNonce have been sent but not yet
+// ack'd. Set when a batch is detached for async submission in collectDueBatches
+// (the synchronous fast path in Add skips it — it holds the lock across the
+// whole submit, so there is no concurrency window to guard).
+func (n *nonceTracker) markSubmitting(highNonce uint64) {
+	n.submitting = knownNonce(highNonce)
+}
+
+// markSubmitted acks a successful submission: it advances the consecutively-
+// submitted nonce and clears the in-flight marker. Called the moment a
+// submission succeeds, EXPLICITLY and under the lock, rather than waiting for
+// the index to confirm — so `submitting` strictly means "a network call is
+// outstanding" and is cleared as soon as the call returns (here on success, or
+// via rollbackSubmitting on failure). This costs one quick lock per successful
+// submission, which we accept for a state machine that is trivial to reason
+// about.
+func (n *nonceTracker) markSubmitted(highNonce uint64) {
+	n.lastConsecutivelySubmitted = knownNonce(highNonce)
+	n.submitting = optionalNonce{}
+}
+
+// rollbackSubmitting clears the in-flight marker after a FAILED submission, but
+// only when it still refers to highNonce (a newer submission may have replaced
+// it). Because a failure never advances lastConsecutivelySubmitted, there is
+// nothing else to undo: the next flush recomputes expectedNonce from the
+// unchanged frontier. This replaces the old, fragile
+// "lastSubmittedNonce == batchMax" guard.
+func (n *nonceTracker) rollbackSubmitting(highNonce uint64) {
+	if n.submitting.is(highNonce) {
+		n.submitting = optionalNonce{}
+	}
+}
+
+// refreshIndexed updates the cached on-chain frontier from a fresh index read.
+func (n *nonceTracker) refreshIndexed(indexedNonce uint64) {
+	n.localIndexedNonce = indexedNonce
+}
+
 // eoaQueue tracks the held transactions and submission state for one EOA.
 type eoaQueue struct {
 	// txs holds pending transactions keyed by nonce. Keying by nonce gives
@@ -90,19 +237,15 @@ type eoaQueue struct {
 	// deliberately no separate "hard cap" knob: TxSubmissionSpacing serves
 	// both purposes (see PR #965 discussion).
 	flushDeadline time.Time
-	// lastSubmittedAt is when the last Cadence tx for this EOA was submitted.
+	// lastSubmittedAt is when the last Cadence tx for this EOA was submitted
+	// (used for submission spacing).
 	lastSubmittedAt time.Time
-	// lastSubmittedNonce is the highest nonce included in the last submission.
-	// Only meaningful while hasInFlight is true. (Kept next to lastSubmittedAt:
-	// "submitted" and "sent" mean the same action here.)
-	lastSubmittedNonce uint64
 	// lastActivity is when this EOA was last touched — a transaction received
 	// (Add) or a batch flushed (collectDueBatches). It bounds memory: a queue
 	// with no held txs and no activity past idleQueueRetention is removed.
 	lastActivity time.Time
-	// hasInFlight reports whether a submission exists that the local index
-	// has not yet confirmed (index nonce <= lastSubmittedNonce).
-	hasInFlight bool
+	// nonces is the submission-state machine for this EOA.
+	nonces nonceTracker
 }
 
 // isEmpty reports whether the queue holds no transactions. Callers must hold
@@ -220,11 +363,18 @@ func (t *TxMemPool) Add(
 
 	q, ok := t.queues[from]
 	if !ok {
+		// A fresh queue's other fields are intentionally left at their zero
+		// values: the nonceTracker's optionalNonce fields read as "unset" (nonce 0
+		// is not mistaken for a real submission), and the timing fields
+		// (collectionWindowEndsAt/flushDeadline/lastSubmittedAt) are only ever
+		// read after being set on the first enqueue or submission below.
 		q = &eoaQueue{txs: make(map[uint64]heldTx)}
 		t.queues[from] = q
 	}
 
 	now := time.Now()
+	// The EOA was "touched" even if this turns out to be a duplicate, so record
+	// activity here to keep the idle-queue retention clock accurate.
 	q.lastActivity = now
 
 	userTx := heldTx{
@@ -235,34 +385,26 @@ func (t *TxMemPool) Add(
 	}
 
 	// Reject obvious cases before reading the index nonce — each read builds a
-	// full block view, so when we already know we will reject the transaction
-	// we must not pay that cost.
+	// full block view, so when we already know we will reject we must not pay
+	// that cost.
 
 	// Reject an exact duplicate of a transaction already in the queue.
 	if existing, ok := q.txs[tx.Nonce()]; ok && existing.txHash == tx.Hash() {
 		return errs.ErrDuplicateTransaction
 	}
 
-	// Reject a nonce that has been submitted and is still in flight: it
-	// would burn Flow fees on a guaranteed nonce-mismatch failure. A nonce at
-	// or below lastSubmittedNonce while hasInFlight is inherently in flight, so
-	// rejecting it here is correct.
-	//
-	// Note (zhangchiqing): ErrInFlightNonce covers a nonce at/below the last
-	// in-flight nonce. A nonce strictly below the indexed (already-used) nonce
-	// is NOT separately distinguished here — doing so would require an extra
-	// index read on every Add. Such a transaction is instead pruned by
-	// pruneStaleTxs on the background loop, or fails observably on-chain.
-	if q.hasInFlight && tx.Nonce() <= q.lastSubmittedNonce {
+	// Reject a nonce we have already sent (in flight or ack'd): resubmitting it
+	// would burn Flow fees on a guaranteed nonce-mismatch. classify answers this
+	// from the cached frontier, with no index read.
+	if q.nonces.classify(tx.Nonce()) == nonceInFlight {
 		return errs.ErrInFlightNonce
 	}
 
-	// Read the index nonce — an expensive operation that builds a full block
-	// view — at most once per Add, and only when it can change the decision:
-	// to clear a stale in-flight marker, and/or to evaluate the fast path for
-	// an empty, spacing-satisfied queue.
-	if q.hasInFlight || (q.isEmpty() && t.spacingElapsed(q, now)) {
-		indexNonce, nonceErr := q.queryAndRefreshInFlight(t.nonceProvider, from)
+	// Read the index nonce — an expensive full-block-view build — only when it
+	// can change the decision: while a submission is outstanding, or to evaluate
+	// the fast path for an empty, spacing-satisfied queue.
+	if q.nonces.inFlight() || (q.isEmpty() && t.spacingElapsed(q, now)) {
+		indexNonce, nonceErr := t.nonceProvider.GetNonce(from)
 		if nonceErr != nil {
 			// A nonce lookup failure is an exception, not an expected
 			// condition: this is a local state-index read that should not
@@ -271,27 +413,25 @@ func (t *TxMemPool) Add(
 			// it through the queue path.
 			return nonceErr
 		}
+		q.nonces.refreshIndexed(indexNonce)
 
 		// We deliberately do NOT prune stale txs (nonce < indexNonce) here,
 		// even though the index may have just advanced: pruning is deferred to
 		// collectDueBatches, which walks every queued tx anyway, so repeating
 		// it per-Add would be redundant work.
 
-		// Fast path: the queue is empty, nothing is in flight (the marker may
-		// have just been cleared above), spacing is satisfied and this tx is
-		// exactly the next expected nonce. Submit right away — zero added
-		// latency for the common case.
-		if q.isEmpty() && !q.hasInFlight &&
-			t.spacingElapsed(q, now) && tx.Nonce() == indexNonce {
+		// Fast path: empty queue, nothing in flight, spacing satisfied, and this
+		// tx is exactly the next expected nonce — submit immediately, zero added
+		// latency for the common case. The lock is held across the whole submit,
+		// so there is no concurrency window: no need to mark "submitting" first;
+		// on success we record the ack, on failure we leave the EOA untouched.
+		if q.isEmpty() && !q.nonces.inFlight() && t.spacingElapsed(q, now) &&
+			q.nonces.classify(tx.Nonce()) == nonceNextExpected {
 			if submitErr := t.submitBatch(ctx, []heldTx{userTx}); submitErr != nil {
-				// Submission failed: leave queue state untouched so the EOA
-				// is neither marked in flight nor rate-limited behind a tx
-				// that never landed.
 				return submitErr
 			}
+			q.nonces.markSubmitted(tx.Nonce())
 			q.lastSubmittedAt = time.Now()
-			q.lastSubmittedNonce = tx.Nonce()
-			q.hasInFlight = true
 			return nil
 		}
 		// On an unexpected nonce, fall through to the queue path.
@@ -312,30 +452,6 @@ func (t *TxMemPool) Add(
 	return nil
 }
 
-// refreshInFlight clears the in-flight marker once the local index has
-// advanced past the last submitted nonce. Callers must hold the pool's
-// queueMux.
-func (q *eoaQueue) refreshInFlight(indexNonce uint64) {
-	if q.hasInFlight && indexNonce > q.lastSubmittedNonce {
-		q.hasInFlight = false
-	}
-}
-
-// queryAndRefreshInFlight reads the EOA's current nonce from the local index
-// and clears the in-flight marker if the index has advanced past the last
-// submitted nonce, returning the index nonce. Callers must hold queueMux.
-func (q *eoaQueue) queryAndRefreshInFlight(
-	np NonceProvider,
-	from gethCommon.Address,
-) (uint64, error) {
-	indexNonce, err := np.GetNonce(from)
-	if err != nil {
-		return 0, err
-	}
-	q.refreshInFlight(indexNonce)
-	return indexNonce, nil
-}
-
 // spacingElapsed reports whether enough time has passed since the last
 // Cadence submission for this EOA. Callers must hold queueMux.
 func (t *TxMemPool) spacingElapsed(q *eoaQueue, now time.Time) bool {
@@ -348,11 +464,11 @@ func (t *TxMemPool) spacingElapsed(q *eoaQueue, now time.Time) bool {
 type flushWork struct {
 	from gethCommon.Address
 	txs  []heldTx
-	// inFlight is true for consecutive-prefix batches, which optimistically
-	// advance lastSubmittedNonce/hasInFlight on the queue and must therefore
-	// roll those back if the submission fails (see rollbackFailedSubmission).
-	// TTL-expiry batches are not marked in flight and must never clear the
-	// marker.
+	// inFlight is true for consecutive-prefix batches, which mark the queue's
+	// nonceTracker "submitting" and must therefore reconcile it once the submit
+	// returns (markSubmitted on success, rollbackSubmitting on failure — see
+	// reconcileSubmission). TTL-expiry batches are not marked in flight and must
+	// never touch the tracker.
 	inFlight bool
 }
 
@@ -377,36 +493,41 @@ func (t *TxMemPool) processQueues(ctx context.Context) {
 	}
 }
 
-// submitWork submits one detached batch. On failure it rolls back the state
-// the queue committed optimistically when the batch was collected; on success
-// there is nothing to do — that optimistic state already reflects the
-// submission.
+// submitWork submits one detached batch and reconciles the queue's nonce state
+// once the network call returns.
 func (t *TxMemPool) submitWork(ctx context.Context, w flushWork) error {
 	err := t.submitBatch(ctx, w.txs)
-	if err != nil {
-		t.rollbackFailedSubmission(w)
-	}
+	t.reconcileSubmission(w, err)
 	return err
 }
 
-// rollbackFailedSubmission re-opens an EOA after a failed flush.
-// collectDueBatches optimistically marks a consecutive-prefix batch in flight
-// and advances lastSubmittedNonce BEFORE the network call. If that call fails,
-// the batch's transactions are dropped (already counted and logged by
-// submitBatch) and never reach the chain — so without this rollback every
-// resubmission of those nonces would be rejected with ErrInFlightNonce, and the
-// index would never advance past them to clear the marker: the EOA would be
-// permanently wedged.
+// reconcileSubmission updates the EOA's nonceTracker after a detached
+// consecutive-prefix submission returns. collectDueBatches marked the batch
+// "submitting" (under the lock) before the network call; this records the
+// outcome:
 //
-// The marker is cleared only when it still belongs to the failed batch — a
-// newer submission may have replaced it while the failed one was on the wire.
-// Only in-flight (prefix) batches are rolled back; TTL-expiry batches never set
-// the marker.
+//   - On SUCCESS we explicitly advance the consecutively-submitted nonce now
+//     (markSubmitted), under the lock, rather than waiting for the index to
+//     confirm. This is the deliberate "update on success" decision: it keeps
+//     `submitting` meaning strictly "a network call is outstanding".
 //
-// lastSubmittedAt is deliberately NOT restored: a brief, self-correcting
-// spacing delay after a rare submission failure is harmless and not worth the
-// extra bookkeeping.
-func (t *TxMemPool) rollbackFailedSubmission(w flushWork) {
+//   - On FAILURE the batch's transactions are dropped (already counted and
+//     logged by submitBatch) and never reach the chain, so we clear the
+//     "submitting" marker (rollbackSubmitting). Without this, every resubmission
+//     of those nonces would be rejected as in-flight forever and the index would
+//     never advance to clear the marker — the EOA would be permanently wedged.
+//     rollbackSubmitting clears the marker only if it still refers to this
+//     batch (a newer submission may have replaced it). lastSubmittedAt is
+//     deliberately NOT restored: a brief, self-correcting spacing delay after a
+//     rare failure is harmless.
+//
+// TTL-expiry batches (w.inFlight == false) never mark the tracker, so there is
+// nothing to reconcile for them.
+func (t *TxMemPool) reconcileSubmission(w flushWork, submitErr error) {
+	if !w.inFlight {
+		return
+	}
+
 	t.queueMux.Lock()
 	defer t.queueMux.Unlock()
 
@@ -414,9 +535,13 @@ func (t *TxMemPool) rollbackFailedSubmission(w flushWork) {
 	if !ok {
 		return
 	}
-	if w.inFlight && q.hasInFlight && q.lastSubmittedNonce == w.txs[len(w.txs)-1].nonce {
-		q.hasInFlight = false
+
+	highNonce := w.txs[len(w.txs)-1].nonce
+	if submitErr != nil {
+		q.nonces.rollbackSubmitting(highNonce)
+		return
 	}
+	q.nonces.markSubmitted(highNonce)
 }
 
 // collectDueBatches selects, under the queue lock, every batch that is due
@@ -428,6 +553,21 @@ func (t *TxMemPool) collectDueBatches() []flushWork {
 
 	now := time.Now()
 	work := make([]flushWork, 0)
+
+	// Build the EVM block view at most once per tick and read every due EOA's
+	// nonce from it: building the view is expensive, so we avoid rebuilding it
+	// per address. Built lazily on first need so an all-idle tick does no work.
+	var blockView NonceView
+	indexNonceOf := func(addr gethCommon.Address) (uint64, error) {
+		if blockView == nil {
+			v, err := t.nonceProvider.GetBlockView()
+			if err != nil {
+				return 0, err
+			}
+			blockView = v
+		}
+		return blockView.GetNonce(addr)
+	}
 
 	for from, q := range t.queues {
 		if q.isEmpty() {
@@ -453,7 +593,7 @@ func (t *TxMemPool) collectDueBatches() []flushWork {
 			continue
 		}
 
-		indexNonce, err := t.nonceProvider.GetNonce(from)
+		indexNonce, err := indexNonceOf(from)
 		if err != nil {
 			// Exception: a local state-index nonce read should not fail
 			// under normal operation. This is a background loop with no
@@ -465,17 +605,12 @@ func (t *TxMemPool) collectDueBatches() []flushWork {
 			continue
 		}
 
-		q.refreshInFlight(indexNonce)
+		q.nonces.refreshIndexed(indexNonce)
 
 		// Prune transactions that can never execute: their nonce is already
 		// used on-chain (e.g. filled via another gateway). They would only
 		// burn fees at TTL expiry.
 		t.pruneStaleTxs(q, from, indexNonce)
-
-		expected := indexNonce
-		if q.hasInFlight && q.lastSubmittedNonce+1 > expected {
-			expected = q.lastSubmittedNonce + 1
-		}
 
 		// At most one batch is collected per EOA per tick. The consecutive
 		// prefix below takes precedence and `continue`s; only when there is no
@@ -484,15 +619,16 @@ func (t *TxMemPool) collectDueBatches() []flushWork {
 		// drained on a later tick, gated by submission spacing — it is never
 		// merged with this batch, since a head gap would make the whole Flow
 		// transaction fail.
-		prefix := selectConsecutivePrefix(q.txs, expected, t.config.TxMaxBatchSize)
+		prefix := selectConsecutivePrefix(q.txs, q.nonces.expectedNonce(), t.config.TxMaxBatchSize)
 		if len(prefix) > 0 {
 			for _, htx := range prefix {
 				delete(q.txs, htx.nonce)
 			}
-			q.lastSubmittedNonce = prefix[len(prefix)-1].nonce
+			// Optimistically mark the batch submitting; reconcileSubmission
+			// advances submitted on success or clears it on failure.
+			q.nonces.markSubmitting(prefix[len(prefix)-1].nonce)
 			q.lastSubmittedAt = now
 			q.lastActivity = now
-			q.hasInFlight = true
 			if !q.isEmpty() {
 				// Re-arm for the remaining (post-gap or over-cap) txs.
 				q.collectionWindowEndsAt = now.Add(t.config.TxCollectionWindow)
