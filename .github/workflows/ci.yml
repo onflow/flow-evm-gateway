@@ -1,7 +1,7 @@
 name: CI
 
 env:
-  GO_VERSION: "1.26"
+  GO_VERSION: "1.25"
 
 on:
   pull_request:
@@ -35,5 +35,5 @@ jobs:
         uses: golangci/golangci-lint-action@v8
         with:
           # Required: the version of golangci-lint is required and must be specified without patch version: we always use the latest patch version.
-          version: v2.9.0
+          version: v2.4
           args: --timeout=10m
