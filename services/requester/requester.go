@@ -4,7 +4,6 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
-	"math"
 	"math/big"
 	"time"
 
@@ -341,23 +340,23 @@ func (e *EVM) EstimateGas(
 		passingGasLimit = uint64(*txArgs.Gas)
 	}
 
-	targetBlock, err := e.blocks.GetByHeight(height)
-	if err != nil {
-		return 0, err
-	}
-	blockNumber, blockTime := new(big.Int).SetUint64(targetBlock.Height), targetBlock.Timestamp
-	if blockOverrides != nil {
-		if blockOverrides.Number != nil {
-			blockNumber = blockOverrides.Number.ToInt()
-		}
-		if blockOverrides.Time != nil {
-			blockTime = uint64(*blockOverrides.Time)
-		}
-	}
-	chainConfig := emulator.MakeChainConfig(e.config.EVMNetworkID)
-
 	if passingGasLimit > gethParams.MaxTxGas {
 		// Cap the maximum gas allowance according to EIP-7825 if the estimation targets Osaka
+		targetBlock, err := e.blocks.GetByHeight(height)
+		if err != nil {
+			return 0, err
+		}
+		blockNumber, blockTime := new(big.Int).SetUint64(targetBlock.Height), targetBlock.Timestamp
+
+		if blockOverrides != nil {
+			if blockOverrides.Number != nil {
+				blockNumber = blockOverrides.Number.ToInt()
+			}
+			if blockOverrides.Time != nil {
+				blockTime = uint64(*blockOverrides.Time)
+			}
+		}
+		chainConfig := emulator.MakeChainConfig(e.config.EVMNetworkID)
 		isOsaka := chainConfig.IsOsaka(blockNumber, blockTime)
 		isAmsterdam := chainConfig.IsAmsterdam(blockNumber, blockTime)
 		if isOsaka && !isAmsterdam {
@@ -435,43 +434,6 @@ func (e *EVM) EstimateGas(
 		} else {
 			failingGasLimit = mid
 		}
-	}
-
-	// The dry-run binary search above executes a Flow `DirectCall`, which does
-	// not carry the transaction's access list and is therefore not charged its
-	// intrinsic gas. Add the intrinsic gas attributable to the access list and
-	// the authorization list here. We delegate the per-fork arithmetic to
-	// go-ethereum's `IntrinsicGas` (EIP-2930 access list, EIP-7981 surcharge,
-	// EIP-7702 authorization tuples) so it stays in sync across hard forks
-	// automatically when the dependency is bumped. Only the delta over a
-	// list-less call is added, since the binary search already accounts for the
-	// base + calldata intrinsic gas.
-	if txArgs.AccessList != nil || txArgs.AuthorizationList != nil {
-		var accessList types.AccessList
-		if txArgs.AccessList != nil {
-			accessList = *txArgs.AccessList
-		}
-		rules := chainConfig.Rules(blockNumber, true, blockTime)
-		// Data and the contract-creation flag are held constant across both
-		// calls, so the base + calldata gas cancels out and only the
-		// access/authorization-list cost remains.
-		withLists, err := gethCore.IntrinsicGas(
-			nil, accessList, txArgs.AuthorizationList, false, rules, gethParams.CostPerStateByte,
-		)
-		if err != nil {
-			return 0, err
-		}
-		baseline, err := gethCore.IntrinsicGas(
-			nil, nil, nil, false, rules, gethParams.CostPerStateByte,
-		)
-		if err != nil {
-			return 0, err
-		}
-		listGas := withLists.Sum() - baseline.Sum()
-		if math.MaxUint64-passingGasLimit < listGas {
-			return 0, gethCore.ErrGasUintOverflow
-		}
-		passingGasLimit += listGas
 	}
 
 	return passingGasLimit, nil
