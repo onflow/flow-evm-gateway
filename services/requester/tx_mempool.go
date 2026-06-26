@@ -21,7 +21,6 @@ import (
 
 // TODO: Document what the TX Mempool does with clear examples of the difference use cases it handles. e.g. transactions coming in out of sequence with a gap in between, transactions expiring in the queue as local index nonce moves beyond the nonce of the the tx.
 // TODO: Overall, refactor the code such that its easier to understand and more importantly easier to maintain
-// TODO: Log when transactions are being discarded from the queue to help debug issues if lets say a client compains about transactions being lost or erroring out.
 
 // heldTx is a transaction held in the mempool, waiting for its
 // collection window to elapse or its nonce gap to be filled.
@@ -470,7 +469,10 @@ func (t *TxMemPool) Add(
 		// (queue non-empty, in flight, or spacing not elapsed), fall through to
 		// enqueue and let the background loop flush it.
 		if q.isEmpty() && !q.nonces.inFlight() && t.spacingElapsed(q, now) {
-			if submitErr := t.submitBatch(ctx, []heldTx{userTx}); submitErr != nil {
+			batch := []heldTx{userTx}
+			submitErr := t.submitBatch(ctx, batch)
+			t.logSubmission(from, batch, flushReasonFastPath, q.nonces.localIndexedNonce, submitErr)
+			if submitErr != nil {
 				return submitErr
 			}
 			q.nonces.markSubmitted(tx.Nonce())
@@ -514,7 +516,22 @@ type flushWork struct {
 	// reconcileSubmission). TTL-expiry batches are not marked in flight and must
 	// never touch the tracker.
 	inFlight bool
+	// reason is why this batch was flushed, recorded purely for the submission
+	// log (see logSubmission): flushReasonPrefix for a consecutive-prefix flush,
+	// flushReasonTTL for a TTL-expiry submit-anyway.
+	reason string
+	// localIndexedNonce is the on-chain frontier observed when the batch was
+	// collected. It is logged on drop so a "lost transaction" report can be
+	// debugged against where the chain actually was.
+	localIndexedNonce uint64
 }
+
+// flushReason values label why a batch was submitted, for the submission log.
+const (
+	flushReasonFastPath = "fast-path"
+	flushReasonPrefix   = "consecutive-prefix"
+	flushReasonTTL      = "ttl-expiry"
+)
 
 func (t *TxMemPool) processQueues(ctx context.Context) {
 	ticker := time.NewTicker(txMemPoolTickInterval)
@@ -537,12 +554,67 @@ func (t *TxMemPool) processQueues(ctx context.Context) {
 	}
 }
 
-// submitWork submits one detached batch and reconciles the queue's nonce state
-// once the network call returns.
+// submitWork submits one detached batch, records its fate (logSubmission), and
+// reconciles the queue's nonce state once the network call returns.
 func (t *TxMemPool) submitWork(ctx context.Context, w flushWork) error {
 	err := t.submitBatch(ctx, w.txs)
+	t.logSubmission(w.from, w.txs, w.reason, w.localIndexedNonce, err)
 	t.reconcileSubmission(w, err)
 	return err
+}
+
+// logSubmission records the fate of a submitted batch so a transaction is never
+// silently lost. This is the observability half of Leo's invariant: for any tx
+// id, you can either find it on-chain (sent) OR find a WARN log here (dropped) —
+// never nothing.
+//
+//   - On a Flow submit FAILURE the batch's EVM transactions are dropped (we do
+//     not retry — clients resubmit), so we WARN with everything needed to debug
+//     a "lost transaction" report: eoa, tx hashes, nonce range, the indexed
+//     frontier, batch size, the flush reason, and the error.
+//   - On SUCCESS we emit a lighter DEBUG line (eoa + nonce range) so a sent
+//     batch is traceable without the noise of a warning.
+//
+// txs is assumed nonce-ascending (selectConsecutivePrefix / selectExpired and
+// the single-tx fast path all satisfy this), so txs[0] is the low nonce.
+func (t *TxMemPool) logSubmission(
+	from gethCommon.Address,
+	txs []heldTx,
+	reason string,
+	localIndexedNonce uint64,
+	submitErr error,
+) {
+	if len(txs) == 0 {
+		return
+	}
+	lowNonce := txs[0].nonce
+	highNonce := txs[len(txs)-1].nonce
+
+	if submitErr != nil {
+		txHashes := make([]string, len(txs))
+		for i, htx := range txs {
+			txHashes[i] = htx.txHash.Hex()
+		}
+		t.logger.Warn().
+			Err(submitErr).
+			Str("eoa", from.Hex()).
+			Strs("tx-hashes", txHashes).
+			Uint64("low-nonce", lowNonce).
+			Uint64("high-nonce", highNonce).
+			Uint64("local-indexed-nonce", localIndexedNonce).
+			Int("batch-size", len(txs)).
+			Str("reason", reason).
+			Msg("Flow submission failed, EVM transactions dropped")
+		return
+	}
+
+	t.logger.Debug().
+		Str("eoa", from.Hex()).
+		Uint64("low-nonce", lowNonce).
+		Uint64("high-nonce", highNonce).
+		Int("batch-size", len(txs)).
+		Str("reason", reason).
+		Msg("submitted EVM transactions to Flow")
 }
 
 // reconcileSubmission updates the EOA's nonceTracker after a detached
@@ -667,9 +739,11 @@ func (t *TxMemPool) collectDueBatches() []flushWork {
 				q.flushDeadline = now.Add(t.config.TxSubmissionSpacing)
 			}
 			work = append(work, flushWork{
-				from:     from,
-				txs:      prefix,
-				inFlight: true,
+				from:              from,
+				txs:               prefix,
+				inFlight:          true,
+				reason:            flushReasonPrefix,
+				localIndexedNonce: indexNonce,
 			})
 			continue
 		}
@@ -712,10 +786,14 @@ func (t *TxMemPool) collectDueBatches() []flushWork {
 				txHashes[i] = htx.txHash.Hex()
 			}
 			t.logger.Warn().Strs("tx-hashes", txHashes).Str("eoa", from.Hex()).
+				Uint64("local-indexed-nonce", indexNonce).
+				Uint64("expected-nonce", q.nonces.expectedNonce()).
 				Msg("nonce gap never filled within TTL, submitting held transactions anyway")
 			work = append(work, flushWork{
-				from: from,
-				txs:  expired,
+				from:              from,
+				txs:               expired,
+				reason:            flushReasonTTL,
+				localIndexedNonce: indexNonce,
 			})
 		}
 	}
@@ -750,6 +828,7 @@ func (t *TxMemPool) pruneStaleTxs(
 	}
 	if len(stale) > 0 {
 		t.logger.Warn().Strs("tx-hashes", stale).Str("eoa", from.Hex()).
+			Uint64("local-indexed-nonce", indexNonce).
 			Msg("dropping stale transactions with nonce below indexed state")
 	}
 }
@@ -769,6 +848,11 @@ func (t *TxMemPool) submitTxBatch(ctx context.Context, txs []heldTx) error {
 	}
 
 	script := replaceAddresses(runTxScript, t.config.FlowNetworkID)
+	// On a build/send failure the batch's EVM transactions are dropped; count
+	// them here (the metric is reserved for Cadence build/submission errors) and
+	// return the error. The observable WARN drop log — with eoa, nonce range and
+	// flush reason — is emitted by logSubmission at the call site, which has that
+	// context; this keeps submitTxBatch a pure submission primitive.
 	flowTx, err := t.buildTransaction(
 		ctx,
 		t.getReferenceBlock(),
@@ -778,23 +862,13 @@ func (t *TxMemPool) submitTxBatch(ctx context.Context, txs []heldTx) error {
 	)
 	if err != nil {
 		t.collector.TransactionsDropped(len(txs))
-		t.logTxsDropped(txs, err, "failed to build Flow transaction, EVM transactions dropped")
 		return err
 	}
 
 	if err := t.client.SendTransaction(ctx, *flowTx); err != nil {
 		t.collector.TransactionsDropped(len(txs))
-		t.logTxsDropped(txs, err, "failed to send Flow transaction, EVM transactions dropped")
 		return err
 	}
 
 	return nil
-}
-
-func (t *TxMemPool) logTxsDropped(txs []heldTx, err error, msg string) {
-	txHashes := make([]string, len(txs))
-	for i, htx := range txs {
-		txHashes[i] = htx.txHash.Hex()
-	}
-	t.logger.Error().Err(err).Strs("tx-hashes", txHashes).Msg(msg)
 }

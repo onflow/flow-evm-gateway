@@ -1,6 +1,7 @@
 package requester
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"errors"
@@ -394,6 +395,88 @@ func Test_TxMemPool_SuccessfulFlushMarksSubmitted(t *testing.T) {
 	q := pool.queues[from]
 	assert.False(t, q.nonces.inFlight())
 	assert.Equal(t, toNonceWrapper(1), q.nonces.lastConsecutivelySubmitted)
+}
+
+// No silent drops (Leo's invariant): a failed flush submission must produce an
+// observable WARN log carrying the dropped tx hashes and enough context to
+// debug a "lost transaction" report (eoa, nonce range, indexed nonce, batch
+// size, reason, error).
+func Test_TxMemPool_FailedSubmitLogsDropWarning(t *testing.T) {
+	key, err := crypto.GenerateKey()
+	require.NoError(t, err)
+	from := crypto.PubkeyToAddress(key.PublicKey)
+
+	var logBuf bytes.Buffer
+	submitErr := errors.New("network down")
+	pool := newTestPool(
+		&fakeNonceProvider{nonce: 0},
+		func(_ context.Context, _ []heldTx) error { return submitErr },
+		testPoolConfig(),
+	)
+	pool.logger = zerolog.New(&logBuf)
+
+	tx0 := signedTestTx(t, key, 0, 1)
+	tx1 := signedTestTx(t, key, 1, 1)
+	past := time.Now().Add(-time.Second)
+	pool.queues[from] = &eoaQueue{
+		txs: map[uint64]heldTx{
+			0: {txHash: tx0.Hash(), nonce: 0, enqueuedAt: past},
+			1: {txHash: tx1.Hash(), nonce: 1, enqueuedAt: past},
+		},
+		collectionWindowEndsAt: past,
+		flushDeadline:          past,
+	}
+
+	work := pool.collectDueBatches()
+	require.Len(t, work, 1)
+	require.Error(t, pool.submitWork(context.Background(), work[0]))
+
+	out := logBuf.String()
+	assert.Contains(t, out, `"level":"warn"`, "drop must be observable at WARN level")
+	assert.Contains(t, out, tx0.Hash().Hex(), "dropped tx hash must be logged")
+	assert.Contains(t, out, tx1.Hash().Hex(), "dropped tx hash must be logged")
+	assert.Contains(t, out, from.Hex(), "eoa must be logged")
+	assert.Contains(t, out, `"local-indexed-nonce":0`, "indexed frontier must be logged")
+	assert.Contains(t, out, `"batch-size":2`, "batch size must be logged")
+	assert.Contains(t, out, "network down", "submit error must be logged")
+}
+
+// A successful submission is traceable via a DEBUG log carrying the eoa and
+// nonce range, so a sent batch can be found in logs without a warning.
+func Test_TxMemPool_SuccessfulSubmitLogsDebug(t *testing.T) {
+	key, err := crypto.GenerateKey()
+	require.NoError(t, err)
+	from := crypto.PubkeyToAddress(key.PublicKey)
+
+	var logBuf bytes.Buffer
+	pool := newTestPool(
+		&fakeNonceProvider{nonce: 0},
+		func(_ context.Context, _ []heldTx) error { return nil },
+		testPoolConfig(),
+	)
+	pool.logger = zerolog.New(&logBuf)
+
+	tx0 := signedTestTx(t, key, 0, 1)
+	tx1 := signedTestTx(t, key, 1, 1)
+	past := time.Now().Add(-time.Second)
+	pool.queues[from] = &eoaQueue{
+		txs: map[uint64]heldTx{
+			0: {txHash: tx0.Hash(), nonce: 0, enqueuedAt: past},
+			1: {txHash: tx1.Hash(), nonce: 1, enqueuedAt: past},
+		},
+		collectionWindowEndsAt: past,
+		flushDeadline:          past,
+	}
+
+	work := pool.collectDueBatches()
+	require.Len(t, work, 1)
+	require.NoError(t, pool.submitWork(context.Background(), work[0]))
+
+	out := logBuf.String()
+	assert.Contains(t, out, `"level":"debug"`, "successful send must be traceable at DEBUG level")
+	assert.Contains(t, out, from.Hex(), "eoa must be logged")
+	assert.Contains(t, out, `"low-nonce":0`)
+	assert.Contains(t, out, `"high-nonce":1`)
 }
 
 // Fix 1: a failed fast-path submission must not rate-limit the EOA via
