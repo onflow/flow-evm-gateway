@@ -432,13 +432,6 @@ func (t *TxMemPool) Add(
 	// activity here to keep the idle-queue retention clock accurate.
 	q.lastActivity = now
 
-	userTx := heldTx{
-		txPayload:  hexEncodedTx,
-		txHash:     tx.Hash(),
-		nonce:      tx.Nonce(),
-		enqueuedAt: now,
-	}
-
 	// Reject an exact duplicate of a transaction already in the queue (cheapest
 	// check; needs no index read).
 	if existing, ok := q.txs[tx.Nonce()]; ok && existing.txHash == tx.Hash() {
@@ -453,6 +446,8 @@ func (t *TxMemPool) Add(
 		return err
 	}
 
+	// Reject out-of-range / in-flight nonces up front, before allocating any
+	// held state: a transaction we are about to reject must not cost a heldTx.
 	switch verdict {
 	case nonceInFlight:
 		return errs.ErrInFlightNonce
@@ -460,31 +455,40 @@ func (t *TxMemPool) Add(
 		return errs.ErrNonceTooLow
 	case nonceTooHigh:
 		return errs.ErrNonceTooHigh
-	case nonceNextExpected:
-		// Fast path: an empty queue with nothing in flight and spacing satisfied
-		// can submit the expected nonce immediately — zero added latency. The
-		// lock is held across the whole submit, so there is no concurrency
-		// window: no need to mark "submitting" first; on success we record the
-		// ack, on failure we leave the EOA untouched. If we cannot fast-path yet
-		// (queue non-empty, in flight, or spacing not elapsed), fall through to
-		// enqueue and let the background loop flush it.
-		if q.isEmpty() && !q.nonces.inFlight() && t.spacingElapsed(q, now) {
-			batch := []heldTx{userTx}
-			submitErr := t.submitBatch(ctx, batch)
-			t.logSubmission(from, batch, flushReasonFastPath, q.nonces.localIndexedNonce, submitErr)
-			if submitErr != nil {
-				return submitErr
-			}
-			q.nonces.markSubmitted(tx.Nonce())
-			q.lastSubmittedAt = time.Now()
-			return nil
-		}
-	case nonceQueue:
-		// A gap ahead within the accepted window — fall through to enqueue.
 	}
 
-	// Enqueue. A same-nonce, different-payload resubmission replaces the
-	// queued transaction (last write wins), matching mempool semantics.
+	// Past every cheap rejection: the transaction will be kept (submitted now or
+	// held), so build the heldTx now rather than before the checks above.
+	userTx := heldTx{
+		txPayload:  hexEncodedTx,
+		txHash:     tx.Hash(),
+		nonce:      tx.Nonce(),
+		enqueuedAt: now,
+	}
+
+	// Fast path: a next-expected nonce with an empty queue, nothing in flight and
+	// spacing satisfied is submitted immediately — zero added latency. The lock
+	// is held across the whole submit, so there is no concurrency window: no need
+	// to mark "submitting" first; on success we record the ack, on failure we
+	// leave the EOA untouched. If we cannot fast-path yet (queue non-empty, in
+	// flight, or spacing not elapsed), fall through to enqueue and let the
+	// background loop flush it.
+	if verdict == nonceNextExpected &&
+		q.isEmpty() && !q.nonces.inFlight() && t.spacingElapsed(q, now) {
+		batch := []heldTx{userTx}
+		submitErr := t.submitBatch(ctx, batch)
+		t.logSubmission(from, batch, flushReasonFastPath, q.nonces.localIndexedNonce, submitErr)
+		if submitErr != nil {
+			return submitErr
+		}
+		q.nonces.markSubmitted(tx.Nonce())
+		q.lastSubmittedAt = time.Now()
+		return nil
+	}
+
+	// Enqueue (a gap ahead, or a next-expected nonce that could not fast-path
+	// yet). A same-nonce, different-payload resubmission replaces the queued
+	// transaction (last write wins), matching mempool semantics.
 	wasEmpty := q.isEmpty()
 	q.txs[tx.Nonce()] = userTx
 	q.collectionWindowEndsAt = now.Add(t.config.TxCollectionWindow)
