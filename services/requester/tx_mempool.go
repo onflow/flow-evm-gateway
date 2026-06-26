@@ -677,7 +677,7 @@ func (t *TxMemPool) submitWork(ctx context.Context, w flushWork) error {
 	return err
 }
 
-// batchFields attaches to e the structured fields common to every per-batch
+// batchLogFields attaches to e the structured fields common to every per-batch
 // lifecycle log — submission failure, stale prune, and TTL submit-anyway — so
 // the no-silent-drops fields stay consistent and greppable across all three
 // sites (eoa, tx hashes, nonce range, batch size, the indexed frontier). The
@@ -685,7 +685,7 @@ func (t *TxMemPool) submitWork(ctx context.Context, w flushWork) error {
 // error, expected-nonce, ...), and calls Msg. The nonce range is computed as the
 // true min/max so it is correct even when txs is not sorted (e.g. a stale-prune
 // batch collected in map order).
-func batchFields(
+func batchLogFields(
 	e *zerolog.Event,
 	from gethCommon.Address,
 	txs []heldTx,
@@ -716,7 +716,7 @@ func batchFields(
 //
 //   - On a Flow submit FAILURE the batch's EVM transactions are dropped (we do
 //     not retry — clients resubmit), so we WARN with the full batch context
-//     (batchFields) plus the flush reason and the error.
+//     (batchLogFields) plus the flush reason and the error.
 //   - On SUCCESS we emit a lighter DEBUG line (eoa + nonce range) so a sent
 //     batch is traceable without the noise of a warning.
 //
@@ -734,7 +734,7 @@ func (t *TxMemPool) logSubmission(
 	}
 
 	if submitErr != nil {
-		batchFields(t.logger.Warn(), from, txs, localIndexedNonce).
+		batchLogFields(t.logger.Warn(), from, txs, localIndexedNonce).
 			Str("reason", reason).
 			Err(submitErr).
 			Msg("Flow submission failed, EVM transactions dropped")
@@ -944,7 +944,7 @@ func (t *TxMemPool) collectExpired(
 	deleteByNonce(q.txs, expired)
 	q.lastSubmittedAt = now
 	q.lastActivity = now
-	batchFields(t.logger.Warn(), from, expired, indexNonce).
+	batchLogFields(t.logger.Warn(), from, expired, indexNonce).
 		Uint64("expected-nonce", q.nonces.expectedNonce()).
 		Msg("nonce gap never filled within TTL, submitting held transactions anyway")
 	return flushWork{
@@ -982,7 +982,7 @@ func (t *TxMemPool) pruneStaleTxs(
 	}
 	if len(stale) > 0 {
 		deleteByNonce(q.txs, stale)
-		batchFields(t.logger.Warn(), from, stale, indexNonce).
+		batchLogFields(t.logger.Warn(), from, stale, indexNonce).
 			Msg("dropping stale transactions with nonce below indexed state")
 	}
 }
