@@ -397,10 +397,10 @@ func Test_TxMemPool_SuccessfulFlushMarksSubmitted(t *testing.T) {
 	assert.Equal(t, toNonceWrapper(1), q.nonces.lastConsecutivelySubmitted)
 }
 
-// No silent drops (Leo's invariant): a failed flush submission must produce an
-// observable WARN log carrying the dropped tx hashes and enough context to
-// debug a "lost transaction" report (eoa, nonce range, indexed nonce, batch
-// size, reason, error).
+// No silent drops: a failed flush submission must produce an observable WARN log
+// carrying the dropped tx hashes and enough context to debug a "lost
+// transaction" report (eoa, nonce range, indexed nonce, batch size, reason,
+// error).
 func Test_TxMemPool_FailedSubmitLogsDropWarning(t *testing.T) {
 	key, err := crypto.GenerateKey()
 	require.NoError(t, err)
@@ -479,8 +479,8 @@ func Test_TxMemPool_SuccessfulSubmitLogsDebug(t *testing.T) {
 	assert.Contains(t, out, `"high-nonce":1`)
 }
 
-// Fix 1: a failed fast-path submission must not rate-limit the EOA via
-// lastSubmittedAt, and must leave nothing in flight.
+// A failed fast-path submission must not rate-limit the EOA via lastSubmittedAt,
+// and must leave nothing in flight.
 func Test_TxMemPool_FailedFastPathLeavesNoState(t *testing.T) {
 	key, err := crypto.GenerateKey()
 	require.NoError(t, err)
@@ -503,8 +503,8 @@ func Test_TxMemPool_FailedFastPathLeavesNoState(t *testing.T) {
 	assert.True(t, q.lastSubmittedAt.IsZero(), "failed submission must not stamp lastSubmittedAt")
 }
 
-// Fix 2: resubmitting a single held tx with the same nonce must not re-arm the
-// flush deadline anchored at first enqueue.
+// Resubmitting a single held tx with the same nonce must not re-arm the flush
+// deadline anchored at first enqueue.
 func Test_TxMemPool_SameNonceReplacementKeepsFlushDeadline(t *testing.T) {
 	key, err := crypto.GenerateKey()
 	require.NoError(t, err)
@@ -525,7 +525,7 @@ func Test_TxMemPool_SameNonceReplacementKeepsFlushDeadline(t *testing.T) {
 	assert.Equal(t, firstDeadline, pool.queues[from].flushDeadline)
 }
 
-// Fix 3: TTL-expiry flushes are capped at TxMaxBatchSize.
+// TTL-expiry flushes are capped at TxMaxBatchSize.
 func Test_TxMemPool_TTLFlushCappedAtMaxBatch(t *testing.T) {
 	key, err := crypto.GenerateKey()
 	require.NoError(t, err)
@@ -559,8 +559,8 @@ func Test_TxMemPool_TTLFlushCappedAtMaxBatch(t *testing.T) {
 	assert.Len(t, pool.queues[from].txs, 4)
 }
 
-// Fix 4: a queue emptied without ever submitting (e.g. all txs pruned) must
-// still age out via lastActivity rather than leaking forever.
+// A queue emptied without ever submitting (e.g. all txs pruned) must still age
+// out via lastActivity rather than leaking forever.
 func Test_TxMemPool_EmptyQueueAgesOut(t *testing.T) {
 	pool := newTestPool(
 		&fakeNonceProvider{nonce: 0},
