@@ -3,6 +3,7 @@ package requester
 import (
 	"context"
 	"encoding/hex"
+	"fmt"
 	"sort"
 	"sync"
 	"time"
@@ -124,7 +125,7 @@ func selectConsecutivePrefix(
 	expectedNonce uint64,
 	maxBatch int,
 ) []heldTx {
-	prefix := make([]heldTx, 0)
+	prefix := make([]heldTx, 0, maxBatch)
 	for nonce := expectedNonce; len(prefix) < maxBatch; nonce++ {
 		tx, ok := txs[nonce]
 		if !ok {
@@ -135,6 +136,22 @@ func selectConsecutivePrefix(
 	return prefix
 }
 
+// deleteByNonce removes every transaction in batch from txs, keyed by nonce.
+func deleteByNonce(txs map[uint64]heldTx, batch []heldTx) {
+	for _, htx := range batch {
+		delete(txs, htx.nonce)
+	}
+}
+
+// txHashHexes returns the hex tx hashes of a batch, for structured log fields.
+func txHashHexes(txs []heldTx) []string {
+	hashes := make([]string, len(txs))
+	for i, htx := range txs {
+		hashes[i] = htx.txHash.Hex()
+	}
+	return hashes
+}
+
 // selectExpired returns the held transactions older than ttl, sorted by
 // nonce ascending.
 func selectExpired(
@@ -142,7 +159,7 @@ func selectExpired(
 	now time.Time,
 	ttl time.Duration,
 ) []heldTx {
-	expired := make([]heldTx, 0)
+	expired := make([]heldTx, 0, len(txs))
 	for _, tx := range txs {
 		if now.Sub(tx.enqueuedAt) > ttl {
 			expired = append(expired, tx)
@@ -187,20 +204,20 @@ func toNonceWrapper(v uint64) nonceWrapper { return nonceWrapper{v: v, set: true
 
 // atLeast reports whether this nonce is set and >= n. An unset nonce (-∞) is
 // never >= a real nonce, so it returns false.
-func (o nonceWrapper) atLeast(n uint64) bool { return o.set && o.v >= n }
+func (w nonceWrapper) atLeast(n uint64) bool { return w.set && w.v >= n }
 
 // is reports whether this nonce is set and exactly equals n.
-func (o nonceWrapper) is(n uint64) bool { return o.set && o.v == n }
+func (w nonceWrapper) is(n uint64) bool { return w.set && w.v == n }
 
 // max returns the greater of two optional nonces, treating unset as -∞.
-func (o nonceWrapper) max(other nonceWrapper) nonceWrapper {
-	if !o.set {
+func (w nonceWrapper) max(other nonceWrapper) nonceWrapper {
+	if !w.set {
 		return other
 	}
-	if other.set && other.v > o.v {
+	if other.set && other.v > w.v {
 		return other
 	}
-	return o
+	return w
 }
 
 // nonceVerdict is what classify decides should happen to an incoming nonce.
@@ -302,7 +319,7 @@ func (n *nonceTracker) classify(
 	// Beyond what we've sent: refresh the frontier for the remaining verdicts.
 	indexNonce, err := np.GetNonce(from)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("reading indexed nonce for %s: %w", from.Hex(), err)
 	}
 	n.refreshIndexed(indexNonce)
 
@@ -539,7 +556,7 @@ func (t *TxMemPool) Add(
 
 	// Past every cheap rejection: the transaction will be kept (submitted now or
 	// held), so build the heldTx now rather than before the checks above.
-	userTx := heldTx{
+	held := heldTx{
 		txPayload:  hexEncodedTx,
 		txHash:     tx.Hash(),
 		nonce:      tx.Nonce(),
@@ -554,7 +571,7 @@ func (t *TxMemPool) Add(
 	// elapsed) fall through to enqueue for the background loop.
 	if verdict == nonceNextExpected &&
 		q.isEmpty() && !q.nonces.inFlight() && t.spacingElapsed(q, now) {
-		batch := []heldTx{userTx}
+		batch := []heldTx{held}
 		// Bound the submit so a hung call cannot pin queueMux indefinitely
 		// (see fastPathSubmitTimeout).
 		submitCtx, cancel := context.WithTimeout(ctx, fastPathSubmitTimeout)
@@ -573,7 +590,7 @@ func (t *TxMemPool) Add(
 	// yet). A same-nonce, different-payload resubmission replaces the queued
 	// transaction (last write wins), matching mempool semantics.
 	wasEmpty := q.isEmpty()
-	q.txs[tx.Nonce()] = userTx
+	q.txs[tx.Nonce()] = held
 	q.collectionWindowEndsAt = now.Add(t.config.TxCollectionWindow)
 	// Anchor the flush deadline at the FIRST enqueue only. Re-arming it on a
 	// same-nonce replacement would let a client defer the flush indefinitely
@@ -678,14 +695,10 @@ func (t *TxMemPool) logSubmission(
 	highNonce := txs[len(txs)-1].nonce
 
 	if submitErr != nil {
-		txHashes := make([]string, len(txs))
-		for i, htx := range txs {
-			txHashes[i] = htx.txHash.Hex()
-		}
 		t.logger.Warn().
 			Err(submitErr).
 			Str("eoa", from.Hex()).
-			Strs("tx-hashes", txHashes).
+			Strs("tx-hashes", txHashHexes(txs)).
 			Uint64("low-nonce", lowNonce).
 			Uint64("high-nonce", highNonce).
 			Uint64("local-indexed-nonce", localIndexedNonce).
@@ -754,7 +767,7 @@ func (t *TxMemPool) collectDueBatches() []flushWork {
 	defer t.queueMux.Unlock()
 
 	now := t.now()
-	work := make([]flushWork, 0)
+	work := make([]flushWork, 0, len(t.queues))
 
 	// Each due EOA's nonce is read via GetNonce; the provider caches the block
 	// view by indexed height, so all reads in this pass (and across ticks at the
@@ -811,9 +824,7 @@ func (t *TxMemPool) collectDueBatches() []flushWork {
 		// transaction fail.
 		prefix := selectConsecutivePrefix(q.txs, q.nonces.expectedNonce(), t.config.TxMaxBatchSize)
 		if len(prefix) > 0 {
-			for _, htx := range prefix {
-				delete(q.txs, htx.nonce)
-			}
+			deleteByNonce(q.txs, prefix)
 			// Optimistically mark the batch submitting; reconcileSubmission
 			// advances submitted on success or clears it on failure.
 			q.nonces.markSubmitting(prefix[len(prefix)-1].nonce)
@@ -857,19 +868,13 @@ func (t *TxMemPool) collectDueBatches() []flushWork {
 			expired = expired[:t.config.TxMaxBatchSize]
 		}
 		if len(expired) > 0 {
-			for _, htx := range expired {
-				delete(q.txs, htx.nonce)
-			}
+			deleteByNonce(q.txs, expired)
 			// Deliberately do NOT mark the nonceTracker submitting here: these
 			// nonces are out of order (past a gap), and marking them in flight
 			// would corrupt the expected-nonce computation for future flushes.
 			q.lastSubmittedAt = now
 			q.lastActivity = now
-			txHashes := make([]string, len(expired))
-			for i, htx := range expired {
-				txHashes[i] = htx.txHash.Hex()
-			}
-			t.logger.Warn().Strs("tx-hashes", txHashes).Str("eoa", from.Hex()).
+			t.logger.Warn().Strs("tx-hashes", txHashHexes(expired)).Str("eoa", from.Hex()).
 				Uint64("local-indexed-nonce", indexNonce).
 				Uint64("expected-nonce", q.nonces.expectedNonce()).
 				Msg("nonce gap never filled within TTL, submitting held transactions anyway")
@@ -903,15 +908,15 @@ func (t *TxMemPool) pruneStaleTxs(
 	from gethCommon.Address,
 	indexNonce uint64,
 ) {
-	stale := make([]string, 0)
+	var stale []heldTx
 	for nonce, htx := range q.txs {
 		if nonce < indexNonce {
-			stale = append(stale, htx.txHash.Hex())
-			delete(q.txs, nonce)
+			stale = append(stale, htx)
 		}
 	}
 	if len(stale) > 0 {
-		t.logger.Warn().Strs("tx-hashes", stale).Str("eoa", from.Hex()).
+		deleteByNonce(q.txs, stale)
+		t.logger.Warn().Strs("tx-hashes", txHashHexes(stale)).Str("eoa", from.Hex()).
 			Uint64("local-indexed-nonce", indexNonce).
 			Msg("dropping stale transactions with nonce below indexed state")
 	}
@@ -946,12 +951,12 @@ func (t *TxMemPool) submitTxBatch(ctx context.Context, txs []heldTx) error {
 	)
 	if err != nil {
 		t.collector.TransactionsDropped(len(txs))
-		return err
+		return fmt.Errorf("building Flow transaction: %w", err)
 	}
 
 	if err := t.client.SendTransaction(ctx, *flowTx); err != nil {
 		t.collector.TransactionsDropped(len(txs))
-		return err
+		return fmt.Errorf("sending Flow transaction: %w", err)
 	}
 
 	return nil
