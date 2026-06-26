@@ -200,7 +200,7 @@ func Test_TxMemPool_FastPathSubmitsImmediately(t *testing.T) {
 	assert.Empty(t, q.txs)
 	// Explicit success update: submitting cleared, submitted advanced to 0.
 	assert.False(t, q.nonces.inFlight())
-	assert.Equal(t, knownNonce(0), q.nonces.lastConsecutivelySubmitted)
+	assert.Equal(t, toNonceWrapper(0), q.nonces.lastConsecutivelySubmitted)
 }
 
 func Test_TxMemPool_UnexpectedNonceEnqueues(t *testing.T) {
@@ -310,7 +310,7 @@ func Test_TxMemPool_FailedFlushDoesNotWedgeEOA(t *testing.T) {
 	// State was committed optimistically under the lock.
 	q := pool.queues[from]
 	require.True(t, q.nonces.inFlight())
-	assert.Equal(t, knownNonce(1), q.nonces.submitting)
+	assert.Equal(t, toNonceWrapper(1), q.nonces.submitting)
 
 	// The submission fails; submitWork must clear the in-flight marker.
 	err = pool.submitWork(context.Background(), work[0])
@@ -331,7 +331,7 @@ func Test_ReconcileSubmission_OnlyReconcilesMatchingInFlightBatch(t *testing.T) 
 	from := gethCommon.HexToAddress("0xabc")
 	pool.queues[from] = &eoaQueue{
 		txs:    map[uint64]heldTx{},
-		nonces: nonceTracker{submitting: knownNonce(7)},
+		nonces: nonceTracker{submitting: toNonceWrapper(7)},
 	}
 	submitErr := errors.New("network down")
 
@@ -393,7 +393,7 @@ func Test_TxMemPool_SuccessfulFlushMarksSubmitted(t *testing.T) {
 
 	q := pool.queues[from]
 	assert.False(t, q.nonces.inFlight())
-	assert.Equal(t, knownNonce(1), q.nonces.lastConsecutivelySubmitted)
+	assert.Equal(t, toNonceWrapper(1), q.nonces.lastConsecutivelySubmitted)
 }
 
 // Fix 1: a failed fast-path submission must not rate-limit the EOA via
@@ -490,7 +490,7 @@ func Test_TxMemPool_EmptyQueueAgesOut(t *testing.T) {
 	// last active beyond the retention window: must be removed.
 	pool.queues[from] = &eoaQueue{
 		txs:          map[uint64]heldTx{},
-		nonces:       nonceTracker{submitting: knownNonce(5)},
+		nonces:       nonceTracker{submitting: toNonceWrapper(5)},
 		lastActivity: time.Now().Add(-2 * idleQueueRetention),
 	}
 	pool.collectDueBatches()
@@ -601,19 +601,19 @@ func Test_NonceTracker_Classify(t *testing.T) {
 		{"gap ahead queues", nonceTracker{}, 5, 7, nonceQueue},
 		{"below index is too low (no gap configured)", nonceTracker{}, 5, 3, nonceTooLow},
 		{"nonce 0 is next-expected on a zero tracker", nonceTracker{}, 0, 0, nonceNextExpected},
-		{"at submitted is in-flight", nonceTracker{lastConsecutivelySubmitted: knownNonce(6)}, 5, 6, nonceInFlight},
-		{"below submitted is in-flight", nonceTracker{lastConsecutivelySubmitted: knownNonce(6)}, 5, 4, nonceInFlight},
-		{"next after submitted is expected", nonceTracker{lastConsecutivelySubmitted: knownNonce(6)}, 5, 7, nonceNextExpected},
-		{"at submitting is in-flight", nonceTracker{submitting: knownNonce(8)}, 5, 8, nonceInFlight},
-		{"next after submitting is expected", nonceTracker{submitting: knownNonce(8)}, 5, 9, nonceNextExpected},
-		{"index ahead of submitted: expected follows index", nonceTracker{lastConsecutivelySubmitted: knownNonce(6)}, 10, 10, nonceNextExpected},
-		{"index ahead of submitted: below index is too low", nonceTracker{lastConsecutivelySubmitted: knownNonce(6)}, 10, 8, nonceTooLow},
+		{"at submitted is in-flight", nonceTracker{lastConsecutivelySubmitted: toNonceWrapper(6)}, 5, 6, nonceInFlight},
+		{"below submitted is in-flight", nonceTracker{lastConsecutivelySubmitted: toNonceWrapper(6)}, 5, 4, nonceInFlight},
+		{"next after submitted is expected", nonceTracker{lastConsecutivelySubmitted: toNonceWrapper(6)}, 5, 7, nonceNextExpected},
+		{"at submitting is in-flight", nonceTracker{submitting: toNonceWrapper(8)}, 5, 8, nonceInFlight},
+		{"next after submitting is expected", nonceTracker{submitting: toNonceWrapper(8)}, 5, 9, nonceNextExpected},
+		{"index ahead of submitted: expected follows index", nonceTracker{lastConsecutivelySubmitted: toNonceWrapper(6)}, 10, 10, nonceNextExpected},
+		{"index ahead of submitted: below index is too low", nonceTracker{lastConsecutivelySubmitted: toNonceWrapper(6)}, 10, 8, nonceTooLow},
 		// Range checks (maxNonceGap > 0).
 		{"gap: index nonce is next-expected", nonceTracker{maxNonceGap: 50}, 5, 5, nonceNextExpected},
 		{"gap: below index is too low", nonceTracker{maxNonceGap: 50}, 5, 4, nonceTooLow},
 		{"gap: at the upper bound is accepted (queued)", nonceTracker{maxNonceGap: 50}, 5, 55, nonceQueue},
 		{"gap: beyond the upper bound is too high", nonceTracker{maxNonceGap: 50}, 5, 56, nonceTooHigh},
-		{"gap: in-flight takes precedence over too-low", nonceTracker{maxNonceGap: 50, lastConsecutivelySubmitted: knownNonce(6)}, 5, 3, nonceInFlight},
+		{"gap: in-flight takes precedence over too-low", nonceTracker{maxNonceGap: 50, lastConsecutivelySubmitted: toNonceWrapper(6)}, 5, 3, nonceInFlight},
 		{"no gap: far-ahead nonce queues (no upper bound)", nonceTracker{}, 5, 100_000, nonceQueue},
 	}
 	for _, tc := range tests {
@@ -661,12 +661,12 @@ func Test_TxMemPool_RejectsNonceOutOfRange(t *testing.T) {
 func Test_NonceTracker_ExpectedNonce(t *testing.T) {
 	assert.Equal(t, uint64(5), (&nonceTracker{localIndexedNonce: 5}).expectedNonce())
 	assert.Equal(t, uint64(7),
-		(&nonceTracker{localIndexedNonce: 5, lastConsecutivelySubmitted: knownNonce(6)}).expectedNonce())
+		(&nonceTracker{localIndexedNonce: 5, lastConsecutivelySubmitted: toNonceWrapper(6)}).expectedNonce())
 	assert.Equal(t, uint64(9),
-		(&nonceTracker{localIndexedNonce: 5, submitting: knownNonce(8)}).expectedNonce())
+		(&nonceTracker{localIndexedNonce: 5, submitting: toNonceWrapper(8)}).expectedNonce())
 	// The indexed frontier wins when it is ahead of our own sends.
 	assert.Equal(t, uint64(10),
-		(&nonceTracker{localIndexedNonce: 10, lastConsecutivelySubmitted: knownNonce(6)}).expectedNonce())
+		(&nonceTracker{localIndexedNonce: 10, lastConsecutivelySubmitted: toNonceWrapper(6)}).expectedNonce())
 }
 
 func Test_NonceTracker_Transitions(t *testing.T) {
@@ -675,12 +675,12 @@ func Test_NonceTracker_Transitions(t *testing.T) {
 	// markSubmitting sets the in-flight marker.
 	n.markSubmitting(7)
 	assert.True(t, n.inFlight())
-	assert.Equal(t, knownNonce(7), n.submitting)
+	assert.Equal(t, toNonceWrapper(7), n.submitting)
 
 	// markSubmitted advances submitted and clears submitting.
 	n.markSubmitted(7)
 	assert.False(t, n.inFlight())
-	assert.Equal(t, knownNonce(7), n.lastConsecutivelySubmitted)
+	assert.Equal(t, toNonceWrapper(7), n.lastConsecutivelySubmitted)
 
 	// rollbackSubmitting only clears a matching in-flight nonce.
 	n.markSubmitting(9)
@@ -689,7 +689,7 @@ func Test_NonceTracker_Transitions(t *testing.T) {
 	n.rollbackSubmitting(9) // matching: cleared
 	assert.False(t, n.inFlight())
 	// A rollback never disturbs the consecutively-submitted nonce.
-	assert.Equal(t, knownNonce(7), n.lastConsecutivelySubmitted)
+	assert.Equal(t, toNonceWrapper(7), n.lastConsecutivelySubmitted)
 
 	// refreshIndexed updates the cached frontier.
 	n.refreshIndexed(12)

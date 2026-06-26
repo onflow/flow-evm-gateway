@@ -79,29 +79,29 @@ const txMemPoolTickInterval = 50 * time.Millisecond
 // recent activity is kept before being removed, to bound memory usage.
 const idleQueueRetention = time.Minute
 
-// optionalNonce represents a nonce that may not be set: when set is true, v is a
+// nonceWrapper represents a nonce that may not be set: when set is true, v is a
 // valid nonce; when set is false, the nonce has not been initialized yet. It
 // lets us compare nonces uniformly even when one may be absent — including the
 // ambiguous case where the value is 0 (a valid nonce) but set is false. An unset
-// optionalNonce behaves as -∞ in the comparisons below (atLeast/is/max): it is
+// nonceWrapper behaves as -∞ in the comparisons below (atLeast/is/max): it is
 // below every real nonce and never "at or above" one, so callers carry no set
 // checks.
-type optionalNonce struct {
+type nonceWrapper struct {
 	v   uint64
 	set bool
 }
 
-func knownNonce(v uint64) optionalNonce { return optionalNonce{v: v, set: true} }
+func toNonceWrapper(v uint64) nonceWrapper { return nonceWrapper{v: v, set: true} }
 
 // atLeast reports whether this nonce is set and >= n. An unset nonce (-∞) is
 // never >= a real nonce, so it returns false.
-func (o optionalNonce) atLeast(n uint64) bool { return o.set && o.v >= n }
+func (o nonceWrapper) atLeast(n uint64) bool { return o.set && o.v >= n }
 
 // is reports whether this nonce is set and exactly equals n.
-func (o optionalNonce) is(n uint64) bool { return o.set && o.v == n }
+func (o nonceWrapper) is(n uint64) bool { return o.set && o.v == n }
 
 // max returns the greater of two optional nonces, treating unset as -∞.
-func (o optionalNonce) max(other optionalNonce) optionalNonce {
+func (o nonceWrapper) max(other nonceWrapper) nonceWrapper {
 	if !o.set {
 		return other
 	}
@@ -149,12 +149,12 @@ type nonceTracker struct {
 	// is outstanding. It means strictly "a network call is in flight" and is
 	// cleared the moment that call returns — by markSubmitted on success or
 	// rollbackSubmitting on failure.
-	submitting optionalNonce
+	submitting nonceWrapper
 	// lastConsecutivelySubmitted is the highest nonce CONSECUTIVELY, SUCCESSFULLY
 	// submitted (ack'd). Unset before the EOA's first success. Only consecutive
 	// submissions advance it; TTL-expiry (gapped) batches do NOT, so it never
 	// includes a nonce past a gap.
-	lastConsecutivelySubmitted optionalNonce
+	lastConsecutivelySubmitted nonceWrapper
 	// maxNonceGap is how far above localIndexedNonce a nonce may be before it is
 	// rejected as too-high. 0 means no upper bound. It does NOT affect the
 	// too-low check (a nonce below localIndexedNonce is always rejected). Set
@@ -168,7 +168,7 @@ func (n *nonceTracker) inFlight() bool { return n.submitting.set }
 // highestSent returns the highest nonce we have already sent — whether still in
 // flight or already ack'd (unset if neither). Re-accepting a nonce at or below
 // it would burn Flow fees on a guaranteed nonce-mismatch.
-func (n *nonceTracker) highestSent() optionalNonce {
+func (n *nonceTracker) highestSent() nonceWrapper {
 	return n.lastConsecutivelySubmitted.max(n.submitting)
 }
 
@@ -234,7 +234,7 @@ func (n *nonceTracker) classify(
 // (the synchronous fast path in Add skips it — it holds the lock across the
 // whole submit, so there is no concurrency window to guard).
 func (n *nonceTracker) markSubmitting(highNonce uint64) {
-	n.submitting = knownNonce(highNonce)
+	n.submitting = toNonceWrapper(highNonce)
 }
 
 // markSubmitted acks a successful submission: it advances the consecutively-
@@ -246,8 +246,8 @@ func (n *nonceTracker) markSubmitting(highNonce uint64) {
 // submission, which we accept for a state machine that is trivial to reason
 // about.
 func (n *nonceTracker) markSubmitted(highNonce uint64) {
-	n.lastConsecutivelySubmitted = knownNonce(highNonce)
-	n.submitting = optionalNonce{}
+	n.lastConsecutivelySubmitted = toNonceWrapper(highNonce)
+	n.submitting = nonceWrapper{}
 }
 
 // rollbackSubmitting clears the in-flight marker after a FAILED submission, but
@@ -258,7 +258,7 @@ func (n *nonceTracker) markSubmitted(highNonce uint64) {
 // "lastSubmittedNonce == batchMax" guard.
 func (n *nonceTracker) rollbackSubmitting(highNonce uint64) {
 	if n.submitting.is(highNonce) {
-		n.submitting = optionalNonce{}
+		n.submitting = nonceWrapper{}
 	}
 }
 
@@ -409,7 +409,7 @@ func (t *TxMemPool) Add(
 	q, ok := t.queues[from]
 	if !ok {
 		// A fresh queue's other fields are intentionally left at their zero
-		// values: the nonceTracker's optionalNonce fields read as "unset" (nonce 0
+		// values: the nonceTracker's nonceWrapper fields read as "unset" (nonce 0
 		// is not mistaken for a real submission), and the timing fields
 		// (collectionWindowEndsAt/flushDeadline/lastSubmittedAt) are only ever
 		// read after being set on the first enqueue or submission below. Only
