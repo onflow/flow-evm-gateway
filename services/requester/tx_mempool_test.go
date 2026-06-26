@@ -303,6 +303,39 @@ func Test_TxMemPool_InFlightDuplicateRejected(t *testing.T) {
 	assert.ErrorIs(t, err, errs.ErrInFlightNonce)
 }
 
+// Case 9 (duplicate): re-adding the IDENTICAL transaction (same nonce AND same
+// hash) of one already HELD in the queue is rejected with
+// ErrDuplicateTransaction, while a same-nonce tx with a DIFFERENT hash replaces
+// the queued one (last write wins). This exercises the duplicate check itself,
+// distinct from the in-flight rejection above (which removes the tx from the
+// queue before the second Add).
+func Test_TxMemPool_DuplicateQueuedTxRejected(t *testing.T) {
+	key, err := crypto.GenerateKey()
+	require.NoError(t, err)
+	from := crypto.PubkeyToAddress(key.PublicKey)
+
+	pool := newTestPool(
+		// Frontier 0, so a nonce-5 tx is out of order and is HELD (not submitted).
+		&fakeNonceProvider{nonce: 0},
+		func(_ context.Context, _ []heldTx) error { return nil },
+		testPoolConfig(),
+	)
+
+	tx := signedTestTx(t, key, 5, 1)
+	require.NoError(t, pool.Add(context.Background(), tx))
+
+	// Re-adding the identical tx (same hash) is a duplicate.
+	err = pool.Add(context.Background(), tx)
+	assert.ErrorIs(t, err, errs.ErrDuplicateTransaction)
+
+	// A same-nonce, different-payload (different hash) tx is NOT a duplicate; it
+	// replaces the held one.
+	replacement := signedTestTx(t, key, 5, 2)
+	require.NotEqual(t, tx.Hash(), replacement.Hash())
+	require.NoError(t, pool.Add(context.Background(), replacement))
+	assert.Equal(t, replacement.Hash(), pool.queues[from].txs[5].txHash)
+}
+
 func Test_TxMemPool_FailedFlushDoesNotWedgeEOA(t *testing.T) {
 	key, err := crypto.GenerateKey()
 	require.NoError(t, err)

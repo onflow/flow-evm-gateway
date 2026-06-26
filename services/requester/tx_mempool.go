@@ -40,9 +40,13 @@ import (
 //      arrival) decides when a burst is complete; a flush deadline anchored at
 //      the FIRST enqueue (TxSubmissionSpacing) caps how long a continuously
 //      resetting window can defer the flush.
-//      Example: nonces 5,6,7 arrive within a few ms of each other; the window
-//      keeps resetting, so they are collected together and flushed as one batch
-//      once arrivals pause for TxCollectionWindow (or the deadline is hit).
+//      Example: nonce 5 fast-paths and is sent; nonces 6,7,8 then arrive a few
+//      ms apart while the submission-spacing gap since that send is still open,
+//      so they cannot fast-path and queue instead. The window keeps resetting as
+//      they arrive, and they flush together as one batch once arrivals pause for
+//      TxCollectionWindow (or the deadline is hit) AND spacing has elapsed. (A
+//      burst whose lead nonce is itself the next expected one on an empty, idle
+//      queue would fast-path that first tx — case 1 — not queue it.)
 //   3. Consecutive-prefix flush: on flush, the longest run of consecutive nonces
 //      starting at the expected nonce is sent as ONE Cadence transaction, capped
 //      at TxMaxBatchSize. A nonce gap splits the queue: only the prefix before
