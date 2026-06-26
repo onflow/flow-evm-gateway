@@ -256,7 +256,7 @@ type nonceTracker struct {
 	// index (the on-chain frontier). A cache of a fact about the chain, refreshed
 	// from a fresh read via refreshIndexed — not a record of our own sends.
 	localIndexedNonce uint64
-	// submitting is the highest nonce sent to Flow but not yet ack'd. It marks the
+	// submitting is the highest consecutive nonce sent to Flow but not yet ack'd. It marks the
 	// window between detaching a batch and its submit result returning, and
 	// strictly means "a network call is in flight": it is cleared the moment that
 	// call returns, by markSubmitted on success or rollbackSubmitting on failure.
