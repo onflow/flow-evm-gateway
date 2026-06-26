@@ -759,145 +759,179 @@ func (t *TxMemPool) reconcileSubmission(w flushWork, submitErr error) {
 	q.nonces.markSubmitted(highNonce)
 }
 
-// collectDueBatches selects, under the queue lock, every batch that is due
-// for submission, updates the queue state optimistically, and returns the
-// detached work items.
+// collectDueBatches selects, under the queue lock, every batch that is due for
+// submission, updates the queue state optimistically, and returns the detached
+// work items. The per-EOA decision lives in collectQueue.
+//
+// Each due EOA's nonce is read via GetNonce; the provider caches the block view
+// by indexed height, so all reads in this pass (and across ticks at the same
+// height) reuse one built view rather than rebuilding per address.
 func (t *TxMemPool) collectDueBatches() []flushWork {
 	t.queueMux.Lock()
 	defer t.queueMux.Unlock()
 
 	now := t.now()
 	work := make([]flushWork, 0, len(t.queues))
-
-	// Each due EOA's nonce is read via GetNonce; the provider caches the block
-	// view by indexed height, so all reads in this pass (and across ticks at the
-	// same height) reuse one built view rather than rebuilding per address.
 	for from, q := range t.queues {
-		if q.isEmpty() {
-			// Bound memory: drop queues with no held txs and no activity past
-			// the retention period. Any in-flight submission has long since
-			// resolved on-chain after this window, so discarding a lingering
-			// in-flight marker here is safe — a later transaction for the EOA
-			// creates a fresh queue and re-reads the index nonce.
-			if now.Sub(q.lastActivity) > idleQueueRetention {
-				delete(t.queues, from)
-			}
-			continue
-		}
-
-		// Not due yet: both the sliding window and the flush deadline are
-		// still in the future.
-		if now.Before(q.collectionWindowEndsAt) && now.Before(q.flushDeadline) {
-			continue
-		}
-
-		// Safety gap since the previous submission not yet elapsed.
-		if !t.spacingElapsed(q, now) {
-			continue
-		}
-
-		indexNonce, err := t.nonceProvider.GetNonce(from)
-		if err != nil {
-			// Exception: a local state-index nonce read should not fail
-			// under normal operation. This is a background loop with no
-			// caller to reject the tx to, so skip this EOA for the current
-			// tick (its batch is deferred until the read succeeds) without
-			// aborting the whole flush for other EOAs.
-			t.logger.Error().Err(err).Str("eoa", from.Hex()).
-				Msg("unexpected failure reading nonce from local index, skipping EOA this tick")
-			continue
-		}
-
-		q.nonces.refreshIndexed(indexNonce)
-
-		// Prune transactions that can never execute: their nonce is already
-		// used on-chain (e.g. filled via another gateway). They would only
-		// burn fees at TTL expiry.
-		t.pruneStaleTxs(q, from, indexNonce)
-
-		// At most one batch is collected per EOA per tick. The consecutive
-		// prefix below takes precedence and `continue`s; only when there is no
-		// eligible prefix (a gap at the head) do we consider the TTL-expiry
-		// path. The post-gap / over-cap remainder is left in the queue and
-		// drained on a later tick, gated by submission spacing — it is never
-		// merged with this batch, since a head gap would make the whole Flow
-		// transaction fail.
-		prefix := selectConsecutivePrefix(q.txs, q.nonces.expectedNonce(), t.config.TxMaxBatchSize)
-		if len(prefix) > 0 {
-			deleteByNonce(q.txs, prefix)
-			// Optimistically mark the batch submitting; reconcileSubmission
-			// advances submitted on success or clears it on failure.
-			q.nonces.markSubmitting(prefix[len(prefix)-1].nonce)
-			q.lastSubmittedAt = now
-			q.lastActivity = now
-			if !q.isEmpty() {
-				// Re-arm for the remaining (post-gap or over-cap) txs.
-				q.collectionWindowEndsAt = now.Add(t.config.TxCollectionWindow)
-				q.flushDeadline = now.Add(t.config.TxSubmissionSpacing)
-			}
-			work = append(work, flushWork{
-				from:              from,
-				txs:               prefix,
-				inFlight:          true,
-				reason:            flushReasonPrefix,
-				localIndexedNonce: indexNonce,
-			})
-			continue
-		}
-
-		// No eligible prefix (gap at the head). Submit transactions held
-		// past their TTL anyway instead of dropping them.
-		//
-		// Rationale (no silent drops): submitting an unexecutable transaction
-		// produces a real, observable on-chain failure (operators can see the
-		// failed Flow transaction and its nonce-mismatch), whereas silently
-		// dropping it leaves no trace. Avoiding silent drops is the whole reason
-		// this pool exists, so an observable failure is strictly preferable to an
-		// invisible drop.
-		//
-		// Tradeoff: a tx whose nonce is far ahead of the index is still
-		// submitted at TTL and burns fees on a guaranteed failure. How far
-		// ahead a nonce may be is bounded instead at Add time by TxMaxNonceGap
-		// (see classify); when that is unset (0), far-ahead nonces reach here.
-		//
-		// Cap the batch at TxMaxBatchSize so a long-lived gap cannot produce an
-		// unbounded Flow transaction; the remainder drains on later ticks,
-		// gated by submission spacing.
-		expired := selectExpired(q.txs, now, t.config.TxPoolTTL)
-		if len(expired) > t.config.TxMaxBatchSize {
-			expired = expired[:t.config.TxMaxBatchSize]
-		}
-		if len(expired) > 0 {
-			deleteByNonce(q.txs, expired)
-			// Deliberately do NOT mark the nonceTracker submitting here: these
-			// nonces are out of order (past a gap), and marking them in flight
-			// would corrupt the expected-nonce computation for future flushes.
-			q.lastSubmittedAt = now
-			q.lastActivity = now
-			t.logger.Warn().Strs("tx-hashes", txHashHexes(expired)).Str("eoa", from.Hex()).
-				Uint64("local-indexed-nonce", indexNonce).
-				Uint64("expected-nonce", q.nonces.expectedNonce()).
-				Msg("nonce gap never filled within TTL, submitting held transactions anyway")
-			work = append(work, flushWork{
-				from:              from,
-				txs:               expired,
-				reason:            flushReasonTTL,
-				localIndexedNonce: indexNonce,
-			})
+		if w, ok := t.collectQueue(from, q, now); ok {
+			work = append(work, w)
 		}
 	}
+	t.reportSize()
+	return work
+}
 
-	// Report the pool's memory footprint while still holding queueMux: the
-	// number of per-EOA queues and the total number of held transactions.
-	// Counting must happen under the lock since t.queues is mutated
-	// concurrently (and idle queues are pruned above).
+// collectQueue evaluates one EOA's queue and returns its due batch, if any. It
+// applies the gating checks (idle eviction, due-time, submission spacing, a
+// fresh frontier read + stale prune) and then collects at most one batch:
+// the consecutive prefix takes precedence, and only when a gap at the head
+// blocks it does the TTL-expiry path run. The post-gap / over-cap remainder is
+// left in the queue for a later tick — never merged with this batch, since a
+// head gap would fail the whole Flow transaction. Callers must hold queueMux;
+// it may evict an idle empty queue as a side effect.
+func (t *TxMemPool) collectQueue(
+	from gethCommon.Address,
+	q *eoaQueue,
+	now time.Time,
+) (flushWork, bool) {
+	if q.isEmpty() {
+		// Bound memory: drop queues with no held txs and no activity past the
+		// retention period. Any in-flight submission has long since resolved
+		// on-chain after this window, so discarding a lingering in-flight marker
+		// here is safe — a later transaction for the EOA creates a fresh queue
+		// and re-reads the index nonce.
+		if now.Sub(q.lastActivity) > idleQueueRetention {
+			delete(t.queues, from)
+		}
+		return flushWork{}, false
+	}
+
+	// Not due yet: both the sliding window and the flush deadline are still in
+	// the future.
+	if now.Before(q.collectionWindowEndsAt) && now.Before(q.flushDeadline) {
+		return flushWork{}, false
+	}
+
+	// Safety gap since the previous submission not yet elapsed.
+	if !t.spacingElapsed(q, now) {
+		return flushWork{}, false
+	}
+
+	indexNonce, err := t.nonceProvider.GetNonce(from)
+	if err != nil {
+		// Exception: a local state-index nonce read should not fail under normal
+		// operation. This is a background loop with no caller to reject the tx
+		// to, so skip this EOA for the current tick (its batch is deferred until
+		// the read succeeds) without aborting the whole flush for other EOAs.
+		t.logger.Error().Err(err).Str("eoa", from.Hex()).
+			Msg("unexpected failure reading nonce from local index, skipping EOA this tick")
+		return flushWork{}, false
+	}
+
+	q.nonces.refreshIndexed(indexNonce)
+
+	// Prune transactions that can never execute: their nonce is already used
+	// on-chain (e.g. filled via another gateway). They would only burn fees at
+	// TTL expiry.
+	t.pruneStaleTxs(q, from, indexNonce)
+
+	if w, ok := t.collectPrefix(from, q, now, indexNonce); ok {
+		return w, true
+	}
+	return t.collectExpired(from, q, now, indexNonce)
+}
+
+// collectPrefix detaches the longest consecutive nonce run starting at the
+// expected nonce (capped at TxMaxBatchSize), marks it in flight, and re-arms the
+// queue for any remainder. Returns false when a gap at the head leaves no
+// eligible prefix. Callers must hold queueMux.
+func (t *TxMemPool) collectPrefix(
+	from gethCommon.Address,
+	q *eoaQueue,
+	now time.Time,
+	indexNonce uint64,
+) (flushWork, bool) {
+	prefix := selectConsecutivePrefix(q.txs, q.nonces.expectedNonce(), t.config.TxMaxBatchSize)
+	if len(prefix) == 0 {
+		return flushWork{}, false
+	}
+
+	deleteByNonce(q.txs, prefix)
+	// Optimistically mark the batch submitting; reconcileSubmission advances
+	// submitted on success or clears it on failure.
+	q.nonces.markSubmitting(prefix[len(prefix)-1].nonce)
+	q.lastSubmittedAt = now
+	q.lastActivity = now
+	if !q.isEmpty() {
+		// Re-arm for the remaining (post-gap or over-cap) txs.
+		q.collectionWindowEndsAt = now.Add(t.config.TxCollectionWindow)
+		q.flushDeadline = now.Add(t.config.TxSubmissionSpacing)
+	}
+	return flushWork{
+		from:              from,
+		txs:               prefix,
+		inFlight:          true,
+		reason:            flushReasonPrefix,
+		localIndexedNonce: indexNonce,
+	}, true
+}
+
+// collectExpired detaches transactions held past their TTL when a head gap
+// blocks the prefix path, submitting them anyway (capped at TxMaxBatchSize)
+// rather than dropping them. Returns false when nothing has expired. Callers
+// must hold queueMux.
+//
+// Rationale (no silent drops): submitting an unexecutable transaction produces a
+// real, observable on-chain failure (operators can see the failed Flow
+// transaction and its nonce-mismatch), whereas silently dropping it leaves no
+// trace. Avoiding silent drops is the whole reason this pool exists, so an
+// observable failure is strictly preferable to an invisible drop. The batch is
+// deliberately NOT marked in flight: these nonces are out of order (past a gap),
+// and marking them would corrupt the expected-nonce computation for future
+// flushes.
+//
+// Tradeoff: a tx whose nonce is far ahead of the index is still submitted at TTL
+// and burns fees on a guaranteed failure. How far ahead a nonce may be is
+// bounded instead at Add time by TxMaxNonceGap (see classify); when that is
+// unset (0), far-ahead nonces reach here.
+func (t *TxMemPool) collectExpired(
+	from gethCommon.Address,
+	q *eoaQueue,
+	now time.Time,
+	indexNonce uint64,
+) (flushWork, bool) {
+	expired := selectExpired(q.txs, now, t.config.TxPoolTTL)
+	if len(expired) > t.config.TxMaxBatchSize {
+		expired = expired[:t.config.TxMaxBatchSize]
+	}
+	if len(expired) == 0 {
+		return flushWork{}, false
+	}
+
+	deleteByNonce(q.txs, expired)
+	q.lastSubmittedAt = now
+	q.lastActivity = now
+	t.logger.Warn().Strs("tx-hashes", txHashHexes(expired)).Str("eoa", from.Hex()).
+		Uint64("local-indexed-nonce", indexNonce).
+		Uint64("expected-nonce", q.nonces.expectedNonce()).
+		Msg("nonce gap never filled within TTL, submitting held transactions anyway")
+	return flushWork{
+		from:              from,
+		txs:               expired,
+		reason:            flushReasonTTL,
+		localIndexedNonce: indexNonce,
+	}, true
+}
+
+// reportSize emits the pool's memory footprint: the number of per-EOA queues and
+// the total number of held transactions. Callers must hold queueMux, since it
+// reads t.queues (mutated concurrently, and pruned during collection).
+func (t *TxMemPool) reportSize() {
 	queuedTxs := 0
 	for _, q := range t.queues {
 		queuedTxs += q.size()
 	}
 	t.collector.TxPoolSize(len(t.queues), queuedTxs)
-
-	return work
 }
 
 // pruneStaleTxs removes queued transactions whose nonce is below the current
