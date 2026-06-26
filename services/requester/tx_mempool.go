@@ -332,7 +332,10 @@ func (n *nonceTracker) classify(
 	// More than maxNonceGap beyond the frontier (only when a gap is configured):
 	// cannot execute until the gap fills. A behind (stale) index can only make
 	// this over-strict, which is acceptable — the gateway is catching up.
-	if n.maxNonceGap > 0 && nonce > n.localIndexedNonce+n.maxNonceGap {
+	// Compare the distance rather than localIndexedNonce+maxNonceGap, which could
+	// overflow near math.MaxUint64; the too-low check above guarantees
+	// nonce >= localIndexedNonce, so the subtraction never underflows.
+	if n.maxNonceGap > 0 && nonce-n.localIndexedNonce > n.maxNonceGap {
 		return nonceTooHigh, nil
 	}
 	if nonce == n.expectedNonce() {

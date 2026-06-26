@@ -249,10 +249,11 @@ func Test_TxMemPool_FastPathSubmitHasBoundedTimeout(t *testing.T) {
 
 	before := time.Now()
 	require.NoError(t, pool.Add(context.Background(), signedTestTx(t, key, 0, 1)))
+	after := time.Now()
 
 	require.True(t, hasDeadline, "fast-path submit context must carry a deadline")
 	assert.Greater(t, deadline, before)
-	assert.LessOrEqual(t, deadline.Sub(before), fastPathSubmitTimeout+time.Second,
+	assert.LessOrEqual(t, deadline, after.Add(fastPathSubmitTimeout),
 		"deadline must be bounded by fastPathSubmitTimeout")
 }
 
