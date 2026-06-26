@@ -667,15 +667,46 @@ func (t *TxMemPool) submitWork(ctx context.Context, w flushWork) error {
 	return err
 }
 
+// batchFields attaches to e the structured fields common to every per-batch
+// lifecycle log — submission failure, stale prune, and TTL submit-anyway — so
+// the no-silent-drops fields stay consistent and greppable across all three
+// sites (eoa, tx hashes, nonce range, batch size, the indexed frontier). The
+// caller creates e at the desired level, adds any site-specific fields (reason,
+// error, expected-nonce, ...), and calls Msg. The nonce range is computed as the
+// true min/max so it is correct even when txs is not sorted (e.g. a stale-prune
+// batch collected in map order).
+func batchFields(
+	e *zerolog.Event,
+	from gethCommon.Address,
+	txs []heldTx,
+	indexNonce uint64,
+) *zerolog.Event {
+	var lowNonce, highNonce uint64
+	for i, htx := range txs {
+		if i == 0 || htx.nonce < lowNonce {
+			lowNonce = htx.nonce
+		}
+		if i == 0 || htx.nonce > highNonce {
+			highNonce = htx.nonce
+		}
+	}
+	return e.
+		Str("eoa", from.Hex()).
+		Strs("tx-hashes", txHashHexes(txs)).
+		Uint64("low-nonce", lowNonce).
+		Uint64("high-nonce", highNonce).
+		Int("batch-size", len(txs)).
+		Uint64("local-indexed-nonce", indexNonce)
+}
+
 // logSubmission records the fate of a submitted batch so a transaction is never
 // silently lost. This is the observability half of the no-silent-drops
 // invariant: for any tx id you can either find it on-chain (sent) OR find a WARN
 // log here (dropped) — never nothing.
 //
 //   - On a Flow submit FAILURE the batch's EVM transactions are dropped (we do
-//     not retry — clients resubmit), so we WARN with everything needed to debug
-//     a "lost transaction" report: eoa, tx hashes, nonce range, the indexed
-//     frontier, batch size, the flush reason, and the error.
+//     not retry — clients resubmit), so we WARN with the full batch context
+//     (batchFields) plus the flush reason and the error.
 //   - On SUCCESS we emit a lighter DEBUG line (eoa + nonce range) so a sent
 //     batch is traceable without the noise of a warning.
 //
@@ -691,27 +722,19 @@ func (t *TxMemPool) logSubmission(
 	if len(txs) == 0 {
 		return
 	}
-	lowNonce := txs[0].nonce
-	highNonce := txs[len(txs)-1].nonce
 
 	if submitErr != nil {
-		t.logger.Warn().
-			Err(submitErr).
-			Str("eoa", from.Hex()).
-			Strs("tx-hashes", txHashHexes(txs)).
-			Uint64("low-nonce", lowNonce).
-			Uint64("high-nonce", highNonce).
-			Uint64("local-indexed-nonce", localIndexedNonce).
-			Int("batch-size", len(txs)).
+		batchFields(t.logger.Warn(), from, txs, localIndexedNonce).
 			Str("reason", reason).
+			Err(submitErr).
 			Msg("Flow submission failed, EVM transactions dropped")
 		return
 	}
 
 	t.logger.Debug().
 		Str("eoa", from.Hex()).
-		Uint64("low-nonce", lowNonce).
-		Uint64("high-nonce", highNonce).
+		Uint64("low-nonce", txs[0].nonce).
+		Uint64("high-nonce", txs[len(txs)-1].nonce).
 		Int("batch-size", len(txs)).
 		Str("reason", reason).
 		Msg("submitted EVM transactions to Flow")
@@ -911,8 +934,7 @@ func (t *TxMemPool) collectExpired(
 	deleteByNonce(q.txs, expired)
 	q.lastSubmittedAt = now
 	q.lastActivity = now
-	t.logger.Warn().Strs("tx-hashes", txHashHexes(expired)).Str("eoa", from.Hex()).
-		Uint64("local-indexed-nonce", indexNonce).
+	batchFields(t.logger.Warn(), from, expired, indexNonce).
 		Uint64("expected-nonce", q.nonces.expectedNonce()).
 		Msg("nonce gap never filled within TTL, submitting held transactions anyway")
 	return flushWork{
@@ -950,8 +972,7 @@ func (t *TxMemPool) pruneStaleTxs(
 	}
 	if len(stale) > 0 {
 		deleteByNonce(q.txs, stale)
-		t.logger.Warn().Strs("tx-hashes", txHashHexes(stale)).Str("eoa", from.Hex()).
-			Uint64("local-indexed-nonce", indexNonce).
+		batchFields(t.logger.Warn(), from, stale, indexNonce).
 			Msg("dropping stale transactions with nonce below indexed state")
 	}
 }
