@@ -6,6 +6,7 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"math/big"
+	"sync"
 	"testing"
 	"time"
 
@@ -133,9 +134,32 @@ func newTestPool(
 		},
 		nonceProvider: np,
 		queues:        make(map[gethCommon.Address]*eoaQueue),
+		now:           time.Now,
 	}
 	pool.submitBatch = submit
 	return pool
+}
+
+// fakeClock is a controllable clock for driving the pool's time-based behavior
+// in tests without wall-clock sleeps. It is safe for the single-goroutine unit
+// tests here (Add and collectDueBatches are called synchronously).
+type fakeClock struct {
+	mu sync.Mutex
+	t  time.Time
+}
+
+func newFakeClock(t time.Time) *fakeClock { return &fakeClock{t: t} }
+
+func (c *fakeClock) now() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.t
+}
+
+func (c *fakeClock) advance(d time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.t = c.t.Add(d)
 }
 
 func testPoolConfig() config.Config {
@@ -777,4 +801,199 @@ func Test_NonceTracker_Transitions(t *testing.T) {
 	// refreshIndexed updates the cached frontier.
 	n.refreshIndexed(12)
 	assert.Equal(t, uint64(12), n.localIndexedNonce)
+}
+
+// --- Clock-driven timing tests -------------------------------------------
+// These drive the collection window, flush deadline, submission spacing, TTL
+// expiry and idle-queue retention through the real Add -> collectDueBatches
+// path using an injected clock, rather than hand-building deadline timestamps.
+
+var timingClockBase = time.Unix(1_700_000_000, 0)
+
+// The sliding collection window is re-armed on every arrival.
+func Test_TxMemPool_CollectionWindowResetsOnEachArrival(t *testing.T) {
+	key, err := crypto.GenerateKey()
+	require.NoError(t, err)
+	from := crypto.PubkeyToAddress(key.PublicKey)
+
+	clk := newFakeClock(timingClockBase)
+	pool := newTestPool(
+		&fakeNonceProvider{nonce: 0},
+		func(_ context.Context, _ []heldTx) error { return nil },
+		testPoolConfig(),
+	)
+	pool.now = clk.now
+
+	// A gapped nonce (frontier 0, nonce 5) queues rather than fast-pathing.
+	require.NoError(t, pool.Add(context.Background(), signedTestTx(t, key, 5, 1)))
+	q := pool.queues[from]
+	require.NotNil(t, q)
+	assert.Equal(t, timingClockBase.Add(testPoolConfig().TxCollectionWindow), q.collectionWindowEndsAt)
+	firstDeadline := q.flushDeadline
+
+	// A later arrival re-arms the window relative to its own arrival time, but
+	// must NOT re-arm the first-enqueue flush deadline.
+	clk.advance(40 * time.Millisecond)
+	require.NoError(t, pool.Add(context.Background(), signedTestTx(t, key, 6, 1)))
+	assert.Equal(t, clk.now().Add(testPoolConfig().TxCollectionWindow), q.collectionWindowEndsAt)
+	assert.Equal(t, firstDeadline, q.flushDeadline, "flush deadline stays anchored at first enqueue")
+}
+
+// Submission spacing gates the background flush: a due batch is held until
+// TxSubmissionSpacing has elapsed since the previous submission, then flushed.
+func Test_TxMemPool_SpacingGateDefersThenFlushes(t *testing.T) {
+	key, err := crypto.GenerateKey()
+	require.NoError(t, err)
+	from := crypto.PubkeyToAddress(key.PublicKey)
+
+	clk := newFakeClock(timingClockBase)
+	var submitted [][]heldTx
+	pool := newTestPool(
+		&fakeNonceProvider{nonce: 0},
+		func(_ context.Context, txs []heldTx) error {
+			submitted = append(submitted, txs)
+			return nil
+		},
+		testPoolConfig(),
+	)
+	pool.now = clk.now
+	cfg := testPoolConfig()
+
+	// nonce 0 fast-paths immediately and stamps lastSubmittedAt = base.
+	require.NoError(t, pool.Add(context.Background(), signedTestTx(t, key, 0, 1)))
+	require.Len(t, submitted, 1)
+	// nonces 1,2 arrive while spacing has not elapsed, so they queue.
+	require.NoError(t, pool.Add(context.Background(), signedTestTx(t, key, 1, 1)))
+	require.NoError(t, pool.Add(context.Background(), signedTestTx(t, key, 2, 1)))
+
+	// Past the collection window but within the spacing gap: NOT flushed yet.
+	clk.advance(cfg.TxCollectionWindow + 50*time.Millisecond)
+	pool.collectDueBatches()
+	assert.Len(t, submitted, 1, "spacing gate must defer the flush")
+	assert.Len(t, pool.queues[from].txs, 2)
+
+	// Once spacing has elapsed, the consecutive prefix {1,2} flushes.
+	clk.advance(cfg.TxSubmissionSpacing)
+	for _, w := range pool.collectDueBatches() {
+		require.NoError(t, pool.submitWork(context.Background(), w))
+	}
+	require.Len(t, submitted, 2)
+	assert.Equal(t, []uint64{1, 2}, noncesOf(submitted[1]))
+	assert.Empty(t, pool.queues[from].txs)
+}
+
+// The first-enqueue flush deadline forces a flush even while the (continuously
+// re-armed) collection window is still in the future.
+func Test_TxMemPool_FlushDeadlineForcesFlushWhileWindowOpen(t *testing.T) {
+	key, err := crypto.GenerateKey()
+	require.NoError(t, err)
+	from := crypto.PubkeyToAddress(key.PublicKey)
+
+	clk := newFakeClock(timingClockBase)
+	var submitted [][]heldTx
+	pool := newTestPool(
+		&fakeNonceProvider{nonce: 0},
+		func(_ context.Context, txs []heldTx) error {
+			submitted = append(submitted, txs)
+			return nil
+		},
+		testPoolConfig(),
+	)
+	pool.now = clk.now
+	cfg := testPoolConfig()
+
+	require.NoError(t, pool.Add(context.Background(), signedTestTx(t, key, 0, 1))) // fast-path
+	require.NoError(t, pool.Add(context.Background(), signedTestTx(t, key, 1, 1))) // queues; deadline = base + spacing
+
+	// Just before the deadline, re-arm the window with a late arrival so the
+	// window remains in the future at flush time.
+	clk.advance(cfg.TxSubmissionSpacing - 50*time.Millisecond)
+	require.NoError(t, pool.Add(context.Background(), signedTestTx(t, key, 2, 1)))
+	q := pool.queues[from]
+	require.True(t, clk.now().Before(q.collectionWindowEndsAt), "window must still be open")
+
+	// Cross the deadline (still before the window end): the deadline forces it.
+	clk.advance(60 * time.Millisecond)
+	require.True(t, clk.now().Before(q.collectionWindowEndsAt), "window still open at flush time")
+	require.False(t, clk.now().Before(q.flushDeadline), "deadline has passed")
+	for _, w := range pool.collectDueBatches() {
+		require.NoError(t, pool.submitWork(context.Background(), w))
+	}
+	require.Len(t, submitted, 2)
+	assert.Equal(t, []uint64{1, 2}, noncesOf(submitted[1]))
+}
+
+// A nonce stuck behind a permanent head gap is submitted anyway once TxPoolTTL
+// elapses (driven by the clock via enqueuedAt), not silently dropped.
+func Test_TxMemPool_TTLExpiryViaClock(t *testing.T) {
+	key, err := crypto.GenerateKey()
+	require.NoError(t, err)
+	from := crypto.PubkeyToAddress(key.PublicKey)
+
+	clk := newFakeClock(timingClockBase)
+	var submitted []flushWork
+	pool := newTestPool(
+		&fakeNonceProvider{nonce: 0},
+		func(_ context.Context, _ []heldTx) error { return nil },
+		testPoolConfig(),
+	)
+	pool.now = clk.now
+	cfg := testPoolConfig()
+
+	// Frontier 0, nonce 10 — a permanent head gap, so the only exit is TTL.
+	require.NoError(t, pool.Add(context.Background(), signedTestTx(t, key, 10, 1)))
+
+	// Before TTL: held, not submitted.
+	clk.advance(cfg.TxCollectionWindow + 50*time.Millisecond)
+	assert.Empty(t, pool.collectDueBatches())
+	assert.Len(t, pool.queues[from].txs, 1)
+
+	// Past TTL: submitted anyway, as a non-in-flight TTL batch.
+	clk.advance(cfg.TxPoolTTL)
+	work := pool.collectDueBatches()
+	require.Len(t, work, 1)
+	submitted = work
+	assert.False(t, submitted[0].inFlight)
+	assert.Equal(t, flushReasonTTL, submitted[0].reason)
+	assert.Equal(t, []uint64{10}, noncesOf(submitted[0].txs))
+	assert.Empty(t, pool.queues[from].txs)
+}
+
+// An empty queue with no activity past idleQueueRetention is evicted.
+func Test_TxMemPool_IdleQueueEvictedViaClock(t *testing.T) {
+	key, err := crypto.GenerateKey()
+	require.NoError(t, err)
+	from := crypto.PubkeyToAddress(key.PublicKey)
+
+	clk := newFakeClock(timingClockBase)
+	pool := newTestPool(
+		&fakeNonceProvider{nonce: 0},
+		func(_ context.Context, _ []heldTx) error { return nil },
+		testPoolConfig(),
+	)
+	pool.now = clk.now
+
+	// nonce 0 fast-paths and leaves an empty queue with lastActivity = base.
+	require.NoError(t, pool.Add(context.Background(), signedTestTx(t, key, 0, 1)))
+	require.NotNil(t, pool.queues[from])
+
+	// Within retention: kept.
+	clk.advance(idleQueueRetention / 2)
+	pool.collectDueBatches()
+	assert.NotNil(t, pool.queues[from])
+
+	// Past retention: evicted.
+	clk.advance(idleQueueRetention)
+	pool.collectDueBatches()
+	_, ok := pool.queues[from]
+	assert.False(t, ok, "idle empty queue must be evicted past retention")
+}
+
+// noncesOf extracts the nonces of a batch in order, for concise assertions.
+func noncesOf(txs []heldTx) []uint64 {
+	ns := make([]uint64, len(txs))
+	for i, htx := range txs {
+		ns[i] = htx.nonce
+	}
+	return ns
 }

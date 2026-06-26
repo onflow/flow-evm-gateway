@@ -406,6 +406,11 @@ type TxMemPool struct {
 	// submitBatch performs the actual Flow submission. It defaults to
 	// submitTxBatch and exists as a field so tests can inject a fake.
 	submitBatch func(ctx context.Context, txs []heldTx) error
+	// now returns the current time. It defaults to time.Now and exists as a
+	// field so tests can drive the collection window, flush deadline, submission
+	// spacing, TTL expiry and idle-queue retention with a controllable clock
+	// rather than wall-clock sleeps.
+	now func() time.Time
 }
 
 var _ TxPool = &TxMemPool{}
@@ -431,6 +436,7 @@ func NewTxMemPool(
 		SingleTxPool:  singleTxPool,
 		nonceProvider: nonceProvider,
 		queues:        make(map[gethCommon.Address]*eoaQueue),
+		now:           time.Now,
 	}
 	pool.submitBatch = pool.submitTxBatch
 
@@ -487,7 +493,7 @@ func (t *TxMemPool) Add(
 		t.queues[from] = q
 	}
 
-	now := time.Now()
+	now := t.now()
 	// The EOA was "touched" even if this turns out to be a duplicate, so record
 	// activity here to keep the idle-queue retention clock accurate.
 	q.lastActivity = now
@@ -541,7 +547,7 @@ func (t *TxMemPool) Add(
 			return submitErr
 		}
 		q.nonces.markSubmitted(tx.Nonce())
-		q.lastSubmittedAt = time.Now()
+		q.lastSubmittedAt = t.now()
 		return nil
 	}
 
@@ -729,7 +735,7 @@ func (t *TxMemPool) collectDueBatches() []flushWork {
 	t.queueMux.Lock()
 	defer t.queueMux.Unlock()
 
-	now := time.Now()
+	now := t.now()
 	work := make([]flushWork, 0)
 
 	// Each due EOA's nonce is read via GetNonce; the provider caches the block
