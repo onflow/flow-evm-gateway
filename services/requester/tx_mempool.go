@@ -607,8 +607,22 @@ func (t *TxMemPool) Add(
 	return nil
 }
 
-// spacingElapsed reports whether enough time has passed since the last
-// Cadence submission for this EOA. Callers must hold queueMux.
+// spacingElapsed reports whether enough time has passed since the last Cadence
+// submission for this EOA. Callers must hold queueMux.
+//
+// Timing caveat: for background batches, lastSubmittedAt is stamped at COLLECTION
+// time (collectPrefix/collectExpired), not when the detached submit actually
+// returns. Since one tick's batches are submitted sequentially afterward, a
+// later EOA's stamp can predate its real submit by the cumulative submit latency
+// ahead of it, so its NEXT batch's effective spacing can be short by that skew.
+// The skew is bounded by (concurrently-due EOAs ahead) x (per-submit latency),
+// which is small for the current few-EOA deployment and accepted. The
+// collection-time stamp is also load-bearing the other way: it is what gates a
+// follow-up batch from being collected while the previous one is still in flight
+// (the spacing check runs before prefix selection, and the in-flight marker does
+// not by itself stop the next consecutive prefix from being selected). A precise
+// fix would keep this gate and additionally re-stamp on submit completion in
+// reconcileSubmission.
 func (t *TxMemPool) spacingElapsed(q *eoaQueue, now time.Time) bool {
 	return q.lastSubmittedAt.IsZero() ||
 		now.Sub(q.lastSubmittedAt) >= t.config.TxSubmissionSpacing
