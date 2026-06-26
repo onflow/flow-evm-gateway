@@ -1,6 +1,8 @@
 package requester
 
 import (
+	"sync"
+
 	gethCommon "github.com/ethereum/go-ethereum/common"
 	"github.com/onflow/flow-go/fvm/evm"
 	"github.com/onflow/flow-go/fvm/evm/offchain/query"
@@ -31,20 +33,25 @@ type NonceProvider interface {
 	// rather than a routine, recoverable condition to swallow.
 	GetNonce(address gethCommon.Address) (uint64, error)
 
-	// GetBlockView builds a NonceView over the latest indexed EVM state. A
-	// caller that reads many EOAs' nonces at once (e.g. a single mempool flush
-	// tick) can build the view once and reuse it, instead of paying the view
-	// build cost per address as GetNonce does. A non-nil error is an
-	// EXCEPTION, same contract as GetNonce.
+	// GetBlockView returns a NonceView over the latest indexed EVM state. A
+	// non-nil error is an EXCEPTION, same contract as GetNonce.
 	GetBlockView() (NonceView, error)
 }
 
 // LocalNonceProvider reads the EOA nonce from the latest height of the
-// local state index.
+// local state index. It caches the built block view and reuses it while the
+// indexed height is unchanged (see GetBlockView).
 type LocalNonceProvider struct {
 	chainID       flowGo.ChainID
 	registerStore *pebble.RegisterStorage
 	blocks        storage.BlockIndexer
+
+	// mu guards the cached view below. The cached view is shared across reads;
+	// callers that read it concurrently must serialize (the mempool does, via
+	// its queueMux).
+	mu           sync.Mutex
+	cachedView   NonceView
+	cachedHeight uint64
 }
 
 var _ NonceProvider = &LocalNonceProvider{}
@@ -61,11 +68,23 @@ func NewLocalNonceProvider(
 	}
 }
 
-// GetBlockView builds a NonceView over the latest indexed EVM height.
+// GetBlockView returns a NonceView over the latest indexed EVM height. The view
+// is cached and reused while the indexed height is unchanged, so a burst of
+// reads within one block — many Add calls, or a collectDueBatches pass — builds
+// the (expensive) view only once. It is rebuilt when a new block is indexed.
+// Reuse is safe because an EOA's on-chain nonce cannot change without a new
+// block being indexed.
 func (p *LocalNonceProvider) GetBlockView() (NonceView, error) {
 	height, err := p.blocks.LatestEVMHeight()
 	if err != nil {
 		return nil, err
+	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.cachedView != nil && p.cachedHeight == height {
+		return p.cachedView, nil
 	}
 
 	viewProvider := query.NewViewProvider(
@@ -80,6 +99,9 @@ func (p *LocalNonceProvider) GetBlockView() (NonceView, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	p.cachedView = view
+	p.cachedHeight = height
 
 	return view, nil
 }

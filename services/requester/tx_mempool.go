@@ -213,8 +213,7 @@ func (n *nonceTracker) classify(
 	}
 	n.refreshIndexed(indexNonce)
 
-	// Below the on-chain frontier: already used, can never execute. Always
-	// rejected — unrelated to maxNonceGap (it bounds only the upper end).
+	// Below the on-chain frontier: already used, can never execute.
 	if nonce < n.localIndexedNonce {
 		return nonceTooLow, nil
 	}
@@ -592,21 +591,9 @@ func (t *TxMemPool) collectDueBatches() []flushWork {
 	now := time.Now()
 	work := make([]flushWork, 0)
 
-	// Build the EVM block view at most once per tick and read every due EOA's
-	// nonce from it: building the view is expensive, so we avoid rebuilding it
-	// per address. Built lazily on first need so an all-idle tick does no work.
-	var blockView NonceView
-	indexNonceOf := func(addr gethCommon.Address) (uint64, error) {
-		if blockView == nil {
-			v, err := t.nonceProvider.GetBlockView()
-			if err != nil {
-				return 0, err
-			}
-			blockView = v
-		}
-		return blockView.GetNonce(addr)
-	}
-
+	// Each due EOA's nonce is read via GetNonce; the provider caches the block
+	// view by indexed height, so all reads in this pass (and across ticks at the
+	// same height) reuse one built view rather than rebuilding per address.
 	for from, q := range t.queues {
 		if q.isEmpty() {
 			// Bound memory: drop queues with no held txs and no activity past
@@ -631,7 +618,7 @@ func (t *TxMemPool) collectDueBatches() []flushWork {
 			continue
 		}
 
-		indexNonce, err := indexNonceOf(from)
+		indexNonce, err := t.nonceProvider.GetNonce(from)
 		if err != nil {
 			// Exception: a local state-index nonce read should not fail
 			// under normal operation. This is a background loop with no
