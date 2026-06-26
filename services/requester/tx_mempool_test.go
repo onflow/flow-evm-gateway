@@ -228,6 +228,34 @@ func Test_TxMemPool_FastPathSubmitsImmediately(t *testing.T) {
 	assert.Equal(t, toNonceWrapper(0), q.nonces.lastConsecutivelySubmitted)
 }
 
+// The fast-path submit must run under a bounded-deadline context so a hung
+// Flow call cannot pin the pool-wide queueMux indefinitely (audit liveness
+// finding). Before the bound, Add forwarded its raw context (here Background,
+// with no deadline) straight into the submit.
+func Test_TxMemPool_FastPathSubmitHasBoundedTimeout(t *testing.T) {
+	key, err := crypto.GenerateKey()
+	require.NoError(t, err)
+
+	var deadline time.Time
+	var hasDeadline bool
+	pool := newTestPool(
+		&fakeNonceProvider{nonce: 0},
+		func(ctx context.Context, _ []heldTx) error {
+			deadline, hasDeadline = ctx.Deadline()
+			return nil
+		},
+		testPoolConfig(),
+	)
+
+	before := time.Now()
+	require.NoError(t, pool.Add(context.Background(), signedTestTx(t, key, 0, 1)))
+
+	require.True(t, hasDeadline, "fast-path submit context must carry a deadline")
+	assert.Greater(t, deadline, before)
+	assert.LessOrEqual(t, deadline.Sub(before), fastPathSubmitTimeout+time.Second,
+		"deadline must be bounded by fastPathSubmitTimeout")
+}
+
 func Test_TxMemPool_UnexpectedNonceEnqueues(t *testing.T) {
 	key, err := crypto.GenerateKey()
 	require.NoError(t, err)

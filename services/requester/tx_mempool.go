@@ -156,8 +156,18 @@ func selectExpired(
 
 // txMemPoolTickInterval is the resolution at which due queues are
 // scanned and flushed. Deadlines are therefore honored with up to this
-// much slack, which is acceptable relative to the 300ms collection window.
+// much slack, which is acceptable relative to the collection window.
 const txMemPoolTickInterval = 50 * time.Millisecond
+
+// fastPathSubmitTimeout bounds how long a single fast-path submission may take.
+// The fast path holds the pool-wide queueMux across the whole Flow submission
+// (see the note on TxMemPool), so without a bound a hung Access-node call would
+// block every other EOA's Add and the background flush loop for as long as the
+// caller's context allows — up to RpcRequestTimeout (120s by default). This is a
+// liveness safety ceiling, NOT a latency SLA: normal submits complete well
+// within it and release the lock immediately; only a genuinely stalled call is
+// cut off (and its tx is dropped-and-logged for the client to resubmit).
+const fastPathSubmitTimeout = 10 * time.Second
 
 // idleQueueRetention is how long a queue with no held transactions and no
 // recent activity is kept before being removed, to bound memory usage.
@@ -545,7 +555,11 @@ func (t *TxMemPool) Add(
 	if verdict == nonceNextExpected &&
 		q.isEmpty() && !q.nonces.inFlight() && t.spacingElapsed(q, now) {
 		batch := []heldTx{userTx}
-		submitErr := t.submitBatch(ctx, batch)
+		// Bound the submit so a hung call cannot pin queueMux indefinitely
+		// (see fastPathSubmitTimeout).
+		submitCtx, cancel := context.WithTimeout(ctx, fastPathSubmitTimeout)
+		submitErr := t.submitBatch(submitCtx, batch)
+		cancel()
 		t.logSubmission(from, batch, flushReasonFastPath, q.nonces.localIndexedNonce, submitErr)
 		if submitErr != nil {
 			return submitErr
