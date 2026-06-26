@@ -101,7 +101,9 @@ import (
 // Cross-cutting invariants
 //   - No silent drops: for any accepted tx id you can either find it on-chain
 //     (submitted) or find a WARN log saying it was dropped (submit failure or
-//     stale prune) — never nothing. See logSubmission.
+//     stale prune) — never nothing. See logSubmission. The one exception is
+//     shutdown: held-but-not-yet-submitted txs are discarded without a WARN when
+//     the pool's context is cancelled (no graceful drain — see processQueues).
 //   - Failure handling: a failed submission drops the batch (clients resubmit)
 //     and never wedges the EOA (the in-flight marker is rolled back). The pool
 //     does NOT retry internally.
@@ -644,6 +646,14 @@ func (t *TxMemPool) processQueues(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
+			// Shutdown is NOT a graceful drain: any transactions still held in a
+			// queue (waiting on their collection window, gap fill, or TTL) are
+			// dropped without a WARN, which is the one gap in the no-silent-drops
+			// invariant — it holds during steady-state operation, not across a
+			// shutdown/restart. This is acceptable because clients resubmit, and
+			// a held tx has not been sent to Flow (nothing on-chain to reconcile
+			// against). If this ever needs to change, drain due+held batches here
+			// before returning rather than relying on resubmission.
 			return
 		case <-ticker.C:
 			for _, w := range t.collectDueBatches() {
