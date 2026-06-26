@@ -409,11 +409,18 @@ func (t *TxMemPool) Add(
 	q, ok := t.queues[from]
 	if !ok {
 		// A fresh queue's other fields are intentionally left at their zero
-		// values: the nonceTracker's nonceWrapper fields read as "unset" (nonce 0
-		// is not mistaken for a real submission), and the timing fields
-		// (collectionWindowEndsAt/flushDeadline/lastSubmittedAt) are only ever
-		// read after being set on the first enqueue or submission below. Only
-		// maxNonceGap needs seeding from config.
+		// values, each safe to read as-is:
+		//   - the nonceTracker's nonceWrapper fields read as "unset", so nonce 0
+		//     is never mistaken for a real submission (see nonceWrapper);
+		//   - collectionWindowEndsAt and flushDeadline are read only once the
+		//     queue is non-empty (collectDueBatches skips empty queues), and the
+		//     first enqueue below sets them before that — their zero value is
+		//     never observed;
+		//   - lastSubmittedAt MAY be read while still zero (the fast path checks
+		//     spacing immediately after creation), but spacingElapsed treats zero
+		//     as "never submitted" → spacing satisfied, which is exactly right;
+		//   - lastActivity is set unconditionally on the next line.
+		// Only maxNonceGap needs seeding from config.
 		q = &eoaQueue{
 			txs:    make(map[uint64]heldTx),
 			nonces: nonceTracker{maxNonceGap: t.config.TxMaxNonceGap},
