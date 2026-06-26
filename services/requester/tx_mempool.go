@@ -19,8 +19,89 @@ import (
 	"github.com/onflow/flow-evm-gateway/services/requester/keystore"
 )
 
-// TODO: Document what the TX Mempool does with clear examples of the difference use cases it handles. e.g. transactions coming in out of sequence with a gap in between, transactions expiring in the queue as local index nonce moves beyond the nonce of the the tx.
-// TODO: Overall, refactor the code such that its easier to understand and more importantly easier to maintain
+// This file implements TxMemPool, a nonce-aware transaction mempool that
+// decides when and how to submit EVM transactions to Flow. It treats the EOA's
+// nonce from the local state index as the on-chain frontier and reasons about
+// each incoming nonce relative to that frontier and to what it has already sent.
+//
+// BEHAVIOR SPEC — every case the pool handles. This is meant to read as a
+// checklist for tests; each numbered case maps to code and ideally to a test.
+//
+// (The examples below assume the EOA's next expected nonce is N unless stated.)
+//
+// Submission paths
+//   1. Fast path: a transaction whose nonce is the next expected nonce, arriving
+//      to an empty queue with nothing in flight and submission spacing
+//      satisfied, is submitted synchronously inside Add — zero added latency.
+//      Example: expected nonce 5, an empty queue, tx with nonce 5 arrives → it
+//      is sent immediately, nothing is queued.
+//   2. Burst batching: when the fast path does not apply, transactions queue
+//      per-EOA. A sliding collection window (TxCollectionWindow, reset on each
+//      arrival) decides when a burst is complete; a flush deadline anchored at
+//      the FIRST enqueue (TxSubmissionSpacing) caps how long a continuously
+//      resetting window can defer the flush.
+//      Example: nonces 5,6,7 arrive within a few ms of each other; the window
+//      keeps resetting, so they are collected together and flushed as one batch
+//      once arrivals pause for TxCollectionWindow (or the deadline is hit).
+//   3. Consecutive-prefix flush: on flush, the longest run of consecutive nonces
+//      starting at the expected nonce is sent as ONE Cadence transaction, capped
+//      at TxMaxBatchSize. A nonce gap splits the queue: only the prefix before
+//      the first gap is sent; the post-gap remainder waits for a later tick.
+//      Example: txs with nonces 1,2,3,5,6,7 arrive (gap at 4); the queue holds
+//      1,2,3,5,6,7; the flush sends a batch of 1,2,3 while 5,6,7 wait in the
+//      queue for nonce 4 to arrive (or to age out via case 7).
+//   4. Submission spacing: consecutive Cadence submissions for one EOA are kept
+//      at least TxSubmissionSpacing apart, so two Flow transactions land in
+//      different blocks and cannot be reordered by Collection Nodes.
+//      Example: a batch is sent at t=0; the next batch for the same EOA is held
+//      until t=TxSubmissionSpacing even if it is already due.
+//
+// Holding and eventual disposal of out-of-order transactions
+//   5. Queue (gap ahead): a future nonce within the accepted window is held
+//      until the gap fills or it ages out.
+//      Example: expected nonce 5, tx with nonce 7 arrives (5 and 6 missing) →
+//      7 is held, not sent.
+//   6. Stale pruning: a held tx whose nonce has fallen below the indexed
+//      frontier (e.g. filled via another gateway) can never execute and is
+//      dropped with a WARN log before it would burn fees.
+//      Example: nonce 3 sits in the queue; the frontier advances to 5 (3 and 4
+//      were filled elsewhere) → 3 is dropped with a WARN, never submitted.
+//   7. TTL submit-anyway: a held tx whose head gap never fills within TxPoolTTL
+//      is submitted ANYWAY (capped at TxMaxBatchSize) rather than dropped, so
+//      its failure is observable on-chain instead of a silent disappearance.
+//      Example: nonce 7 is held while 5,6 never arrive; after TxPoolTTL, 7 is
+//      submitted and fails on-chain with a nonce mismatch (visible on flowscan).
+//   8. Idle-queue retention: a queue with no held txs and no activity for
+//      idleQueueRetention is removed to bound memory.
+//
+// Rejections (returned synchronously from Add; the tx is never queued)
+//   9.  Duplicate: same nonce AND same tx hash as one already queued →
+//       ErrDuplicateTransaction (cheapest check; no index read).
+//       Example: tx with nonce 5 is queued; the identical tx (same hash) is
+//       submitted again → rejected. (A same-nonce tx with a DIFFERENT hash is
+//       not a duplicate — it replaces the queued one, last write wins.)
+//   10. In-flight: nonce at or below the highest nonce already sent (still in
+//       flight or already ack'd) → ErrInFlightNonce; re-accepting would burn
+//       Flow fees on a guaranteed nonce-mismatch.
+//       Example: nonces 5,6 were just sent and are in flight; a new tx with
+//       nonce 6 arrives → rejected.
+//   11. Too-low: nonce below the indexed frontier (already used) →
+//       ErrNonceTooLow. Always enforced.
+//       Example: frontier is 5, tx with nonce 4 arrives → rejected.
+//   12. Too-high: nonce more than TxMaxNonceGap beyond the frontier →
+//       ErrNonceTooHigh. Only enforced when TxMaxNonceGap > 0.
+//       Example: frontier 5, TxMaxNonceGap 500, tx with nonce 600 arrives →
+//       rejected (it cannot execute until ~595 intervening nonces are filled).
+//
+// Cross-cutting invariants
+//   - No silent drops: for any accepted tx id you can either find it on-chain
+//     (submitted) or find a WARN log saying it was dropped (submit failure or
+//     stale prune) — never nothing. See logSubmission.
+//   - Failure handling: a failed submission drops the batch (clients resubmit)
+//     and never wedges the EOA (the in-flight marker is rolled back). The pool
+//     does NOT retry internally.
+//   - Concurrency: one background goroutine (processQueues) flushes due queues
+//     and Add runs under the same pool-wide queueMux; see the note on TxMemPool.
 
 // heldTx is a transaction held in the mempool, waiting for its
 // collection window to elapse or its nonce gap to be filled.
@@ -304,40 +385,22 @@ func (q *eoaQueue) size() int {
 	return len(q.txs)
 }
 
-// TxMemPool is a `TxPool` implementation that uses the EOA nonce from
-// the local state index to decide when and how to submit transactions to the
-// Flow network.
+// TxMemPool is a `TxPool` implementation that uses the EOA nonce from the local
+// state index to decide when and how to submit transactions to the Flow
+// network. The full behavior — fast path, burst batching, gap handling, TTL
+// submit-anyway, and the rejection rules — is enumerated in the behavior spec
+// at the top of this file.
 //
-// Fast path: a transaction carrying the expected next nonce, with an empty
-// queue, nothing in flight, and submission spacing satisfied, is submitted
-// IMMEDIATELY — zero added latency for the common case.
+// `TxSubmissionSpacing` deliberately serves two roles at once: (a) the minimum
+// gap between consecutive Cadence submissions for one EOA (so two Flow
+// transactions land in different blocks and cannot be reordered by Collection
+// Nodes) and (b) the flush deadline anchored at first enqueue. There is
+// intentionally NO separate hard-cap knob.
 //
-// Otherwise transactions queue per-EOA. A sliding collection window
-// (`TxCollectionWindow`, reset on each arrival) decides when a burst is
-// complete. `TxSubmissionSpacing` is BOTH (a) the minimum gap between
-// consecutive Cadence submissions for the same EOA (so two Flow transactions
-// land in different blocks and cannot be reordered by Collection Nodes) and
-// (b) the flush deadline anchored at first enqueue (caps a
-// continuously-resetting window). There is deliberately NO separate hard-cap
-// knob.
-//
-// On flush, the longest consecutive nonce prefix starting at the expected
-// nonce (from the local index, advanced past any in-flight submission) is
-// submitted, capped at `TxMaxBatchSize`.
-//
-// Out-of-order transactions are held until the gap fills, the local index
-// advances past them (then they are stale and pruned), or `TxPoolTTL`
-// expires — on expiry they are submitted anyway so the failure is observable
-// on-chain rather than a silent drop.
-//
-// A nonce already submitted and still in flight is rejected with
-// `ErrInFlightNonce`, since a duplicate would burn Flow fees on a guaranteed
-// nonce-mismatch failure.
-//
-// Note on locking: fast-path submissions hold the pool-wide queue lock for
-// the duration of one Flow submission, trading cross-EOA throughput for the
-// simplicity of atomic state updates; a per-EOA lock is the known upgrade
-// path if contention shows up.
+// Note on locking: fast-path submissions hold the pool-wide queue lock for the
+// duration of one Flow submission, trading cross-EOA throughput for the
+// simplicity of atomic state updates; a per-EOA lock is the known upgrade path
+// if contention shows up.
 type TxMemPool struct {
 	*SingleTxPool
 	nonceProvider NonceProvider
