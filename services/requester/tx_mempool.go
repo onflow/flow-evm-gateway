@@ -368,6 +368,16 @@ func (n *nonceTracker) markSubmitting(highNonce uint64) {
 	n.submitting = toNonceWrapper(highNonce)
 }
 
+// clearSubmittingIf retracts the in-flight marker, but only if it still refers
+// to highNonce (a newer submission may have replaced it once submissions run
+// concurrently). Shared by the success (markSubmitted) and failure
+// (rollbackSubmitting) acks — both fire when the network call returns.
+func (n *nonceTracker) clearSubmittingIf(highNonce uint64) {
+	if n.submitting.is(highNonce) {
+		n.submitting = nonceWrapper{}
+	}
+}
+
 // markSubmitted acks a successful submission: it advances the consecutively-
 // submitted nonce and clears the in-flight marker. It runs the moment the
 // submission succeeds, under the lock, rather than waiting for the index to
@@ -376,26 +386,20 @@ func (n *nonceTracker) markSubmitting(highNonce uint64) {
 // submission, accepted in exchange for a state machine that is easy to reason
 // about.
 //
-// Both updates are guarded so a stale ack cannot corrupt newer state (symmetric
-// with rollbackSubmitting): lastConsecutivelySubmitted only advances (never
-// regresses), and submitting is cleared only if it still refers to this batch —
-// a newer submission may have replaced it once submissions run concurrently.
+// Both updates are guarded so a stale ack cannot corrupt newer state:
+// lastConsecutivelySubmitted only advances (never regresses), and submitting is
+// cleared only if it still refers to this batch.
 func (n *nonceTracker) markSubmitted(highNonce uint64) {
 	n.lastConsecutivelySubmitted = n.lastConsecutivelySubmitted.max(toNonceWrapper(highNonce))
-	if n.submitting.is(highNonce) {
-		n.submitting = nonceWrapper{}
-	}
+	n.clearSubmittingIf(highNonce)
 }
 
-// rollbackSubmitting clears the in-flight marker after a failed submission, but
-// only when it still refers to highNonce (a newer submission may have replaced
-// it). Because a failure never advances lastConsecutivelySubmitted, there is
-// nothing else to undo: the next flush recomputes expectedNonce from the
-// unchanged frontier.
+// rollbackSubmitting clears the in-flight marker after a failed submission.
+// Because a failure never advances lastConsecutivelySubmitted, there is nothing
+// else to undo: the next flush recomputes expectedNonce from the unchanged
+// frontier.
 func (n *nonceTracker) rollbackSubmitting(highNonce uint64) {
-	if n.submitting.is(highNonce) {
-		n.submitting = nonceWrapper{}
-	}
+	n.clearSubmittingIf(highNonce)
 }
 
 // refreshIndexed updates the cached on-chain frontier from a fresh index read.
