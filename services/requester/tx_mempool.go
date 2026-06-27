@@ -564,8 +564,11 @@ func (t *TxMemPool) Add(
 		return err
 	}
 
-	// Reject out-of-range / in-flight nonces up front, before allocating any
-	// held state: a transaction we are about to reject must not cost a heldTx.
+	// Handle every verdict exhaustively. The rejections return up front, before
+	// allocating any held state (a transaction we are about to reject must not
+	// cost a heldTx); the two keep verdicts fall through to the fast-path/enqueue
+	// logic below. A new verdict that isn't handled here is a programming error,
+	// so panic rather than silently routing it through enqueue.
 	switch verdict {
 	case nonceInFlight:
 		return errs.ErrInFlightNonce
@@ -573,6 +576,10 @@ func (t *TxMemPool) Add(
 		return errs.ErrNonceTooLow
 	case nonceTooHigh:
 		return errs.ErrNonceTooHigh
+	case nonceNextExpected, nonceQueue:
+		// Keep: fall through to the fast-path / enqueue logic below.
+	default:
+		panic(fmt.Sprintf("unhandled nonce verdict: %d", verdict))
 	}
 
 	// Past every cheap rejection: the transaction will be kept (submitted now or
