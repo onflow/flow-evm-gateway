@@ -564,11 +564,10 @@ func (t *TxMemPool) Add(
 		return err
 	}
 
-	// Handle every verdict exhaustively. The rejections return up front, before
-	// allocating any held state (a transaction we are about to reject must not
-	// cost a heldTx); the two keep verdicts fall through to the fast-path/enqueue
-	// logic below. A new verdict that isn't handled here is a programming error,
-	// so panic rather than silently routing it through enqueue.
+	// Handle every verdict. The rejections return up front, before allocating any
+	// held state (a transaction we are about to reject must not cost a heldTx).
+	// The two keep verdicts build the heldTx and either fast-path or enqueue it.
+	// An unhandled verdict is a programming error, so panic.
 	switch verdict {
 	case nonceInFlight:
 		return errs.ErrInFlightNonce
@@ -576,58 +575,64 @@ func (t *TxMemPool) Add(
 		return errs.ErrNonceTooLow
 	case nonceTooHigh:
 		return errs.ErrNonceTooHigh
-	case nonceNextExpected, nonceQueue:
-		// Keep: fall through to the fast-path / enqueue logic below.
+	case nonceQueue:
+		// A gap ahead within the accepted window — hold it for the background loop.
+		held := heldTx{
+			txPayload:  hexEncodedTx,
+			txHash:     tx.Hash(),
+			nonce:      tx.Nonce(),
+			enqueuedAt: now,
+		}
+		t.enqueue(q, held, now)
+		return nil
+	case nonceNextExpected:
+		held := heldTx{
+			txPayload:  hexEncodedTx,
+			txHash:     tx.Hash(),
+			nonce:      tx.Nonce(),
+			enqueuedAt: now,
+		}
+		// Fast path: an empty queue with nothing in flight and spacing satisfied
+		// submits immediately — zero added latency. The lock is held across the
+		// whole submit, so there is no concurrency window: no need to mark
+		// "submitting" first; on success we record the ack, on failure we leave
+		// the EOA untouched. Otherwise fall back to enqueue for the background loop.
+		if q.isEmpty() && !q.nonces.inFlight() && t.spacingElapsed(q, now) {
+			batch := []heldTx{held}
+			// Bound the submit so a hung call cannot pin queueMux indefinitely
+			// (see fastPathSubmitTimeout).
+			submitCtx, cancel := context.WithTimeout(ctx, fastPathSubmitTimeout)
+			submitErr := t.submitBatch(submitCtx, batch)
+			cancel()
+			t.logSubmission(from, batch, flushReasonFastPath, q.nonces.localIndexedNonce, submitErr)
+			if submitErr != nil {
+				return submitErr
+			}
+			q.nonces.markSubmitted(tx.Nonce())
+			q.lastSubmittedAt = t.now()
+			return nil
+		}
+		t.enqueue(q, held, now)
+		return nil
 	default:
 		panic(fmt.Sprintf("unhandled nonce verdict: %d", verdict))
 	}
+}
 
-	// Past every cheap rejection: the transaction will be kept (submitted now or
-	// held), so build the heldTx now rather than before the checks above.
-	held := heldTx{
-		txPayload:  hexEncodedTx,
-		txHash:     tx.Hash(),
-		nonce:      tx.Nonce(),
-		enqueuedAt: now,
-	}
-
-	// Fast path: a next-expected nonce with an empty queue, nothing in flight and
-	// spacing satisfied is submitted immediately — zero added latency. The lock is
-	// held across the whole submit, so there is no concurrency window: no need to
-	// mark "submitting" first; on success we record the ack, on failure we leave
-	// the EOA untouched. Otherwise (queue non-empty, in flight, or spacing not
-	// elapsed) fall through to enqueue for the background loop.
-	if verdict == nonceNextExpected &&
-		q.isEmpty() && !q.nonces.inFlight() && t.spacingElapsed(q, now) {
-		batch := []heldTx{held}
-		// Bound the submit so a hung call cannot pin queueMux indefinitely
-		// (see fastPathSubmitTimeout).
-		submitCtx, cancel := context.WithTimeout(ctx, fastPathSubmitTimeout)
-		submitErr := t.submitBatch(submitCtx, batch)
-		cancel()
-		t.logSubmission(from, batch, flushReasonFastPath, q.nonces.localIndexedNonce, submitErr)
-		if submitErr != nil {
-			return submitErr
-		}
-		q.nonces.markSubmitted(tx.Nonce())
-		q.lastSubmittedAt = t.now()
-		return nil
-	}
-
-	// Enqueue (a gap ahead, or a next-expected nonce that could not fast-path
-	// yet). A same-nonce, different-payload resubmission replaces the queued
-	// transaction (last write wins), matching mempool semantics.
+// enqueue holds a transaction for the background flush loop, (re)arming the
+// collection window. A same-nonce, different-payload resubmission replaces the
+// queued transaction (last write wins), matching mempool semantics. Callers must
+// hold queueMux.
+func (t *TxMemPool) enqueue(q *eoaQueue, held heldTx, now time.Time) {
 	wasEmpty := q.isEmpty()
-	q.txs[tx.Nonce()] = held
+	q.txs[held.nonce] = held
 	q.collectionWindowEndsAt = now.Add(t.config.TxCollectionWindow)
 	// Anchor the flush deadline at the FIRST enqueue only. Re-arming it on a
-	// same-nonce replacement would let a client defer the flush indefinitely
-	// by resubmitting one held transaction before each deadline.
+	// same-nonce replacement would let a client defer the flush indefinitely by
+	// resubmitting one held transaction before each deadline.
 	if wasEmpty {
 		q.flushDeadline = now.Add(t.config.TxSubmissionSpacing)
 	}
-
-	return nil
 }
 
 // spacingElapsed reports whether enough time has passed since the last Cadence
