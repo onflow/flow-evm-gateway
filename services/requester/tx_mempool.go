@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"sort"
 	"sync"
 	"time"
@@ -243,6 +244,17 @@ const (
 	nonceQueue
 )
 
+// normalizeNonceGap maps the configured max nonce gap to the value stored in a
+// nonceTracker. The config value 0 ("no upper bound") becomes math.MaxUint64, so
+// classify can use a single distance comparison without a per-call "gap > 0"
+// guard. Any non-zero value is used as-is.
+func normalizeNonceGap(configGap uint64) uint64 {
+	if configGap == 0 {
+		return math.MaxUint64
+	}
+	return configGap
+}
+
 // nonceTracker is the per-EOA submission-state machine. It records the nonce
 // facts the mempool reasons about and answers "what should happen to an
 // incoming nonce?" (classify) and "what is the next nonce to submit?"
@@ -268,9 +280,11 @@ type nonceTracker struct {
 	// Unset before the EOA's first success.
 	lastConsecutivelySubmitted nonceWrapper
 	// maxNonceGap is how far above localIndexedNonce a nonce may be before it is
-	// rejected as too-high; 0 means no upper bound. It does NOT affect the too-low
-	// check (a nonce below localIndexedNonce is always rejected). Set once from
-	// config when the queue is created.
+	// rejected as too-high. math.MaxUint64 means no upper bound: the config value
+	// TxMaxNonceGap, where 0 = "unbounded", is normalized to it at construction
+	// (see normalizeNonceGap) so classify needs no per-call "is a gap configured?"
+	// guard. It does NOT affect the too-low check (a nonce below localIndexedNonce
+	// is always rejected). Set once when the queue is created.
 	maxNonceGap uint64
 }
 
@@ -329,13 +343,15 @@ func (n *nonceTracker) classify(
 	if nonce < n.localIndexedNonce {
 		return nonceTooLow, nil
 	}
-	// More than maxNonceGap beyond the frontier (only when a gap is configured):
-	// cannot execute until the gap fills. A behind (stale) index can only make
-	// this over-strict, which is acceptable — the gateway is catching up.
-	// Compare the distance rather than localIndexedNonce+maxNonceGap, which could
-	// overflow near math.MaxUint64; the too-low check above guarantees
-	// nonce >= localIndexedNonce, so the subtraction never underflows.
-	if n.maxNonceGap > 0 && nonce-n.localIndexedNonce > n.maxNonceGap {
+	// More than maxNonceGap beyond the frontier: cannot execute until the gap
+	// fills. A behind (stale) index can only make this over-strict, which is
+	// acceptable — the gateway is catching up. maxNonceGap is normalized
+	// (math.MaxUint64 = unbounded), so no "is a gap configured?" guard is needed.
+	// We compare the distance rather than localIndexedNonce+maxNonceGap (which
+	// could overflow): the too-low check above guarantees nonce >= localIndexedNonce
+	// so the subtraction never underflows, and the distance is at most MaxUint64
+	// so the unbounded case never trips.
+	if nonce-n.localIndexedNonce > n.maxNonceGap {
 		return nonceTooHigh, nil
 	}
 	if nonce == n.expectedNonce() {
@@ -524,7 +540,7 @@ func (t *TxMemPool) Add(
 		// Only maxNonceGap needs seeding from config.
 		q = &eoaQueue{
 			txs:    make(map[uint64]heldTx),
-			nonces: nonceTracker{maxNonceGap: t.config.TxMaxNonceGap},
+			nonces: nonceTracker{maxNonceGap: normalizeNonceGap(t.config.TxMaxNonceGap)},
 		}
 		t.queues[from] = q
 	}

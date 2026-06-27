@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"errors"
+	"math"
 	"math/big"
 	"sync"
 	"testing"
@@ -788,6 +789,9 @@ func Test_NonceTracker_Classify(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			tracker := tc.tracker
+			// classify expects a normalized gap (0 in the table means "unbounded",
+			// stored as math.MaxUint64), matching how queues are constructed.
+			tracker.maxNonceGap = normalizeNonceGap(tracker.maxNonceGap)
 			got, err := tracker.classify(
 				tc.nonce,
 				&fakeNonceProvider{nonce: tc.frontier},
@@ -797,6 +801,13 @@ func Test_NonceTracker_Classify(t *testing.T) {
 			assert.Equal(t, tc.want, got)
 		})
 	}
+}
+
+// normalizeNonceGap maps the config "0 = no upper bound" to MaxUint64 (so
+// classify needs no per-call gap>0 guard) and passes other values through.
+func Test_NormalizeNonceGap(t *testing.T) {
+	assert.Equal(t, uint64(math.MaxUint64), normalizeNonceGap(0), "0 = unbounded maps to MaxUint64")
+	assert.Equal(t, uint64(500), normalizeNonceGap(500))
 }
 
 // With a configured max gap, Add rejects out-of-range nonces up front.
