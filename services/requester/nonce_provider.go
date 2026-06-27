@@ -24,7 +24,8 @@ type NonceView interface {
 // NonceProvider returns the current nonce of the given EOA address.
 // The transaction mempool uses it to determine the expected next nonce.
 type NonceProvider interface {
-	// GetNonce returns the current nonce of the given EOA address.
+	// GetNonce returns the account nonce of the given EOA — its transaction count,
+	// i.e. the next nonce the EOA should use (matches eth_getTransactionCount).
 	//
 	// A non-nil error represents an EXCEPTION, not an expected condition:
 	// the underlying read is a local state-index lookup that should not
