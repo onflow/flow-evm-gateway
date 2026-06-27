@@ -876,6 +876,31 @@ func Test_NonceTracker_Transitions(t *testing.T) {
 	assert.Equal(t, uint64(12), n.localIndexedNonce)
 }
 
+// A stale success ack (e.g. once submissions run concurrently and a newer batch
+// has already been marked in flight) must not clear the newer in-flight marker
+// or regress the consecutively-submitted nonce.
+func Test_NonceTracker_StaleMarkSubmittedDoesNotClobber(t *testing.T) {
+	n := &nonceTracker{}
+
+	n.markSubmitting(6) // batch A {.,6} in flight
+	n.markSubmitting(8) // batch B {7,8} replaces it as the newer in-flight batch
+
+	// Batch A's (stale) success ack arrives: it must not clear B's marker.
+	n.markSubmitted(6)
+	assert.True(t, n.inFlight(), "newer in-flight marker must survive a stale ack")
+	assert.Equal(t, toNonceWrapper(8), n.submitting)
+	assert.Equal(t, toNonceWrapper(6), n.lastConsecutivelySubmitted)
+
+	// Batch B's ack then clears the marker and advances submitted to 8.
+	n.markSubmitted(8)
+	assert.False(t, n.inFlight())
+	assert.Equal(t, toNonceWrapper(8), n.lastConsecutivelySubmitted)
+
+	// An out-of-order ack for an older nonce must not regress submitted.
+	n.markSubmitted(7)
+	assert.Equal(t, toNonceWrapper(8), n.lastConsecutivelySubmitted, "submitted must never regress")
+}
+
 // --- Clock-driven timing tests -------------------------------------------
 // These drive the collection window, flush deadline, submission spacing, TTL
 // expiry and idle-queue retention through the real Add -> collectDueBatches

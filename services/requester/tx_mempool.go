@@ -375,9 +375,16 @@ func (n *nonceTracker) markSubmitting(highNonce uint64) {
 // clears as soon as the call returns. The cost is one quick lock per successful
 // submission, accepted in exchange for a state machine that is easy to reason
 // about.
+//
+// Both updates are guarded so a stale ack cannot corrupt newer state (symmetric
+// with rollbackSubmitting): lastConsecutivelySubmitted only advances (never
+// regresses), and submitting is cleared only if it still refers to this batch —
+// a newer submission may have replaced it once submissions run concurrently.
 func (n *nonceTracker) markSubmitted(highNonce uint64) {
-	n.lastConsecutivelySubmitted = toNonceWrapper(highNonce)
-	n.submitting = nonceWrapper{}
+	n.lastConsecutivelySubmitted = n.lastConsecutivelySubmitted.max(toNonceWrapper(highNonce))
+	if n.submitting.is(highNonce) {
+		n.submitting = nonceWrapper{}
+	}
 }
 
 // rollbackSubmitting clears the in-flight marker after a failed submission, but
