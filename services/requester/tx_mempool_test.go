@@ -392,7 +392,7 @@ func Test_TxMemPool_FailedFlushDoesNotWedgeEOA(t *testing.T) {
 
 	work := pool.collectDueBatches()
 	require.Len(t, work, 1)
-	assert.True(t, work[0].inFlight)
+	assert.True(t, work[0].needsReconcile)
 	require.Len(t, work[0].txs, 2)
 
 	// State was committed optimistically under the lock.
@@ -425,28 +425,28 @@ func Test_ReconcileSubmission_OnlyReconcilesMatchingInFlightBatch(t *testing.T) 
 
 	// A different (newer) in-flight nonce owns the marker: not cleared.
 	pool.reconcileSubmission(
-		flushWork{from: from, txs: []heldTx{makeHeldTx(5, time.Time{})}, inFlight: true},
+		flushWork{from: from, txs: []heldTx{makeHeldTx(5, time.Time{})}, needsReconcile: true},
 		submitErr,
 	)
 	assert.True(t, pool.queues[from].nonces.inFlight())
 
-	// A TTL-expiry batch (inFlight false) never touches the tracker.
+	// A TTL-expiry batch (needsReconcile false) never touches the tracker.
 	pool.reconcileSubmission(
-		flushWork{from: from, txs: []heldTx{makeHeldTx(7, time.Time{})}, inFlight: false},
+		flushWork{from: from, txs: []heldTx{makeHeldTx(7, time.Time{})}, needsReconcile: false},
 		submitErr,
 	)
 	assert.True(t, pool.queues[from].nonces.inFlight())
 
 	// The failed in-flight batch still owns the marker: cleared.
 	pool.reconcileSubmission(
-		flushWork{from: from, txs: []heldTx{makeHeldTx(7, time.Time{})}, inFlight: true},
+		flushWork{from: from, txs: []heldTx{makeHeldTx(7, time.Time{})}, needsReconcile: true},
 		submitErr,
 	)
 	assert.False(t, pool.queues[from].nonces.inFlight())
 
 	// Unknown EOA: no panic.
 	pool.reconcileSubmission(
-		flushWork{from: gethCommon.HexToAddress("0xdef"), txs: []heldTx{makeHeldTx(7, time.Time{})}, inFlight: true},
+		flushWork{from: gethCommon.HexToAddress("0xdef"), txs: []heldTx{makeHeldTx(7, time.Time{})}, needsReconcile: true},
 		submitErr,
 	)
 }
@@ -640,7 +640,7 @@ func Test_TxMemPool_TTLFlushCappedAtMaxBatch(t *testing.T) {
 	work := pool.collectDueBatches()
 	require.Len(t, work, 1)
 	assert.Len(t, work[0].txs, 3, "TTL flush must be capped at TxMaxBatchSize")
-	assert.False(t, work[0].inFlight)
+	assert.False(t, work[0].needsReconcile)
 	// Lowest nonces drained first; remainder stays queued.
 	assert.Equal(t, uint64(10), work[0].txs[0].nonce)
 	assert.Len(t, pool.queues[from].txs, 4)
@@ -1051,7 +1051,7 @@ func Test_TxMemPool_TTLExpiryViaClock(t *testing.T) {
 	work := pool.collectDueBatches()
 	require.Len(t, work, 1)
 	submitted = work
-	assert.False(t, submitted[0].inFlight)
+	assert.False(t, submitted[0].needsReconcile)
 	assert.Equal(t, flushReasonTTL, submitted[0].reason)
 	assert.Equal(t, []uint64{10}, noncesOf(submitted[0].txs))
 	assert.Empty(t, pool.queues[from].txs)

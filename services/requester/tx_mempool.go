@@ -672,12 +672,13 @@ func (t *TxMemPool) spacingElapsed(q *eoaQueue, now time.Time) bool {
 type flushWork struct {
 	from gethCommon.Address
 	txs  []heldTx
-	// inFlight is true for consecutive-prefix batches, which mark the queue's
-	// nonceTracker "submitting" and must therefore reconcile it once the submit
-	// returns (markSubmitted on success, rollbackSubmitting on failure — see
-	// reconcileSubmission). TTL-expiry batches are not marked in flight and must
-	// never touch the tracker.
-	inFlight bool
+	// needsReconcile is true when reconcileSubmission must update the tracker for
+	// this batch. Consecutive-prefix batches set it: they mark the nonceTracker
+	// "submitting" and must reconcile it once the submit returns (markSubmitted on
+	// success, rollbackSubmitting on failure — see reconcileSubmission). TTL-expiry
+	// batches leave it false: they never mark the tracker, so there is nothing to
+	// reconcile.
+	needsReconcile bool
 	// reason is why this batch was flushed, recorded purely for the submission
 	// log (see logSubmission): flushReasonPrefix for a consecutive-prefix flush,
 	// flushReasonTTL for a TTL-expiry submit-anyway.
@@ -825,10 +826,10 @@ func (t *TxMemPool) logSubmission(
 //     have replaced it). lastSubmittedAt is deliberately NOT restored: a brief,
 //     self-correcting spacing delay after a rare failure is harmless.
 //
-// TTL-expiry batches (w.inFlight == false) never mark the tracker, so there is
-// nothing to reconcile for them.
+// TTL-expiry batches (w.needsReconcile == false) never mark the tracker, so
+// there is nothing to reconcile for them.
 func (t *TxMemPool) reconcileSubmission(w flushWork, submitErr error) {
-	if !w.inFlight {
+	if !w.needsReconcile {
 		return
 	}
 
@@ -959,7 +960,7 @@ func (t *TxMemPool) collectPrefix(
 	return flushWork{
 		from:              from,
 		txs:               prefix,
-		inFlight:          true,
+		needsReconcile:    true,
 		reason:            flushReasonPrefix,
 		localIndexedNonce: indexNonce,
 	}, true
