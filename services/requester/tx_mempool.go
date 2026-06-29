@@ -273,6 +273,8 @@ type nonceTracker struct {
 	// strictly means "a network call is in flight": it is cleared the moment that
 	// call returns, by markSubmitted on success or rollbackSubmitting on failure.
 	// Unset when no submission is outstanding.
+	// it is also used to filter incoming txs to accept only whose nonce is bigger than this, 
+	// otherwise would be rejected
 	submitting nonceWrapper
 	// lastConsecutivelySubmitted is the highest nonce consecutively and
 	// successfully submitted (ack'd). Only consecutive-prefix batches advance it;
