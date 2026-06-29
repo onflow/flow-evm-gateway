@@ -683,7 +683,7 @@ type flushWork struct {
 	// log (see logSubmission): flushReasonPrefix for a consecutive-prefix flush,
 	// flushReasonTTL for a TTL-expiry submit-anyway.
 	reason string
-	// localIndexedNonce is the on-chain frontier observed when the batch was
+	// localNextNonce is the on-chain next expected nonce observed when the batch was
 	// collected. It is logged on drop so a "lost transaction" report can be
 	// debugged against where the chain actually was.
 	localIndexedNonce uint64
