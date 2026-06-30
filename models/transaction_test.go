@@ -369,8 +369,8 @@ func TestValidateTransaction(t *testing.T) {
 					Data:     []byte{},
 				},
 			),
-			valid:  false,
-			errMsg: "transaction gas limit too high (cap: 16777216, tx: 16777316)",
+			valid:  true,
+			errMsg: "",
 		},
 	}
 
@@ -486,7 +486,7 @@ func TestValidateConsensusRules(t *testing.T) {
 		// All those fields are summed up to at most 213 bytes.
 		baseSize := uint64(213)
 		dataSize := TxMaxSize - baseSize
-		gasLimit := uint64(5_500_000)
+		gasLimit := uint64(8_500_500)
 
 		// Try adding a transaction with maximal allowed size
 		tx := makeSignedTx(gasLimit, dataSize, key, signer)
@@ -565,7 +565,7 @@ func TestValidateConsensusRules(t *testing.T) {
 	})
 
 	t.Run("init code size exceeded", func(t *testing.T) {
-		dataLen := params.MaxInitCodeSize + 5_000
+		dataLen := params.MaxInitCodeSizeAmsterdam + 5_000
 		data := make([]byte, dataLen)
 		n, err := crand.Read(data)
 		require.Equal(t, n, dataLen)
@@ -593,7 +593,7 @@ func TestValidateConsensusRules(t *testing.T) {
 		assert.ErrorContains(
 			t,
 			err,
-			"max initcode size exceeded: code size 54152, limit 49152",
+			"max initcode size exceeded: code size 70536 limit 65536",
 		)
 	})
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 
+	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/onflow/flow-go/fvm/evm/events"
@@ -79,6 +80,7 @@ func NewCadenceEvents(events flow.BlockEvents) (*CadenceEvents, error) {
 		for _, l := range rcp.Logs {
 			l.BlockNumber = rcp.BlockNumber.Uint64()
 			l.BlockHash = rcp.BlockHash
+			l.BlockTimestamp = e.block.Timestamp
 			l.TxHash = rcp.TxHash
 			l.TxIndex = rcp.TransactionIndex
 			l.Index = logIndex
@@ -109,6 +111,7 @@ func decodeCadenceEvents(events flow.BlockEvents) (*CadenceEvents, error) {
 				return nil, err
 			}
 
+			block.AccessListHash = &gethTypes.EmptyBlockAccessListHash
 			e.block = block
 			e.blockEventPayload = blockEventPayload
 			continue

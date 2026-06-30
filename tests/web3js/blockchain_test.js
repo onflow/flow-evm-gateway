@@ -13,7 +13,7 @@ it('check blockchain is linked', async () => {
             to: web3.eth.accounts.create().address,
             value: utils.toWei("0.00005", "ether"),
             gasPrice: conf.minGasPrice,
-            gasLimit: 55_000,
+            gasLimit: 205_000,
         })
         assert.isNotEmpty(transfer.hash)
     }
