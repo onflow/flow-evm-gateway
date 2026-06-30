@@ -67,7 +67,7 @@ import (
 //      until the gap fills or it ages out.
 //      Example: expected nonce 5, tx with nonce 7 arrives (5 and 6 missing) →
 //      7 is held, not sent.
-//   6. Stale pruning: a held tx whose nonce has fallen below the indexed
+//   6. Stale pruning: a held tx whose nonce has fallen below the on-chain
 //      frontier (e.g. filled via another gateway) can never execute and is
 //      dropped with a WARN log before it would burn fees.
 //      Example: nonce 3 sits in the queue; the frontier advances to 5 (3 and 4
@@ -91,7 +91,7 @@ import (
 //       Flow fees on a guaranteed nonce-mismatch.
 //       Example: nonces 5,6 were just sent and are in flight; a new tx with
 //       nonce 6 arrives → rejected.
-//   11. Too-low: nonce below the indexed frontier (already used) →
+//   11. Too-low: nonce below the on-chain frontier (already used) →
 //       ErrNonceTooLow. Always enforced.
 //       Example: frontier is 5, tx with nonce 4 arrives → rejected.
 //   12. Too-high: nonce more than TxMaxNonceGap beyond the frontier →
@@ -264,16 +264,16 @@ func normalizeNonceGap(configGap uint64) uint64 {
 // held. Serialized access is guaranteed by the single submit goroutine plus
 // Add running under that same lock (see the TxMemPool docstring).
 type nonceTracker struct {
-	// localIndexedNonce is the EOA's next expected nonce per the local state
+	// localNextNonce is the EOA's next expected nonce per the local state
 	// index (the on-chain frontier). A cache of a fact about the chain, refreshed
-	// from a fresh read via refreshIndexed — not a record of our own sends.
-	localIndexedNonce uint64
+	// from a fresh read via refreshNextNonce — not a record of our own sends.
+	localNextNonce uint64
 	// submitting is the highest consecutive nonce sent to Flow but not yet ack'd. It marks the
 	// window between detaching a batch and its submit result returning, and
 	// strictly means "a network call is in flight": it is cleared the moment that
 	// call returns, by markSubmitted on success or rollbackSubmitting on failure.
 	// Unset when no submission is outstanding.
-	// it is also used to filter incoming txs to accept only whose nonce is bigger than this, 
+	// it is also used to filter incoming txs to accept only whose nonce is bigger than this,
 	// otherwise would be rejected
 	submitting nonceWrapper
 	// lastConsecutivelySubmitted is the highest nonce consecutively and
@@ -281,11 +281,11 @@ type nonceTracker struct {
 	// TTL-expiry (gapped) batches do NOT, so it never includes a nonce past a gap.
 	// Unset before the EOA's first success.
 	lastConsecutivelySubmitted nonceWrapper
-	// maxNonceGap is how far above localIndexedNonce a nonce may be before it is
+	// maxNonceGap is how far above localNextNonce a nonce may be before it is
 	// rejected as too-high. math.MaxUint64 means no upper bound: the config value
 	// TxMaxNonceGap, where 0 = "unbounded", is normalized to it at construction
 	// (see normalizeNonceGap) so classify needs no per-call "is a gap configured?"
-	// guard. It does NOT affect the too-low check (a nonce below localIndexedNonce
+	// guard. It does NOT affect the too-low check (a nonce below localNextNonce
 	// is always rejected). Set once when the queue is created.
 	maxNonceGap uint64
 }
@@ -301,12 +301,12 @@ func (n *nonceTracker) highestSent() nonceWrapper {
 }
 
 // expectedNonce is the next nonce eligible for submission: one past the highest
-// nonce already sent, or the indexed frontier, whichever is higher.
+// nonce already sent, or the on-chain frontier, whichever is higher.
 func (n *nonceTracker) expectedNonce() uint64 {
-	if hi := n.highestSent(); hi.atLeast(n.localIndexedNonce) {
+	if hi := n.highestSent(); hi.atLeast(n.localNextNonce) {
 		return hi.v + 1
 	}
-	return n.localIndexedNonce
+	return n.localNextNonce
 }
 
 // classify returns the verdict for an incoming nonce, refreshing the cached
@@ -335,25 +335,25 @@ func (n *nonceTracker) classify(
 	}
 
 	// Beyond what we've sent: refresh the frontier for the remaining verdicts.
-	indexNonce, err := np.GetNonce(from)
+	nextNonce, err := np.GetNextNonce(from)
 	if err != nil {
-		return 0, fmt.Errorf("reading indexed nonce for %s: %w", from.Hex(), err)
+		return 0, fmt.Errorf("reading next nonce for %s: %w", from.Hex(), err)
 	}
-	n.refreshIndexed(indexNonce)
+	n.refreshNextNonce(nextNonce)
 
 	// Below the on-chain frontier: already used, can never execute.
-	if nonce < n.localIndexedNonce {
+	if nonce < n.localNextNonce {
 		return nonceTooLow, nil
 	}
 	// More than maxNonceGap beyond the frontier: cannot execute until the gap
 	// fills. A behind (stale) index can only make this over-strict, which is
 	// acceptable — the gateway is catching up. maxNonceGap is normalized
 	// (math.MaxUint64 = unbounded), so no "is a gap configured?" guard is needed.
-	// We compare the distance rather than localIndexedNonce+maxNonceGap (which
-	// could overflow): the too-low check above guarantees nonce >= localIndexedNonce
+	// We compare the distance rather than localNextNonce+maxNonceGap (which
+	// could overflow): the too-low check above guarantees nonce >= localNextNonce
 	// so the subtraction never underflows, and the distance is at most MaxUint64
 	// so the unbounded case never trips.
-	if nonce-n.localIndexedNonce > n.maxNonceGap {
+	if nonce-n.localNextNonce > n.maxNonceGap {
 		return nonceTooHigh, nil
 	}
 	if nonce == n.expectedNonce() {
@@ -404,9 +404,9 @@ func (n *nonceTracker) rollbackSubmitting(highNonce uint64) {
 	n.clearSubmittingIf(highNonce)
 }
 
-// refreshIndexed updates the cached on-chain frontier from a fresh index read.
-func (n *nonceTracker) refreshIndexed(indexedNonce uint64) {
-	n.localIndexedNonce = indexedNonce
+// refreshNextNonce updates the cached on-chain frontier from a fresh index read.
+func (n *nonceTracker) refreshNextNonce(nextNonce uint64) {
+	n.localNextNonce = nextNonce
 }
 
 // eoaQueue tracks the held transactions and submission state for one EOA.
@@ -617,7 +617,7 @@ func (t *TxMemPool) Add(
 			submitCtx, cancel := context.WithTimeout(ctx, fastPathSubmitTimeout)
 			submitErr := t.submitBatch(submitCtx, batch)
 			cancel()
-			t.logSubmission(from, batch, flushReasonFastPath, q.nonces.localIndexedNonce, submitErr)
+			t.logSubmission(from, batch, flushReasonFastPath, q.nonces.localNextNonce, submitErr)
 			if submitErr != nil {
 				return submitErr
 			}
@@ -688,7 +688,7 @@ type flushWork struct {
 	// localNextNonce is the on-chain next expected nonce observed when the batch was
 	// collected. It is logged on drop so a "lost transaction" report can be
 	// debugged against where the chain actually was.
-	localIndexedNonce uint64
+	localNextNonce uint64
 }
 
 // flushReason values label why a batch was submitted, for the submission log.
@@ -731,7 +731,7 @@ func (t *TxMemPool) processQueues(ctx context.Context) {
 // reconciles the queue's nonce state once the network call returns.
 func (t *TxMemPool) submitWork(ctx context.Context, w flushWork) error {
 	err := t.submitBatch(ctx, w.txs)
-	t.logSubmission(w.from, w.txs, w.reason, w.localIndexedNonce, err)
+	t.logSubmission(w.from, w.txs, w.reason, w.localNextNonce, err)
 	t.reconcileSubmission(w, err)
 	return err
 }
@@ -739,7 +739,7 @@ func (t *TxMemPool) submitWork(ctx context.Context, w flushWork) error {
 // batchLogFields attaches to e the structured fields common to every per-batch
 // lifecycle log — submission failure, stale prune, and TTL submit-anyway — so
 // the no-silent-drops fields stay consistent and greppable across all three
-// sites (eoa, tx hashes, nonce range, batch size, the indexed frontier). The
+// sites (eoa, tx hashes, nonce range, batch size, the on-chain frontier). The
 // caller creates e at the desired level, adds any site-specific fields (reason,
 // error, expected-nonce, ...), and calls Msg. The nonce range is computed as the
 // true min/max so it is correct even when txs is not sorted (e.g. a stale-prune
@@ -748,7 +748,7 @@ func batchLogFields(
 	e *zerolog.Event,
 	from gethCommon.Address,
 	txs []heldTx,
-	indexNonce uint64,
+	nextNonce uint64,
 ) *zerolog.Event {
 	var lowNonce, highNonce uint64
 	for i, htx := range txs {
@@ -765,7 +765,7 @@ func batchLogFields(
 		Uint64("low-nonce", lowNonce).
 		Uint64("high-nonce", highNonce).
 		Int("batch-size", len(txs)).
-		Uint64("local-indexed-nonce", indexNonce)
+		Uint64("local-next-nonce", nextNonce)
 }
 
 // logSubmission records the fate of a submitted batch so a transaction is never
@@ -785,7 +785,7 @@ func (t *TxMemPool) logSubmission(
 	from gethCommon.Address,
 	txs []heldTx,
 	reason string,
-	localIndexedNonce uint64,
+	localNextNonce uint64,
 	submitErr error,
 ) {
 	if len(txs) == 0 {
@@ -793,7 +793,7 @@ func (t *TxMemPool) logSubmission(
 	}
 
 	if submitErr != nil {
-		batchLogFields(t.logger.Warn(), from, txs, localIndexedNonce).
+		batchLogFields(t.logger.Warn(), from, txs, localNextNonce).
 			Str("reason", reason).
 			Err(submitErr).
 			Msg("Flow submission failed, EVM transactions dropped")
@@ -855,7 +855,7 @@ func (t *TxMemPool) reconcileSubmission(w flushWork, submitErr error) {
 // submission, updates the queue state optimistically, and returns the detached
 // work items. The per-EOA decision lives in collectQueue.
 //
-// Each due EOA's nonce is read via GetNonce; the provider caches the block view
+// Each due EOA's nonce is read via GetNextNonce; the provider caches the block view
 // by indexed height, so all reads in this pass (and across ticks at the same
 // height) reuse one built view rather than rebuilding per address.
 func (t *TxMemPool) collectDueBatches() []flushWork {
@@ -909,7 +909,7 @@ func (t *TxMemPool) collectQueue(
 		return flushWork{}, false
 	}
 
-	indexNonce, err := t.nonceProvider.GetNonce(from)
+	nextNonce, err := t.nonceProvider.GetNextNonce(from)
 	if err != nil {
 		// Exception: a local state-index nonce read should not fail under normal
 		// operation. This is a background loop with no caller to reject the tx
@@ -920,17 +920,17 @@ func (t *TxMemPool) collectQueue(
 		return flushWork{}, false
 	}
 
-	q.nonces.refreshIndexed(indexNonce)
+	q.nonces.refreshNextNonce(nextNonce)
 
 	// Prune transactions that can never execute: their nonce is already used
 	// on-chain (e.g. filled via another gateway). They would only burn fees at
 	// TTL expiry.
-	t.pruneStaleTxs(q, from, indexNonce)
+	t.pruneStaleTxs(q, from, nextNonce)
 
-	if w, ok := t.collectPrefix(from, q, now, indexNonce); ok {
+	if w, ok := t.collectPrefix(from, q, now, nextNonce); ok {
 		return w, true
 	}
-	return t.collectExpired(from, q, now, indexNonce)
+	return t.collectExpired(from, q, now, nextNonce)
 }
 
 // collectPrefix detaches the longest consecutive nonce run starting at the
@@ -941,7 +941,7 @@ func (t *TxMemPool) collectPrefix(
 	from gethCommon.Address,
 	q *eoaQueue,
 	now time.Time,
-	indexNonce uint64,
+	nextNonce uint64,
 ) (flushWork, bool) {
 	prefix := selectConsecutivePrefix(q.txs, q.nonces.expectedNonce(), t.config.TxMaxBatchSize)
 	if len(prefix) == 0 {
@@ -960,11 +960,11 @@ func (t *TxMemPool) collectPrefix(
 		q.flushDeadline = now.Add(t.config.TxSubmissionSpacing)
 	}
 	return flushWork{
-		from:              from,
-		txs:               prefix,
-		needsReconcile:    true,
-		reason:            flushReasonPrefix,
-		localIndexedNonce: indexNonce,
+		from:           from,
+		txs:            prefix,
+		needsReconcile: true,
+		reason:         flushReasonPrefix,
+		localNextNonce: nextNonce,
 	}, true
 }
 
@@ -990,7 +990,7 @@ func (t *TxMemPool) collectExpired(
 	from gethCommon.Address,
 	q *eoaQueue,
 	now time.Time,
-	indexNonce uint64,
+	nextNonce uint64,
 ) (flushWork, bool) {
 	expired := selectExpired(q.txs, now, t.config.TxPoolTTL)
 	if len(expired) > t.config.TxMaxBatchSize {
@@ -1003,14 +1003,14 @@ func (t *TxMemPool) collectExpired(
 	deleteByNonce(q.txs, expired)
 	q.lastSubmittedAt = now
 	q.lastActivity = now
-	batchLogFields(t.logger.Warn(), from, expired, indexNonce).
+	batchLogFields(t.logger.Warn(), from, expired, nextNonce).
 		Uint64("expected-nonce", q.nonces.expectedNonce()).
 		Msg("nonce gap never filled within TTL, submitting held transactions anyway")
 	return flushWork{
-		from:              from,
-		txs:               expired,
-		reason:            flushReasonTTL,
-		localIndexedNonce: indexNonce,
+		from:           from,
+		txs:            expired,
+		reason:         flushReasonTTL,
+		localNextNonce: nextNonce,
 	}, true
 }
 
@@ -1031,18 +1031,18 @@ func (t *TxMemPool) reportSize() {
 func (t *TxMemPool) pruneStaleTxs(
 	q *eoaQueue,
 	from gethCommon.Address,
-	indexNonce uint64,
+	nextNonce uint64,
 ) {
 	var stale []heldTx
 	for nonce, htx := range q.txs {
-		if nonce < indexNonce {
+		if nonce < nextNonce {
 			stale = append(stale, htx)
 		}
 	}
 	if len(stale) > 0 {
 		deleteByNonce(q.txs, stale)
-		batchLogFields(t.logger.Warn(), from, stale, indexNonce).
-			Msg("dropping stale transactions with nonce below indexed state")
+		batchLogFields(t.logger.Warn(), from, stale, nextNonce).
+			Msg("dropping stale transactions with nonce below the on-chain frontier")
 	}
 }
 

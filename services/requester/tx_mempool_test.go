@@ -110,6 +110,12 @@ type fakeNonceProvider struct {
 	err   error
 }
 
+// GetNextNonce satisfies NonceProvider; GetNonce satisfies the NonceView that
+// GetBlockView returns. Both read every EOA's nonce as f.nonce/f.err.
+func (f *fakeNonceProvider) GetNextNonce(_ gethCommon.Address) (uint64, error) {
+	return f.nonce, f.err
+}
+
 func (f *fakeNonceProvider) GetNonce(_ gethCommon.Address) (uint64, error) {
 	return f.nonce, f.err
 }
@@ -486,7 +492,7 @@ func Test_TxMemPool_SuccessfulFlushMarksSubmitted(t *testing.T) {
 
 // No silent drops: a failed flush submission must produce an observable WARN log
 // carrying the dropped tx hashes and enough context to debug a "lost
-// transaction" report (eoa, nonce range, indexed nonce, batch size, reason,
+// transaction" report (eoa, nonce range, next nonce, batch size, reason,
 // error).
 func Test_TxMemPool_FailedSubmitLogsDropWarning(t *testing.T) {
 	key, err := crypto.GenerateKey()
@@ -523,7 +529,7 @@ func Test_TxMemPool_FailedSubmitLogsDropWarning(t *testing.T) {
 	assert.Contains(t, out, tx0.Hash().Hex(), "dropped tx hash must be logged")
 	assert.Contains(t, out, tx1.Hash().Hex(), "dropped tx hash must be logged")
 	assert.Contains(t, out, from.Hex(), "eoa must be logged")
-	assert.Contains(t, out, `"local-indexed-nonce":0`, "indexed frontier must be logged")
+	assert.Contains(t, out, `"local-next-nonce":0`, "next nonce must be logged")
 	assert.Contains(t, out, `"batch-size":2`, "batch size must be logged")
 	assert.Contains(t, out, "network down", "submit error must be logged")
 }
@@ -694,7 +700,7 @@ func (c *countingCollector) TxPoolSize(queues int, queued int) {
 	c.txPoolSizeSet = true
 }
 
-// Stale txs (nonce below the indexed nonce) must be pruned from the queue, but
+// Stale txs (nonce below the next nonce) must be pruned from the queue, but
 // pruning must NOT increment the TransactionsDropped metric — that metric is
 // reserved for build/submission errors of the Cadence transaction to Flow.
 func Test_TxMemPool_PruneStaleDoesNotIncrementDropped(t *testing.T) {
@@ -767,7 +773,7 @@ func Test_NonceTracker_Classify(t *testing.T) {
 		nonce    uint64
 		want     nonceVerdict
 	}{
-		{"indexed nonce is next-expected", nonceTracker{}, 5, 5, nonceNextExpected},
+		{"nonce at the frontier is next-expected", nonceTracker{}, 5, 5, nonceNextExpected},
 		{"gap ahead queues", nonceTracker{}, 5, 7, nonceQueue},
 		{"below index is too low (no gap configured)", nonceTracker{}, 5, 3, nonceTooLow},
 		{"nonce 0 is next-expected on a zero tracker", nonceTracker{}, 0, 0, nonceNextExpected},
@@ -839,18 +845,18 @@ func Test_TxMemPool_RejectsNonceOutOfRange(t *testing.T) {
 }
 
 func Test_NonceTracker_ExpectedNonce(t *testing.T) {
-	assert.Equal(t, uint64(5), (&nonceTracker{localIndexedNonce: 5}).expectedNonce())
+	assert.Equal(t, uint64(5), (&nonceTracker{localNextNonce: 5}).expectedNonce())
 	assert.Equal(t, uint64(7),
-		(&nonceTracker{localIndexedNonce: 5, lastConsecutivelySubmitted: toNonceWrapper(6)}).expectedNonce())
+		(&nonceTracker{localNextNonce: 5, lastConsecutivelySubmitted: toNonceWrapper(6)}).expectedNonce())
 	assert.Equal(t, uint64(9),
-		(&nonceTracker{localIndexedNonce: 5, submitting: toNonceWrapper(8)}).expectedNonce())
-	// The indexed frontier wins when it is ahead of our own sends.
+		(&nonceTracker{localNextNonce: 5, submitting: toNonceWrapper(8)}).expectedNonce())
+	// The on-chain frontier wins when it is ahead of our own sends.
 	assert.Equal(t, uint64(10),
-		(&nonceTracker{localIndexedNonce: 10, lastConsecutivelySubmitted: toNonceWrapper(6)}).expectedNonce())
+		(&nonceTracker{localNextNonce: 10, lastConsecutivelySubmitted: toNonceWrapper(6)}).expectedNonce())
 }
 
 func Test_NonceTracker_Transitions(t *testing.T) {
-	n := &nonceTracker{localIndexedNonce: 5}
+	n := &nonceTracker{localNextNonce: 5}
 
 	// markSubmitting sets the in-flight marker.
 	n.markSubmitting(7)
@@ -871,9 +877,9 @@ func Test_NonceTracker_Transitions(t *testing.T) {
 	// A rollback never disturbs the consecutively-submitted nonce.
 	assert.Equal(t, toNonceWrapper(7), n.lastConsecutivelySubmitted)
 
-	// refreshIndexed updates the cached frontier.
-	n.refreshIndexed(12)
-	assert.Equal(t, uint64(12), n.localIndexedNonce)
+	// refreshNextNonce updates the cached frontier.
+	n.refreshNextNonce(12)
+	assert.Equal(t, uint64(12), n.localNextNonce)
 }
 
 // A stale success ack (e.g. once submissions run concurrently and a newer batch

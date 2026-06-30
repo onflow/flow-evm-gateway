@@ -17,25 +17,27 @@ import (
 // rather than rebuilding the (expensive) view per address. It is an interface
 // so tests can fake it without constructing a real query.View.
 type NonceView interface {
-	// GetNonce returns the nonce of the given EOA at this view's state.
+	// GetNonce returns the EOA's account nonce (the next nonce to use) at this
+	// view's state. Named GetNonce — not GetNextNonce — because this interface is
+	// satisfied directly by flow-go's query.View, whose method is GetNonce.
 	GetNonce(address gethCommon.Address) (uint64, error)
 }
 
-// NonceProvider returns the current nonce of the given EOA address.
-// The transaction mempool uses it to determine the expected next nonce.
+// NonceProvider returns the next nonce of the given EOA address. The transaction
+// mempool uses it to determine the expected next nonce.
 type NonceProvider interface {
-	// GetNonce returns the account nonce of the given EOA — its transaction count,
-	// i.e. the next nonce the EOA should use (matches eth_getTransactionCount).
+	// GetNextNonce returns the account nonce of the given EOA — its transaction
+	// count, i.e. the next nonce the EOA should use (matches eth_getTransactionCount).
 	//
 	// A non-nil error represents an EXCEPTION, not an expected condition:
 	// the underlying read is a local state-index lookup that should not
 	// fail under normal operation. Callers must therefore treat an error
 	// as a hard failure (reject the transaction / abort the operation)
 	// rather than a routine, recoverable condition to swallow.
-	GetNonce(address gethCommon.Address) (uint64, error)
+	GetNextNonce(address gethCommon.Address) (uint64, error)
 
 	// GetBlockView returns a NonceView over the latest indexed EVM state. A
-	// non-nil error is an EXCEPTION, same contract as GetNonce.
+	// non-nil error is an EXCEPTION, same contract as GetNextNonce.
 	GetBlockView() (NonceView, error)
 }
 
@@ -107,7 +109,7 @@ func (p *LocalNonceProvider) GetBlockView() (NonceView, error) {
 	return view, nil
 }
 
-func (p *LocalNonceProvider) GetNonce(address gethCommon.Address) (uint64, error) {
+func (p *LocalNonceProvider) GetNextNonce(address gethCommon.Address) (uint64, error) {
 	view, err := p.GetBlockView()
 	if err != nil {
 		return 0, err
