@@ -51,7 +51,7 @@ func Test_TxMemPool_OutOfOrderBurst(t *testing.T) {
 	for nonce := range totalTxs {
 		signed, _, err := evmSign(
 			big.NewInt(transferAmount),
-			23_500,
+			205_000,
 			privateKey,
 			uint64(nonce),
 			&testEoaReceiver,
@@ -133,7 +133,7 @@ func Test_TxMemPool_SingleTxImmediateSubmission(t *testing.T) {
 
 	signed, _, err := evmSign(
 		big.NewInt(transferAmount),
-		23_500,
+		205_000,
 		privateKey,
 		0,
 		&testEoaReceiver,
@@ -214,7 +214,7 @@ func Test_TxMemPool_GapHoldAndFill(t *testing.T) {
 	for nonce := range 5 {
 		signed, _, err := evmSign(
 			big.NewInt(transferAmount),
-			23_500,
+			205_000,
 			privateKey,
 			uint64(nonce),
 			&testEoaReceiver,
@@ -293,7 +293,7 @@ func Test_TxMemPool_TTLExpiry(t *testing.T) {
 	// it will be held behind the gap.
 	signed, _, err := evmSign(
 		big.NewInt(50_000),
-		23_500,
+		205_000,
 		privateKey,
 		5,
 		&testEoaReceiver,
@@ -356,7 +356,7 @@ func Test_TxMemPool_InFlightNonceRejection(t *testing.T) {
 	// hashes) carrying the same nonce 0.
 	signedFirst, _, err := evmSign(
 		big.NewInt(transferAmount),
-		23_500,
+		205_000,
 		privateKey,
 		0,
 		&testEoaReceiver,
@@ -424,7 +424,7 @@ func Test_TxMemPool_BatchSizeCap(t *testing.T) {
 	for nonce := range totalTxs {
 		signed, _, err := evmSign(
 			big.NewInt(transferAmount),
-			23_500,
+			205_000,
 			privateKey,
 			uint64(nonce),
 			&testEoaReceiver,
@@ -527,7 +527,7 @@ func Test_TxMemPool_DuplicateTransactionRejection(t *testing.T) {
 	// stays queued (never fast-pathed, never in flight).
 	signed, _, err := evmSign(
 		big.NewInt(50_000),
-		23_500,
+		205_000,
 		privateKey,
 		5,
 		&testEoaReceiver,
@@ -553,7 +553,7 @@ func fundEOA(t *testing.T, rpcTester *rpcTest, testAddr common.Address) {
 	eoaKey, err := crypto.HexToECDSA(eoaTestPrivateKey)
 	require.NoError(t, err)
 
-	signed, _, err := evmSign(big.NewInt(1_000_000_000), 23_500, eoaKey, 0, &testAddr, nil)
+	signed, _, err := evmSign(big.NewInt(1_000_000_000), 205_000, eoaKey, 0, &testAddr, nil)
 	require.NoError(t, err)
 
 	txHash, err := rpcTester.sendRawTx(signed)
