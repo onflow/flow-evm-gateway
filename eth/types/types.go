@@ -475,12 +475,6 @@ type Block struct {
 	Uncles           []common.Hash    `json:"uncles"`
 	MixHash          common.Hash      `json:"mixHash"`
 	BaseFeePerGas    hexutil.Big      `json:"baseFeePerGas"`
-
-	// SlotNumber was added by EIP-7843 and is ignored in legacy headers.
-	SlotNumber *hexutil.Uint64 `json:"slotNumber,omitempty"`
-
-	// BlockAccessListHash was added by EIP-7928 and is ignored in legacy headers.
-	BlockAccessListHash *common.Hash `json:"blockAccessListHash,omitempty"`
 }
 
 type BlockHeader struct {

@@ -3,15 +3,12 @@ package ingestion
 import (
 	"context"
 	"fmt"
-	"math/big"
 	"time"
 
 	flowGo "github.com/onflow/flow-go/model/flow"
 
 	pebbleDB "github.com/cockroachdb/pebble"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
-	gethBAL "github.com/ethereum/go-ethereum/core/types/bal"
-	gethParams "github.com/ethereum/go-ethereum/params"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/rs/zerolog"
 
@@ -21,7 +18,6 @@ import (
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
 
-	"github.com/onflow/flow-go/fvm/evm/emulator"
 	"github.com/onflow/flow-go/fvm/evm/offchain/sync"
 )
 
@@ -57,7 +53,6 @@ type Engine struct {
 	logsPublisher   *models.Publisher[[]*gethTypes.Log]
 	collector       metrics.Collector
 	replayerConfig  replayer.Config
-	chainConfig     *gethParams.ChainConfig
 }
 
 func NewEventIngestionEngine(
@@ -73,7 +68,6 @@ func NewEventIngestionEngine(
 	log zerolog.Logger,
 	collector metrics.Collector,
 	replayerConfig replayer.Config,
-	chainID *big.Int,
 ) *Engine {
 	log = log.With().Str("component", "ingestion").Logger()
 
@@ -92,7 +86,6 @@ func NewEventIngestionEngine(
 		logsPublisher:   logsPublisher,
 		collector:       collector,
 		replayerConfig:  replayerConfig,
-		chainConfig:     emulator.MakeChainConfig(chainID),
 	}
 }
 
@@ -238,10 +231,9 @@ func (e *Engine) indexEvents(events *models.CadenceEvents, batch *pebbleDB.Batch
 	}
 
 	// Step 1: Re-execute all transactions on the latest EVM block
-	block := events.Block()
 
 	// Step 1.1: Notify the `BlocksProvider` of the newly received EVM block
-	if err := e.blocksProvider.OnBlockReceived(block); err != nil {
+	if err := e.blocksProvider.OnBlockReceived(events.Block()); err != nil {
 		return err
 	}
 
@@ -258,33 +250,17 @@ func (e *Engine) indexEvents(events *models.CadenceEvents, batch *pebbleDB.Batch
 	// Step 1.2: Replay all block transactions
 	// If `ReplayBlock` returns any error, we abort the EVM events processing
 	blockEvents := events.BlockEventPayload()
-	replayResult, txResults, err := replayer.ReplayBlockEvents(events.TxEventPayloads(), blockEvents)
+	res, err := replayer.ReplayBlock(events.TxEventPayloads(), blockEvents)
 	if err != nil {
-		return fmt.Errorf("failed to replay block on height: %d, with: %w", block.Height, err)
-	}
-
-	// compute the `BlockAccessListHash` field when Amsterdam is activated
-	if e.chainConfig.IsAmsterdam(new(big.Int).SetUint64(block.Height), block.Timestamp) {
-		stateAccessList := gethBAL.NewConstructionBlockAccessList()
-		for _, txRes := range txResults {
-			if txRes.StateAccessList != nil {
-				stateAccessList.Merge(txRes.StateAccessList)
-			}
-		}
-		accessListHash := stateAccessList.ToEncodingObj().Hash()
-		block.AccessListHash = &accessListHash
+		return fmt.Errorf("failed to replay block on height: %d, with: %w", events.Block().Height, err)
 	}
 
 	// Step 2: Write all the necessary changes to each storage
 
 	// Step 2.1: Write all the EVM state changes to `StorageProvider`
-	err = e.registerStore.Store(
-		registerEntriesFromKeyValue(replayResult.StorageRegisterUpdates()),
-		blockEvents.Height,
-		batch,
-	)
+	err = e.registerStore.Store(registerEntriesFromKeyValue(res.StorageRegisterUpdates()), blockEvents.Height, batch)
 	if err != nil {
-		return fmt.Errorf("failed to store state changes on block: %d", block.Height)
+		return fmt.Errorf("failed to store state changes on block: %d", events.Block().Height)
 	}
 
 	// Step 2.2: Write the latest EVM block to `Blocks` storage
@@ -293,11 +269,11 @@ func (e *Engine) indexEvents(events *models.CadenceEvents, batch *pebbleDB.Batch
 	err = e.indexBlock(
 		events.CadenceHeight(),
 		events.CadenceBlockID(),
-		block,
+		events.Block(),
 		batch,
 	)
 	if err != nil {
-		return fmt.Errorf("failed to index block %d event: %w", block.Height, err)
+		return fmt.Errorf("failed to index block %d event: %w", events.Block().Height, err)
 	}
 
 	// Step 2.3: Write all EVM transactions of the current block,
@@ -315,10 +291,10 @@ func (e *Engine) indexEvents(events *models.CadenceEvents, batch *pebbleDB.Batch
 	// to `Receipts` storage
 	err = e.indexReceipts(events.Receipts(), batch)
 	if err != nil {
-		return fmt.Errorf("failed to index receipts for block %d event: %w", block.Height, err)
+		return fmt.Errorf("failed to index receipts for block %d event: %w", events.Block().Height, err)
 	}
 
-	blockCreation := time.Unix(int64(block.Timestamp), 0)
+	blockCreation := time.Unix(int64(events.Block().Timestamp), 0)
 	e.collector.BlockIngestionTime(blockCreation)
 
 	return nil

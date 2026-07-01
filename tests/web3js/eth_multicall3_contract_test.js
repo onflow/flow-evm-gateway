@@ -24,7 +24,7 @@ it('deploys multicall3 contract and interacts', async () => {
         to: MULTICALL3_DEPLOYER,
         value: utils.toWei('1.0', 'ether'),
         gasPrice: conf.minGasPrice,
-        gasLimit: 205_000,
+        gasLimit: 55_000,
     })
     assert.equal(transfer.receipt.status, conf.successStatus)
 

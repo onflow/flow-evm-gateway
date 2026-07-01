@@ -87,14 +87,6 @@ func TestWeb3_E2E(t *testing.T) {
 	})
 
 	t.Run("deploy multicall3 contract and call methods", func(t *testing.T) {
-		// set the Amsterdam hard-fork activation to 24 hours from now
-		evmEmulator.PreviewnetAmsterdamActivation = uint64(time.Now().Add(24 * time.Hour).Unix())
-		defer func() {
-			// set it back to its original value
-			evmEmulator.PreviewnetAmsterdamActivation = uint64(0)
-		}()
-		// this is a pre-signed contract deployment, that only works before
-		// Amsterdam.
 		runWeb3Test(t, "eth_multicall3_contract_test")
 	})
 
@@ -204,7 +196,7 @@ func TestWeb3_E2E(t *testing.T) {
 			require.NoError(t, err)
 
 			// contract deployment transaction
-			deployPayload, _, err := evmSign(big.NewInt(0), 8_750_000, accountKey, nonce, nil, contractCode)
+			deployPayload, _, err := evmSign(big.NewInt(0), 1_250_000, accountKey, nonce, nil, contractCode)
 			require.NoError(t, err)
 			nonce += 1
 
@@ -268,7 +260,7 @@ func TestWeb3_E2E(t *testing.T) {
 			require.NoError(t, err)
 
 			// contract deployment transaction
-			deployPayload, _, err := evmSign(big.NewInt(0), 8_750_000, accountKey, nonce, nil, contractCode)
+			deployPayload, _, err := evmSign(big.NewInt(0), 1_250_000, accountKey, nonce, nil, contractCode)
 			require.NoError(t, err)
 			nonce += 1
 

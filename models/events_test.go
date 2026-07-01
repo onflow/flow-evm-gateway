@@ -630,7 +630,6 @@ func newBlock(height uint64, txHashes []gethCommon.Hash) (*Block, flow.Event, er
 	evmBlock := &Block{
 		Block:             gethBlock,
 		TransactionHashes: txHashes,
-		AccessListHash:    &gethTypes.EmptyBlockAccessListHash,
 	}
 
 	ev := events.NewBlockEvent(gethBlock)

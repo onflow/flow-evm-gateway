@@ -52,7 +52,6 @@ type Block struct {
 	// We must make the FixedHash exported so RLP encoding preserves it.
 	FixedHash         gethCommon.Hash
 	TransactionHashes []gethCommon.Hash
-	AccessListHash    *gethCommon.Hash `rlp:"optional"`
 }
 
 func (b *Block) ToBytes() ([]byte, error) {
