@@ -1,37 +1,63 @@
 package requester
 
 import (
+	"sync"
+
 	gethCommon "github.com/ethereum/go-ethereum/common"
 	"github.com/onflow/flow-go/fvm/evm"
 	"github.com/onflow/flow-go/fvm/evm/offchain/query"
 	flowGo "github.com/onflow/flow-go/model/flow"
 
+	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
 )
 
-// NonceProvider returns the current nonce of the given EOA address.
-// The transaction mempool uses it to determine the expected next nonce.
+// NonceView reads EOA nonces at a single, fixed EVM state (one built block
+// view). The mempool reads many EOAs' nonces from one view per flush tick
+// rather than rebuilding the (expensive) view per address. It is an interface
+// so tests can fake it without constructing a real query.View.
+type NonceView interface {
+	// GetNonce returns the EOA's account nonce (the next nonce to use) at this
+	// view's state. Named GetNonce — not GetNextNonce — because this interface is
+	// satisfied directly by flow-go's query.View, whose method is GetNonce.
+	GetNonce(address gethCommon.Address) (uint64, error)
+}
+
+// NonceProvider returns the next nonce of the given EOA address. The transaction
+// mempool uses it to determine the expected next nonce.
 type NonceProvider interface {
-	// GetNonce returns the current nonce of the given EOA address.
+	// GetNextNonce returns the account nonce of the given EOA — its transaction
+	// count, i.e. the next nonce the EOA should use (matches eth_getTransactionCount).
 	//
 	// A non-nil error represents an EXCEPTION, not an expected condition:
 	// the underlying read is a local state-index lookup that should not
 	// fail under normal operation. Callers must therefore treat an error
 	// as a hard failure (reject the transaction / abort the operation)
 	// rather than a routine, recoverable condition to swallow.
-	GetNonce(address gethCommon.Address) (uint64, error)
+	GetNextNonce(address gethCommon.Address) (uint64, error)
 
-	// GetBlockView provides query capabilities over a specific state of the EVM chain.
-	GetBlockView() (*query.View, error)
+	// GetBlockView returns a NonceView over the latest indexed EVM state. A
+	// non-nil error is an EXCEPTION, same contract as GetNextNonce.
+	GetBlockView() (NonceView, error)
 }
 
 // LocalNonceProvider reads the EOA nonce from the latest height of the
-// local state index.
+// local state index. It caches the built block view and reuses it while the
+// indexed height is unchanged (see GetBlockView).
 type LocalNonceProvider struct {
 	chainID       flowGo.ChainID
 	registerStore *pebble.RegisterStorage
 	blocks        storage.BlockIndexer
+	collector     metrics.Collector
+
+	// mu guards only the cached-view slot below (its read and update), NOT the
+	// expensive view build in GetBlockView. Note the cached view itself is shared
+	// across reads; callers that read it concurrently must still serialize (the
+	// mempool does, via its queueMux).
+	mu           sync.Mutex
+	cachedView   NonceView
+	cachedHeight uint64
 }
 
 var _ NonceProvider = &LocalNonceProvider{}
@@ -40,19 +66,43 @@ func NewLocalNonceProvider(
 	chainID flowGo.ChainID,
 	registerStore *pebble.RegisterStorage,
 	blocks storage.BlockIndexer,
+	collector metrics.Collector,
 ) *LocalNonceProvider {
 	return &LocalNonceProvider{
 		chainID:       chainID,
 		registerStore: registerStore,
 		blocks:        blocks,
+		collector:     collector,
 	}
 }
 
-func (p *LocalNonceProvider) GetBlockView() (*query.View, error) {
+// GetBlockView returns a NonceView over the latest indexed EVM height. The view
+// is cached and reused while the indexed height is unchanged, so a burst of
+// reads within one block — many Add calls, or a collectDueBatches pass — builds
+// the (expensive) view only once. It is rebuilt when a new block is indexed.
+// Reuse is safe because an EOA's on-chain nonce cannot change without a new
+// block being indexed.
+func (p *LocalNonceProvider) GetBlockView() (NonceView, error) {
 	height, err := p.blocks.LatestEVMHeight()
 	if err != nil {
 		return nil, err
 	}
+
+	// Fast path: reuse the cached view for this indexed height. Only the cache
+	// read (and the update below) is locked — the expensive view build runs
+	// OUTSIDE the lock. A concurrent miss may build the view more than once for
+	// the same height, which is wasteful but correct (same height => same view)
+	// and does not occur under the mempool's serialized (queueMux) access.
+	p.mu.Lock()
+	if p.cachedView != nil && p.cachedHeight == height {
+		view := p.cachedView
+		p.mu.Unlock()
+		p.collector.NonceViewCache(true)
+		return view, nil
+	}
+	p.mu.Unlock()
+
+	p.collector.NonceViewCache(false)
 
 	viewProvider := query.NewViewProvider(
 		p.chainID,
@@ -67,13 +117,19 @@ func (p *LocalNonceProvider) GetBlockView() (*query.View, error) {
 		return nil, err
 	}
 
+	p.mu.Lock()
+	p.cachedView = view
+	p.cachedHeight = height
+	p.mu.Unlock()
+
 	return view, nil
 }
 
-func (p *LocalNonceProvider) GetNonce(address gethCommon.Address) (uint64, error) {
+func (p *LocalNonceProvider) GetNextNonce(address gethCommon.Address) (uint64, error) {
 	view, err := p.GetBlockView()
 	if err != nil {
 		return 0, err
 	}
+
 	return view.GetNonce(address)
 }
