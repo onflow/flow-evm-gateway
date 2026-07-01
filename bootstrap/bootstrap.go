@@ -249,6 +249,7 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 			b.config.FlowNetworkID,
 			b.storages.Registers,
 			b.storages.Blocks,
+			b.collector,
 		)
 		txPool, err = requester.NewTxMemPool(
 			ctx,

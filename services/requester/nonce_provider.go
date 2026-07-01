@@ -8,6 +8,7 @@ import (
 	"github.com/onflow/flow-go/fvm/evm/offchain/query"
 	flowGo "github.com/onflow/flow-go/model/flow"
 
+	"github.com/onflow/flow-evm-gateway/metrics"
 	"github.com/onflow/flow-evm-gateway/storage"
 	"github.com/onflow/flow-evm-gateway/storage/pebble"
 )
@@ -48,10 +49,12 @@ type LocalNonceProvider struct {
 	chainID       flowGo.ChainID
 	registerStore *pebble.RegisterStorage
 	blocks        storage.BlockIndexer
+	collector     metrics.Collector
 
-	// mu guards the cached view below. The cached view is shared across reads;
-	// callers that read it concurrently must serialize (the mempool does, via
-	// its queueMux).
+	// mu guards only the cached-view slot below (its read and update), NOT the
+	// expensive view build in GetBlockView. Note the cached view itself is shared
+	// across reads; callers that read it concurrently must still serialize (the
+	// mempool does, via its queueMux).
 	mu           sync.Mutex
 	cachedView   NonceView
 	cachedHeight uint64
@@ -63,11 +66,13 @@ func NewLocalNonceProvider(
 	chainID flowGo.ChainID,
 	registerStore *pebble.RegisterStorage,
 	blocks storage.BlockIndexer,
+	collector metrics.Collector,
 ) *LocalNonceProvider {
 	return &LocalNonceProvider{
 		chainID:       chainID,
 		registerStore: registerStore,
 		blocks:        blocks,
+		collector:     collector,
 	}
 }
 
@@ -83,12 +88,21 @@ func (p *LocalNonceProvider) GetBlockView() (NonceView, error) {
 		return nil, err
 	}
 
+	// Fast path: reuse the cached view for this indexed height. Only the cache
+	// read (and the update below) is locked — the expensive view build runs
+	// OUTSIDE the lock. A concurrent miss may build the view more than once for
+	// the same height, which is wasteful but correct (same height => same view)
+	// and does not occur under the mempool's serialized (queueMux) access.
 	p.mu.Lock()
-	defer p.mu.Unlock()
-
 	if p.cachedView != nil && p.cachedHeight == height {
-		return p.cachedView, nil
+		view := p.cachedView
+		p.mu.Unlock()
+		p.collector.NonceViewCache(true)
+		return view, nil
 	}
+	p.mu.Unlock()
+
+	p.collector.NonceViewCache(false)
 
 	viewProvider := query.NewViewProvider(
 		p.chainID,
@@ -103,8 +117,10 @@ func (p *LocalNonceProvider) GetBlockView() (NonceView, error) {
 		return nil, err
 	}
 
+	p.mu.Lock()
 	p.cachedView = view
 	p.cachedHeight = height
+	p.mu.Unlock()
 
 	return view, nil
 }

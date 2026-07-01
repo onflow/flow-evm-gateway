@@ -792,6 +792,11 @@ func (t *TxMemPool) logSubmission(
 		return
 	}
 
+	// Count every submitted batch by flush reason (fast-path / consecutive-prefix
+	// / ttl-expiry), regardless of outcome; failures are also tracked by
+	// TransactionsDropped.
+	t.collector.TxPoolSubmission(reason)
+
 	if submitErr != nil {
 		batchLogFields(t.logger.Warn(), from, txs, localNextNonce).
 			Str("reason", reason).

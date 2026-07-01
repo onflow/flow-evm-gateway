@@ -110,6 +110,16 @@ var txPoolQueuedTransactions = prometheus.NewGauge(prometheus.GaugeOpts{
 	Help: "Total number of transactions currently held across all queues in the transaction mempool",
 })
 
+var txPoolSubmissions = prometheus.NewCounterVec(prometheus.CounterOpts{
+	Name: prefixedName("txpool_submissions_total"),
+	Help: "Total EVM transaction batches the mempool submitted to Flow, by flush reason (fast-path, consecutive-prefix, ttl-expiry)",
+}, []string{"reason"})
+
+var txPoolNonceViewCache = prometheus.NewCounterVec(prometheus.CounterOpts{
+	Name: prefixedName("txpool_nonce_view_cache_total"),
+	Help: "Block-view cache accesses when reading EOA nonces (hit = reused the view built for the indexed height; miss = rebuilt it)",
+}, []string{"result"})
+
 var metrics = []prometheus.Collector{
 	apiErrors,
 	serverPanicsCounters,
@@ -130,6 +140,8 @@ var metrics = []prometheus.Collector{
 	flowTotalSupply,
 	txPoolQueues,
 	txPoolQueuedTransactions,
+	txPoolSubmissions,
+	txPoolNonceViewCache,
 }
 
 type Collector interface {
@@ -150,6 +162,8 @@ type Collector interface {
 	TransactionRateLimited()
 	FlowTotalSupply(totalSupply *big.Int)
 	TxPoolSize(queues int, queuedTransactions int)
+	TxPoolSubmission(reason string)
+	NonceViewCache(hit bool)
 }
 
 var _ Collector = &DefaultCollector{}
@@ -177,6 +191,8 @@ type DefaultCollector struct {
 	flowTotalSupply                prometheus.Gauge
 	txPoolQueues                   prometheus.Gauge
 	txPoolQueuedTransactions       prometheus.Gauge
+	txPoolSubmissions              *prometheus.CounterVec
+	txPoolNonceViewCache           *prometheus.CounterVec
 }
 
 func NewCollector(logger zerolog.Logger) Collector {
@@ -206,6 +222,8 @@ func NewCollector(logger zerolog.Logger) Collector {
 		flowTotalSupply:                flowTotalSupply,
 		txPoolQueues:                   txPoolQueues,
 		txPoolQueuedTransactions:       txPoolQueuedTransactions,
+		txPoolSubmissions:              txPoolSubmissions,
+		txPoolNonceViewCache:           txPoolNonceViewCache,
 	}
 }
 
@@ -308,6 +326,18 @@ func (c *DefaultCollector) FlowTotalSupply(totalSupply *big.Int) {
 func (c *DefaultCollector) TxPoolSize(queues int, queuedTransactions int) {
 	c.txPoolQueues.Set(float64(queues))
 	c.txPoolQueuedTransactions.Set(float64(queuedTransactions))
+}
+
+func (c *DefaultCollector) TxPoolSubmission(reason string) {
+	c.txPoolSubmissions.With(prometheus.Labels{"reason": reason}).Inc()
+}
+
+func (c *DefaultCollector) NonceViewCache(hit bool) {
+	result := "miss"
+	if hit {
+		result = "hit"
+	}
+	c.txPoolNonceViewCache.With(prometheus.Labels{"result": result}).Inc()
 }
 
 func prefixedName(name string) string {
