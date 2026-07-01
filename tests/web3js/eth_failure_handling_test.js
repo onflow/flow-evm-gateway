@@ -3,23 +3,18 @@ const helpers = require('./helpers')
 const conf = require('./config')
 const web3 = conf.web3
 
-it('should fail when tx gas limit higher than the max value', async () => {
+it('should not fail when tx gas limit higher than the max value under Amsterdam', async () => {
     let receiver = web3.eth.accounts.create()
 
-    try {
-        await helpers.signAndSend({
-            from: conf.eoa.address,
-            to: receiver.address,
-            value: 10,
-            gasPrice: conf.minGasPrice,
-            gasLimit: 51_000_000, // max tx gas limit is 16_777_216 starting from Fusaka
-        })
-    } catch (e) {
-        assert.include(e.message, 'transaction gas limit too high (cap: 16777216, tx: 51000000)')
-        return
-    }
+    let res = await helpers.signAndSend({
+        from: conf.eoa.address,
+        to: receiver.address,
+        value: 10,
+        gasPrice: conf.minGasPrice,
+        gasLimit: 20_000_000, // max tx gas limit is 16_777_216 starting from Fusaka
+    })
 
-    assert.fail('should not reach')
+    assert.equal(res.receipt.status, conf.successStatus)
 })
 
 it('should fail when nonce too low', async () => {
@@ -31,7 +26,7 @@ it('should fail when nonce too low', async () => {
         to: receiver.address,
         value: 1,
         gasPrice: conf.minGasPrice,
-        gasLimit: 55_000,
+        gasLimit: 205_000,
     })
 
     try {
@@ -40,13 +35,13 @@ it('should fail when nonce too low', async () => {
             to: receiver.address,
             value: 1,
             gasPrice: conf.minGasPrice,
-            gasLimit: 55_000,
+            gasLimit: 205_000,
             nonce: 0, // invalid
         })
     } catch (e) {
         assert.include(
             e.message,
-            'nonce too low: address 0xFACF71692421039876a5BB4F10EF7A439D8ef61E, tx: 0, state: 1'
+            'nonce too low: address 0xFACF71692421039876a5BB4F10EF7A439D8ef61E, tx: 0, state: 2'
         )
         return
     }
@@ -63,7 +58,7 @@ it('should fail when insufficient gas price', async () => {
             to: receiver.address,
             value: 10,
             gasPrice: conf.minGasPrice - 50n, // non-accepted gasPrice
-            gasLimit: 55_000,
+            gasLimit: 205_000,
         })
     } catch (e) {
         assert.include(e.message, 'the minimum accepted gas price for transactions is: 150')
@@ -81,7 +76,7 @@ it('should fail when insufficient balance for transfer', async () => {
         to: receiver.address,
         value: 10_000_000,
         gasPrice: conf.minGasPrice,
-        gasLimit: 55_000,
+        gasLimit: 205_000,
     })
 
     let signedTx = await receiver.signTransaction({
@@ -89,7 +84,7 @@ it('should fail when insufficient balance for transfer', async () => {
         to: conf.eoa.address,
         value: 10_100_000,
         gasPrice: conf.minGasPrice,
-        gasLimit: 23_000,
+        gasLimit: 205_000,
     })
     let response = await helpers.callRPCMethod(
         'eth_sendRawTransaction',
@@ -100,7 +95,7 @@ it('should fail when insufficient balance for transfer', async () => {
 
     assert.equal(
         response.body.error.message,
-        'insufficient funds for gas * price + value: balance 10000000, tx cost 13550000, overshot 3550000'
+        'insufficient funds for gas * price + value: balance 10000000, tx cost 40850000, overshot 30850000'
     )
 })
 
@@ -112,7 +107,7 @@ it('should fail when insufficient balance for transfer + gas', async () => {
         to: receiver.address,
         value: 10_000_000,
         gasPrice: conf.minGasPrice,
-        gasLimit: 55_000,
+        gasLimit: 205_000,
     })
 
     let signedTx = await receiver.signTransaction({
@@ -120,7 +115,7 @@ it('should fail when insufficient balance for transfer + gas', async () => {
         to: conf.eoa.address,
         value: 7_000_000,
         gasPrice: conf.minGasPrice,
-        gasLimit: 23_000,
+        gasLimit: 205_000,
     })
     let response = await helpers.callRPCMethod(
         'eth_sendRawTransaction',
@@ -131,6 +126,6 @@ it('should fail when insufficient balance for transfer + gas', async () => {
 
     assert.equal(
         response.body.error.message,
-        'insufficient funds for gas * price + value: balance 10000000, tx cost 10450000, overshot 450000'
+        'insufficient funds for gas * price + value: balance 10000000, tx cost 37750000, overshot 27750000'
     )
 })
