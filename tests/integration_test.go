@@ -105,7 +105,7 @@ func Test_ConcurrentTransactionSubmissionWithTxSeal(t *testing.T) {
 	hashes := make([]common.Hash, totalTxs)
 	nonce := uint64(0)
 	for i := 0; i < totalTxs; i++ {
-		signed, signedHash, err := evmSign(big.NewInt(10), 21000, eoaKey, nonce, &testAddr, nil)
+		signed, signedHash, err := evmSign(big.NewInt(10), 205_000, eoaKey, nonce, &testAddr, nil)
 		require.NoError(t, err)
 		hashes[i] = signedHash
 
@@ -218,7 +218,7 @@ func Test_ConcurrentTransactionSubmissionWithLocalIndex(t *testing.T) {
 	hashes := make([]common.Hash, totalTxs)
 	nonce := uint64(0)
 	for i := 0; i < totalTxs; i++ {
-		signed, _, err := evmSign(big.NewInt(10), 21000, eoaKey, nonce, &testAddr, nil)
+		signed, _, err := evmSign(big.NewInt(10), 205_000, eoaKey, nonce, &testAddr, nil)
 		require.NoError(t, err)
 
 		txHash, err := rpcTester.sendRawTx(signed)
@@ -527,7 +527,7 @@ func Test_ForceStartHeightIdempotency(t *testing.T) {
 	hashes := make([]common.Hash, totalTxs)
 	nonce := uint64(0)
 	for i := 0; i < totalTxs; i++ {
-		signed, _, err := evmSign(big.NewInt(10), 21000, eoaKey, nonce, &testAddr, nil)
+		signed, _, err := evmSign(big.NewInt(10), 205_000, eoaKey, nonce, &testAddr, nil)
 		require.NoError(t, err)
 
 		txHash, err := rpcTester.sendRawTx(signed)

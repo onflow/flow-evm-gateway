@@ -438,7 +438,7 @@ func Test_TransactionBatchingMode(t *testing.T) {
 	totalTxs := 25
 	hashes := make([]common.Hash, totalTxs)
 	for i := range totalTxs {
-		signed, _, err := evmSign(big.NewInt(10), 21000, eoaKey, nonce, &testAddr, nil)
+		signed, _, err := evmSign(big.NewInt(10), 205_000, eoaKey, nonce, &testAddr, nil)
 		require.NoError(t, err)
 
 		txHash, err := rpcTester.sendRawTx(signed)
@@ -487,7 +487,7 @@ func Test_TransactionBatchingModeWithConcurrentTxSubmissions(t *testing.T) {
 
 	// Add a sufficient amount of funds to the test addresses
 	for testAddr := range testAddresses {
-		signed, _, err := evmSign(big.NewInt(1_000_000_000), 23_500, eoaKey, nonce, &testAddr, nil)
+		signed, _, err := evmSign(big.NewInt(1_000_000_000), 205_000, eoaKey, nonce, &testAddr, nil)
 		require.NoError(t, err)
 
 		txHash, err := rpcTester.sendRawTx(signed)
@@ -527,7 +527,7 @@ func Test_TransactionBatchingModeWithConcurrentTxSubmissions(t *testing.T) {
 			for range totalTxs {
 				signed, _, err := evmSign(
 					big.NewInt(transferAmount),
-					23_500,
+					205_000,
 					privateKey,
 					nonce,
 					&testEoaReceiver,
@@ -597,7 +597,7 @@ func Test_MultipleTransactionSubmissionsWithinSmallInterval(t *testing.T) {
 	require.NoError(t, err)
 
 	// Add a sufficient amount of funds to the test address
-	signed, _, err := evmSign(big.NewInt(1_000_000_000), 23_500, eoaKey, 0, &testAddr, nil)
+	signed, _, err := evmSign(big.NewInt(1_000_000_000), 205_000, eoaKey, 0, &testAddr, nil)
 	require.NoError(t, err)
 
 	txHash, err := rpcTester.sendRawTx(signed)
@@ -625,7 +625,7 @@ func Test_MultipleTransactionSubmissionsWithinSmallInterval(t *testing.T) {
 	for i := range uint64(2) {
 		signed, _, err := evmSign(
 			big.NewInt(500_000),
-			23_500,
+			205_000,
 			privatekey,
 			i,
 			&testEoaReceiver,
@@ -685,7 +685,7 @@ func Test_MultipleTransactionSubmissionsWithinRecentInterval(t *testing.T) {
 	require.NoError(t, err)
 
 	// Add a sufficient amount of funds to the test address
-	signed, _, err := evmSign(big.NewInt(1_000_000_000), 23_500, eoaKey, 0, &testAddr, nil)
+	signed, _, err := evmSign(big.NewInt(1_000_000_000), 205_000, eoaKey, 0, &testAddr, nil)
 	require.NoError(t, err)
 
 	txHash, err := rpcTester.sendRawTx(signed)
@@ -712,7 +712,7 @@ func Test_MultipleTransactionSubmissionsWithinRecentInterval(t *testing.T) {
 	for i := range uint64(2) {
 		signed, _, err := evmSign(
 			big.NewInt(500_000),
-			23_500,
+			205_000,
 			privatekey,
 			i,
 			&testEoaReceiver,
@@ -773,7 +773,7 @@ func Test_MultipleTransactionSubmissionsWithinNonRecentInterval(t *testing.T) {
 	require.NoError(t, err)
 
 	// Add a sufficient amount of funds to the test address
-	signed, _, err := evmSign(big.NewInt(1_000_000_000), 23_500, eoaKey, 0, &testAddr, nil)
+	signed, _, err := evmSign(big.NewInt(1_000_000_000), 205_000, eoaKey, 0, &testAddr, nil)
 	require.NoError(t, err)
 
 	txHash, err := rpcTester.sendRawTx(signed)
@@ -802,7 +802,7 @@ func Test_MultipleTransactionSubmissionsWithinNonRecentInterval(t *testing.T) {
 	for i := range uint64(2) {
 		signed, _, err := evmSign(
 			big.NewInt(500_000),
-			23_500,
+			205_000,
 			privatekey,
 			i,
 			&testEoaReceiver,

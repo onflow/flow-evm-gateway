@@ -109,7 +109,7 @@ func Test_KeyStoreSigningKeysRelease(t *testing.T) {
 	nonces := []uint64{5, 4, 3, 2, 1, 1, 0, 1, 5, 2, 5, 3, 5, 4}
 	transferAmount := int64(50_000)
 	for _, nonce := range nonces {
-		signed, _, err := evmSign(big.NewInt(transferAmount), 23_000, eoaKey, nonce, &testAddr, nil)
+		signed, _, err := evmSign(big.NewInt(transferAmount), 205_000, eoaKey, nonce, &testAddr, nil)
 		require.NoError(t, err)
 
 		txHash, err := rpcTester.sendRawTx(signed)

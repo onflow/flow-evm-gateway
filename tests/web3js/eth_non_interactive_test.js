@@ -29,7 +29,7 @@ it('should get block', async () => {
         block.transactionsRoot,
         '0x0000000000000000000000000000000000000000000000000000000000000000'
     )
-    assert.equal(block.size, 4028n)
+    assert.equal(block.size, 4062n)
     assert.equal(block.gasLimit, 120000000n)
     assert.equal(block.miner, '0x0000000000000000000000030000000000000000')
     assert.equal(
@@ -101,6 +101,13 @@ it('should get block', async () => {
     // not existing transaction
     let no = await web3.eth.getTransactionFromBlock(conf.startBlockHeight, 5)
     assert.isNull(no)
+
+    // assert that slot number is present on the block response
+    let response = await helpers.callRPCMethod('eth_getBlockByHash', [block.hash, false])
+    assert.equal(response.status, 200)
+
+    let blockResponse = response.body.result
+    assert.isTrue(web3Utils.hexToNumber(blockResponse.slotNumber) >= 75_100_200n)
 })
 
 it('should get block receipts', async () => {
@@ -112,10 +119,9 @@ it('should get block receipts', async () => {
     assert.lengthOf(blockReceipts, 3)
 
     for (let blockReceipt of blockReceipts) {
-        let txReceipt = await web3.eth.getTransactionReceipt(
-            blockReceipt.transactionHash,
-            web3types.ETH_DATA_FORMAT
-        )
+        let txResponse = await helpers.callRPCMethod('eth_getTransactionReceipt', [blockReceipt.transactionHash])
+        assert.equal(txResponse.status, 200)
+        let txReceipt = txResponse.body.result
         // normalize missing fields from transaction receipt
         if (txReceipt.to === undefined) {
             txReceipt.to = null
@@ -123,7 +129,6 @@ it('should get block receipts', async () => {
         if (txReceipt.contractAddress === undefined) {
             txReceipt.contractAddress = null
         }
-
         assert.deepEqual(blockReceipt, txReceipt)
     }
 })
@@ -202,11 +207,11 @@ it('should get block and transactions with COA interactions', async () => {
         // Assert that the transaction type from receipt is `0`, the type of `LegacyTx`.
         assert.equal(receipt.type, 0n)
         if (receipt.contractAddress != null) {
-            assert.equal(receipt.gasUsed, 702600n)
-            assert.equal(receipt.cumulativeGasUsed, 702600n)
+            assert.equal(receipt.gasUsed, 5375550n)
+            assert.equal(receipt.cumulativeGasUsed, 5375550n)
         } else {
             assert.equal(receipt.gasUsed, 21055n)
-            assert.equal(receipt.cumulativeGasUsed, 723655n)
+            assert.equal(receipt.cumulativeGasUsed, 5396605n)
         }
     }
 
@@ -269,8 +274,8 @@ it('should get transaction', async () => {
     assert.equal(rcp.blockNumber, conf.coaDeploymentHeight)
     assert.equal(rcp.from, tx.from)
     assert.equal(rcp.to, tx.to)
-    assert.equal(rcp.gasUsed, 21000n)
-    assert.equal(rcp.cumulativeGasUsed, 744655n)
+    assert.equal(rcp.gasUsed, 204600n)
+    assert.equal(rcp.cumulativeGasUsed, 5601205n)
     assert.equal(rcp.transactionHash, tx.hash)
     assert.equal(rcp.status, conf.successStatus)
     assert.equal(rcp.effectiveGasPrice, 1n)
@@ -389,7 +394,7 @@ it('should get fee history', async () => {
             oldestBlock: 1n,
             reward: [['0x96'], ['0x96'], ['0x96']], // gas price is 150 during testing
             baseFeePerGas: [1n, 1n, 1n],
-            gasUsedRatio: [0.07122295, 0.006205458333333334, 0.0]
+            gasUsedRatio: [0.48226858333333333, 0.04667670833333333, 0.0]
         }
     )
 })
