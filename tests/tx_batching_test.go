@@ -52,7 +52,7 @@ func Test_TxMemPool_OutOfOrderBurst(t *testing.T) {
 	for nonce := range totalTxs {
 		signed, _, err := evmSign(
 			big.NewInt(transferAmount),
-			23_500,
+			205_000,
 			privateKey,
 			uint64(nonce),
 			&testEoaReceiver,
@@ -134,7 +134,7 @@ func Test_TxMemPool_SingleTxImmediateSubmission(t *testing.T) {
 
 	signed, _, err := evmSign(
 		big.NewInt(transferAmount),
-		23_500,
+		205_000,
 		privateKey,
 		0,
 		&testEoaReceiver,
@@ -215,7 +215,7 @@ func Test_TxMemPool_GapHoldAndFill(t *testing.T) {
 	for nonce := range 5 {
 		signed, _, err := evmSign(
 			big.NewInt(transferAmount),
-			23_500,
+			205_000,
 			privateKey,
 			uint64(nonce),
 			&testEoaReceiver,
@@ -298,7 +298,7 @@ func Test_TxMemPool_BatchSizeCap(t *testing.T) {
 	for nonce := range totalTxs {
 		signed, _, err := evmSign(
 			big.NewInt(transferAmount),
-			23_500,
+			205_000,
 			privateKey,
 			uint64(nonce),
 			&testEoaReceiver,
@@ -401,7 +401,7 @@ func Test_TxMemPool_DuplicateTransactionRejection(t *testing.T) {
 	// stays queued (never fast-pathed, never in flight).
 	signed, _, err := evmSign(
 		big.NewInt(50_000),
-		23_500,
+		205_000,
 		privateKey,
 		5,
 		&testEoaReceiver,
@@ -913,7 +913,7 @@ func Test_OutOfOrderNonceBurstTransactions(t *testing.T) {
 	require.NoError(t, err)
 
 	// Fund the test wallet
-	signed, _, err := evmSign(big.NewInt(1_000_000_000), 23_500, eoaKey, 0, &testAddr, nil)
+	signed, _, err := evmSign(big.NewInt(1_000_000_000), 205_000, eoaKey, 0, &testAddr, nil)
 	require.NoError(t, err)
 
 	fundHash, err := rpcTester.sendRawTx(signed)
@@ -931,7 +931,7 @@ func Test_OutOfOrderNonceBurstTransactions(t *testing.T) {
 	txs := make([][]byte, burstSize)
 	hashes := make([]string, burstSize)
 	for i := range burstSize {
-		s, hash, err := evmSign(big.NewInt(1_000), 23_500, privatekey, uint64(i), &testEoaReceiver, nil)
+		s, hash, err := evmSign(big.NewInt(1_000), 205_000, privatekey, uint64(i), &testEoaReceiver, nil)
 		require.NoError(t, err)
 		txs[i] = s
 		hashes[i] = hash.Hex()
@@ -1032,7 +1032,7 @@ func fundEOA(t *testing.T, rpcTester *rpcTest, testAddr common.Address) {
 	eoaKey, err := crypto.HexToECDSA(eoaTestPrivateKey)
 	require.NoError(t, err)
 
-	signed, _, err := evmSign(big.NewInt(1_000_000_000), 23_500, eoaKey, 0, &testAddr, nil)
+	signed, _, err := evmSign(big.NewInt(1_000_000_000), 205_000, eoaKey, 0, &testAddr, nil)
 	require.NoError(t, err)
 
 	txHash, err := rpcTester.sendRawTx(signed)
