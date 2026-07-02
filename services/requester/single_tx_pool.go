@@ -125,7 +125,7 @@ func (t *SingleTxPool) Add(
 		// If there was any error during the transaction build
 		// process, we record it as a dropped transaction.
 		t.collector.TransactionsDropped(1)
-		t.logger.Error().Err(err).Msgf(
+		t.logger.Error().Err(err).Str("tx-hash", tx.Hash().Hex()).Msgf(
 			"failed to build Flow transaction for EOA: %s, with nonce: %d",
 			from.Hex(),
 			tx.Nonce(),
@@ -137,7 +137,7 @@ func (t *SingleTxPool) Add(
 		// If there was any error while sending the transaction,
 		// we record it as a dropped transaction.
 		t.collector.TransactionsDropped(1)
-		t.logger.Error().Err(err).Msgf(
+		t.logger.Error().Err(err).Str("tx-hash", tx.Hash().Hex()).Msgf(
 			"failed to submit Flow transaction for EOA: %s, with nonce: %d",
 			from.Hex(),
 			tx.Nonce(),

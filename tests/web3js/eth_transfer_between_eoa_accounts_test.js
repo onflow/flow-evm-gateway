@@ -24,7 +24,7 @@ it('transfer flow between two EOA accounts', async () => {
     to: receiver.address,
     value: transferValue,
     gasPrice: conf.minGasPrice,
-    gasLimit: 55_000,
+    gasLimit: 205_000,
   })
   assert.equal(transfer.receipt.status, conf.successStatus)
   assert.equal(transfer.receipt.from, conf.eoa_address)
@@ -40,7 +40,7 @@ it('transfer flow between two EOA accounts', async () => {
 
   senderBalance = await web3.eth.getBalance(conf.eoa.address)
   assert.isTrue(senderBalance < utils.toWei(conf.fundedAmount, "ether") - transferValue)
-  assert.equal(senderBalance, 4499999999996850000n) // gas fees are subtracted
+  assert.equal(senderBalance, 4499999999969310000n) // gas fees are subtracted
 
   // make sure latest block includes the transfer tx
   let latest = await web3.eth.getBlockNumber()

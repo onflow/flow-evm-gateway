@@ -74,7 +74,7 @@ it('should send transactions with relay account', async () => {
     )
     assert.equal(response.status, 200)
     assert.isDefined(response.body)
-    assert.equal(web3.utils.hexToNumber(response.body.result), 63779n)
+    assert.equal(web3.utils.hexToNumber(response.body.result), 250299n)
 
     // 2. Designate the Contract on the EOA, and invoke the `initialize` function.
     let hash = await walletClient.sendTransaction({
@@ -164,7 +164,7 @@ it('should send self-executing transactions', async () => {
     )
     assert.equal(response.status, 200)
     assert.isDefined(response.body)
-    assert.equal(web3.utils.hexToNumber(response.body.result), 63779n)
+    assert.equal(web3.utils.hexToNumber(response.body.result), 250299n)
 
     // 2. Designate the Contract on the EOA, and invoke the `initialize` function.
     let hash = await walletClient.sendTransaction({

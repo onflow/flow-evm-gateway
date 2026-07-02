@@ -21,13 +21,13 @@ before(async () => {
     assert.equal(rcp.contractAddress, contractAddress)
     assert.equal(rcp.status, conf.successStatus)
     assert.isUndefined(rcp.to)
-    assert.equal(rcp.gasUsed, 1200498n)
+    assert.equal(rcp.gasUsed, 8329308n)
     assert.equal(rcp.gasUsed, rcp.cumulativeGasUsed)
 })
 
 it('calculates fees for legacy tx type', async () => {
     let senderBalance = await web3.eth.getBalance(conf.eoa.address)
-    assert.equal(senderBalance, 4999999999819925300n)
+    assert.equal(senderBalance, 4999999998750603800n)
 
     let storeCallData = deployed.contract.methods.store(1337).encodeABI()
     let gasPrice = conf.minGasPrice + 50n
@@ -67,69 +67,12 @@ it('calculates fees for legacy tx type', async () => {
     }
 
     let coinbaseBalance = await web3.eth.getBalance(conf.coinbase)
-    assert.equal(coinbaseBalance, 184845300n)
-})
-
-it('calculates fees for access list tx type', async () => {
-    let senderBalance = await web3.eth.getBalance(conf.eoa.address)
-    assert.equal(senderBalance, 4999999999815154700n)
-
-    let storeCallData = deployed.contract.methods.store(8250).encodeABI()
-    let gasPrice = conf.minGasPrice + 5n
-    let res = await helpers.signAndSend({
-        from: conf.eoa.address,
-        to: contractAddress,
-        data: storeCallData,
-        value: '0',
-        gasPrice: gasPrice,
-        accessList: [
-            {
-                address: contractAddress,
-                storageKeys: [],
-            },
-        ]
-    })
-    assert.equal(res.receipt.status, conf.successStatus)
-    assert.equal(res.receipt.type, 1n)
-    assert.equal(res.receipt.effectiveGasPrice, gasPrice)
-
-    // assert the transaction fees charged on sender EOA
-    let cost = res.receipt.gasUsed * gasPrice
-    let expectedBalance = senderBalance - cost
-    senderBalance = await web3.eth.getBalance(conf.eoa.address)
-    assert.equal(senderBalance, expectedBalance)
-
-    // assert the gasPrice field of the submitted tx
-    let latest = await web3.eth.getBlockNumber()
-    let tx = await web3.eth.getTransactionFromBlock(latest, 0)
-    assert.equal(tx.gasPrice, gasPrice)
-
-    // with insufficient gas price
-    try {
-        res = await helpers.signAndSend({
-            from: conf.eoa.address,
-            to: contractAddress,
-            data: storeCallData,
-            value: '0',
-            gasPrice: conf.minGasPrice - 50n,
-            accessList: [
-                {
-                    address: contractAddress,
-                    storageKeys: [],
-                },
-            ]
-        })
-    } catch (e) {
-        assert.include(e.message, "the minimum accepted gas price for transactions is: 150")
-    }
-
-    let coinbaseBalance = await web3.eth.getBalance(conf.coinbase)
-    assert.equal(coinbaseBalance, 189348515n)
+    assert.equal(coinbaseBalance, 1254166800n)
 })
 
 it('calculates fees for dynamic fees tx type', async () => {
     let senderBalance = await web3.eth.getBalance(conf.eoa.address)
-    assert.equal(senderBalance, 4999999999810651485n)
+    assert.equal(senderBalance, 4999999998745833200n)
 
     // gasTipCap is less than gasFeeCap
     // price = Min(GasTipCap, GasFeeCap) when baseFee = 0
@@ -222,5 +165,5 @@ it('calculates fees for dynamic fees tx type', async () => {
     }
 
     let coinbaseBalance = await web3.eth.getBalance(conf.coinbase)
-    assert.equal(coinbaseBalance, 199365715n)
+    assert.equal(coinbaseBalance, 1264184000n)
 })

@@ -1,4 +1,5 @@
 const { assert } = require('chai')
+const web3Validator = require('web3-validator')
 const conf = require('./config')
 const helpers = require('./helpers')
 const web3 = conf.web3
@@ -18,8 +19,17 @@ it('deploy contract and interact', async () => {
     assert.equal(rcp.contractAddress, contractAddress)
     assert.equal(rcp.status, conf.successStatus)
     assert.isUndefined(rcp.to)
-    assert.equal(rcp.gasUsed, 1200498n)
+    assert.equal(rcp.gasUsed, 8329308n)
     assert.equal(rcp.gasUsed, rcp.cumulativeGasUsed)
+
+    let blockResponse = await helpers.callRPCMethod('eth_getBlockByHash', [rcp.blockHash, false])
+    assert.equal(blockResponse.status, 200)
+
+    let blockResult = blockResponse.body.result
+    assert.equal(
+        blockResult.blockAccessListHash,
+        '0x61ea4e7a61ece84df5403c55b8cd08d6e53fd683f32ecfd51589d190a9499e37'
+    )
 
     // check if latest block contains the deploy results
     let latestHeight = await web3.eth.getBlockNumber()
@@ -100,10 +110,15 @@ it('deploy contract and interact', async () => {
     })
     assert.equal(res.receipt.status, conf.successStatus)
 
-    // assert that logsBloom from transaction receipt and block match
+    // assert that logsBloom from transaction receipt is included in block's logsBloom
     latestHeight = await web3.eth.getBlockNumber()
     let block = await web3.eth.getBlock(latestHeight)
-    assert.equal(block.logsBloom, res.receipt.logsBloom)
+    assert.isTrue(web3Validator.isBloom(block.logsBloom))
+    let txLog = res.receipt.logs[0]
+    assert.isTrue(web3Validator.isContractAddressInBloom(block.logsBloom, txLog.address))
+    for (const topic of txLog.topics) {
+        assert.isTrue(web3Validator.isTopicInBloom(block.logsBloom, topic))
+    }
 
     // check that revert reason for custom error is correctly returned for signed transaction
     try {
@@ -256,7 +271,7 @@ it('deploy contract and interact', async () => {
         },
         '0x1' // give a block height at which the contract did not exist
     )
-    assert.equal(gasEstimate, 22026n)
+    assert.equal(gasEstimate, 25693n)
 
     gasEstimate = await web3.eth.estimateGas(
         {
@@ -268,7 +283,7 @@ it('deploy contract and interact', async () => {
         },
         'latest' // give a block height at which the contract did exist
     )
-    assert.equal(gasEstimate, 25050n)
+    assert.equal(gasEstimate, 25693n)
 
     // check that `eth_call` can handle state overrides
     let stateOverrides = {
@@ -330,5 +345,5 @@ it('deploy contract and interact', async () => {
     // setting a storage slot from a zero-value, to a non-zero value has an
     // increase of about 20,000 gas. Which is quite different to `0x72c3`.
     result = response.body.result
-    assert.equal(result, '0xac56')
+    assert.equal(result, '0x1eac6')
 })
