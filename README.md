@@ -265,6 +265,12 @@ The application can be configured using the following flags at runtime:
 | `profiler-host`                | `localhost`      | Host for the pprof profiler                                                                |
 | `profiler-port`                | `6060`           | Port for the pprof profiler                                                                |
 | `tx-state-validation`          | `""`             | When set to `local-index` will validate EVM transaction state locally                      |
+| `tx-mempool-mode`              | `false`          | Enable the nonce-aware transaction mempool: expected-nonce transactions are submitted immediately, out-of-order transactions are held per-EOA until their nonce gap fills. Mutually exclusive with `tx-batch-mode` and requires `tx-state-validation=local-index`. |
+| `tx-collection-window`         | `300ms`          | Per-EOA sliding collection window for the transaction mempool. Resets on each arrival from the same EOA. Only applies when `tx-mempool-mode=true`.                        |
+| `tx-submission-spacing`        | `1200ms`         | Minimum gap between consecutive Cadence submissions for the same EOA in the transaction mempool; also serves as the flush deadline for a continuously-fed collection window. Recommended ~1.5x the block production rate. Must be >= `tx-collection-window`. Only applies when `tx-mempool-mode=true`. |
+| `tx-pool-ttl`                  | `30s`            | How long the transaction mempool holds an out-of-order transaction waiting for its nonce gap to fill, before submitting it anyway. Only applies when `tx-mempool-mode=true`.                                       |
+| `tx-max-batch-size`            | `5`              | Maximum number of EVM transactions per `EVM.batchRun` Cadence transaction in the transaction mempool. Only applies when `tx-mempool-mode=true`.                                                                        |
+| `tx-max-nonce-gap`             | `500`            | How far ahead of an EOA's on-chain nonce the transaction mempool accepts a nonce; nonces beyond `indexedNonce + gap` are rejected as nonce-too-high. `0` disables the upper bound. A nonce below the indexed nonce is always rejected as nonce-too-low. Only applies when `tx-mempool-mode=true`. |
 
 
 # EVM Gateway Endpoints
