@@ -8,10 +8,10 @@ require (
 	github.com/goccy/go-json v0.10.4
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/holiman/uint256 v1.3.2
-	github.com/onflow/atree v0.16.0
-	github.com/onflow/cadence v1.10.3
-	github.com/onflow/flow-go v0.48.1-evm-cache-block.0.20260625075712-10f911e681fa
-	github.com/onflow/flow-go-sdk v1.10.3
+	github.com/onflow/atree v0.16.1
+	github.com/onflow/cadence v1.10.5
+	github.com/onflow/flow-go v0.50.1-0.20260715144919-b7c998e1925c
+	github.com/onflow/flow-go-sdk v1.10.5
 	github.com/prometheus/client_golang v1.20.5
 	github.com/rs/cors v1.8.0
 	github.com/rs/zerolog v1.33.0
@@ -23,7 +23,7 @@ require (
 	go.uber.org/atomic v1.11.0
 	go.uber.org/ratelimit v0.3.1
 	golang.org/x/exp v0.0.0-20241217172543-b2144cdd0a67
-	golang.org/x/sync v0.19.0
+	golang.org/x/sync v0.20.0
 	google.golang.org/grpc v1.79.3
 )
 
@@ -205,11 +205,11 @@ require (
 	go.opentelemetry.io/proto/otlp v1.9.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
-	golang.org/x/crypto v0.48.0 // indirect
-	golang.org/x/net v0.50.0 // indirect
+	golang.org/x/crypto v0.52.0 // indirect
+	golang.org/x/net v0.55.0 // indirect
 	golang.org/x/oauth2 v0.35.0 // indirect
-	golang.org/x/sys v0.42.0 // indirect
-	golang.org/x/text v0.34.0 // indirect
+	golang.org/x/sys v0.45.0 // indirect
+	golang.org/x/text v0.37.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
 	gonum.org/v1/gonum v0.16.0 // indirect
