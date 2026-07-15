@@ -287,12 +287,6 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 			nonceProvider,
 		)
 	} else if b.config.TxBatchMode {
-		nonceProvider := requester.NewLocalNonceProvider(
-			b.config.FlowNetworkID,
-			b.storages.Registers,
-			b.storages.Blocks,
-			b.collector,
-		)
 		txPool, err = requester.NewBatchTxPool(
 			ctx,
 			b.client,
@@ -301,7 +295,6 @@ func (b *Bootstrap) StartAPIServer(ctx context.Context) error {
 			b.config,
 			b.collector,
 			b.keystore,
-			nonceProvider,
 		)
 	} else {
 		txPool, err = requester.NewSingleTxPool(
