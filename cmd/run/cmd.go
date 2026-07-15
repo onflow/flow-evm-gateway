@@ -227,6 +227,33 @@ func parseConfigFromFlags() error {
 		return fmt.Errorf("tx-batch-mode should be enabled with tx-state-validation=local-index")
 	}
 
+	if cfg.TxMemPoolMode {
+		if cfg.TxBatchMode {
+			return fmt.Errorf("tx-mempool-mode and tx-batch-mode are mutually exclusive")
+		}
+		if cfg.TxStateValidation != config.LocalIndexValidation {
+			return fmt.Errorf("tx-mempool-mode requires tx-state-validation=local-index")
+		}
+		if cfg.TxCollectionWindow <= 0 {
+			return fmt.Errorf("tx-collection-window must be > 0 when tx-mempool-mode is enabled")
+		}
+		if cfg.TxSubmissionSpacing <= 0 {
+			return fmt.Errorf("tx-submission-spacing must be > 0 when tx-mempool-mode is enabled")
+		}
+		if cfg.TxCollectionWindow > cfg.TxSubmissionSpacing {
+			return fmt.Errorf(
+				"tx-collection-window (%s) must not exceed tx-submission-spacing (%s)",
+				cfg.TxCollectionWindow, cfg.TxSubmissionSpacing,
+			)
+		}
+		if cfg.TxPoolTTL <= 0 {
+			return fmt.Errorf("tx-pool-ttl must be > 0 when tx-mempool-mode is enabled")
+		}
+		if cfg.TxMaxBatchSize < 1 {
+			return fmt.Errorf("tx-max-batch-size must be >= 1 when tx-mempool-mode is enabled")
+		}
+	}
+
 	return nil
 }
 
@@ -291,6 +318,12 @@ func init() {
 	Cmd.Flags().BoolVar(&cfg.TxBatchMode, "tx-batch-mode", false, "Enable batch transaction submission, to avoid nonce mismatch issues for high-volume EOAs.")
 	Cmd.Flags().DurationVar(&cfg.TxBatchInterval, "tx-batch-interval", time.Millisecond*1200, "Time interval upon which to submit the transaction batches to the Flow network.")
 	Cmd.Flags().DurationVar(&cfg.EOAActivityCacheTTL, "eoa-activity-cache-ttl", time.Second*10, "Time interval used to track EOA activity. Tx send more frequently than this interval will be batched. Useful only when batch transaction submission is enabled.")
+	Cmd.Flags().BoolVar(&cfg.TxMemPoolMode, "tx-mempool-mode", false, "Enable the transaction mempool: expected-nonce transactions are submitted immediately, out-of-order transactions are held until their nonce gap fills. Mutually exclusive with --tx-batch-mode and requires --tx-state-validation=local-index.")
+	Cmd.Flags().DurationVar(&cfg.TxCollectionWindow, "tx-collection-window", 300*time.Millisecond, "Per-EOA sliding collection window for the transaction mempool. Resets on each arrival from the same EOA.")
+	Cmd.Flags().DurationVar(&cfg.TxSubmissionSpacing, "tx-submission-spacing", 1200*time.Millisecond, "Minimum gap between consecutive Cadence submissions for the same EOA in the transaction mempool; also serves as the flush deadline for a continuously-fed collection window. Recommended ~1.5x the block production rate.")
+	Cmd.Flags().DurationVar(&cfg.TxPoolTTL, "tx-pool-ttl", 30*time.Second, "How long the transaction mempool holds an out-of-order transaction waiting for its nonce gap to fill, before submitting it anyway.")
+	Cmd.Flags().IntVar(&cfg.TxMaxBatchSize, "tx-max-batch-size", 5, "Maximum number of EVM transactions per EVM.batchRun Cadence transaction in the transaction mempool.")
+	Cmd.Flags().Uint64Var(&cfg.TxMaxNonceGap, "tx-max-nonce-gap", 500, "How far ahead of an EOA's on-chain nonce the transaction mempool accepts a nonce; nonces beyond indexedNonce+gap are rejected as nonce-too-high. 0 means no upper bound. A nonce below the indexed nonce is always rejected as nonce-too-low regardless of this setting.")
 	Cmd.Flags().DurationVar(&cfg.RpcRequestTimeout, "rpc-request-timeout", time.Second*120, "Sets the maximum duration at which JSON-RPC requests should generate a response, before they timeout. The default is 120 seconds.")
 
 	err := Cmd.Flags().MarkDeprecated("init-cadence-height", "This flag is no longer necessary and will be removed in future version. The initial Cadence height is known for testnet/mainnet and this was only required for fresh deployments of EVM Gateway. Once the DB has been initialized, the latest index Cadence height will be used upon start-up.")
