@@ -5,15 +5,15 @@ go 1.25.1
 require (
 	github.com/ethereum/go-ethereum v1.17.4
 	github.com/goccy/go-json v0.10.4
-	github.com/onflow/cadence v1.10.3
+	github.com/onflow/cadence v1.10.5
 	github.com/onflow/crypto v0.25.4
 	github.com/onflow/flow-emulator v1.21.1
 	github.com/onflow/flow-evm-gateway v0.0.0-20240201154855-4d4d3d3f19c7
-	github.com/onflow/flow-go v0.48.1-evm-cache-block.0.20260625075712-10f911e681fa
-	github.com/onflow/flow-go-sdk v1.10.3
+	github.com/onflow/flow-go v0.50.1-0.20260710075724-3cb18cfa2e5b
+	github.com/onflow/flow-go-sdk v1.10.5
 	github.com/rs/zerolog v1.34.0
 	github.com/stretchr/testify v1.11.1
-	golang.org/x/sync v0.19.0
+	golang.org/x/sync v0.20.0
 )
 
 require (
@@ -154,7 +154,7 @@ require (
 	github.com/multiformats/go-varint v0.0.7 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
-	github.com/onflow/atree v0.16.0 // indirect
+	github.com/onflow/atree v0.16.1 // indirect
 	github.com/onflow/fixed-point v0.1.1 // indirect
 	github.com/onflow/flow-core-contracts/lib/go/contracts v1.10.3 // indirect
 	github.com/onflow/flow-core-contracts/lib/go/templates v1.10.3 // indirect
@@ -230,13 +230,13 @@ require (
 	go.uber.org/ratelimit v0.3.1 // indirect
 	go.uber.org/zap v1.27.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
-	golang.org/x/crypto v0.48.0 // indirect
+	golang.org/x/crypto v0.52.0 // indirect
 	golang.org/x/exp v0.0.0-20251023183803-a4bb9ffd2546 // indirect
-	golang.org/x/net v0.50.0 // indirect
+	golang.org/x/net v0.55.0 // indirect
 	golang.org/x/oauth2 v0.35.0 // indirect
-	golang.org/x/sys v0.42.0 // indirect
-	golang.org/x/term v0.40.0 // indirect
-	golang.org/x/text v0.34.0 // indirect
+	golang.org/x/sys v0.45.0 // indirect
+	golang.org/x/term v0.43.0 // indirect
+	golang.org/x/text v0.37.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
 	gonum.org/v1/gonum v0.16.0 // indirect
