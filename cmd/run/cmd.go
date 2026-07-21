@@ -227,9 +227,6 @@ func parseConfigFromFlags() error {
 		return fmt.Errorf("tx-batch-mode should be enabled with tx-state-validation=local-index")
 	}
 
-	cfg.ExperimentalSoftFinalityEnabled = experimentalSoftFinalityEnabled
-	cfg.ExperimentalSealingVerificationEnabled = experimentalSealingVerificationEnabled
-
 	if cfg.TxMemPoolMode {
 		if cfg.TxBatchMode {
 			return fmt.Errorf("tx-mempool-mode and tx-batch-mode are mutually exclusive")
@@ -257,6 +254,10 @@ func parseConfigFromFlags() error {
 		}
 	}
 
+	if !cfg.ExperimentalSoftFinalityEnabled && cfg.ExperimentalSealingVerificationEnabled {
+		return fmt.Errorf("experimental-sealing-verification-enabled should be enabled only when experimental-soft-finality-enabled=true")
+	}
+
 	return nil
 }
 
@@ -280,9 +281,6 @@ var (
 	txStateValidation string
 	initHeight,
 	forceStartHeight uint64
-
-	experimentalSoftFinalityEnabled,
-	experimentalSealingVerificationEnabled bool
 )
 
 func init() {
@@ -323,9 +321,9 @@ func init() {
 	Cmd.Flags().DurationVar(&cfg.TxRequestLimitDuration, "tx-request-limit-duration", time.Second*3, "Time interval upon which to enforce transaction submission rate limiting.")
 	Cmd.Flags().BoolVar(&cfg.TxBatchMode, "tx-batch-mode", false, "Enable batch transaction submission, to avoid nonce mismatch issues for high-volume EOAs.")
 	Cmd.Flags().DurationVar(&cfg.TxBatchInterval, "tx-batch-interval", time.Millisecond*1200, "Time interval upon which to submit the transaction batches to the Flow network.")
-	Cmd.Flags().BoolVar(&experimentalSoftFinalityEnabled, "experimental-soft-finality-enabled", false, "Sets whether the gateway should use the experimental soft finality feature. WARNING: This may result in incorrect results being returned in certain circumstances. Use only if you know what you are doing.")
-	Cmd.Flags().BoolVar(&experimentalSealingVerificationEnabled, "experimental-sealing-verification-enabled", true, "Sets whether the gateway should use the experimental soft finality sealing verification feature. WARNING: This may result in indexing halts if events do not match. Use only if you know what you are doing.")
-	Cmd.Flags().DurationVar(&cfg.EOAActivityCacheTTL, "eoa-activity-cache-ttl", time.Second*10, "[DEPRECATED] No longer has any effect. BatchTxPool now always pools every transaction before submission.")
+	Cmd.Flags().DurationVar(&cfg.EOAActivityCacheTTL, "eoa-activity-cache-ttl", time.Second*10, "Time interval used to track EOA activity. Tx send more frequently than this interval will be batched. Useful only when batch transaction submission is enabled.")
+	Cmd.Flags().BoolVar(&cfg.ExperimentalSoftFinalityEnabled, "experimental-soft-finality-enabled", false, "Sets whether the gateway should use the experimental soft finality feature. This results in faster indexing time, because EVM state is fetched from finalized, instead of sealed Flow blocks.")
+	Cmd.Flags().BoolVar(&cfg.ExperimentalSealingVerificationEnabled, "experimental-sealing-verification-enabled", false, "Sets whether the gateway should use the experimental soft finality sealing verification feature. This is an extra safety check for --experimental-soft-finality-enabled=true, which verifies that all finalized Flow blocks that were indexed, have eventually been sealed. The ingestion will halt, even if a single Flow block was not found to be sealed.")
 	Cmd.Flags().BoolVar(&cfg.TxMemPoolMode, "tx-mempool-mode", false, "Enable the transaction mempool: expected-nonce transactions are submitted immediately, out-of-order transactions are held until their nonce gap fills. Mutually exclusive with --tx-batch-mode and requires --tx-state-validation=local-index.")
 	Cmd.Flags().DurationVar(&cfg.TxCollectionWindow, "tx-collection-window", 300*time.Millisecond, "Per-EOA sliding collection window for the transaction mempool. Resets on each arrival from the same EOA.")
 	Cmd.Flags().DurationVar(&cfg.TxSubmissionSpacing, "tx-submission-spacing", 1200*time.Millisecond, "Minimum gap between consecutive Cadence submissions for the same EOA in the transaction mempool; also serves as the flush deadline for a continuously-fed collection window. Recommended ~1.5x the block production rate.")

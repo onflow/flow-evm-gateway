@@ -37,11 +37,11 @@ type SealingVerifier struct {
 	startHeight uint64
 	eventsHash  *pebble.EventsHash
 
-	// unsealedBlocksToVerify contains the events has for unsealed blocks by the ingestion engine
+	// unsealedBlocksToVerify contains the events hash for unsealed blocks by the ingestion engine
 	// Cache the unsealed data until the sealed data is available to verify.
 	unsealedBlocksToVerify map[uint64]flow.Identifier
 
-	// sealedBlocksToVerify contains the events hash for sealed blocks return by the Access node
+	// sealedBlocksToVerify contains the events hash for sealed blocks returned by the Access node
 	// Note: we also track sealed blocks since it's possible for the sealed data stream to get ahead
 	// of the unsealed data ingestion. In this case, we need to cache the sealed data until the unsealed
 	// data is available.

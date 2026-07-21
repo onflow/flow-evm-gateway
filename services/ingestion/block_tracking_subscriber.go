@@ -31,14 +31,17 @@ var _ EventSubscriber = &RPCBlockTrackingSubscriber{}
 // polling endpoint to fetch the events for each finalized block.
 //
 // IMPORTANT: Since data is downloaded and processed from unsealed blocks, it's possible for the
-// data that was downloaded to be incorrect. This subscriber provides no handling or detection for
-// cases where the received data differs from the data that was ultimately sealed. The operator must
-// handle this manually.
-// Since it's not reasonable to expect operators to do this manual tracking, this features should NOT
-// be used outside of a limited Proof of Concept. Use at own risk.
+// data that was downloaded to be incorrect. This subscriber provides no automatic handling for
+// such cases, but the `SealingVerifier`, when enabled, can detect for which block the received
+// data differs from the data that was ultimately sealed. Even when the `SealingVerifier` is not
+// enabled, the ingestion engine always validates the state-change checksum for every transaction
+// that is replayed and indexed locally.
+// At any case, the operator can handle such cases manually, either by using an older snapshot of
+// the local DB, or by using the `--force-start-height` CLI flag and forcing the ingestion engine
+// to start from a block height before the data inconsistency appeared.
 //
-// A future version of the RPCEventSubscriber will provide this detection and handling functionality
-// at which point this subscriber will be removed.
+// A future version of the RPCEventSubscriber will provide automated detection and handling
+// functionality at which point this subscriber will be removed.
 type RPCBlockTrackingSubscriber struct {
 	*RPCEventSubscriber
 
@@ -184,9 +187,8 @@ func (r *RPCBlockTrackingSubscriber) subscribe(ctx context.Context, height uint6
 
 			case blockHeader, ok := <-blockHeadersChan:
 				if !ok {
-					// typically we receive an error in the errChan before the channels are closes
-					var err error
-					err = errs.ErrDisconnected
+					// typically we receive an error in the errChan before the channels are closed
+					err := errs.ErrDisconnected
 					if ctx.Err() != nil {
 						err = ctx.Err()
 					}
@@ -253,9 +255,8 @@ func (r *RPCBlockTrackingSubscriber) subscribe(ctx context.Context, height uint6
 
 			case err, ok := <-errChan:
 				if !ok {
-					// typically we receive an error in the errChan before the channels are closes
-					var err error
-					err = errs.ErrDisconnected
+					// typically we receive an error in the errChan before the channels are closed
+					err := errs.ErrDisconnected
 					if ctx.Err() != nil {
 						err = ctx.Err()
 					}
@@ -324,15 +325,21 @@ func (r *RPCBlockTrackingSubscriber) evmEventsForBlock(
 			BlockTimestamp: blockHeader.Timestamp,
 		}
 	} else {
-		return flow.BlockEvents{}, fmt.Errorf("failed to get EVM block event for cadence block %d: %w",
-			blockHeader.Height, err)
+		return flow.BlockEvents{}, fmt.Errorf(
+			"failed to get EVM block event for cadence block %d: %w",
+			blockHeader.Height,
+			err,
+		)
 	}
 
 	// evm TX events
 	txEvents, err := r.getEventsByType(ctx, blockHeader, eventTypes[1])
 	if err != nil {
-		return flow.BlockEvents{}, fmt.Errorf("failed to get EVM transaction events for cadence block %d: %w",
-			blockHeader.Height, err)
+		return flow.BlockEvents{}, fmt.Errorf(
+			"failed to get EVM transaction events for cadence block %d: %w",
+			blockHeader.Height,
+			err,
+		)
 	}
 
 	// combine block and tx events to be processed together
