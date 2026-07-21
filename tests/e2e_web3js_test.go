@@ -95,7 +95,7 @@ func TestWeb3_E2E(t *testing.T) {
 		}()
 		// this is a pre-signed contract deployment, that only works before
 		// Amsterdam.
-		runWeb3Test(t, "eth_multicall3_contract_test")
+		// runWeb3Test(t, "eth_multicall3_contract_test")
 	})
 
 	t.Run("test fetch transaction", func(t *testing.T) {
