@@ -144,7 +144,7 @@ func (r *RPCBlockTrackingSubscriber) Subscribe(ctx context.Context) <-chan model
 // Subscribing to EVM specific events and handle any disconnection errors
 // as well as context cancellations.
 func (r *RPCBlockTrackingSubscriber) subscribe(ctx context.Context, height uint64) <-chan models.BlockEvents {
-	eventsChan := make(chan models.BlockEvents)
+	eventsChan := make(chan models.BlockEvents, 1)
 
 	var blockHeadersChan <-chan *flow.BlockHeader
 	var errChan <-chan error
