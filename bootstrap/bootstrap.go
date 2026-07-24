@@ -653,9 +653,9 @@ func setupStorage(
 			if err := eventsHash.BatchSetProcessedSealedHeight(config.ForceStartCadenceHeight, batch); err != nil {
 				return nil, nil, fmt.Errorf("failed to set latest verified sealed height: %w", err)
 			}
-		}
-		if err := eventsHash.BatchRemoveAboveHeight(config.ForceStartCadenceHeight, batch); err != nil {
-			return nil, nil, fmt.Errorf("failed to reset events hash above height: %w", err)
+			if err := eventsHash.BatchRemoveAboveHeight(config.ForceStartCadenceHeight, batch); err != nil {
+				return nil, nil, fmt.Errorf("failed to reset events hash above height: %w", err)
+			}
 		}
 	}
 
