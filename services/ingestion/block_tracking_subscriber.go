@@ -210,6 +210,8 @@ func (r *RPCBlockTrackingSubscriber) subscribe(ctx context.Context, height uint6
 					}
 				}
 
+				lastReceivedHeight = blockHeader.Height
+
 				// this means that either:
 				//  - the system transaction failed AND there were no EVM transactions
 				//  - this was the spork root block which has no EVM blocks
@@ -233,7 +235,6 @@ func (r *RPCBlockTrackingSubscriber) subscribe(ctx context.Context, height uint6
 				for _, evt := range blockEvents.Events {
 					r.keyLock.NotifyTransaction(evt.TransactionID)
 				}
-				lastReceivedHeight = blockHeader.Height
 
 				blockHeadersQueue = append(blockHeadersQueue, *blockHeader)
 

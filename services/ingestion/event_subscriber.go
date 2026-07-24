@@ -184,6 +184,8 @@ func (r *RPCEventSubscriber) subscribe(ctx context.Context, height uint64) <-cha
 					return
 				}
 
+				lastReceivedHeight = blockEvents.Height
+
 				evmEvents := models.NewSingleBlockEvents(blockEvents)
 				// if events contain an error, or we are in a recovery mode
 				if evmEvents.Err != nil || r.recovery {
@@ -202,8 +204,6 @@ func (r *RPCEventSubscriber) subscribe(ctx context.Context, height uint64) <-cha
 						Height: blockEvents.Height,
 					},
 				)
-
-				lastReceivedHeight = blockEvents.Height
 
 				eventsChan <- evmEvents
 
