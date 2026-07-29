@@ -125,7 +125,7 @@ import (
 //       neither a superseding ack'd submission nor a freshly-in-flight one
 //       is ever clobbered.
 //       Observability: each reset emits a WARN log line with eoa,
-//       flow-tx-id and reason ("wrapper-reverted" | "unsealed-past-threshold")
+//       flow_tx_id and reason ("wrapper-reverted" | "unsealed-past-threshold")
 //       and increments the TxPoolReconcileReset counter. Wedge duration is
 //       bounded to ~one sealing window (~6-8s) instead of the full
 //       idleQueueRetention (60s).
@@ -1267,7 +1267,7 @@ func (t *TxMemPool) reconcileOnce(ctx context.Context) {
 
 		t.queueMux.Lock()
 		q, ok := t.queues[s.from]
-		// If the queue was evicted or already advanced (different flow-tx-id
+		// If the queue was evicted or already advanced (different flow_tx_id
 		// now), do nothing — a fresher submission has superseded this state.
 		if !ok || q.lastFlowTxID != s.flowTxID {
 			t.queueMux.Unlock()
@@ -1293,7 +1293,7 @@ func (t *TxMemPool) reconcileOnce(ctx context.Context) {
 		elapsed := now.Sub(s.lastSubmittedAt)
 		event := t.logger.Warn().
 			Str("eoa", s.from.Hex()).
-			Str("flow-tx-id", s.flowTxID.Hex()).
+			Str("flow_tx_id", s.flowTxID.Hex()).
 			Str("reason", reason).
 			Dur("elapsed-since-submit", elapsed)
 		if reverted && result.Error != nil {
