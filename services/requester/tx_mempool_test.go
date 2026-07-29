@@ -14,6 +14,7 @@ import (
 	gethCommon "github.com/ethereum/go-ethereum/common"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/onflow/flow-go-sdk"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -143,7 +144,12 @@ func newTestPool(
 		queues:        make(map[gethCommon.Address]*eoaQueue),
 		now:           time.Now,
 	}
-	pool.submitBatch = submit
+	// Adapt the old-style submit closure to the new signature that carries the
+	// wrapping Cadence tx ID. Tests that need to assert on the flowTxID field
+	// override pool.submitBatch directly after construction.
+	pool.submitBatch = func(ctx context.Context, txs []heldTx) (flow.Identifier, error) {
+		return flow.Identifier{}, submit(ctx, txs)
+	}
 	return pool
 }
 
@@ -499,6 +505,10 @@ func Test_TxMemPool_FailedSubmitLogsDropWarning(t *testing.T) {
 	require.NoError(t, err)
 	from := crypto.PubkeyToAddress(key.PublicKey)
 
+	flowTxID := flow.HexToID(
+		"1122334455667788112233445566778811223344556677881122334455667788",
+	)
+
 	var logBuf bytes.Buffer
 	submitErr := errors.New("network down")
 	pool := newTestPool(
@@ -506,6 +516,13 @@ func Test_TxMemPool_FailedSubmitLogsDropWarning(t *testing.T) {
 		func(_ context.Context, _ []heldTx) error { return submitErr },
 		testPoolConfig(),
 	)
+	// Override with the new-signature closure so we can assert on the flow tx
+	// ID in the drop log — the "sending Flow transaction" failure mode (where
+	// the tx was built and signed but the AN rejected the send) still carries
+	// a valid ID that an operator can look up on Flowscan.
+	pool.submitBatch = func(_ context.Context, _ []heldTx) (flow.Identifier, error) {
+		return flowTxID, submitErr
+	}
 	pool.logger = zerolog.New(&logBuf)
 
 	tx0 := signedTestTx(t, key, 0, 1)
@@ -532,6 +549,9 @@ func Test_TxMemPool_FailedSubmitLogsDropWarning(t *testing.T) {
 	assert.Contains(t, out, `"local-next-nonce":0`, "next nonce must be logged")
 	assert.Contains(t, out, `"batch-size":2`, "batch size must be logged")
 	assert.Contains(t, out, "network down", "submit error must be logged")
+	assert.Contains(t, out, `"flow-tx-id":"`+flowTxID.Hex()+`"`,
+		"wrapping Cadence tx ID must be logged so an operator can trace it on Flowscan",
+	)
 }
 
 // A successful submission is traceable via a DEBUG log carrying the eoa and
@@ -570,6 +590,57 @@ func Test_TxMemPool_SuccessfulSubmitLogsDebug(t *testing.T) {
 	assert.Contains(t, out, from.Hex(), "eoa must be logged")
 	assert.Contains(t, out, `"low-nonce":0`)
 	assert.Contains(t, out, `"high-nonce":1`)
+}
+
+// On a successful submission we also emit a dedicated INFO log carrying just
+// eoa, nonce range and the wrapping Cadence tx ID. This is the greppable
+// mapping an operator needs to correlate an EVM nonce to the Flow tx that
+// carried it — the DEBUG log has richer context but is filtered out at the
+// default log level in production.
+func Test_TxMemPool_SuccessfulSubmitLogsInfoWithFlowTxID(t *testing.T) {
+	key, err := crypto.GenerateKey()
+	require.NoError(t, err)
+	from := crypto.PubkeyToAddress(key.PublicKey)
+
+	flowTxID := flow.HexToID(
+		"aabbccddeeff00112233445566778899aabbccddeeff00112233445566778899",
+	)
+
+	var logBuf bytes.Buffer
+	pool := newTestPool(
+		&fakeNonceProvider{nonce: 0},
+		func(_ context.Context, _ []heldTx) error { return nil },
+		testPoolConfig(),
+	)
+	pool.submitBatch = func(_ context.Context, _ []heldTx) (flow.Identifier, error) {
+		return flowTxID, nil
+	}
+	pool.logger = zerolog.New(&logBuf)
+
+	tx0 := signedTestTx(t, key, 0, 1)
+	tx1 := signedTestTx(t, key, 1, 1)
+	past := time.Now().Add(-time.Second)
+	pool.queues[from] = &eoaQueue{
+		txs: map[uint64]heldTx{
+			0: {txHash: tx0.Hash(), nonce: 0, enqueuedAt: past},
+			1: {txHash: tx1.Hash(), nonce: 1, enqueuedAt: past},
+		},
+		collectionWindowEndsAt: past,
+		flushDeadline:          past,
+	}
+
+	work := pool.collectDueBatches()
+	require.Len(t, work, 1)
+	require.NoError(t, pool.submitWork(context.Background(), work[0]))
+
+	out := logBuf.String()
+	assert.Contains(t, out, `"level":"info"`, "successful send must emit an INFO-level line")
+	assert.Contains(t, out, from.Hex(), "eoa must be logged")
+	assert.Contains(t, out, `"low-nonce":0`, "low nonce must be logged")
+	assert.Contains(t, out, `"high-nonce":1`, "high nonce must be logged")
+	assert.Contains(t, out, `"flow-tx-id":"`+flowTxID.Hex()+`"`,
+		"wrapping Cadence tx ID must be logged so it can be correlated to Flowscan",
+	)
 }
 
 // A failed fast-path submission must not rate-limit the EOA via lastSubmittedAt,

@@ -12,6 +12,7 @@ import (
 	gethCommon "github.com/ethereum/go-ethereum/common"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/onflow/cadence"
+	"github.com/onflow/flow-go-sdk"
 	"github.com/rs/zerolog"
 
 	"github.com/onflow/flow-evm-gateway/config"
@@ -469,8 +470,12 @@ type TxMemPool struct {
 	queues        map[gethCommon.Address]*eoaQueue
 	queueMux      sync.Mutex
 	// submitBatch performs the actual Flow submission. It defaults to
-	// submitTxBatch and exists as a field so tests can inject a fake.
-	submitBatch func(ctx context.Context, txs []heldTx) error
+	// submitTxBatch and exists as a field so tests can inject a fake. It returns
+	// the ID of the wrapping Cadence transaction (zero on early build failure
+	// before a Flow tx is signed) so logSubmission can record it, enabling an
+	// operator to correlate a wedged EVM nonce to the specific Cadence tx that
+	// carried it (or was supposed to).
+	submitBatch func(ctx context.Context, txs []heldTx) (flow.Identifier, error)
 	// now returns the current time. It defaults to time.Now and exists as a
 	// field so tests can drive the collection window, flush deadline, submission
 	// spacing, TTL expiry and idle-queue retention with a controllable clock
@@ -615,9 +620,9 @@ func (t *TxMemPool) Add(
 			// Bound the submit so a hung call cannot pin queueMux indefinitely
 			// (see fastPathSubmitTimeout).
 			submitCtx, cancel := context.WithTimeout(ctx, fastPathSubmitTimeout)
-			submitErr := t.submitBatch(submitCtx, batch)
+			flowTxID, submitErr := t.submitBatch(submitCtx, batch)
 			cancel()
-			t.logSubmission(from, batch, flushReasonFastPath, q.nonces.localNextNonce, submitErr)
+			t.logSubmission(from, batch, flushReasonFastPath, q.nonces.localNextNonce, flowTxID, submitErr)
 			if submitErr != nil {
 				return submitErr
 			}
@@ -730,8 +735,8 @@ func (t *TxMemPool) processQueues(ctx context.Context) {
 // submitWork submits one detached batch, records its fate (logSubmission), and
 // reconciles the queue's nonce state once the network call returns.
 func (t *TxMemPool) submitWork(ctx context.Context, w flushWork) error {
-	err := t.submitBatch(ctx, w.txs)
-	t.logSubmission(w.from, w.txs, w.reason, w.localNextNonce, err)
+	flowTxID, err := t.submitBatch(ctx, w.txs)
+	t.logSubmission(w.from, w.txs, w.reason, w.localNextNonce, flowTxID, err)
 	t.reconcileSubmission(w, err)
 	return err
 }
@@ -775,9 +780,14 @@ func batchLogFields(
 //
 //   - On a Flow submit FAILURE the batch's EVM transactions are dropped (we do
 //     not retry — clients resubmit), so we WARN with the full batch context
-//     (batchLogFields) plus the flush reason and the error.
-//   - On SUCCESS we emit a lighter DEBUG line (eoa + nonce range) so a sent
-//     batch is traceable without the noise of a warning.
+//     (batchLogFields) plus the flush reason, the wrapping Cadence tx ID (zero
+//     if the failure happened before the tx was built), and the error.
+//   - On SUCCESS we emit two lines: a lighter DEBUG line with the full context,
+//     and a dedicated INFO line carrying only the fields an operator needs to
+//     correlate an EVM nonce back to the wrapping Cadence tx on Flowscan
+//     (eoa, nonce range, flow-tx-id). The INFO line is what stays visible at
+//     the default log level in production; the DEBUG line is available when
+//     the log level is turned up.
 //
 // txs is assumed nonce-ascending (selectConsecutivePrefix / selectExpired and
 // the single-tx fast path all satisfy this), so txs[0] is the low nonce.
@@ -786,6 +796,7 @@ func (t *TxMemPool) logSubmission(
 	txs []heldTx,
 	reason string,
 	localNextNonce uint64,
+	flowTxID flow.Identifier,
 	submitErr error,
 ) {
 	if len(txs) == 0 {
@@ -800,10 +811,18 @@ func (t *TxMemPool) logSubmission(
 	if submitErr != nil {
 		batchLogFields(t.logger.Warn(), from, txs, localNextNonce).
 			Str("reason", reason).
+			Str("flow-tx-id", flowTxID.Hex()).
 			Err(submitErr).
 			Msg("Flow submission failed, EVM transactions dropped")
 		return
 	}
+
+	t.logger.Info().
+		Str("eoa", from.Hex()).
+		Uint64("low-nonce", txs[0].nonce).
+		Uint64("high-nonce", txs[len(txs)-1].nonce).
+		Str("flow-tx-id", flowTxID.Hex()).
+		Msg("submitted EVM transactions to Flow")
 
 	t.logger.Debug().
 		Str("eoa", from.Hex()).
@@ -1053,8 +1072,11 @@ func (t *TxMemPool) pruneStaleTxs(
 
 // submitTxBatch wraps the given (nonce-ascending) transactions in a single
 // Cadence transaction and sends it to the Flow network. The run.cdc script
-// uses EVM.run for a single tx and EVM.batchRun for multiple.
-func (t *TxMemPool) submitTxBatch(ctx context.Context, txs []heldTx) error {
+// uses EVM.run for a single tx and EVM.batchRun for multiple. The returned
+// flow.Identifier is the wrapping Cadence tx ID: set once the tx has been
+// built (even if the subsequent send fails, so a wedge investigation can
+// still find the tx on the AN), zero if the build itself failed.
+func (t *TxMemPool) submitTxBatch(ctx context.Context, txs []heldTx) (flow.Identifier, error) {
 	hexEncodedTxs := make([]cadence.Value, len(txs))
 	for i, htx := range txs {
 		hexEncodedTxs[i] = htx.txPayload
@@ -1062,7 +1084,7 @@ func (t *TxMemPool) submitTxBatch(ctx context.Context, txs []heldTx) error {
 
 	coinbaseAddress, err := cadence.NewString(t.config.Coinbase.Hex())
 	if err != nil {
-		return err
+		return flow.Identifier{}, err
 	}
 
 	script := replaceAddresses(runTxScript, t.config.FlowNetworkID)
@@ -1080,13 +1102,13 @@ func (t *TxMemPool) submitTxBatch(ctx context.Context, txs []heldTx) error {
 	)
 	if err != nil {
 		t.collector.TransactionsDropped(len(txs))
-		return fmt.Errorf("building Flow transaction: %w", err)
+		return flow.Identifier{}, fmt.Errorf("building Flow transaction: %w", err)
 	}
 
 	if err := t.client.SendTransaction(ctx, *flowTx); err != nil {
 		t.collector.TransactionsDropped(len(txs))
-		return fmt.Errorf("sending Flow transaction: %w", err)
+		return flowTx.ID(), fmt.Errorf("sending Flow transaction: %w", err)
 	}
 
-	return nil
+	return flowTx.ID(), nil
 }
