@@ -271,6 +271,8 @@ The application can be configured using the following flags at runtime:
 | `tx-pool-ttl`                  | `30s`            | How long the transaction mempool holds an out-of-order transaction waiting for its nonce gap to fill, before submitting it anyway. Only applies when `tx-mempool-mode=true`.                                       |
 | `tx-max-batch-size`            | `5`              | Maximum number of EVM transactions per `EVM.batchRun` Cadence transaction in the transaction mempool. Only applies when `tx-mempool-mode=true`.                                                                        |
 | `tx-max-nonce-gap`             | `500`            | How far ahead of an EOA's on-chain nonce the transaction mempool accepts a nonce; nonces beyond `indexedNonce + gap` are rejected as nonce-too-high. `0` disables the upper bound. A nonce below the indexed nonce is always rejected as nonce-too-low. Only applies when `tx-mempool-mode=true`. |
+| `tx-reconcile-interval`        | `1s`             | How often the mempool reconciliation loop polls each active EOA's most recent Cadence tx wrapper. Only applies when `tx-mempool-mode=true`.                                                                                                              |
+| `tx-reconcile-stale-after`     | `30s`            | Grace period past a wrapper's submission time after which, if it still is not sealed, the reconciler treats it as dropped and clears the EOA's in-flight marker. Must be >> Flow sealing latency (~6-8s). Only applies when `tx-mempool-mode=true`.       |
 
 
 # EVM Gateway Endpoints

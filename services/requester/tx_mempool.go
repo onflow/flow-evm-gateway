@@ -101,14 +101,32 @@ import (
 //       rejected (it cannot execute until ~595 intervening nonces are filled).
 //
 // Recovery
-//   13. Reconciliation: a background loop (reconcileLoop, tick
-//       TxReconcileInterval) polls the wrapping Cadence tx status for each EOA
-//       with an outstanding in-flight marker. If the wrapper is sealed with an
-//       error (e.g. the run.cdc "nonce too high" assertion after intra-block
-//       reordering) OR it has not sealed within TxReconcileStaleAfter, the
-//       marker is cleared so the next Add() re-classifies against on-chain
-//       state — bounding wedge duration to ~one sealing window instead of the
-//       full idle-eviction retention.
+//   13. Reconciliation: a background loop (reconcileLoop) ticks every
+//       TxReconcileInterval (default 1s). For each EOA with an outstanding
+//       submission marker (highestSent() set and lastFlowTxID != zero) it
+//       calls GetTransactionResult(lastFlowTxID) and resets the marker in
+//       two cases:
+//         (a) the wrapper is SEALED with a non-nil Error — the wrapper
+//             reverted. Canonical case: two consecutive-nonce wrappers land
+//             in the same Flow block, the collector executes them out of
+//             order, and the higher-nonce wrapper's run.cdc assertion trips
+//             with "nonce too high". No EVM.TransactionExecuted event fires
+//             for the reverted wrapper, so without reconciliation the pool
+//             would never learn.
+//         (b) the wrapper is not sealed and now - lastSubmittedAt exceeds
+//             TxReconcileStaleAfter (default 30s) — probable silent drop or
+//             any never-lands case.
+//       The reset clears lastConsecutivelySubmitted, submitting, and
+//       lastFlowTxID so the next Add() re-classifies against on-chain state.
+//       Concurrency: the (eoa, flowTxID, lastSubmittedAt) snapshot is taken
+//       under queueMux, the GetTransactionResult call runs OUTSIDE the lock,
+//       and the reset re-acquires the lock and re-checks lastFlowTxID still
+//       matches — so a superseding submission is never clobbered.
+//       Observability: each reset emits a WARN log line with eoa,
+//       flow-tx-id and reason ("wrapper-reverted" | "unsealed-past-threshold")
+//       and increments the TxPoolReconcileReset counter. Wedge duration is
+//       bounded to ~one sealing window (~6-8s) instead of the full
+//       idleQueueRetention (60s).
 //
 // Cross-cutting invariants
 //   - No silent drops: for any accepted tx id you can either find it on-chain
@@ -1157,17 +1175,19 @@ func (t *TxMemPool) submitTxBatch(ctx context.Context, txs []heldTx) (flow.Ident
 
 // reconcileLoop periodically inspects each active EOA queue's most recent
 // wrapping Cadence transaction and clears the in-flight nonce marker when the
-// wrapper is provably not going to advance the on-chain nonce. Three cases
+// wrapper is provably not going to advance the on-chain nonce. Two cases
 // trigger a reset:
-//  1. The wrapper is SEALED with a non-zero ErrorCode (it reverted — e.g. the
+//  1. The wrapper is SEALED with a non-nil Error (it reverted — e.g. the
 //     intra-block reordering "nonce too high" assertion in run.cdc). This is
 //     the primary DFNS-observed failure mode.
 //  2. The wrapper is not sealed and more than TxReconcileStaleAfter has
 //     elapsed since submission. Catches silent AN drops and any other
 //     never-lands case.
-//  3. The on-chain nextNonce has advanced past highestSent — the chain moved
-//     on without our help (unlikely with the other two cases, but keeps the
-//     marker precisely in sync).
+//
+// The "chain advanced past highestSent" case is not handled here on purpose:
+// if the wrapper actually landed, it seals successfully and the next
+// legitimate submission moves lastConsecutivelySubmitted forward on its own;
+// there is no wedge to clear.
 func (t *TxMemPool) reconcileLoop(ctx context.Context) {
 	ticker := time.NewTicker(t.config.TxReconcileInterval)
 	defer ticker.Stop()
