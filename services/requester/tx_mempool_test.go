@@ -183,10 +183,12 @@ func (c *fakeClock) advance(d time.Duration) {
 
 func testPoolConfig() config.Config {
 	return config.Config{
-		TxCollectionWindow:  100 * time.Millisecond,
-		TxSubmissionSpacing: time.Second,
-		TxPoolTTL:           time.Minute,
-		TxMaxBatchSize:      10,
+		TxCollectionWindow:    100 * time.Millisecond,
+		TxSubmissionSpacing:   time.Second,
+		TxPoolTTL:             time.Minute,
+		TxMaxBatchSize:        10,
+		TxReconcileInterval:   time.Second,
+		TxReconcileStaleAfter: 30 * time.Second,
 	}
 }
 
@@ -1187,4 +1189,342 @@ func noncesOf(txs []heldTx) []uint64 {
 		ns[i] = htx.nonce
 	}
 	return ns
+}
+
+// --- Reconciliation loop tests -------------------------------------------
+// These drive reconcileOnce directly (rather than through the background
+// goroutine) so behavior can be asserted synchronously and without wall-clock
+// sleeps. The 7 cases below map to the recovery spec (behavior spec case 13
+// in tx_mempool.go).
+
+// primeReconcilePool sets up a pool with one EOA (`from`) whose fast-path
+// submission has succeeded: the nonce tracker records nonce N as consecutively
+// submitted, no submission is in flight, and lastFlowTxID / lastSubmittedAt
+// are set from the returned values. Returns the flow-tx-id that identifies the
+// most-recent wrapper (what reconcileOnce polls) so tests can assert the
+// getTxResult callback receives the expected identifier.
+func primeReconcilePool(
+	t *testing.T,
+	pool *TxMemPool,
+	clk *fakeClock,
+	key *ecdsa.PrivateKey,
+	nonce uint64,
+	flowTxID flow.Identifier,
+) gethCommon.Address {
+	t.Helper()
+	from := crypto.PubkeyToAddress(key.PublicKey)
+
+	// Fast-path submit sets lastConsecutivelySubmitted, lastFlowTxID, and
+	// lastSubmittedAt from a real Add() flow — exercising the actual submission
+	// path (rather than seeding fields by hand).
+	pool.submitBatch = func(_ context.Context, _ []heldTx) (flow.Identifier, error) {
+		return flowTxID, nil
+	}
+	require.NoError(t, pool.Add(context.Background(), signedTestTx(t, key, nonce, 1)))
+
+	q := pool.queues[from]
+	require.NotNil(t, q)
+	require.True(t, q.nonces.lastConsecutivelySubmitted.set,
+		"precondition: fast-path submission must have advanced lastConsecutivelySubmitted")
+	require.Equal(t, nonce, q.nonces.lastConsecutivelySubmitted.v)
+	require.Equal(t, flowTxID, q.lastFlowTxID)
+	require.Equal(t, clk.now(), q.lastSubmittedAt)
+	return from
+}
+
+// After a fast-path submission the wrapping Cadence tx can seal with an error
+// (e.g. the run.cdc "nonce too high" assertion after intra-block reordering).
+// reconcileOnce must observe this and clear the in-flight state so a subsequent
+// Add() re-classifies against the on-chain frontier rather than staying wedged
+// behind the stale marker.
+func Test_TxMemPool_ReconcileClearsMarkerWhenWrapperReverted(t *testing.T) {
+	key, err := crypto.GenerateKey()
+	require.NoError(t, err)
+
+	clk := newFakeClock(timingClockBase)
+	pool := newTestPool(
+		&fakeNonceProvider{nonce: 3},
+		func(_ context.Context, _ []heldTx) error { return nil },
+		testPoolConfig(),
+	)
+	pool.now = clk.now
+
+	flowTxID := flow.HexToID(
+		"1111111111111111111111111111111111111111111111111111111111111111",
+	)
+	from := primeReconcilePool(t, pool, clk, key, 3, flowTxID)
+
+	var polledID flow.Identifier
+	pool.getTxResult = func(_ context.Context, id flow.Identifier) (*flow.TransactionResult, error) {
+		polledID = id
+		return &flow.TransactionResult{
+			Status: flow.TransactionStatusSealed,
+			Error:  errors.New("evm_error=nonce too high"),
+		}, nil
+	}
+
+	pool.reconcileOnce(context.Background())
+
+	assert.Equal(t, flowTxID, polledID, "reconciler must poll the recorded wrapping tx id")
+
+	q := pool.queues[from]
+	require.NotNil(t, q)
+	assert.False(t, q.nonces.lastConsecutivelySubmitted.set,
+		"reverted wrapper must clear lastConsecutivelySubmitted")
+	assert.False(t, q.nonces.submitting.set,
+		"reverted wrapper must clear submitting")
+	assert.Equal(t, flow.Identifier{}, q.lastFlowTxID,
+		"reverted wrapper must zero lastFlowTxID so a fresher submission owns the slot")
+}
+
+// A wrapper that never seals within TxReconcileStaleAfter is treated as
+// dropped: reconcileOnce clears the in-flight marker so the EOA can recover
+// without waiting for the idle-queue eviction window.
+func Test_TxMemPool_ReconcileClearsMarkerWhenWrapperStale(t *testing.T) {
+	key, err := crypto.GenerateKey()
+	require.NoError(t, err)
+
+	clk := newFakeClock(timingClockBase)
+	pool := newTestPool(
+		&fakeNonceProvider{nonce: 3},
+		func(_ context.Context, _ []heldTx) error { return nil },
+		testPoolConfig(),
+	)
+	pool.now = clk.now
+
+	flowTxID := flow.HexToID(
+		"2222222222222222222222222222222222222222222222222222222222222222",
+	)
+	from := primeReconcilePool(t, pool, clk, key, 3, flowTxID)
+
+	// Wrapper has not sealed — could be an AN drop or a slow seal. Either way,
+	// past the stale threshold reconcileOnce must clear the marker.
+	pool.getTxResult = func(_ context.Context, _ flow.Identifier) (*flow.TransactionResult, error) {
+		return &flow.TransactionResult{Status: flow.TransactionStatusExecuted}, nil
+	}
+
+	// Advance past the stale threshold. lastSubmittedAt was stamped at
+	// timingClockBase inside primeReconcilePool.
+	clk.advance(pool.config.TxReconcileStaleAfter + time.Second)
+
+	pool.reconcileOnce(context.Background())
+
+	q := pool.queues[from]
+	require.NotNil(t, q)
+	assert.False(t, q.nonces.lastConsecutivelySubmitted.set,
+		"stale unsealed wrapper must clear lastConsecutivelySubmitted")
+	assert.False(t, q.nonces.submitting.set)
+	assert.Equal(t, flow.Identifier{}, q.lastFlowTxID)
+}
+
+// A wrapper that sealed cleanly (Status Sealed, no Error) is the healthy path:
+// the on-chain nonce has advanced and reconcileOnce must leave the marker
+// alone. Resetting here would let a client's retry with the same nonce
+// double-spend against the freshly-advanced frontier.
+func Test_TxMemPool_ReconcileLeavesMarkerWhenWrapperSealedSuccessfully(t *testing.T) {
+	key, err := crypto.GenerateKey()
+	require.NoError(t, err)
+
+	clk := newFakeClock(timingClockBase)
+	pool := newTestPool(
+		&fakeNonceProvider{nonce: 3},
+		func(_ context.Context, _ []heldTx) error { return nil },
+		testPoolConfig(),
+	)
+	pool.now = clk.now
+
+	flowTxID := flow.HexToID(
+		"3333333333333333333333333333333333333333333333333333333333333333",
+	)
+	from := primeReconcilePool(t, pool, clk, key, 3, flowTxID)
+
+	pool.getTxResult = func(_ context.Context, _ flow.Identifier) (*flow.TransactionResult, error) {
+		return &flow.TransactionResult{Status: flow.TransactionStatusSealed, Error: nil}, nil
+	}
+
+	pool.reconcileOnce(context.Background())
+
+	q := pool.queues[from]
+	require.NotNil(t, q)
+	assert.True(t, q.nonces.lastConsecutivelySubmitted.set,
+		"sealed-successful wrapper must NOT clear the marker")
+	assert.Equal(t, uint64(3), q.nonces.lastConsecutivelySubmitted.v)
+	assert.Equal(t, flowTxID, q.lastFlowTxID,
+		"sealed-successful wrapper must preserve lastFlowTxID")
+}
+
+// A wrapper that is still in flight (not yet sealed) within the stale window
+// is normal steady-state operation. reconcileOnce must not reset in this case;
+// resetting would race the imminent seal and could allow a duplicate submission.
+func Test_TxMemPool_ReconcileLeavesMarkerWhenWrapperUnsealedAndFresh(t *testing.T) {
+	key, err := crypto.GenerateKey()
+	require.NoError(t, err)
+
+	clk := newFakeClock(timingClockBase)
+	pool := newTestPool(
+		&fakeNonceProvider{nonce: 3},
+		func(_ context.Context, _ []heldTx) error { return nil },
+		testPoolConfig(),
+	)
+	pool.now = clk.now
+
+	flowTxID := flow.HexToID(
+		"4444444444444444444444444444444444444444444444444444444444444444",
+	)
+	from := primeReconcilePool(t, pool, clk, key, 3, flowTxID)
+
+	pool.getTxResult = func(_ context.Context, _ flow.Identifier) (*flow.TransactionResult, error) {
+		return &flow.TransactionResult{Status: flow.TransactionStatusExecuted}, nil
+	}
+
+	// Advance a small amount — well within the stale threshold.
+	clk.advance(pool.config.TxReconcileStaleAfter / 3)
+
+	pool.reconcileOnce(context.Background())
+
+	q := pool.queues[from]
+	require.NotNil(t, q)
+	assert.True(t, q.nonces.lastConsecutivelySubmitted.set,
+		"unsealed fresh wrapper must NOT clear the marker")
+	assert.Equal(t, uint64(3), q.nonces.lastConsecutivelySubmitted.v)
+	assert.Equal(t, flowTxID, q.lastFlowTxID)
+}
+
+// An EOA with no outstanding submission marker is not a candidate for
+// reconciliation — reconcileOnce must skip it entirely and never issue a
+// getTxResult call for it (avoids unnecessary AN traffic on idle EOAs and
+// starts up scenarios where every queue is fresh).
+func Test_TxMemPool_ReconcileSkipsQueueWithoutMarker(t *testing.T) {
+	pool := newTestPool(
+		&fakeNonceProvider{nonce: 0},
+		func(_ context.Context, _ []heldTx) error { return nil },
+		testPoolConfig(),
+	)
+	from := gethCommon.HexToAddress("0xabc")
+
+	// Empty tracker, no lastFlowTxID: no work for the reconciler.
+	pool.queues[from] = &eoaQueue{
+		txs:          map[uint64]heldTx{},
+		lastActivity: time.Now(),
+	}
+
+	pool.getTxResult = func(_ context.Context, _ flow.Identifier) (*flow.TransactionResult, error) {
+		t.Fatalf("getTxResult must not be called for a queue without an outstanding marker")
+		return nil, nil
+	}
+
+	pool.reconcileOnce(context.Background())
+
+	// The queue must be untouched.
+	q := pool.queues[from]
+	require.NotNil(t, q)
+	assert.False(t, q.nonces.lastConsecutivelySubmitted.set)
+	assert.False(t, q.nonces.submitting.set)
+	assert.Equal(t, flow.Identifier{}, q.lastFlowTxID)
+}
+
+// While reconcileOnce is polling the AN outside the lock, a concurrent
+// submission may advance the EOA's lastFlowTxID to a fresher wrapper. When the
+// reconciler re-acquires the lock to reset, it must notice that the flow-tx-id
+// has moved on and leave the (now-current) marker alone — otherwise a
+// successful just-submitted batch would be wrongly cleared.
+func Test_TxMemPool_ReconcileSkipsSupersededFlowTxID(t *testing.T) {
+	key, err := crypto.GenerateKey()
+	require.NoError(t, err)
+
+	clk := newFakeClock(timingClockBase)
+	pool := newTestPool(
+		&fakeNonceProvider{nonce: 3},
+		func(_ context.Context, _ []heldTx) error { return nil },
+		testPoolConfig(),
+	)
+	pool.now = clk.now
+
+	originalFlowTxID := flow.HexToID(
+		"5555555555555555555555555555555555555555555555555555555555555555",
+	)
+	newerFlowTxID := flow.HexToID(
+		"6666666666666666666666666666666666666666666666666666666666666666",
+	)
+	from := primeReconcilePool(t, pool, clk, key, 3, originalFlowTxID)
+
+	// The getTxResult call simulates the race: while the reconciler is polling
+	// outside the lock, a concurrent successful submission bumps the queue's
+	// lastFlowTxID. When the reconciler re-acquires the lock to reset, the
+	// stored id will no longer match its snapshot and the reset must be skipped.
+	pool.getTxResult = func(_ context.Context, _ flow.Identifier) (*flow.TransactionResult, error) {
+		pool.queueMux.Lock()
+		pool.queues[from].lastFlowTxID = newerFlowTxID
+		pool.queueMux.Unlock()
+		return &flow.TransactionResult{
+			Status: flow.TransactionStatusSealed,
+			Error:  errors.New("wrapper reverted"),
+		}, nil
+	}
+
+	pool.reconcileOnce(context.Background())
+
+	q := pool.queues[from]
+	require.NotNil(t, q)
+	assert.True(t, q.nonces.lastConsecutivelySubmitted.set,
+		"a fresher submission has superseded the snapshot; reconciler must not reset")
+	assert.Equal(t, uint64(3), q.nonces.lastConsecutivelySubmitted.v)
+	assert.Equal(t, newerFlowTxID, q.lastFlowTxID,
+		"the newer lastFlowTxID must survive the reconciler pass")
+}
+
+// End-to-end: after reconciliation clears a wedged marker, a client's retry
+// with the same nonce is accepted (fast-paths) rather than being rejected as
+// in flight. This is the operational point of the reconciliation loop.
+func Test_TxMemPool_ReconcileClearsAllowsSubsequentAddToBeAccepted(t *testing.T) {
+	key, err := crypto.GenerateKey()
+	require.NoError(t, err)
+
+	clk := newFakeClock(timingClockBase)
+	pool := newTestPool(
+		// Frontier stays at 3: the reverted wrapper did not advance the chain.
+		&fakeNonceProvider{nonce: 3},
+		func(_ context.Context, _ []heldTx) error { return nil },
+		testPoolConfig(),
+	)
+	pool.now = clk.now
+
+	flowTxID := flow.HexToID(
+		"7777777777777777777777777777777777777777777777777777777777777777",
+	)
+	from := primeReconcilePool(t, pool, clk, key, 3, flowTxID)
+
+	// While the marker is set, a retry of the same nonce is rejected as in flight.
+	err = pool.Add(context.Background(), signedTestTx(t, key, 3, 2))
+	require.ErrorIs(t, err, errs.ErrInFlightNonce,
+		"before reconciliation, retry with the same nonce must be rejected as in flight")
+
+	// Reconcile with a reverted wrapper: the marker clears.
+	pool.getTxResult = func(_ context.Context, _ flow.Identifier) (*flow.TransactionResult, error) {
+		return &flow.TransactionResult{
+			Status: flow.TransactionStatusSealed,
+			Error:  errors.New("evm_error=nonce too high"),
+		}, nil
+	}
+	// Advance past the submission-spacing gap so the subsequent Add can fast-path.
+	clk.advance(pool.config.TxSubmissionSpacing + time.Second)
+	pool.reconcileOnce(context.Background())
+
+	// After reconciliation, a retry of the same nonce is accepted (fast-paths).
+	var retrySubmitted bool
+	pool.submitBatch = func(_ context.Context, txs []heldTx) (flow.Identifier, error) {
+		retrySubmitted = true
+		require.Len(t, txs, 1)
+		assert.Equal(t, uint64(3), txs[0].nonce)
+		return flow.HexToID("8888888888888888888888888888888888888888888888888888888888888888"), nil
+	}
+	require.NoError(t, pool.Add(context.Background(), signedTestTx(t, key, 3, 2)),
+		"after reconciliation, retry with the same nonce must be accepted")
+	assert.True(t, retrySubmitted, "retry must reach the submit path (fast-path)")
+
+	// And the EOA is no longer wedged: the new submission owns lastFlowTxID.
+	q := pool.queues[from]
+	require.NotNil(t, q)
+	assert.NotEqual(t, flowTxID, q.lastFlowTxID,
+		"lastFlowTxID must now reference the retry's wrapping tx, not the reverted one")
 }
