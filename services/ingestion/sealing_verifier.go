@@ -238,7 +238,6 @@ func (v *SealingVerifier) backfill(ctx context.Context, height uint64) error {
 		Msg("backfilling verifier")
 
 	startHeight := height
-	var currentBlockTxEvents []flow.Event
 	for {
 		endHeight := startHeight + maxRangeForGetEvents
 		if endHeight >= sporkRootHeight {
@@ -266,25 +265,10 @@ func (v *SealingVerifier) backfill(ctx context.Context, height uint64) error {
 		}
 
 		for i, blockEvent := range blockEvents {
-			currentBlockTxEvents = append(currentBlockTxEvents, txEvents[i].Events...)
-
-			// if the system transaction failed, there won't be an EVM block event, but there may
-			// be EVM transactions. Group all transactions into the next block.
-			if len(blockEvent.Events) != 1 {
-				v.logger.Warn().
-					Uint64("height", blockEvent.Height).
-					Str("block_id", blockEvent.BlockID.String()).
-					Msg("missing evm block event. will accumulate transactions into the next block")
-				continue
-			}
-
-			blockEvent.Events = append(blockEvent.Events, currentBlockTxEvents...)
+			blockEvent.Events = append(blockEvent.Events, txEvents[i].Events...)
 			if err := v.onSealedEvents(blockEvent); err != nil {
 				return fmt.Errorf("failed to verify block events for height %d: %w", blockEvent.Height, err)
 			}
-
-			// transactions successfully grouped with a block. reset the list
-			currentBlockTxEvents = nil
 		}
 
 		startHeight = endHeight + 1
