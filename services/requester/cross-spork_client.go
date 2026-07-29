@@ -3,6 +3,7 @@ package requester
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/hashicorp/go-multierror"
 	"github.com/onflow/cadence"
@@ -12,7 +13,6 @@ import (
 	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/rs/zerolog"
 	"go.uber.org/ratelimit"
-	"golang.org/x/exp/slices"
 
 	errs "github.com/onflow/flow-evm-gateway/models/errors"
 )
@@ -160,13 +160,16 @@ func NewCrossSporkClient(
 		return nil, fmt.Errorf("provided past-spork clients don't create a continuous range of heights")
 	}
 
-	// at this point, we've verified that the past spork clients form a continue range of heights.
-	// next, make sure the the last spork client forms a continuous range with the current spork
+	// at this point, we've verified that the past spork clients form a continuous range of heights.
+	// next, make sure the last spork client forms a continuous range with the current spork
 	// client's node root block height. Note: this must be the NodeRootBlockHeight, not the
 	// SporkRootBlockHeight, since this is the first height available on the node.
 	if len(clients) > 0 && clients[len(clients)-1].lastHeight+1 != nodeRootBlockHeight {
-		return nil, fmt.Errorf("provided past-spork clients don't end at the spork root block height (%d != %d-1)",
-			clients[len(clients)-1].lastHeight, nodeRootBlockHeight)
+		return nil, fmt.Errorf(
+			"provided past-spork clients don't end at the node root block height (%d, %d)",
+			clients[len(clients)-1].lastHeight,
+			nodeRootBlockHeight,
+		)
 	}
 
 	return &CrossSporkClient{

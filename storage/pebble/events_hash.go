@@ -43,7 +43,7 @@ func (e *EventsHash) GetByHeight(height uint64) (flow.Identifier, error) {
 	return flow.BytesToID(hash), nil
 }
 
-// RemoveAboveHeight removes all stored events hashes above the given height (exclusive).
+// BatchRemoveAboveHeight removes all stored events hashes above the given height (exclusive).
 func (e *EventsHash) BatchRemoveAboveHeight(height uint64, batch *pebbleDB.Batch) error {
 	for {
 		height++ // skip the current height

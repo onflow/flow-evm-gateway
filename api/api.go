@@ -206,7 +206,7 @@ func (b *BlockChainAPI) GetBalance(
 		return nil, err
 	}
 
-	height, err := resolveBlockTag(&blockNumberOrHash, b.blocks, b.logger)
+	height, err := resolveBlockTag(&blockNumberOrHash, b.blocks)
 	if err != nil {
 		return handleError[*hexutil.Big](err, l, b.collector)
 	}
@@ -436,7 +436,7 @@ func (b *BlockChainAPI) GetBlockReceipts(
 		return nil, err
 	}
 
-	height, err := resolveBlockTag(&blockNumberOrHash, b.blocks, b.logger)
+	height, err := resolveBlockTag(&blockNumberOrHash, b.blocks)
 	if err != nil {
 		return handleError[[]map[string]any](err, l, b.collector)
 	}
@@ -567,7 +567,7 @@ func (b *BlockChainAPI) Call(
 		return handleError[hexutil.Bytes](err, l, b.collector)
 	}
 
-	height, err := resolveBlockTag(blockNumberOrHash, b.blocks, b.logger)
+	height, err := resolveBlockTag(blockNumberOrHash, b.blocks)
 	if err != nil {
 		return handleError[hexutil.Bytes](err, l, b.collector)
 	}
@@ -689,7 +689,7 @@ func (b *BlockChainAPI) GetTransactionCount(
 		return nil, err
 	}
 
-	height, err := resolveBlockTag(&blockNumberOrHash, b.blocks, b.logger)
+	height, err := resolveBlockTag(&blockNumberOrHash, b.blocks)
 	if err != nil {
 		return handleError[*hexutil.Uint64](err, l, b.collector)
 	}
@@ -756,7 +756,7 @@ func (b *BlockChainAPI) EstimateGas(
 		from = *args.From
 	}
 
-	height, err := resolveBlockTag(blockNumberOrHash, b.blocks, b.logger)
+	height, err := resolveBlockTag(blockNumberOrHash, b.blocks)
 	if err != nil {
 		return handleError[hexutil.Uint64](err, l, b.collector)
 	}
@@ -791,7 +791,7 @@ func (b *BlockChainAPI) GetCode(
 		return nil, err
 	}
 
-	height, err := resolveBlockTag(&blockNumberOrHash, b.blocks, b.logger)
+	height, err := resolveBlockTag(&blockNumberOrHash, b.blocks)
 	if err != nil {
 		return handleError[hexutil.Bytes](err, l, b.collector)
 	}
@@ -912,7 +912,7 @@ func (b *BlockChainAPI) GetStorageAt(
 		)
 	}
 
-	height, err := resolveBlockTag(&blockNumberOrHash, b.blocks, b.logger)
+	height, err := resolveBlockTag(&blockNumberOrHash, b.blocks)
 	if err != nil {
 		return handleError[hexutil.Bytes](err, l, b.collector)
 	}

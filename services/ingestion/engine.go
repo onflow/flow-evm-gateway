@@ -150,29 +150,6 @@ func (e *Engine) Run(ctx context.Context) error {
 	}
 }
 
-// withBatch will execute the provided function with a new batch, and commit the batch
-// afterwards if no error is returned.
-func (e *Engine) withBatch(f func(batch *pebbleDB.Batch) error) error {
-	batch := e.store.NewBatch()
-	defer func(batch *pebbleDB.Batch) {
-		err := batch.Close()
-		if err != nil {
-			e.log.Fatal().Err(err).Msg("failed to close batch")
-		}
-	}(batch)
-
-	err := f(batch)
-	if err != nil {
-		return err
-	}
-
-	if err := batch.Commit(pebbleDB.Sync); err != nil {
-		return fmt.Errorf("failed to commit batch: %w", err)
-	}
-
-	return nil
-}
-
 // processEvents converts the events to block and transactions and indexes them.
 //
 // BlockEvents are received by the access node API and contain Cadence height (always a single Flow block),
@@ -192,7 +169,8 @@ func (e *Engine) processEvents(events *models.CadenceEvents) error {
 		Msg("received new cadence evm events")
 
 	start := time.Now()
-	err := e.withBatch(
+	err := pebble.WithBatch(
+		e.store,
 		func(batch *pebbleDB.Batch) error {
 			return e.indexEvents(events, batch)
 		},

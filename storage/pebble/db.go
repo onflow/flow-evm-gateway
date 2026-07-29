@@ -5,7 +5,6 @@ import (
 
 	"github.com/cockroachdb/pebble"
 	"github.com/cockroachdb/pebble/bloom"
-	"github.com/rs/zerolog/log"
 )
 
 // OpenDB opens a new pebble database at the provided directory.
@@ -62,17 +61,17 @@ func OpenDB(dir string) (*pebble.DB, error) {
 	return db, nil
 }
 
+// WithBatch will execute the provided function with a new batch,
+// and commit the batch afterwards if no error is returned.
 func WithBatch(store *Storage, f func(batch *pebble.Batch) error) error {
 	batch := store.NewBatch()
 	defer func(batch *pebble.Batch) {
-		err := batch.Close()
-		if err != nil {
-			log.Fatal().Err(err).Msg("failed to close batch")
+		if err := batch.Close(); err != nil {
+			store.log.Error().Err(err).Msg("failed to close batch")
 		}
 	}(batch)
 
-	err := f(batch)
-	if err != nil {
+	if err := f(batch); err != nil {
 		return err
 	}
 

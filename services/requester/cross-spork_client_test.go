@@ -153,7 +153,7 @@ func Test_CrossSpork(t *testing.T) {
 			flowGo.Previewnet,
 		)
 		require.Error(t, err)
-		require.ErrorContains(t, err, "provided past-spork clients don't end at the spork root block height")
+		require.ErrorContains(t, err, "provided past-spork clients don't end at the node root block height (500, 511)")
 		require.Nil(t, client)
 	})
 
@@ -167,7 +167,7 @@ func Test_CrossSpork(t *testing.T) {
 			flowGo.Previewnet,
 		)
 		require.Error(t, err)
-		require.ErrorContains(t, err, "provided past-spork clients don't end at the spork root block height")
+		require.ErrorContains(t, err, "provided past-spork clients don't end at the node root block height (500, 502)")
 		require.Nil(t, client)
 	})
 }

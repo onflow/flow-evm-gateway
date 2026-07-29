@@ -18,7 +18,6 @@ import (
 func resolveBlockTag(
 	blockNumberOrHash *rpc.BlockNumberOrHash,
 	blocksDB storage.BlockIndexer,
-	logger zerolog.Logger,
 ) (uint64, error) {
 	if blockNumberOrHash == nil {
 		return 0, fmt.Errorf(
