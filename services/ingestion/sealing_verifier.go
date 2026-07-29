@@ -238,6 +238,7 @@ func (v *SealingVerifier) backfill(ctx context.Context, height uint64) error {
 		Msg("backfilling verifier")
 
 	startHeight := height
+	var currentBlockTxEvents []flow.Event
 	for {
 		endHeight := startHeight + maxRangeForGetEvents
 		if endHeight >= sporkRootHeight {
@@ -264,7 +265,6 @@ func (v *SealingVerifier) backfill(ctx context.Context, height uint64) error {
 			return fmt.Errorf("received unexpected number of events for height range %d-%d: %d != %d", startHeight, endHeight, len(blockEvents), len(txEvents))
 		}
 
-		var currentBlockTxEvents []flow.Event
 		for i, blockEvent := range blockEvents {
 			currentBlockTxEvents = append(currentBlockTxEvents, txEvents[i].Events...)
 
@@ -283,7 +283,7 @@ func (v *SealingVerifier) backfill(ctx context.Context, height uint64) error {
 				return fmt.Errorf("failed to verify block events for height %d: %w", blockEvent.Height, err)
 			}
 
-			// transactions sucessessfully grouped with a block. reset the list
+			// transactions successfully grouped with a block. reset the list
 			currentBlockTxEvents = nil
 		}
 
