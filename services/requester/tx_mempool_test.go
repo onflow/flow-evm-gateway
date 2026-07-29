@@ -1473,6 +1473,59 @@ func Test_TxMemPool_ReconcileSkipsSupersededFlowTxID(t *testing.T) {
 		"the newer lastFlowTxID must survive the reconciler pass")
 }
 
+// If a fresh batch enters flight between the reconciler's snapshot and its
+// reset — such that lastFlowTxID still matches the snapshot but q.nonces.submitting
+// is now set for a newer batch — the reset must be skipped. Otherwise the reset
+// would clobber the newer batch's submitting marker and let a client retry
+// duplicate a nonce that is legitimately in flight, reintroducing the very
+// duplicate-wrapper failure mode this loop exists to prevent.
+func Test_TxMemPool_ReconcileSkipsWhenFreshBatchInFlight(t *testing.T) {
+	key, err := crypto.GenerateKey()
+	require.NoError(t, err)
+
+	clk := newFakeClock(timingClockBase)
+	pool := newTestPool(
+		&fakeNonceProvider{nonce: 3},
+		func(_ context.Context, _ []heldTx) error { return nil },
+		testPoolConfig(),
+	)
+	pool.now = clk.now
+
+	flowTxID := flow.HexToID(
+		"7777777777777777777777777777777777777777777777777777777777777777",
+	)
+	from := primeReconcilePool(t, pool, clk, key, 3, flowTxID)
+
+	// Simulate a concurrent background flush that acquires the lock while the
+	// reconciler is out doing its network call, marks a newer batch in flight,
+	// but does NOT yet update lastFlowTxID (that happens later in
+	// reconcileSubmission on submit success). The reconciler must detect the
+	// in-flight marker and skip.
+	newerInFlightNonce := uint64(4)
+	pool.getTxResult = func(_ context.Context, _ flow.Identifier) (*flow.TransactionResult, error) {
+		pool.queueMux.Lock()
+		pool.queues[from].nonces.markSubmitting(newerInFlightNonce)
+		pool.queueMux.Unlock()
+		return &flow.TransactionResult{
+			Status: flow.TransactionStatusSealed,
+			Error:  errors.New("wrapper reverted"),
+		}, nil
+	}
+
+	pool.reconcileOnce(context.Background())
+
+	q := pool.queues[from]
+	require.NotNil(t, q)
+	assert.True(t, q.nonces.lastConsecutivelySubmitted.set,
+		"snapshot's marker must be preserved; newer batch owns the state now")
+	assert.Equal(t, uint64(3), q.nonces.lastConsecutivelySubmitted.v)
+	assert.True(t, q.nonces.submitting.set,
+		"newer batch's submitting marker must survive the reconciler pass")
+	assert.Equal(t, newerInFlightNonce, q.nonces.submitting.v)
+	assert.Equal(t, flowTxID, q.lastFlowTxID,
+		"lastFlowTxID unchanged (newer batch has not yet ack'd)")
+}
+
 // End-to-end: after reconciliation clears a wedged marker, a client's retry
 // with the same nonce is accepted (fast-paths) rather than being rejected as
 // in flight. This is the operational point of the reconciliation loop.

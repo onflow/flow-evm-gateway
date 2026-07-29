@@ -120,8 +120,10 @@ import (
 //       lastFlowTxID so the next Add() re-classifies against on-chain state.
 //       Concurrency: the (eoa, flowTxID, lastSubmittedAt) snapshot is taken
 //       under queueMux, the GetTransactionResult call runs OUTSIDE the lock,
-//       and the reset re-acquires the lock and re-checks lastFlowTxID still
-//       matches — so a superseding submission is never clobbered.
+//       and the reset re-acquires the lock and (i) re-checks lastFlowTxID
+//       still matches and (ii) requires q.nonces.inFlight() to be false — so
+//       neither a superseding ack'd submission nor a freshly-in-flight one
+//       is ever clobbered.
 //       Observability: each reset emits a WARN log line with eoa,
 //       flow-tx-id and reason ("wrapper-reverted" | "unsealed-past-threshold")
 //       and increments the TxPoolReconcileReset counter. Wedge duration is
@@ -223,6 +225,18 @@ const fastPathSubmitTimeout = 10 * time.Second
 // idleQueueRetention is how long a queue with no held transactions and no
 // recent activity is kept before being removed, to bound memory usage.
 const idleQueueRetention = time.Minute
+
+// defaultTxReconcileInterval and defaultTxReconcileStaleAfter are the fallback
+// values used by NewTxMemPool when the config leaves them at zero. This
+// protects programmatic callers (e.g. e2e tests constructing a Config directly)
+// from the time.NewTicker(0) panic and from a zero staleness threshold that
+// would treat every unsealed tx as instantly stale. The CLI-flag defaults in
+// cmd/run/cmd.go match these — the double-source-of-truth is intentional so
+// both flag-driven and Go-driven constructors behave sanely.
+const (
+	defaultTxReconcileInterval   = time.Second
+	defaultTxReconcileStaleAfter = 30 * time.Second
+)
 
 // nonceWrapper is a nonce that may be unset (set == false). It disambiguates the
 // otherwise ambiguous value 0, which is both a valid nonce and the zero value.
@@ -557,6 +571,15 @@ func NewTxMemPool(
 	}
 	pool.submitBatch = pool.submitTxBatch
 	pool.getTxResult = pool.client.GetTransactionResult
+
+	// Backfill reconcile-loop knobs when a programmatic caller leaves them at
+	// zero. Also protects against time.NewTicker(0) which panics.
+	if pool.config.TxReconcileInterval <= 0 {
+		pool.config.TxReconcileInterval = defaultTxReconcileInterval
+	}
+	if pool.config.TxReconcileStaleAfter <= 0 {
+		pool.config.TxReconcileStaleAfter = defaultTxReconcileStaleAfter
+	}
 
 	go pool.processQueues(ctx)
 	go pool.reconcileLoop(ctx)
@@ -1250,16 +1273,33 @@ func (t *TxMemPool) reconcileOnce(ctx context.Context) {
 			t.queueMux.Unlock()
 			continue
 		}
+		// A newer batch entered flight between our snapshot and this reset.
+		// lastFlowTxID is only advanced together with markSubmitted (in
+		// reconcileSubmission), so a matching lastFlowTxID means the batch that
+		// set it has already returned; any q.nonces.submitting we see now must
+		// belong to a strictly newer batch. Clobbering its submitting marker
+		// would let a client retry duplicate a nonce that is legitimately in
+		// flight — reintroducing the very failure mode this loop exists to
+		// prevent. Skip and let the next tick handle whichever wrapper needs it.
+		if q.nonces.inFlight() {
+			t.queueMux.Unlock()
+			continue
+		}
 
 		reason := "unsealed-past-threshold"
 		if reverted {
 			reason = "wrapper-reverted"
 		}
-		t.logger.Warn().
+		elapsed := now.Sub(s.lastSubmittedAt)
+		event := t.logger.Warn().
 			Str("eoa", s.from.Hex()).
 			Str("flow-tx-id", s.flowTxID.Hex()).
 			Str("reason", reason).
-			Msg("reconciliation clearing stuck in-flight marker; subsequent Add() calls will re-classify against chain")
+			Dur("elapsed-since-submit", elapsed)
+		if reverted && result.Error != nil {
+			event = event.Str("wrapper-error", result.Error.Error())
+		}
+		event.Msg("reconciliation clearing stuck in-flight marker; subsequent Add() calls will re-classify against chain")
 
 		q.nonces.resetSubmissionState()
 		q.lastFlowTxID = flow.Identifier{}
