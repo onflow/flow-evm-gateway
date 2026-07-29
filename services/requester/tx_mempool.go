@@ -469,12 +469,10 @@ type TxMemPool struct {
 	nonceProvider NonceProvider
 	queues        map[gethCommon.Address]*eoaQueue
 	queueMux      sync.Mutex
-	// submitBatch performs the actual Flow submission. It defaults to
-	// submitTxBatch and exists as a field so tests can inject a fake. It returns
-	// the ID of the wrapping Cadence transaction (zero on early build failure
-	// before a Flow tx is signed) so logSubmission can record it, enabling an
-	// operator to correlate a wedged EVM nonce to the specific Cadence tx that
-	// carried it (or was supposed to).
+	// submitBatch exists as a field so tests can inject a fake. It returns the
+	// ID of the wrapping Cadence transaction (zero on early build failure
+	// before a Flow tx is signed) so logSubmission can record it, letting an
+	// operator correlate a wedged EVM nonce to the specific Cadence tx.
 	submitBatch func(ctx context.Context, txs []heldTx) (flow.Identifier, error)
 	// now returns the current time. It defaults to time.Now and exists as a
 	// field so tests can drive the collection window, flush deadline, submission
@@ -780,14 +778,16 @@ func batchLogFields(
 //
 //   - On a Flow submit FAILURE the batch's EVM transactions are dropped (we do
 //     not retry — clients resubmit), so we WARN with the full batch context
-//     (batchLogFields) plus the flush reason, the wrapping Cadence tx ID (zero
-//     if the failure happened before the tx was built), and the error.
-//   - On SUCCESS we emit two lines: a lighter DEBUG line with the full context,
-//     and a dedicated INFO line carrying only the fields an operator needs to
-//     correlate an EVM nonce back to the wrapping Cadence tx on Flowscan
-//     (eoa, nonce range, flow-tx-id). The INFO line is what stays visible at
-//     the default log level in production; the DEBUG line is available when
-//     the log level is turned up.
+//     (batchLogFields) plus the flush reason, the wrapping Cadence tx ID (only
+//     when non-zero — omitted if the failure happened before the tx was built),
+//     and the error.
+//   - On SUCCESS we emit a single INFO line carrying eoa, nonce range,
+//     batch-size, reason, and the wrapping Cadence tx ID — the fields an
+//     operator needs to correlate an EVM nonce back to the Flow tx on
+//     Flowscan.
+//
+// The `flow_tx_id` field is emitted only when non-zero, so an early build
+// failure produces a clean log without a bogus all-zero identifier.
 //
 // txs is assumed nonce-ascending (selectConsecutivePrefix / selectExpired and
 // the single-tx fast path all satisfy this), so txs[0] is the low nonce.
@@ -809,28 +809,26 @@ func (t *TxMemPool) logSubmission(
 	t.collector.TxPoolSubmission(reason)
 
 	if submitErr != nil {
-		batchLogFields(t.logger.Warn(), from, txs, localNextNonce).
+		event := batchLogFields(t.logger.Warn(), from, txs, localNextNonce).
 			Str("reason", reason).
-			Str("flow-tx-id", flowTxID.Hex()).
-			Err(submitErr).
-			Msg("Flow submission failed, EVM transactions dropped")
+			Err(submitErr)
+		if flowTxID != (flow.Identifier{}) {
+			event = event.Str("flow_tx_id", flowTxID.Hex())
+		}
+		event.Msg("Flow submission failed, EVM transactions dropped")
 		return
 	}
 
-	t.logger.Info().
-		Str("eoa", from.Hex()).
-		Uint64("low-nonce", txs[0].nonce).
-		Uint64("high-nonce", txs[len(txs)-1].nonce).
-		Str("flow-tx-id", flowTxID.Hex()).
-		Msg("submitted EVM transactions to Flow")
-
-	t.logger.Debug().
+	event := t.logger.Info().
 		Str("eoa", from.Hex()).
 		Uint64("low-nonce", txs[0].nonce).
 		Uint64("high-nonce", txs[len(txs)-1].nonce).
 		Int("batch-size", len(txs)).
-		Str("reason", reason).
-		Msg("submitted EVM transactions to Flow")
+		Str("reason", reason)
+	if flowTxID != (flow.Identifier{}) {
+		event = event.Str("flow_tx_id", flowTxID.Hex())
+	}
+	event.Msg("submitted EVM transactions to Flow")
 }
 
 // reconcileSubmission updates the EOA's nonceTracker after a detached
@@ -1073,9 +1071,13 @@ func (t *TxMemPool) pruneStaleTxs(
 // submitTxBatch wraps the given (nonce-ascending) transactions in a single
 // Cadence transaction and sends it to the Flow network. The run.cdc script
 // uses EVM.run for a single tx and EVM.batchRun for multiple. The returned
-// flow.Identifier is the wrapping Cadence tx ID: set once the tx has been
-// built (even if the subsequent send fails, so a wedge investigation can
-// still find the tx on the AN), zero if the build itself failed.
+// flow.Identifier is the wrapping Cadence tx ID: it is a deterministic hash
+// computed locally over the signed tx bytes, so we can return it as soon as
+// the tx is built regardless of whether the subsequent SendTransaction
+// succeeded. A network failure at SendTransaction likely means the tx never
+// reached the AN — the ID is still useful as a stable identifier for logs
+// and any client-side retry accounting. It is zero only when the build
+// itself failed (before signing).
 func (t *TxMemPool) submitTxBatch(ctx context.Context, txs []heldTx) (flow.Identifier, error) {
 	hexEncodedTxs := make([]cadence.Value, len(txs))
 	for i, htx := range txs {

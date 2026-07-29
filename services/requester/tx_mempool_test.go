@@ -549,55 +549,16 @@ func Test_TxMemPool_FailedSubmitLogsDropWarning(t *testing.T) {
 	assert.Contains(t, out, `"local-next-nonce":0`, "next nonce must be logged")
 	assert.Contains(t, out, `"batch-size":2`, "batch size must be logged")
 	assert.Contains(t, out, "network down", "submit error must be logged")
-	assert.Contains(t, out, `"flow-tx-id":"`+flowTxID.Hex()+`"`,
+	assert.Contains(t, out, `"flow_tx_id":"`+flowTxID.Hex()+`"`,
 		"wrapping Cadence tx ID must be logged so an operator can trace it on Flowscan",
 	)
 }
 
-// A successful submission is traceable via a DEBUG log carrying the eoa and
-// nonce range, so a sent batch can be found in logs without a warning.
-func Test_TxMemPool_SuccessfulSubmitLogsDebug(t *testing.T) {
-	key, err := crypto.GenerateKey()
-	require.NoError(t, err)
-	from := crypto.PubkeyToAddress(key.PublicKey)
-
-	var logBuf bytes.Buffer
-	pool := newTestPool(
-		&fakeNonceProvider{nonce: 0},
-		func(_ context.Context, _ []heldTx) error { return nil },
-		testPoolConfig(),
-	)
-	pool.logger = zerolog.New(&logBuf)
-
-	tx0 := signedTestTx(t, key, 0, 1)
-	tx1 := signedTestTx(t, key, 1, 1)
-	past := time.Now().Add(-time.Second)
-	pool.queues[from] = &eoaQueue{
-		txs: map[uint64]heldTx{
-			0: {txHash: tx0.Hash(), nonce: 0, enqueuedAt: past},
-			1: {txHash: tx1.Hash(), nonce: 1, enqueuedAt: past},
-		},
-		collectionWindowEndsAt: past,
-		flushDeadline:          past,
-	}
-
-	work := pool.collectDueBatches()
-	require.Len(t, work, 1)
-	require.NoError(t, pool.submitWork(context.Background(), work[0]))
-
-	out := logBuf.String()
-	assert.Contains(t, out, `"level":"debug"`, "successful send must be traceable at DEBUG level")
-	assert.Contains(t, out, from.Hex(), "eoa must be logged")
-	assert.Contains(t, out, `"low-nonce":0`)
-	assert.Contains(t, out, `"high-nonce":1`)
-}
-
-// On a successful submission we also emit a dedicated INFO log carrying just
-// eoa, nonce range and the wrapping Cadence tx ID. This is the greppable
-// mapping an operator needs to correlate an EVM nonce to the Flow tx that
-// carried it — the DEBUG log has richer context but is filtered out at the
-// default log level in production.
-func Test_TxMemPool_SuccessfulSubmitLogsInfoWithFlowTxID(t *testing.T) {
+// A successful submission emits a single INFO log carrying eoa, nonce range,
+// batch-size, reason and the wrapping Cadence tx ID. Historically split across
+// INFO+DEBUG but that duplicated log volume at the default (`debug`) log level;
+// consolidated per PR #984 review.
+func Test_TxMemPool_SuccessfulSubmitLogsInfoWithAllFields(t *testing.T) {
 	key, err := crypto.GenerateKey()
 	require.NoError(t, err)
 	from := crypto.PubkeyToAddress(key.PublicKey)
@@ -638,8 +599,53 @@ func Test_TxMemPool_SuccessfulSubmitLogsInfoWithFlowTxID(t *testing.T) {
 	assert.Contains(t, out, from.Hex(), "eoa must be logged")
 	assert.Contains(t, out, `"low-nonce":0`, "low nonce must be logged")
 	assert.Contains(t, out, `"high-nonce":1`, "high nonce must be logged")
-	assert.Contains(t, out, `"flow-tx-id":"`+flowTxID.Hex()+`"`,
+	assert.Contains(t, out, `"batch-size":2`, "batch size must be logged")
+	assert.Contains(t, out, `"reason":"consecutive-prefix"`, "flush reason must be logged")
+	assert.Contains(t, out, `"flow_tx_id":"`+flowTxID.Hex()+`"`,
 		"wrapping Cadence tx ID must be logged so it can be correlated to Flowscan",
+	)
+	assert.NotContains(t, out, `"level":"debug"`,
+		"successful send must NOT emit a duplicate DEBUG line — consolidated per PR #984 review",
+	)
+}
+
+// When the Cadence tx build fails before signing, the flow_tx_id is the
+// zero identifier — the WARN drop log must OMIT the field rather than emit
+// a meaningless all-zero hex string, per Janez's PR #984 review comment.
+func Test_TxMemPool_FailedSubmitOmitsFlowTxIDWhenBuildFailed(t *testing.T) {
+	key, err := crypto.GenerateKey()
+	require.NoError(t, err)
+	from := crypto.PubkeyToAddress(key.PublicKey)
+
+	var logBuf bytes.Buffer
+	submitErr := errors.New("building Flow transaction: signer unavailable")
+	pool := newTestPool(
+		&fakeNonceProvider{nonce: 0},
+		func(_ context.Context, _ []heldTx) error { return submitErr },
+		testPoolConfig(),
+	)
+	pool.submitBatch = func(_ context.Context, _ []heldTx) (flow.Identifier, error) {
+		return flow.Identifier{}, submitErr
+	}
+	pool.logger = zerolog.New(&logBuf)
+
+	tx0 := signedTestTx(t, key, 0, 1)
+	past := time.Now().Add(-time.Second)
+	pool.queues[from] = &eoaQueue{
+		txs:                    map[uint64]heldTx{0: {txHash: tx0.Hash(), nonce: 0, enqueuedAt: past}},
+		collectionWindowEndsAt: past,
+		flushDeadline:          past,
+	}
+
+	work := pool.collectDueBatches()
+	require.Len(t, work, 1)
+	require.Error(t, pool.submitWork(context.Background(), work[0]))
+
+	out := logBuf.String()
+	assert.Contains(t, out, `"level":"warn"`, "drop must still be observable at WARN level")
+	assert.Contains(t, out, "signer unavailable", "underlying error must be logged")
+	assert.NotContains(t, out, `"flow_tx_id"`,
+		"flow_tx_id field must be omitted when the ID is zero (build failed pre-signing)",
 	)
 }
 
