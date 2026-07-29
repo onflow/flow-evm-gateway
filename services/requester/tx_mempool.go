@@ -100,6 +100,16 @@ import (
 //       Example: frontier 5, TxMaxNonceGap 500, tx with nonce 600 arrives →
 //       rejected (it cannot execute until ~595 intervening nonces are filled).
 //
+// Recovery
+//   13. Reconciliation: a background loop (reconcileLoop, tick
+//       TxReconcileInterval) polls the wrapping Cadence tx status for each EOA
+//       with an outstanding in-flight marker. If the wrapper is sealed with an
+//       error (e.g. the run.cdc "nonce too high" assertion after intra-block
+//       reordering) OR it has not sealed within TxReconcileStaleAfter, the
+//       marker is cleared so the next Add() re-classifies against on-chain
+//       state — bounding wedge duration to ~one sealing window instead of the
+//       full idle-eviction retention.
+//
 // Cross-cutting invariants
 //   - No silent drops: for any accepted tx id you can either find it on-chain
 //     (submitted) or find a WARN log saying it was dropped (submit failure or
@@ -110,7 +120,9 @@ import (
 //     and never wedges the EOA (the in-flight marker is rolled back). The pool
 //     does NOT retry internally.
 //   - Concurrency: one background goroutine (processQueues) flushes due queues
-//     and Add runs under the same pool-wide queueMux; see the note on TxMemPool.
+//     and Add runs under the same pool-wide queueMux; a second goroutine
+//     (reconcileLoop) polls Cadence tx status outside the lock and only
+//     acquires it briefly to reset stuck markers. See the note on TxMemPool.
 
 // heldTx is a transaction held in the mempool, waiting for its
 // collection window to elapse or its nonce gap to be filled.
@@ -410,6 +422,16 @@ func (n *nonceTracker) refreshNextNonce(nextNonce uint64) {
 	n.localNextNonce = nextNonce
 }
 
+// resetSubmissionState clears both submission markers so subsequent Add() calls
+// re-classify against on-chain state. Called by the reconciliation loop when
+// the wrapping Cadence tx demonstrably did not advance the on-chain nonce
+// (reverted, or unsealed past the stale-after threshold). The corresponding
+// eoaQueue's lastFlowTxID must be cleared alongside this call.
+func (n *nonceTracker) resetSubmissionState() {
+	n.lastConsecutivelySubmitted = nonceWrapper{}
+	n.submitting = nonceWrapper{}
+}
+
 // eoaQueue tracks the held transactions and submission state for one EOA.
 type eoaQueue struct {
 	// txs holds pending transactions keyed by nonce. Keying by nonce gives
@@ -434,6 +456,11 @@ type eoaQueue struct {
 	lastActivity time.Time
 	// nonces is the submission-state machine for this EOA.
 	nonces nonceTracker
+	// lastFlowTxID is the Flow transaction ID of the most recent Cadence submission
+	// for this EOA. Zero until the first successful submission. Read by the
+	// reconciliation loop to poll the wrapper's on-chain status; rolled back to
+	// zero when reconciliation detects the wrapper reverted or never sealed.
+	lastFlowTxID flow.Identifier
 }
 
 // isEmpty reports whether the queue holds no transactions. Callers must hold
@@ -474,6 +501,10 @@ type TxMemPool struct {
 	// before a Flow tx is signed) so logSubmission can record it, letting an
 	// operator correlate a wedged EVM nonce to the specific Cadence tx.
 	submitBatch func(ctx context.Context, txs []heldTx) (flow.Identifier, error)
+	// getTxResult retrieves the sealed status of a Cadence transaction. It defaults
+	// to t.client.GetTransactionResult and exists as a field so tests can inject a
+	// fake without a live Access Node.
+	getTxResult func(ctx context.Context, id flow.Identifier) (*flow.TransactionResult, error)
 	// now returns the current time. It defaults to time.Now and exists as a
 	// field so tests can drive the collection window, flush deadline, submission
 	// spacing, TTL expiry and idle-queue retention with a controllable clock
@@ -507,8 +538,10 @@ func NewTxMemPool(
 		now:           time.Now,
 	}
 	pool.submitBatch = pool.submitTxBatch
+	pool.getTxResult = pool.client.GetTransactionResult
 
 	go pool.processQueues(ctx)
+	go pool.reconcileLoop(ctx)
 
 	return pool, nil
 }
@@ -626,6 +659,7 @@ func (t *TxMemPool) Add(
 			}
 			q.nonces.markSubmitted(tx.Nonce())
 			q.lastSubmittedAt = t.now()
+			q.lastFlowTxID = flowTxID
 			return nil
 		}
 		t.enqueue(q, held, now)
@@ -735,7 +769,7 @@ func (t *TxMemPool) processQueues(ctx context.Context) {
 func (t *TxMemPool) submitWork(ctx context.Context, w flushWork) error {
 	flowTxID, err := t.submitBatch(ctx, w.txs)
 	t.logSubmission(w.from, w.txs, w.reason, w.localNextNonce, flowTxID, err)
-	t.reconcileSubmission(w, err)
+	t.reconcileSubmission(w, flowTxID, err)
 	return err
 }
 
@@ -852,7 +886,12 @@ func (t *TxMemPool) logSubmission(
 //
 // TTL-expiry batches (w.needsReconcile == false) never mark the tracker, so
 // there is nothing to reconcile for them.
-func (t *TxMemPool) reconcileSubmission(w flushWork, submitErr error) {
+//
+// flowTxID is recorded on the queue when submission succeeds so the
+// reconciliation loop can later poll the wrapping Cadence tx status against the
+// chain (see reconcileLoop). It is ignored on failure and for batches that
+// don't require reconciliation.
+func (t *TxMemPool) reconcileSubmission(w flushWork, flowTxID flow.Identifier, submitErr error) {
 	if !w.needsReconcile {
 		return
 	}
@@ -871,6 +910,7 @@ func (t *TxMemPool) reconcileSubmission(w flushWork, submitErr error) {
 		return
 	}
 	q.nonces.markSubmitted(highNonce)
+	q.lastFlowTxID = flowTxID
 }
 
 // collectDueBatches selects, under the queue lock, every batch that is due for
@@ -1113,4 +1153,97 @@ func (t *TxMemPool) submitTxBatch(ctx context.Context, txs []heldTx) (flow.Ident
 	}
 
 	return flowTx.ID(), nil
+}
+
+// reconcileLoop periodically inspects each active EOA queue's most recent
+// wrapping Cadence transaction and clears the in-flight nonce marker when the
+// wrapper is provably not going to advance the on-chain nonce. Three cases
+// trigger a reset:
+//  1. The wrapper is SEALED with a non-zero ErrorCode (it reverted — e.g. the
+//     intra-block reordering "nonce too high" assertion in run.cdc). This is
+//     the primary DFNS-observed failure mode.
+//  2. The wrapper is not sealed and more than TxReconcileStaleAfter has
+//     elapsed since submission. Catches silent AN drops and any other
+//     never-lands case.
+//  3. The on-chain nextNonce has advanced past highestSent — the chain moved
+//     on without our help (unlikely with the other two cases, but keeps the
+//     marker precisely in sync).
+func (t *TxMemPool) reconcileLoop(ctx context.Context) {
+	ticker := time.NewTicker(t.config.TxReconcileInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			t.reconcileOnce(ctx)
+		}
+	}
+}
+
+// reconcileOnce performs one pass of reconciliation across all active EOA
+// queues. Callers must NOT hold queueMux — this method acquires it in short
+// sections around each EOA's read/reset, and the network call (getTxResult)
+// happens outside the lock so a slow AN cannot pin the pool.
+func (t *TxMemPool) reconcileOnce(ctx context.Context) {
+	// Snapshot the (eoa, flowTxID, lastSubmittedAt) tuples for EOAs with an
+	// outstanding submission marker. Copy under the lock so we can release it
+	// before doing network I/O.
+	type snapshot struct {
+		from            gethCommon.Address
+		flowTxID        flow.Identifier
+		lastSubmittedAt time.Time
+	}
+	var snaps []snapshot
+	t.queueMux.Lock()
+	for from, q := range t.queues {
+		if !q.nonces.highestSent().set {
+			continue
+		}
+		if q.lastFlowTxID == (flow.Identifier{}) {
+			continue
+		}
+		snaps = append(snaps, snapshot{from, q.lastFlowTxID, q.lastSubmittedAt})
+	}
+	t.queueMux.Unlock()
+
+	now := t.now()
+	for _, s := range snaps {
+		result, err := t.getTxResult(ctx, s.flowTxID)
+		// Fall through: even on error we may still want to check the staleness
+		// path below. But avoid touching state on transient AN errors — only
+		// reset if we have concrete evidence (SEALED-with-error) OR the
+		// staleness threshold is exceeded.
+		sealed := err == nil && result != nil && result.Status >= flow.TransactionStatusSealed
+		reverted := sealed && result.Error != nil
+		stale := now.Sub(s.lastSubmittedAt) > t.config.TxReconcileStaleAfter
+
+		if !reverted && !stale {
+			continue
+		}
+
+		t.queueMux.Lock()
+		q, ok := t.queues[s.from]
+		// If the queue was evicted or already advanced (different flow-tx-id
+		// now), do nothing — a fresher submission has superseded this state.
+		if !ok || q.lastFlowTxID != s.flowTxID {
+			t.queueMux.Unlock()
+			continue
+		}
+
+		reason := "unsealed-past-threshold"
+		if reverted {
+			reason = "wrapper-reverted"
+		}
+		t.logger.Warn().
+			Str("eoa", s.from.Hex()).
+			Str("flow-tx-id", s.flowTxID.Hex()).
+			Str("reason", reason).
+			Msg("reconciliation clearing stuck in-flight marker; subsequent Add() calls will re-classify against chain")
+
+		q.nonces.resetSubmissionState()
+		q.lastFlowTxID = flow.Identifier{}
+		t.collector.TxPoolReconcileReset(reason)
+		t.queueMux.Unlock()
+	}
 }

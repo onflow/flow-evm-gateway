@@ -150,6 +150,12 @@ func newTestPool(
 	pool.submitBatch = func(ctx context.Context, txs []heldTx) (flow.Identifier, error) {
 		return flow.Identifier{}, submit(ctx, txs)
 	}
+	// The reconciliation loop is not started by newTestPool, but the field is
+	// defaulted to a no-op fake so any direct call to reconcileOnce from a test
+	// works without a live Access Node.
+	pool.getTxResult = func(context.Context, flow.Identifier) (*flow.TransactionResult, error) {
+		return nil, nil
+	}
 	return pool
 }
 
@@ -438,6 +444,7 @@ func Test_ReconcileSubmission_OnlyReconcilesMatchingInFlightBatch(t *testing.T) 
 	// A different (newer) in-flight nonce owns the marker: not cleared.
 	pool.reconcileSubmission(
 		flushWork{from: from, txs: []heldTx{makeHeldTx(5, time.Time{})}, needsReconcile: true},
+		flow.Identifier{},
 		submitErr,
 	)
 	assert.True(t, pool.queues[from].nonces.inFlight())
@@ -445,6 +452,7 @@ func Test_ReconcileSubmission_OnlyReconcilesMatchingInFlightBatch(t *testing.T) 
 	// A TTL-expiry batch (needsReconcile false) never touches the tracker.
 	pool.reconcileSubmission(
 		flushWork{from: from, txs: []heldTx{makeHeldTx(7, time.Time{})}, needsReconcile: false},
+		flow.Identifier{},
 		submitErr,
 	)
 	assert.True(t, pool.queues[from].nonces.inFlight())
@@ -452,6 +460,7 @@ func Test_ReconcileSubmission_OnlyReconcilesMatchingInFlightBatch(t *testing.T) 
 	// The failed in-flight batch still owns the marker: cleared.
 	pool.reconcileSubmission(
 		flushWork{from: from, txs: []heldTx{makeHeldTx(7, time.Time{})}, needsReconcile: true},
+		flow.Identifier{},
 		submitErr,
 	)
 	assert.False(t, pool.queues[from].nonces.inFlight())
@@ -459,6 +468,7 @@ func Test_ReconcileSubmission_OnlyReconcilesMatchingInFlightBatch(t *testing.T) 
 	// Unknown EOA: no panic.
 	pool.reconcileSubmission(
 		flushWork{from: gethCommon.HexToAddress("0xdef"), txs: []heldTx{makeHeldTx(7, time.Time{})}, needsReconcile: true},
+		flow.Identifier{},
 		submitErr,
 	)
 }

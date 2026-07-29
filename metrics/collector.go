@@ -120,6 +120,11 @@ var txPoolNonceViewCache = prometheus.NewCounterVec(prometheus.CounterOpts{
 	Help: "Block-view cache accesses when reading EOA nonces (hit = reused the view built for the indexed height; miss = rebuilt it)",
 }, []string{"result"})
 
+var txPoolReconcileResets = prometheus.NewCounterVec(prometheus.CounterOpts{
+	Name: prefixedName("txpool_reconcile_resets_total"),
+	Help: "Total mempool in-flight nonce markers cleared by the reconciliation loop, by reason (wrapper-reverted, unsealed-past-threshold)",
+}, []string{"reason"})
+
 var metrics = []prometheus.Collector{
 	apiErrors,
 	serverPanicsCounters,
@@ -142,6 +147,7 @@ var metrics = []prometheus.Collector{
 	txPoolQueuedTransactions,
 	txPoolSubmissions,
 	txPoolNonceViewCache,
+	txPoolReconcileResets,
 }
 
 type Collector interface {
@@ -164,6 +170,7 @@ type Collector interface {
 	TxPoolSize(queues int, queuedTransactions int)
 	TxPoolSubmission(reason string)
 	NonceViewCache(hit bool)
+	TxPoolReconcileReset(reason string)
 }
 
 var _ Collector = &DefaultCollector{}
@@ -193,6 +200,7 @@ type DefaultCollector struct {
 	txPoolQueuedTransactions       prometheus.Gauge
 	txPoolSubmissions              *prometheus.CounterVec
 	txPoolNonceViewCache           *prometheus.CounterVec
+	txPoolReconcileResets          *prometheus.CounterVec
 }
 
 func NewCollector(logger zerolog.Logger) Collector {
@@ -224,6 +232,7 @@ func NewCollector(logger zerolog.Logger) Collector {
 		txPoolQueuedTransactions:       txPoolQueuedTransactions,
 		txPoolSubmissions:              txPoolSubmissions,
 		txPoolNonceViewCache:           txPoolNonceViewCache,
+		txPoolReconcileResets:          txPoolReconcileResets,
 	}
 }
 
@@ -338,6 +347,10 @@ func (c *DefaultCollector) NonceViewCache(hit bool) {
 		result = "hit"
 	}
 	c.txPoolNonceViewCache.With(prometheus.Labels{"result": result}).Inc()
+}
+
+func (c *DefaultCollector) TxPoolReconcileReset(reason string) {
+	c.txPoolReconcileResets.With(prometheus.Labels{"reason": reason}).Inc()
 }
 
 func prefixedName(name string) string {

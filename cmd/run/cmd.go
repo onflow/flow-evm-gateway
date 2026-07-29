@@ -252,6 +252,12 @@ func parseConfigFromFlags() error {
 		if cfg.TxMaxBatchSize < 1 {
 			return fmt.Errorf("tx-max-batch-size must be >= 1 when tx-mempool-mode is enabled")
 		}
+		if cfg.TxReconcileInterval <= 0 {
+			return fmt.Errorf("tx-reconcile-interval must be > 0 when tx-mempool-mode is enabled")
+		}
+		if cfg.TxReconcileStaleAfter <= 0 {
+			return fmt.Errorf("tx-reconcile-stale-after must be > 0 when tx-mempool-mode is enabled")
+		}
 	}
 
 	if !cfg.ExperimentalSoftFinalityEnabled && cfg.ExperimentalSealingVerificationEnabled {
@@ -330,6 +336,8 @@ func init() {
 	Cmd.Flags().DurationVar(&cfg.TxPoolTTL, "tx-pool-ttl", 30*time.Second, "How long the transaction mempool holds an out-of-order transaction waiting for its nonce gap to fill, before submitting it anyway.")
 	Cmd.Flags().IntVar(&cfg.TxMaxBatchSize, "tx-max-batch-size", 5, "Maximum number of EVM transactions per EVM.batchRun Cadence transaction in the transaction mempool.")
 	Cmd.Flags().Uint64Var(&cfg.TxMaxNonceGap, "tx-max-nonce-gap", 500, "How far ahead of an EOA's on-chain nonce the transaction mempool accepts a nonce; nonces beyond indexedNonce+gap are rejected as nonce-too-high. 0 means no upper bound. A nonce below the indexed nonce is always rejected as nonce-too-low regardless of this setting.")
+	Cmd.Flags().DurationVar(&cfg.TxReconcileInterval, "tx-reconcile-interval", time.Second, "How often the mempool reconciliation loop polls each active EOA's most recent Cadence tx wrapper. Only used when --tx-mempool-mode=true.")
+	Cmd.Flags().DurationVar(&cfg.TxReconcileStaleAfter, "tx-reconcile-stale-after", 30*time.Second, "How long to wait for a submitted wrapping Cadence tx to seal before the reconciliation loop treats it as dropped and clears the EOA's in-flight marker. Must be >> Flow sealing latency.")
 	Cmd.Flags().DurationVar(&cfg.RpcRequestTimeout, "rpc-request-timeout", time.Second*120, "Sets the maximum duration at which JSON-RPC requests should generate a response, before they timeout. The default is 120 seconds.")
 
 	err := Cmd.Flags().MarkDeprecated("init-cadence-height", "This flag is no longer necessary and will be removed in future version. The initial Cadence height is known for testnet/mainnet and this was only required for fresh deployments of EVM Gateway. Once the DB has been initialized, the latest index Cadence height will be used upon start-up.")

@@ -164,6 +164,16 @@ type Config struct {
 	// bounds only the upper end: a nonce below the indexed nonce is always
 	// rejected with ErrNonceTooLow regardless of this setting.
 	TxMaxNonceGap uint64
+	// TxReconcileInterval is how often the mempool reconciliation loop wakes to
+	// poll each active EOA's last-submitted wrapping Cadence tx status against the
+	// chain. A stale marker (reverted wrapper or silent drop) is cleared here so
+	// the wedge does not persist until idle-eviction.
+	TxReconcileInterval time.Duration
+	// TxReconcileStaleAfter is the grace period past a wrapper's submission time
+	// after which, if it still is not sealed, the reconciler treats it as dropped
+	// and clears the marker. Must comfortably exceed Flow's sealing latency
+	// (~6-8s) to avoid false positives.
+	TxReconcileStaleAfter time.Duration
 	// RpcRequestTimeout is the maximum duration at which JSON-RPC requests should generate
 	// a response, before they timeout.
 	RpcRequestTimeout time.Duration

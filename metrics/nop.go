@@ -30,3 +30,4 @@ func (c *nopCollector) FlowTotalSupply(totalSupply *big.Int)       {}
 func (c *nopCollector) TxPoolSize(queues int, queued int)          {}
 func (c *nopCollector) TxPoolSubmission(reason string)             {}
 func (c *nopCollector) NonceViewCache(hit bool)                    {}
+func (c *nopCollector) TxPoolReconcileReset(reason string)         {}
