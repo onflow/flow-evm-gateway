@@ -124,6 +124,15 @@ type Config struct {
 	// frequently than this interval will be batched.
 	// Useful only when batch transaction submission is enabled.
 	EOAActivityCacheTTL time.Duration
+	// ExperimentalSoftFinalityEnabled enables the experimental soft finality feature which syncs
+	// EVM block and transaction data from the upstream Access node before the block is sealed.
+	// CAUTION: This feature is experimental and may return incorrect data in certain circumstances.
+	ExperimentalSoftFinalityEnabled bool
+	// ExperimentalSealingVerificationEnabled enables the experimental sealing verification feature
+	// which verifies the hash of the EVM events ingested by the requester engine match the hash
+	// of the events from the sealed block in the Flow network.
+	// CAUTION: This feature is experimental and will cause the node to halt if the events don't match.
+	ExperimentalSealingVerificationEnabled bool
 	// TxMemPoolMode configures the gateway to use the transaction mempool:
 	// transactions carrying the expected next nonce (with nothing in flight)
 	// are submitted immediately, out-of-order transactions are held until their

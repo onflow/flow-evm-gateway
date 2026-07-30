@@ -155,6 +155,11 @@ func decodeCadenceEvents(events flow.BlockEvents) (*CadenceEvents, error) {
 	return e, nil
 }
 
+// BlockEvents returns the Flow block events.
+func (c *CadenceEvents) BlockEvents() flow.BlockEvents {
+	return c.events
+}
+
 // Block evm block. If event doesn't contain EVM block the return value is nil.
 func (c *CadenceEvents) Block() *Block {
 	return c.block

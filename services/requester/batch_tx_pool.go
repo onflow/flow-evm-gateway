@@ -50,7 +50,7 @@ type BatchTxPool struct {
 	eoaActivity *expirable.LRU[gethCommon.Address, time.Time]
 }
 
-var _ TxPool = &BatchTxPool{}
+var _ TxPool = (*BatchTxPool)(nil)
 
 func NewBatchTxPool(
 	ctx context.Context,
@@ -162,7 +162,7 @@ func (t *BatchTxPool) Add(
 
 	if err != nil {
 		t.collector.TransactionsDropped(1)
-		t.logger.Error().Err(err).Str("tx-hash", tx.Hash().Hex()).Msg("failed to build Flow transaction, EVM transaction dropped")
+		t.logger.Error().Err(err).Str("tx_hash", tx.Hash().Hex()).Msg("failed to build Flow transaction, EVM transaction dropped")
 	}
 	return err
 }
@@ -239,7 +239,7 @@ func (t *BatchTxPool) batchSubmitTransactionsForSameAddress(
 		for i, tx := range pooledTxs {
 			txHashes[i] = tx.txHash.Hex()
 		}
-		t.logger.Error().Err(err).Strs("tx-hashes", txHashes).Msg("failed to build Flow transaction, EVM transactions dropped")
+		t.logger.Error().Err(err).Strs("tx_hashes", txHashes).Msg("failed to build Flow transaction, EVM transactions dropped")
 		return err
 	}
 
@@ -249,7 +249,7 @@ func (t *BatchTxPool) batchSubmitTransactionsForSameAddress(
 		for i, tx := range pooledTxs {
 			txHashes[i] = tx.txHash.Hex()
 		}
-		t.logger.Error().Err(err).Strs("tx-hashes", txHashes).Msg("failed to send Flow transaction, EVM transactions dropped")
+		t.logger.Error().Err(err).Strs("tx_hashes", txHashes).Msg("failed to send Flow transaction, EVM transactions dropped")
 		return err
 	}
 

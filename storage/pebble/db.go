@@ -60,3 +60,24 @@ func OpenDB(dir string) (*pebble.DB, error) {
 	}
 	return db, nil
 }
+
+// WithBatch will execute the provided function with a new batch,
+// and commit the batch afterwards if no error is returned.
+func WithBatch(store *Storage, f func(batch *pebble.Batch) error) error {
+	batch := store.NewBatch()
+	defer func(batch *pebble.Batch) {
+		if err := batch.Close(); err != nil {
+			store.log.Error().Err(err).Msg("failed to close batch")
+		}
+	}(batch)
+
+	if err := f(batch); err != nil {
+		return err
+	}
+
+	if err := batch.Commit(pebble.Sync); err != nil {
+		return fmt.Errorf("failed to commit batch: %w", err)
+	}
+
+	return nil
+}

@@ -154,7 +154,7 @@ func (d *DebugAPI) TraceCall(
 		return nil, err
 	}
 
-	height, err := resolveBlockTag(&blockNrOrHash, d.blocks, d.logger)
+	height, err := resolveBlockTag(&blockNrOrHash, d.blocks)
 	if err != nil {
 		return nil, err
 	}
@@ -258,7 +258,7 @@ func (d *DebugAPI) FlowHeightByBlock(
 		return 0, err
 	}
 
-	height, err := resolveBlockTag(&blockNrOrHash, d.blocks, d.logger)
+	height, err := resolveBlockTag(&blockNrOrHash, d.blocks)
 	if err != nil {
 		return 0, err
 	}

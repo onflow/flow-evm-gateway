@@ -30,6 +30,9 @@ const (
 	// special keys
 	latestEVMHeightKey     = byte(100)
 	latestCadenceHeightKey = byte(102)
+
+	eventsHashKey         = byte(150)
+	sealedEventsHeightKey = byte(151)
 )
 
 // makePrefix makes a key used internally to store the values
