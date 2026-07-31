@@ -1353,6 +1353,41 @@ func Test_TxMemPool_ReconcileLeavesMarkerWhenWrapperSealedSuccessfully(t *testin
 		"sealed-successful wrapper must preserve lastFlowTxID")
 }
 
+func Test_TxMemPool_ReconcileLeavesMarkerWhenWrapperSealedSuccessfullyPastGracePeriod(t *testing.T) {
+	key, err := crypto.GenerateKey()
+	require.NoError(t, err)
+
+	clk := newFakeClock(timingClockBase)
+	pool := newTestPool(
+		&fakeNonceProvider{nonce: 3},
+		func(_ context.Context, _ []heldTx) error { return nil },
+		testPoolConfig(),
+	)
+	pool.now = clk.now
+
+	flowTxID := flow.HexToID(
+		"3333333333333333333333333333333333333333333333333333333333333333",
+	)
+	from := primeReconcilePool(t, pool, clk, key, 3, flowTxID)
+
+	pool.getTxResult = func(_ context.Context, _ flow.Identifier) (*flow.TransactionResult, error) {
+		return &flow.TransactionResult{Status: flow.TransactionStatusSealed, Error: nil}, nil
+	}
+
+	// Advance by a sufficient amount — well after the stale threshold.
+	clk.advance(pool.config.TxReconcileStaleAfter + 3)
+
+	pool.reconcileOnce(context.Background())
+
+	q := pool.queues[from]
+	require.NotNil(t, q)
+	assert.True(t, q.nonces.lastConsecutivelySubmitted.set,
+		"sealed-successful wrapper must NOT clear the marker")
+	assert.Equal(t, uint64(3), q.nonces.lastConsecutivelySubmitted.v)
+	assert.Equal(t, flowTxID, q.lastFlowTxID,
+		"sealed-successful wrapper must preserve lastFlowTxID")
+}
+
 // A wrapper that is still in flight (not yet sealed) within the stale window
 // is normal steady-state operation. reconcileOnce must not reset in this case;
 // resetting would race the imminent seal and could allow a duplicate submission.

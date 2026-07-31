@@ -1259,7 +1259,7 @@ func (t *TxMemPool) reconcileOnce(ctx context.Context) {
 		// staleness threshold is exceeded.
 		sealed := err == nil && result != nil && result.Status == flow.TransactionStatusSealed
 		reverted := sealed && result.Error != nil
-		stale := now.Sub(s.lastSubmittedAt) > t.config.TxReconcileStaleAfter
+		stale := !(sealed && result.Error == nil) && now.Sub(s.lastSubmittedAt) > t.config.TxReconcileStaleAfter
 
 		if !reverted && !stale {
 			continue
