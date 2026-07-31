@@ -1252,7 +1252,9 @@ func (t *TxMemPool) reconcileOnce(ctx context.Context) {
 
 	now := t.now()
 	for _, s := range snaps {
-		result, err := t.getTxResult(ctx, s.flowTxID)
+		getTxResultCtx, cancel := context.WithTimeout(ctx, t.config.TxReconcileInterval)
+		result, err := t.getTxResult(getTxResultCtx, s.flowTxID)
+		cancel()
 		// Fall through: even on error we may still want to check the staleness
 		// path below. But avoid touching state on transient AN errors — only
 		// reset if we have concrete evidence (SEALED-with-error) OR the
