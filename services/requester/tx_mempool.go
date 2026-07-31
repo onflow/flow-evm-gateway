@@ -1257,7 +1257,7 @@ func (t *TxMemPool) reconcileOnce(ctx context.Context) {
 		// path below. But avoid touching state on transient AN errors — only
 		// reset if we have concrete evidence (SEALED-with-error) OR the
 		// staleness threshold is exceeded.
-		sealed := err == nil && result != nil && result.Status >= flow.TransactionStatusSealed
+		sealed := err == nil && result != nil && result.Status == flow.TransactionStatusSealed
 		reverted := sealed && result.Error != nil
 		stale := now.Sub(s.lastSubmittedAt) > t.config.TxReconcileStaleAfter
 
