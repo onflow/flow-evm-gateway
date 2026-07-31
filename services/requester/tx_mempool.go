@@ -1296,7 +1296,8 @@ func (t *TxMemPool) reconcileOnce(ctx context.Context) {
 			Str("flow_tx_id", s.flowTxID.Hex()).
 			Str("reason", reason).
 			Dur("elapsed-since-submit", elapsed)
-		if reverted && result.Error != nil {
+
+		if reverted {
 			event = event.Str("wrapper-error", result.Error.Error())
 		}
 		event.Msg("reconciliation clearing stuck in-flight marker; subsequent Add() calls will re-classify against chain")
