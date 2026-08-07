@@ -3,14 +3,12 @@ package requester
 import (
 	"context"
 	"encoding/hex"
-	"slices"
 	"sort"
 	"sync"
 	"time"
 
 	gethCommon "github.com/ethereum/go-ethereum/common"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
-	"github.com/hashicorp/golang-lru/v2/expirable"
 	"github.com/onflow/cadence"
 	"github.com/onflow/flow-go-sdk"
 	"github.com/rs/zerolog"
@@ -22,32 +20,210 @@ import (
 	"github.com/onflow/flow-evm-gateway/services/requester/keystore"
 )
 
-const eoaActivityCacheSize = 10_000
+const (
+	// Max number of transactions per EOA batch submission. The Cadence
+	// transaction that wraps and executes EVM transactions with
+	// `EVM.batchRun`, is submitted with a computation limit of `9,999`.
+	// Adding more EVM transactions per batch, increases the risk of
+	// running out of computation limit, which will revert all wrapped
+	// EVM transactions.
+	maxTxBatch = 5
+	// Max number of pooled transactions per EOA, to avoid unconstrained
+	// memory growth.
+	maxEOAPoolSize = 50
+	// Multiplication factor for the submission spacing interval, which
+	// gives an indication that an EOA queue is stale and could be
+	// removed, to avoid unconstrained memory growth.
+	stalenessFactor = 2
+)
 
+// BatchTxPool is a TxPool implementation that collects and groups transactions
+// by EOA signer, sorts them by nonce, and submits them as a batch via
+// EVM.batchRun on each flush interval.
+//
+// # Problem
+//
+// Flow did not have a traditional EVM mempool. On standard EVM chains, when a
+// wallet sends transactions out-of-nonce-sequence (e.g., nonces 5, 7, 6 in
+// parallel), the mempool holds future-nonce transactions until the gap is
+// filled. Flow EVM had no such pooling mechanism — a transaction whose nonce
+// does not match the current account nonce is simply dropped.
+//
+// The original BatchTxPool implementation partially addressed this by batching
+// transactions that arrived from an EOA with "recent activity" (i.e., a prior
+// transaction within TxBatchInterval). However, it still submitted the FIRST
+// transaction from any burst immediately — before the rest of the burst had
+// a chance to arrive. If that first transaction happened to carry a future
+// nonce (due to parallel dispatch), it failed, and the gap it left caused all
+// subsequent nonces in the batch to fail as well.
+//
+// # Fix
+//
+// For all incoming transactions, we are now inspecting the EOA's current nonce
+// in the local state index:
+// 1. If it matches the transaction nonce, we submit it right away, and record
+// this activity in the EOA's dedicated queue, for use in future submissions.
+// 2. If the transaction nonce is higher, we check for any recent submissions
+// to see if we can form a valid sequence. This could happen from in-flight
+// transaction submission, that have not yet been index by the local state
+// index. In this case we optimistically submit right away. and record this
+// activity in the EOA's dedicated queue, for use in future submissions.
+// 3. If none of the above 2 conditions are met, we enqueue the transaction
+// in the pool. The flush timer (TxBatchInterval) is the sole submission trigger.
+// This guarantees that parallel transactions from the same wallet accumulate
+// in the pool before being sorted by nonce and submitted atomically.
+type BatchTxPool struct {
+	*SingleTxPool
+
+	nonceProvider NonceProvider
+	txQueues      map[gethCommon.Address]*txQueue
+	txQueuesMux   sync.Mutex
+}
+
+// txQueue tracks the pooled transactions and submission state for one EOA.
+type txQueue struct {
+	// txs holds pooled transactions keyed by nonce. Keying by nonce gives
+	// last-write-wins semantics when a client resubmits a not-yet-sent
+	// transaction with the same nonce (e.g. to change its payload).
+	txs map[uint64]pooledEvmTx
+	// lastSubmittedAt is when the last Cadence tx for this EOA was submitted
+	// (used for submission spacing).
+	lastSubmittedAt time.Time
+	// lastSubmittedNonce is the last EOA nonce that was submitted with a
+	// Cadence tx (used for classifying whether to queue or submit right away).
+	lastSubmittedNonce uint64
+}
+
+// size returns the total number of pooled transactions.
+func (t *txQueue) size() int {
+	return len(t.txs)
+}
+
+// spacingElapsed checks whether enough spacing has elapsed since the EOA's
+// last activity, for the given current time and spacing duration.
+func (t *txQueue) spacingElapsed(now time.Time, spacing time.Duration) bool {
+	return t.lastSubmittedAt.IsZero() || now.Sub(t.lastSubmittedAt) >= spacing
+}
+
+// staleEntry checks whether the recorded submission activity for the EOA
+// is stale and could be removed from the mempool queue, to avoid memory
+// growth. If there are no pooled transactions and the last submission was
+// 2 times more than the given spacing interval, we can safely remove this
+// entry.
+func (t *txQueue) staleEntry(now time.Time, spacing time.Duration) bool {
+	return len(t.txs) == 0 && now.Sub(t.lastSubmittedAt) >= (spacing*stalenessFactor)
+}
+
+// validNonce compares the transaction nonce with the nonce from the local
+// state index and the last submission activity (if any), and returns whether
+// the transaction nonce is valid for submission.
+func (t *txQueue) validNonce(
+	txNonce uint64,
+	stateNonce uint64,
+) bool {
+	if txNonce == stateNonce {
+		return true
+	}
+
+	// a value of 0 for `lastSubmittedNonce` is legit, if this is the EOA's
+	// first transaction ever, so we use `lastSubmittedAt` to differentiate
+	// between Go's zero-value.
+	if txNonce == t.lastSubmittedNonce+1 && !t.lastSubmittedAt.IsZero() {
+		return true
+	}
+
+	return false
+}
+
+// pruneTxs filters out any pooled transactions with nonce lower than the
+// given state nonce, as they are stale and should not be submitted. It
+// will also filter any transactions past the size of `maxEOAPoolSize`,
+// to avoid unconstrained memory growth
+func (t *txQueue) pruneTxs(
+	address gethCommon.Address,
+	stateNonce uint64,
+	logger zerolog.Logger,
+) {
+	staleNonces := make([]uint64, 0)
+	for nonce, tx := range t.txs {
+		// drop any pooled transactions with nonce lower than
+		// the nonce in local state index
+		if tx.nonce < stateNonce {
+			logger.Warn().Msgf(
+				"dropped tx with nonce: %d for EOA: %s, expected state nonce: %d",
+				tx.nonce,
+				address,
+				stateNonce,
+			)
+			staleNonces = append(staleNonces, nonce)
+		}
+
+		// keep up to `maxEOAPoolSize` txs per EOA in the pool,
+		// to avoid unconstrained memory growth
+		if tx.nonce > maxEOAPoolSize+stateNonce {
+			logger.Warn().Msgf(
+				"dropped tx with nonce: %d for EOA: %s, due to max pool size limit",
+				tx.nonce,
+				address,
+			)
+			staleNonces = append(staleNonces, nonce)
+		}
+	}
+
+	// remove the transactions with stale nonces from the pooled transactions.
+	for _, nonce := range staleNonces {
+		delete(t.txs, nonce)
+	}
+}
+
+// selectSequentialNonces returns up to `maxTxBatch` pooled transactions
+// forming a sequential nonce run starting exactly at `stateNonce`, sorted
+// ascending.
+// Returns an empty slice when the transaction with stateNonce is absent.
+func (t *txQueue) selectSequentialNonces(stateNonce uint64) []pooledEvmTx {
+	txs := make([]pooledEvmTx, 0)
+	for _, tx := range t.txs {
+		txs = append(txs, tx)
+	}
+
+	// pick the txs with the valid nonce sequence.
+	// txs should be first sorted by nonce, in ascending order.
+	sort.Slice(txs, func(i, j int) bool {
+		return txs[i].nonce < txs[j].nonce
+	})
+	txSequence := make([]pooledEvmTx, 0)
+	for _, tx := range txs {
+		if len(txSequence) >= maxTxBatch {
+			break
+		}
+		if tx.nonce == stateNonce {
+			txSequence = append(txSequence, tx)
+			stateNonce += 1
+		}
+	}
+
+	// remove the transactions with sequential nonces from the pooled transactions.
+	for _, tx := range txSequence {
+		delete(t.txs, tx.nonce)
+	}
+
+	return txSequence
+}
+
+// pooledEvmTx is a transaction queued in the mempool, waiting for the
+// batch interval to elapse or its nonce gap to be filled.
 type pooledEvmTx struct {
 	txPayload cadence.String
 	txHash    gethCommon.Hash
 	nonce     uint64
 }
 
-// BatchTxPool is a `TxPool` implementation that collects and groups
-// transactions based on their EOA signer, and submits them for execution
-// using a batch.
-//
-// The underlying Cadence EVM API used, is `EVM.batchRun`, instead of the
-// `EVM.run` used in `SingleTxPool`.
-//
-// The main advantage of this implementation over the `SingleTxPool`, is the
-// guarantee that transactions originated from the same EOA address, which
-// arrive in a short time interval (about the same as Flow's block production rate),
-// will be executed in the same order their arrived.
-// This helps to reduce the nonce mismatch errors which mainly occur from the
-// re-ordering of Cadence transactions that happens from Collection nodes.
-type BatchTxPool struct {
-	*SingleTxPool
-	pooledTxs   map[gethCommon.Address][]pooledEvmTx
-	txMux       sync.Mutex
-	eoaActivity *expirable.LRU[gethCommon.Address, time.Time]
+// batchSubmission is a batch selected for submission, detached from the queue so
+// the network call happens outside queueMux.
+type batchSubmission struct {
+	from     gethCommon.Address
+	txs      []pooledEvmTx
+	eoaQueue *txQueue
 }
 
 var _ TxPool = (*BatchTxPool)(nil)
@@ -60,6 +236,7 @@ func NewBatchTxPool(
 	config config.Config,
 	collector metrics.Collector,
 	keystore *keystore.KeyStore,
+	nonceProvider NonceProvider,
 ) (*BatchTxPool, error) {
 	// initialize the available keys metric since it is only updated when sending a tx
 	collector.AvailableSigningKeys(keystore.AvailableKeys())
@@ -77,16 +254,11 @@ func NewBatchTxPool(
 		return nil, err
 	}
 
-	eoaActivity := expirable.NewLRU[gethCommon.Address, time.Time](
-		eoaActivityCacheSize,
-		nil,
-		config.EOAActivityCacheTTL,
-	)
 	batchPool := &BatchTxPool{
-		SingleTxPool: singleTxPool,
-		pooledTxs:    make(map[gethCommon.Address][]pooledEvmTx),
-		txMux:        sync.Mutex{},
-		eoaActivity:  eoaActivity,
+		SingleTxPool:  singleTxPool,
+		nonceProvider: nonceProvider,
+		txQueues:      make(map[gethCommon.Address]*txQueue),
+		txQueuesMux:   sync.Mutex{},
 	}
 
 	go batchPool.processPooledTransactions(ctx)
@@ -94,10 +266,10 @@ func NewBatchTxPool(
 	return batchPool, nil
 }
 
-// Add adds the EVM transaction to the tx pool, grouped with the rest of the
-// transactions from the same EOA signer.
-// After the configured `TxBatchInterval`, the collected transations
-// are batched and sent to the Flow network using `EVM.batchRun`, for execution.
+// Add inspects the nonce of the incoming transaction, and either submits it
+// right away or enqueues the transaction in the per-EOA pool, in which case
+// it will be processed and submitted by the flush goroutine
+// (processPooledTransactions) on every `TxBatchInterval` tick.
 func (t *BatchTxPool) Add(
 	ctx context.Context,
 	tx *gethTypes.Transaction,
@@ -106,11 +278,20 @@ func (t *BatchTxPool) Add(
 
 	// tx adding should be blocking, so we don't have races when
 	// pooled transactions are being processed in the background.
-	t.txMux.Lock()
-	defer t.txMux.Unlock()
+	t.txQueuesMux.Lock()
+	defer t.txQueuesMux.Unlock()
 
 	from, err := models.DeriveTxSender(tx)
 	if err != nil {
+		return err
+	}
+
+	// get the latest nonce from the local state index
+	nonce, err := t.nonceProvider.GetNextNonce(from)
+	if err != nil {
+		t.logger.Error().Err(err).Msgf(
+			"failed to get nonce for EOA: %s", from,
+		)
 		return err
 	}
 
@@ -123,48 +304,40 @@ func (t *BatchTxPool) Add(
 		return err
 	}
 
-	// Scenarios
-	// 1. EOA activity not found:
-	// => We send the transaction individually, without adding it
-	// to the batch pool.
-	//
-	// 2. EOA activity found AND it was more than [X] seconds ago:
-	// => We send the transaction individually, without adding it
-	// to the batch pool.
-	//
-	// 3. EOA activity found AND it was less than [X] seconds ago:
-	// => We add the transaction to the batch pool, so that it gets
-	// processed and submitted according to the configured
-	// `TxBatchInterval`.
-	//
-	// For all 3 cases, we record the activity time for the next
-	// transactions that might come from the same EOA.
-	// [X] is equal to the configured `TxBatchInterval` duration.
-	lastActivityTime, found := t.eoaActivity.Get(from)
+	// Reject an exact duplicate of a transaction already in the queue (cheapest
+	// check; needs no index read).
+	eoaQueue := t.eoaQueueEntry(from)
+	if existing, ok := eoaQueue.txs[tx.Nonce()]; ok && existing.txHash == tx.Hash() {
+		return errs.ErrDuplicateTransaction
+	}
 
-	if !found {
-		// Case 1. EOA activity not found:
-		err = t.submitSingleTransaction(ctx, hexEncodedTx)
-	} else if time.Since(lastActivityTime) > t.config.TxBatchInterval {
-		// Case 2. EOA activity found AND it was more than [X] seconds ago:
-		err = t.submitSingleTransaction(ctx, hexEncodedTx)
-	} else {
-		// Case 3. EOA activity found AND it was less than [X] seconds ago:
-		userTx := pooledEvmTx{txPayload: hexEncodedTx, txHash: tx.Hash(), nonce: tx.Nonce()}
-		// Prevent submission of duplicate transactions, based on their tx hash
-		if slices.Contains(t.pooledTxs[from], userTx) {
-			return errs.ErrDuplicateTransaction
+	// Check the `txQueue` for an entry with the given EOA. If enough spacing
+	// has elapsed and the tx nonce is the next expected, we submit right
+	// away and update the `lastSubmittedAt` & `lastSubmittedNonce` fields,
+	// for classifying future submissions, that might arrive shortly.
+	if eoaQueue.spacingElapsed(time.Now(), t.config.TxBatchInterval) && eoaQueue.validNonce(tx.Nonce(), nonce) {
+		// Bound the submit so a hung call cannot pin `txQueuesMux`
+		// indefinitely (see `fastPathSubmitTimeout`).
+		submitCtx, cancel := context.WithTimeout(ctx, fastPathSubmitTimeout)
+		err = t.submitSingleTransaction(submitCtx, hexEncodedTx)
+		cancel()
+		if err != nil {
+			return err
 		}
-		t.pooledTxs[from] = append(t.pooledTxs[from], userTx)
+
+		eoaQueue.lastSubmittedAt = time.Now()
+		eoaQueue.lastSubmittedNonce = tx.Nonce()
+		t.collector.TxPoolSubmission(flushReasonFastPath)
+		return nil
 	}
 
-	t.eoaActivity.Add(from, time.Now())
-
-	if err != nil {
-		t.collector.TransactionsDropped(1)
-		t.logger.Error().Err(err).Str("tx_hash", tx.Hash().Hex()).Msg("failed to build Flow transaction, EVM transaction dropped")
+	eoaQueue.txs[tx.Nonce()] = pooledEvmTx{
+		txPayload: hexEncodedTx,
+		txHash:    tx.Hash(),
+		nonce:     tx.Nonce(),
 	}
-	return err
+
+	return nil
 }
 
 func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
@@ -176,28 +349,89 @@ func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			// Take a copy here to allow `Add()` to continue accept
-			// incoming EVM transactions, without blocking until the
-			// batch transactions are submitted.
-			t.txMux.Lock()
-			txsGroupedByAddress := t.pooledTxs
-			t.pooledTxs = make(map[gethCommon.Address][]pooledEvmTx)
-			t.txMux.Unlock()
-
-			for address, pooledTxs := range txsGroupedByAddress {
-				err := t.batchSubmitTransactionsForSameAddress(
-					ctx,
-					t.getReferenceBlock(),
-					pooledTxs,
+			// construct a block view here, to read the nonce for each
+			// EOA below, without recreating the block view each time.
+			blockView, err := t.nonceProvider.GetBlockView()
+			if err != nil {
+				t.logger.Fatal().Err(err).Msgf(
+					"failed to construct BlockView for nonce reading",
 				)
+				return
+			}
+
+			t.txQueuesMux.Lock()
+			txBatchByAddress := make(map[gethCommon.Address]batchSubmission)
+			staleEntries := make([]gethCommon.Address, 0)
+			queues := len(t.txQueues)
+			queuedTxs := 0
+			for address, eoaQueue := range t.txQueues {
+				if eoaQueue.staleEntry(time.Now(), t.config.TxBatchInterval) {
+					staleEntries = append(staleEntries, address)
+					continue
+				}
+				queuedTxs += eoaQueue.size()
+
+				// get the latest nonce from the local state index.
+				nonce, err := blockView.GetNonce(address)
 				if err != nil {
 					t.logger.Error().Err(err).Msgf(
-						"failed to submit Flow transaction from BatchTxPool for EOA: %s",
-						address.Hex(),
+						"failed to get nonce for EOA: %s", address,
 					)
 					continue
 				}
+
+				// drop any pooled transactions with nonce lower than
+				// the local state index nonce.
+				eoaQueue.pruneTxs(address, nonce, t.logger)
+
+				// pick the txs with the valid nonce sequence
+				txSequence := eoaQueue.selectSequentialNonces(nonce)
+				// if there is no valid nonce sequence, according to the local state
+				// index, continue with the next EOA.
+				if len(txSequence) == 0 {
+					continue
+				}
+				txBatchByAddress[address] = batchSubmission{
+					from:     address,
+					txs:      txSequence,
+					eoaQueue: eoaQueue,
+				}
 			}
+
+			// cleanup any stale entries, to avoid unconstrained memory growth
+			for _, address := range staleEntries {
+				delete(t.txQueues, address)
+			}
+			t.txQueuesMux.Unlock()
+
+			for address, batch := range txBatchByAddress {
+				err = t.batchSubmitTransactionsForSameAddress(
+					ctx,
+					t.getReferenceBlock(),
+					batch.txs,
+				)
+				t.txQueuesMux.Lock()
+				if err != nil {
+					t.logger.Error().Err(err).Msgf(
+						"failed to submit batch Flow transaction for EOA: %s, batch count: %d, nonce: %d, tx hash: %s",
+						address.Hex(),
+						len(batch.txs),
+						batch.txs[0].nonce,
+						batch.txs[0].txHash.Hex(),
+					)
+					// In case of any submission errors, add the transactions back
+					// to the pool as a retry mechanism. This is an important part
+					// to avoid gaps, which would require users to resubmit.
+					batch.eoaQueue = t.eoaEnqueueTxs(address, batch.txs)
+				} else {
+					batch.eoaQueue.lastSubmittedAt = time.Now()
+					batch.eoaQueue.lastSubmittedNonce = batch.txs[len(batch.txs)-1].nonce
+				}
+				t.txQueuesMux.Unlock()
+				t.collector.TxPoolSubmission(flushReasonPrefix)
+			}
+
+			t.collector.TxPoolSize(queues, queuedTxs)
 		}
 	}
 }
@@ -207,12 +441,8 @@ func (t *BatchTxPool) batchSubmitTransactionsForSameAddress(
 	referenceBlockHeader *flow.BlockHeader,
 	pooledTxs []pooledEvmTx,
 ) error {
-	// Sort the transactions based on their nonce, to make sure
-	// that no re-ordering has happened due to races etc.
-	sort.Slice(pooledTxs, func(i, j int) bool {
-		return pooledTxs[i].nonce < pooledTxs[j].nonce
-	})
-
+	// the `pooledTxs` slice is already sorted by nonce, in ascending order
+	// inside the `processPooledTransactions()` function.
 	hexEncodedTxs := make([]cadence.Value, len(pooledTxs))
 	for i, txPayload := range pooledTxs {
 		hexEncodedTxs[i] = txPayload.txPayload
@@ -234,7 +464,7 @@ func (t *BatchTxPool) batchSubmitTransactionsForSameAddress(
 	if err != nil {
 		// If there was any error during the transaction build
 		// process, we record all transactions as dropped.
-		t.collector.TransactionsDropped(len(hexEncodedTxs))
+		t.collector.TransactionsDropped(len(pooledTxs))
 		txHashes := make([]string, len(pooledTxs))
 		for i, tx := range pooledTxs {
 			txHashes[i] = tx.txHash.Hex()
@@ -244,6 +474,8 @@ func (t *BatchTxPool) batchSubmitTransactionsForSameAddress(
 	}
 
 	if err := t.client.SendTransaction(ctx, *flowTx); err != nil {
+		// If there was any error while sending the transaction,
+		// we record all transactions as dropped.
 		t.collector.TransactionsDropped(len(pooledTxs))
 		txHashes := make([]string, len(pooledTxs))
 		for i, tx := range pooledTxs {
@@ -285,4 +517,35 @@ func (t *BatchTxPool) submitSingleTransaction(
 	}
 
 	return nil
+}
+
+// eoaQueueEntry returns the corresponding txQueue for the given address.
+// One will be created if it doesn't yet exist.
+func (t *BatchTxPool) eoaQueueEntry(address gethCommon.Address) *txQueue {
+	queue, ok := t.txQueues[address]
+	if !ok {
+		queue = &txQueue{
+			txs: make(map[uint64]pooledEvmTx),
+		}
+		t.txQueues[address] = queue
+	}
+	return queue
+}
+
+// eoaEnqueueTxs enqueues the given transactions to the corresponding txQueue
+// for the given address, and returns the txQueue. One will be created if it
+// doesn't yet exist.
+func (t *BatchTxPool) eoaEnqueueTxs(address gethCommon.Address, txs []pooledEvmTx) *txQueue {
+	queue, ok := t.txQueues[address]
+	if !ok {
+		queue = &txQueue{
+			txs: make(map[uint64]pooledEvmTx),
+		}
+		t.txQueues[address] = queue
+	}
+	for _, tx := range txs {
+		queue.txs[tx.nonce] = tx
+	}
+
+	return queue
 }
