@@ -245,10 +245,9 @@ func Test_BatchTxPool_GapHoldAndFill(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	// Sleep past the collection window (300ms) and the submission spacing
-	// (1200ms), but well within the pool TTL (5s): the held transactions
-	// must NOT have been submitted.
-	time.Sleep(2500 * time.Millisecond)
+	// Sleep past two flush ticks: the held transactions must NOT have
+	// been submitted, because nonce 2 is missing.
+	time.Sleep(2 * cfg.TxBatchInterval)
 
 	balance, err := rpcTester.getBalance(testEoaReceiver)
 	require.NoError(t, err)
@@ -962,10 +961,10 @@ func setupGatewayNode(t *testing.T) (emulator.Emulator, config.Config, func()) {
 		require.NoError(t, err)
 	}()
 
+	<-bootstrapDone
+
 	// Allow the Gateway to catch up on indexing
 	time.Sleep(time.Second * 2)
-
-	<-bootstrapDone
 
 	return emu, cfg, func() {
 		cancel()

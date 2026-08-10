@@ -322,11 +322,22 @@ func (t *BatchTxPool) Add(
 		err = t.submitSingleTransaction(submitCtx, hexEncodedTx)
 		cancel()
 		if err != nil {
+			// If there was any error during transaction submission,
+			// we record it as a dropped transaction.
+			t.collector.TransactionsDropped(1)
+			t.logger.Error().Err(err).Str("tx_hash", tx.Hash().Hex()).Msgf(
+				"failed to submit Flow transaction for EOA: %s, with nonce: %d",
+				from.Hex(),
+				tx.Nonce(),
+			)
 			return err
 		}
 
 		eoaQueue.lastSubmittedAt = time.Now()
 		eoaQueue.lastSubmittedNonce = tx.Nonce()
+		// the submitted nonce must not stay queued, otherwise the flush
+		// loop can resubmit a superseded payload for the same nonce.
+		delete(eoaQueue.txs, tx.Nonce())
 		t.collector.TxPoolSubmission(flushReasonFastPath)
 		return nil
 	}
@@ -353,10 +364,10 @@ func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 			// EOA below, without recreating the block view each time.
 			blockView, err := t.nonceProvider.GetBlockView()
 			if err != nil {
-				t.logger.Fatal().Err(err).Msgf(
+				t.logger.Error().Err(err).Msg(
 					"failed to construct BlockView for nonce reading",
 				)
-				return
+				continue
 			}
 
 			t.txQueuesMux.Lock()
@@ -426,9 +437,9 @@ func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 				} else {
 					batch.eoaQueue.lastSubmittedAt = time.Now()
 					batch.eoaQueue.lastSubmittedNonce = batch.txs[len(batch.txs)-1].nonce
+					t.collector.TxPoolSubmission(flushReasonPrefix)
 				}
 				t.txQueuesMux.Unlock()
-				t.collector.TxPoolSubmission(flushReasonPrefix)
 			}
 
 			t.collector.TxPoolSize(queues, queuedTxs)
@@ -462,26 +473,20 @@ func (t *BatchTxPool) batchSubmitTransactionsForSameAddress(
 		coinbaseAddress,
 	)
 	if err != nil {
-		// If there was any error during the transaction build
-		// process, we record all transactions as dropped.
-		t.collector.TransactionsDropped(len(pooledTxs))
 		txHashes := make([]string, len(pooledTxs))
 		for i, tx := range pooledTxs {
 			txHashes[i] = tx.txHash.Hex()
 		}
-		t.logger.Error().Err(err).Strs("tx_hashes", txHashes).Msg("failed to build Flow transaction, EVM transactions dropped")
+		t.logger.Error().Err(err).Strs("tx_hashes", txHashes).Msg("failed to build Flow transaction, EVM transactions re-queued")
 		return err
 	}
 
 	if err := t.client.SendTransaction(ctx, *flowTx); err != nil {
-		// If there was any error while sending the transaction,
-		// we record all transactions as dropped.
-		t.collector.TransactionsDropped(len(pooledTxs))
 		txHashes := make([]string, len(pooledTxs))
 		for i, tx := range pooledTxs {
 			txHashes[i] = tx.txHash.Hex()
 		}
-		t.logger.Error().Err(err).Strs("tx_hashes", txHashes).Msg("failed to send Flow transaction, EVM transactions dropped")
+		t.logger.Error().Err(err).Strs("tx_hashes", txHashes).Msg("failed to send Flow transaction, EVM transactions re-queued")
 		return err
 	}
 
@@ -506,9 +511,6 @@ func (t *BatchTxPool) submitSingleTransaction(
 		coinbaseAddress,
 	)
 	if err != nil {
-		// If there was any error during the transaction build
-		// process, we record it as a dropped transaction.
-		t.collector.TransactionsDropped(1)
 		return err
 	}
 
