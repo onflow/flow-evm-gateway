@@ -221,9 +221,11 @@ type pooledEvmTx struct {
 // batchSubmission is a batch selected for submission, detached from the queue so
 // the network call happens outside queueMux.
 type batchSubmission struct {
-	from     gethCommon.Address
-	txs      []pooledEvmTx
-	eoaQueue *txQueue
+	from               gethCommon.Address
+	txs                []pooledEvmTx
+	eoaQueue           *txQueue
+	lastSubmittedAt    time.Time
+	lastSubmittedNonce uint64
 }
 
 var _ TxPool = (*BatchTxPool)(nil)
@@ -401,10 +403,16 @@ func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 					continue
 				}
 				txBatchByAddress[address] = batchSubmission{
-					from:     address,
-					txs:      txSequence,
-					eoaQueue: eoaQueue,
+					from:               address,
+					txs:                txSequence,
+					eoaQueue:           eoaQueue,
+					lastSubmittedAt:    eoaQueue.lastSubmittedAt,
+					lastSubmittedNonce: eoaQueue.lastSubmittedNonce,
 				}
+				// reserve the nonce range before releasing the lock, so a
+				// concurrent `Add()` cannot fast-path the same nonces.
+				eoaQueue.lastSubmittedAt = time.Now()
+				eoaQueue.lastSubmittedNonce = txSequence[len(txSequence)-1].nonce
 			}
 
 			// cleanup any stale entries, to avoid unconstrained memory growth
@@ -431,7 +439,10 @@ func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 					// In case of any submission errors, add the transactions back
 					// to the pool as a retry mechanism. This is an important part
 					// to avoid gaps, which would require users to resubmit.
-					batch.eoaQueue = t.eoaEnqueueTxs(address, batch.txs)
+					// Rollback the nonce range reservation from before.
+					eoaQueue := t.eoaEnqueueTxs(address, batch.txs)
+					eoaQueue.lastSubmittedAt = batch.lastSubmittedAt
+					eoaQueue.lastSubmittedNonce = batch.lastSubmittedNonce
 				} else {
 					batch.eoaQueue.lastSubmittedAt = time.Now()
 					batch.eoaQueue.lastSubmittedNonce = batch.txs[len(batch.txs)-1].nonce
