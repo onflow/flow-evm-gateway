@@ -310,6 +310,7 @@ func (t *BatchTxPool) Add(
 	if existing, ok := eoaQueue.txs[tx.Nonce()]; ok && existing.txHash == tx.Hash() {
 		return errs.ErrDuplicateTransaction
 	}
+	userTx := pooledEvmTx{txPayload: hexEncodedTx, txHash: tx.Hash(), nonce: tx.Nonce()}
 
 	// Check the `txQueue` for an entry with the given EOA. If enough spacing
 	// has elapsed and the tx nonce is the next expected, we submit right
@@ -319,7 +320,7 @@ func (t *BatchTxPool) Add(
 		// Bound the submit so a hung call cannot pin `txQueuesMux`
 		// indefinitely (see `fastPathSubmitTimeout`).
 		submitCtx, cancel := context.WithTimeout(ctx, fastPathSubmitTimeout)
-		err = t.submitSingleTransaction(submitCtx, hexEncodedTx)
+		flowTxID, err := t.submitSingleTransaction(submitCtx, hexEncodedTx)
 		cancel()
 		if err != nil {
 			// If there was any error during transaction submission,
@@ -332,6 +333,7 @@ func (t *BatchTxPool) Add(
 			)
 			return err
 		}
+		t.logSubmission(from, []pooledEvmTx{userTx}, flushReasonFastPath, flowTxID)
 
 		eoaQueue.lastSubmittedAt = time.Now()
 		eoaQueue.lastSubmittedNonce = tx.Nonce()
@@ -342,11 +344,7 @@ func (t *BatchTxPool) Add(
 		return nil
 	}
 
-	eoaQueue.txs[tx.Nonce()] = pooledEvmTx{
-		txPayload: hexEncodedTx,
-		txHash:    tx.Hash(),
-		nonce:     tx.Nonce(),
-	}
+	eoaQueue.txs[tx.Nonce()] = userTx
 
 	return nil
 }
@@ -416,7 +414,7 @@ func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 			t.txQueuesMux.Unlock()
 
 			for address, batch := range txBatchByAddress {
-				err = t.batchSubmitTransactionsForSameAddress(
+				flowTxID, err := t.batchSubmitTransactionsForSameAddress(
 					ctx,
 					t.getReferenceBlock(),
 					batch.txs,
@@ -438,6 +436,7 @@ func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 					batch.eoaQueue.lastSubmittedAt = time.Now()
 					batch.eoaQueue.lastSubmittedNonce = batch.txs[len(batch.txs)-1].nonce
 					t.collector.TxPoolSubmission(flushReasonPrefix)
+					t.logSubmission(address, batch.txs, flushReasonFastPath, flowTxID)
 				}
 				t.txQueuesMux.Unlock()
 			}
@@ -451,7 +450,7 @@ func (t *BatchTxPool) batchSubmitTransactionsForSameAddress(
 	ctx context.Context,
 	referenceBlockHeader *flow.BlockHeader,
 	pooledTxs []pooledEvmTx,
-) error {
+) (flow.Identifier, error) {
 	// the `pooledTxs` slice is already sorted by nonce, in ascending order
 	// inside the `processPooledTransactions()` function.
 	hexEncodedTxs := make([]cadence.Value, len(pooledTxs))
@@ -461,7 +460,7 @@ func (t *BatchTxPool) batchSubmitTransactionsForSameAddress(
 
 	coinbaseAddress, err := cadence.NewString(t.config.Coinbase.Hex())
 	if err != nil {
-		return err
+		return flow.Identifier{}, err
 	}
 
 	script := replaceAddresses(runTxScript, t.config.FlowNetworkID)
@@ -478,7 +477,7 @@ func (t *BatchTxPool) batchSubmitTransactionsForSameAddress(
 			txHashes[i] = tx.txHash.Hex()
 		}
 		t.logger.Error().Err(err).Strs("tx_hashes", txHashes).Msg("failed to build Flow transaction, EVM transactions re-queued")
-		return err
+		return flow.Identifier{}, err
 	}
 
 	if err := t.client.SendTransaction(ctx, *flowTx); err != nil {
@@ -487,19 +486,19 @@ func (t *BatchTxPool) batchSubmitTransactionsForSameAddress(
 			txHashes[i] = tx.txHash.Hex()
 		}
 		t.logger.Error().Err(err).Strs("tx_hashes", txHashes).Msg("failed to send Flow transaction, EVM transactions re-queued")
-		return err
+		return flow.Identifier{}, err
 	}
 
-	return nil
+	return flowTx.ID(), nil
 }
 
 func (t *BatchTxPool) submitSingleTransaction(
 	ctx context.Context,
 	hexEncodedTx cadence.String,
-) error {
+) (flow.Identifier, error) {
 	coinbaseAddress, err := cadence.NewString(t.config.Coinbase.Hex())
 	if err != nil {
-		return err
+		return flow.Identifier{}, err
 	}
 
 	script := replaceAddresses(runTxScript, t.config.FlowNetworkID)
@@ -511,14 +510,14 @@ func (t *BatchTxPool) submitSingleTransaction(
 		coinbaseAddress,
 	)
 	if err != nil {
-		return err
+		return flow.Identifier{}, err
 	}
 
 	if err := t.client.SendTransaction(ctx, *flowTx); err != nil {
-		return err
+		return flow.Identifier{}, err
 	}
 
-	return nil
+	return flowTx.ID(), nil
 }
 
 // eoaQueueEntry returns the corresponding txQueue for the given address.
@@ -550,4 +549,29 @@ func (t *BatchTxPool) eoaEnqueueTxs(address gethCommon.Address, txs []pooledEvmT
 	}
 
 	return queue
+}
+
+// logSubmission records the fate of a submitted batch so a transaction is
+// never silently lost.
+func (t *BatchTxPool) logSubmission(
+	from gethCommon.Address,
+	txs []pooledEvmTx,
+	reason string,
+	flowTxID flow.Identifier,
+) {
+	if len(txs) == 0 {
+		return
+	}
+
+	event := t.logger.Info().
+		Str("eoa", from.Hex()).
+		Uint64("low-nonce", txs[0].nonce).
+		Uint64("high-nonce", txs[len(txs)-1].nonce).
+		Int("batch-size", len(txs)).
+		Str("reason", reason)
+
+	if flowTxID != (flow.Identifier{}) {
+		event = event.Str("flow_tx_id", flowTxID.Hex())
+	}
+	event.Msg("submitted EVM transactions to Flow")
 }
