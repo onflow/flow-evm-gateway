@@ -23,6 +23,7 @@ import (
 
 	"github.com/onflow/flow-evm-gateway/bootstrap"
 	"github.com/onflow/flow-evm-gateway/config"
+	errs "github.com/onflow/flow-evm-gateway/models/errors"
 )
 
 // Test_BatchTxPool_OutOfOrderBurst is the DFNS regression scenario:
@@ -374,12 +375,6 @@ func Test_BatchTxPool_BatchSizeCap(t *testing.T) {
 // Test_BatchTxPool_DuplicateTransactionRejection asserts that resending the
 // exact same raw transaction while it is still QUEUED (held behind a nonce
 // gap, not yet submitted) is rejected with ErrDuplicateTransaction.
-//
-// A fast-path-submitted tx instead becomes IN-FLIGHT, so resending it would
-// surface as ErrInFlightNonce (see Test_TxMemPool_InFlightNonceRejection).
-// To reach the duplicate path we must keep the tx queued: send an
-// out-of-order nonce so it parks behind a gap, then resend the identical
-// bytes before the gap fills.
 func Test_BatchTxPool_DuplicateTransactionRejection(t *testing.T) {
 	_, cfg, stop := setupGatewayNode(t)
 	defer stop()
@@ -416,7 +411,76 @@ func Test_BatchTxPool_DuplicateTransactionRejection(t *testing.T) {
 	// a duplicate (ErrDuplicateTransaction -> "transaction already in pool").
 	_, err = rpcTester.sendRawTx(signed)
 	require.Error(t, err)
-	require.ErrorContains(t, err, "transaction already in pool")
+	require.ErrorContains(t, err, errs.ErrDuplicateTransaction.Error())
+}
+
+// Test_BatchTxPool_InFlightNonceRejection asserts that a transaction
+// carrying the same nonce as an in-flight submission is rejected, since
+// it would burn Flow fees on a guaranteed nonce-mismatch failure.
+func Test_BatchTxPool_InFlightNonceRejection(t *testing.T) {
+	emu, cfg, stop := setupGatewayNode(t)
+	defer stop()
+
+	rpcTester := &rpcTest{
+		url: fmt.Sprintf("%s:%d", cfg.RPCHost, cfg.RPCPort),
+	}
+
+	testAddr := common.HexToAddress("0x061B63D29332e4de81bD9F51A48609824CD113a8")
+	privateKey, err := crypto.HexToECDSA("ddcb1e965557474fd13de3a66a40e4bc9b759a306e5db1046bac5ca47aafd584")
+	require.NoError(t, err)
+
+	fundEOA(t, rpcTester, testAddr)
+
+	testEoaReceiver := common.HexToAddress("0x6F416dcC9BEFe43b7dDF53f2662F76dD34A9fc11")
+	transferAmount := int64(50_000)
+
+	// Sign two DIFFERENT transfers (different amounts, hence different
+	// hashes) carrying the same nonce 0.
+	signedFirst, _, err := evmSign(
+		big.NewInt(transferAmount),
+		205_000,
+		privateKey,
+		0,
+		&testEoaReceiver,
+		nil,
+	)
+	require.NoError(t, err)
+
+	signedSecond, _, err := evmSign(
+		big.NewInt(60_000),
+		23_500,
+		privateKey,
+		0,
+		&testEoaReceiver,
+		nil,
+	)
+	require.NoError(t, err)
+
+	// disable auto-mine so we can control delays
+	emu.DisableAutoMine()
+
+	// The first transfer takes the fast path: it is submitted immediately
+	// and stays in flight until the local index confirms it.
+	_, err = rpcTester.sendRawTx(signedFirst)
+	require.NoError(t, err)
+
+	// The second transfer is sent back to back with the first one: its
+	// nonce is still in flight, so it must be rejected.
+	_, err = rpcTester.sendRawTx(signedSecond)
+	require.Error(t, err)
+	require.ErrorContains(t, err, errs.ErrInFlightNonce.Error())
+
+	// Execute and commit block, to advance EVM state
+	_, _, err = emu.ExecuteAndCommitBlock()
+	require.NoError(t, err)
+
+	// The first transfer eventually executes.
+	assert.Eventually(t, func() bool {
+		balance, err := rpcTester.getBalance(testEoaReceiver)
+		require.NoError(t, err)
+
+		return balance.Cmp(big.NewInt(transferAmount)) == 0
+	}, time.Second*15, time.Second*1, "first transaction was not executed")
 }
 
 func Test_TransactionBatchingMode(t *testing.T) {

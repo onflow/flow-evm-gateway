@@ -306,11 +306,15 @@ func (t *BatchTxPool) Add(
 		return err
 	}
 
-	// Reject an exact duplicate of a transaction already in the queue (cheapest
-	// check; needs no index read).
+	// Reject an exact duplicate of a transaction already in the queue
+	// (cheapest check; needs no index read).
 	eoaQueue := t.eoaQueueEntry(from)
 	if existing, ok := eoaQueue.txs[tx.Nonce()]; ok && existing.txHash == tx.Hash() {
 		return errs.ErrDuplicateTransaction
+	}
+	// Reject any transaction with a nonce that has already been submitted.
+	if !eoaQueue.lastSubmittedAt.IsZero() && tx.Nonce() <= eoaQueue.lastSubmittedNonce {
+		return errs.ErrInFlightNonce
 	}
 	userTx := pooledEvmTx{txPayload: hexEncodedTx, txHash: tx.Hash(), nonce: tx.Nonce()}
 
