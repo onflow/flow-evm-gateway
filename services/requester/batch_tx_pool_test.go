@@ -20,9 +20,9 @@ func Test_TxQueue_StaleEntry(t *testing.T) {
 	now := time.Now()
 	spacing := time.Second
 
-	t.Run("zero-value lastSubmittedAt is not stale", func(t *testing.T) {
+	t.Run("zero-value lastSubmittedAt is stale", func(t *testing.T) {
 		q := &txQueue{txs: map[uint64]pooledEvmTx{}}
-		assert.False(t, q.staleEntry(now, spacing))
+		assert.True(t, q.staleEntry(now, spacing))
 	})
 
 	t.Run("non-empty queue is not stale", func(t *testing.T) {

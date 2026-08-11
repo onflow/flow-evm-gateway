@@ -119,14 +119,9 @@ func (t *txQueue) spacingElapsed(now time.Time, spacing time.Duration) bool {
 // is stale and could be removed from the mempool queue, to avoid memory
 // growth. If there are no pooled transactions and the last submission was
 // 2 times more than the given spacing interval, we can safely remove this
-// entry. A zero-value lastSubmittedAt (no submission has happened yet) is
-// treated as not-stale so a freshly-created queue is never harvested before
-// it has a chance to submit.
+// entry.
 func (t *txQueue) staleEntry(now time.Time, spacing time.Duration) bool {
-	if len(t.txs) != 0 || t.lastSubmittedAt.IsZero() {
-		return false
-	}
-	return now.Sub(t.lastSubmittedAt) >= (spacing * stalenessFactor)
+	return len(t.txs) == 0 && now.Sub(t.lastSubmittedAt) >= (spacing*stalenessFactor)
 }
 
 // validNonce compares the transaction nonce with the nonce from the local
