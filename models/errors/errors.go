@@ -43,6 +43,9 @@ var (
 	// configured maximum gap ahead of the EOA's on-chain nonce. Such a tx cannot
 	// execute until the gap fills, so it is rejected up front for fast feedback.
 	ErrNonceTooHigh = fmt.Errorf("%w: %s", ErrInvalid, "nonce too high")
+	// ErrTxPoolFull is returned when the per-EOA pool has reached its size cap
+	// and cannot accept another transaction until existing ones drain.
+	ErrTxPoolFull = fmt.Errorf("%w: %s", ErrInvalid, "transaction pool is full for this account")
 
 	// Storage errors
 
