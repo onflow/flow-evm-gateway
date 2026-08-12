@@ -311,13 +311,8 @@ func (t *BatchTxPool) Add(
 	if !eoaQueue.lastSubmittedAt.IsZero() && tx.Nonce() <= eoaQueue.lastSubmittedNonce {
 		return errs.ErrInFlightNonce
 	}
-	// Bound per-EOA memory. A same-nonce replacement (last-write-wins) does
-	// not grow the queue and is allowed even at the cap.
-	if !existsAtNonce && eoaQueue.size() >= maxEOAQueueSize {
-		return errs.ErrTxPoolFull
-	}
-	userTx := pooledEvmTx{txPayload: hexEncodedTx, txHash: tx.Hash(), nonce: tx.Nonce()}
 
+	userTx := pooledEvmTx{txPayload: hexEncodedTx, txHash: tx.Hash(), nonce: tx.Nonce()}
 	// get the latest nonce from the local state index
 	nonce, err := t.nonceProvider.GetNextNonce(from)
 	if err != nil {
@@ -357,6 +352,12 @@ func (t *BatchTxPool) Add(
 		delete(eoaQueue.txs, tx.Nonce())
 		t.collector.TxPoolSubmission(flushReasonFastPath)
 		return nil
+	}
+
+	// Bound per-EOA memory. A same-nonce replacement (last-write-wins) does
+	// not grow the queue and is allowed even at the cap.
+	if !existsAtNonce && eoaQueue.size() >= maxEOAQueueSize {
+		return errs.ErrTxPoolFull
 	}
 
 	eoaQueue.txs[tx.Nonce()] = userTx
