@@ -11,8 +11,9 @@ import (
 
 func makePooledTx(nonce uint64) pooledEvmTx {
 	return pooledEvmTx{
-		txHash: gethCommon.BytesToHash([]byte{byte(nonce)}),
-		nonce:  nonce,
+		txHash:     gethCommon.BytesToHash([]byte{byte(nonce)}),
+		nonce:      nonce,
+		enqueuedAt: time.Now(),
 	}
 }
 
@@ -167,6 +168,23 @@ func Test_TxQueue_PruneTxs(t *testing.T) {
 		assert.True(t, hasEdge, "nonce exactly at the cap boundary must be retained")
 		assert.False(t, hasOver)
 		assert.False(t, hasFar)
+	})
+
+	t.Run("drops nonces exceeding queue TTL", func(t *testing.T) {
+		q := &txQueue{txs: map[uint64]pooledEvmTx{
+			2: makePooledTx(2),
+			3: makePooledTx(3),
+		}}
+		tx4 := makePooledTx(4)
+		tx4.enqueuedAt = time.Now().Add(-(maxQueueTTL * 2))
+		q.txs[4] = tx4
+		q.pruneTxs(addr, 1, zerolog.Nop())
+		_, has2 := q.txs[2]
+		_, has3 := q.txs[3]
+		_, has4 := q.txs[4]
+		assert.True(t, has2)
+		assert.True(t, has3)
+		assert.False(t, has4)
 	})
 }
 

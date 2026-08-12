@@ -45,6 +45,9 @@ const (
 	// gives an indication that an EOA queue is stale and could be
 	// removed, to avoid unconstrained memory growth.
 	stalenessFactor = 2
+	// How long the EOA queue holds an out-of-order transaction
+	// waiting for its nonce gap to fill, before dropping it.
+	maxQueueTTL = 30 * time.Second
 )
 
 // BatchTxPool is a TxPool implementation that collects and groups transactions
@@ -148,10 +151,11 @@ func (t *txQueue) validNonce(
 }
 
 // pruneTxs drops pooled transactions that can never be submitted from this
-// queue: nonces below the on-chain frontier (already used), and nonces further
+// queue: nonces below the on-chain frontier (already used), nonces further
 // than `maxNonceLookahead` beyond the frontier (unreachable within any
-// realistic gap-fill window). The absolute queue-length cap is enforced at
-// admission time in Add() — this pass only prunes; it does not size-cap.
+// realistic gap-fill window) and transactions that have exceeded the queue
+// TTL. The absolute queue-length cap is enforced at admission time in Add(),
+// this pass only prunes; it does not size-cap.
 func (t *txQueue) pruneTxs(
 	address gethCommon.Address,
 	stateNonce uint64,
@@ -167,6 +171,17 @@ func (t *txQueue) pruneTxs(
 				tx.nonce,
 				address,
 				stateNonce,
+			)
+			staleNonces = append(staleNonces, nonce)
+			continue
+		}
+
+		// drop any pooled transactions that have exceeded the pool TTL
+		if time.Since(tx.enqueuedAt) >= maxQueueTTL {
+			logger.Warn().Msgf(
+				"dropped tx with nonce: %d for EOA: %s, exceeds pool TTL",
+				tx.nonce,
+				address,
 			)
 			staleNonces = append(staleNonces, nonce)
 			continue
@@ -217,9 +232,10 @@ func (t *txQueue) selectSequentialNonces(stateNonce uint64) []pooledEvmTx {
 // pooledEvmTx is a transaction queued in the mempool, waiting for the
 // batch interval to elapse or its nonce gap to be filled.
 type pooledEvmTx struct {
-	txPayload cadence.String
-	txHash    gethCommon.Hash
-	nonce     uint64
+	txPayload  cadence.String
+	txHash     gethCommon.Hash
+	nonce      uint64
+	enqueuedAt time.Time
 }
 
 // batchSubmission is a batch selected for submission, detached from the queue so
@@ -312,7 +328,12 @@ func (t *BatchTxPool) Add(
 		return errs.ErrInFlightNonce
 	}
 
-	userTx := pooledEvmTx{txPayload: hexEncodedTx, txHash: tx.Hash(), nonce: tx.Nonce()}
+	userTx := pooledEvmTx{
+		txPayload:  hexEncodedTx,
+		txHash:     tx.Hash(),
+		nonce:      tx.Nonce(),
+		enqueuedAt: time.Now(),
+	}
 	// get the latest nonce from the local state index
 	nonce, err := t.nonceProvider.GetNextNonce(from)
 	if err != nil {
