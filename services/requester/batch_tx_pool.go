@@ -70,14 +70,16 @@ const (
 // # Fix
 //
 // For all incoming transactions, we are now inspecting the EOA's current nonce
-// in the local state index:
-// 1. If it matches the transaction nonce, we submit it right away, and record
-// this activity in the EOA's dedicated queue, for use in future submissions.
-// 2. If the transaction nonce is higher, we check for any recent submissions
-// to see if we can form a valid sequence. This could happen from in-flight
-// transaction submission, that have not yet been index by the local state
-// index. In this case we optimistically submit right away. and record this
-// activity in the EOA's dedicated queue, for use in future submissions.
+// in the local state index, as well as the elapsed spacing from any recent
+// submission:
+// 1. If enough spacing has elapsed and the current nonce matches the transaction
+// nonce, we submit it right away, and record this activity in the EOA's dedicated
+// queue, for use in future submissions.
+// 2. If enough spacing has elapsed and the transaction nonce is higher, we check
+// for any recent submissions to see if we can form a valid sequence. This could
+// happen from in-flight transaction submission, that have not yet been indexed
+// by the local state index. In this case we optimistically submit right away and
+// record this activity in the EOA's dedicated queue, for use in future submissions.
 // 3. If none of the above 2 conditions are met, we enqueue the transaction
 // in the pool. The flush timer (TxBatchInterval) is the sole submission trigger.
 // This guarantees that parallel transactions from the same wallet accumulate
