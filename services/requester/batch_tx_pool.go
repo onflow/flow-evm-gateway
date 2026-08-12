@@ -225,7 +225,6 @@ type pooledEvmTx struct {
 // batchSubmission is a batch selected for submission, detached from the queue so
 // the network call happens outside queueMux.
 type batchSubmission struct {
-	from               gethCommon.Address
 	txs                []pooledEvmTx
 	eoaQueue           *txQueue
 	lastSubmittedAt    time.Time
@@ -417,7 +416,6 @@ func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 					continue
 				}
 				txBatchByAddress[address] = batchSubmission{
-					from:               address,
 					txs:                txSequence,
 					eoaQueue:           eoaQueue,
 					lastSubmittedAt:    eoaQueue.lastSubmittedAt,
