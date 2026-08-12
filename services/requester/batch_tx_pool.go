@@ -577,20 +577,13 @@ func (t *BatchTxPool) eoaQueueEntry(address gethCommon.Address) *txQueue {
 // dropped a fresher payload there while we were off-lock, and last-write-wins
 // for the client means the fresh payload must win over the failed batch.
 func (t *BatchTxPool) eoaEnqueueTxs(address gethCommon.Address, txs []pooledEvmTx) *txQueue {
-	queue, ok := t.txQueues[address]
-	if !ok {
-		queue = &txQueue{
-			txs: make(map[uint64]pooledEvmTx),
-		}
-		t.txQueues[address] = queue
-	}
+	queue := t.eoaQueueEntry(address)
 	for _, tx := range txs {
 		if _, exists := queue.txs[tx.nonce]; exists {
 			continue
 		}
 		queue.txs[tx.nonce] = tx
 	}
-
 	return queue
 }
 
