@@ -290,15 +290,6 @@ func (t *BatchTxPool) Add(
 		return err
 	}
 
-	// get the latest nonce from the local state index
-	nonce, err := t.nonceProvider.GetNextNonce(from)
-	if err != nil {
-		t.logger.Error().Err(err).Msgf(
-			"failed to get nonce for EOA: %s", from,
-		)
-		return err
-	}
-
 	txData, err := tx.MarshalBinary()
 	if err != nil {
 		return err
@@ -325,6 +316,15 @@ func (t *BatchTxPool) Add(
 		return errs.ErrTxPoolFull
 	}
 	userTx := pooledEvmTx{txPayload: hexEncodedTx, txHash: tx.Hash(), nonce: tx.Nonce()}
+
+	// get the latest nonce from the local state index
+	nonce, err := t.nonceProvider.GetNextNonce(from)
+	if err != nil {
+		t.logger.Error().Err(err).Msgf(
+			"failed to get nonce for EOA: %s", from,
+		)
+		return err
+	}
 
 	// Check the `txQueue` for an entry with the given EOA. If enough spacing
 	// has elapsed and the tx nonce is the next expected, we submit right
