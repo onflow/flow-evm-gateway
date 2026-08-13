@@ -96,6 +96,16 @@ type BatchTxPool struct {
 	nonceProvider NonceProvider
 	txQueues      map[gethCommon.Address]*txQueue
 	txQueuesMux   sync.Mutex
+
+	// submitBatch exists as a field so tests can inject a fake. It returns the
+	// ID of the wrapping Cadence transaction (zero on early build failure
+	// before a Flow tx is signed) so logSubmission can record it, letting an
+	// operator correlate a wedged EVM nonce to the specific Cadence tx.
+	submitBatch func(
+		ctx context.Context,
+		block *flow.BlockHeader,
+		txs []pooledEvmTx,
+	) (flow.Identifier, error)
 }
 
 // txQueue tracks the pooled transactions and submission state for one EOA.
@@ -287,6 +297,7 @@ func NewBatchTxPool(
 		txQueues:      make(map[gethCommon.Address]*txQueue),
 		txQueuesMux:   sync.Mutex{},
 	}
+	batchPool.submitBatch = batchPool.batchSubmitTransactionsForSameAddress
 
 	go batchPool.processPooledTransactions(ctx)
 
@@ -462,7 +473,7 @@ func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 			t.txQueuesMux.Unlock()
 
 			for address, batch := range txBatchByAddress {
-				flowTxID, err := t.batchSubmitTransactionsForSameAddress(
+				flowTxID, err := t.submitBatch(
 					ctx,
 					t.getReferenceBlock(),
 					batch.txs,
@@ -622,7 +633,7 @@ func (t *BatchTxPool) eoaEnqueueTxs(
 ) (*txQueue, bool) {
 	queue := t.eoaQueueEntry(address)
 	if queue.retries >= maxSubmissionRetries {
-		return nil, false
+		return queue, false
 	}
 	for _, tx := range txs {
 		if _, exists := queue.txs[tx.nonce]; exists {

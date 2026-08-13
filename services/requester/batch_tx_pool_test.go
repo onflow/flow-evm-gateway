@@ -1,12 +1,24 @@
 package requester
 
 import (
+	"context"
+	"fmt"
 	"testing"
 	"time"
 
 	gethCommon "github.com/ethereum/go-ethereum/common"
+	gethTypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/onflow/flow-evm-gateway/config"
+	"github.com/onflow/flow-evm-gateway/metrics"
+	"github.com/onflow/flow-evm-gateway/models"
+	errs "github.com/onflow/flow-evm-gateway/models/errors"
+	"github.com/onflow/flow-go-sdk"
+	flowGo "github.com/onflow/flow-go/model/flow"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 )
 
 func makePooledTx(nonce uint64) pooledEvmTx {
@@ -251,4 +263,185 @@ func Test_BatchTxPool_EnqueueFillsMissingNonces(t *testing.T) {
 	assert.Equal(t, uint64(1), q.txs[1].nonce)
 	assert.Equal(t, uint64(2), q.txs[2].nonce)
 	assert.Equal(t, uint64(3), q.txs[3].nonce)
+}
+
+// Test_BatchTxPool_ErrTxPoolFull asserts that `Add()` bounds the per-EOA
+// queue to a configured max number of entries.
+func Test_BatchTxPool_ErrTxPoolFull(t *testing.T) {
+	pool := &BatchTxPool{
+		SingleTxPool: &SingleTxPool{
+			logger:      zerolog.Nop(),
+			txPublisher: models.NewPublisher[*gethTypes.Transaction](),
+			collector:   metrics.NopCollector,
+		},
+		nonceProvider: &fakeNonceProvider{nonce: 0},
+		txQueues:      map[gethCommon.Address]*txQueue{},
+	}
+
+	key, err := crypto.GenerateKey()
+	require.NoError(t, err)
+
+	for i := range maxEOAQueueSize {
+		tx := signedTestTx(t, key, uint64(i+1), 1)
+		require.NoError(t, pool.Add(context.Background(), tx))
+	}
+
+	tx := signedTestTx(t, key, uint64(maxEOAQueueSize+1), 1)
+	err = pool.Add(context.Background(), tx)
+	require.Error(t, err)
+	require.ErrorContains(t, err, errs.ErrTxPoolFull.Error())
+}
+
+// Test_BatchTxPool_SubmissionFailureNonceReservationRollback asserts that
+// a submission failure on a batch will rollback any nonce reservation, while
+// guarding any advances made by a concurrent `Add()`.
+func Test_BatchTxPool_SubmissionFailureNonceReservationRollback(t *testing.T) {
+	pool := &BatchTxPool{
+		SingleTxPool: &SingleTxPool{
+			logger:      zerolog.Nop(),
+			txPublisher: models.NewPublisher[*gethTypes.Transaction](),
+			collector:   metrics.NopCollector,
+			config: config.Config{
+				TxBatchMode:     true,
+				TxBatchInterval: time.Second,
+				FlowNetworkID:   flowGo.Emulator,
+			},
+		},
+		nonceProvider: &fakeNonceProvider{nonce: 2},
+		txQueues:      map[gethCommon.Address]*txQueue{},
+	}
+	pool.submitBatch = func(
+		ctx context.Context,
+		block *flow.BlockHeader,
+		txs []pooledEvmTx,
+	) (flow.Identifier, error) {
+		return flow.Identifier{}, fmt.Errorf("failed to submit batch Flow transaction")
+	}
+
+	key, err := crypto.GenerateKey()
+	require.NoError(t, err)
+	addr := crypto.PubkeyToAddress(key.PublicKey)
+
+	pool.eoaEnqueueTxs(addr, []pooledEvmTx{
+		makePooledTx(2),
+		makePooledTx(3),
+		makePooledTx(4),
+	})
+
+	q := pool.eoaQueueEntry(addr)
+	assert.Len(t, q.txs, 3)
+	lastSubmittedAt := time.Now()
+	lastSubmittedNonce := uint64(1)
+	q.lastSubmittedAt = lastSubmittedAt
+	q.lastSubmittedNonce = lastSubmittedNonce
+	assert.Equal(t, uint64(2), q.txs[2].nonce)
+	assert.Equal(t, uint64(3), q.txs[3].nonce)
+	assert.Equal(t, uint64(4), q.txs[4].nonce)
+	assert.Equal(t, lastSubmittedNonce, q.lastSubmittedNonce)
+
+	ctx := context.Background()
+	submitCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+
+	g := errgroup.Group{}
+	nonce := uint64(5)
+	g.Go(func() error {
+		for {
+			select {
+			case <-submitCtx.Done():
+				return nil
+			default:
+				tx := signedTestTx(t, key, nonce, 1)
+				require.NoError(t, pool.Add(context.Background(), tx))
+				nonce += 1
+				time.Sleep(time.Millisecond * 500)
+			}
+		}
+	})
+
+	pool.processPooledTransactions(submitCtx)
+
+	cancel()
+	err = g.Wait()
+	require.NoError(t, err)
+
+	assert.Equal(t, lastSubmittedAt, q.lastSubmittedAt)
+	assert.Equal(t, lastSubmittedNonce, q.lastSubmittedNonce)
+}
+
+// Test_BatchTxPool_SubmissionSuccessNonRegressionMerge asserts that on successful
+// batch submission, we perform non-regression merge, to account for any advances
+// by concurrent `Add()`.
+func Test_BatchTxPool_SubmissionSuccessNonRegressionMerge(t *testing.T) {
+	pool := &BatchTxPool{
+		SingleTxPool: &SingleTxPool{
+			logger:      zerolog.Nop(),
+			txPublisher: models.NewPublisher[*gethTypes.Transaction](),
+			collector:   metrics.NopCollector,
+			config: config.Config{
+				TxBatchMode:     true,
+				TxBatchInterval: time.Second,
+				FlowNetworkID:   flowGo.Emulator,
+			},
+		},
+		nonceProvider: &fakeNonceProvider{nonce: 2},
+		txQueues:      map[gethCommon.Address]*txQueue{},
+	}
+	pool.submitBatch = func(
+		ctx context.Context,
+		block *flow.BlockHeader,
+		txs []pooledEvmTx,
+	) (flow.Identifier, error) {
+		return flow.HexToID(
+			"2222222222222222222222222222222222222222222222222222222222222222",
+		), nil
+	}
+
+	key, err := crypto.GenerateKey()
+	require.NoError(t, err)
+	addr := crypto.PubkeyToAddress(key.PublicKey)
+
+	pool.eoaEnqueueTxs(addr, []pooledEvmTx{
+		makePooledTx(2),
+		makePooledTx(3),
+		makePooledTx(4),
+	})
+
+	q := pool.eoaQueueEntry(addr)
+	assert.Len(t, q.txs, 3)
+	lastSubmittedAt := time.Now()
+	lastSubmittedNonce := uint64(1)
+	q.lastSubmittedAt = lastSubmittedAt
+	q.lastSubmittedNonce = lastSubmittedNonce
+	assert.Equal(t, uint64(2), q.txs[2].nonce)
+	assert.Equal(t, uint64(3), q.txs[3].nonce)
+	assert.Equal(t, uint64(4), q.txs[4].nonce)
+	assert.Equal(t, lastSubmittedNonce, q.lastSubmittedNonce)
+
+	ctx := context.Background()
+	submitCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+
+	g := errgroup.Group{}
+	nonce := uint64(5)
+	g.Go(func() error {
+		for {
+			select {
+			case <-submitCtx.Done():
+				return nil
+			default:
+				tx := signedTestTx(t, key, nonce, 1)
+				require.NoError(t, pool.Add(context.Background(), tx))
+				nonce += 1
+				time.Sleep(time.Millisecond * 500)
+			}
+		}
+	})
+
+	pool.processPooledTransactions(submitCtx)
+
+	cancel()
+	err = g.Wait()
+	require.NoError(t, err)
+
+	assert.Greater(t, q.lastSubmittedAt, lastSubmittedAt)
+	assert.Greater(t, q.lastSubmittedNonce, lastSubmittedNonce)
 }
