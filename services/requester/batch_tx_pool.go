@@ -48,6 +48,9 @@ const (
 	// How long the EOA queue holds an out-of-order transaction
 	// waiting for its nonce gap to fill, before dropping it.
 	maxQueueTTL = 30 * time.Second
+	// Max number of retries to perform on submission errors, such as
+	// networking issues etc.
+	maxSubmissionRetries = 5
 )
 
 // BatchTxPool is a TxPool implementation that collects and groups transactions
@@ -107,6 +110,9 @@ type txQueue struct {
 	// lastSubmittedNonce is the last EOA nonce that was submitted with a
 	// Cadence tx (used for classifying whether to queue or submit right away).
 	lastSubmittedNonce uint64
+	// retries is the total number of retries performed after submission errors,
+	// such as transient networking issues etc.
+	retries uint64
 }
 
 // size returns the total number of pooled transactions.
@@ -476,7 +482,17 @@ func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 					// Rollback the nonce range reservation from before — but only
 					// if a concurrent Add() has not already advanced past it via
 					// the fast path, otherwise we'd erase legitimate activity.
-					eoaQueue := t.eoaEnqueueTxs(address, batch.txs)
+					eoaQueue, ok := t.eoaEnqueueTxs(address, batch.txs)
+					if !ok {
+						t.logger.Warn().Err(err).Msgf(
+							"max number of retries reached for EOA: %s, batch count: %d, nonce: %d, tx hash: %s",
+							address.Hex(),
+							len(batch.txs),
+							batch.txs[0].nonce,
+							batch.txs[0].txHash.Hex(),
+						)
+						t.collector.TransactionsDropped(len(batch.txs))
+					}
 					if eoaQueue.lastSubmittedNonce == batch.txs[len(batch.txs)-1].nonce {
 						eoaQueue.lastSubmittedNonce = batch.lastSubmittedNonce
 						eoaQueue.lastSubmittedAt = batch.lastSubmittedAt
@@ -598,15 +614,24 @@ func (t *BatchTxPool) eoaQueueEntry(address gethCommon.Address) *txQueue {
 // nonce entry already in the queue is preserved: a concurrent Add() may have
 // dropped a fresher payload there while we were off-lock, and last-write-wins
 // for the client means the fresh payload must win over the failed batch.
-func (t *BatchTxPool) eoaEnqueueTxs(address gethCommon.Address, txs []pooledEvmTx) *txQueue {
+// Up to `maxSubmissionRetries` are allowed and a boolean value is returned to
+// denote enqueue failure.
+func (t *BatchTxPool) eoaEnqueueTxs(
+	address gethCommon.Address,
+	txs []pooledEvmTx,
+) (*txQueue, bool) {
 	queue := t.eoaQueueEntry(address)
+	if queue.retries >= maxSubmissionRetries {
+		return nil, false
+	}
 	for _, tx := range txs {
 		if _, exists := queue.txs[tx.nonce]; exists {
 			continue
 		}
 		queue.txs[tx.nonce] = tx
 	}
-	return queue
+	queue.retries += 1
+	return queue, true
 }
 
 // logSubmission records the fate of a submitted batch so a transaction is
