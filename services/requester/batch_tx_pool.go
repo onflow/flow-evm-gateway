@@ -523,6 +523,8 @@ func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 					}
 					t.collector.TxPoolSubmission(flushReasonPrefix)
 					t.logSubmission(address, batch.txs, flushReasonPrefix, flowTxID)
+					// reset submission failure retries on success
+					batch.eoaQueue.retries = 0
 				}
 				t.txQueuesMux.Unlock()
 			}
