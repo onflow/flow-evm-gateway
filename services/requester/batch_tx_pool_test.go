@@ -54,10 +54,10 @@ func Test_TxQueue_StaleEntry(t *testing.T) {
 		assert.False(t, q.staleEntry(now, spacing))
 	})
 
-	t.Run("empty and past 2x spacing is stale", func(t *testing.T) {
+	t.Run("empty and past spacing*stalenessFactor is stale", func(t *testing.T) {
 		q := &txQueue{
 			txs:             map[uint64]pooledEvmTx{},
-			lastSubmittedAt: now.Add(-2 * spacing),
+			lastSubmittedAt: now.Add(spacing * -stalenessFactor),
 		}
 		assert.True(t, q.staleEntry(now, spacing))
 	})

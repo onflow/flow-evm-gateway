@@ -44,7 +44,7 @@ const (
 	// Multiplication factor for the submission spacing interval, which
 	// gives an indication that an EOA queue is stale and could be
 	// removed, to avoid unconstrained memory growth.
-	stalenessFactor = 2
+	stalenessFactor = 4
 	// How long the EOA queue holds an out-of-order transaction
 	// waiting for its nonce gap to fill, before dropping it.
 	maxQueueTTL = 30 * time.Second
@@ -139,8 +139,8 @@ func (t *txQueue) spacingElapsed(now time.Time, spacing time.Duration) bool {
 // staleEntry checks whether the recorded submission activity for the EOA
 // is stale and could be removed from the mempool queue, to avoid memory
 // growth. If there are no pooled transactions and the last submission was
-// 2 times more than the given spacing interval, we can safely remove this
-// entry.
+// `stalenessFactor` times more than the given spacing interval, we can
+// safely remove this entry.
 func (t *txQueue) staleEntry(now time.Time, spacing time.Duration) bool {
 	return len(t.txs) == 0 && now.Sub(t.lastSubmittedAt) >= (spacing*stalenessFactor)
 }
