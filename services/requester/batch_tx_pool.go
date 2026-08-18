@@ -257,9 +257,15 @@ type pooledEvmTx struct {
 // batchSubmission is a batch selected for submission, detached from the queue so
 // the network call happens outside queueMux.
 type batchSubmission struct {
-	txs                []pooledEvmTx
-	eoaQueue           *txQueue
-	lastSubmittedAt    time.Time
+	txs      []pooledEvmTx
+	eoaQueue *txQueue
+	// lastSubmittedAt holds the value of `eoaQueue.lastSubmittedAt` at the time
+	// of batch selection. Used for reverting the queue's last submitted state
+	// for submission retries
+	lastSubmittedAt time.Time
+	// lastSubmittedNonce holds the value of `eoaQueue.lastSubmittedNonce` at the
+	// time of batch selection. Used for reverting the queue's last submitted state
+	// for submission retries
 	lastSubmittedNonce uint64
 }
 
