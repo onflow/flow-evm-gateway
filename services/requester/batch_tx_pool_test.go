@@ -237,7 +237,12 @@ func Test_BatchTxPool_EnqueuePreservesFresh(t *testing.T) {
 
 	stale := makePooledTx(3)
 	stale.txHash = gethCommon.BytesToHash([]byte("stale"))
-	pool.eoaEnqueueTxs(addr, []pooledEvmTx{stale})
+	pool.eoaEnqueueTxs(
+		addr,
+		batchSubmission{
+			txs: []pooledEvmTx{stale},
+		},
+	)
 
 	assert.Equal(t, fresh.txHash, q.txs[3].txHash,
 		"eoaEnqueueTxs must not overwrite a fresh same-nonce entry")
@@ -252,11 +257,15 @@ func Test_BatchTxPool_EnqueueFillsMissingNonces(t *testing.T) {
 	}
 	addr := gethCommon.HexToAddress("0xabc")
 
-	pool.eoaEnqueueTxs(addr, []pooledEvmTx{
-		makePooledTx(1),
-		makePooledTx(2),
-		makePooledTx(3),
-	})
+	pool.eoaEnqueueTxs(addr,
+		batchSubmission{
+			txs: []pooledEvmTx{
+				makePooledTx(1),
+				makePooledTx(2),
+				makePooledTx(3),
+			},
+		},
+	)
 
 	q := pool.eoaQueueEntry(addr)
 	assert.Len(t, q.txs, 3)
@@ -322,11 +331,15 @@ func Test_BatchTxPool_SubmissionFailureNonceReservationRollback(t *testing.T) {
 	require.NoError(t, err)
 	addr := crypto.PubkeyToAddress(key.PublicKey)
 
-	pool.eoaEnqueueTxs(addr, []pooledEvmTx{
-		makePooledTx(2),
-		makePooledTx(3),
-		makePooledTx(4),
-	})
+	pool.eoaEnqueueTxs(addr,
+		batchSubmission{
+			txs: []pooledEvmTx{
+				makePooledTx(2),
+				makePooledTx(3),
+				makePooledTx(4),
+			},
+		},
+	)
 
 	q := pool.eoaQueueEntry(addr)
 	assert.Len(t, q.txs, 3)
@@ -400,11 +413,15 @@ func Test_BatchTxPool_SubmissionSuccessNonRegressionMerge(t *testing.T) {
 	require.NoError(t, err)
 	addr := crypto.PubkeyToAddress(key.PublicKey)
 
-	pool.eoaEnqueueTxs(addr, []pooledEvmTx{
-		makePooledTx(2),
-		makePooledTx(3),
-		makePooledTx(4),
-	})
+	pool.eoaEnqueueTxs(addr,
+		batchSubmission{
+			txs: []pooledEvmTx{
+				makePooledTx(2),
+				makePooledTx(3),
+				makePooledTx(4),
+			},
+		},
+	)
 
 	q := pool.eoaQueueEntry(addr)
 	assert.Len(t, q.txs, 3)

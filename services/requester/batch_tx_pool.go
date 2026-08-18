@@ -490,11 +490,7 @@ func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 					// In case of any submission errors, add the transactions back
 					// to the pool as a retry mechanism. This is an important part
 					// to avoid gaps, which would require users to resubmit.
-					// Rollback the nonce range reservation from before — but only
-					// if a concurrent Add() has not already advanced past it via
-					// the fast path, otherwise we'd erase legitimate activity.
-					eoaQueue, ok := t.eoaEnqueueTxs(address, batch.txs)
-					if !ok {
+					if !t.eoaEnqueueTxs(address, batch) {
 						t.logger.Warn().Err(err).Msgf(
 							"max number of retries reached for EOA: %s, batch count: %d, nonce: %d, tx hash: %s",
 							address.Hex(),
@@ -503,10 +499,6 @@ func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 							batch.txs[0].txHash.Hex(),
 						)
 						t.collector.TransactionsDropped(len(batch.txs))
-					}
-					if eoaQueue.lastSubmittedNonce == batch.txs[len(batch.txs)-1].nonce {
-						eoaQueue.lastSubmittedNonce = batch.lastSubmittedNonce
-						eoaQueue.lastSubmittedAt = batch.lastSubmittedAt
 					}
 				} else {
 					// Merge the ack with any concurrent Add() fast-path that
@@ -622,29 +614,41 @@ func (t *BatchTxPool) eoaQueueEntry(address gethCommon.Address) *txQueue {
 }
 
 // eoaEnqueueTxs re-adds the given transactions to the corresponding txQueue
-// for the given address (used as a rollback path on submission failure), and
-// returns the txQueue. One will be created if it doesn't yet exist. A same-
-// nonce entry already in the queue is preserved: a concurrent Add() may have
-// dropped a fresher payload there while we were off-lock, and last-write-wins
-// for the client means the fresh payload must win over the failed batch.
+// for the given address (used as a rollback path on submission failure).
+// One will be created if it doesn't yet exist. A same-nonce entry already
+// in the queue is preserved: a concurrent Add() may have dropped a fresher
+// payload there while we were off-lock, and last-write-wins for the client
+// means the fresh payload must win over the failed batch.
 // Up to `maxSubmissionRetries` are allowed and a boolean value is returned to
 // denote enqueue success.
 func (t *BatchTxPool) eoaEnqueueTxs(
 	address gethCommon.Address,
-	txs []pooledEvmTx,
-) (*txQueue, bool) {
+	batch batchSubmission,
+) bool {
 	queue := t.eoaQueueEntry(address)
-	if queue.retries >= maxSubmissionRetries {
-		return queue, false
+	// Rollback the nonce range reservation from before — but only
+	// if a concurrent Add() has not already advanced past it via
+	// the fast path, otherwise we'd erase legitimate activity.
+	if queue.lastSubmittedNonce == batch.txs[len(batch.txs)-1].nonce {
+		queue.lastSubmittedNonce = batch.lastSubmittedNonce
+		queue.lastSubmittedAt = batch.lastSubmittedAt
 	}
-	for _, tx := range txs {
+
+	if queue.retries >= maxSubmissionRetries {
+		return false
+	}
+
+	// re-add the transactions from the batch, in the per-EOA pool
+	for _, tx := range batch.txs {
 		if _, exists := queue.txs[tx.nonce]; exists {
 			continue
 		}
 		queue.txs[tx.nonce] = tx
 	}
+
+	// increment the counter of submission retries
 	queue.retries += 1
-	return queue, true
+	return true
 }
 
 // logSubmission records the fate of a submitted batch so a transaction is
