@@ -628,7 +628,7 @@ func (t *BatchTxPool) eoaQueueEntry(address gethCommon.Address) *txQueue {
 // dropped a fresher payload there while we were off-lock, and last-write-wins
 // for the client means the fresh payload must win over the failed batch.
 // Up to `maxSubmissionRetries` are allowed and a boolean value is returned to
-// denote enqueue failure.
+// denote enqueue success.
 func (t *BatchTxPool) eoaEnqueueTxs(
 	address gethCommon.Address,
 	txs []pooledEvmTx,
