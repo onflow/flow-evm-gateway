@@ -572,6 +572,68 @@ func Test_BatchTxPool_InFlightNonceRejection(t *testing.T) {
 	}, time.Second*15, time.Second*1, "first transaction was not executed")
 }
 
+// Test_BatchTxPool_WedgeRecovery reproduces the wedge state described in
+// https://github.com/onflow/flow-evm-gateway/issues/983#issuecomment-5112498568
+// (a Cadence wrapper reverts before advancing on-chain state, leaving the
+// pool's in-flight marker ahead of state) and asserts that the pool's
+// staleEntry eviction clears the wedge within TxBatchInterval*stalenessFactor.
+//
+// Auto-mine is disabled so on-chain state stays at nonce 0 for the whole
+// test. Without that, validateTransactionWithState (requester.go) would
+// preempt the pool's in-flight check with ErrNonceTooLow as soon as tx1
+// mined, masking the pool's eviction timing entirely. This is the reason
+// the equivalent scenario cannot be reproduced on testnet — state
+// validation catches up in ~1–3s regardless of pool behavior.
+func Test_BatchTxPool_WedgeRecovery(t *testing.T) {
+	emu, cfg, stop := setupGatewayNode(t)
+	defer stop()
+
+	rpcTester := &rpcTest{
+		url: fmt.Sprintf("%s:%d", cfg.RPCHost, cfg.RPCPort),
+	}
+
+	testAddr := common.HexToAddress("0x061B63D29332e4de81bD9F51A48609824CD113a8")
+	privateKey, err := crypto.HexToECDSA("ddcb1e965557474fd13de3a66a40e4bc9b759a306e5db1046bac5ca47aafd584")
+	require.NoError(t, err)
+
+	fundEOA(t, rpcTester, testAddr)
+
+	testEoaReceiver := common.HexToAddress("0x6F416dcC9BEFe43b7dDF53f2662F76dD34A9fc11")
+
+	// Three DIFFERENT transfers (distinct values → distinct hashes) all
+	// carrying the same nonce 0.
+	signedFirst, _, err := evmSign(big.NewInt(50_000), 205_000, privateKey, 0, &testEoaReceiver, nil)
+	require.NoError(t, err)
+	signedSecond, _, err := evmSign(big.NewInt(60_000), 23_500, privateKey, 0, &testEoaReceiver, nil)
+	require.NoError(t, err)
+	signedThird, _, err := evmSign(big.NewInt(70_000), 23_500, privateKey, 0, &testEoaReceiver, nil)
+	require.NoError(t, err)
+
+	// Freeze on-chain state so the pool's in-flight marker is the only gate.
+	emu.DisableAutoMine()
+
+	// tx1 fast-paths: pool sets lastSubmittedNonce = 0.
+	_, err = rpcTester.sendRawTx(signedFirst)
+	require.NoError(t, err)
+
+	// tx2 at the same nonce is rejected — the wedge state.
+	_, err = rpcTester.sendRawTx(signedSecond)
+	require.Error(t, err)
+	require.ErrorContains(t, err, errs.ErrInFlightNonce.Error())
+
+	// stalenessFactor is 4 (see services/requester/batch_tx_pool.go). With
+	// TxBatchInterval = 2.5s the eviction window is 10s. Add a cushion for
+	// the 1s flush ticker.
+	const stalenessFactor = 4
+	time.Sleep(cfg.TxBatchInterval*stalenessFactor + 2*time.Second)
+
+	// tx3 at the same nonce again: the queue was evicted (empty + past the
+	// window), so Add sees a fresh queue with lastSubmittedAt.IsZero(). The
+	// in-flight check short-circuits and the fast path submits.
+	_, err = rpcTester.sendRawTx(signedThird)
+	require.NoError(t, err, "wedge did not clear after staleEntry window")
+}
+
 func Test_TransactionBatchingMode(t *testing.T) {
 	_, cfg, stop := setupGatewayNode(t)
 	defer stop()
