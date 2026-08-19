@@ -429,7 +429,7 @@ func (t *BatchTxPool) Add(
 }
 
 func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
-	ticker := time.NewTicker(t.config.TxBatchInterval)
+	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
 	for {
@@ -453,6 +453,11 @@ func (t *BatchTxPool) processPooledTransactions(ctx context.Context) {
 			queues := len(t.txQueues)
 			queuedTxs := 0
 			for address, eoaQueue := range t.txQueues {
+				// skip processing for this EOA, if there was any recent activity
+				// from concurrent `Add()`
+				if !eoaQueue.spacingElapsed(time.Now(), t.config.TxBatchInterval) {
+					continue
+				}
 				if eoaQueue.staleEntry(time.Now(), t.config.TxBatchInterval) {
 					staleEntries = append(staleEntries, address)
 					continue

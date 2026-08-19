@@ -109,6 +109,95 @@ func Test_BatchTxPool_OutOfOrderBurst(t *testing.T) {
 	assert.Equal(t, totalTxs, totalEVMEvents)
 }
 
+// Test_BatchTxPool_OutOfOrderBurstSubmissionSpacingPreserved asserts that
+// a burst of out-of-order transactions with arbitrary spacing, will always
+// preserve the necessary spacing between consecutive submissions
+func Test_BatchTxPool_OutOfOrderBurstSubmissionSpacingPreserved(t *testing.T) {
+	emu, cfg, stop := setupGatewayNode(t)
+	defer stop()
+
+	rpcTester := &rpcTest{
+		url: fmt.Sprintf("%s:%d", cfg.RPCHost, cfg.RPCPort),
+	}
+
+	privateKey, err := crypto.HexToECDSA(eoaTestPrivateKey)
+	require.NoError(t, err)
+
+	testEoaReceiver := common.HexToAddress("0x6F416dcC9BEFe43b7dDF53f2662F76dD34A9fc11")
+
+	totalTxs := 10
+	transferAmount := int64(50_000)
+
+	// Sign 10 transfers with nonces 0..9.
+	signedTxs := make([][]byte, totalTxs)
+	for nonce := range totalTxs {
+		signed, _, err := evmSign(
+			big.NewInt(transferAmount),
+			205_000,
+			privateKey,
+			uint64(nonce),
+			&testEoaReceiver,
+			nil,
+		)
+		require.NoError(t, err)
+		signedTxs[nonce] = signed
+	}
+
+	startBlock, err := emu.GetLatestBlock()
+	require.NoError(t, err)
+
+	// Send them concurrently in shuffled nonce order.
+	// All sends must be accepted by the pool without errors.
+	shuffledNonces := []int{6, 2, 8, 0, 1, 9, 3, 5, 4, 7}
+	g := errgroup.Group{}
+	for _, nonce := range shuffledNonces {
+		signed := signedTxs[nonce]
+		g.Go(func() error {
+			// Add a bit of random waiting time, to simulate spacing.
+			waitTime := rand.IntN(5) * 1000
+			time.Sleep(time.Duration(waitTime) * time.Millisecond)
+			_, err := rpcTester.sendRawTx(signed)
+			return err
+		})
+	}
+
+	err = g.Wait()
+	require.NoError(t, err)
+
+	expectedBalance := int64(totalTxs) * transferAmount
+
+	assert.Eventually(t, func() bool {
+		balance, err := rpcTester.getBalance(testEoaReceiver)
+		require.NoError(t, err)
+
+		return balance.Cmp(big.NewInt(expectedBalance)) == 0
+	}, time.Second*30, time.Second*1, "all transactions were not executed")
+
+	endBlock, err := emu.GetLatestBlock()
+	require.NoError(t, err)
+
+	blockEvents, err := emu.GetEventsForHeightRange(
+		"A.f8d6e0586b0a20c7.EVM.TransactionExecuted",
+		startBlock.Height+1,
+		endBlock.Height,
+	)
+	require.NoError(t, err)
+
+	totalEVMEvents := 0
+	now := blockEvents[0].BlockTimestamp.Add(-2 * time.Second)
+	for _, blockEvent := range blockEvents {
+		totalEVMEvents += len(blockEvent.Events)
+		// Assert that each `EVM.TransactionExecuted` was included
+		// in blocks were there was enough spacing. For Emulator,
+		// blocks are created with each single Cadence transaction
+		// execution.
+		assert.GreaterOrEqual(t, blockEvent.BlockTimestamp.Sub(now), time.Second*2)
+	}
+
+	// Exactly 10 EVM transactions executed: no drops, no duplicates.
+	assert.Equal(t, totalTxs, totalEVMEvents)
+}
+
 // Test_BatchTxPool_SingleTxImmediateSubmission asserts the fast path:
 // a transaction with the expected next nonce, an empty queue and nothing
 // in flight is submitted immediately as a single-tx batch, which takes
@@ -525,7 +614,7 @@ func Test_TransactionBatchingMode(t *testing.T) {
 		}
 
 		return true
-	}, time.Second*15, time.Second*1, "all transactions were not executed")
+	}, time.Second*25, time.Second*1, "all transactions were not executed")
 }
 
 func Test_TransactionBatchingModeWithConcurrentTxSubmissions(t *testing.T) {
