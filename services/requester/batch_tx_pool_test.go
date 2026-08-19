@@ -63,23 +63,42 @@ func Test_TxQueue_StaleEntry(t *testing.T) {
 	})
 }
 
-func Test_TxQueue_ValidNonce(t *testing.T) {
+func Test_TxQueue_FastPathAvailable(t *testing.T) {
+	now := time.Now()
+	spacing := 2 * time.Second
+
 	t.Run("matches state nonce", func(t *testing.T) {
 		q := &txQueue{}
-		assert.True(t, q.validNonce(5, 5))
+		reason, available := q.fastPathAvailable(now, spacing, 5, 5)
+		assert.True(t, available)
+		assert.Equal(t, fastPathStateNonce, reason)
 	})
 
-	t.Run("matches lastSubmittedNonce+1 when there is prior activity", func(t *testing.T) {
+	t.Run("matches lastSubmittedNonce+1 when there is prior activity with elapsed spacing", func(t *testing.T) {
+		q := &txQueue{
+			lastSubmittedNonce: 5,
+			lastSubmittedAt:    now.Add(-2 * spacing),
+		}
+		reason, available := q.fastPathAvailable(now, spacing, 6, 4)
+		assert.True(t, available)
+		assert.Equal(t, fastPathInFlightNonce, reason)
+	})
+
+	t.Run("does not match lastSubmittedNonce+1 without elapsed spacing", func(t *testing.T) {
 		q := &txQueue{
 			lastSubmittedNonce: 5,
 			lastSubmittedAt:    time.Now(),
 		}
-		assert.True(t, q.validNonce(6, 4))
+		reason, available := q.fastPathAvailable(now, spacing, 6, 4)
+		assert.False(t, available)
+		assert.Equal(t, fastPathNoSpacing, reason)
 	})
 
 	t.Run("lastSubmittedNonce+1 without prior activity is rejected", func(t *testing.T) {
 		q := &txQueue{lastSubmittedNonce: 0}
-		assert.False(t, q.validNonce(1, 4))
+		reason, available := q.fastPathAvailable(now, spacing, 1, 4)
+		assert.False(t, available)
+		assert.Equal(t, fastPathNoAvailability, reason)
 	})
 
 	t.Run("arbitrary future nonce is rejected", func(t *testing.T) {
@@ -87,7 +106,9 @@ func Test_TxQueue_ValidNonce(t *testing.T) {
 			lastSubmittedNonce: 5,
 			lastSubmittedAt:    time.Now(),
 		}
-		assert.False(t, q.validNonce(9, 5))
+		reason, available := q.fastPathAvailable(now, spacing, 9, 5)
+		assert.False(t, available)
+		assert.Equal(t, fastPathNoSpacing, reason)
 	})
 }
 

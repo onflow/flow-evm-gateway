@@ -51,6 +51,12 @@ const (
 	// Max number of retries to perform on submission errors, such as
 	// networking issues etc.
 	maxSubmissionRetries = 5
+
+	// The possible reasons returned by `fastPathAvailable()`
+	fastPathNoAvailability = "fast-path: conditions not satisfied"
+	fastPathNoSpacing      = "fast-path: not enough spacing elapsed"
+	fastPathStateNonce     = "fast-path: next unindexed nonce"
+	fastPathInFlightNonce  = "fast-path: next unsubmitted nonce"
 )
 
 // BatchTxPool is a TxPool implementation that collects and groups transactions
@@ -145,25 +151,37 @@ func (t *txQueue) staleEntry(now time.Time, spacing time.Duration) bool {
 	return len(t.txs) == 0 && now.Sub(t.lastSubmittedAt) >= (spacing*stalenessFactor)
 }
 
-// validNonce compares the transaction nonce with the nonce from the local
-// state index and the last submission activity (if any), and returns whether
-// the transaction nonce is valid for submission.
-func (t *txQueue) validNonce(
+// fastPathAvailable checks whether there is a fast-path strategy, based on
+// the EOA's last activity and the given transaction nonce. If enough spacing
+// has elapsed since the EOA's last activity, for the given current time and
+// spacing duration, and the transaction nonce matches the nonce from the
+// local staate index or the last submission activity (if any), fast-path is
+// available.
+//
+// Returns the matching fast-path strategy, if any, and a boolean value which
+// denotes its availability.
+func (t *txQueue) fastPathAvailable(
+	now time.Time,
+	spacing time.Duration,
 	txNonce uint64,
 	stateNonce uint64,
-) bool {
+) (string, bool) {
+	if !t.spacingElapsed(now, spacing) {
+		return fastPathNoSpacing, false
+	}
+
 	if txNonce == stateNonce {
-		return true
+		return fastPathStateNonce, true
 	}
 
 	// a value of 0 for `lastSubmittedNonce` is legit, if this is the EOA's
 	// first transaction ever, so we use `lastSubmittedAt` to differentiate
 	// between Go's zero-value.
 	if txNonce == t.lastSubmittedNonce+1 && !t.lastSubmittedAt.IsZero() {
-		return true
+		return fastPathInFlightNonce, true
 	}
 
-	return false
+	return fastPathNoAvailability, false
 }
 
 // pruneTxs drops pooled transactions that can never be submitted from this
@@ -370,7 +388,8 @@ func (t *BatchTxPool) Add(
 	// has elapsed and the tx nonce is the next expected, we submit right
 	// away and update the `lastSubmittedAt` & `lastSubmittedNonce` fields,
 	// for classifying future submissions, that might arrive shortly.
-	if eoaQueue.spacingElapsed(time.Now(), t.config.TxBatchInterval) && eoaQueue.validNonce(tx.Nonce(), nonce) {
+	reason, ok := eoaQueue.fastPathAvailable(time.Now(), t.config.TxBatchInterval, tx.Nonce(), nonce)
+	if ok {
 		// Bound the submit so a hung call cannot pin `txQueuesMux`
 		// indefinitely (see `fastPathSubmitTimeout`).
 		submitCtx, cancel := context.WithTimeout(ctx, fastPathSubmitTimeout)
@@ -387,7 +406,7 @@ func (t *BatchTxPool) Add(
 			)
 			return err
 		}
-		t.logSubmission(from, []pooledEvmTx{userTx}, flushReasonFastPath, flowTxID)
+		t.logSubmission(from, []pooledEvmTx{userTx}, reason, flowTxID)
 
 		eoaQueue.lastSubmittedAt = time.Now()
 		eoaQueue.lastSubmittedNonce = tx.Nonce()
