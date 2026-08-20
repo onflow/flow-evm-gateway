@@ -120,10 +120,6 @@ type Config struct {
 	// TxBatchInterval is the time interval upon which to submit the transaction batches to the
 	// Flow network.
 	TxBatchInterval time.Duration
-	// EOAActivityCacheTTL is the time interval used to track EOA activity. Tx send more
-	// frequently than this interval will be batched.
-	// Useful only when batch transaction submission is enabled.
-	EOAActivityCacheTTL time.Duration
 	// ExperimentalSoftFinalityEnabled enables the experimental soft finality feature which syncs
 	// EVM block and transaction data from the upstream Access node before the block is sealed.
 	// CAUTION: This feature is experimental and may return incorrect data in certain circumstances.
