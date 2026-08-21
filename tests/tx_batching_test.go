@@ -360,8 +360,8 @@ func Test_BatchTxPool_GapHoldAndFill(t *testing.T) {
 }
 
 // Test_BatchTxPool_BatchSizeCap asserts that the gateway never submits a
-// Cadence transaction wrapping more EVM transactions than TxMaxBatchSize,
-// while still executing every submitted transaction exactly once.
+// Cadence transaction wrapping more EVM transactions than the pool's
+// maxTxBatch, while still executing every submitted transaction exactly once.
 func Test_BatchTxPool_BatchSizeCap(t *testing.T) {
 	const maxBatchSize = 5
 	emu, cfg, stop := setupGatewayNode(t)
@@ -632,6 +632,25 @@ func Test_BatchTxPool_WedgeRecovery(t *testing.T) {
 	// in-flight check short-circuits and the fast path submits.
 	_, err = rpcTester.sendRawTx(signedThird)
 	require.NoError(t, err, "wedge did not clear after staleEntry window")
+}
+
+// fundEOA adds a sufficient amount of funds to the given test EOA, from the
+// test EOA created on emulator setup, and waits until the funding transaction
+// is executed.
+func fundEOA(t *testing.T, rpcTester *rpcTest, testAddr common.Address) {
+	eoaKey, err := crypto.HexToECDSA(eoaTestPrivateKey)
+	require.NoError(t, err)
+
+	signed, _, err := evmSign(big.NewInt(1_000_000_000), 205_000, eoaKey, 0, &testAddr, nil)
+	require.NoError(t, err)
+
+	txHash, err := rpcTester.sendRawTx(signed)
+	require.NoError(t, err)
+
+	require.Eventually(t, func() bool {
+		rcp, err := rpcTester.getReceipt(txHash.String())
+		return err == nil && rcp != nil && rcp.Status == 1
+	}, time.Second*15, time.Second*1, "funding transaction was not executed")
 }
 
 func Test_TransactionBatchingMode(t *testing.T) {
