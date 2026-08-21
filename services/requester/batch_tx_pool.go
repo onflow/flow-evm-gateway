@@ -1,11 +1,5 @@
 package requester
 
-// BatchTxPool shares several building blocks with the newer TxMemPool
-// (see tx_mempool.go): the NonceProvider / NonceView interfaces used to
-// consult the local state index, the fastPathSubmitTimeout bound on
-// synchronous submits, and the flushReason* labels used for metrics and
-// logs. Those symbols are intentionally single-sourced there.
-
 import (
 	"context"
 	"encoding/hex"

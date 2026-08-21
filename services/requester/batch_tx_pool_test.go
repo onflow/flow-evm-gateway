@@ -2,7 +2,9 @@ package requester
 
 import (
 	"context"
+	"crypto/ecdsa"
 	"fmt"
+	"math/big"
 	"testing"
 	"time"
 
@@ -27,6 +29,53 @@ func makePooledTx(nonce uint64) pooledEvmTx {
 		nonce:      nonce,
 		enqueuedAt: time.Now(),
 	}
+}
+
+// fakeNonceProvider is a test double for both NonceProvider and NonceView. A
+// single fake reads every EOA's nonce as f.nonce/f.err, mirroring the
+// production single-view read path.
+type fakeNonceProvider struct {
+	nonce uint64
+	err   error
+}
+
+func (f *fakeNonceProvider) GetNextNonce(_ gethCommon.Address) (uint64, error) {
+	return f.nonce, f.err
+}
+
+func (f *fakeNonceProvider) GetNonce(_ gethCommon.Address) (uint64, error) {
+	return f.nonce, f.err
+}
+
+func (f *fakeNonceProvider) GetBlockView() (NonceView, error) {
+	return f, nil
+}
+
+// signedTestTx builds a signed legacy EVM transaction from the given key at the
+// requested nonce. The value field is exposed only so tests can produce two
+// distinct transactions carrying the same nonce.
+func signedTestTx(
+	t *testing.T,
+	key *ecdsa.PrivateKey,
+	nonce uint64,
+	value int64,
+) *gethTypes.Transaction {
+	t.Helper()
+	chainID := big.NewInt(747)
+	tx, err := gethTypes.SignTx(
+		gethTypes.NewTransaction(
+			nonce,
+			gethCommon.HexToAddress("0x0000000000000000000000000000000000000001"),
+			big.NewInt(value),
+			21_000,
+			big.NewInt(1),
+			nil,
+		),
+		gethTypes.LatestSignerForChainID(chainID),
+		key,
+	)
+	require.NoError(t, err)
+	return tx
 }
 
 func Test_TxQueue_StaleEntry(t *testing.T) {
