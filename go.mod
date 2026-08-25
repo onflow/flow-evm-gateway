@@ -10,7 +10,7 @@ require (
 	github.com/holiman/uint256 v1.3.2
 	github.com/onflow/atree v0.16.1
 	github.com/onflow/cadence v1.10.6
-	github.com/onflow/flow-go v0.51.0
+	github.com/onflow/flow-go v0.51.1-0.20260818190615-51d198a4e379
 	github.com/onflow/flow-go-sdk v1.10.9
 	github.com/prometheus/client_golang v1.20.5
 	github.com/rs/cors v1.8.0
