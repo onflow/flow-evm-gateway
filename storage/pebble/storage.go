@@ -67,3 +67,10 @@ func (s *Storage) delete(keyCode byte, key []byte, batch *pebble.Batch) error {
 func (s *Storage) NewBatch() *pebble.Batch {
 	return s.db.NewBatch()
 }
+
+// delete removes a key-value pair identified by key code.
+// Optional batch argument makes the operation atomic.
+func (s *Storage) delete(keyCode byte, key []byte, batch *pebble.Batch) error {
+	prefixedKey := makePrefix(keyCode, key)
+	return batch.Delete(prefixedKey, nil)
+}
