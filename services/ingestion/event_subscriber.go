@@ -224,7 +224,7 @@ func (r *RPCEventSubscriber) subscribe(ctx context.Context, height uint64) <-cha
 					// we can get not found when reconnecting after a disconnect/restart before the
 					// next block is finalized. just wait briefly and try again
 					time.Sleep(200 * time.Millisecond)
-				case codes.DeadlineExceeded, codes.Internal:
+				case codes.DeadlineExceeded, codes.Internal, codes.Unavailable:
 					// these are sometimes returned when the stream is disconnected by a middleware or the server
 				default:
 					// skip reconnect on all other errors
@@ -232,15 +232,30 @@ func (r *RPCEventSubscriber) subscribe(ctx context.Context, height uint64) <-cha
 					return
 				}
 
-				if err := connect(lastReceivedHeight + 1); err != nil {
-					eventsChan <- models.NewBlockEventsError(
-						fmt.Errorf(
-							"failed to resubscribe for events on height: %d, with: %w",
-							lastReceivedHeight+1,
-							err,
-						),
-					)
-					return
+				start := time.Now()
+				attempts := 0
+				pauseDuration, maxDuration := 200*time.Millisecond, 30*time.Second
+				// Allow reconnect retries for up to 30 seconds, with retry
+				// attempts every 200 ms.
+				for {
+					err := connect(lastReceivedHeight)
+					if err == nil {
+						break
+					}
+
+					attempts++
+					duration := time.Since(start)
+					if duration >= maxDuration {
+						eventsChan <- models.NewBlockEventsError(
+							fmt.Errorf(
+								"failed to resubscribe for events on height: %d, with: %w",
+								lastReceivedHeight,
+								err,
+							),
+						)
+						return
+					}
+					time.Sleep(pauseDuration)
 				}
 			}
 		}
