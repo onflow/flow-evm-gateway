@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
 
 	pebbleDB "github.com/cockroachdb/pebble"
 	"github.com/onflow/flow-go-sdk"
