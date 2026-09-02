@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
 
 	pebbleDB "github.com/cockroachdb/pebble"
 	"github.com/onflow/flow-go-sdk"
@@ -44,21 +45,23 @@ func (e *EventsHash) GetByHeight(height uint64) (flow.Identifier, error) {
 }
 
 // BatchRemoveAboveHeight removes all stored events hashes above the given height (exclusive).
+//
+// Emits a single pebble range tombstone over [eventsHashKey||BE(height+1), sealedEventsHeightKey),
+// which is O(1) regardless of how many entries were previously stored. The previous per-height
+// loop could stall setup for a long time (and balloon the setup batch in memory) when
+// --force-start-height rewound past a large populated range — e.g. a DB previously indexed by
+// the sealing verifier.
 func (e *EventsHash) BatchRemoveAboveHeight(height uint64, batch *pebbleDB.Batch) error {
-	for {
-		height++ // skip the current height
-		if _, err := e.GetByHeight(height); err != nil {
-			if errors.Is(err, errs.ErrEntityNotFound) {
-				// event hashes are inserted in order with no gaps, so we can stop at the first
-				// missing hash
-				return nil
-			}
-			return err
-		}
-		if err := e.store.delete(eventsHashKey, uint64Bytes(height), batch); err != nil {
-			return err
-		}
+	// Guard against uint64 overflow when height is math.MaxUint64.
+	if height == math.MaxUint64 {
+		return nil
 	}
+	start := makePrefix(eventsHashKey, uint64Bytes(height+1))
+	end := makePrefix(sealedEventsHeightKey) // exclusive upper bound: next key-code prefix
+	if err := batch.DeleteRange(start, end, nil); err != nil {
+		return fmt.Errorf("failed to remove events hashes above height %d: %w", height, err)
+	}
+	return nil
 }
 
 func (e *EventsHash) ProcessedSealedHeight() (uint64, error) {
