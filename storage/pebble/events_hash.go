@@ -52,7 +52,7 @@ func (e *EventsHash) GetByHeight(height uint64) (flow.Identifier, error) {
 // the sealing verifier.
 func (e *EventsHash) BatchRemoveAboveHeight(height uint64, batch *pebbleDB.Batch) error {
 	// Guard against uint64 overflow when height is math.MaxUint64.
-	if height == ^uint64(0) {
+	if height == math.MaxUint64 {
 		return nil
 	}
 	start := makePrefix(eventsHashKey, uint64Bytes(height+1))
