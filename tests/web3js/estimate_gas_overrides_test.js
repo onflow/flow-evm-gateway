@@ -36,7 +36,7 @@ it('should apply block overrides on eth_estimateGas', async () => {
     )
     assert.equal(response.status, 200)
     assert.isDefined(response.body)
-    assert.equal(web3.utils.hexToNumber(response.body.result), 21473n)
+    assert.equal(web3.utils.hexToNumber(response.body.result), 15467n)
 
     // Override the `block.number` value to `9090`.
     response = await helpers.callRPCMethod(
@@ -45,7 +45,7 @@ it('should apply block overrides on eth_estimateGas', async () => {
     )
     assert.equal(response.status, 200)
     assert.isDefined(response.body)
-    assert.equal(web3.utils.hexToNumber(response.body.result), 273693n)
+    assert.equal(web3.utils.hexToNumber(response.body.result), 267646n)
 
     // Check the `block.timestamp` value, without overrides
     response = await helpers.callRPCMethod(
@@ -54,7 +54,7 @@ it('should apply block overrides on eth_estimateGas', async () => {
     )
     assert.equal(response.status, 200)
     assert.isDefined(response.body)
-    assert.equal(web3.utils.hexToNumber(response.body.result), 21473n)
+    assert.equal(web3.utils.hexToNumber(response.body.result), 15467n)
 
     // Override the `block.timestamp` value to `0x674DB1E1`.
     response = await helpers.callRPCMethod(
@@ -63,7 +63,7 @@ it('should apply block overrides on eth_estimateGas', async () => {
     )
     assert.equal(response.status, 200)
     assert.isDefined(response.body)
-    assert.equal(web3.utils.hexToNumber(response.body.result), 273693n)
+    assert.equal(web3.utils.hexToNumber(response.body.result), 267646n)
 
     // Check the `block.prevrandao` value, without overrides
     response = await helpers.callRPCMethod(
@@ -72,7 +72,7 @@ it('should apply block overrides on eth_estimateGas', async () => {
     )
     assert.equal(response.status, 200)
     assert.isDefined(response.body)
-    assert.equal(web3.utils.hexToNumber(response.body.result), 21473n)
+    assert.equal(web3.utils.hexToNumber(response.body.result), 15467n)
 
     // Override the `block.prevrandao` value to `0x7914bb5b13bac6f621bc37bbf6e406fbf4472aaaaf17ec2f309a92aca4e27fc0`.
     let random = '0x7914bb5b13bac6f621bc37bbf6e406fbf4472aaaaf17ec2f309a92aca4e27fc0'
@@ -82,7 +82,7 @@ it('should apply block overrides on eth_estimateGas', async () => {
     )
     assert.equal(response.status, 200)
     assert.isDefined(response.body)
-    assert.equal(web3.utils.hexToNumber(response.body.result), 273693n)
+    assert.equal(web3.utils.hexToNumber(response.body.result), 267646n)
 
     // Check the `block.coinbase` value, without overrides
     response = await helpers.callRPCMethod(
@@ -91,7 +91,7 @@ it('should apply block overrides on eth_estimateGas', async () => {
     )
     assert.equal(response.status, 200)
     assert.isDefined(response.body)
-    assert.equal(web3.utils.hexToNumber(response.body.result), 21473n)
+    assert.equal(web3.utils.hexToNumber(response.body.result), 15467n)
 
     // Override the `block.coinbase` value to `0x658Bdf435d810C91414eC09147DAA6DB62406379`.
     response = await helpers.callRPCMethod(
@@ -100,7 +100,7 @@ it('should apply block overrides on eth_estimateGas', async () => {
     )
     assert.equal(response.status, 200)
     assert.isDefined(response.body)
-    assert.equal(web3.utils.hexToNumber(response.body.result), 273693n)
+    assert.equal(web3.utils.hexToNumber(response.body.result), 267646n)
 
     // test that gas estimation still allows gas limits above the configured
     // EIP-7825 value
@@ -119,5 +119,5 @@ it('should apply block overrides on eth_estimateGas', async () => {
     )
     assert.equal(response.status, 200)
     assert.isDefined(response.body)
-    assert.equal(web3.utils.hexToNumber(response.body.result), 21473n)
+    assert.equal(web3.utils.hexToNumber(response.body.result), 15467n)
 })

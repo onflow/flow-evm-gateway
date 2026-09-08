@@ -565,7 +565,7 @@ func TestValidateConsensusRules(t *testing.T) {
 	})
 
 	t.Run("init code size exceeded", func(t *testing.T) {
-		dataLen := params.MaxInitCodeSizeAmsterdam + 5_000
+		dataLen := params.MaxInitCodeSizeAmsterdam + 200
 		data := make([]byte, dataLen)
 		n, err := crand.Read(data)
 		require.Equal(t, n, dataLen)
@@ -587,13 +587,20 @@ func TestValidateConsensusRules(t *testing.T) {
 		)
 		require.NoError(t, err)
 
+		rlpTx, err := tx.MarshalBinary()
+		require.NoError(t, err)
+
 		err = txpool.ValidateTransaction(tx, head, signer, opts)
 
 		require.Error(t, err)
 		assert.ErrorContains(
 			t,
 			err,
-			"max initcode size exceeded: code size 70536 limit 65536",
+			fmt.Sprintf(
+				"oversized data: transaction size %d, limit %d",
+				len(rlpTx),
+				params.MaxInitCodeSizeAmsterdam,
+			),
 		)
 	})
 

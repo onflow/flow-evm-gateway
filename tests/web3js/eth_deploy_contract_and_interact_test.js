@@ -19,7 +19,7 @@ it('deploy contract and interact', async () => {
     assert.equal(rcp.contractAddress, contractAddress)
     assert.equal(rcp.status, conf.successStatus)
     assert.isUndefined(rcp.to)
-    assert.equal(rcp.gasUsed, 8329308n)
+    assert.equal(rcp.gasUsed, 8338408n)
     assert.equal(rcp.gasUsed, rcp.cumulativeGasUsed)
 
     let blockResponse = await helpers.callRPCMethod('eth_getBlockByHash', [rcp.blockHash, false])
@@ -28,7 +28,7 @@ it('deploy contract and interact', async () => {
     let blockResult = blockResponse.body.result
     assert.equal(
         blockResult.blockAccessListHash,
-        '0x61ea4e7a61ece84df5403c55b8cd08d6e53fd683f32ecfd51589d190a9499e37'
+        '0xa5d09e6f0ef12739bd0c872bce7eb1b3ef144349d9f9fee011af7defbcf57344'
     )
 
     // check if latest block contains the deploy results
@@ -271,7 +271,7 @@ it('deploy contract and interact', async () => {
         },
         '0x1' // give a block height at which the contract did not exist
     )
-    assert.equal(gasEstimate, 25693n)
+    assert.equal(gasEstimate, 19516n)
 
     gasEstimate = await web3.eth.estimateGas(
         {
@@ -283,7 +283,7 @@ it('deploy contract and interact', async () => {
         },
         'latest' // give a block height at which the contract did exist
     )
-    assert.equal(gasEstimate, 25693n)
+    assert.equal(gasEstimate, 19516n)
 
     // check that `eth_call` can handle state overrides
     let stateOverrides = {
@@ -324,7 +324,7 @@ it('deploy contract and interact', async () => {
     assert.isDefined(response.body)
 
     result = response.body.result
-    assert.equal(result, '0x6969')
+    assert.equal(result, '0x713d')
 
     stateOverrides = {
         [contractAddress]: {
@@ -345,5 +345,5 @@ it('deploy contract and interact', async () => {
     // setting a storage slot from a zero-value, to a non-zero value has an
     // increase of about 20,000 gas. Which is quite different to `0x72c3`.
     result = response.body.result
-    assert.equal(result, '0x1eac6')
+    assert.equal(result, '0x1f29e')
 })

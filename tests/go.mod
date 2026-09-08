@@ -3,13 +3,13 @@ module github.com/onflow/flow-evm-gateway/integration
 go 1.26.0
 
 require (
-	github.com/ethereum/go-ethereum v1.17.4
+	github.com/ethereum/go-ethereum v1.17.5
 	github.com/goccy/go-json v0.10.4
 	github.com/onflow/cadence v1.10.6
 	github.com/onflow/crypto v0.27.2
 	github.com/onflow/flow-emulator v1.22.0
 	github.com/onflow/flow-evm-gateway v0.0.0-20240201154855-4d4d3d3f19c7
-	github.com/onflow/flow-go v0.51.1-0.20260901160419-2a03353d75bd
+	github.com/onflow/flow-go v0.51.1-0.20260907082448-dd4977c5c1cf
 	github.com/onflow/flow-go-sdk v1.10.9
 	github.com/rs/zerolog v1.34.0
 	github.com/stretchr/testify v1.11.1
@@ -24,9 +24,11 @@ require (
 	cloud.google.com/go/iam v1.5.3 // indirect
 	cloud.google.com/go/kms v1.26.0 // indirect
 	cloud.google.com/go/longrunning v0.8.0 // indirect
-	github.com/DataDog/zstd v1.5.6-0.20230824185856-869dae002e5e // indirect
+	github.com/DataDog/zstd v1.5.7 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/ProjectZKM/Ziren/crates/go-runtime/zkvm_runtime v0.0.0-20251001021608-1fe7b43fc4d6 // indirect
+	github.com/RaduBerinde/axisds v0.1.0 // indirect
+	github.com/RaduBerinde/btreemap v0.0.0-20250419174037-3d62b7205d54 // indirect
 	github.com/SaveTheRbtz/mph v0.1.1-0.20240117162131-4166ec7869bc // indirect
 	github.com/StackExchange/wmi v1.2.1 // indirect
 	github.com/VictoriaMetrics/fastcache v1.13.0 // indirect
@@ -39,12 +41,12 @@ require (
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash v1.1.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/cockroachdb/crlib v0.0.0-20241015224233-894974b3ad94 // indirect
+	github.com/cockroachdb/crlib v0.0.0-20241112164430-1264a2edc35b // indirect
 	github.com/cockroachdb/errors v1.11.3 // indirect
 	github.com/cockroachdb/fifo v0.0.0-20240606204812-0bbfbd93a7ce // indirect
 	github.com/cockroachdb/logtags v0.0.0-20230118201751-21c54148d20b // indirect
 	github.com/cockroachdb/pebble v1.1.5 // indirect
-	github.com/cockroachdb/pebble/v2 v2.0.6 // indirect
+	github.com/cockroachdb/pebble/v2 v2.1.4 // indirect
 	github.com/cockroachdb/redact v1.1.5 // indirect
 	github.com/cockroachdb/swiss v0.0.0-20251224182025-b0f6560f979b // indirect
 	github.com/cockroachdb/tokenbucket v0.0.0-20230807174530-cc333fc44b06 // indirect
@@ -66,7 +68,7 @@ require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/ef-ds/deque v1.0.4 // indirect
 	github.com/emicklei/dot v1.6.2 // indirect
-	github.com/ethereum/c-kzg-4844/v2 v2.1.6 // indirect
+	github.com/ethereum/c-kzg-4844/v2 v2.1.8 // indirect
 	github.com/ethereum/go-bigmodexpfix v0.0.0-20250911101455-f9e208c548ab // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/ferranbt/fastssz v0.1.4 // indirect
@@ -87,7 +89,7 @@ require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/glog v1.2.5 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
-	github.com/golang/snappy v1.0.0 // indirect
+	github.com/golang/snappy v1.0.1-0.20260716114414-9ae09f520e93 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/go-dap v0.11.0 // indirect
 	github.com/google/pprof v0.0.0-20250630185457-6e76a2b096b5 // indirect
@@ -115,10 +117,10 @@ require (
 	github.com/ipfs/boxo v0.17.1-0.20240131173518-89bceff34bf1 // indirect
 	github.com/ipfs/go-block-format v0.2.0 // indirect
 	github.com/ipfs/go-cid v0.4.1 // indirect
-	github.com/ipfs/go-datastore v0.8.2 // indirect
+	github.com/ipfs/go-datastore v0.9.0 // indirect
 	github.com/ipfs/go-ipfs-util v0.0.3 // indirect
 	github.com/ipfs/go-ipld-format v0.6.0 // indirect
-	github.com/ipfs/go-log/v2 v2.5.1 // indirect
+	github.com/ipfs/go-log/v2 v2.9.0 // indirect
 	github.com/ipfs/go-metrics-interface v0.0.1 // indirect
 	github.com/jackpal/go-nat-pmp v1.0.2 // indirect
 	github.com/jbenet/go-temp-err-catcher v0.1.0 // indirect
@@ -138,6 +140,7 @@ require (
 	github.com/magiconair/properties v1.8.7 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
+	github.com/minio/minlz v1.0.1-0.20250507153514-87eb42fe8882 // indirect
 	github.com/minio/sha256-simd v1.0.1 // indirect
 	github.com/mitchellh/colorstring v0.0.0-20190213212951-d06e56a500db // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
