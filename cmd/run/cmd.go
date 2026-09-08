@@ -299,6 +299,7 @@ func init() {
 	Cmd.Flags().BoolVar(&cfg.ExperimentalSoftFinalityEnabled, "experimental-soft-finality-enabled", false, "Sets whether the gateway should use the experimental soft finality feature. This results in faster indexing time, because EVM state is fetched from finalized, instead of sealed Flow blocks.")
 	Cmd.Flags().BoolVar(&cfg.ExperimentalSealingVerificationEnabled, "experimental-sealing-verification-enabled", false, "Sets whether the gateway should use the experimental soft finality sealing verification feature. This is an extra safety check for --experimental-soft-finality-enabled=true, which verifies that all finalized Flow blocks that were indexed, have eventually been sealed. The ingestion will halt, even if a single Flow block was not found to be sealed.")
 	Cmd.Flags().DurationVar(&cfg.RpcRequestTimeout, "rpc-request-timeout", time.Second*120, "Sets the maximum duration at which JSON-RPC requests should generate a response, before they timeout. The default is 120 seconds.")
+	Cmd.Flags().IntVar(&cfg.BlockByNumberCacheSize, "block-by-number-cache-size", 1000, "Number of block cache for getBlockByNumber API.")
 
 	err := Cmd.Flags().MarkDeprecated("init-cadence-height", "This flag is no longer necessary and will be removed in future version. The initial Cadence height is known for testnet/mainnet and this was only required for fresh deployments of EVM Gateway. Once the DB has been initialized, the latest index Cadence height will be used upon start-up.")
 	if err != nil {
