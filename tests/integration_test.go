@@ -17,6 +17,7 @@ import (
 	"github.com/onflow/flow-go-sdk/access/grpc"
 	flowGoKMS "github.com/onflow/flow-go-sdk/crypto/cloudkms"
 	"github.com/onflow/flow-go/fvm/evm/types"
+	"github.com/onflow/flow-go/model/flow"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -54,8 +55,7 @@ func Test_ConcurrentTransactionSubmissionWithTxSeal(t *testing.T) {
 		client,
 		keyCount,
 		service.Address,
-		sc.FungibleToken.Address.HexWithPrefix(),
-		sc.FlowToken.Address.HexWithPrefix(),
+		flow.Emulator,
 		service.PrivateKey,
 	)
 	require.NoError(t, err)
@@ -165,8 +165,7 @@ func Test_ConcurrentTransactionSubmissionWithLocalIndex(t *testing.T) {
 		client,
 		keyCount,
 		service.Address,
-		sc.FungibleToken.Address.HexWithPrefix(),
-		sc.FlowToken.Address.HexWithPrefix(),
+		flow.Emulator,
 		service.PrivateKey,
 	)
 	require.NoError(t, err)
@@ -270,8 +269,7 @@ func Test_EthClientTest(t *testing.T) {
 		client,
 		keyCount,
 		service.Address,
-		sc.FungibleToken.Address.HexWithPrefix(),
-		sc.FlowToken.Address.HexWithPrefix(),
+		flow.Emulator,
 		service.PrivateKey,
 	)
 	require.NoError(t, err)
@@ -367,8 +365,7 @@ func Test_CloudKMSConcurrentTransactionSubmission(t *testing.T) {
 		client,
 		publicKeys,
 		service.Address,
-		sc.FungibleToken.Address.HexWithPrefix(),
-		sc.FlowToken.Address.HexWithPrefix(),
+		flow.Emulator,
 		service.PrivateKey,
 	)
 	require.NoError(t, err)
@@ -473,8 +470,7 @@ func Test_ForceStartHeightIdempotency(t *testing.T) {
 		client,
 		keyCount,
 		service.Address,
-		sc.FungibleToken.Address.HexWithPrefix(),
-		sc.FlowToken.Address.HexWithPrefix(),
+		flow.Emulator,
 		service.PrivateKey,
 	)
 	require.NoError(t, err)

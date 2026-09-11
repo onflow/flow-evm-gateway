@@ -149,8 +149,7 @@ func servicesSetup(t *testing.T) (emulator.Emulator, func()) {
 		client,
 		keyCount,
 		service.Address,
-		sc.FungibleToken.Address.HexWithPrefix(),
-		sc.FlowToken.Address.HexWithPrefix(),
+		flow.Emulator,
 		service.PrivateKey,
 	)
 	require.NoError(t, err)
