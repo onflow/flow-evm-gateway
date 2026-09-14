@@ -532,6 +532,6 @@ describe('eth_getFilterChanges', async () => {
             s: '0x3'
         }
         assert.include(transactions[1], expectedCoaTx)
-        assert.include(transactions[1].to, '0x000000000000000000000002')
+        assert.match(transactions[1].to, /^0x000000000000000000000002/)
     })
 })

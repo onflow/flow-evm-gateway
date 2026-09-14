@@ -302,7 +302,7 @@ it('should retrieve transaction traces', async () => {
             type: 'CALL'
         }
     )
-    assert.include(txTraces[1].result.to, '0x000000000000000000000002')
+    assert.match(txTraces[1].result.to, /^0x000000000000000000000002/)
 
     response = await helpers.callRPCMethod(
         'debug_traceBlockByHash',
@@ -374,7 +374,7 @@ it('should retrieve transaction traces', async () => {
             type: 'CALL'
         }
     )
-    assert.include(txTraces[1].result.to, '0x000000000000000000000002')
+    assert.match(txTraces[1].result.to, /^0x000000000000000000000002/)
 
     callTracer = {
         tracer: 'callTracer',
