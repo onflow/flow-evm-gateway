@@ -121,18 +121,18 @@ func CreateMultiKeyAccount(
 	}
 
 	sc := systemcontracts.SystemContractsForChain(chainID)
-	createAndFund = []byte(strings.ReplaceAll(
+	txScript := []byte(strings.ReplaceAll(
 		string(createAndFund),
 		`import "EVM"`,
 		fmt.Sprintf(`import EVM from %s`, sc.EVMContract.Address.HexWithPrefix()),
 	))
-	createAndFund = []byte(strings.ReplaceAll(
-		string(createAndFund),
+	txScript = []byte(strings.ReplaceAll(
+		string(txScript),
 		`import "FlowToken"`,
 		fmt.Sprintf(`import FlowToken from %s`, sc.FlowToken.Address.HexWithPrefix()),
 	))
-	createAndFund = []byte(strings.ReplaceAll(
-		string(createAndFund),
+	txScript = []byte(strings.ReplaceAll(
+		string(txScript),
 		`import "FungibleToken"`,
 		fmt.Sprintf(`import FungibleToken from %s`, sc.FungibleToken.Address.HexWithPrefix()),
 	))
@@ -144,7 +144,7 @@ func CreateMultiKeyAccount(
 	args = append(args, json2.MustEncode(val))
 
 	tx := flow.NewTransaction().
-		SetScript(createAndFund).
+		SetScript(txScript).
 		AddAuthorizer(payer)
 
 	for _, arg := range args {
@@ -253,18 +253,18 @@ func CreateMultiCloudKMSKeysAccount(
 	}
 
 	sc := systemcontracts.SystemContractsForChain(chainID)
-	createAndFund = []byte(strings.ReplaceAll(
+	txScript := []byte(strings.ReplaceAll(
 		string(createAndFund),
 		`import "EVM"`,
 		fmt.Sprintf(`import EVM from %s`, sc.EVMContract.Address.HexWithPrefix()),
 	))
-	createAndFund = []byte(strings.ReplaceAll(
-		string(createAndFund),
+	txScript = []byte(strings.ReplaceAll(
+		string(txScript),
 		`import "FlowToken"`,
 		fmt.Sprintf(`import FlowToken from %s`, sc.FlowToken.Address.HexWithPrefix()),
 	))
-	createAndFund = []byte(strings.ReplaceAll(
-		string(createAndFund),
+	txScript = []byte(strings.ReplaceAll(
+		string(txScript),
 		`import "FungibleToken"`,
 		fmt.Sprintf(`import FungibleToken from %s`, sc.FungibleToken.Address.HexWithPrefix()),
 	))
@@ -276,7 +276,7 @@ func CreateMultiCloudKMSKeysAccount(
 	args = append(args, json2.MustEncode(val))
 
 	tx := flow.NewTransaction().
-		SetScript(createAndFund).
+		SetScript(txScript).
 		AddAuthorizer(payer)
 
 	for _, arg := range args {
