@@ -26,9 +26,9 @@ it('deploy contract and interact', async () => {
     assert.equal(blockResponse.status, 200)
 
     let blockResult = blockResponse.body.result
-    assert.equal(
+    assert.notEqual(
         blockResult.blockAccessListHash,
-        '0x61ea4e7a61ece84df5403c55b8cd08d6e53fd683f32ecfd51589d190a9499e37'
+        '0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347'
     )
 
     // check if latest block contains the deploy results

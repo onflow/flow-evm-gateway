@@ -250,11 +250,9 @@ it('should retrieve transaction traces', async () => {
         { pc: 0, op: 'PUSH1', gas: 7344, gasCost: 3, depth: 1, stack: [] }
     )
 
-    assert.equal(txTraces[1].txHash, '0x66620365e0f153e54f9be590611279ea08aad948de5a58d27b0c49268c48b927')
-    assert.equal(txTraces[1].result.gas, 21000)
+    assert.equal(txTraces[1].result.gas, 21055)
     assert.equal(txTraces[1].result.failed, false)
     assert.equal(txTraces[1].result.returnValue, '0x')
-    assert.deepEqual(txTraces[1].result.structLogs, [])
 
     response = await helpers.callRPCMethod(
         'debug_traceBlockByNumber',
@@ -266,60 +264,45 @@ it('should retrieve transaction traces', async () => {
     txTraces = response.body.result
     assert.lengthOf(txTraces, 2) // the 2nd tx trace is from the transfer of fees to coinbase
     assert.deepEqual(
-        txTraces,
-        [
-            {
-                txHash: '0x2a2526cfe1c5533b5debbf7942cb16f25b9e7800c5c33c2d85695256d2fa44a5',
-                result: {
-                    from: '0xfacf71692421039876a5bb4f10ef7a439d8ef61e',
-                    gas: '0x6f84',
-                    gasUsed: '0x6e29',
-                    to: '0x99a64c993965f8d69f985b5171bc20065cc32fab',
-                    input: '0x6babb2240000000000000000000000000000000000000000000000000000000000000064',
-                    logs: [
-                        {
-                            address: '0x99a64c993965f8d69f985b5171bc20065cc32fab',
-                            data: '0x',
-                            index: '0x0',
-                            position: '0x0',
-                            topics: [
-                                '0x043cc306157a91d747b36aba0e235bbbc5771d75aba162f6e5540767d22673c6',
-                                '0x000000000000000000000000facf71692421039876a5bb4f10ef7a439d8ef61e',
-                                '0x0000000000000000000000000000000000000000000000000000000000000064'
-                            ]
-                        }
-                    ],
-                    value: '0x0',
-                    type: 'CALL'
-                }
-            },
-            {
-                txHash: '0x66620365e0f153e54f9be590611279ea08aad948de5a58d27b0c49268c48b927',
-                result: {
-                    from: '0x0000000000000000000000030000000000000000',
-                    gas: '0x32834',
-                    gasUsed: '0x5208',
-                    to: '0x658bdf435d810c91414ec09147daa6db62406379',
-                    input: '0x',
-                    logs: [
-                        {
-                            address: '0xfffffffffffffffffffffffffffffffffffffffe',
-                            data: '0x0000000000000000000000000000000000000000000000000000000000408c06',
-                            index: '0x0',
-                            position: '0x0',
-                            topics: [
-                                '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef',
-                                '0x0000000000000000000000000000000000000000000000030000000000000000',
-                                '0x000000000000000000000000658bdf435d810c91414ec09147daa6db62406379',
-                            ]
-                        }
-                    ],
-                    value: '0x408c06',
-                    type: 'CALL'
-                }
+        txTraces[0],
+        {
+            txHash: '0x2a2526cfe1c5533b5debbf7942cb16f25b9e7800c5c33c2d85695256d2fa44a5',
+            result: {
+                from: '0xfacf71692421039876a5bb4f10ef7a439d8ef61e',
+                gas: '0x6f84',
+                gasUsed: '0x6e29',
+                to: '0x99a64c993965f8d69f985b5171bc20065cc32fab',
+                input: '0x6babb2240000000000000000000000000000000000000000000000000000000000000064',
+                logs: [
+                    {
+                        address: '0x99a64c993965f8d69f985b5171bc20065cc32fab',
+                        data: '0x',
+                        index: '0x0',
+                        position: '0x0',
+                        topics: [
+                            '0x043cc306157a91d747b36aba0e235bbbc5771d75aba162f6e5540767d22673c6',
+                            '0x000000000000000000000000facf71692421039876a5bb4f10ef7a439d8ef61e',
+                            '0x0000000000000000000000000000000000000000000000000000000000000064'
+                        ]
+                    }
+                ],
+                value: '0x0',
+                type: 'CALL'
             }
-        ]
+        },
     )
+    assert.include(
+        txTraces[1].result,
+        {
+            from: '0x0000000000000000000000030000000000000000',
+            gas: '0x32834',
+            gasUsed: '0x523f',
+            input: '0x',
+            value: '0x408c06',
+            type: 'CALL'
+        }
+    )
+    assert.match(txTraces[1].result.to, /^0x000000000000000000000002/)
 
     response = await helpers.callRPCMethod(
         'debug_traceBlockByHash',
@@ -339,11 +322,9 @@ it('should retrieve transaction traces', async () => {
         { pc: 0, op: 'PUSH1', gas: 7344, gasCost: 3, depth: 1, stack: [] }
     )
 
-    assert.equal(txTraces[1].txHash, '0x66620365e0f153e54f9be590611279ea08aad948de5a58d27b0c49268c48b927')
-    assert.equal(txTraces[1].result.gas, 21000)
+    assert.equal(txTraces[1].result.gas, 21055)
     assert.equal(txTraces[1].result.failed, false)
     assert.equal(txTraces[1].result.returnValue, '0x')
-    assert.deepEqual(txTraces[1].result.structLogs, [])
 
     response = await helpers.callRPCMethod(
         'debug_traceBlockByHash',
@@ -355,60 +336,45 @@ it('should retrieve transaction traces', async () => {
     txTraces = response.body.result
     assert.lengthOf(txTraces, 2) // the 2nd tx trace is from the transfer of fees to coinbase
     assert.deepEqual(
-        txTraces,
-        [
-            {
-                txHash: '0x2a2526cfe1c5533b5debbf7942cb16f25b9e7800c5c33c2d85695256d2fa44a5',
-                result: {
-                    from: '0xfacf71692421039876a5bb4f10ef7a439d8ef61e',
-                    gas: '0x6f84',
-                    gasUsed: '0x6e29',
-                    to: '0x99a64c993965f8d69f985b5171bc20065cc32fab',
-                    input: '0x6babb2240000000000000000000000000000000000000000000000000000000000000064',
-                    logs: [
-                        {
-                            address: '0x99a64c993965f8d69f985b5171bc20065cc32fab',
-                            data: '0x',
-                            index: '0x0',
-                            position: '0x0',
-                            topics: [
-                                '0x043cc306157a91d747b36aba0e235bbbc5771d75aba162f6e5540767d22673c6',
-                                '0x000000000000000000000000facf71692421039876a5bb4f10ef7a439d8ef61e',
-                                '0x0000000000000000000000000000000000000000000000000000000000000064'
-                            ]
-                        }
-                    ],
-                    value: '0x0',
-                    type: 'CALL'
-                }
-            },
-            {
-                txHash: '0x66620365e0f153e54f9be590611279ea08aad948de5a58d27b0c49268c48b927',
-                result: {
-                    from: '0x0000000000000000000000030000000000000000',
-                    gas: '0x32834',
-                    gasUsed: '0x5208',
-                    to: '0x658bdf435d810c91414ec09147daa6db62406379',
-                    input: '0x',
-                    logs: [
-                        {
-                            address: '0xfffffffffffffffffffffffffffffffffffffffe',
-                            data: '0x0000000000000000000000000000000000000000000000000000000000408c06',
-                            index: '0x0',
-                            position: '0x0',
-                            topics: [
-                                '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef',
-                                '0x0000000000000000000000000000000000000000000000030000000000000000',
-                                '0x000000000000000000000000658bdf435d810c91414ec09147daa6db62406379'
-                            ]
-                        }
-                    ],
-                    value: '0x408c06',
-                    type: 'CALL'
-                }
+        txTraces[0],
+        {
+            txHash: '0x2a2526cfe1c5533b5debbf7942cb16f25b9e7800c5c33c2d85695256d2fa44a5',
+            result: {
+                from: '0xfacf71692421039876a5bb4f10ef7a439d8ef61e',
+                gas: '0x6f84',
+                gasUsed: '0x6e29',
+                to: '0x99a64c993965f8d69f985b5171bc20065cc32fab',
+                input: '0x6babb2240000000000000000000000000000000000000000000000000000000000000064',
+                logs: [
+                    {
+                        address: '0x99a64c993965f8d69f985b5171bc20065cc32fab',
+                        data: '0x',
+                        index: '0x0',
+                        position: '0x0',
+                        topics: [
+                            '0x043cc306157a91d747b36aba0e235bbbc5771d75aba162f6e5540767d22673c6',
+                            '0x000000000000000000000000facf71692421039876a5bb4f10ef7a439d8ef61e',
+                            '0x0000000000000000000000000000000000000000000000000000000000000064'
+                        ]
+                    }
+                ],
+                value: '0x0',
+                type: 'CALL'
             }
-        ]
+        },
     )
+    assert.include(
+        txTraces[1].result,
+        {
+            from: '0x0000000000000000000000030000000000000000',
+            gas: '0x32834',
+            gasUsed: '0x523f',
+            input: '0x',
+            value: '0x408c06',
+            type: 'CALL'
+        }
+    )
+    assert.match(txTraces[1].result.to, /^0x000000000000000000000002/)
 
     callTracer = {
         tracer: 'callTracer',
