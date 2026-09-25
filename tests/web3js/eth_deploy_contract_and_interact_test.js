@@ -19,7 +19,7 @@ it('deploy contract and interact', async () => {
     assert.equal(rcp.contractAddress, contractAddress)
     assert.equal(rcp.status, conf.successStatus)
     assert.isUndefined(rcp.to)
-    assert.equal(rcp.gasUsed, 8338408n)
+    assert.equal(rcp.gasUsed, 8337608n)
     assert.equal(rcp.gasUsed, rcp.cumulativeGasUsed)
 
     let blockResponse = await helpers.callRPCMethod('eth_getBlockByHash', [rcp.blockHash, false])
@@ -28,7 +28,7 @@ it('deploy contract and interact', async () => {
     let blockResult = blockResponse.body.result
     assert.equal(
         blockResult.blockAccessListHash,
-        '0xa5d09e6f0ef12739bd0c872bce7eb1b3ef144349d9f9fee011af7defbcf57344'
+        '0xc3b97a802fb6e61d490681f4e701d8c8ad8502a48fbe844c2c8dff14c16635c1'
     )
 
     // check if latest block contains the deploy results
@@ -324,7 +324,7 @@ it('deploy contract and interact', async () => {
     assert.isDefined(response.body)
 
     result = response.body.result
-    assert.equal(result, '0x713d')
+    assert.equal(result, '0x6db7')
 
     stateOverrides = {
         [contractAddress]: {
@@ -345,5 +345,5 @@ it('deploy contract and interact', async () => {
     // setting a storage slot from a zero-value, to a non-zero value has an
     // increase of about 20,000 gas. Which is quite different to `0x72c3`.
     result = response.body.result
-    assert.equal(result, '0x1f29e')
+    assert.equal(result, '0x1ef17')
 })
