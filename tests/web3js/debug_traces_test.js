@@ -321,6 +321,21 @@ it('should retrieve transaction traces', async () => {
         ]
     )
 
+    // Regression test for https://github.com/onflow/flow-evm-gateway/issues/998:
+    // tracing a transaction at index > 0 with the default (struct logger) tracer
+    // used to fail with "used gas mismatch" because the loop re-executing
+    // preceding transactions compared each one's gas against the target's receipt.
+    response = await helpers.callRPCMethod(
+        'debug_traceTransaction',
+        ['0x66620365e0f153e54f9be590611279ea08aad948de5a58d27b0c49268c48b927', { tracer: null }]
+    )
+    assert.equal(response.status, 200)
+    assert.isUndefined(response.body.error)
+    assert.isDefined(response.body.result)
+    assert.equal(response.body.result.gas, 21000)
+    assert.equal(response.body.result.failed, false)
+    assert.deepEqual(response.body.result.structLogs, [])
+
     response = await helpers.callRPCMethod(
         'debug_traceBlockByHash',
         [web3.utils.toHex(receipt.blockHash), { tracer: null }]

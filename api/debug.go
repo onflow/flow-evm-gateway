@@ -295,6 +295,18 @@ func (d *DebugAPI) traceTransaction(
 		return nil, err
 	}
 
+	// Load all receipts in the block once, keyed by tx hash, so each preceding
+	// transaction is re-executed against its own receipt (BlockExecutor.Run
+	// compares res.GasConsumed to receipt.GasUsed).
+	blockReceipts, err := d.receipts.GetByBlockHeight(block.Height)
+	if err != nil {
+		return nil, err
+	}
+	receiptsByHash := make(map[gethCommon.Hash]*models.Receipt, len(blockReceipts))
+	for _, r := range blockReceipts {
+		receiptsByHash[r.TxHash] = r
+	}
+
 	// Re-execute the transactions in the order they appear, for the block
 	// that contains the given transaction. We set the tracer only for
 	// the given transaction, as we don't need it for the preceding
@@ -313,12 +325,17 @@ func (d *DebugAPI) traceTransaction(
 			return nil, err
 		}
 
+		txReceipt, ok := receiptsByHash[h]
+		if !ok {
+			return nil, fmt.Errorf("missing receipt for tx %s in block %d", h, block.Height)
+		}
+
 		if h == hash {
 			txTracer = tracer
 			txExecuted = true
 		}
 
-		if err = blockExecutor.Run(tx, receipt, txTracer); err != nil {
+		if err = blockExecutor.Run(tx, txReceipt, txTracer); err != nil {
 			return nil, err
 		}
 	}
