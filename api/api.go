@@ -8,6 +8,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/common/math"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/filters"
@@ -90,6 +91,8 @@ type BlockChainAPI struct {
 	indexingResumedHeight uint64
 	rateLimiter           RateLimiter
 	collector             metrics.Collector
+
+	blockByNumberCache *lru.Cache[uint64, *ethTypes.Block]
 }
 
 func NewBlockChainAPI(
@@ -102,6 +105,7 @@ func NewBlockChainAPI(
 	rateLimiter RateLimiter,
 	collector metrics.Collector,
 	indexingResumedHeight uint64,
+	blockByNumberCacheSize int,
 ) *BlockChainAPI {
 	return &BlockChainAPI{
 		logger:                logger,
@@ -113,6 +117,7 @@ func NewBlockChainAPI(
 		indexingResumedHeight: indexingResumedHeight,
 		rateLimiter:           rateLimiter,
 		collector:             collector,
+		blockByNumberCache:    lru.NewCache[uint64, *ethTypes.Block](blockByNumberCacheSize),
 	}
 }
 
@@ -408,6 +413,10 @@ func (b *BlockChainAPI) GetBlockByNumber(
 		return handleError[*ethTypes.Block](err, l, b.collector)
 	}
 
+	if block, ok := b.blockByNumberCache.Get(height); ok {
+		return block, nil
+	}
+
 	block, err := b.blocks.GetByHeight(height)
 
 	if err != nil {
@@ -418,6 +427,8 @@ func (b *BlockChainAPI) GetBlockByNumber(
 	if err != nil {
 		return handleError[*ethTypes.Block](err, l, b.collector)
 	}
+
+	_ = b.blockByNumberCache.Add(height, apiBlock)
 
 	return apiBlock, nil
 }
