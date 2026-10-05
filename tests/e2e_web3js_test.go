@@ -95,7 +95,7 @@ func TestWeb3_E2E(t *testing.T) {
 		}()
 		// this is a pre-signed contract deployment, that only works before
 		// Amsterdam.
-		// runWeb3Test(t, "eth_multicall3_contract_test")
+		runWeb3Test(t, "eth_multicall3_contract_test")
 	})
 
 	t.Run("test fetch transaction", func(t *testing.T) {
@@ -145,7 +145,7 @@ func TestWeb3_E2E(t *testing.T) {
 	t.Run("batch run transactions", func(t *testing.T) {
 		// create multiple value transfers and batch run them before the test
 		runWeb3TestWithSetup(t, "eth_batch_retrieval_test", func(emu emulator.Emulator) {
-			// crate test accounts
+			// create test accounts
 			senderKey, err := crypto.HexToECDSA("6a0eb450085e825dd41cc3dd85e4166d4afbb0162488a3d811a0637fa7656abf")
 			require.NoError(t, err)
 			receiver := common.HexToAddress("0xd0bA5bc19775c36faD888a9C856baffD6d575482")
@@ -313,19 +313,19 @@ func TestWeb3_E2E(t *testing.T) {
 							from: EVM.addressFromString("0xFACF71692421039876a5BB4F10EF7A439D8ef61E"),
 							to: EVM.addressFromString("0x99a64c993965f8d69f985b5171bc20065cc32fab"),
 							data: EVM.encodeABIWithSignature("storeWithLog(uint256)", [UInt256(1453)]),
-							gasLimit: 30000,
+							gasLimit: 40_000,
 							value: EVM.Balance(attoflow: 0)
 						)
-						assert(callResult.status == EVM.Status.successful)
+						assert(callResult.status == EVM.Status.successful, message: callResult.errorMessage)
 
 						callResult = EVM.dryCall(
 							from: EVM.addressFromString("0xFACF71692421039876a5BB4F10EF7A439D8ef61E"),
 							to: EVM.addressFromString("0x99a64c993965f8d69f985b5171bc20065cc32fab"),
 							data: EVM.encodeABIWithSignature("retrieve()", []),
-							gasLimit: 30000,
+							gasLimit: 40_000,
 							value: EVM.Balance(attoflow: 0)
 						)
-						assert(callResult.status == EVM.Status.successful)
+						assert(callResult.status == EVM.Status.successful, message: callResult.errorMessage)
 						var returnData = EVM.decodeABI(types: [Type<UInt256>()], data: callResult.data)
 						// assert that the above EVM.dryCall with storeWithLog(1453), had no
 						// effect on the contract's state.
@@ -335,18 +335,18 @@ func TestWeb3_E2E(t *testing.T) {
 						callResult = coa.dryCall(
 							to: EVM.addressFromString("0x99a64c993965f8d69f985b5171bc20065cc32fab"),
 							data: EVM.encodeABIWithSignature("storeWithLog(uint256)", [UInt256(1515)]),
-							gasLimit: 30000,
+							gasLimit: 40_000,
 							value: EVM.Balance(attoflow: 0)
 						)
-						assert(callResult.status == EVM.Status.successful)
+						assert(callResult.status == EVM.Status.successful, message: callResult.errorMessage)
 
 						callResult = coa.dryCall(
 							to: EVM.addressFromString("0x99a64c993965f8d69f985b5171bc20065cc32fab"),
 							data: EVM.encodeABIWithSignature("retrieve()", []),
-							gasLimit: 30000,
+							gasLimit: 40_000,
 							value: EVM.Balance(attoflow: 0)
 						)
-						assert(callResult.status == EVM.Status.successful)
+						assert(callResult.status == EVM.Status.successful, message: callResult.errorMessage)
 						returnData = EVM.decodeABI(types: [Type<UInt256>()], data: callResult.data)
 						// assert that the above coa.dryCall with storeWithLog(1515), had no
 						// effect on the contract's state.
@@ -381,9 +381,13 @@ func TestWeb3_E2E(t *testing.T) {
 	t.Run("test pre-Pectra changes", func(t *testing.T) {
 		// set the Prague hard-fork activation to 24 hours from now
 		evmEmulator.PreviewnetPragueActivation = uint64(time.Now().Add(24 * time.Hour).Unix())
+		evmEmulator.PreviewnetOsakaActivation = uint64(time.Now().Add(24 * time.Hour).Unix())
+		evmEmulator.PreviewnetAmsterdamActivation = uint64(time.Now().Add(24 * time.Hour).Unix())
 		defer func() {
 			// set it back to its original value
 			evmEmulator.PreviewnetPragueActivation = uint64(0)
+			evmEmulator.PreviewnetOsakaActivation = uint64(0)
+			evmEmulator.PreviewnetAmsterdamActivation = uint64(0)
 		}()
 
 		runWeb3Test(t, "eth_pectra_upgrade_test")

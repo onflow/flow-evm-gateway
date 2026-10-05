@@ -63,6 +63,20 @@ async function deployContractFrom(from, name) {
 // signAndSend signs a transactions and submits it to the network,
 // returning a transaction hash and receipt
 async function signAndSend(tx) {
+  if (tx.gasLimit === undefined && tx.gas === undefined) {
+    // Let the node accurately estimate the sub-21,000 gas
+    try {
+      const estimatedGas = await web3.eth.estimateGas(tx)
+      // Necessary workaround until web3.js becomes compatible
+      // with the Glamsterdam hard-fork
+      if (estimatedGas <= 21_000) {
+        tx.gasLimit = 23_300
+      }
+    } catch (error) {
+
+    }
+  }
+
   const signedTx = await conf.eoa.signTransaction(tx)
   // send transaction and make sure interaction was success
   const receipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction)

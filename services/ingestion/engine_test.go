@@ -280,6 +280,11 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		blocks.
 			On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*models.Block"), mock.Anything).
 			Return(func(h uint64, id flow.Identifier, storeBlock *models.Block, _ *pebbleDB.Batch) error {
+				require.NotNil(t, storeBlock.AccessListHash)
+				require.NotEqual(t, &gethTypes.EmptyBlockAccessListHash, storeBlock.AccessListHash)
+				// this is only possible to calculate during tx replay
+				block.AccessListHash = storeBlock.AccessListHash
+
 				assert.Equal(t, block, storeBlock)
 				assert.Equal(t, blockID, id)
 				assert.Equal(t, nextHeight, h)
@@ -510,6 +515,11 @@ func TestBlockAndTransactionIngestion(t *testing.T) {
 		blocks.
 			On("Store", mock.AnythingOfType("uint64"), mock.Anything, mock.AnythingOfType("*models.Block"), mock.Anything).
 			Return(func(h uint64, id flow.Identifier, storeBlock *models.Block, _ *pebbleDB.Batch) error {
+				require.NotNil(t, storeBlock.AccessListHash)
+				require.NotEqual(t, &gethTypes.EmptyBlockAccessListHash, storeBlock.AccessListHash)
+				// this is only possible to calculate during tx replay
+				block.AccessListHash = storeBlock.AccessListHash
+
 				assert.Equal(t, block, storeBlock)
 				assert.Equal(t, evmHeight, block.Height)
 				assert.Equal(t, latestCadenceHeight+1, h)
