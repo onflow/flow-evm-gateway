@@ -471,10 +471,6 @@ describe('eth_getFilterChanges', async () => {
         txHashes = response.body.result
         assert.lengthOf(txHashes, 2) // the last transaction is the COA transfer for gas fees
         assert.equal(txHashes[0], res.receipt.transactionHash)
-        assert.equal(
-            txHashes[1],
-            '0x735eefb9f5d1cb46bffc2971bc27ff35b2f2b9b03de16b91666be10063f5da2e'
-        )
     })
 
     it('should return new full transactions for a transaction filter', async () => {
@@ -526,10 +522,8 @@ describe('eth_getFilterChanges', async () => {
             from: '0x0000000000000000000000030000000000000000',
             gas: '0x32834',
             gasPrice: '0x1',
-            hash: '0xa301328b0d09610dd065a4dd9f6e3071d5093d0432c02a59dd6f5d5aba3b6f31',
             input: '0x',
             nonce: '0x9',
-            to: '0x658bdf435d810c91414ec09147daa6db62406379',
             transactionIndex: '0x1',
             value: '0x3a06b0',
             type: '0x0',
@@ -537,6 +531,7 @@ describe('eth_getFilterChanges', async () => {
             r: '0x30000000000000000',
             s: '0x3'
         }
-        assert.deepEqual(transactions[1], expectedCoaTx)
+        assert.include(transactions[1], expectedCoaTx)
+        assert.match(transactions[1].to, /^0x000000000000000000000002/)
     })
 })

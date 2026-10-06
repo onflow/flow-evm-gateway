@@ -562,18 +562,12 @@ func (t *BatchTxPool) batchSubmitTransactionsForSameAddress(
 		hexEncodedTxs[i] = txPayload.txPayload
 	}
 
-	coinbaseAddress, err := cadence.NewString(t.config.Coinbase.Hex())
-	if err != nil {
-		return flow.Identifier{}, err
-	}
-
 	script := replaceAddresses(runTxScript, t.config.FlowNetworkID)
 	flowTx, err := t.buildTransaction(
 		ctx,
 		referenceBlockHeader,
 		script,
 		cadence.NewArray(hexEncodedTxs),
-		coinbaseAddress,
 	)
 	if err != nil {
 		txHashes := make([]string, len(pooledTxs))
@@ -600,18 +594,12 @@ func (t *BatchTxPool) submitSingleTransaction(
 	ctx context.Context,
 	hexEncodedTx cadence.String,
 ) (flow.Identifier, error) {
-	coinbaseAddress, err := cadence.NewString(t.config.Coinbase.Hex())
-	if err != nil {
-		return flow.Identifier{}, err
-	}
-
 	script := replaceAddresses(runTxScript, t.config.FlowNetworkID)
 	flowTx, err := t.buildTransaction(
 		ctx,
 		t.getReferenceBlock(),
 		script,
 		cadence.NewArray([]cadence.Value{hexEncodedTx}),
-		coinbaseAddress,
 	)
 	if err != nil {
 		return flow.Identifier{}, err

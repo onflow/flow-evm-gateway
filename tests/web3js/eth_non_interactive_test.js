@@ -149,7 +149,7 @@ it('should get block transaction count', async () => {
 
     // call endpoint with 'latest'
     txCount = await web3.eth.getBlockTransactionCount('latest')
-    assert.equal(txCount, 0n)
+    assert.equal(txCount, 1n)
 })
 
 it('should get transactions from block', async () => {
@@ -176,7 +176,8 @@ it('should get transactions from block', async () => {
 
     // call endpoint with 'latest'
     tx = await web3.eth.getTransactionFromBlock('latest', 0)
-    assert.isNull(tx)
+    assert.isNotNull(tx)
+    assert.equal(tx.from, '0x0000000000000000000000020000000000000000')
 })
 
 it('should get earliest/genesis block', async () => {
@@ -394,7 +395,7 @@ it('should get fee history', async () => {
             oldestBlock: 1n,
             reward: [['0x96'], ['0x96'], ['0x96']], // gas price is 150 during testing
             baseFeePerGas: [1n, 1n, 1n],
-            gasUsedRatio: [0.48226858333333333, 0.04667670833333333, 0.0]
+            gasUsedRatio: [0.48226858333333333, 0.04667670833333333, 0.04479625]
         }
     )
 })

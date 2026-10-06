@@ -18,26 +18,40 @@ import (
 	"golang.org/x/exp/rand"
 )
 
-var sc = systemcontracts.SystemContractsForChain(flowGo.Emulator)
-var ftAddress = sc.FungibleToken.Address.HexWithPrefix()
-var flowAddress = sc.FlowToken.Address.HexWithPrefix()
-
 // RunCreateMultiKeyAccount command creates a new account with multiple keys, which are saved to keys.json for later
 // use with running the gateway in a key-rotation mode (used with --coa-key-file flag).
 func RunCreateMultiKeyAccount() {
 	var (
-		keyCount                                         int
-		keyFlag, addressFlag, hostFlag, ftFlag, flowFlag string
+		keyCount                                    int
+		keyFlag, addressFlag, hostFlag, flowNetwork string
 	)
 
 	flag.IntVar(&keyCount, "key-count", 20, "how many keys you want to create and assign to account")
 	flag.StringVar(&keyFlag, "signer-key", "", "signer key used to create the new account")
 	flag.StringVar(&addressFlag, "signer-address", "", "signer address used to create new account")
-	flag.StringVar(&ftFlag, "ft-address", ftAddress, "address of fungible token contract")
-	flag.StringVar(&flowFlag, "flow-token-address", flowAddress, "address of flow token contract")
+	flag.StringVar(&flowNetwork, "flow-network-id", "flow-emulator", "Flow network ID (flow-emulator, flow-previewnet, flow-testnet, flow-mainnet)")
 	flag.StringVar(&hostFlag, "access-node-grpc-host", "localhost:3569", "host to the flow access node gRPC API")
 
 	flag.Parse()
+
+	var chainID flowGo.ChainID
+	switch flowNetwork {
+	case "flow-previewnet":
+		chainID = flowGo.Previewnet
+	case "flow-emulator":
+		chainID = flowGo.Emulator
+	case "flow-testnet":
+		chainID = flowGo.Testnet
+	case "flow-mainnet":
+		chainID = flowGo.Mainnet
+	default:
+		panic(
+			fmt.Errorf(
+				"flow network ID: %s not supported, valid values are ('flow-emulator', 'flow-previewnet', 'flow-testnet', 'flow-mainnet')",
+				flowNetwork,
+			),
+		)
+	}
 
 	key, err := crypto.DecodePrivateKeyHex(crypto.ECDSA_P256, keyFlag)
 	if err != nil {
@@ -54,7 +68,7 @@ func RunCreateMultiKeyAccount() {
 		panic(err)
 	}
 
-	address, privateKey, err := CreateMultiKeyAccount(client, keyCount, payer, ftFlag, flowFlag, key)
+	address, privateKey, err := CreateMultiKeyAccount(client, keyCount, payer, chainID, key)
 	if err != nil {
 		panic(err)
 	}
@@ -71,8 +85,7 @@ func CreateMultiKeyAccount(
 	client *grpc.Client,
 	keyCount int,
 	payer flow.Address,
-	ftAddress string,
-	flowAddress string,
+	chainID flowGo.ChainID,
 	key crypto.PrivateKey,
 ) (*flow.Address, crypto.PrivateKey, error) {
 	privateKey, err := randomPrivateKey()
@@ -107,15 +120,21 @@ func CreateMultiKeyAccount(
 		json2.MustEncode(cadenceContracts),
 	}
 
-	createAndFund = []byte(strings.ReplaceAll(
+	sc := systemcontracts.SystemContractsForChain(chainID)
+	txScript := []byte(strings.ReplaceAll(
 		string(createAndFund),
-		`import "FlowToken"`,
-		fmt.Sprintf(`import FlowToken from %s`, flowAddress),
+		`import "EVM"`,
+		fmt.Sprintf(`import EVM from %s`, sc.EVMContract.Address.HexWithPrefix()),
 	))
-	createAndFund = []byte(strings.ReplaceAll(
-		string(createAndFund),
+	txScript = []byte(strings.ReplaceAll(
+		string(txScript),
+		`import "FlowToken"`,
+		fmt.Sprintf(`import FlowToken from %s`, sc.FlowToken.Address.HexWithPrefix()),
+	))
+	txScript = []byte(strings.ReplaceAll(
+		string(txScript),
 		`import "FungibleToken"`,
-		fmt.Sprintf(`import FungibleToken from %s`, ftAddress),
+		fmt.Sprintf(`import FungibleToken from %s`, sc.FungibleToken.Address.HexWithPrefix()),
 	))
 
 	val, err := cadence.NewUFix64("10.0")
@@ -125,7 +144,7 @@ func CreateMultiKeyAccount(
 	args = append(args, json2.MustEncode(val))
 
 	tx := flow.NewTransaction().
-		SetScript(createAndFund).
+		SetScript(txScript).
 		AddAuthorizer(payer)
 
 	for _, arg := range args {
@@ -197,8 +216,7 @@ func CreateMultiCloudKMSKeysAccount(
 	client *grpc.Client,
 	publicKeys []string,
 	payer flow.Address,
-	ftAddress string,
-	flowAddress string,
+	chainID flowGo.ChainID,
 	key crypto.PrivateKey,
 ) (*flow.Address, error) {
 	accountKeys := make([]*flow.AccountKey, len(publicKeys))
@@ -234,15 +252,21 @@ func CreateMultiCloudKMSKeysAccount(
 		json2.MustEncode(cadenceContracts),
 	}
 
-	createAndFund = []byte(strings.ReplaceAll(
+	sc := systemcontracts.SystemContractsForChain(chainID)
+	txScript := []byte(strings.ReplaceAll(
 		string(createAndFund),
-		`import "FlowToken"`,
-		fmt.Sprintf(`import FlowToken from %s`, flowAddress),
+		`import "EVM"`,
+		fmt.Sprintf(`import EVM from %s`, sc.EVMContract.Address.HexWithPrefix()),
 	))
-	createAndFund = []byte(strings.ReplaceAll(
-		string(createAndFund),
+	txScript = []byte(strings.ReplaceAll(
+		string(txScript),
+		`import "FlowToken"`,
+		fmt.Sprintf(`import FlowToken from %s`, sc.FlowToken.Address.HexWithPrefix()),
+	))
+	txScript = []byte(strings.ReplaceAll(
+		string(txScript),
 		`import "FungibleToken"`,
-		fmt.Sprintf(`import FungibleToken from %s`, ftAddress),
+		fmt.Sprintf(`import FungibleToken from %s`, sc.FungibleToken.Address.HexWithPrefix()),
 	))
 
 	val, err := cadence.NewUFix64("10.0")
@@ -252,7 +276,7 @@ func CreateMultiCloudKMSKeysAccount(
 	args = append(args, json2.MustEncode(val))
 
 	tx := flow.NewTransaction().
-		SetScript(createAndFund).
+		SetScript(txScript).
 		AddAuthorizer(payer)
 
 	for _, arg := range args {
@@ -368,14 +392,15 @@ func (e *events) GetCreatedAddresses() []*flow.Address {
 
 var createAndFund = []byte(`
 import Crypto
+import "EVM"
 import "FlowToken"
 import "FungibleToken"
 
 transaction(publicKeys: [Crypto.KeyListEntry], contracts: {String: String}, fundAmount: UFix64) {
-    let tokenReceiver: &{FungibleToken.Receiver}
-    let sentVault: @{FungibleToken.Vault}
+	let tokenReceiver: &{FungibleToken.Receiver}
+	let sentVault: @{FungibleToken.Vault}
 
-	prepare(signer: auth(BorrowValue) &Account) {
+	prepare(signer: auth(BorrowValue, Storage) &Account) {
 		let account = Account(payer: signer)
 
 		// add all the keys to the account
@@ -389,17 +414,24 @@ transaction(publicKeys: [Crypto.KeyListEntry], contracts: {String: String}, fund
 		}
 
 		self.tokenReceiver = account
-          .capabilities.borrow<&{FungibleToken.Receiver}>(/public/flowTokenReceiver)
-          ?? panic("Unable to borrow receiver reference")
+			.capabilities.borrow<&{FungibleToken.Receiver}>(/public/flowTokenReceiver)
+			?? panic("Unable to borrow receiver reference")
 
-        let vaultRef = signer.storage.borrow<auth(FungibleToken.Withdraw) &FlowToken.Vault>(from: /storage/flowTokenVault)
-            ?? panic("Could not borrow reference to the owner's Vault!")
+		let vaultRef = signer.storage.borrow<auth(FungibleToken.Withdraw) &FlowToken.Vault>(from: /storage/flowTokenVault)
+			?? panic("Could not borrow reference to the owner's Vault!")
 
-        self.sentVault <- vaultRef.withdraw(amount: fundAmount)
+		self.sentVault <- vaultRef.withdraw(amount: fundAmount)
+
+		if !account.storage.check<@EVM.CadenceOwnedAccount>(from: /storage/evm_coa) {
+			account.storage.save<@EVM.CadenceOwnedAccount>(
+				<- EVM.createCadenceOwnedAccount(),
+				to: /storage/evm_coa
+			)
+		}
 	}
 
 	execute {
-	    self.tokenReceiver.deposit(from: <-self.sentVault)
+		self.tokenReceiver.deposit(from: <-self.sentVault)
 	}
 }
 `)

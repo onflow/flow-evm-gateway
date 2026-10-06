@@ -108,10 +108,6 @@ func (t *SingleTxPool) Add(
 	if err != nil {
 		return err
 	}
-	coinbaseAddress, err := cadence.NewString(t.config.Coinbase.Hex())
-	if err != nil {
-		return err
-	}
 
 	script := replaceAddresses(runTxScript, t.config.FlowNetworkID)
 	flowTx, err := t.buildTransaction(
@@ -119,7 +115,6 @@ func (t *SingleTxPool) Add(
 		t.getReferenceBlock(),
 		script,
 		cadence.NewArray([]cadence.Value{hexEncodedTx}),
-		coinbaseAddress,
 	)
 	if err != nil {
 		// If there was any error during the transaction build
@@ -194,10 +189,12 @@ func (t *SingleTxPool) buildTransaction(
 		t.collector.AvailableSigningKeys(t.keystore.AvailableKeys())
 	}()
 
+	coaAddress := t.config.COAAddress
 	flowTx := flow.NewTransaction().
 		SetScript(script).
 		SetReferenceBlockID(referenceBlockHeader.ID).
-		SetComputeLimit(flowGo.DefaultMaxTransactionGasLimit)
+		SetComputeLimit(flowGo.DefaultMaxTransactionGasLimit).
+		AddAuthorizer(coaAddress)
 
 	for _, arg := range args {
 		if err := flowTx.AddArgument(arg); err != nil {
@@ -214,7 +211,6 @@ func (t *SingleTxPool) buildTransaction(
 		return nil, err
 	}
 
-	coaAddress := t.config.COAAddress
 	accountKey, err := t.client.GetAccountKeyAtLatestBlock(ctx, coaAddress, accKey.Index)
 	if err != nil {
 		accKey.Done()
