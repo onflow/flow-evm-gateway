@@ -9,9 +9,9 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/holiman/uint256 v1.3.2
 	github.com/onflow/atree v0.16.1
-	github.com/onflow/cadence v1.10.6
-	github.com/onflow/flow-go v0.51.1-0.20260901160419-2a03353d75bd
-	github.com/onflow/flow-go-sdk v1.10.9
+	github.com/onflow/cadence v1.10.7
+	github.com/onflow/flow-go v0.51.1-0.20261113165525-fe155581e20d
+	github.com/onflow/flow-go-sdk v1.10.10
 	github.com/prometheus/client_golang v1.20.5
 	github.com/rs/cors v1.8.0
 	github.com/rs/zerolog v1.33.0
