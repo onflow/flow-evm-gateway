@@ -19,10 +19,10 @@ StandardOutput=journal
 EnvironmentFile=/etc/flow/runtime-conf.env
 EnvironmentFile=-/etc/flow/conf.d/*.env
 
-ExecStartPre=docker pull us-west1-docker.pkg.dev/dl-flow-devex-production/development/flow-evm-gateway:${VERSION}
+ExecStartPre=docker pull public.ecr.aws/onflow/flow-evm-gateway:${VERSION}
 ExecStart=docker run --rm \
 	--name flow-evm-gateway \
-	us-west1-docker.pkg.dev/dl-flow-devex-production/development/flow-evm-gateway:${VERSION} \
+	public.ecr.aws/onflow/flow-evm-gateway:${VERSION} \
     --database-dir=/data \
     --access-node-grpc-host=${ACCESS_NODE_GRPC_HOST} \
     --flow-network-id=${FLOW_NETWORK_ID} \

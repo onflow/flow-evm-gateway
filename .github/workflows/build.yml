@@ -9,13 +9,14 @@ on:
         type: string
 
 env:
-  DOCKER_IMAGE_URL: ${{ vars.REPO_DOCKER_IMAGE_URL }}
+  DOCKER_IMAGE_URL: public.ecr.aws/onflow/flow-evm-gateway
 
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
       id-token: write
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -24,21 +25,22 @@ jobs:
           fetch-tags: true
           ref: ${{ inputs.tag }}
 
-      - name: Google auth
-        id: auth
-        uses: google-github-actions/auth@v2
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          token_format: 'access_token'
-          workload_identity_provider: ${{ vars.GHA_IDENTITY_POOL }}
-          service_account: ${{ vars.REPO_SERVICE_ACCOUNT }}
-      
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v1
+          role-to-assume: ${{ vars.AWS_ECR_PUBLIC_PUSH_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Login to Amazon ECR Public
+        uses: aws-actions/amazon-ecr-login@v2
         with:
-          project_id: ${{ vars.GAR_PROJECT_ID }}
-      
-      - name: Docker Auth
+          registry-type: public
+
+      - name: Build and push
         run: |-
-          gcloud auth configure-docker ${{ vars.GAR_LOCATION }}-docker.pkg.dev
-          docker build --build-arg VERSION="${{ inputs.tag }}" --build-arg ARCH=amd64 -t ${{ env.DOCKER_IMAGE_URL }}:${{ inputs.tag }} --file Dockerfile .
+          docker build \
+            --build-arg VERSION="${{ inputs.tag }}" \
+            --build-arg ARCH=amd64 \
+            -t ${{ env.DOCKER_IMAGE_URL }}:${{ inputs.tag }} \
+            --file Dockerfile .
           docker push ${{ env.DOCKER_IMAGE_URL }}:${{ inputs.tag }}

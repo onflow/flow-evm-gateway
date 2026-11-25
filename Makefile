@@ -39,7 +39,7 @@ VERSION ?= $(SHORT_COMMIT)
 IMAGE_TAG ?= $(VERSION)
 
 # docker container registry
-CONTAINER_REGISTRY := us-west1-docker.pkg.dev/dl-flow-devex-production/development
+CONTAINER_REGISTRY := public.ecr.aws/onflow
 DOCKER_BUILDKIT := 1
 DATADIR := /data
 
