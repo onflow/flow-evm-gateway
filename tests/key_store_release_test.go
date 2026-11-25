@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/onflow/flow-go/fvm/evm/types"
+	"github.com/onflow/flow-go/model/flow"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -48,8 +49,7 @@ func Test_KeyStoreSigningKeysRelease(t *testing.T) {
 		client,
 		keyCount,
 		service.Address,
-		sc.FungibleToken.Address.HexWithPrefix(),
-		sc.FlowToken.Address.HexWithPrefix(),
+		flow.Emulator,
 		service.PrivateKey,
 	)
 	require.NoError(t, err)

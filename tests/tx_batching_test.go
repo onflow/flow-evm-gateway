@@ -16,6 +16,7 @@ import (
 	"github.com/onflow/flow-emulator/emulator"
 	"github.com/onflow/flow-go-sdk/access/grpc"
 	"github.com/onflow/flow-go/fvm/evm/types"
+	"github.com/onflow/flow-go/model/flow"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1162,8 +1163,7 @@ func setupGatewayNode(t *testing.T) (emulator.Emulator, config.Config, func()) {
 		client,
 		200,
 		service.Address,
-		sc.FungibleToken.Address.HexWithPrefix(),
-		sc.FlowToken.Address.HexWithPrefix(),
+		flow.Emulator,
 		service.PrivateKey,
 	)
 	require.NoError(t, err)

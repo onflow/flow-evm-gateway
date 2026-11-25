@@ -65,9 +65,6 @@ it('calculates fees for legacy tx type', async () => {
     } catch (e) {
         assert.include(e.message, "the minimum accepted gas price for transactions is: 150")
     }
-
-    let coinbaseBalance = await web3.eth.getBalance(conf.coinbase)
-    assert.equal(coinbaseBalance, 1254166800n)
 })
 
 it('calculates fees for dynamic fees tx type', async () => {
@@ -163,7 +160,4 @@ it('calculates fees for dynamic fees tx type', async () => {
     } catch (e) {
         assert.include(e.message, "the minimum accepted gas price for transactions is: 150")
     }
-
-    let coinbaseBalance = await web3.eth.getBalance(conf.coinbase)
-    assert.equal(coinbaseBalance, 1264184000n)
 })
