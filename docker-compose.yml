@@ -2,7 +2,7 @@ version: '3'
 
 services:
   flow-evm-gateway:
-    image: us-west1-docker.pkg.dev/dl-flow-devex-production/development/flow-evm-gateway:${VERSION}
+    image: public.ecr.aws/onflow/flow-evm-gateway:${VERSION}
     ports:
       - "${DOCKER_HOST_PORT}:8545"
       - "${DOCKER_HOST_METRICS_PORT}:8080"
